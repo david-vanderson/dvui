@@ -1,0 +1,136 @@
+
+make checkbox highlight and hover and focused better
+
+convert:
+- ContextWidget
+- ScrollBar
+- ScaleWidget
+
+make sure everyplace that sets a tabindex does it only if they have a non-empty rect
+
+dark mode
+- checkbox in menu
+
+icon browser for builtin icons
+- load only a few icons each frame
+
+try animating a fade
+- does Options need a separate alpha?
+
+punchlist for podcast app:
+- equal-sized weight option to boxlayout
+- arbitrarily long scroll?
+- bitmaps
+- textentry needs to be able to paste a url
+
+
+debugging:
+- highlight widgets that are causing CueFrames?
+- show layout somehow (mouseover?)
+- maybe just a separate floating window that shows a tree-view of all the widgets
+  - mouseover to highlight the widget?
+
+copy other widgets from imgui
+
+textlayout:
+- minSizeForChild should recalc based on the four corners
+
+if Options being copied a lot is a problem, then:
+- split out things you rarely change into a pointer (most style stuff)
+- instead of copying, do a tuple that points to a backing Options for stuff it doesn't override
+
+options should have an explicit "rect" thing where the child doesn't ask the parent for a rect and doesn't report it's size, it just draws at that location (from the parent's screenRectScale), it's out of the normal flow
+
+split gravity into 2 0-1 values plus a text baseline?
+
+hover and highlight properties need to propogate down to children so that icons can draw properly in buttons where the button is highlighted but not the icon directly?
+- maybe set and reset global options?
+  - but then need to save for deferred rendering
+  - maybe as part of the giant Options struct?
+
+
+PathStroking with thickness
+- endcaps?
+- need to adjust points if they are too close together or angle is too acute
+  - on acute angle side and do line intersection
+    - so we have points a,b,c where b is the current intersection point above p
+    - if the angle from p to a is on the wrong side of b, then project a onto the line from p to b to ensure convexness
+  - on other side, do line intersection
+    - but set some maximum on the length of the point from p
+
+
+dialog
+- maybe a flag on floatingwindow?
+- have a separate function that does the nextWindowCleanup
+  - always call in deinit, but also user can call that and get result if the user pressed esc
+  - are there other things a user could press?
+- rss textentry should bubble up the enter that it doesn't process so the dialog can record that it should "submit"
+
+stacking order of child windows?
+- each window's children are on top of their parent, but the stacking order of the children can be altered
+- window.floating_windows
+  - during a frame it only has windows that are ancestors of the current window
+  - at the end when we finally pop the render queue it will reget all windows in stacking order
+- windows persist a stacking list of children (along with positions in renderqueue)
+  - init
+    - child window records start in parent's deferredrenderqueue
+    - child does FloatingWindowAdd
+  - deinit
+    - child window records end in parent's deferredrenderqueue
+    - child pops itself from window.floating_windows
+  - deferredrenderpop does it in stacking order and re-adds FloatingWindowData
+
+popups need to have a scrollarea
+- scrollarea needs to not show the scrollbar if no need
+- also main window and floating windows
+- probably default layouts for those should be a vertical scrollarea with showing the scrollbar only when needed (and when not showing it don't scroll past the beginning or end)
+
+maybe use stb_truetype or whatever so we don't need sdl_ttf?
+- translate-c is failing for a few of the functions
+
+popups need to bubble up tab event so that the root menu can decide what to do with it
+- File/Edit menu moves to next item_prev
+- all other menus do nothing
+
+menu/submenu keyboard nav
+
+change cursorlayout from top-to-bottom to left-to-right with optional extra floating widgets that get routed around
+- save info for each line
+  - size and baseline offset
+  - height is max of (height of items without baseline) and max of (max of baselines, max of underhangs) of items with baselines
+  - if new size/baseline is different, CueFrame()
+- replace menubar horizontal box with textlayout so that lots of menus will wrap
+
+baseline alignment
+- maybe only inside TextLayout?
+- vertical alignment needs additional .baseline
+- rectFor provides baseline float offset from top of rect
+- minSize needs to send baseline offset
+- PlaceIn honors .baseline alignment
+
+make Alt do special stuff with the menubar
+
+scroll area scroll to newly-focused widget?
+
+forms where you can press "enter" in a form field and it clicks the ok button
+- also "esc" clicks the cancel button
+- maybe a FormWidget that wraps those
+  - bubbleEvent can catch "enter" from text entry
+  - FormEvent() call for user side to use on button press that creates and bubbles an event?
+
+
+ability to use gui floating windows alongside a game
+- addEvent should return whether gui wants the event or not
+
+need to free widgets that are allocated on the arena
+- like TextWidget does it
+
+
+scroll widget when stuff is being added/deleted
+- lock to top if there previously
+- scroll to bottom if there previously
+- otherwise scroll to widget that was in the middle?
+
+
+flag whether the app should show the mouse cursor
+
