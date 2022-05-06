@@ -283,7 +283,7 @@ pub fn main() void {
             checklabel = "Check Me Yes";
           }
 
-          gui.Checkbox(@src(), 0, &CheckboxBool.b, checklabel, .{.tab_index = 6, .min_size = .{.w = 100, .h = 0}});
+          gui.Checkbox(@src(), 0, &CheckboxBool.b, checklabel, .{.tab_index = 6, .min_size = .{.w = 100, .h = 0}, .color_style = .content, .margin = gui.Rect.all(4), .corner_radius = gui.Rect.all(2)});
         }
 
         {

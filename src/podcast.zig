@@ -216,19 +216,25 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
 
 fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
   _ = arena;
-  var box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window});
+  var box = gui.Box(@src(), 0, .vertical, .{
+    .expand = .both,
+    .color_style = .window,
+  });
   defer box.deinit();
+
   if (paned.collapsed()) {
-    var menu = gui.Menu(@src(), 0, .horizontal, .{.expand = .horizontal, .color_style = .window});
+    var menu = gui.Menu(@src(), 0, .horizontal, .{.expand = .horizontal});
     defer menu.deinit();
 
-    if (gui.MenuItemLabel(@src(), 0, "Back", false, .{.margin = gui.Rect.all(4), .corner_radius = gui.Rect.all(5)})) |rr| {
+    if (gui.MenuItemLabel(@src(), 0, "Back", false, .{
+      .padding = gui.Rect.all(4),
+      .corner_radius = gui.Rect.all(5)})) |rr| {
       _ = rr;
       paned.showOther();
     }
   }
 
-  var scroll = gui.ScrollArea(@src(), 0, .{.expand = .both, .background = false, .color_style = .window});
+  var scroll = gui.ScrollArea(@src(), 0, .{.expand = .both, .background = false});
   defer scroll.deinit();
 
   const oo = gui.OptionsSet(.{.margin = gui.Rect.all(4), .padding = gui.Rect.all(4)});
@@ -236,16 +242,20 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
 
   var i: usize = 0;
   while (i < 10) : (i += 1) {
-    var tl = gui.TextLayout(@src(), i, .{.expand = .horizontal, .font_line_skip_factor = 1.1, .color_style = .content});
-    {
-      var cbox = gui.Box(@src(), 0, .vertical, gui.OptionsGet(.{.gravity = .upright}).plain());
-      defer cbox.deinit();
+    var tl = gui.TextLayout(@src(), i, .{
+      .expand = .horizontal,
+      .font_line_skip_factor = 1.1,
+      .color_style = .content,
+    });
 
-      _ = gui.ButtonIcon(@src(), 0, 18, "play",
-        gui.icons.papirus.actions.media_playback_start_symbolic, .{});
-      _ = gui.ButtonIcon(@src(), 0, 18, "more",
-        gui.icons.papirus.actions.view_more_symbolic, .{});
-    }
+    var cbox = gui.Box(@src(), 0, .vertical, gui.OptionsGet(.{.gravity = .upright}).plain());
+
+    _ = gui.ButtonIcon(@src(), 0, 18, "play",
+      gui.icons.papirus.actions.media_playback_start_symbolic, .{});
+    _ = gui.ButtonIcon(@src(), 0, 18, "more",
+      gui.icons.papirus.actions.view_more_symbolic, .{});
+
+    cbox.deinit();
 
     tl.addText("Episode Title\n", .{.font_style = .heading, .font_line_skip_factor = 1.3});
     const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";

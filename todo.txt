@@ -1,5 +1,5 @@
 
-make checkbox highlight and hover and focused better
+convert checkbox to using stroke instead of fill
 
 convert:
 - ContextWidget

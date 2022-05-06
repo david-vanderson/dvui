@@ -4591,7 +4591,7 @@ pub fn ButtonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32,
 pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label: []const u8, opts: Options) void {
   debug("Checkbox {s}", .{label});
   const options = OptionsGet(opts);
-  var bc = ButtonContainer(src, id_extra, false, options);
+  var bc = ButtonContainer(src, id_extra, false, options.override(.{.background = false}));
   defer bc.deinit();
 
   if (bc.clicked) {
@@ -4601,14 +4601,36 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
   var box = Box(@src(), 0, .horizontal, options.plain().override(.{.expand = .both}));
   defer box.deinit();
 
-  var check_size = options.font().textSize("x").h;
+  var check_size = options.font().textSize("X").h;
   const r = SpacerRect(@src(), 0, .{.min_size = Size.all(check_size), .gravity = .left});
-  var rs = ParentGet().screenRectScale(r.insetAll(2));
-  PathAddRect(rs.r, Rect.all(2.0 * rs.s));
-  PathFillConvex(options.color_bg());
+
+  var rs = ParentGet().screenRectScale(r);
+
+  PathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
+  var col = Color.lerp(options.color_bg(), 0.3, options.color());
+  PathFillConvex(col);
+
+  rs.r = rs.r.insetAll(1);
+
+  PathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
+  var fill = options.color_bg();
+  if (target.*) {
+    fill = options.color_focus_bg();
+  }
+
+  if (bc.captured) {
+    // pressed
+    fill = Color.lerp(fill, 0.2, options.color());
+  }
+  else if (bc.highlight) {
+    // hovered
+    fill = Color.lerp(fill, 0.1, options.color());
+  }
+
+  PathFillConvex(fill);
 
   if (target.*) {
-    var check_color = Color{.r = 255, .g = 0, .b = 0, .a = 255};
+    var check_color = options.color_focus();
 
     const pad = math.max(1.0, rs.r.w / 6);
 
@@ -4633,7 +4655,10 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     PathFillConvex(check_color);
   }
 
-  LabelNoFormat(@src(), 0, label, .{});
+  LabelNoFormat(@src(), 0, label, options.override(.{
+    .background = false,
+    .margin = .{.x = 4, .y = 0, .w = 0, .h = 0},
+  }));
 }
 
 pub fn TextEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) void {
