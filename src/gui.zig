@@ -937,40 +937,92 @@ pub fn PathStroke(closed_in: bool, thickness: f32, col: Color) void {
     closed = false;
   }
 
-  var vtx = std.ArrayList(c.SDL_Vertex).initCapacity(cw.arena, cw.path.items.len * 2) catch unreachable;
+  var vtx_count = cw.path.items.len * 4;
+  if (!closed) {
+    vtx_count += 4;
+  }
+  var vtx = std.ArrayList(c.SDL_Vertex).initCapacity(cw.arena, vtx_count) catch unreachable;
   defer vtx.deinit();
-  const idx_count = (cw.path.items.len - 2) * 3 + cw.path.items.len * 6;
+  var idx_count = (cw.path.items.len - 1) * 18;
+  if (closed) {
+    idx_count += 18;
+  }
+  else {
+    idx_count += 8*3;
+  }
   var idx = std.ArrayList(c_int).initCapacity(cw.arena, idx_count) catch unreachable;
   defer idx.deinit();
   var col_trans = col;
   col_trans.a = 0;
 
+  var vtx_start: usize = 0;
   var i: usize = 0;
   while (i < cw.path.items.len) : (i += 1) {
     const ai = (i + cw.path.items.len - 1) % cw.path.items.len;
     const bi = i % cw.path.items.len;
     const ci = (i + 1) % cw.path.items.len;
     const aa = cw.path.items[ai];
-    const bb = cw.path.items[bi];
+    var bb = cw.path.items[bi];
     const cc = cw.path.items[ci];
 
     // the amount to move from bb to the edge of the line
     var halfnorm: Point = undefined;
+
+    var v: c.SDL_Vertex = undefined;
+    var diffab: Point = undefined;
 
     if (!closed and ((i == 0) or ((i + 1) == cw.path.items.len))) {
       if (i == 0) {
         const diffbc = Point.diff(bb, cc).normalize();
         // rotate by 90 to get normal
         halfnorm = Point{.x = diffbc.y / 2, .y = (-diffbc.x) / 2};
+
+        // square endcaps move bb out by thickness
+        bb.x += diffbc.x * thickness;
+        bb.y += diffbc.y * thickness;
+
+        // add 2 extra vertexes for endcap fringe
+        vtx_start += 2;
+
+        v.position.x = bb.x - halfnorm.x * (thickness + 1.0) + diffbc.x;
+        v.position.y = bb.y - halfnorm.y * (thickness + 1.0) + diffbc.y;
+        v.color = col_trans.sdlcolor();
+        vtx.append(v) catch unreachable;
+
+        v.position.x = bb.x + halfnorm.x * (thickness + 1.0) + diffbc.x;
+        v.position.y = bb.y + halfnorm.y * (thickness + 1.0) + diffbc.y;
+        v.color = col_trans.sdlcolor();
+        vtx.append(v) catch unreachable;
+
+        // add indexes for endcap fringe
+        idx.append(@intCast(c_int, 0)) catch unreachable;
+        idx.append(@intCast(c_int, vtx_start)) catch unreachable;
+        idx.append(@intCast(c_int, vtx_start + 1)) catch unreachable;
+
+        idx.append(@intCast(c_int, 0)) catch unreachable;
+        idx.append(@intCast(c_int, 1)) catch unreachable;
+        idx.append(@intCast(c_int, vtx_start)) catch unreachable;
+
+        idx.append(@intCast(c_int, 1)) catch unreachable;
+        idx.append(@intCast(c_int, vtx_start)) catch unreachable;
+        idx.append(@intCast(c_int, vtx_start + 2)) catch unreachable;
+
+        idx.append(@intCast(c_int, 1)) catch unreachable;
+        idx.append(@intCast(c_int, vtx_start + 2)) catch unreachable;
+        idx.append(@intCast(c_int, vtx_start + 2 + 1)) catch unreachable;
       }
       else if ((i + 1) == cw.path.items.len) {
-        const diffab = Point.diff(aa, bb).normalize();
+        diffab = Point.diff(aa, bb).normalize();
         // rotate by 90 to get normal
         halfnorm = Point{.x = diffab.y / 2, .y = (-diffab.x) / 2};
+
+        // square endcaps move bb out by thickness
+        bb.x -= diffab.x * thickness;
+        bb.y -= diffab.y * thickness;
       }
     }
     else {
-      const diffab = Point.diff(aa, bb).normalize();
+      diffab = Point.diff(aa, bb).normalize();
       const diffbc = Point.diff(bb, cc).normalize();
       // average of normals on each side
       halfnorm = Point{.x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2};
@@ -990,7 +1042,6 @@ pub fn PathStroke(closed_in: bool, thickness: f32, col: Color) void {
       }
     }
 
-    var v: c.SDL_Vertex = undefined;
     // side 1 inner vertex
     v.position.x = bb.x - halfnorm.x * thickness;
     v.position.y = bb.y - halfnorm.y * thickness;
@@ -1017,31 +1068,60 @@ pub fn PathStroke(closed_in: bool, thickness: f32, col: Color) void {
 
     if (closed or ((i + 1) != cw.path.items.len)) {
       // indexes for fill
-      idx.append(@intCast(c_int, bi * 4)) catch unreachable;
-      idx.append(@intCast(c_int, bi * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, ci * 4)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + ci * 4)) catch unreachable;
 
-      idx.append(@intCast(c_int, bi * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, ci * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, ci * 4)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + ci * 4 + 2)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + ci * 4)) catch unreachable;
 
       // indexes for aa fade from inner to outer side 1
-      idx.append(@intCast(c_int, bi * 4)) catch unreachable;
-      idx.append(@intCast(c_int, bi * 4 + 1)) catch unreachable;
-      idx.append(@intCast(c_int, ci * 4 + 1)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 1)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + ci * 4 + 1)) catch unreachable;
 
-      idx.append(@intCast(c_int, bi * 4)) catch unreachable;
-      idx.append(@intCast(c_int, ci * 4 + 1)) catch unreachable;
-      idx.append(@intCast(c_int, ci * 4)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + ci * 4 + 1)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + ci * 4)) catch unreachable;
 
       // indexes for aa fade from inner to outer side 2
-      idx.append(@intCast(c_int, bi * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, bi * 4 + 3)) catch unreachable;
-      idx.append(@intCast(c_int, ci * 4 + 3)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 3)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + ci * 4 + 3)) catch unreachable;
 
-      idx.append(@intCast(c_int, bi * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, ci * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, ci * 4 + 3)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + ci * 4 + 2)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + ci * 4 + 3)) catch unreachable;
+    }
+    else if (!closed and (i + 1) == cw.path.items.len) {
+      // add 2 extra vertexes for endcap fringe
+      v.position.x = bb.x - halfnorm.x * (thickness + 1.0) - diffab.x;
+      v.position.y = bb.y - halfnorm.y * (thickness + 1.0) - diffab.y;
+      v.color = col_trans.sdlcolor();
+      vtx.append(v) catch unreachable;
+
+      v.position.x = bb.x + halfnorm.x * (thickness + 1.0) - diffab.x;
+      v.position.y = bb.y + halfnorm.y * (thickness + 1.0) - diffab.y;
+      v.color = col_trans.sdlcolor();
+      vtx.append(v) catch unreachable;
+
+      // add indexes for endcap fringe
+      idx.append(@intCast(c_int, vtx_start + bi * 4)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 1)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 4)) catch unreachable;
+
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 4)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
+
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 4)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 5)) catch unreachable;
+
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 3)) catch unreachable;
+      idx.append(@intCast(c_int, vtx_start + bi * 4 + 5)) catch unreachable;
     }
   }
 
@@ -4610,7 +4690,13 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
   var col = Color.lerp(options.color_bg(), 0.3, options.color());
   PathFillConvex(col);
 
-  rs.r = rs.r.insetAll(1);
+  if (bc.focused) {
+    const thick_px = 4;
+    PathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
+    PathStroke(true, thick_px, options.color_focus_bg());
+  }
+
+  rs.r = rs.r.insetAll(0.5 * rs.s);
 
   PathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
   var fill = options.color_bg();
@@ -4630,8 +4716,6 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
   PathFillConvex(fill);
 
   if (target.*) {
-    var check_color = options.color_focus();
-
     const pad = math.max(1.0, rs.r.w / 6);
 
     var thick = math.max(1.0, rs.r.w / 5);
@@ -4640,19 +4724,12 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     const x = rs.r.x + pad + (0.25 * thick) + third;
     const y = rs.r.y + pad + (0.25 * thick) + size - (third * 0.5);
 
-    thick /= 2;
+    thick /= 1.5;
 
-    PathAddPoint(Point{.x = x - third        , .y = y - third - thick});
-    PathAddPoint(Point{.x = x - third - thick, .y = y - third});
-    PathAddPoint(Point{.x = x                , .y = y + thick});
-    PathAddPoint(Point{.x = x                , .y = y - thick});
-    PathFillConvex(check_color);
-
-    PathAddPoint(Point{.x = x                    , .y = y - thick});
-    PathAddPoint(Point{.x = x                    , .y = y + thick});
-    PathAddPoint(Point{.x = x + third * 2 + thick, .y = y - (third * 2)});
-    PathAddPoint(Point{.x = x + third * 2        , .y = y - (third * 2) - thick});
-    PathFillConvex(check_color);
+    PathAddPoint(Point{.x = x - third, .y = y - third});
+    PathAddPoint(Point{.x = x, .y = y});
+    PathAddPoint(Point{.x = x + third * 2, .y = y - third * 2});
+    PathStroke(false, thick, options.color_focus());
   }
 
   LabelNoFormat(@src(), 0, label, options.override(.{
@@ -4987,12 +5064,16 @@ pub const Rect = struct {
   }
 
   pub fn insetAll(self: *const Self, p: f32) Self {
-    return self.inset(Rect{.x = p, .y = p, .w = p, .h = p});
+    return self.inset(Rect.all(p));
   }
 
-  pub fn expand(self: *const Self, r: Rect) Self {
+  pub fn outset(self: *const Self, r: Rect) Self {
     return Self{.x = self.x - r.x, .y = self.y - r.y,
                 .w = self.w + r.x + r.w, .h = self.h + r.y + r.h};
+  }
+
+  pub fn outsetAll(self: *const Self, p: f32) Self {
+    return self.outset(Rect.all(p));
   }
 
   pub fn format(self: *const Self, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {

@@ -1,6 +1,4 @@
 
-convert checkbox to using stroke instead of fill
-
 convert:
 - ContextWidget
 - ScrollBar
@@ -23,6 +21,8 @@ punchlist for podcast app:
 - bitmaps
 - textentry needs to be able to paste a url
 
+some visual indication of non-focused windows
+- maybe change focus color inside?
 
 debugging:
 - highlight widgets that are causing CueFrames?
