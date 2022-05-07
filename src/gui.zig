@@ -3341,37 +3341,33 @@ pub fn Context(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(ContextWidget) catch unreachable;
   ret.* = ContextWidget{};
-  ret.install(src, id_extra, opts);
+  ret.init(src, id_extra, opts);
+  ret.install();
   return ret;
 }
 
 pub const ContextWidget = struct {
   const Self = @This();
-  id: u32 = undefined,
-  parent: Widget = undefined,
-  rect: Rect = Rect{},
-  minSize: Size = Size{},
+  wd: WidgetData = undefined,
 
   winId: u32 = undefined,
   active: bool = false,
   activePt: Point = Point{},
 
-  pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
+  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
     const options = OptionsGet(opts);
-    self.parent = ParentSet(self.widget());
-    self.id = self.parent.extendID(src, id_extra);
-    self.rect = self.parent.rectFor(self.id, options);
-    debug("{x} Context {}", .{self.id, self.rect});
+    self.wd = WidgetData.init(src, id_extra, options);
     self.winId = WindowCurrentId();
-    if (DataGet(self.id, Point)) |a| {
+    if (DataGet(self.wd.id, Point)) |a| {
       self.active = true;
       self.activePt = a;
     }
+  }
 
-    var fill_color = Color{.r = 0, .g = 100, .b = 0, .a = 50};
-    const rs = self.parent.screenRectScale(self.rect);
-    PathAddRect(rs.r, Rect.all(5));
-    PathFillConvex(fill_color);
+  pub fn install(self: *Self) void {
+    _ = ParentSet(self.widget());
+    debug("{x} Context {}", .{self.wd.id, self.wd.rect});
+    self.wd.borderAndBackground();
   }
 
   pub fn activePoint(self: *Self) ?Point {
@@ -3388,28 +3384,28 @@ pub const ContextWidget = struct {
   }
 
   fn ID(self: *const Self) u32 {
-    return self.id;
+    return self.wd.id;
   }
 
   pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    return PlaceIn(id, self.rect, opts);
+    return PlaceIn(id, self.wd.contentRect(), opts);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
-    self.minSize = Size.max(self.minSize, s);
+    self.wd.minSizeMax(self.wd.padSize(s));
   }
 
-  pub fn screenRectScale(self: *Self, r: Rect) RectScale {
-    return self.parent.screenRectScale(r);
+  pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+    return self.wd.parent.screenRectScale(rect);
   }
 
   pub fn bubbleEvent(self: *Self, e: *Event) void {
-    self.parent.bubbleEvent(e);
+    self.wd.parent.bubbleEvent(e);
   }
 
   pub fn processMouseEventsAfter(self: *Self) void {
-    const rs = self.parent.screenRectScale(self.rect);
-    var iter = EventIterator.init(self.id, rs.r);
+    const rs = self.wd.borderRectScale();
+    var iter = EventIterator.init(self.wd.id, rs.r);
     while (iter.next()) |e| {
       switch (e.evt) {
         .mouse => {
@@ -3432,11 +3428,10 @@ pub const ContextWidget = struct {
   pub fn deinit(self: *Self) void {
     self.processMouseEventsAfter();
     if (self.active) {
-      DataSet(self.id, self.activePt);
+      DataSet(self.wd.id, self.activePt);
     }
-    MinSizeSet(self.id, self.minSize);
-    self.parent.minSizeForChild(self.minSize);
-    _ = ParentSet(self.parent);
+    self.wd.reportMinSize();
+    _ = ParentSet(self.wd.parent);
   }
 };
 
