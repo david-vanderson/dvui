@@ -3,9 +3,6 @@ convert:
 - ScrollBar
 - ScaleWidget
 
-dark mode
-- checkbox in menu
-
 icon browser for builtin icons
 - load only a few icons each frame
 

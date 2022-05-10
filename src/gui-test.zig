@@ -155,6 +155,19 @@ pub fn main() void {
               _ = gui.MenuItemLabel(@src(), 0, "Paste", false, .{});
             }
           }
+
+          {
+            if (gui.MenuItemLabel(@src(), 0, "Theme", true, .{})) |r| {
+              var fw = gui.Popup(@src(), 0, gui.Rect.fromPoint(gui.Point{.x = r.x, .y = r.y + r.h}), &menu.submenus_activated, menu, .{});
+              defer fw.deinit();
+
+              gui.Checkbox(@src(), 0, &theme_dark, "Dark", .{});
+
+              _ = gui.MenuItemLabel(@src(), 0, "Cut", false, .{});
+              _ = gui.MenuItemLabel(@src(), 0, "Copy", false, .{});
+              _ = gui.MenuItemLabel(@src(), 0, "Paste", false, .{});
+            }
+          }
         }
 
         //{
