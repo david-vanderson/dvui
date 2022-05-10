@@ -189,19 +189,6 @@ pub const Options = struct {
     }
   }
 
-  pub fn lineSkip(self: *const Options) f32 {
-    const f = self.font();
-
-    // do the same sized thing as textSize so they will cache the same font
-    const ask_size = @ceil(f.size * WindowNaturalScale());
-    const target_fraction = f.size / ask_size;
-    const sized_font = f.resize(ask_size);
-
-    const sdlfont = FontCacheGet(sized_font);
-    const skip = c.TTF_FontLineSkip(sdlfont);
-    return @intToFloat(f32, skip) * target_fraction * (self.font_line_skip_factor orelse 1.0);
-  }
-
   pub fn font(self: *const Options) Font {
     const style = self.font_style orelse .body;
     const f =
@@ -373,6 +360,7 @@ fn BubbleEvents(w: Widget) void {
 
 pub const Font = struct {
   size: f32,
+  line_skip_factor: f32 = 1.0,
   name: []const u8,
   ttf_bytes: []const u8,
 
@@ -401,6 +389,16 @@ pub const Font = struct {
     return Size{.w = @intToFloat(f32, tw) * target_fraction, .h = @intToFloat(f32, th) * target_fraction};
   }
 
+  pub fn lineSkip(self: *const Font) f32 {
+    // do the same sized thing as textSize so they will cache the same font
+    const ask_size = @ceil(self.size * WindowNaturalScale());
+    const target_fraction = self.size / ask_size;
+    const sized_font = self.resize(ask_size);
+
+    const sdlfont = FontCacheGet(sized_font);
+    const skip = c.TTF_FontLineSkip(sdlfont);
+    return @intToFloat(f32, skip) * target_fraction * self.line_skip_factor;
+  }
 };
 
 const FontCacheEntry = struct {
@@ -3187,7 +3185,7 @@ pub const TextLayoutWidget = struct {
     var iter = std.mem.split(u8, text, "\n");
     var first: bool = true;
     const startx = self.wd.contentRect().x;
-    const lineskip = options.lineSkip();
+    const lineskip = options.font().lineSkip();
     while (iter.next()) |line| {
       if (first) {
         first = false;
@@ -3203,7 +3201,7 @@ pub const TextLayoutWidget = struct {
   pub fn addTextNoNewlines(self: *Self, text: []const u8, opts: Options) void {
     const options = self.wd.options.override(opts);
     const msize = options.font().textSize("m");
-    const lineskip = options.lineSkip();
+    const lineskip = options.font().lineSkip();
     var txt = text;
 
     while (txt.len > 0) {
@@ -4032,39 +4030,34 @@ pub fn Scale(src: std.builtin.SourceLocation, id_extra: usize, initial_scale: f3
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(ScaleWidget) catch unreachable;
   ret.* = ScaleWidget{};
-  ret.install(src, id_extra, initial_scale, opts);
+  ret.init(src, id_extra, initial_scale, opts);
+  ret.install();
   return ret;
 }
 
 pub const ScaleWidget = struct {
   const Self = @This();
-  id: u32 = undefined,
-  parent: Widget = undefined,
-  rect: Rect = Rect{},
-  minSize: Size = Size{},
+  wd: WidgetData = undefined,
   scale: f32 = 1.0,
 
-  pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, initial_scale: f32, opts: Options) void {
+  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, initial_scale: f32, opts: Options) void {
     const options = OptionsGet(opts);
-    self.parent = ParentSet(self.widget());
-    self.id = self.parent.extendID(src, id_extra);
+    self.wd = WidgetData.init(src, id_extra, options);
     self.scale = initial_scale;
-    if (DataGet(self.id, f32)) |s| {
+    if (DataGet(self.wd.id, f32)) |s| {
       self.scale = s;
-    }
-    self.rect = self.parent.rectFor(self.id, options);
-    debug("{x} Scale {d} {}", .{self.id, self.scale, self.rect});
-
-    if (options.background orelse false) {
-      const rs = self.parent.screenRectScale(self.rect);
-      PathAddRect(rs.r, Rect.all(0));
-      PathFillConvex(options.color_bg());
     }
   }
 
+  pub fn install(self: *Self) void {
+    _ = ParentSet(self.widget());
+    debug("{x} Scale {d} {}", .{self.wd.id, self.scale, self.wd.rect});
+    self.wd.borderAndBackground();
+  }
+
   fn processEventsAfter(self: *Self) void {
-    const rs = self.parent.screenRectScale(self.rect);
-    var iter = EventIterator.init(self.id, rs.r);
+    const rs = self.wd.borderRectScale();
+    var iter = EventIterator.init(self.wd.id, rs.r);
     while (iter.next()) |e| {
       switch (e.evt) {
         .mouse => |me| {
@@ -4088,34 +4081,33 @@ pub const ScaleWidget = struct {
   }
 
   fn ID(self: *const Self) u32 {
-    return self.id;
+    return self.wd.id;
   }
 
   pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    return PlaceIn(id, self.rect.justSize().scale(1.0 / self.scale), opts);
+    return PlaceIn(id, self.wd.contentRect().justSize().scale(1.0 / self.scale), opts);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
-    self.minSize = Size.max(self.minSize, s.scale(self.scale));
+    self.wd.minSizeMax(self.wd.padSize(s.scale(self.scale)));
   }
 
   pub fn screenRectScale(self: *Self, r: Rect) RectScale {
-    const screenRS = self.parent.screenRectScale(self.rect);
+    const screenRS = self.wd.contentRectScale();
     const s = screenRS.s * self.scale;
     const scaled = r.scale(s);
     return RectScale{.r = scaled.offset(screenRS.r), .s = s};
   }
 
   pub fn bubbleEvent(self: *Self, e: *Event) void {
-    self.parent.bubbleEvent(e);
+    self.wd.parent.bubbleEvent(e);
   }
 
   pub fn deinit(self: *Self) void {
     self.processEventsAfter();
-    DataSet(self.id, self.scale);
-    MinSizeSet(self.id, self.minSize);
-    self.parent.minSizeForChild(self.minSize);
-    _ = ParentSet(self.parent);
+    DataSet(self.wd.id, self.scale);
+    self.wd.reportMinSize();
+    _ = ParentSet(self.wd.parent);
   }
 };
 
@@ -4676,19 +4668,20 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
   var box = Box(@src(), 0, .horizontal, options.plain().override(.{.expand = .both}));
   defer box.deinit();
 
-  var check_size = options.font().textSize("X").h;
+  var check_size = options.font().lineSkip();
   const r = SpacerRect(@src(), 0, .{.min_size = Size.all(check_size), .gravity = .left});
 
   var rs = ParentGet().screenRectScale(r);
+  const thick_focus = 2;
+  rs.r = rs.r.insetAll(thick_focus / 2 * rs.s);
 
   PathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
   var col = Color.lerp(options.color_bg(), 0.3, options.color());
   PathFillConvex(col);
 
   if (bc.focused) {
-    const thick_px = 4;
     PathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
-    PathStroke(true, thick_px, options.color_focus_bg());
+    PathStroke(true, thick_focus * rs.s, options.color_focus_bg());
   }
 
   rs.r = rs.r.insetAll(0.5 * rs.s);
