@@ -1,12 +1,7 @@
 
-doing default options for widgets
-- should floating windows have padding by default?
-
 convert:
 - ScrollBar
 - ScaleWidget
-
-make sure everyplace that sets a tabindex does it only if they have a non-empty rect
 
 dark mode
 - checkbox in menu

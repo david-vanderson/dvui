@@ -2562,7 +2562,6 @@ pub const PopupWidget = struct {
   var Defaults: Options = .{
     .corner_radius = Rect.all(5),
     .border = Rect.all(1),
-    .padding = Rect.all(4),
     .background = true,
     .color_style = .window
   };
@@ -2707,7 +2706,6 @@ pub const FloatingWindowWidget = struct {
   var Defaults: Options = .{
     .corner_radius = Rect.all(5),
     .border = Rect.all(1),
-    .padding = Rect.all(4),
     .background = true,
     .color_style = .window
   };
@@ -3843,6 +3841,7 @@ pub const ScrollAreaWidget = struct {
   const Self = @This();
   var Defaults: Options = .{
     .background = true,
+    .corner_radius = Rect.all(5),
     .color_style = .content,
     .min_size = .{.w = 0, .h = 100},
   };
