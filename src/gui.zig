@@ -2562,6 +2562,7 @@ pub const PopupWidget = struct {
   var Defaults: Options = .{
     .corner_radius = Rect.all(5),
     .border = Rect.all(1),
+    .padding = Rect.all(4),
     .background = true,
     .color_style = .window
   };
