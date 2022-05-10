@@ -1,14 +1,6 @@
 
-split options and style
-- style will have a default for each widget:
-  - font_style, color_style
-  - margin/border/padding/radius/min_size
-- options will have:
-  - expand, gravity (not in style)
-  - color, color_bg (for custom)
-  - overrides for stuff in style for each widget
-
-if you want to change other things (like the various colors or various fonts), then you have to alter the style
+doing default options for widgets
+- should floating windows have padding by default?
 
 convert:
 - ScrollBar

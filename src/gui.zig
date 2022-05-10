@@ -25,6 +25,59 @@ pub fn debug(comptime str: []const u8, args: anytype) void {
   }
 }
 
+pub const Theme = struct {
+  color_accent: Color,
+  color_accent_bg: Color,
+  color_success: Color,
+  color_success_bg: Color,
+  color_warning: Color,
+  color_warning_bg: Color,
+  color_err: Color,
+  color_err_bg: Color,
+  color_window: Color,
+  color_window_bg: Color,
+  color_content: Color,
+  color_content_bg: Color,
+  color_control: Color,
+  color_control_bg: Color,
+
+  font_body: Font,
+  font_heading: Font,
+  font_caption: Font,
+  font_caption_heading: Font,
+  font_title_large: Font,
+  font_title_1: Font,
+  font_title_2: Font,
+  font_title_3: Font,
+  font_title_4: Font,
+};
+
+pub const Theme_Adwaita = Theme{
+  .font_body = Font{.size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera},
+  .font_heading = Font{.size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
+  .font_caption = Font{.size = 9, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera},
+  .font_caption_heading = Font{.size = 9, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
+  .font_title_large = Font{.size = 24, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera},
+  .font_title_1 = Font{.size = 20, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
+  .font_title_2 = Font{.size = 17, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
+  .font_title_3 = Font{.size = 15, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
+  .font_title_4 = Font{.size = 13, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
+  .color_accent = Color{.r = 0xff, .g = 0xff, .b = 0xff, .a = 255},
+  .color_accent_bg = Color{.r = 0x35, .g = 0x84, .b = 0xe4, .a = 255},
+  .color_success = Color{.r = 0, .g = 0, .b = 0, .a = 255},
+  .color_success_bg = Color{.r = 0, .g = 0, .b = 0, .a = 255},
+  .color_warning = Color{.r = 0, .g = 0, .b = 0, .a = 255},
+  .color_warning_bg = Color{.r = 0, .g = 0, .b = 0, .a = 255},
+  .color_err = Color{.r = 0, .g = 0, .b = 0, .a = 255},
+  .color_err_bg = Color{.r = 0, .g = 0, .b = 0, .a = 255},
+  .color_window = Color{.r = 0x31, .g = 0x31, .b = 0x31, .a = 255},
+  .color_window_bg = Color{.r = 0xf0, .g = 0xf0, .b = 0xf0, .a = 255},
+  .color_content = Color{.r = 0, .g = 0, .b = 0, .a = 255},
+  .color_content_bg = Color{.r = 0xff, .g = 0xff, .b = 0xff, .a = 255},
+  .color_control = Color{.r = 0x31, .g = 0x31, .b = 0x31, .a = 255},
+  .color_control_bg = Color{.r = 0xe0, .g = 0xe0, .b = 0xe0, .a = 255},
+};
+
 pub const Options = struct {
   pub const Expand = enum {
     none,
@@ -54,6 +107,7 @@ pub const Options = struct {
   };
 
   pub const FontStyle = enum {
+    custom,
     body,
     heading,
     caption,
@@ -76,6 +130,27 @@ pub const Options = struct {
     control,
   };
 
+  // default is .none
+  expand: ?Expand = null,
+
+  // default is .topleft
+  gravity: ?Gravity = null,
+
+  // widgets will be focusable only if this is set
+  tab_index: ?u16 = null,
+
+  // only used if .color_style == .custom
+  color_custom: ?Color = null,
+  color_custom_bg: ?Color = null,
+
+  // only used if .font_style == .custom
+  font_custom: ?Font = null,
+
+  // colors and fonts are pulled from here
+  theme: ?*const Theme = null,
+
+  // For the rest of these fields, if null, each widget uses its defaults
+
   // x left, y top, w right, h bottom
   margin: ?Rect = null,
   border: ?Rect = null,
@@ -84,131 +159,113 @@ pub const Options = struct {
   // x topleft, y topright, w botright, h botleft
   corner_radius: ?Rect = null,
 
-  expand: ?Expand = null,
-  gravity: ?Gravity = null,
-  tab_index: ?u16 = null,
-
   // includes padding/border/margin
   // see overrideMinSizeContent()
   min_size: ?Size = null,
 
   color_style: ?ColorStyle = null,
-  color_custom: ?Color = null,
-  color_custom_bg: ?Color = null,
-  color_accent: ?Color = null,
-  color_accent_bg: ?Color = null,
-  color_success: ?Color = null,
-  color_success_bg: ?Color = null,
-  color_warning: ?Color = null,
-  color_warning_bg: ?Color = null,
-  color_err: ?Color = null,
-  color_err_bg: ?Color = null,
-  color_window: ?Color = null,
-  color_window_bg: ?Color = null,
-  color_content: ?Color = null,
-  color_content_bg: ?Color = null,
-  color_control: ?Color = null,
-  color_control_bg: ?Color = null,
   background: ?bool = null,
-
   font_style: ?FontStyle = null,
-  font_body: ?Font = null,
-  font_heading: ?Font = null,
-  font_caption: ?Font = null,
-  font_caption_heading: ?Font = null,
-  font_title_large: ?Font = null,
-  font_title_1: ?Font = null,
-  font_title_2: ?Font = null,
-  font_title_3: ?Font = null,
-  font_title_4: ?Font = null,
-  font_line_skip_factor: ?f32 = null,
 
   pub fn color(self: *const Options) Color {
-    const style = self.color_style orelse .control;
+    return self.colorWithDefault(.control);
+  }
+
+  pub fn colorWithDefault(self: *const Options, style_default: ColorStyle) Color {
+    const style = self.color_style orelse style_default;
     const col =
       switch (style) {
         .custom => self.color_custom,
-        .accent => self.color_accent,
-        .success => self.color_success,
-        .warning => self.color_warning,
-        .err => self.color_err,
-        .content => self.color_content,
-        .window => self.color_window,
-        .control => self.color_control,
+        .accent => if (self.theme) |t| t.color_accent else null,
+        .success => if (self.theme) |t| t.color_success else null,
+        .warning => if (self.theme) |t| t.color_warning else null,
+        .err => if (self.theme) |t| t.color_err else null,
+        .content => if (self.theme) |t| t.color_content else null,
+        .window => if (self.theme) |t| t.color_window else null,
+        .control => if (self.theme) |t| t.color_control else null,
     };
       
     if (col) |cc| {
       return cc;
     }
     else {
-      debug("Options.color couldn't find a color, substituting magenta\n", .{});
+      log.debug("Options.color() couldn't find a color, substituting magenta\n", .{});
       return Color{.r = 255, .g = 0, .b = 255, .a = 255};
     }
   }
 
   pub fn color_bg(self: *const Options) Color {
-    const style = self.color_style orelse .control;
+    return self.color_bgWithDefault(.control);
+  }
+
+  pub fn color_bgWithDefault(self: *const Options, style_default: ColorStyle) Color {
+    const style = self.color_style orelse style_default;
     const col =
       switch (style) {
         .custom => self.color_custom_bg,
-        .accent => self.color_accent_bg,
-        .success => self.color_success_bg,
-        .warning => self.color_warning_bg,
-        .err => self.color_err_bg,
-        .content => self.color_content_bg,
-        .window => self.color_window_bg,
-        .control => self.color_control_bg,
+        .accent => if (self.theme) |t| t.color_accent_bg else null,
+        .success => if (self.theme) |t| t.color_success_bg else null,
+        .warning => if (self.theme) |t| t.color_warning_bg else null,
+        .err => if (self.theme) |t| t.color_err_bg else null,
+        .content => if (self.theme) |t| t.color_content_bg else null,
+        .window => if (self.theme) |t| t.color_window_bg else null,
+        .control => if (self.theme) |t| t.color_control_bg else null,
     };
       
     if (col) |cc| {
       return cc;
     }
     else {
-      debug("Options.color_bg couldn't find a color, substituting green\n", .{});
+      log.debug("Options.color_bg() couldn't find a color, substituting green\n", .{});
       return Color{.r = 0, .g = 255, .b = 0, .a = 255};
     }
   }
 
   pub fn color_focus(self: *const Options) Color {
-    if (self.color_accent) |col| {
-      return col;
+    if (self.theme) |t| {
+      return t.color_accent;
     }
     else  {
-      debug("Options.color_focus couldn't find a color, substituting magenta\n", .{});
-      return Color{.r = 255, .g = 0, .b = 255, .a = 255};
+      log.debug("Options.color_focus() couldn't find a color, substituting blue\n", .{});
+      return Color{.r = 0, .g = 0, .b = 255, .a = 255};
     }
   }
 
   pub fn color_focus_bg(self: *const Options) Color {
-    if (self.color_accent_bg) |col| {
-      return col;
+    if (self.theme) |t| {
+      return t.color_accent_bg;
     }
     else  {
-      debug("Options.color_focus_bg couldn't find a color, substituting green\n", .{});
-      return Color{.r = 0, .g = 255, .b = 0, .a = 255};
+      log.debug("Options.color_focus_bg() couldn't find a color, substituting red\n", .{});
+      return Color{.r = 255, .g = 0, .b = 0, .a = 255};
     }
   }
 
   pub fn font(self: *const Options) Font {
-    const style = self.font_style orelse .body;
+    return self.fontWithDefault(.body);
+  }
+
+  pub fn fontWithDefault(self: *const Options, style_default: FontStyle) Font {
+    const style = self.font_style orelse style_default;
     const f =
       switch (style) {
-        .body => self.font_body,
-        .heading => self.font_heading,
-        .caption => self.font_caption,
-        .caption_heading => self.font_caption_heading,
-        .title_large => self.font_title_large,
-        .title_1 => self.font_title_1,
-        .title_2 => self.font_title_2,
-        .title_3 => self.font_title_3,
-        .title_4 => self.font_title_4,
+        .custom => self.font_custom,
+        .body => if (self.theme) |t| t.font_body else null,
+        .heading => if (self.theme) |t| t.font_heading else null,
+        .caption => if (self.theme) |t| t.font_caption else null,
+        .caption_heading => if (self.theme) |t| t.font_caption_heading else null,
+        .title_large => if (self.theme) |t| t.font_title_large else null,
+        .title_1 => if (self.theme) |t| t.font_title_1 else null,
+        .title_2 => if (self.theme) |t| t.font_title_2 else null,
+        .title_3 => if (self.theme) |t| t.font_title_3 else null,
+        .title_4 => if (self.theme) |t| t.font_title_4 else null,
     };
       
     if (f) |ff| {
       return ff;
     }
     else {
-      debug("Options.font couldn't find a font, falling back\n", .{});
+      log.debug("Options.font() couldn't find a font, falling back\n", .{});
       return Font{.name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 12};
     }
   }
@@ -275,6 +332,20 @@ pub const Options = struct {
     inline for (@typeInfo(Options).Struct.fields) |f| {
       if (@field(over, f.name)) |fval| {
         @field(ret, f.name) = fval;
+      }
+    }
+
+    return ret;
+  }
+
+  pub fn overrideIfNull(self: *const Options, over: Options) Options {
+    var ret = self.*;
+
+    inline for (@typeInfo(Options).Struct.fields) |f| {
+      if (@field(over, f.name)) |fval| {
+        if (@field(ret, f.name) == null) {
+          @field(ret, f.name) = fval;
+        }
       }
     }
 
@@ -2339,45 +2410,10 @@ pub const Window = struct {
     self.parent = self.widget();
     self.menu_current = null;
 
-    OptionsReset(.{
-      .font_body = Font{.size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera},
-      .font_heading = Font{.size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
-      .font_caption = Font{.size = 9, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera},
-      .font_caption_heading = Font{.size = 9, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
-      .font_title_large = Font{.size = 24, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera},
-      .font_title_1 = Font{.size = 20, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
-      .font_title_2 = Font{.size = 17, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
-      .font_title_3 = Font{.size = 15, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
-      .font_title_4 = Font{.size = 13, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
-      .color_custom = Color{.r = 255, .g = 0, .b = 0, .a = 255},
-      .color_custom_bg = Color{.r = 0, .g = 255, .b = 0, .a = 255},
-      .color_accent = Color{.r = 0xff, .g = 0xff, .b = 0xff, .a = 255},
-      .color_accent_bg = Color{.r = 0x35, .g = 0x84, .b = 0xe4, .a = 255},
-      .color_success = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-      .color_success_bg = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-      .color_warning = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-      .color_warning_bg = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-      .color_err = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-      .color_err_bg = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-      .color_window = Color{.r = 0x31, .g = 0x31, .b = 0x31, .a = 255},
-      .color_window_bg = Color{.r = 0xf0, .g = 0xf0, .b = 0xf0, .a = 255},
-      .color_content = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-      .color_content_bg = Color{.r = 0xff, .g = 0xff, .b = 0xff, .a = 255},
-      .color_control = Color{.r = 0x31, .g = 0x31, .b = 0x31, .a = 255},
-      .color_control_bg = Color{.r = 0xe0, .g = 0xe0, .b = 0xe0, .a = 255},
-    });
-
-    // these options should always have these defaults, regardless of style
-    self.options.font_style = .body;
-    self.options.color_style = .control;
-    self.options.background = true;
-    self.options.margin = null;
-    self.options.border = null;
-    self.options.padding = null;
-    self.options.corner_radius = null;
+    OptionsReset(.{.theme = &Theme_Adwaita});
 
     self.layout = BoxWidget{};
-    self.layout.init(@src(), 0, .vertical, .{.expand = .both});
+    self.layout.init(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
     self.layout.install();
   }
 
@@ -2523,6 +2559,14 @@ pub fn Popup(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect
 
 pub const PopupWidget = struct {
   const Self = @This();
+  var Defaults: Options = .{
+    .corner_radius = Rect.all(5),
+    .border = Rect.all(1),
+    .padding = Rect.all(4),
+    .background = true,
+    .color_style = .window
+  };
+
   id: u32 = undefined,
   parent: Widget = undefined,
   prev_windowId: u32 = 0,
@@ -2534,7 +2578,7 @@ pub const PopupWidget = struct {
   deferred_render_queue: DeferredRenderQueue = undefined,
 
   pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, openflag: ?*bool, menu: ?*MenuWidget, opts: Options) void {
-    const options = OptionsGet(opts);
+    const options = OptionsGet(opts).overrideIfNull(Defaults);
     DeferRender();
     self.parent = ParentSet(self.widget());
     self.id = self.parent.extendID(src, id_extra);
@@ -2660,6 +2704,14 @@ pub fn FloatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: b
 
 pub const FloatingWindowWidget = struct {
   const Self = @This();
+  var Defaults: Options = .{
+    .corner_radius = Rect.all(5),
+    .border = Rect.all(1),
+    .padding = Rect.all(4),
+    .background = true,
+    .color_style = .window
+  };
+
   id: u32 = undefined,
   parent: Widget = undefined,
   modal: bool = false,
@@ -2671,7 +2723,7 @@ pub const FloatingWindowWidget = struct {
   deferred_render_queue: DeferredRenderQueue = undefined,
 
   pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, modal: bool, initialRect: Rect, openflag: ?*bool, opts: Options) void {
-    const options = OptionsGet(opts);
+    const options = OptionsGet(opts).overrideIfNull(Defaults);
 
     DeferRender();
     self.parent = ParentSet(self.widget());
@@ -2719,7 +2771,7 @@ pub const FloatingWindowWidget = struct {
     // we are using BoxWidget to do border/background but floating windows
     // don't have margin, so turn that off
     self.layout = BoxWidget{};
-    self.layout.init(@src(), 0, .vertical, options.override(.{.margin = Rect{}, .expand = .both}));
+    self.layout.init(@src(), 0, .vertical, options.override(.{.margin = .{}, .expand = .both}));
     self.layout.install();
   }
 
@@ -3160,13 +3212,20 @@ pub fn TextLayout(src: std.builtin.SourceLocation, id_extra: usize, opts: Option
 
 pub const TextLayoutWidget = struct {
   const Self = @This();
+  var Defaults: Options = .{
+    .margin = Rect.all(4),
+    .padding = Rect.all(4),
+    .background = true,
+    .color_style = .content,
+  };
+
   wd: WidgetData = undefined,
   corners: [4]?Rect = [_]?Rect{null} ** 4,
   cursor: Point = Point{},
   prevClip: Rect = Rect{},
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-    const options = OptionsGet(opts);
+    const options = OptionsGet(opts).overrideIfNull(Defaults);
     self.wd = WidgetData.init(src, id_extra, options);
   }
 
@@ -3503,6 +3562,7 @@ pub fn Box(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opt
 
 pub const BoxWidget = struct {
   const Self = @This();
+
   wd: WidgetData = undefined,
 
   dir: Direction = undefined,
@@ -3781,6 +3841,12 @@ pub fn ScrollArea(src: std.builtin.SourceLocation, id_extra: usize, opts: Option
 
 pub const ScrollAreaWidget = struct {
   const Self = @This();
+  var Defaults: Options = .{
+    .background = true,
+    .color_style = .content,
+    .min_size = .{.w = 0, .h = 100},
+  };
+
   const grab_thick = 10;
   const ScrollInfo = struct {
     fraction_visible: f32,
@@ -3802,7 +3868,7 @@ pub const ScrollAreaWidget = struct {
   scrollAfter: f32 = 0,  // how far we need to scroll after this frame
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-    const options = OptionsGet(opts);
+    const options = OptionsGet(opts).overrideIfNull(Defaults);
     self.wd = WidgetData.init(src, id_extra, options);
     if (DataGet(self.wd.id, Data)) |d| {
       self.virtualSize = d.virtualSize;
@@ -4122,6 +4188,7 @@ pub fn Menu(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, op
 
 pub const MenuWidget = struct {
   const Self = @This();
+
   wd: WidgetData = undefined,
 
   dir: Direction = undefined,
@@ -4224,6 +4291,10 @@ pub fn MenuItem(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool,
 
 pub const MenuItemWidget = struct {
   const Self = @This();
+  var Defaults: Options = .{
+    .corner_radius = Rect.all(5),
+    .padding = Rect.all(4),
+  };
 
   wd: WidgetData = undefined,
   focused: bool = false,
@@ -4232,7 +4303,7 @@ pub const MenuItemWidget = struct {
   activated: bool = false,
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, opts: Options) void {
-    const options = OptionsGet(opts);
+    const options = OptionsGet(opts).overrideIfNull(Defaults);
     self.wd = WidgetData.init(src, id_extra, options);
     self.submenu = submenu;
     if (!self.wd.rect.empty()) {
@@ -4386,6 +4457,11 @@ pub const MenuItemWidget = struct {
 
 pub const LabelWidget = struct {
   const Self = @This();
+  var Defaults: Options = .{
+    .padding = Rect.all(4),
+    .color_style = .control,
+  };
+
   wd: WidgetData = undefined,
   label: []const u8 = undefined,
 
@@ -4393,7 +4469,7 @@ pub const LabelWidget = struct {
     var cw = current_window orelse unreachable;
     self.label = std.fmt.allocPrint(cw.arena, fmt, args) catch unreachable;
 
-    const options = OptionsGet(opts);
+    const options = OptionsGet(opts).overrideIfNull(Defaults);
     const size = options.font().textSize(self.label);
     self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
     self.wd.placeInsideNoExpand();
@@ -4617,12 +4693,20 @@ pub const ButtonContainerWidget = struct {
 
 pub const ButtonWidget = struct {
   const Self = @This();
+  var Defaults: Options = .{
+    .margin = Rect.all(4),
+    .corner_radius = Rect.all(5),
+    .padding = Rect.all(4),
+    .background = true,
+    .color_style = .control,
+  };
+
   bc: ButtonContainerWidget = undefined,
   label: []const u8 = undefined,
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) void {
     self.bc = ButtonContainerWidget{};
-    _ = self.bc.init(src, id_extra, true, opts);
+    _ = self.bc.init(src, id_extra, true, OptionsGet(opts).overrideIfNull(Defaults));
     self.label = label;
   }
 
@@ -4645,7 +4729,15 @@ pub fn Button(src: std.builtin.SourceLocation, id_extra: usize, label: []const u
 }
 
 pub fn ButtonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) bool {
-  const options = OptionsGet(opts);
+  var Defaults: Options = .{
+    .margin = gui.Rect.all(4),
+    .corner_radius = Rect.all(5),
+    .padding = Rect.all(4),
+    .background = true,
+    .color_style = .control,
+    .gravity = .center,
+  };
+  const options = OptionsGet(opts).overrideIfNull(Defaults);
   debug("ButtonIcon \"{s}\" {}", .{name, options});
   var bc = ButtonContainer(src, id_extra, true, options);
   defer bc.deinit();
@@ -4738,6 +4830,15 @@ pub fn TextEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, t
 
 pub const TextEntryWidget = struct {
   const Self = @This();
+  var Defaults: Options = .{
+    .margin = Rect.all(4),
+    .corner_radius = Rect.all(5),
+    .border = Rect.all(1),
+    .padding = Rect.all(4),
+    .background = true,
+    .color_style = .content,
+  };
+
   wd: WidgetData = undefined,
 
   allocator: ?std.mem.Allocator = null,
@@ -4746,7 +4847,7 @@ pub const TextEntryWidget = struct {
   len: usize = undefined,
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) void {
-    const options = OptionsGet(opts);
+    const options = OptionsGet(opts).overrideIfNull(Defaults);
 
     const msize = options.font().textSize("M");
     const size = Size{.w = msize.w * width, .h = msize.h};

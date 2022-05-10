@@ -78,6 +78,7 @@ pub fn main() void {
     }
 
     win.endEvents();
+    defer win.end(10);
 
     {
       const oo = gui.OptionsSet(.{.expand = .both});
@@ -208,11 +209,7 @@ pub fn main() void {
         //}
 
         {
-          var scroll = gui.ScrollArea(@src(), 0, .{.min_size = .{.w = 50, .h = 200},
-            .margin = gui.Rect.all(8),
-            .border = gui.Rect.all(1),
-            .padding = gui.Rect.all(8),
-          });
+          var scroll = gui.ScrollArea(@src(), 0, .{});
           defer scroll.deinit();
 
           var buf: [100]u8 = undefined;
@@ -368,7 +365,7 @@ pub fn main() void {
         }
       
 
-        gui.Label(@src(), 0, "Pretty Cool", .{}, .{.font_body = .{.name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 20}});
+        gui.Label(@src(), 0, "Pretty Cool", .{}, .{.font_style = .custom, .font_custom = .{.name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 20}});
 
         if (gui.Button(@src(), 0, "button", .{})) {
           std.debug.print("floating button\n", .{});
@@ -456,8 +453,6 @@ pub fn main() void {
         tl.deinit();
       }
     }
-
-    win.end(10);
   }
 
   c.SDL_DestroyRenderer(renderer);

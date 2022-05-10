@@ -91,9 +91,7 @@ pub fn main() void {
 var show_dialog: bool = false;
 
 fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
-  var box = gui.Box(@src(), 0, .vertical, .{
-    .expand = .both,
-    .color_style = .window});
+  var box = gui.Box(@src(), 0, .vertical, .{.expand = .both});
   defer box.deinit();
 
   {
@@ -101,19 +99,11 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
     defer overlay.deinit();
 
     {
-      var menu = gui.Menu(@src(), 0, .horizontal, .{
-        .expand = .horizontal,
-      //.color_style = .window,
-      });
+      var menu = gui.Menu(@src(), 0, .horizontal, .{.expand = .horizontal});
       defer menu.deinit();
 
       gui.Spacer(@src(), 0, .{.expand = .horizontal});
 
-      const oo = gui.OptionsSet(.{
-        .expand = .none, 
-        .padding = gui.Rect.all(4),
-        .corner_radius = gui.Rect.all(5)});
-      defer gui.OptionsReset(oo);
       if (gui.MenuItemLabel(@src(), 0, "Hello", true, .{})) |r| {
         var fw = gui.Popup(@src(), 0, gui.Rect.fromPoint(gui.Point{.x = r.x, .y = r.y + r.h}), &menu.submenus_activated, menu, .{});
         defer fw.deinit();
@@ -125,23 +115,14 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
       }
     }
 
-    gui.Label(@src(), 0, "fps {d}", .{@round(gui.FPS())}, .{
-      .margin = gui.Rect.all(4),
-      .expand = .none, 
-      .gravity = .upleft, 
-      .background = false});
+    gui.Label(@src(), 0, "fps {d}", .{@round(gui.FPS())}, .{});
   }
 
   if (show_dialog) {
-    const oo2 = gui.OptionsSet(.{.corner_radius = gui.Rect.all(5), .padding = gui.Rect.all(4)});
-    defer gui.OptionsReset(oo2);
-
-    var dialog = gui.FloatingWindow(@src(), 0, true, gui.Rect{}, &show_dialog, .{.color_style = .window});
+    var dialog = gui.FloatingWindow(@src(), 0, true, gui.Rect{}, &show_dialog, .{});
     defer dialog.deinit();
 
-    _ = gui.OptionsSet(.{.margin = gui.Rect.all(4), .padding = gui.Rect.all(6)});
-
-    gui.LabelNoFormat(@src(), 0, "Add RSS Feed", .{.gravity = .center, .background = false});
+    gui.LabelNoFormat(@src(), 0, "Add RSS Feed", .{.gravity = .center});
 
     const TextEntryText = struct {
       //var text = array(u8, 100, "abcdefghijklmnopqrstuvwxyz");
@@ -153,9 +134,9 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
       }
     };
 
-    gui.TextEntry(@src(), 0, 26.0, &TextEntryText.text1, .{.gravity = .center, .color_style = .content, .border = gui.Rect.all(1)});
+    gui.TextEntry(@src(), 0, 26.0, &TextEntryText.text1, .{.gravity = .center});
 
-    var box2 = gui.Box(@src(), 0, .horizontal, gui.OptionsGet(.{.gravity = .right}).plain());
+    var box2 = gui.Box(@src(), 0, .horizontal, .{.gravity = .right});
     defer box2.deinit();
     if (gui.Button(@src(), 0, "Ok", .{})) {
       dialog.close();
@@ -202,7 +183,8 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
         .margin = margin,
         .border = border,
         .corner_radius = corner,
-        .padding = gui.Rect.all(8)})) {
+        .padding = gui.Rect.all(8),
+        })) {
       paned.showOther();
     }
   }
@@ -216,19 +198,14 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
 
 fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
   _ = arena;
-  var box = gui.Box(@src(), 0, .vertical, .{
-    .expand = .both,
-    .color_style = .window,
-  });
+  var box = gui.Box(@src(), 0, .vertical, .{.expand = .both});
   defer box.deinit();
 
   if (paned.collapsed()) {
     var menu = gui.Menu(@src(), 0, .horizontal, .{.expand = .horizontal});
     defer menu.deinit();
 
-    if (gui.MenuItemLabel(@src(), 0, "Back", false, .{
-      .padding = gui.Rect.all(4),
-      .corner_radius = gui.Rect.all(5)})) |rr| {
+    if (gui.MenuItemLabel(@src(), 0, "Back", false, .{})) |rr| {
       _ = rr;
       paned.showOther();
     }
@@ -237,27 +214,22 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
   var scroll = gui.ScrollArea(@src(), 0, .{.expand = .both, .background = false});
   defer scroll.deinit();
 
-  const oo = gui.OptionsSet(.{.margin = gui.Rect.all(4), .padding = gui.Rect.all(4)});
-  defer gui.OptionsReset(oo);
-
   var i: usize = 0;
   while (i < 10) : (i += 1) {
-    var tl = gui.TextLayout(@src(), i, .{
-      .expand = .horizontal,
-      .font_line_skip_factor = 1.1,
-      .color_style = .content,
-    });
+    var tl = gui.TextLayout(@src(), i, .{.expand = .horizontal});
 
     var cbox = gui.Box(@src(), 0, .vertical, gui.OptionsGet(.{.gravity = .upright}).plain());
 
     _ = gui.ButtonIcon(@src(), 0, 18, "play",
-      gui.icons.papirus.actions.media_playback_start_symbolic, .{});
+      gui.icons.papirus.actions.media_playback_start_symbolic, .{.padding = gui.Rect.all(6)});
     _ = gui.ButtonIcon(@src(), 0, 18, "more",
-      gui.icons.papirus.actions.view_more_symbolic, .{});
+      gui.icons.papirus.actions.view_more_symbolic, .{.padding = gui.Rect.all(6)});
 
     cbox.deinit();
 
-    tl.addText("Episode Title\n", .{.font_style = .heading, .font_line_skip_factor = 1.3});
+    var f = gui.OptionsGet(.{.font_style = .heading}).font();
+    f.line_skip_factor = 1.3;
+    tl.addText("Episode Title\n", .{.font_style = .custom, .font_custom = f});
     const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
     tl.addText(lorem, .{});
     tl.deinit();
@@ -270,9 +242,8 @@ fn player(arena: std.mem.Allocator) void {
     .expand = .horizontal,
     .color_style = .content,
   });
-  defer gui.OptionsReset(oo);
 
-  var box2 = gui.Box(@src(), 0, .vertical, .{});
+  var box2 = gui.Box(@src(), 0, .vertical, .{.background = true});
   defer box2.deinit();
 
   gui.Label(@src(), 0, "Title of the playing episode", .{}, .{
@@ -280,23 +251,17 @@ fn player(arena: std.mem.Allocator) void {
     .font_style = .heading,
   });
 
-  var box3 = gui.Box(@src(), 0, .horizontal, .{
-    .margin = .{.x = 4, .y = 0, .w = 4, .h = 4},
-    .padding = gui.Rect.all(0),
-  });
+  var box3 = gui.Box(@src(), 0, .horizontal, .{.padding = .{.x = 4, .y = 0, .w = 4, .h = 4}});
   defer box3.deinit();
 
-  _ = gui.OptionsSet(.{
-    .gravity = .center,
-    .color_style = .control,
-    .padding = gui.Rect.all(4),
-    .corner_radius = gui.Rect.all(5),
-    .margin = gui.Rect.all(4)});
+  gui.OptionsReset(oo);
+  const oo2 = gui.OptionsSet(.{.expand = .horizontal});
+  defer gui.OptionsReset(oo2);
 
   _ = gui.ButtonIcon(@src(), 0, 20, "back",
     gui.icons.papirus.actions.media_seek_backward_symbolic, .{});
 
-  gui.Label(@src(), 0, "0.00%", .{}, .{.color_style = .content});
+  gui.Label(@src(), 0, "0.00%", .{}, .{.color_style = .content, .gravity = .center});
 
   _ = gui.ButtonIcon(@src(), 0, 20, "forward",
     gui.icons.papirus.actions.media_seek_forward_symbolic, .{});
