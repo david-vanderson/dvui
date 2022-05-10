@@ -26,6 +26,8 @@ pub fn debug(comptime str: []const u8, args: anytype) void {
 }
 
 pub const Theme = struct {
+  name: []const u8,
+
   color_accent: Color,
   color_accent_bg: Color,
   color_success: Color,
@@ -53,6 +55,7 @@ pub const Theme = struct {
 };
 
 pub const Theme_Adwaita = Theme{
+  .name = "Adwaita",
   .font_body = Font{.size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera},
   .font_heading = Font{.size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
   .font_caption = Font{.size = 9, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera},
@@ -62,20 +65,47 @@ pub const Theme_Adwaita = Theme{
   .font_title_2 = Font{.size = 17, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
   .font_title_3 = Font{.size = 15, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
   .font_title_4 = Font{.size = 13, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
-  .color_accent = Color{.r = 0xff, .g = 0xff, .b = 0xff, .a = 255},
-  .color_accent_bg = Color{.r = 0x35, .g = 0x84, .b = 0xe4, .a = 255},
-  .color_success = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-  .color_success_bg = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-  .color_warning = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-  .color_warning_bg = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-  .color_err = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-  .color_err_bg = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-  .color_window = Color{.r = 0x31, .g = 0x31, .b = 0x31, .a = 255},
-  .color_window_bg = Color{.r = 0xf0, .g = 0xf0, .b = 0xf0, .a = 255},
-  .color_content = Color{.r = 0, .g = 0, .b = 0, .a = 255},
-  .color_content_bg = Color{.r = 0xff, .g = 0xff, .b = 0xff, .a = 255},
-  .color_control = Color{.r = 0x31, .g = 0x31, .b = 0x31, .a = 255},
-  .color_control_bg = Color{.r = 0xe0, .g = 0xe0, .b = 0xe0, .a = 255},
+  .color_accent = Color{.r = 0xff, .g = 0xff, .b = 0xff},
+  .color_accent_bg = Color{.r = 0x35, .g = 0x84, .b = 0xe4},
+  .color_success = Color{.r = 0xff, .g = 0xff, .b = 0xff},
+  .color_success_bg = Color{.r = 0x2e, .g = 0xc2, .b = 0x7e},
+  .color_warning = Color{.r = 0, .g = 0, .b = 0, .a = 0xcc},
+  .color_warning_bg = Color{.r = 0xe5, .g = 0xa5, .b = 0x0a},
+  .color_err = Color{.r = 0xff, .g = 0xff, .b = 0xff},
+  .color_err_bg = Color{.r = 0xe0, .g = 0x1b, .b = 0x24},
+  .color_window = Color{.r = 0, .g = 0, .b = 0, .a = 0xcc},
+  .color_window_bg = Color{.r = 0xf0, .g = 0xf0, .b = 0xf0},
+  .color_content = Color{.r = 0, .g = 0, .b = 0},
+  .color_content_bg = Color{.r = 0xff, .g = 0xff, .b = 0xff},
+  .color_control = Color{.r = 0x31, .g = 0x31, .b = 0x31},
+  .color_control_bg = Color{.r = 0xe0, .g = 0xe0, .b = 0xe0},
+};
+
+pub const Theme_Adwaita_Dark = Theme{
+  .name = "Adwaita Dark",
+  .font_body = Font{.size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera},
+  .font_heading = Font{.size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
+  .font_caption = Font{.size = 9, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera},
+  .font_caption_heading = Font{.size = 9, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
+  .font_title_large = Font{.size = 24, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera},
+  .font_title_1 = Font{.size = 20, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
+  .font_title_2 = Font{.size = 17, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
+  .font_title_3 = Font{.size = 15, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
+  .font_title_4 = Font{.size = 13, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd},
+  .color_accent = Color{.r = 0xff, .g = 0xff, .b = 0xff},
+  .color_accent_bg = Color{.r = 0x35, .g = 0x84, .b = 0xe4},
+  .color_success = Color{.r = 0xff, .g = 0xff, .b = 0xff},
+  .color_success_bg = Color{.r = 0x26, .g = 0xa2, .b = 0x69},
+  .color_warning = Color{.r = 0, .g = 0, .b = 0, .a = 0xcc},
+  .color_warning_bg = Color{.r = 0xcd, .g = 0x93, .b = 0x09},
+  .color_err = Color{.r = 0xff, .g = 0xff, .b = 0xff},
+  .color_err_bg = Color{.r = 0xc0, .g = 0x1c, .b = 0x28},
+  .color_window = Color{.r = 0xff, .g = 0xff, .b = 0xff},
+  .color_window_bg = Color{.r = 0x24, .g = 0x24, .b = 0x24},
+  .color_content = Color{.r = 0xff, .g = 0xff, .b = 0xff},
+  .color_content_bg = Color{.r = 0x1e, .g = 0x1e, .b = 0x1e},
+  .color_control = Color{.r = 0xff, .g = 0xff, .b = 0xff},
+  .color_control_bg = Color{.r = 0x30, .g = 0x30, .b = 0x30},
 };
 
 pub const Options = struct {
@@ -1892,6 +1922,8 @@ pub const Window = struct {
   parent: Widget = undefined,
   menu_current: ?*MenuWidget = null,
   options: Options = .{},
+  theme: *const Theme = &Theme_Adwaita,
+
   widgets_min_size_prev: std.AutoHashMap(u32, Size),
   widgets_min_size: std.AutoHashMap(u32, Size),
   data_prev: std.ArrayList(u8),
@@ -2410,7 +2442,7 @@ pub const Window = struct {
     self.parent = self.widget();
     self.menu_current = null;
 
-    OptionsReset(.{.theme = &Theme_Adwaita});
+    OptionsReset(.{.theme = self.theme});
 
     self.layout = BoxWidget{};
     self.layout.init(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
@@ -4970,10 +5002,10 @@ pub const TextEntryWidget = struct {
 };
 
 pub const Color = struct {
-  r: u8 = 255,
-  g: u8 = 255,
-  b: u8 = 255,
-  a: u8 = 255,
+  r: u8 = 0xff,
+  g: u8 = 0xff,
+  b: u8 = 0xff,
+  a: u8 = 0xff,
 
   pub fn sdlcolor(self: *const Color) c.SDL_Color {
     return c.SDL_Color{.r = self.r, .g = self.g, .b = self.b, .a = self.a};

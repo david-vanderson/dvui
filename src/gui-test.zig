@@ -34,6 +34,8 @@ pub fn main() void {
 
   var win = gui.Window.init(gpa, window, renderer);
 
+  var theme_dark = false;
+
   var buttons: [3][6]bool = undefined;
   for (buttons) |*b| {
     b.* = [_]bool{true} ** 6;
@@ -48,6 +50,12 @@ pub fn main() void {
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
+    if (theme_dark) {
+      win.theme = &gui.Theme_Adwaita_Dark;
+    }
+    else {
+      win.theme = &gui.Theme_Adwaita;
+    }
     win.begin(arena);
 
     var event: c.SDL_Event = undefined;
@@ -297,6 +305,23 @@ pub fn main() void {
 
           gui.TextEntry(@src(), 0, 26.0, &TextEntryText.text1, .{});
           gui.TextEntry(@src(), 0, 26.0, &TextEntryText.text2, .{});
+        }
+
+        {
+          var box = gui.Box(@src(), 0, .horizontal, .{});
+
+          _ = gui.Button(@src(), 0, "Accent", .{.color_style = .accent});
+          _ = gui.Button(@src(), 0, "Success", .{.color_style = .success});
+          _ = gui.Button(@src(), 0, "Warning", .{.color_style = .warning});
+          _ = gui.Button(@src(), 0, "Error", .{.color_style = .err});
+
+          box.deinit();
+
+          gui.Label(@src(), 0, "Theme: {s}", .{gui.OptionsGet(.{}).theme.?.name}, .{});
+
+          if (gui.Button(@src(), 0, "Toggle Theme", .{})) {
+            theme_dark = !theme_dark;
+          }
         }
       }
       
