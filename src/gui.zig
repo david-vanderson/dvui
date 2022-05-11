@@ -4442,16 +4442,12 @@ pub const LabelWidget = struct {
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) void {
     var cw = current_window orelse unreachable;
-    self.label = std.fmt.allocPrint(cw.arena, fmt, args) catch unreachable;
-
-    const options = opts.overrideIfNull(Defaults);
-    const size = options.font().textSize(self.label);
-    self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
-    self.wd.placeInsideNoExpand();
+    const label = std.fmt.allocPrint(cw.arena, fmt, args) catch unreachable;
+    self.initNoFormat(src, id_extra, label, opts);
   }
 
   pub fn initNoFormat(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) void {
-    const options = opts.overrideIfNull(Defaults);
+    const options = Defaults.override(opts);
     self.label = label;
     const size = options.font().textSize(self.label);
     self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
@@ -5138,7 +5134,7 @@ pub const RectScale = struct {
 //pub var render_text: bool = false;
 
 pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) void {
-  if (text.len == 0) {
+  if (text.len == 0 or ClipGet().intersect(rs.r).empty()) {
     return;
   }
 
@@ -5185,7 +5181,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
 }
 
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colormod: Color) void {
-  if (rs.r.empty()) {
+  if (ClipGet().intersect(rs.r).empty()) {
     return;
   }
 
@@ -5297,6 +5293,10 @@ pub const WidgetData = struct {
     self.rect = self.parent.rectFor(self.id, self.min_size, self.options.expand orelse .none, self.options.gravity orelse .upleft);
     
     return self;
+  }
+
+  pub fn visible(self: *const WidgetData) bool {
+    return !ClipGet().intersect(self.borderRectScale().r).empty();
   }
 
   pub fn borderAndBackground(self: *const WidgetData) void {

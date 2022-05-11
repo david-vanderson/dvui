@@ -1,4 +1,6 @@
 
+need a way to persist floating window rect - pass a pointer?
+
 do arbitrary scroll for icon browser
 
 convert:
