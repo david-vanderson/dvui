@@ -148,12 +148,11 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
 
   var scroll = gui.ScrollArea(@src(), 0, .{.expand = .both, .color_style = .window, .background = false});
 
-  const oo3 = gui.OptionsSet(.{
+  const oo3 = gui.Options{
     .expand = .horizontal,
     .gravity = .left,
     .color_style = .content,
-  });
-  defer gui.OptionsReset(oo3);
+  };
 
   var i: usize = 1;
   while (i < 8) : (i += 1) {
@@ -163,7 +162,7 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
     var corner = gui.Rect.all(0);
 
     if (i != 1) {
-      gui.Separator(@src(), i, .{.margin = margin, .min_size = .{.w = 1, .h = 1}, .border = .{.x = 1, .y = 1, .w = 0, .h = 0}});
+      gui.Separator(@src(), i, oo3.override(.{.margin = margin, .min_size = .{.w = 1, .h = 1}, .border = .{.x = 1, .y = 1, .w = 0, .h = 0}}));
     }
 
     if (i == 1) {
@@ -179,12 +178,12 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
       corner.h = 9;
     }
 
-    if (gui.Button(@src(), i, title, .{
+    if (gui.Button(@src(), i, title, oo3.override(.{
         .margin = margin,
         .border = border,
         .corner_radius = corner,
         .padding = gui.Rect.all(8),
-        })) {
+        }))) {
       paned.showOther();
     }
   }
@@ -218,7 +217,7 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
   while (i < 10) : (i += 1) {
     var tl = gui.TextLayout(@src(), i, .{.expand = .horizontal});
 
-    var cbox = gui.Box(@src(), 0, .vertical, gui.OptionsGet(.{.gravity = .upright}).plain());
+    var cbox = gui.Box(@src(), 0, .vertical, gui.Options{.gravity = .upright});
 
     _ = gui.ButtonIcon(@src(), 0, 18, "play",
       gui.icons.papirus.actions.media_playback_start_symbolic, .{.padding = gui.Rect.all(6)});
@@ -227,7 +226,7 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
 
     cbox.deinit();
 
-    var f = gui.OptionsGet(.{.font_style = .heading}).font();
+    var f = gui.ThemeGet().font_heading;
     f.line_skip_factor = 1.3;
     tl.addText("Episode Title\n", .{.font_style = .custom, .font_custom = f});
     const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
@@ -238,36 +237,34 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
 
 fn player(arena: std.mem.Allocator) void {
   _ = arena;
-  const oo = gui.OptionsSet(.{
+  const oo = gui.Options{
     .expand = .horizontal,
     .color_style = .content,
-  });
+  };
 
-  var box2 = gui.Box(@src(), 0, .vertical, .{.background = true});
+  var box2 = gui.Box(@src(), 0, .vertical, oo.override(.{.background = true}));
   defer box2.deinit();
 
-  gui.Label(@src(), 0, "Title of the playing episode", .{}, .{
+  gui.Label(@src(), 0, "Title of the playing episode", .{}, oo.override(.{
     .margin = gui.Rect{.x = 8, .y = 4, .w = 8, .h = 4},
     .font_style = .heading,
-  });
+  }));
 
-  var box3 = gui.Box(@src(), 0, .horizontal, .{.padding = .{.x = 4, .y = 0, .w = 4, .h = 4}});
+  var box3 = gui.Box(@src(), 0, .horizontal, oo.override(.{.padding = .{.x = 4, .y = 0, .w = 4, .h = 4}}));
   defer box3.deinit();
 
-  gui.OptionsReset(oo);
-  const oo2 = gui.OptionsSet(.{.expand = .horizontal});
-  defer gui.OptionsReset(oo2);
+  const oo2 = gui.Options{.expand = .horizontal, .gravity = .center};
 
   _ = gui.ButtonIcon(@src(), 0, 20, "back",
-    gui.icons.papirus.actions.media_seek_backward_symbolic, .{});
+    gui.icons.papirus.actions.media_seek_backward_symbolic, oo2);
 
-  gui.Label(@src(), 0, "0.00%", .{}, .{.color_style = .content, .gravity = .center});
+  gui.Label(@src(), 0, "0.00%", .{}, oo2.override(.{.color_style = .content}));
 
   _ = gui.ButtonIcon(@src(), 0, 20, "forward",
-    gui.icons.papirus.actions.media_seek_forward_symbolic, .{});
+    gui.icons.papirus.actions.media_seek_forward_symbolic, oo2);
 
   _ = gui.ButtonIcon(@src(), 0, 20, "play",
-    gui.icons.papirus.actions.media_playback_start_symbolic, .{});
+    gui.icons.papirus.actions.media_playback_start_symbolic, oo2);
 
 }
 

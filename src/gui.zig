@@ -176,9 +176,6 @@ pub const Options = struct {
   // only used if .font_style == .custom
   font_custom: ?Font = null,
 
-  // colors and fonts are pulled from here
-  theme: ?*const Theme = null,
-
   // For the rest of these fields, if null, each widget uses its defaults
 
   // x left, y top, w right, h bottom
@@ -206,13 +203,13 @@ pub const Options = struct {
     const col =
       switch (style) {
         .custom => self.color_custom,
-        .accent => if (self.theme) |t| t.color_accent else null,
-        .success => if (self.theme) |t| t.color_success else null,
-        .warning => if (self.theme) |t| t.color_warning else null,
-        .err => if (self.theme) |t| t.color_err else null,
-        .content => if (self.theme) |t| t.color_content else null,
-        .window => if (self.theme) |t| t.color_window else null,
-        .control => if (self.theme) |t| t.color_control else null,
+        .accent => ThemeGet().color_accent,
+        .success => ThemeGet().color_success,
+        .warning => ThemeGet().color_warning,
+        .err => ThemeGet().color_err,
+        .content => ThemeGet().color_content,
+        .window => ThemeGet().color_window,
+        .control => ThemeGet().color_control,
     };
       
     if (col) |cc| {
@@ -233,13 +230,13 @@ pub const Options = struct {
     const col =
       switch (style) {
         .custom => self.color_custom_bg,
-        .accent => if (self.theme) |t| t.color_accent_bg else null,
-        .success => if (self.theme) |t| t.color_success_bg else null,
-        .warning => if (self.theme) |t| t.color_warning_bg else null,
-        .err => if (self.theme) |t| t.color_err_bg else null,
-        .content => if (self.theme) |t| t.color_content_bg else null,
-        .window => if (self.theme) |t| t.color_window_bg else null,
-        .control => if (self.theme) |t| t.color_control_bg else null,
+        .accent => ThemeGet().color_accent_bg,
+        .success => ThemeGet().color_success_bg,
+        .warning => ThemeGet().color_warning_bg,
+        .err => ThemeGet().color_err_bg,
+        .content => ThemeGet().color_content_bg,
+        .window => ThemeGet().color_window_bg,
+        .control => ThemeGet().color_control_bg,
     };
       
     if (col) |cc| {
@@ -248,26 +245,6 @@ pub const Options = struct {
     else {
       log.debug("Options.color_bg() couldn't find a color, substituting green\n", .{});
       return Color{.r = 0, .g = 255, .b = 0, .a = 255};
-    }
-  }
-
-  pub fn color_focus(self: *const Options) Color {
-    if (self.theme) |t| {
-      return t.color_accent;
-    }
-    else  {
-      log.debug("Options.color_focus() couldn't find a color, substituting blue\n", .{});
-      return Color{.r = 0, .g = 0, .b = 255, .a = 255};
-    }
-  }
-
-  pub fn color_focus_bg(self: *const Options) Color {
-    if (self.theme) |t| {
-      return t.color_accent_bg;
-    }
-    else  {
-      log.debug("Options.color_focus_bg() couldn't find a color, substituting red\n", .{});
-      return Color{.r = 255, .g = 0, .b = 0, .a = 255};
     }
   }
 
@@ -280,15 +257,15 @@ pub const Options = struct {
     const f =
       switch (style) {
         .custom => self.font_custom,
-        .body => if (self.theme) |t| t.font_body else null,
-        .heading => if (self.theme) |t| t.font_heading else null,
-        .caption => if (self.theme) |t| t.font_caption else null,
-        .caption_heading => if (self.theme) |t| t.font_caption_heading else null,
-        .title_large => if (self.theme) |t| t.font_title_large else null,
-        .title_1 => if (self.theme) |t| t.font_title_1 else null,
-        .title_2 => if (self.theme) |t| t.font_title_2 else null,
-        .title_3 => if (self.theme) |t| t.font_title_3 else null,
-        .title_4 => if (self.theme) |t| t.font_title_4 else null,
+        .body => ThemeGet().font_body,
+        .heading => ThemeGet().font_heading,
+        .caption => ThemeGet().font_caption,
+        .caption_heading => ThemeGet().font_caption_heading,
+        .title_large => ThemeGet().font_title_large,
+        .title_1 => ThemeGet().font_title_1,
+        .title_2 => ThemeGet().font_title_2,
+        .title_3 => ThemeGet().font_title_3,
+        .title_4 => ThemeGet().font_title_4,
     };
       
     if (f) |ff| {
@@ -326,25 +303,6 @@ pub const Options = struct {
 
   pub fn expandAny(self: *const Options) bool {
     return (self.expand orelse Expand.none) != Expand.none;
-  }
-
-  pub fn gravitate(self: *const Options, in: Rect, avail: Rect) Rect {
-    const g = self.gravity orelse .upleft;
-    var r = in;
-    switch (g) {
-      .upleft, .left, .downleft => r.x = avail.x,
-      .up, .center, .down => r.x = avail.x + (avail.w - r.w) / 2.0,
-      .upright, .right, .downright => r.x = avail.x + (avail.w - r.w),
-    }
-
-    switch (g) {
-      .upleft, .up, .upright => r.y = avail.y,
-      .left, .center, .right => r.y = avail.y + (avail.h - r.h) / 2.0,
-      .downleft, .down, .downright => r.y = avail.y + (avail.h - r.h),
-    }
-
-    debug("    gravitate {} {} in {} to {}", .{self.gravity, in, avail, r});
-    return r;
   }
 
   pub fn plain(self: *const Options) Options {
@@ -387,24 +345,14 @@ pub const Options = struct {
   }
 };
 
-// override the global options and return the previous settings
-pub fn OptionsSet(options: Options) Options {
+pub fn ThemeGet() *const Theme {
   var cw = current_window orelse unreachable;
-  const ret = cw.options;
-  cw.options = cw.options.override(options);
-  return ret;
+  return cw.theme;
 }
 
-// set (not override) global options
-pub fn OptionsReset(options: Options) void {
+pub fn ThemeSet(theme: *const Theme) void {
   var cw = current_window orelse unreachable;
-  cw.options = options;
-}
-
-// get global options overlayed with passed in options
-pub fn OptionsGet(options: Options) Options {
-  var cw = current_window orelse unreachable;
-  return cw.options.override(options);
+  cw.theme = theme;
 }
 
 pub fn PlaceOnScreen(spawner: Rect, start: Rect) Rect {
@@ -1588,13 +1536,8 @@ pub fn DataGetSlice(id: u32, comptime T: type, arena: std.mem.Allocator) ?[]T {
   }
 }
 
-pub fn MinSize(id: ?u32, opts: ?Options) Size {
-  var size = Size{};
-  if (opts) |options| {
-    if (options.min_size) |ms| {
-      size = ms;
-    }
-  }
+pub fn MinSize(id: ?u32, min_size: Size) Size {
+  var size = min_size;
 
   // Need to take the max of both given and previous.  ScrollArea could be
   // passed a min size Size{.w = 0, .h = 200} meaning to get the width from the
@@ -1608,19 +1551,31 @@ pub fn MinSize(id: ?u32, opts: ?Options) Size {
   return size;
 }
 
-pub fn PlaceIn(id: ?u32, parentR: Rect, opts: Options) Rect {
-  var size = MinSize(id, opts);
+pub fn PlaceIn(id: ?u32, avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+  var size = MinSize(id, min_size);
 
-  if (opts.expandHorizontal()) {
-    size.w = parentR.w;
+  if (e.Horizontal()) {
+    size.w = avail.w;
   }
 
-  if (opts.expandVertical()) {
-    size.h = parentR.h;
+  if (e.Vertical()) {
+    size.h = avail.h;
   }
 
-  const r = parentR.shrinkToSize(size);
-  return opts.gravitate(r, parentR);
+  var r = avail.shrinkToSize(size);
+  switch (g) {
+    .upleft, .left, .downleft => r.x = avail.x,
+    .up, .center, .down => r.x = avail.x + (avail.w - r.w) / 2.0,
+    .upright, .right, .downright => r.x = avail.x + (avail.w - r.w),
+  }
+
+  switch (g) {
+    .upleft, .up, .upright => r.y = avail.y,
+    .left, .center, .right => r.y = avail.y + (avail.h - r.h) / 2.0,
+    .downleft, .down, .downright => r.y = avail.y + (avail.h - r.h),
+  }
+
+  return r;
 }
 
 pub fn Events() *[]Event {
@@ -1921,7 +1876,6 @@ pub const Window = struct {
 
   parent: Widget = undefined,
   menu_current: ?*MenuWidget = null,
-  options: Options = .{},
   theme: *const Theme = &Theme_Adwaita,
 
   widgets_min_size_prev: std.AutoHashMap(u32, Size),
@@ -2442,8 +2396,6 @@ pub const Window = struct {
     self.parent = self.widget();
     self.menu_current = null;
 
-    OptionsReset(.{.theme = self.theme});
-
     self.layout = BoxWidget{};
     self.layout.init(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
     self.layout.install();
@@ -2548,8 +2500,8 @@ pub const Window = struct {
     return self.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    return PlaceIn(id, self.rect, opts);
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    return PlaceIn(id, self.rect, min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -2610,7 +2562,7 @@ pub const PopupWidget = struct {
   deferred_render_queue: DeferredRenderQueue = undefined,
 
   pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, openflag: ?*bool, menu: ?*MenuWidget, opts: Options) void {
-    const options = OptionsGet(opts).overrideIfNull(Defaults);
+    const options = opts.overrideIfNull(Defaults);
     DeferRender();
     self.parent = ParentSet(self.widget());
     self.id = self.parent.extendID(src, id_extra);
@@ -2621,7 +2573,7 @@ pub const PopupWidget = struct {
     if (DataGet(self.id, Rect)) |p| {
       self.rect = p;
       if (self.rect.empty()) {
-        const ms = MinSize(self.id, options);
+        const ms = MinSize(self.id, options.min_size orelse .{});
         self.rect.w = ms.w;
         self.rect.h = ms.h;
         self.rect = PlaceOnScreen(initialRect, self.rect);
@@ -2660,8 +2612,8 @@ pub const PopupWidget = struct {
     return self.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    return PlaceIn(id, self.rect, opts);
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    return PlaceIn(id, self.rect, min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -2754,7 +2706,7 @@ pub const FloatingWindowWidget = struct {
   deferred_render_queue: DeferredRenderQueue = undefined,
 
   pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, modal: bool, initialRect: Rect, openflag: ?*bool, opts: Options) void {
-    const options = OptionsGet(opts).overrideIfNull(Defaults);
+    const options = opts.overrideIfNull(Defaults);
 
     DeferRender();
     self.parent = ParentSet(self.widget());
@@ -2765,7 +2717,7 @@ pub const FloatingWindowWidget = struct {
 
     if (DataGet(self.id, Rect)) |p| {
       self.rect = p;
-      const ms = MinSize(self.id, options);
+      const ms = MinSize(self.id, options.min_size orelse .{});
       if (self.rect.w == 0) {
         self.rect.w = ms.w;
         self.rect.x = WindowRect().w / 2 - ms.w / 2;
@@ -2931,8 +2883,8 @@ pub const FloatingWindowWidget = struct {
     return self.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    return PlaceIn(id, self.rect, opts);
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    return PlaceIn(id, self.rect, min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -3000,8 +2952,7 @@ pub const PanedWidget = struct {
   first_side_id: ?u32 = null,
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) void {
-    const options = OptionsGet(opts);
-    self.wd = WidgetData.init(src, id_extra, options);
+    self.wd = WidgetData.init(src, id_extra, opts);
     self.dir = dir;
     self.collapse_size = collapse_size;
   }
@@ -3153,7 +3104,7 @@ pub const PanedWidget = struct {
     return self.wd.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) gui.Rect {
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) gui.Rect {
     if (self.first_side_id == null or self.first_side_id.? == id) {
       self.first_side_id = id;
       var r = self.wd.contentRect();
@@ -3175,7 +3126,7 @@ pub const PanedWidget = struct {
           .vertical => r.h *= self.split_ratio,
         }
       }
-      return gui.PlaceIn(id, r, opts);
+      return gui.PlaceIn(id, r, min_size, e, g);
     }
     else {
       var r = self.wd.contentRect();
@@ -3209,7 +3160,7 @@ pub const PanedWidget = struct {
           },
         }
       }
-      return gui.PlaceIn(id, r, opts);
+      return gui.PlaceIn(id, r, min_size, e, g);
     }
   }
 
@@ -3256,7 +3207,7 @@ pub const TextLayoutWidget = struct {
   prevClip: Rect = Rect{},
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-    const options = OptionsGet(opts).overrideIfNull(Defaults);
+    const options = opts.overrideIfNull(Defaults);
     self.wd = WidgetData.init(src, id_extra, options);
   }
 
@@ -3391,9 +3342,9 @@ pub const TextLayoutWidget = struct {
     return self.wd.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    const ret = PlaceIn(id, self.wd.contentRect(), opts);
-    const i: usize = switch (opts.gravity orelse .upleft) {
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    const ret = PlaceIn(id, self.wd.contentRect(), min_size, e, g);
+    const i: usize = switch (g) {
       .upleft => 0,
       .upright => 1,
       .downleft => 2,
@@ -3443,8 +3394,7 @@ pub const ContextWidget = struct {
   activePt: Point = Point{},
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-    const options = OptionsGet(opts);
-    self.wd = WidgetData.init(src, id_extra, options);
+    self.wd = WidgetData.init(src, id_extra, opts);
     self.winId = WindowCurrentId();
     if (DataGet(self.wd.id, Point)) |a| {
       self.active = true;
@@ -3475,8 +3425,8 @@ pub const ContextWidget = struct {
     return self.wd.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    return PlaceIn(id, self.wd.contentRect(), opts);
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    return PlaceIn(id, self.wd.contentRect(), min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -3537,8 +3487,7 @@ pub const OverlayWidget = struct {
   wd: WidgetData = undefined,
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-    const options = OptionsGet(opts);
-    self.wd = WidgetData.init(src, id_extra, options);
+    self.wd = WidgetData.init(src, id_extra, opts);
   }
 
   pub fn install(self: *Self) void {
@@ -3555,8 +3504,8 @@ pub const OverlayWidget = struct {
     return self.wd.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    return PlaceIn(id, self.wd.contentRect(), opts);
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    return PlaceIn(id, self.wd.contentRect(), min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -3606,8 +3555,7 @@ pub const BoxWidget = struct {
   extra_pixels: f32 = 0,
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) void {
-    const options = OptionsGet(opts);
-    self.wd = WidgetData.init(src, id_extra, options);
+    self.wd = WidgetData.init(src, id_extra, opts);
     self.dir = dir;
     if (DataGet(self.wd.id, f32)) |weight| {
       self.total_weight_prev = weight;
@@ -3624,7 +3572,7 @@ pub const BoxWidget = struct {
     self.childRect.x = 0;
     self.childRect.y = 0;
 
-    const ms = MinSize(self.wd.id, self.wd.options);
+    const ms = MinSize(self.wd.id, self.wd.options.min_size orelse .{});
     const newRect = self.wd.rect;
     defer self.wd.rect = newRect;
 
@@ -3646,10 +3594,10 @@ pub const BoxWidget = struct {
     return self.wd.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     self.current_weight = 0.0;
-    if ((self.dir == .horizontal and opts.expandHorizontal())
-        or (self.dir == .vertical and opts.expandVertical())) {
+    if ((self.dir == .horizontal and e.Horizontal())
+        or (self.dir == .vertical and e.Vertical())) {
       self.current_weight = 1.0;
     }
     self.total_weight += self.current_weight;
@@ -3659,7 +3607,7 @@ pub const BoxWidget = struct {
       pixels_per_w = self.extra_pixels / w;
     }
 
-    var child_size = MinSize(id, opts);
+    var child_size = MinSize(id, min_size);
 
     var rect = self.childRect;
     rect.w = math.min(rect.w, child_size.w);
@@ -3684,7 +3632,7 @@ pub const BoxWidget = struct {
       self.childRect.y += rect.h;
     }
 
-    return PlaceIn(null, rect, opts.override(.{.min_size = child_size}));
+    return PlaceIn(null, rect, child_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -3745,7 +3693,6 @@ pub const ScrollBar = struct {
   highlight: bool = false,
 
   pub fn run(src: std.builtin.SourceLocation, id_extra: usize, area: *ScrollAreaWidget, rect_in: Rect, opts: Options) void {
-    const options = OptionsGet(opts);
     const parent = ParentGet();
     var self = Self{.id = parent.extendID(src, id_extra), .parent = parent, .area = area};
     self.data = DataGet(self.id, Data);
@@ -3783,9 +3730,9 @@ pub const ScrollBar = struct {
     //PathFillConvex(fill_color);
 
     //fill_color = Color{.r = 100, .g = 100, .b = 100, .a = 255};
-    var fill = options.color().transparent(0.5);
+    var fill = opts.color().transparent(0.5);
     if (captured or self.highlight) {
-      fill = options.color().transparent(0.3);
+      fill = opts.color().transparent(0.3);
     }
     self.grabRect = self.grabRect.insetAll(2);
     const grabrs = self.parent.screenRectScale(self.grabRect);
@@ -3900,7 +3847,7 @@ pub const ScrollAreaWidget = struct {
   scrollAfter: f32 = 0,  // how far we need to scroll after this frame
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-    const options = OptionsGet(opts).overrideIfNull(Defaults);
+    const options = opts.overrideIfNull(Defaults);
     self.wd = WidgetData.init(src, id_extra, options);
     if (DataGet(self.wd.id, Data)) |d| {
       self.virtualSize = d.virtualSize;
@@ -3978,13 +3925,13 @@ pub const ScrollAreaWidget = struct {
     return self.wd.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    var child_size = MinSize(id, opts);
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    var child_size = MinSize(id, min_size);
 
     const y = self.cursor;
     const h = self.virtualSize.h - self.cursor;
     const rect = Rect{.x = 0, .y = y, .w = math.max(0, self.wd.contentRect().w - grab_thick), .h = math.min(h, child_size.h)};
-    const ret = PlaceIn(id, rect, opts);
+    const ret = PlaceIn(id, rect, child_size, e, g);
     self.cursor = (ret.y + ret.h);
     return ret;
   }
@@ -4067,8 +4014,7 @@ pub const ScrollAreaWidget = struct {
 };
 
 pub fn Separator(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-  const options = OptionsGet(opts);
-  var wd = WidgetData.init(src, id_extra, options);
+  var wd = WidgetData.init(src, id_extra, opts);
   debug("{x} Spacer {}", .{wd.id, wd.rect});
   wd.borderAndBackground();
   wd.reportMinSize();
@@ -4079,8 +4025,7 @@ pub fn Spacer(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) v
 }
 
 pub fn SpacerRect(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Rect {
-  const options = OptionsGet(opts);
-  var wd = WidgetData.init(src, id_extra, options.plain());
+  var wd = WidgetData.init(src, id_extra, opts);
   debug("{x} Spacer {}", .{wd.id, wd.rect});
   wd.reportMinSize();
   return wd.rect;
@@ -4090,7 +4035,7 @@ pub fn Spinner(src: std.builtin.SourceLocation, id_extra: usize, size: f32) void
   const s = Size{.w = size, .h = size};
   const parent = ParentGet();
   const id = parent.extendID(src, id_extra);
-  const rect = parent.rectFor(id, .{.min_size = s, .expand = .none});
+  const rect = parent.rectFor(id, s, .none, .upleft);
   debug("{x} Spinner {}", .{id, rect});
   parent.minSizeForChild(s);
 
@@ -4139,8 +4084,7 @@ pub const ScaleWidget = struct {
   scale: f32 = 1.0,
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, initial_scale: f32, opts: Options) void {
-    const options = OptionsGet(opts);
-    self.wd = WidgetData.init(src, id_extra, options);
+    self.wd = WidgetData.init(src, id_extra, opts);
     self.scale = initial_scale;
     if (DataGet(self.wd.id, f32)) |s| {
       self.scale = s;
@@ -4182,8 +4126,8 @@ pub const ScaleWidget = struct {
     return self.wd.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    return PlaceIn(id, self.wd.contentRect().justSize().scale(1.0 / self.scale), opts);
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    return PlaceIn(id, self.wd.contentRect().justSize().scale(1.0 / self.scale), min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -4229,8 +4173,7 @@ pub const MenuWidget = struct {
   submenus_activated: bool = false,
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) void {
-    const options = OptionsGet(opts);
-    self.wd = WidgetData.init(src, id_extra, options);
+    self.wd = WidgetData.init(src, id_extra, opts);
 
     self.dir = dir;
     if (MenuGet()) |m| {
@@ -4267,8 +4210,8 @@ pub const MenuWidget = struct {
     return self.wd.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    return PlaceIn(id, self.wd.contentRect(), opts);
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    return PlaceIn(id, self.wd.contentRect(), min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -4293,10 +4236,9 @@ pub const MenuWidget = struct {
 };
 
 pub fn MenuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, submenu: bool, opts: Options) ?Rect {
-  const options = OptionsGet(opts);
-  var mi = MenuItem(src, id_extra, submenu, options);
+  var mi = MenuItem(src, id_extra, submenu, opts);
 
-  var labelopts = options.plain();
+  var labelopts = opts.plain();
   if (mi.active()) {
     labelopts = labelopts.override(.{.color_style = .accent});
   }
@@ -4335,7 +4277,7 @@ pub const MenuItemWidget = struct {
   activated: bool = false,
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, opts: Options) void {
-    const options = OptionsGet(opts).overrideIfNull(Defaults);
+    const options = opts.overrideIfNull(Defaults);
     self.wd = WidgetData.init(src, id_extra, options);
     self.submenu = submenu;
     if (!self.wd.rect.empty()) {
@@ -4362,7 +4304,7 @@ pub const MenuItemWidget = struct {
 
     if (self.active()) {
       // hovered
-      const fill = self.wd.options.color_focus_bg();
+      const fill = ThemeGet().color_accent_bg;
       const rs = self.wd.backgroundRectScale();
       PathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
       PathFillConvex(fill);
@@ -4465,8 +4407,8 @@ pub const MenuItemWidget = struct {
     return self.wd.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    return PlaceIn(id, self.wd.contentRect(), opts);
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    return PlaceIn(id, self.wd.contentRect(), min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -4502,14 +4444,14 @@ pub const LabelWidget = struct {
     var cw = current_window orelse unreachable;
     self.label = std.fmt.allocPrint(cw.arena, fmt, args) catch unreachable;
 
-    const options = OptionsGet(opts).overrideIfNull(Defaults);
+    const options = opts.overrideIfNull(Defaults);
     const size = options.font().textSize(self.label);
     self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
     self.wd.placeInsideNoExpand();
   }
 
   pub fn initNoFormat(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) void {
-    const options = OptionsGet(opts);
+    const options = opts.overrideIfNull(Defaults);
     self.label = label;
     const size = options.font().textSize(self.label);
     self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
@@ -4544,18 +4486,16 @@ pub fn LabelNoFormat(src: std.builtin.SourceLocation, id_extra: usize, label: []
 }
 
 pub fn Icon(src: std.builtin.SourceLocation, id_extra: usize, name: []const u8, tvg_bytes: []const u8, height: f32, opts: Options) void {
-  const options = OptionsGet(opts);
-
   const size = Size{.w = IconWidth(name, tvg_bytes, height), .h = height};
 
-  var wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
+  var wd = WidgetData.init(src, id_extra, opts.overrideMinSizeContent(size));
   debug("{x} Icon \"{s:<10}\" {}", .{wd.id, name, wd.rect});
 
   wd.placeInsideNoExpand();
   wd.borderAndBackground();
 
   const rs = wd.contentRectScale();
-  renderIcon(name, tvg_bytes, rs, options.color());
+  renderIcon(name, tvg_bytes, rs, opts.color());
 
   wd.reportMinSize();
 }
@@ -4579,10 +4519,9 @@ pub const ButtonContainerWidget = struct {
   clicked: bool = false,
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) void {
-    const options = OptionsGet(opts);
-    self.wd = WidgetData.init(src, id_extra, options);
+    self.wd = WidgetData.init(src, id_extra, opts);
     if (!self.wd.rect.empty()) {
-      TabIndexSet(self.wd.id, options.tab_index);
+      TabIndexSet(self.wd.id, opts.tab_index);
     }
     self.show_focus = show_focus;
   }
@@ -4683,8 +4622,8 @@ pub const ButtonContainerWidget = struct {
     return self.wd.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    return PlaceIn(id, self.wd.contentRect(), opts);
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    return PlaceIn(id, self.wd.contentRect(), min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -4720,7 +4659,7 @@ pub const ButtonWidget = struct {
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) void {
     self.bc = ButtonContainerWidget{};
-    _ = self.bc.init(src, id_extra, true, OptionsGet(opts).overrideIfNull(Defaults));
+    _ = self.bc.init(src, id_extra, true, opts.overrideIfNull(Defaults));
     self.label = label;
   }
 
@@ -4751,7 +4690,7 @@ pub fn ButtonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32,
     .color_style = .control,
     .gravity = .center,
   };
-  const options = OptionsGet(opts).overrideIfNull(Defaults);
+  const options = Defaults.override(opts);
   debug("ButtonIcon \"{s}\" {}", .{name, options});
   var bc = ButtonContainer(src, id_extra, true, options);
   defer bc.deinit();
@@ -4761,9 +4700,8 @@ pub fn ButtonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32,
   return bc.clicked;
 }
 
-pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label: []const u8, opts: Options) void {
+pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label: []const u8, options: Options) void {
   debug("Checkbox {s}", .{label});
-  const options = OptionsGet(opts);
   var bc = ButtonContainer(src, id_extra, false, options.override(.{.background = false}));
   defer bc.deinit();
 
@@ -4787,7 +4725,7 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
 
   if (bc.focused) {
     PathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
-    PathStroke(true, thick_focus * rs.s, options.color_focus_bg());
+    PathStroke(true, thick_focus * rs.s, ThemeGet().color_accent_bg);
   }
 
   rs.r = rs.r.insetAll(0.5 * rs.s);
@@ -4795,7 +4733,7 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
   PathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
   var fill = options.color_bg();
   if (target.*) {
-    fill = options.color_focus_bg();
+    fill = ThemeGet().color_accent_bg;
   }
 
   if (bc.captured) {
@@ -4823,7 +4761,7 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     PathAddPoint(Point{.x = x - third, .y = y - third});
     PathAddPoint(Point{.x = x, .y = y});
     PathAddPoint(Point{.x = x + third * 2, .y = y - third * 2});
-    PathStroke(false, thick, options.color_focus());
+    PathStroke(false, thick, ThemeGet().color_accent);
   }
 
   LabelNoFormat(@src(), 0, label, options.override(.{
@@ -4861,7 +4799,7 @@ pub const TextEntryWidget = struct {
   len: usize = undefined,
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) void {
-    const options = OptionsGet(opts).overrideIfNull(Defaults);
+    const options = opts.overrideIfNull(Defaults);
 
     const msize = options.font().textSize("M");
     const size = Size{.w = msize.w * width, .h = msize.h};
@@ -4957,8 +4895,8 @@ pub const TextEntryWidget = struct {
     return self.wd.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: Options) Rect {
-    return PlaceIn(id, self.wd.contentRect(), opts);
+  pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    return PlaceIn(id, self.wd.contentRect(), min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -5351,12 +5289,12 @@ pub const WidgetData = struct {
 
   pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) WidgetData {
     var self = WidgetData{};
-    self.options = OptionsGet(opts);
+    self.options = opts;
 
     self.parent = ParentGet();
     self.id = self.parent.extendID(src, id_extra);
-    self.rect = self.parent.rectFor(self.id, self.options);
     self.min_size = self.options.min_size orelse Size{};
+    self.rect = self.parent.rectFor(self.id, self.min_size, self.options.expand orelse .none, self.options.gravity orelse .upleft);
     
     return self;
   }
@@ -5382,11 +5320,11 @@ pub const WidgetData = struct {
     const thick_px = 4;
     const rs = self.borderRectScale();
     PathAddRect(rs.r.insetAll(thick_px / 2), self.options.corner_radiusGet().scale(rs.s));
-    PathStroke(true, thick_px, self.options.color_focus_bg());
+    PathStroke(true, thick_px, ThemeGet().color_accent_bg);
   }
 
   pub fn placeInsideNoExpand(self: *WidgetData) void {
-    self.rect = PlaceIn(null, self.rect, self.options.override(.{.expand = .none}));
+    self.rect = PlaceIn(null, self.rect, self.min_size, .none, self.options.gravity orelse .upleft);
   }
 
   pub fn borderRect(self: *const WidgetData) Rect {
@@ -5452,7 +5390,7 @@ pub const Widget = struct {
 
   const VTable = struct {
     id: fn (ptr: *anyopaque) u32,
-    rectFor: fn (ptr: *anyopaque, id: u32, opts: Options) Rect,
+    rectFor: fn (ptr: *anyopaque, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
     minSizeForChild: fn (ptr: *anyopaque, s: Size) void,
     screenRectScale: fn (ptr: *anyopaque, r: Rect) RectScale,
     bubbleEvent: fn (ptr: *anyopaque, e: *Event) void,
@@ -5460,7 +5398,7 @@ pub const Widget = struct {
 
   pub fn init(pointer: anytype,
               comptime idFn: fn (ptr: @TypeOf(pointer)) u32,
-              comptime rectForFn: fn (ptr: @TypeOf(pointer), id: u32, opts: Options) Rect,
+              comptime rectForFn: fn (ptr: @TypeOf(pointer), id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
               comptime minSizeForChildFn: fn (ptr: @TypeOf(pointer), s: Size) void,
               comptime screenRectScaleFn: fn (ptr: @TypeOf(pointer), r: Rect) RectScale,
               comptime bubbleEventFn: fn (ptr: @TypeOf(pointer), e: *Event) void,
@@ -5477,9 +5415,9 @@ pub const Widget = struct {
         return @call(.{.modifier = .always_inline}, idFn, .{self});
       }
 
-      fn rectForImpl(ptr: *anyopaque, id: u32, opts: Options) Rect {
+      fn rectForImpl(ptr: *anyopaque, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-        return @call(.{.modifier = .always_inline}, rectForFn, .{self, id, opts});
+        return @call(.{.modifier = .always_inline}, rectForFn, .{self, id, min_size, e, g});
       }
 
       fn minSizeForChildImpl(ptr: *anyopaque, s: Size) void {
@@ -5526,8 +5464,8 @@ pub const Widget = struct {
     return hash.final();
   }
 
-  pub fn rectFor(self: Widget, id: u32, opts: Options) Rect {
-    return self.vtable.rectFor(self.ptr, id, opts);
+  pub fn rectFor(self: Widget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    return self.vtable.rectFor(self.ptr, id, min_size, e, g);
   }
 
   pub fn minSizeForChild(self: Widget, s: Size) void {

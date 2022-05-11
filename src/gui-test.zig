@@ -89,16 +89,15 @@ pub fn main() void {
     defer win.end(null);
 
     {
-      const oo = gui.OptionsSet(.{.expand = .both});
-      var overlay = gui.Overlay(@src(), 0, .{});
+      const oo = gui.Options{.expand = .both};
+      var overlay = gui.Overlay(@src(), 0, oo);
       defer overlay.deinit();
 
-      const scale = gui.Scale(@src(), 0, 1, .{});
+      const scale = gui.Scale(@src(), 0, 1, oo);
       defer scale.deinit();
 
-      const context = gui.Context(@src(), 0, .{});
+      const context = gui.Context(@src(), 0, oo);
       defer context.deinit();
-      gui.OptionsReset(oo);
 
       if (context.activePoint()) |cp| {
         //std.debug.print("context.rect {}\n", .{context.rect});
@@ -277,7 +276,7 @@ pub fn main() void {
           const left = @intCast(i32, @rem(millis, 1000));
 
           var label = gui.LabelWidget{};
-          label.init(@src(), 0, "{d} {d}", .{@divTrunc(millis, 1000), @intCast(u32, left)}, .{.margin = gui.Rect.all(4), .min_size = gui.OptionsGet(.{}).font().textSize("0" ** 15), .gravity = .left});
+          label.init(@src(), 0, "{d} {d}", .{@divTrunc(millis, 1000), @intCast(u32, left)}, .{.margin = gui.Rect.all(4), .min_size = (gui.Options{}).font().textSize("0" ** 15), .gravity = .left});
           label.install();
 
           if (gui.TimerDone(label.wd.id) or !gui.TimerExists(label.wd.id)) {
@@ -330,7 +329,7 @@ pub fn main() void {
 
           box.deinit();
 
-          gui.Label(@src(), 0, "Theme: {s}", .{gui.OptionsGet(.{}).theme.?.name}, .{});
+          gui.Label(@src(), 0, "Theme: {s}", .{gui.ThemeGet().name}, .{});
 
           if (gui.Button(@src(), 0, "Toggle Theme", .{})) {
             theme_dark = !theme_dark;
@@ -439,20 +438,19 @@ pub fn main() void {
 
             gui.Label(@src(), 0, "Asking a Question", .{}, .{});
 
-            const oo = gui.OptionsSet(.{.margin = gui.Rect.all(4), .expand = .horizontal});
-            var box = gui.Box(@src(), 0, .horizontal, .{});
+            const oo = gui.Options{.margin = gui.Rect.all(4), .expand = .horizontal};
+            var box = gui.Box(@src(), 0, .horizontal, oo);
 
-            if (gui.Button(@src(), 0, "Yes", .{})) {
+            if (gui.Button(@src(), 0, "Yes", oo)) {
               std.debug.print("Yes {d}\n", .{fi});
               floats[fi+1] = true;
             }
 
-            if (gui.Button(@src(), 0, "No", .{})) {
+            if (gui.Button(@src(), 0, "No", oo)) {
               std.debug.print("No {d}\n", .{fi});
               fw2.close();
             }
 
-            gui.OptionsReset(oo);
             box.deinit();
 
           }
@@ -511,12 +509,11 @@ pub const StrokeTest = struct {
   rect: gui.Rect = .{},
   minSize: gui.Size = .{},
 
-  pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: gui.Options) void {
-    const options = gui.OptionsGet(opts);
+  pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, options: gui.Options) void {
     self.parent = gui.ParentSet(self.widget());
     self.id = self.parent.extendID(src, id_extra);
-    self.rect = self.parent.rectFor(self.id, options);
     self.minSize = options.min_size orelse .{};
+    self.rect = self.parent.rectFor(self.id, self.minSize, options.expand orelse .none, options.gravity orelse .upleft);
     gui.debug("{x} StrokeTest {}", .{self.id, self.rect});
 
     _ = gui.CaptureMouseMaintain(self.id);
@@ -553,8 +550,8 @@ pub const StrokeTest = struct {
     return self.id;
   }
 
-  pub fn rectFor(self: *Self, id: u32, opts: gui.Options) gui.Rect {
-    return gui.PlaceIn(id, self.rect, opts);
+  pub fn rectFor(self: *Self, id: u32, min_size: gui.Size, e: gui.Options.Expand, g: gui.Options.Gravity) gui.Rect {
+    return gui.PlaceIn(id, self.rect, min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: gui.Size) void {
