@@ -4492,6 +4492,7 @@ pub const LabelWidget = struct {
   var Defaults: Options = .{
     .padding = Rect.all(4),
     .color_style = .control,
+    .background = false,
   };
 
   wd: WidgetData = undefined,
@@ -4548,32 +4549,13 @@ pub fn Icon(src: std.builtin.SourceLocation, id_extra: usize, name: []const u8, 
   const size = Size{.w = IconWidth(name, tvg_bytes, height), .h = height};
 
   var wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
+  debug("{x} Icon \"{s:<10}\" {}", .{wd.id, name, wd.rect});
+
   wd.placeInsideNoExpand();
   wd.borderAndBackground();
 
-  debug("{x} Icon \"{s:<10}\" {}", .{wd.id, name, wd.rect});
-
-  var highlight: bool = false;
-
   const rs = wd.contentRectScale();
-  const oldclip = Clip(rs.r);
-  if (!ClipGet().empty()) {
-    var iter = EventIterator.init(wd.id, rs.r);
-    while (iter.next()) |e| {
-      if (e.evt == .mouse) {
-        if (e.evt.mouse.state == .motion) {
-          if (Highlight(e.evt.mouse.p, rs.r)) {
-            highlight = true;
-          }
-          e.handled = true;
-        }
-      }
-    }
-
-    renderIcon(name, tvg_bytes, rs, options.color());
-  }
-
-  ClipSet(oldclip);
+  renderIcon(name, tvg_bytes, rs, options.color());
 
   wd.reportMinSize();
 }
@@ -5265,6 +5247,10 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
 }
 
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colormod: Color) void {
+  if (rs.r.empty()) {
+    return;
+  }
+
   var cw = current_window orelse unreachable;
   const drqlen = cw.deferred_render_queues.items.len;
   if (drqlen > 1) {

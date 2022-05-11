@@ -1,10 +1,11 @@
 
+do arbitrary scroll for icon browser
+
 convert:
 - ScrollBar
 - ScaleWidget
 
-icon browser for builtin icons
-- load only a few icons each frame
+floating windows should have a close button
 
 try animating a fade
 - does Options need a separate alpha?
@@ -29,18 +30,12 @@ copy other widgets from imgui
 textlayout:
 - minSizeForChild should recalc based on the four corners
 
-if Options being copied a lot is a problem, then:
-- split out things you rarely change into a pointer (most style stuff)
-- instead of copying, do a tuple that points to a backing Options for stuff it doesn't override
-
 options should have an explicit "rect" thing where the child doesn't ask the parent for a rect and doesn't report it's size, it just draws at that location (from the parent's screenRectScale), it's out of the normal flow
 
 split gravity into 2 0-1 values plus a text baseline?
 
 hover and highlight properties need to propogate down to children so that icons can draw properly in buttons where the button is highlighted but not the icon directly?
-- maybe set and reset global options?
-  - but then need to save for deferred rendering
-  - maybe as part of the giant Options struct?
+  - maybe as part of the Options struct?
 
 
 PathStroking with thickness
@@ -61,7 +56,8 @@ dialog
 - rss textentry should bubble up the enter that it doesn't process so the dialog can record that it should "submit"
 
 stacking order of child windows?
-- each window's children are on top of their parent, but the stacking order of the children can be altered
+- each window's children are on top of their parent?
+  - but the stacking order of the children can be altered
 - window.floating_windows
   - during a frame it only has windows that are ancestors of the current window
   - at the end when we finally pop the render queue it will reget all windows in stacking order
@@ -105,6 +101,8 @@ baseline alignment
 make Alt do special stuff with the menubar
 
 scroll area scroll to newly-focused widget?
+- bubble a special "show this screen rect" event
+- how to tell if a widget is just receiving focus instead of having it from last frame?
 
 forms where you can press "enter" in a form field and it clicks the ok button
 - also "esc" clicks the cancel button

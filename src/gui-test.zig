@@ -86,7 +86,7 @@ pub fn main() void {
     }
 
     win.endEvents();
-    defer win.end(10);
+    defer win.end(null);
 
     {
       const oo = gui.OptionsSet(.{.expand = .both});
@@ -336,6 +336,8 @@ pub fn main() void {
             theme_dark = !theme_dark;
           }
         }
+
+        IconBrowserButtonAndWindow();
       }
       
 
@@ -359,7 +361,7 @@ pub fn main() void {
         const fwrect = gui.Rect{.x = 300.25, .y = 200.25, .w = 300, .h = 200};
         var fwin = gui.FloatingWindow(@src(), 0, false, fwrect, &FloatingWindowTest.show, .{});
         defer fwin.deinit();
-        gui.LabelNoFormat(@src(), 0, "Floating Window", .{.margin = .{}, .gravity = .center, .background = false});
+        gui.LabelNoFormat(@src(), 0, "Floating Window", .{.gravity = .center});
 
         {
           var menu = gui.Menu(@src(), 0, .horizontal, .{});
@@ -433,7 +435,7 @@ pub fn main() void {
             const fwrect2 = gui.Rect{.x = 100.25 + 20 * @intToFloat(f32, fi), .y = 100.25, .w = 300, .h = 200};
             var fw2 = gui.FloatingWindow(@src(), fi, modal, fwrect2, f, .{.color_style = .window});
             defer fw2.deinit();
-            gui.LabelNoFormat(@src(), 0, buf_slice, .{.margin = .{}, .gravity = .center, .background = false});
+            gui.LabelNoFormat(@src(), 0, buf_slice, .{.gravity = .center});
 
             gui.Label(@src(), 0, "Asking a Question", .{}, .{});
 
@@ -453,22 +455,6 @@ pub fn main() void {
             gui.OptionsReset(oo);
             box.deinit();
 
-            {
-              var scroll = gui.ScrollArea(@src(), 0, .{.expand = .both});
-              defer scroll.deinit();
-
-              inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls) |d, i| {
-                var iconbox = gui.Box(@src(), 0, .horizontal, .{.expand = .horizontal});
-                defer iconbox.deinit();
-                _ = gui.ButtonIcon(@src(), i, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
-                gui.Label(@src(), i, d.name, .{}, .{});
-
-                //if (i == 10) {
-                  //break;
-                //}
-              }
-            }
-            
           }
         }
 
@@ -501,7 +487,7 @@ pub fn main() void {
 fn show_stroke_test_window() void {
   var win = gui.FloatingWindow(@src(), 0, false, gui.Rect{}, &StrokeTest.show_dialog, .{});
   defer win.deinit();
-  gui.LabelNoFormat(@src(), 0, "Stroke Test", .{.margin = .{}, .gravity = .center, .background = false});
+  gui.LabelNoFormat(@src(), 0, "Stroke Test", .{.gravity = .center});
 
   var scale = gui.Scale(@src(), 0, 1, .{.expand = .both});
   defer scale.deinit();
@@ -649,4 +635,40 @@ pub const StrokeTest = struct {
     _ = gui.ParentSet(self.parent);
   }
 };
+
+fn IconBrowserButtonAndWindow() void {
+  const IconBrowser = struct {
+    var show: bool = false;
+    var icons_shown: usize = 10;
+  };
+
+  if (gui.Button(@src(), 0, "Icon Browser", .{})) {
+    IconBrowser.show = !IconBrowser.show;
+    if (IconBrowser.show) {
+      IconBrowser.icons_shown = 10;
+    }
+  }
+
+  if (IconBrowser.show) {
+    const fwrect = gui.Rect{.x = 300, .y = 100, .w = 300, .h = 500};
+    var fwin = gui.FloatingWindow(@src(), 0, false, fwrect, &IconBrowser.show, .{});
+    defer fwin.deinit();
+    gui.LabelNoFormat(@src(), 0, "Icon Browser", .{.gravity = .center});
+
+    var scroll = gui.ScrollArea(@src(), 0, .{.expand = .both});
+    defer scroll.deinit();
+
+    inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls) |d, i| {
+      var iconbox = gui.Box(@src(), 0, .horizontal, .{.expand = .horizontal});
+      defer iconbox.deinit();
+      _ = gui.ButtonIcon(@src(), i, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
+      gui.Label(@src(), i, d.name, .{}, .{});
+
+      if (i == IconBrowser.icons_shown) {
+        IconBrowser.icons_shown += 10;
+        break;
+      }
+    }
+  }
+}
 
