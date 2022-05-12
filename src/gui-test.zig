@@ -350,6 +350,7 @@ pub fn main() void {
     {
       const FloatingWindowTest = struct {
         var show: bool = false;
+        var rect = gui.Rect{.x = 300.25, .y = 200.25, .w = 300, .h = 200};
       };
 
       if (gui.Button(@src(), 0, "Floating Window", .{})) {
@@ -357,8 +358,7 @@ pub fn main() void {
       }
 
       if (FloatingWindowTest.show) {
-        const fwrect = gui.Rect{.x = 300.25, .y = 200.25, .w = 300, .h = 200};
-        var fwin = gui.FloatingWindow(@src(), 0, false, fwrect, &FloatingWindowTest.show, .{});
+        var fwin = gui.FloatingWindow(@src(), 0, false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
         defer fwin.deinit();
         gui.LabelNoFormat(@src(), 0, "Floating Window", .{.gravity = .center});
 
@@ -431,8 +431,7 @@ pub fn main() void {
             }
             var buf = std.mem.zeroes([100]u8);
             var buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{fi, name}) catch unreachable;
-            const fwrect2 = gui.Rect{.x = 100.25 + 20 * @intToFloat(f32, fi), .y = 100.25, .w = 300, .h = 200};
-            var fw2 = gui.FloatingWindow(@src(), fi, modal, fwrect2, f, .{.color_style = .window});
+            var fw2 = gui.FloatingWindow(@src(), fi, modal, null, f, .{.color_style = .window, .min_size = .{.w = 150, .h = 100}});
             defer fw2.deinit();
             gui.LabelNoFormat(@src(), 0, buf_slice, .{.gravity = .center});
 
@@ -483,7 +482,7 @@ pub fn main() void {
 }
 
 fn show_stroke_test_window() void {
-  var win = gui.FloatingWindow(@src(), 0, false, gui.Rect{}, &StrokeTest.show_dialog, .{});
+  var win = gui.FloatingWindow(@src(), 0, false, &StrokeTest.show_rect, &StrokeTest.show_dialog, .{});
   defer win.deinit();
   gui.LabelNoFormat(@src(), 0, "Stroke Test", .{.gravity = .center});
 
@@ -499,6 +498,7 @@ fn show_stroke_test_window() void {
 pub const StrokeTest = struct {
   const Self = @This();
   var show_dialog: bool = false;
+  var show_rect = gui.Rect{};
   var pointsArray: [10]gui.Point = [1]gui.Point{.{}} ** 10;
   var points: []gui.Point = pointsArray[0..0];
   var dragi: ?usize = null;
@@ -636,6 +636,7 @@ pub const StrokeTest = struct {
 fn IconBrowserButtonAndWindow() void {
   const IconBrowser = struct {
     var show: bool = false;
+    var rect = gui.Rect{};
     var icons_shown: usize = 10;
   };
 
@@ -647,8 +648,7 @@ fn IconBrowserButtonAndWindow() void {
   }
 
   if (IconBrowser.show) {
-    const fwrect = gui.Rect{.x = 300, .y = 100, .w = 300, .h = 500};
-    var fwin = gui.FloatingWindow(@src(), 0, false, fwrect, &IconBrowser.show, .{});
+    var fwin = gui.FloatingWindow(@src(), 0, false, &IconBrowser.rect, &IconBrowser.show, .{});
     defer fwin.deinit();
     gui.LabelNoFormat(@src(), 0, "Icon Browser", .{.gravity = .center});
 

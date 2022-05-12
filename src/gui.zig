@@ -2678,11 +2678,11 @@ pub const PopupWidget = struct {
   }
 };
 
-pub fn FloatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, initialRect: Rect, openflag: ?*bool, opts: Options) *FloatingWindowWidget {
+pub fn FloatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, rect: ?*Rect, openflag: ?*bool, opts: Options) *FloatingWindowWidget {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(FloatingWindowWidget) catch unreachable;
   ret.* = FloatingWindowWidget{};
-  ret.install(src, id_extra, modal, initialRect, openflag, opts);
+  ret.install(src, id_extra, modal, rect, openflag, opts);
   return ret;
 }
 
@@ -2700,24 +2700,37 @@ pub const FloatingWindowWidget = struct {
   modal: bool = false,
   prev_windowId: u32 = 0,
   rect: Rect = Rect{},
+  io_rect: ?*Rect = null,
   minSize: Size = Size{},
   layout: BoxWidget = undefined,
   openflag: ?*bool = null,
   deferred_render_queue: DeferredRenderQueue = undefined,
 
-  pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, modal: bool, initialRect: Rect, openflag: ?*bool, opts: Options) void {
+  pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, modal: bool, io_rect: ?*Rect, openflag: ?*bool, opts: Options) void {
     const options = opts.overrideIfNull(Defaults);
 
     DeferRender();
     self.parent = ParentSet(self.widget());
     self.id = self.parent.extendID(src, id_extra);
+    self.io_rect = io_rect;
     self.modal = modal;
     self.prev_windowId = WindowCurrentSet(self.id);
     self.openflag = openflag;
 
-    if (DataGet(self.id, Rect)) |p| {
-      self.rect = p;
-      const ms = MinSize(self.id, options.min_size orelse .{});
+    if (self.io_rect) |ior| {
+      // user is storing the rect for us across open/close
+      self.rect = ior.*;
+    }
+    else {
+      // we store the rect
+      self.rect = DataGet(self.id, Rect) orelse Rect{};
+    }
+
+    var ms = options.min_size orelse Size{};
+    if (MinSizeGetPrevious(self.id)) |min_size| {
+      ms = Size.max(ms, min_size);
+
+      // if rect w/h is 0, that means use our min size and center
       if (self.rect.w == 0) {
         self.rect.w = ms.w;
         self.rect.x = WindowRect().w / 2 - ms.w / 2;
@@ -2728,7 +2741,7 @@ pub const FloatingWindowWidget = struct {
       }
     }
     else {
-      self.rect = initialRect;
+      // first frame we are being shown
       FocusWindow(self.id, null);
     }
 
@@ -2918,7 +2931,14 @@ pub const FloatingWindowWidget = struct {
   pub fn deinit(self: *Self) void {
     self.processEventsAfter();
     self.layout.deinit();
-    DataSet(self.id, self.rect);
+    if (self.io_rect) |ior| {
+      // user is storing the rect for us across open/close
+      ior.* = self.rect;
+    }
+    else {
+      // we store the rect
+      DataSet(self.id, self.rect);
+    }
     MinSizeSet(self.id, self.minSize);
     // we are outside of normal layout, so don't call minSizeForChild
     _ = ParentSet(self.parent);

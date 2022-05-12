@@ -119,7 +119,7 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
   }
 
   if (show_dialog) {
-    var dialog = gui.FloatingWindow(@src(), 0, true, gui.Rect{}, &show_dialog, .{});
+    var dialog = gui.FloatingWindow(@src(), 0, true, null, &show_dialog, .{});
     defer dialog.deinit();
 
     gui.LabelNoFormat(@src(), 0, "Add RSS Feed", .{.gravity = .center});
