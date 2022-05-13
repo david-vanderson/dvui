@@ -1,8 +1,6 @@
 
 does spinner animation have a hiccup?
 
-floating window needs to do an initial positioning, but then if size changes only change size not position
-
 do arbitrary scroll for icon browser
 - .rect given needs to expand w/h if expand is set
 

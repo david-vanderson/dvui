@@ -2712,6 +2712,11 @@ pub const FloatingWindowWidget = struct {
   layout: BoxWidget = undefined,
   openflag: ?*bool = null,
   deferred_render_queue: DeferredRenderQueue = undefined,
+  autoId: u32 = undefined,
+  autoPosSize: struct {
+    autopos: bool,
+    autosize: bool,
+  } = undefined,
 
   pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, modal: bool, io_rect: ?*Rect, openflag: ?*bool, opts: Options) void {
     const options = Defaults.override(opts);
@@ -2732,31 +2737,44 @@ pub const FloatingWindowWidget = struct {
       self.wd.rect = ior.*;
     }
     else {
-      // we store the rect
+      // we store the rect (only while the window is open)
       self.wd.rect = DataGet(self.wd.id, Rect) orelse Rect{};
+    }
+
+    self.autoId = ParentGet().extendID(@src(), 0);
+    if (DataGet(self.autoId, @TypeOf(self.autoPosSize))) |aps| {
+      self.autoPosSize = aps;
+    }
+    else {
+      self.autoPosSize = .{
+        .autopos = (self.wd.rect.x == 0 and self.wd.rect.y == 0),
+        .autosize = (self.wd.rect.w == 0 and self.wd.rect.h == 0),
+      };
     }
 
     var ms = options.min_size orelse Size{};
     if (MinSizeGetPrevious(self.wd.id)) |min_size| {
       ms = Size.max(ms, min_size);
 
-      // if rect w/h is 0, that means use our min size and center
-      if (self.wd.rect.w == 0) {
-        self.wd.rect.w = ms.w;
+      if (self.autoPosSize.autopos) {
+        // only position ourselves once
+        self.autoPosSize.autopos = false;
         self.wd.rect.x = WindowRect().w / 2 - ms.w / 2;
-      }
-      if (self.wd.rect.h == 0) {
-        self.wd.rect.h = ms.h;
         self.wd.rect.y = WindowRect().h / 2 - ms.h / 2;
+      }
+
+      if (self.autoPosSize.autosize) {
+        self.wd.rect.w = ms.w;
+        self.wd.rect.h = ms.h;
       }
     }
     else {
       // first frame we are being shown
       FocusWindow(self.wd.id, null);
 
-      if (self.wd.rect.empty()) {
-        // need a second frame to fit contents (FocusWindow calls CueFrame but
-        // here for clarity)
+      if (self.autoPosSize.autopos or self.autoPosSize.autosize) {
+        // need a second frame to position or fit contents (FocusWindow calls
+        // CueFrame but here for clarity)
         CueFrame();
       }
     }
@@ -2825,6 +2843,7 @@ pub const FloatingWindowWidget = struct {
                 const p = e.evt.mouse.p.scale(1 / rs.s);
                 self.wd.rect.w = math.max(40, p.x - self.wd.rect.x);
                 self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
+                self.autoPosSize.autosize = false;
               }
               // don't need CueFrame() because we're before drawing
               e.handled = true;
@@ -2878,6 +2897,7 @@ pub const FloatingWindowWidget = struct {
               const p = e.evt.mouse.p.scale(1 / rs.s);
               self.wd.rect.w = math.max(40, p.x - self.wd.rect.x);
               self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
+              self.autoPosSize.autosize = false;
             }
             CueFrame();
           }
@@ -2955,6 +2975,7 @@ pub const FloatingWindowWidget = struct {
       // we store the rect
       DataSet(self.wd.id, self.wd.rect);
     }
+    DataSet(self.autoId, self.autoPosSize);
     self.wd.minSizeSetAndCue();
     // outside normal layout, don't call minSizeForChild or
     // wd.minSizeReportToParent

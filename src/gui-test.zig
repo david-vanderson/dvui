@@ -45,6 +45,8 @@ pub fn main() void {
   _ = maxz;
   var floats: [6]bool = [_]bool{false} ** 6;
 
+  //var rng = std.rand.DefaultPrng.init(0);
+
   main_loop: while (true) {
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena_allocator.deinit();
@@ -160,17 +162,11 @@ pub fn main() void {
               var fw = gui.Popup(@src(), 0, gui.Rect.fromPoint(gui.Point{.x = r.x, .y = r.y + r.h}), &menu.submenus_activated, menu, .{.min_size = .{.w = 150, .h = 400}, .expand = .both});
               defer fw.deinit();
 
-              var opts = gui.Options{.min_size = .{.w = 100, .h = 100}};
-              if (theme_dark) {
-                opts.min_size.?.h = 200;
-              }
-
               gui.Checkbox(@src(), 0, &theme_dark, "Dark", .{});
 
               _ = gui.MenuItemLabel(@src(), 0, "Cut", false, .{});
-
-              _ = gui.MenuItemLabel(@src(), 0, "Copy", false, opts);
-              _ = gui.MenuItemLabel(@src(), 0, "Paste", false, opts);
+              _ = gui.MenuItemLabel(@src(), 0, "Copy", false, .{});
+              _ = gui.MenuItemLabel(@src(), 0, "Paste", false, .{});
              
             }
           }
@@ -458,7 +454,6 @@ pub fn main() void {
             }
 
             box.deinit();
-
           }
         }
 
