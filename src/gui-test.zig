@@ -88,7 +88,7 @@ pub fn main() void {
     }
 
     win.endEvents();
-    defer win.end(2);
+    defer win.end(null);
 
     {
       const oo = gui.Options{.expand = .both};
@@ -159,7 +159,7 @@ pub fn main() void {
 
           {
             if (gui.MenuItemLabel(@src(), 0, "Theme", true, .{})) |r| {
-              var fw = gui.Popup(@src(), 0, gui.Rect.fromPoint(gui.Point{.x = r.x, .y = r.y + r.h}), &menu.submenus_activated, menu, .{.min_size = .{.w = 150, .h = 400}, .expand = .both});
+              var fw = gui.Popup(@src(), 0, gui.Rect.fromPoint(gui.Point{.x = r.x, .y = r.y + r.h}), &menu.submenus_activated, menu, .{});
               defer fw.deinit();
 
               gui.Checkbox(@src(), 0, &theme_dark, "Dark", .{});
@@ -274,7 +274,7 @@ pub fn main() void {
           }
         }
 
-        if (false) {
+        if (true) {
           const millis = @divFloor(gui.frameTimeNS(), 1_000_000);
           const left = @intCast(i32, @rem(millis, 1000));
 
@@ -290,7 +290,7 @@ pub fn main() void {
         }
 
         {
-          //gui.Spinner(@src(), 0, 50);
+          gui.Spinner(@src(), 0, 50);
         }
 
         {

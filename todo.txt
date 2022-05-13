@@ -1,6 +1,4 @@
 
-does spinner animation have a hiccup?
-
 do arbitrary scroll for icon browser
 - .rect given needs to expand w/h if expand is set
 

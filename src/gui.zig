@@ -1672,6 +1672,15 @@ pub const EventIterator = struct {
   }
 };
 
+
+// Animations
+// start_time and end_time are relative to the current frame time.  At the
+// start of each frame both are reduced by the micros since the last frame.
+//
+// An animation will be active thru a frame where its end_time is <= 0, and be
+// deleted at the beginning of the next frame.  See Spinner for an example of
+// how to have a seemless continuous animation.
+
 pub const AnimationProperty = enum(u8) {
   timer,
   alpha,
@@ -4115,8 +4124,10 @@ pub fn Spinner(src: std.builtin.SourceLocation, id_extra: usize, size: f32) void
   var angle: f32 = 0;
   var anim = Animation{.start_val = 0, .end_val = 2 * math.pi, .start_time = 0, .end_time = 4_500_000};
   if (AnimationGet(id, .angle)) |a| {
+    // existing animation
     var aa = a;
     if (aa.end_time <= 0) {
+      // this animation is expired, seemlessly transition to next animation
       aa = anim;
       aa.start_time = a.end_time;
       aa.end_time += a.end_time;
@@ -4125,6 +4136,7 @@ pub fn Spinner(src: std.builtin.SourceLocation, id_extra: usize, size: f32) void
     angle = aa.lerp();
   }
   else {
+    // first frame we are seeing the spinner
     Animate(id, .angle, anim);
   }
 
