@@ -1,13 +1,18 @@
 
-split out minSizeForChild from reportMinSize?
- - should floating/popup do the reportMinSize CueFrame logic?
+does spinner animation have a hiccup?
+
+floating window needs to do an initial positioning, but then if size changes only change size not position
 
 do arbitrary scroll for icon browser
 - .rect given needs to expand w/h if expand is set
 
+make button focus highlight expand outside the border?
+ - how to show it on a accent button?
+
 convert:
 - ScrollBar
 - ScaleWidget
+- Spinner
 
 floating windows should have a close button
 

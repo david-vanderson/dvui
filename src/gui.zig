@@ -2579,16 +2579,18 @@ pub const PopupWidget = struct {
 
     if (DataGet(self.wd.id, Rect)) |p| {
       self.wd.rect = p;
-      if (self.wd.rect.empty()) {
-        const ms = MinSize(self.wd.id, options.min_size orelse .{});
-        self.wd.rect.w = ms.w;
-        self.wd.rect.h = ms.h;
-        self.wd.rect = PlaceOnScreen(initialRect, self.wd.rect);
-      }
+      const ms = MinSize(self.wd.id, options.min_size orelse .{});
+      self.wd.rect.w = ms.w;
+      self.wd.rect.h = ms.h;
+      self.wd.rect = PlaceOnScreen(initialRect, self.wd.rect);
     }
     else {
       self.wd.rect = PlaceOnScreen(initialRect, Rect.fromPoint(initialRect.topleft()));
       FocusWindow(self.wd.id, null);
+
+      // need a second frame to fit contents (FocusWindow calls CueFrame but
+      // here for clarity)
+      CueFrame();
     }
 
     debug("{x} Popup {}", .{self.wd.id, self.wd.rect});
@@ -2677,8 +2679,9 @@ pub const PopupWidget = struct {
 
     self.layout.deinit();
     DataSet(self.wd.id, self.wd.rect);
-    MinSizeSet(self.wd.id, self.wd.min_size);
-    // we are outside of normal layout, so don't call minSizeForChild
+    self.wd.minSizeSetAndCue();
+    // outside normal layout, don't call minSizeForChild or
+    // wd.minSizeReportToParent
     _ = ParentSet(self.wd.parent);
     _ = WindowCurrentSet(self.prev_windowId);
     DeferRenderPop();
@@ -2750,6 +2753,12 @@ pub const FloatingWindowWidget = struct {
     else {
       // first frame we are being shown
       FocusWindow(self.wd.id, null);
+
+      if (self.wd.rect.empty()) {
+        // need a second frame to fit contents (FocusWindow calls CueFrame but
+        // here for clarity)
+        CueFrame();
+      }
     }
 
     debug("{x} FloatingWindow {}", .{self.wd.id, self.wd.rect});
@@ -2946,9 +2955,9 @@ pub const FloatingWindowWidget = struct {
       // we store the rect
       DataSet(self.wd.id, self.wd.rect);
     }
-    MinSizeSet(self.wd.id, self.wd.min_size);
-    // we are outside of normal layout, so don't call minSizeForChild (thru
-    // self.wd.reportMinSize()
+    self.wd.minSizeSetAndCue();
+    // outside normal layout, don't call minSizeForChild or
+    // wd.minSizeReportToParent
     _ = ParentSet(self.wd.parent);
     _ = WindowCurrentSet(self.prev_windowId);
     DeferRenderPop();
@@ -3206,7 +3215,8 @@ pub const PanedWidget = struct {
 
   pub fn deinit(self: *Self) void {
     gui.DataSet(self.wd.id, Data{.split_ratio = self.split_ratio, .rect = self.wd.contentRect()});
-    self.wd.reportMinSize();
+    self.wd.minSizeSetAndCue();
+    self.wd.minSizeReportToParent();
     _ = gui.ParentSet(self.wd.parent);
   }
 };
@@ -3399,7 +3409,8 @@ pub const TextLayoutWidget = struct {
 
   pub fn deinit(self: *Self) void {
     ClipSet(self.prevClip);
-    self.wd.reportMinSize();
+    self.wd.minSizeSetAndCue();
+    self.wd.minSizeReportToParent();
     _ = ParentSet(self.wd.parent);
   }
 };
@@ -3496,7 +3507,8 @@ pub const ContextWidget = struct {
     if (self.active) {
       DataSet(self.wd.id, self.activePt);
     }
-    self.wd.reportMinSize();
+    self.wd.minSizeSetAndCue();
+    self.wd.minSizeReportToParent();
     _ = ParentSet(self.wd.parent);
   }
 };
@@ -3549,7 +3561,8 @@ pub const OverlayWidget = struct {
   }
 
   pub fn deinit(self: *Self) void {
-    self.wd.reportMinSize();
+    self.wd.minSizeSetAndCue();
+    self.wd.minSizeReportToParent();
     _ = ParentSet(self.wd.parent);
   }
 };
@@ -3696,7 +3709,8 @@ pub const BoxWidget = struct {
     }
 
     self.wd.minSizeMax(self.wd.padSize(ms));
-    self.wd.reportMinSize();
+    self.wd.minSizeSetAndCue();
+    self.wd.minSizeReportToParent();
 
     if (self.total_weight > 0) {
       DataSet(self.wd.id, self.total_weight);
@@ -4036,7 +4050,8 @@ pub const ScrollAreaWidget = struct {
     const d = Data{.virtualSize = self.nextVirtualSize, .scroll = scroll};
     DataSet(self.wd.id, d);
 
-    self.wd.reportMinSize();
+    self.wd.minSizeSetAndCue();
+    self.wd.minSizeReportToParent();
     _ = ParentSet(self.wd.parent);
   }
 };
@@ -4045,7 +4060,8 @@ pub fn Separator(src: std.builtin.SourceLocation, id_extra: usize, opts: Options
   var wd = WidgetData.init(src, id_extra, opts);
   debug("{x} Spacer {}", .{wd.id, wd.rect});
   wd.borderAndBackground();
-  wd.reportMinSize();
+  wd.minSizeSetAndCue();
+  wd.minSizeReportToParent();
 }
 
 pub fn Spacer(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
@@ -4055,7 +4071,8 @@ pub fn Spacer(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) v
 pub fn SpacerRect(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Rect {
   var wd = WidgetData.init(src, id_extra, opts);
   debug("{x} Spacer {}", .{wd.id, wd.rect});
-  wd.reportMinSize();
+  wd.minSizeSetAndCue();
+  wd.minSizeReportToParent();
   return wd.rect;
 }
 
@@ -4176,7 +4193,8 @@ pub const ScaleWidget = struct {
   pub fn deinit(self: *Self) void {
     self.processEventsAfter();
     DataSet(self.wd.id, self.scale);
-    self.wd.reportMinSize();
+    self.wd.minSizeSetAndCue();
+    self.wd.minSizeReportToParent();
     _ = ParentSet(self.wd.parent);
   }
 };
@@ -4257,7 +4275,8 @@ pub const MenuWidget = struct {
   pub fn deinit(self: *Self) void {
     self.box.deinit();
     DataSet(self.wd.id, self.submenus_activated);
-    self.wd.reportMinSize();
+    self.wd.minSizeSetAndCue();
+    self.wd.minSizeReportToParent();
     _ = MenuSet(self.parentMenu);
     _ = ParentSet(self.wd.parent);
   }
@@ -4452,7 +4471,8 @@ pub const MenuItemWidget = struct {
   }
 
   pub fn deinit(self: *Self) void {
-    self.wd.reportMinSize();
+    self.wd.minSizeSetAndCue();
+    self.wd.minSizeReportToParent();
     _ = ParentSet(self.wd.parent);
   }
 };
@@ -4493,7 +4513,8 @@ pub const LabelWidget = struct {
     }
     ClipSet(oldclip);
 
-    self.wd.reportMinSize();
+    self.wd.minSizeSetAndCue();
+    self.wd.minSizeReportToParent();
   }
 };
 
@@ -4521,7 +4542,8 @@ pub fn Icon(src: std.builtin.SourceLocation, id_extra: usize, name: []const u8, 
   const rs = wd.contentRectScale();
   renderIcon(name, tvg_bytes, rs, opts.color());
 
-  wd.reportMinSize();
+  wd.minSizeSetAndCue();
+  wd.minSizeReportToParent();
 }
 
 pub fn ButtonContainer(src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) *ButtonContainerWidget {
@@ -4663,7 +4685,8 @@ pub const ButtonContainerWidget = struct {
   }
 
   pub fn deinit(self: *Self) void {
-    self.wd.reportMinSize();
+    self.wd.minSizeSetAndCue();
+    self.wd.minSizeReportToParent();
     _ = ParentSet(self.wd.parent);
   }
 };
@@ -4936,7 +4959,8 @@ pub const TextEntryWidget = struct {
   }
 
   pub fn deinit(self: *Self) void {
-    self.wd.reportMinSize();
+    self.wd.minSizeSetAndCue();
+    self.wd.minSizeReportToParent();
     _ = ParentSet(self.wd.parent);
 
     if (self.allocator) |a| {
@@ -5398,7 +5422,7 @@ pub const WidgetData = struct {
     self.min_size = Size.max(self.min_size, s);
   }
 
-  pub fn reportMinSize(self: *const WidgetData) void {
+  pub fn minSizeSetAndCue(self: *const WidgetData) void {
     if (MinSizeGetPrevious(self.id)) |ms| {
       // If the size we got was exactly our previous min size then our min size
       // was a binding constraint.  So if our min size changed it might cause
@@ -5419,6 +5443,9 @@ pub const WidgetData = struct {
       CueFrame();
     }
     MinSizeSet(self.id, self.min_size);
+  }
+
+  pub fn minSizeReportToParent(self: *const WidgetData) void {
     self.parent.minSizeForChild(self.min_size);
   }
 };

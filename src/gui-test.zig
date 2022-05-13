@@ -86,7 +86,7 @@ pub fn main() void {
     }
 
     win.endEvents();
-    defer win.end(null);
+    defer win.end(2);
 
     {
       const oo = gui.Options{.expand = .both};
@@ -157,14 +157,21 @@ pub fn main() void {
 
           {
             if (gui.MenuItemLabel(@src(), 0, "Theme", true, .{})) |r| {
-              var fw = gui.Popup(@src(), 0, gui.Rect.fromPoint(gui.Point{.x = r.x, .y = r.y + r.h}), &menu.submenus_activated, menu, .{});
+              var fw = gui.Popup(@src(), 0, gui.Rect.fromPoint(gui.Point{.x = r.x, .y = r.y + r.h}), &menu.submenus_activated, menu, .{.min_size = .{.w = 150, .h = 400}, .expand = .both});
               defer fw.deinit();
+
+              var opts = gui.Options{.min_size = .{.w = 100, .h = 100}};
+              if (theme_dark) {
+                opts.min_size.?.h = 200;
+              }
 
               gui.Checkbox(@src(), 0, &theme_dark, "Dark", .{});
 
               _ = gui.MenuItemLabel(@src(), 0, "Cut", false, .{});
-              _ = gui.MenuItemLabel(@src(), 0, "Copy", false, .{});
-              _ = gui.MenuItemLabel(@src(), 0, "Paste", false, .{});
+
+              _ = gui.MenuItemLabel(@src(), 0, "Copy", false, opts);
+              _ = gui.MenuItemLabel(@src(), 0, "Paste", false, opts);
+             
             }
           }
         }
@@ -271,7 +278,7 @@ pub fn main() void {
           }
         }
 
-        {
+        if (false) {
           const millis = @divFloor(gui.frameTimeNS(), 1_000_000);
           const left = @intCast(i32, @rem(millis, 1000));
 
@@ -287,7 +294,7 @@ pub fn main() void {
         }
 
         {
-          gui.Spinner(@src(), 0, 50);
+          //gui.Spinner(@src(), 0, 50);
         }
 
         {
@@ -530,7 +537,8 @@ pub const StrokeTest = struct {
     const stroke_color = gui.Color{.r = 0, .g = 0, .b = 255, .a = 150};
     gui.PathStroke(false, rs.s * thickness, stroke_color);
 
-    self.wd.reportMinSize();
+    self.wd.minSizeSetAndCue();
+    self.wd.minSizeReportToParent();
   }
 
   pub fn processEvents(self: *Self) void {
