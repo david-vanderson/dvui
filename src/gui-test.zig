@@ -88,7 +88,7 @@ pub fn main() void {
     }
 
     win.endEvents();
-    defer win.end(null);
+    defer win.end(3);
 
     {
       const oo = gui.Options{.expand = .both};
@@ -232,7 +232,7 @@ pub fn main() void {
         //}
 
         {
-          var scroll = gui.ScrollArea(@src(), 0, .{});
+          var scroll = gui.ScrollArea(@src(), 0, null, .{});
           defer scroll.deinit();
 
           var buf: [100]u8 = undefined;
@@ -458,7 +458,7 @@ pub fn main() void {
         }
 
 
-        var scroll = gui.ScrollArea(@src(), 0, .{.expand = .both});
+        var scroll = gui.ScrollArea(@src(), 0, null, .{.expand = .both});
         defer scroll.deinit();
         var tl = gui.TextLayout(@src(), 0, .{.expand = .both});
         {
@@ -600,16 +600,12 @@ pub const StrokeTest = struct {
 fn IconBrowserButtonAndWindow() void {
   const IconBrowser = struct {
     var show: bool = false;
-    var rect = gui.Rect{};
-    var icons_shown: usize = 10;
+    var rect = gui.Rect{.x = 0, .y = 0, .w = 300, .h = 300};
     var row_height: f32 = 0;
   };
 
   if (gui.Button(@src(), 0, "Icon Browser", .{})) {
     IconBrowser.show = !IconBrowser.show;
-    if (IconBrowser.show) {
-      IconBrowser.icons_shown = 10;
-    }
   }
 
   if (IconBrowser.show) {
@@ -617,32 +613,33 @@ fn IconBrowserButtonAndWindow() void {
     defer fwin.deinit();
     gui.LabelNoFormat(@src(), 0, "Icon Browser", .{.gravity = .center});
 
-    //const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len;
-    //const height = @intToFloat(f32, num_icons) * IconBrowser.row_height;
+    const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len;
+    const height = @intToFloat(f32, num_icons) * IconBrowser.row_height;
 
-    //var scroll = gui.ScrollAreaUnmanaged(@src(), 0, .{.w = 0, .h = height}, .{.expand = .both});
-    //defer scroll.deinit();
+    var scroll = gui.ScrollArea(@src(), 0, gui.Size{.w = 0, .h = height}, .{.expand = .both});
+    defer scroll.deinit();
 
-    //const visibleRect = scroll.visibleRect();
-    //var cursor: f32 = 0;
+    const visibleRect = scroll.visibleRect();
+    //std.debug.print("visibleRect {}\n", .{visibleRect});
+    var cursor: f32 = 0;
 
-    //inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls) |d, i| {
-    //  if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
-    //    var iconbox = gui.Box(@src(), 0, .horizontal, .{.expand = .horizontal, .rect = .{.x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height}});
-    //    defer iconbox.deinit();
-    //    _ = gui.ButtonIcon(@src(), i, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
-    //    gui.Label(@src(), i, d.name, .{}, .{});
+    inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls) |d, i| {
+      if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
+        const r = gui.Rect{.x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height};
+        //std.debug.print("  c {d} r {}\n", .{cursor, r});
+        var iconbox = gui.Box(@src(), 0, .horizontal, .{.expand = .horizontal, .rect = r});
+        _ = gui.ButtonIcon(@src(), i, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
+        gui.Label(@src(), i, d.name, .{}, .{});
 
-    //    //if (i == IconBrowser.icons_shown) {
-    //    //  IconBrowser.icons_shown += 10;
-    //    //  break;
-    //    //}
+        iconbox.deinit();
 
-    //    if (IconBrowser.row_height == 0) {
-    //      IconBrowser.row_height = iconbox.wd.min_size.h;
-    //    }
-    //  }
-    //}
+        if (IconBrowser.row_height == 0) {
+          IconBrowser.row_height = iconbox.wd.min_size.h;
+        }
+      }
+
+      cursor += IconBrowser.row_height;
+    }
   }
 }
 

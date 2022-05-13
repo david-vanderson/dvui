@@ -2765,16 +2765,16 @@ pub const FloatingWindowWidget = struct {
     if (MinSizeGetPrevious(self.wd.id)) |min_size| {
       ms = Size.max(ms, min_size);
 
-      if (self.autoPosSize.autopos) {
-        // only position ourselves once
-        self.autoPosSize.autopos = false;
-        self.wd.rect.x = WindowRect().w / 2 - ms.w / 2;
-        self.wd.rect.y = WindowRect().h / 2 - ms.h / 2;
-      }
-
       if (self.autoPosSize.autosize) {
         self.wd.rect.w = ms.w;
         self.wd.rect.h = ms.h;
+      }
+
+      if (self.autoPosSize.autopos) {
+        // only position ourselves once
+        self.autoPosSize.autopos = false;
+        self.wd.rect.x = WindowRect().w / 2 - self.wd.rect.w / 2;
+        self.wd.rect.y = WindowRect().h / 2 - self.wd.rect.h / 2;
       }
     }
     else {
@@ -2785,6 +2785,10 @@ pub const FloatingWindowWidget = struct {
         // need a second frame to position or fit contents (FocusWindow calls
         // CueFrame but here for clarity)
         CueFrame();
+
+        // hide our first frame so the user doesn't see a jump when we
+        // autopos/autosize
+        self.wd.rect = .{};
       }
     }
 
@@ -2978,7 +2982,12 @@ pub const FloatingWindowWidget = struct {
     self.layout.deinit();
     if (self.io_rect) |ior| {
       // user is storing the rect for us across open/close
-      ior.* = self.wd.rect;
+      if (!self.autoPosSize.autopos) {
+        // if we are autopositioning, then this is the first frame and we set
+        // our rect to 0 so the user wouldn't see the jump, so don't store it
+        // back out this frame
+        ior.* = self.wd.rect;
+      }
     }
     else {
       // we store the rect
@@ -3880,11 +3889,11 @@ pub const ScrollBar = struct {
   }
 };
 
-pub fn ScrollArea(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *ScrollAreaWidget {
+pub fn ScrollArea(src: std.builtin.SourceLocation, id_extra: usize, virtual_size: ?Size, opts: Options) *ScrollAreaWidget {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(ScrollAreaWidget) catch unreachable;
   ret.* = ScrollAreaWidget{};
-  ret.init(src, id_extra, opts);
+  ret.init(src, id_extra, virtual_size, opts);
   ret.install();
   return ret;
 }
@@ -3918,11 +3927,17 @@ pub const ScrollAreaWidget = struct {
   scroll: f32 = 0,  // how far down we are scrolled (natural scale pixels)
   scrollAfter: f32 = 0,  // how far we need to scroll after this frame
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
+  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, virtual_size: ?Size, opts: Options) void {
     const options = opts.overrideIfNull(Defaults);
     self.wd = WidgetData.init(src, id_extra, options);
+    if (virtual_size) |vs| {
+      self.virtualSize = vs;
+    }
+
     if (DataGet(self.wd.id, Data)) |d| {
-      self.virtualSize = d.virtualSize;
+      if (virtual_size == null) {
+        self.virtualSize = d.virtualSize;
+      }
       self.scroll = d.scroll;
     }
     self.cursor = 0;
@@ -3967,7 +3982,7 @@ pub const ScrollAreaWidget = struct {
     var length = math.max(rect.h, self.virtualSize.h);
     if (self.scroll < 0) {
       // temporarily adding the dead space we are showing
-      length -= self.scroll;
+      length += -self.scroll;
     }
     else if (self.scroll > max_hard_scroll) {
       length += (self.scroll - max_hard_scroll);
@@ -3981,6 +3996,16 @@ pub const ScrollAreaWidget = struct {
     }
     
     return ScrollInfo{.fraction_visible = fraction_visible, .scroll_fraction = scroll_fraction};
+  }
+
+  // rect in virtual coords that is being shown
+  pub fn visibleRect(self: *const Self) Rect {
+    var ret = Rect{};
+    ret.x = 0;
+    ret.w = math.max(0, self.wd.contentRect().w - grab_thick);
+    ret.y = self.scroll;
+    ret.h = self.wd.contentRect().h;
+    return ret;
   }
 
   pub fn scrollToFraction(self: *Self, fin: f32) void {

@@ -1,6 +1,13 @@
 
-do arbitrary scroll for icon browser
-- .rect given needs to expand w/h if expand is set
+can you do the icon browser so that the icons show up immediately and not a frame behind?
+ - maybe set the size of the iconbox?
+
+when I do a scroll on the icon browser with a terminal covering part of the window, the scroll goes to the main window
+- what is the mouse point associated with that scroll?
+- do scroll events have mouse position associated with them?
+
+scrollarea needs to be able to have the keyboard focus because the icon browser doesn't have focusable children to bubble the events
+- focusable but not tabbable
 
 make button focus highlight expand outside the border?
  - how to show it on a accent button?
