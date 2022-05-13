@@ -1,7 +1,9 @@
 
-need a way to persist floating window rect - pass a pointer?
+split out minSizeForChild from reportMinSize?
+ - should floating/popup do the reportMinSize CueFrame logic?
 
 do arbitrary scroll for icon browser
+- .rect given needs to expand w/h if expand is set
 
 convert:
 - ScrollBar

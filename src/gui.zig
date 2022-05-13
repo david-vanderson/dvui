@@ -160,6 +160,13 @@ pub const Options = struct {
     control,
   };
 
+  // null is normal, meaning parent picks a rect for the child widget.  If
+  // non-null, child widget is choosing its own place, meaning its not being
+  // placed normally.  w and h will still be expanded if expand is set.
+  // Example is ScrollAreaUnmanaged, where user code chooses widget placement.
+  // If non-null, should not call rectFor or minSizeForChild.
+  rect: ?Rect = null,
+
   // default is .none
   expand: ?Expand = null,
 
@@ -309,6 +316,7 @@ pub const Options = struct {
     return self.override(.{.margin = .{}, .border = .{}, .background = false, .padding = .{}});
   }
 
+  // converts a content min size to a min size including padding/border/margin
   // make sure you've previously overridden padding/border/margin
   pub fn overrideMinSizeContent(self: *const Options, min_size_content: Size) Options {
     return self.override(.{.min_size = min_size_content.pad(self.paddingGet()).pad(self.borderGet()).pad(self.marginGet())});
@@ -389,7 +397,7 @@ pub fn frameTimeNS() i128 {
 // so that pressing the up key in any child of a scrollarea will scroll.  Call
 // this helper at the end of processing normal events.
 fn BubbleEvents(w: Widget) void {
-  var iter = EventIterator.init(w.ID(), Rect{});
+  var iter = EventIterator.init(w.data().id, Rect{});
   while (iter.next()) |e| {
     if (e.handled) {
       continue;
@@ -689,7 +697,7 @@ pub fn FocusWindow(window_id: ?u32, iter: ?*EventIterator) void {
     cw.focused_windowId = winId;
     CueFrame();
     if (iter) |it| {
-      if (cw.focused_windowId == cw.id) {
+      if (cw.focused_windowId == cw.wd.id) {
         it.focusRemainingEvents(cw.focused_windowId, cw.focused_widgetId);
       }
       else {
@@ -718,7 +726,7 @@ fn optionalEqual(comptime T: type, a: ?T, b: ?T) bool {
 
 pub fn FocusWidget(id: ?u32, iter: ?*EventIterator) void {
   const cw = current_window orelse unreachable;
-  if (cw.focused_windowId == cw.id) {
+  if (cw.focused_windowId == cw.wd.id) {
     if (!optionalEqual(u32, cw.focused_widgetId, id)) {
       cw.focused_widgetId = id;
       if (iter) |it| {
@@ -745,7 +753,7 @@ pub fn FocusWidget(id: ?u32, iter: ?*EventIterator) void {
 
 pub fn FocusedWidgetId() ?u32 {
   const cw = current_window orelse unreachable;
-  if (cw.focused_windowId == cw.id) {
+  if (cw.focused_windowId == cw.wd.id) {
     return cw.focused_widgetId;
   }
   else {
@@ -761,7 +769,7 @@ pub fn FocusedWidgetId() ?u32 {
 
 pub fn FocusedWidgetIdInCurrentWindow() ?u32 {
   const cw = current_window orelse unreachable;
-  if (cw.window_currentId == cw.id) {
+  if (cw.window_currentId == cw.wd.id) {
     return cw.focused_widgetId;
   }
   else {
@@ -1189,7 +1197,7 @@ pub fn WindowFor(p: Point) u32 {
     }
   }
 
-  return cw.id;
+  return cw.wd.id;
 }
 
 // Are we in a popup currently?
@@ -1433,13 +1441,13 @@ pub fn FPS() f32 {
 
 pub fn ParentGet() Widget {
   const cw = current_window orelse unreachable;
-  return cw.parent;
+  return cw.wd.parent;
 }
 
 pub fn ParentSet(w: Widget) Widget {
   var cw = current_window orelse unreachable;
-  const ret = cw.parent;
-  cw.parent = w;
+  const ret = cw.wd.parent;
+  cw.wd.parent = w;
   return ret;
 }
 
@@ -1457,7 +1465,7 @@ pub fn MenuSet(m: ?*MenuWidget) ?*MenuWidget {
 
 pub fn WindowRect() Rect {
   var cw = current_window orelse unreachable;
-  return cw.rect;
+  return cw.wd.rect;
 }
 
 pub fn WindowRectPixels() Rect {
@@ -1874,7 +1882,6 @@ pub const Window = struct {
   extra_frames_needed: u8 = 0,
   clipRect: Rect = Rect{},
 
-  parent: Widget = undefined,
   menu_current: ?*MenuWidget = null,
   theme: *const Theme = &Theme_Adwaita,
 
@@ -1902,10 +1909,9 @@ pub const Window = struct {
 
   defer_render: bool = false,
 
-  id: u32 = 0,
+  wd: WidgetData = undefined,
   rect_pixels: Rect = Rect{},  // pixels
   natural_scale: f32 = 1.0,
-  rect: Rect = Rect{},  // unscaled
   layout: BoxWidget = undefined,
 
   captureID: ?u32 = null,
@@ -1930,10 +1936,10 @@ pub const Window = struct {
                     .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
                     .icon_cache = std.AutoHashMap(u32, IconCacheEntry).init(gpa),
                     .window = window,
-                    .id = fnv.init().final(),
+                    .wd = WidgetData{.id = fnv.init().final()},
                     .renderer = renderer};
 
-    self.focused_windowId = self.id;
+    self.focused_windowId = self.wd.id;
     self.frame_time_ns = std.time.nanoTimestamp();
 
     return self;
@@ -2244,11 +2250,11 @@ pub const Window = struct {
       // if the floating window that was focused went away, focus the highest
       // remaining one
       if (self.floating_windows.items.len > 0) {
-        const data = self.floating_windows.items[self.floating_windows.items.len-1];
-        FocusWindow(data.id, null);
+        const fdata = self.floating_windows.items[self.floating_windows.items.len-1];
+        FocusWindow(fdata.id, null);
       }
       else {
-        FocusWindow(self.id, null);
+        FocusWindow(self.wd.id, null);
       }
     }
 
@@ -2287,12 +2293,12 @@ pub const Window = struct {
     var window_w: i32 = undefined;
     var window_h: i32 = undefined;
     _ = c.SDL_GetWindowSize(self.window, &window_w, &window_h);
-    self.rect = Rect{.x = 0, .y = 0, .w = @intToFloat(f32, window_w), .h = @intToFloat(f32, window_h)};
-    self.natural_scale = self.rect_pixels.w / self.rect.w; 
+    self.wd.rect = Rect{.x = 0, .y = 0, .w = @intToFloat(f32, window_w), .h = @intToFloat(f32, window_h)};
+    self.natural_scale = self.rect_pixels.w / self.wd.rect.w; 
 
-    debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{self.rect.w, self.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale});
+    debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale});
 
-    _ = WindowCurrentSet(self.id);
+    _ = WindowCurrentSet(self.wd.id);
 
     self.extra_frames_needed -|= 1;
     if (micros_since_last == 0) {
@@ -2393,7 +2399,7 @@ pub const Window = struct {
     }
     self.captured_last_frame = false;
 
-    self.parent = self.widget();
+    self.wd.parent = self.widget();
     self.menu_current = null;
 
     self.layout = BoxWidget{};
@@ -2417,7 +2423,7 @@ pub const Window = struct {
 
     // events may have been tagged with a focus widget that never showed up, so
     // we wouldn't even get them bubbled
-    var iter = EventIterator.init(self.id, self.rect_pixels);
+    var iter = EventIterator.init(self.wd.id, self.rect_pixels);
     while (iter.nextCleanup(true)) |e| {
       // doesn't matter if we mark events has handled or not because this is
       // the end of the line for all events
@@ -2478,7 +2484,7 @@ pub const Window = struct {
   }
 
   pub fn FocusedWindowLost(self: *Self) bool {
-    if (self.id == self.focused_windowId) {
+    if (self.wd.id == self.focused_windowId) {
       return false;
     }
     else {
@@ -2493,15 +2499,15 @@ pub const Window = struct {
   }
 
   fn widget(self: *Self) Widget {
-    return Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    return PlaceIn(id, self.rect, min_size, e, g);
+    return PlaceIn(id, self.wd.rect, min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -2521,7 +2527,7 @@ pub const Window = struct {
         e.handled = true;
         // when a popup is closed, the window that spawned it (which had focus
         // previously) should become focused again
-        FocusWindow(self.id, null);
+        FocusWindow(self.wd.id, null);
         if (cp.defocus) {
           FocusWidget(null, null);
         }
@@ -2551,11 +2557,8 @@ pub const PopupWidget = struct {
     .color_style = .window
   };
 
-  id: u32 = undefined,
-  parent: Widget = undefined,
+  wd: WidgetData = undefined,
   prev_windowId: u32 = 0,
-  rect: Rect = Rect{},
-  minSize: Size = Size{},
   layout: MenuWidget = undefined,
   openflag: ?*bool = null,
   menu: ?*MenuWidget = null,
@@ -2564,31 +2567,35 @@ pub const PopupWidget = struct {
   pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, openflag: ?*bool, menu: ?*MenuWidget, opts: Options) void {
     const options = opts.overrideIfNull(Defaults);
     DeferRender();
-    self.parent = ParentSet(self.widget());
-    self.id = self.parent.extendID(src, id_extra);
-    self.prev_windowId = WindowCurrentSet(self.id);
+
+    // passing options.rect will stop WidgetData.init from calling rectFor
+    // which is important because we are outside normal layout
+    self.wd = WidgetData.init(src, id_extra, options.override(.{.rect = .{}}));
+    _ = ParentSet(self.widget());
+
+    self.prev_windowId = WindowCurrentSet(self.wd.id);
     self.openflag = openflag;
     self.menu = menu;
 
-    if (DataGet(self.id, Rect)) |p| {
-      self.rect = p;
-      if (self.rect.empty()) {
-        const ms = MinSize(self.id, options.min_size orelse .{});
-        self.rect.w = ms.w;
-        self.rect.h = ms.h;
-        self.rect = PlaceOnScreen(initialRect, self.rect);
+    if (DataGet(self.wd.id, Rect)) |p| {
+      self.wd.rect = p;
+      if (self.wd.rect.empty()) {
+        const ms = MinSize(self.wd.id, options.min_size orelse .{});
+        self.wd.rect.w = ms.w;
+        self.wd.rect.h = ms.h;
+        self.wd.rect = PlaceOnScreen(initialRect, self.wd.rect);
       }
     }
     else {
-      self.rect = PlaceOnScreen(initialRect, Rect.fromPoint(initialRect.topleft()));
-      FocusWindow(self.id, null);
+      self.wd.rect = PlaceOnScreen(initialRect, Rect.fromPoint(initialRect.topleft()));
+      FocusWindow(self.wd.id, null);
     }
 
-    debug("{x} Popup {}", .{self.id, self.rect});
+    debug("{x} Popup {}", .{self.wd.id, self.wd.rect});
 
     // outside normal flow, so don't get rect from parent
-    const rs = self.screenRectScale(self.rect);
-    FloatingWindowAdd(self.id, self.prev_windowId, rs.r, false);
+    const rs = self.screenRectScale(self.wd.rect);
+    FloatingWindowAdd(self.wd.id, self.prev_windowId, rs.r, false);
 
     // we are using MenuWidget to do border/background but floating windows
     // don't have margin, so turn that off
@@ -2598,26 +2605,26 @@ pub const PopupWidget = struct {
   }
 
   pub fn close(self: *Self) void {
-    FloatingWindowClosing(self.id);
+    FloatingWindowClosing(self.wd.id);
     if (self.openflag) |of| {
       of.* = false;
     }
   }
 
   fn widget(self: *Self) Widget {
-    return Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    return PlaceIn(id, self.rect, min_size, e, g);
+    return PlaceIn(id, self.wd.rect, min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
-    self.minSize = Size.max(self.minSize, s);
+    self.wd.minSizeMax(self.wd.padSize(s));
   }
 
   pub fn screenRectScale(self: *Self, r: Rect) RectScale {
@@ -2637,14 +2644,14 @@ pub const PopupWidget = struct {
     }
 
     if (!e.handled) {
-      self.parent.bubbleEvent(e);
+      self.wd.parent.bubbleEvent(e);
     }
   }
 
   pub fn deinit(self: *Self) void {
     // outside normal flow, so don't get rect from parent
-    const rs = self.screenRectScale(self.rect);
-    var iter = EventIterator.init(self.id, rs.r);
+    const rs = self.screenRectScale(self.wd.rect);
+    var iter = EventIterator.init(self.wd.id, rs.r);
     while (iter.nextCleanup(true)) |e| {
       // mark all events as handled so no mouse events are handled by windows
       // under us
@@ -2663,16 +2670,16 @@ pub const PopupWidget = struct {
       }
     }
 
-    if (FloatingWindowNoChildren() and !PopupAncestorFocused(self.id)) {
+    if (FloatingWindowNoChildren() and !PopupAncestorFocused(self.wd.id)) {
       // this popup is the last popup in the chain and none of them are focused
       self.close();
     }
 
     self.layout.deinit();
-    DataSet(self.id, self.rect);
-    MinSizeSet(self.id, self.minSize);
+    DataSet(self.wd.id, self.wd.rect);
+    MinSizeSet(self.wd.id, self.wd.min_size);
     // we are outside of normal layout, so don't call minSizeForChild
-    _ = ParentSet(self.parent);
+    _ = ParentSet(self.wd.parent);
     _ = WindowCurrentSet(self.prev_windowId);
     DeferRenderPop();
   }
@@ -2692,69 +2699,69 @@ pub const FloatingWindowWidget = struct {
     .corner_radius = Rect.all(5),
     .border = Rect.all(1),
     .background = true,
-    .color_style = .window
+    .color_style = .window,
   };
 
-  id: u32 = undefined,
-  parent: Widget = undefined,
+  wd: WidgetData = undefined,
   modal: bool = false,
   prev_windowId: u32 = 0,
-  rect: Rect = Rect{},
   io_rect: ?*Rect = null,
-  minSize: Size = Size{},
   layout: BoxWidget = undefined,
   openflag: ?*bool = null,
   deferred_render_queue: DeferredRenderQueue = undefined,
 
   pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, modal: bool, io_rect: ?*Rect, openflag: ?*bool, opts: Options) void {
-    const options = opts.overrideIfNull(Defaults);
+    const options = Defaults.override(opts);
 
     DeferRender();
-    self.parent = ParentSet(self.widget());
-    self.id = self.parent.extendID(src, id_extra);
+    
+    // passing options.rect will stop WidgetData.init from calling rectFor
+    // which is important because we are outside normal layout
+    self.wd = WidgetData.init(src, id_extra, options.override(.{.rect = .{}}));
+    _ = ParentSet(self.widget());
     self.io_rect = io_rect;
     self.modal = modal;
-    self.prev_windowId = WindowCurrentSet(self.id);
+    self.prev_windowId = WindowCurrentSet(self.wd.id);
     self.openflag = openflag;
 
     if (self.io_rect) |ior| {
       // user is storing the rect for us across open/close
-      self.rect = ior.*;
+      self.wd.rect = ior.*;
     }
     else {
       // we store the rect
-      self.rect = DataGet(self.id, Rect) orelse Rect{};
+      self.wd.rect = DataGet(self.wd.id, Rect) orelse Rect{};
     }
 
     var ms = options.min_size orelse Size{};
-    if (MinSizeGetPrevious(self.id)) |min_size| {
+    if (MinSizeGetPrevious(self.wd.id)) |min_size| {
       ms = Size.max(ms, min_size);
 
       // if rect w/h is 0, that means use our min size and center
-      if (self.rect.w == 0) {
-        self.rect.w = ms.w;
-        self.rect.x = WindowRect().w / 2 - ms.w / 2;
+      if (self.wd.rect.w == 0) {
+        self.wd.rect.w = ms.w;
+        self.wd.rect.x = WindowRect().w / 2 - ms.w / 2;
       }
-      if (self.rect.h == 0) {
-        self.rect.h = ms.h;
-        self.rect.y = WindowRect().h / 2 - ms.h / 2;
+      if (self.wd.rect.h == 0) {
+        self.wd.rect.h = ms.h;
+        self.wd.rect.y = WindowRect().h / 2 - ms.h / 2;
       }
     }
     else {
       // first frame we are being shown
-      FocusWindow(self.id, null);
+      FocusWindow(self.wd.id, null);
     }
 
-    debug("{x} FloatingWindow {}", .{self.id, self.rect});
+    debug("{x} FloatingWindow {}", .{self.wd.id, self.wd.rect});
 
-    const captured = CaptureMouseMaintain(self.id);
+    const captured = CaptureMouseMaintain(self.wd.id);
 
-    // processEventsBefore can change self.rect
+    // processEventsBefore can change self.wd.rect
     self.processEventsBefore(captured);
 
     // outside normal flow, so don't get rect from parent
-    const rs = self.screenRectScale(self.rect);
-    FloatingWindowAdd(self.id, null, rs.r, self.modal);
+    const rs = self.screenRectScale(self.wd.rect);
+    FloatingWindowAdd(self.wd.id, null, rs.r, self.modal);
 
     if (self.modal) {
       // paint over everything below
@@ -2773,8 +2780,8 @@ pub const FloatingWindowWidget = struct {
 
   pub fn processEventsBefore(self: *Self, captured: bool) void {
     // outside normal flow, so don't get rect from parent
-    const rs = self.screenRectScale(self.rect);
-    var iter = EventIterator.init(self.id, rs.r);
+    const rs = self.screenRectScale(self.wd.rect);
+    var iter = EventIterator.init(self.wd.id, rs.r);
     while (iter.next()) |e| {
       if (e.evt == .mouse) {
         var corner: bool = false;
@@ -2787,7 +2794,7 @@ pub const FloatingWindowWidget = struct {
         if (captured or corner) {
           if (e.evt.mouse.state == .leftdown) {
             // capture and start drag
-            CaptureMouse(self.id);
+            CaptureMouse(self.wd.id);
             DragStart(e.evt.mouse.p, .arrow_nw_se);
             e.handled = true;
           }
@@ -2802,13 +2809,13 @@ pub const FloatingWindowWidget = struct {
             if (Dragging(e.evt.mouse.p)) |dps| {
               if (CursorGetDragging() == CursorKind.crosshair) {
                 const dp = dps.scale(1 / rs.s);
-                self.rect.x += dp.x;
-                self.rect.y += dp.y;
+                self.wd.rect.x += dp.x;
+                self.wd.rect.y += dp.y;
               }
               else if (CursorGetDragging() == CursorKind.arrow_nw_se) {
                 const p = e.evt.mouse.p.scale(1 / rs.s);
-                self.rect.w = math.max(40, p.x - self.rect.x);
-                self.rect.h = math.max(10, p.y - self.rect.y);
+                self.wd.rect.w = math.max(40, p.x - self.wd.rect.x);
+                self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
               }
               // don't need CueFrame() because we're before drawing
               e.handled = true;
@@ -2825,8 +2832,8 @@ pub const FloatingWindowWidget = struct {
 
   pub fn processEventsAfter(self: *Self) void {
     // outside normal flow, so don't get rect from parent
-    const rs = self.screenRectScale(self.rect);
-    var iter = EventIterator.init(self.id, rs.r);
+    const rs = self.screenRectScale(self.wd.rect);
+    var iter = EventIterator.init(self.wd.id, rs.r);
     // duplicate processEventsBefore (minus corner stuff) because you could
     // have a click down, motion, and up in same frame and you wouldn't know
     // you needed to do anything until you got capture here
@@ -2842,7 +2849,7 @@ pub const FloatingWindowWidget = struct {
           FocusWidget(null, null);
 
           // capture and start drag
-          CaptureMouse(self.id);
+          CaptureMouse(self.wd.id);
           DragPreStart(e.evt.mouse.p, .crosshair);
         }
         else if (e.evt.mouse.state == .leftup) {
@@ -2855,13 +2862,13 @@ pub const FloatingWindowWidget = struct {
           if (Dragging(e.evt.mouse.p)) |dps| {
             if (CursorGetDragging() == CursorKind.crosshair) {
               const dp = dps.scale(1 / rs.s);
-              self.rect.x += dp.x;
-              self.rect.y += dp.y;
+              self.wd.rect.x += dp.x;
+              self.wd.rect.y += dp.y;
             }
             else if (CursorGetDragging() == CursorKind.arrow_nw_se) {
               const p = e.evt.mouse.p.scale(1 / rs.s);
-              self.rect.w = math.max(40, p.x - self.rect.x);
-              self.rect.h = math.max(10, p.y - self.rect.y);
+              self.wd.rect.w = math.max(40, p.x - self.wd.rect.x);
+              self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
             }
             CueFrame();
           }
@@ -2882,26 +2889,26 @@ pub const FloatingWindowWidget = struct {
   }
 
   pub fn close(self: *Self) void {
-    FloatingWindowClosing(self.id);
+    FloatingWindowClosing(self.wd.id);
     if (self.openflag) |of| {
       of.* = false;
     }
   }
 
   fn widget(self: *Self) Widget {
-    return Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    return PlaceIn(id, self.rect, min_size, e, g);
+    return PlaceIn(id, self.wd.rect, min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
-    self.minSize = Size.max(self.minSize, s);
+    self.wd.minSizeMax(self.wd.padSize(s));
   }
 
   pub fn screenRectScale(self: *Self, r: Rect) RectScale {
@@ -2917,7 +2924,7 @@ pub const FloatingWindowWidget = struct {
         e.handled = true;
         // when a popup is closed, the window that spawned it (which had focus
         // previously) should become focused again
-        FocusWindow(self.id, null);
+        FocusWindow(self.wd.id, null);
         if (cp.defocus) {
           FocusWidget(null, null);
         }
@@ -2933,15 +2940,16 @@ pub const FloatingWindowWidget = struct {
     self.layout.deinit();
     if (self.io_rect) |ior| {
       // user is storing the rect for us across open/close
-      ior.* = self.rect;
+      ior.* = self.wd.rect;
     }
     else {
       // we store the rect
-      DataSet(self.id, self.rect);
+      DataSet(self.wd.id, self.wd.rect);
     }
-    MinSizeSet(self.id, self.minSize);
-    // we are outside of normal layout, so don't call minSizeForChild
-    _ = ParentSet(self.parent);
+    MinSizeSet(self.wd.id, self.wd.min_size);
+    // we are outside of normal layout, so don't call minSizeForChild (thru
+    // self.wd.reportMinSize()
+    _ = ParentSet(self.wd.parent);
     _ = WindowCurrentSet(self.prev_windowId);
     DeferRenderPop();
   }
@@ -3116,12 +3124,12 @@ pub const PanedWidget = struct {
     }
   }
 
-  fn widget(self: *Self) gui.Widget {
-    return gui.Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+  fn widget(self: *Self) Widget {
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.wd.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) gui.Rect {
@@ -3355,11 +3363,11 @@ pub const TextLayoutWidget = struct {
   }
 
   fn widget(self: *Self) Widget {
-    return Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.wd.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -3438,11 +3446,11 @@ pub const ContextWidget = struct {
   }
 
   fn widget(self: *Self) Widget {
-    return Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.wd.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -3517,11 +3525,11 @@ pub const OverlayWidget = struct {
   }
 
   fn widget(self: *Self) Widget {
-    return Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.wd.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -3607,11 +3615,11 @@ pub const BoxWidget = struct {
   }
 
   fn widget(self: *Self) Widget {
-    return Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.wd.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -3938,11 +3946,11 @@ pub const ScrollAreaWidget = struct {
   }
 
   fn widget(self: *Self) Widget {
-    return Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.wd.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -4139,11 +4147,11 @@ pub const ScaleWidget = struct {
   }
 
   fn widget(self: *Self) Widget {
-    return Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.wd.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -4223,11 +4231,11 @@ pub const MenuWidget = struct {
   }
 
   fn widget(self: *Self) Widget {
-    return Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.wd.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -4420,11 +4428,11 @@ pub const MenuItemWidget = struct {
   }
 
   fn widget(self: *Self) Widget {
-    return Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.wd.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -4631,11 +4639,11 @@ pub const ButtonContainerWidget = struct {
   }
 
   fn widget(self: *Self) Widget {
-    return Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.wd.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -4904,11 +4912,11 @@ pub const TextEntryWidget = struct {
   }
 
   fn widget(self: *Self) Widget {
-    return Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
   }
 
-  fn ID(self: *const Self) u32 {
-    return self.wd.id;
+  fn data(self: *const Self) *const WidgetData {
+    return &self.wd;
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -5310,7 +5318,18 @@ pub const WidgetData = struct {
     self.parent = ParentGet();
     self.id = self.parent.extendID(src, id_extra);
     self.min_size = self.options.min_size orelse Size{};
-    self.rect = self.parent.rectFor(self.id, self.min_size, self.options.expand orelse .none, self.options.gravity orelse .upleft);
+    if (self.options.rect) |r| {
+      self.rect = r;
+      if (self.options.expandHorizontal()) {
+        self.rect.w = self.parent.data().rect.w;
+      }
+      if (self.options.expandVertical()) {
+        self.rect.h = self.parent.data().rect.h;
+      }
+    }
+    else {
+      self.rect = self.parent.rectFor(self.id, self.min_size, self.options.expand orelse .none, self.options.gravity orelse .upleft);
+    }
     
     return self;
   }
@@ -5409,7 +5428,7 @@ pub const Widget = struct {
   vtable: *const VTable,
 
   const VTable = struct {
-    id: fn (ptr: *anyopaque) u32,
+    data: fn (ptr: *anyopaque) *const WidgetData,
     rectFor: fn (ptr: *anyopaque, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
     minSizeForChild: fn (ptr: *anyopaque, s: Size) void,
     screenRectScale: fn (ptr: *anyopaque, r: Rect) RectScale,
@@ -5417,7 +5436,7 @@ pub const Widget = struct {
   };
 
   pub fn init(pointer: anytype,
-              comptime idFn: fn (ptr: @TypeOf(pointer)) u32,
+              comptime dataFn: fn (ptr: @TypeOf(pointer)) *const WidgetData,
               comptime rectForFn: fn (ptr: @TypeOf(pointer), id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
               comptime minSizeForChildFn: fn (ptr: @TypeOf(pointer), s: Size) void,
               comptime screenRectScaleFn: fn (ptr: @TypeOf(pointer), r: Rect) RectScale,
@@ -5430,9 +5449,9 @@ pub const Widget = struct {
     const alignment = ptr_info.Pointer.alignment;
 
     const gen = struct {
-      fn idImpl(ptr: *anyopaque) u32 {
+      fn dataImpl(ptr: *anyopaque) *const WidgetData {
         const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-        return @call(.{.modifier = .always_inline}, idFn, .{self});
+        return @call(.{.modifier = .always_inline}, dataFn, .{self});
       }
 
       fn rectForImpl(ptr: *anyopaque, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
@@ -5456,7 +5475,7 @@ pub const Widget = struct {
       }
 
       const vtable = VTable {
-        .id = idImpl,
+        .data = dataImpl,
         .rectFor = rectForImpl,
         .minSizeForChild = minSizeForChildImpl,
         .screenRectScale = screenRectScaleImpl,
@@ -5470,13 +5489,13 @@ pub const Widget = struct {
     };
   }
 
-  pub fn ID(self: Widget) u32 {
-    return self.vtable.id(self.ptr);
+  pub fn data(self: Widget) *const WidgetData {
+    return self.vtable.data(self.ptr);
   }
 
   pub fn extendID(self: Widget, src: std.builtin.SourceLocation, id_extra: usize) u32 {
     var hash = fnv.init();
-    hash.value = self.ID();
+    hash.value = self.data().id;
     hash.update(src.file);
     hash.update(std.mem.asBytes(&src.line));
     hash.update(std.mem.asBytes(&src.column));

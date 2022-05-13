@@ -486,13 +486,11 @@ fn show_stroke_test_window() void {
   defer win.deinit();
   gui.LabelNoFormat(@src(), 0, "Stroke Test", .{.gravity = .center});
 
-  var scale = gui.Scale(@src(), 0, 1, .{.expand = .both});
-  defer scale.deinit();
+  //var scale = gui.Scale(@src(), 0, 1, .{.expand = .both});
+  //defer scale.deinit();
 
   var st = StrokeTest{};
   st.install(@src(), 0, .{.min_size = .{.w = 400, .h = 400}, .expand = .both});
-  defer st.deinit();
-
 }
 
 pub const StrokeTest = struct {
@@ -504,71 +502,40 @@ pub const StrokeTest = struct {
   var dragi: ?usize = null;
   var thickness: f32 = 1.0;
 
-  id: u32 = undefined,
-  parent: gui.Widget = undefined,
-  rect: gui.Rect = .{},
-  minSize: gui.Size = .{},
+  wd: gui.WidgetData = undefined,
 
   pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, options: gui.Options) void {
-    self.parent = gui.ParentSet(self.widget());
-    self.id = self.parent.extendID(src, id_extra);
-    self.minSize = options.min_size orelse .{};
-    self.rect = self.parent.rectFor(self.id, self.minSize, options.expand orelse .none, options.gravity orelse .upleft);
-    gui.debug("{x} StrokeTest {}", .{self.id, self.rect});
+    self.wd = gui.WidgetData.init(src, id_extra, options);
+    gui.debug("{x} StrokeTest {}", .{self.wd.id, self.wd.rect});
 
-    _ = gui.CaptureMouseMaintain(self.id);
+    _ = gui.CaptureMouseMaintain(self.wd.id);
     self.processEvents();
 
-    const rs = self.parent.screenRectScale(self.rect);
-    if (options.background orelse false) {
-      gui.PathAddRect(rs.r, options.corner_radiusGet());
-      gui.PathFillConvex(options.color_bg());
-    }
+    self.wd.borderAndBackground();
 
+    const rs = gui.ParentGet().screenRectScale(self.wd.rect);
     const fill_color = gui.Color{.r = 200, .g = 200, .b = 200, .a = 255};
     for (points) |p| {
       var rect = gui.Rect.fromPoint(p.plus(.{.x = -10, .y = -10})).toSize(.{.w = 20, .h = 20});
-      const rsrect = self.screenRectScale(rect);
-      gui.PathAddRect(rsrect.r, gui.Rect.all(1));
+      const rsrect = rect.scale(rs.s).offset(rs.r);
+      gui.PathAddRect(rsrect, gui.Rect.all(1));
       gui.PathFillConvex(fill_color);
     }
 
     for (points) |p| {
-      const rsp = self.screenRectScale(self.rect).childPoint(p);
+      const rsp = rs.childPoint(p);
       gui.PathAddPoint(rsp);
     }
 
     const stroke_color = gui.Color{.r = 0, .g = 0, .b = 255, .a = 150};
     gui.PathStroke(false, rs.s * thickness, stroke_color);
-  }
 
-  fn widget(self: *Self) gui.Widget {
-    return gui.Widget.init(self, ID, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
-  }
-
-  fn ID(self: *const Self) u32 {
-    return self.id;
-  }
-
-  pub fn rectFor(self: *Self, id: u32, min_size: gui.Size, e: gui.Options.Expand, g: gui.Options.Gravity) gui.Rect {
-    return gui.PlaceIn(id, self.rect, min_size, e, g);
-  }
-
-  pub fn minSizeForChild(self: *Self, s: gui.Size) void {
-    self.minSize = gui.Size.max(self.minSize, s);
-  }
-
-  pub fn screenRectScale(self: *Self, r: gui.Rect) gui.RectScale {
-    return self.parent.screenRectScale(self.rect).child(r);
-  }
-
-  pub fn bubbleEvent(self: *Self, e: *gui.Event) void {
-    self.parent.bubbleEvent(e);
+    self.wd.reportMinSize();
   }
 
   pub fn processEvents(self: *Self) void {
-    const rs = self.parent.screenRectScale(self.rect);
-    var iter = gui.EventIterator.init(self.id, rs.r);
+    const rs = gui.ParentGet().screenRectScale(self.wd.rect);
+    var iter = gui.EventIterator.init(self.wd.id, rs.r);
     while (iter.next()) |e| {
       switch (e.evt) {
         .mouse => |me| {
@@ -593,7 +560,7 @@ pub const StrokeTest = struct {
               }
 
               if (dragi != null) {
-                gui.CaptureMouse(self.id);
+                gui.CaptureMouse(self.wd.id);
                 gui.DragPreStart(me.p, .crosshair);
               }
             },
@@ -625,12 +592,6 @@ pub const StrokeTest = struct {
       }
     }
   }
-
-  pub fn deinit(self: *Self) void {
-    gui.MinSizeSet(self.id, self.minSize);
-    self.parent.minSizeForChild(self.minSize);
-    _ = gui.ParentSet(self.parent);
-  }
 };
 
 fn IconBrowserButtonAndWindow() void {
@@ -638,6 +599,7 @@ fn IconBrowserButtonAndWindow() void {
     var show: bool = false;
     var rect = gui.Rect{};
     var icons_shown: usize = 10;
+    var row_height: f32 = 0;
   };
 
   if (gui.Button(@src(), 0, "Icon Browser", .{})) {
@@ -652,20 +614,32 @@ fn IconBrowserButtonAndWindow() void {
     defer fwin.deinit();
     gui.LabelNoFormat(@src(), 0, "Icon Browser", .{.gravity = .center});
 
-    var scroll = gui.ScrollArea(@src(), 0, .{.expand = .both});
-    defer scroll.deinit();
+    //const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len;
+    //const height = @intToFloat(f32, num_icons) * IconBrowser.row_height;
 
-    inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls) |d, i| {
-      var iconbox = gui.Box(@src(), 0, .horizontal, .{.expand = .horizontal});
-      defer iconbox.deinit();
-      _ = gui.ButtonIcon(@src(), i, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
-      gui.Label(@src(), i, d.name, .{}, .{});
+    //var scroll = gui.ScrollAreaUnmanaged(@src(), 0, .{.w = 0, .h = height}, .{.expand = .both});
+    //defer scroll.deinit();
 
-      if (i == IconBrowser.icons_shown) {
-        IconBrowser.icons_shown += 10;
-        break;
-      }
-    }
+    //const visibleRect = scroll.visibleRect();
+    //var cursor: f32 = 0;
+
+    //inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls) |d, i| {
+    //  if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
+    //    var iconbox = gui.Box(@src(), 0, .horizontal, .{.expand = .horizontal, .rect = .{.x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height}});
+    //    defer iconbox.deinit();
+    //    _ = gui.ButtonIcon(@src(), i, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
+    //    gui.Label(@src(), i, d.name, .{}, .{});
+
+    //    //if (i == IconBrowser.icons_shown) {
+    //    //  IconBrowser.icons_shown += 10;
+    //    //  break;
+    //    //}
+
+    //    if (IconBrowser.row_height == 0) {
+    //      IconBrowser.row_height = iconbox.wd.min_size.h;
+    //    }
+    //  }
+    //}
   }
 }
 
