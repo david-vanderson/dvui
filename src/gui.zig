@@ -3947,6 +3947,8 @@ pub const ScrollAreaWidget = struct {
     debug("{x} ScrollArea {}", .{self.wd.id, self.wd.rect});
     self.wd.borderAndBackground();
 
+    BubbleEvents(self.widget());
+
     const max_scroll = math.max(0, self.virtualSize.h - self.wd.contentRect().h);
     if (self.scroll < 0) {
       self.scroll = math.min(0, self.scroll + 250 * AnimationRate());
@@ -4081,7 +4083,11 @@ pub const ScrollAreaWidget = struct {
     while (iter.next()) |e| {
       switch (e.evt) {
         .mouse => {
-          if (e.evt.mouse.state == .wheel_y) {
+          if (e.evt.mouse.state == .leftdown) {
+            e.handled = true;
+            FocusWidget(self.wd.id, &iter);
+          }
+          else if (e.evt.mouse.state == .wheel_y) {
             e.handled = true;
             self.scrollAfter += e.evt.mouse.wheel * 3;
           }
