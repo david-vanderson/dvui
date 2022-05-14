@@ -1,7 +1,4 @@
 
-can you do the icon browser so that the icons show up immediately and not a frame behind?
- - maybe set the size of the iconbox?
-
 when I do a scroll on the icon browser with a terminal covering part of the window, the scroll goes to the main window
 - what is the mouse point associated with that scroll?
 - do scroll events have mouse position associated with them?

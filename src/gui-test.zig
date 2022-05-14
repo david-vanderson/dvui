@@ -620,16 +620,15 @@ fn IconBrowserButtonAndWindow() void {
     defer scroll.deinit();
 
     const visibleRect = scroll.visibleRect();
-    //std.debug.print("visibleRect {}\n", .{visibleRect});
     var cursor: f32 = 0;
 
     inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls) |d, i| {
       if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
         const r = gui.Rect{.x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height};
-        //std.debug.print("  c {d} r {}\n", .{cursor, r});
-        var iconbox = gui.Box(@src(), 0, .horizontal, .{.expand = .horizontal, .rect = r});
-        _ = gui.ButtonIcon(@src(), i, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
-        gui.Label(@src(), i, d.name, .{}, .{});
+        var iconbox = gui.Box(@src(), i, .horizontal, .{.expand = .horizontal, .rect = r});
+        gui.Icon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{.margin = gui.Rect.all(2)});
+        //_ = gui.ButtonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
+        gui.Label(@src(), 0, d.name, .{}, .{});
 
         iconbox.deinit();
 

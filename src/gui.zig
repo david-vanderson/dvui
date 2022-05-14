@@ -4588,7 +4588,7 @@ pub fn LabelNoFormat(src: std.builtin.SourceLocation, id_extra: usize, label: []
   lw.install();
 }
 
-pub fn Icon(src: std.builtin.SourceLocation, id_extra: usize, name: []const u8, tvg_bytes: []const u8, height: f32, opts: Options) void {
+pub fn Icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) void {
   const size = Size{.w = IconWidth(name, tvg_bytes, height), .h = height};
 
   var wd = WidgetData.init(src, id_extra, opts.overrideMinSizeContent(size));
@@ -4800,7 +4800,7 @@ pub fn ButtonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32,
   var bc = ButtonContainer(src, id_extra, true, options);
   defer bc.deinit();
 
-  Icon(@src(), 0, name, tvg_bytes, height, options.plain());
+  Icon(@src(), 0, height, name, tvg_bytes, options.plain());
 
   return bc.clicked;
 }
