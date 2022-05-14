@@ -619,6 +619,7 @@ pub const RenderCmd = struct {
       path: std.ArrayList(Point),
       closed: bool,
       thickness: f32,
+      endcap_style: EndCapStyle,
       color: Color,
     },
   },
@@ -666,7 +667,7 @@ pub fn DeferRenderPop() void {
       },
       .pathStroke => |ps| {
         cw.path.appendSlice(ps.path.items) catch unreachable;
-        PathStroke(ps.closed, ps.thickness, ps.color);
+        PathStroke(ps.closed, ps.thickness, ps.endcap_style, ps.color);
         ps.path.deinit();
       },
     }
@@ -957,7 +958,12 @@ pub fn PathFillConvex(col: Color) void {
   cw.path.clearAndFree();
 }
 
-pub fn PathStroke(closed_in: bool, thickness: f32, col: Color) void {
+pub const EndCapStyle = enum {
+  none,
+  square,
+};
+
+pub fn PathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) void {
   const cw = current_window orelse unreachable;
   if (cw.path.items.len == 0) {
     return;
@@ -967,7 +973,7 @@ pub fn PathStroke(closed_in: bool, thickness: f32, col: Color) void {
   if (drqlen > 1) {
     var path_copy = std.ArrayList(Point).init(cw.arena);
     path_copy.appendSlice(cw.path.items) catch unreachable;
-    var cmd = RenderCmd{.clip = ClipGet(), .cmd = .{.pathStroke = .{.path = path_copy, .closed = closed_in, .thickness = thickness, .color = col}}};
+    var cmd = RenderCmd{.clip = ClipGet(), .cmd = .{.pathStroke = .{.path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col}}};
     cw.deferred_render_queues.items[drqlen-2].cmds.append(cmd) catch unreachable;
     cw.path.clearAndFree();
     return;
@@ -1032,9 +1038,11 @@ pub fn PathStroke(closed_in: bool, thickness: f32, col: Color) void {
         // rotate by 90 to get normal
         halfnorm = Point{.x = diffbc.y / 2, .y = (-diffbc.x) / 2};
 
-        // square endcaps move bb out by thickness
-        bb.x += diffbc.x * thickness;
-        bb.y += diffbc.y * thickness;
+        if (endcap_style == .square) {
+          // square endcaps move bb out by thickness
+          bb.x += diffbc.x * thickness;
+          bb.y += diffbc.y * thickness;
+        }
 
         // add 2 extra vertexes for endcap fringe
         vtx_start += 2;
@@ -1071,9 +1079,11 @@ pub fn PathStroke(closed_in: bool, thickness: f32, col: Color) void {
         // rotate by 90 to get normal
         halfnorm = Point{.x = diffab.y / 2, .y = (-diffab.x) / 2};
 
-        // square endcaps move bb out by thickness
-        bb.x -= diffab.x * thickness;
-        bb.y -= diffab.y * thickness;
+        if (endcap_style == .square) {
+          // square endcaps move bb out by thickness
+          bb.x -= diffab.x * thickness;
+          bb.y -= diffab.y * thickness;
+        }
       }
     }
     else {
@@ -4137,24 +4147,26 @@ pub fn SpacerRect(src: std.builtin.SourceLocation, id_extra: usize, opts: Option
   return wd.rect;
 }
 
-pub fn Spinner(src: std.builtin.SourceLocation, id_extra: usize, size: f32) void {
-  const s = Size{.w = size, .h = size};
-  const parent = ParentGet();
-  const id = parent.extendID(src, id_extra);
-  const rect = parent.rectFor(id, s, .none, .upleft);
-  debug("{x} Spinner {}", .{id, rect});
-  parent.minSizeForChild(s);
+pub fn Spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
+  var Defaults: Options = .{
+    .min_size = .{.w = 50, .h = 50},
+  };
+  const options = Defaults.override(opts);
+  var wd = WidgetData.init(src, id_extra, options);
+  debug("{x} Spinner {}", .{wd.id, wd.rect});
+  wd.minSizeSetAndCue();
+  wd.minSizeReportToParent();
 
-  if (rect.empty()) {
+  if (wd.rect.empty()) {
     return;
   }
 
-  const rs = parent.screenRectScale(rect);
+  const rs = wd.contentRectScale();
   const r = rs.r;
 
   var angle: f32 = 0;
   var anim = Animation{.start_val = 0, .end_val = 2 * math.pi, .start_time = 0, .end_time = 4_500_000};
-  if (AnimationGet(id, .angle)) |a| {
+  if (AnimationGet(wd.id, .angle)) |a| {
     // existing animation
     var aa = a;
     if (aa.end_time <= 0) {
@@ -4162,20 +4174,20 @@ pub fn Spinner(src: std.builtin.SourceLocation, id_extra: usize, size: f32) void
       aa = anim;
       aa.start_time = a.end_time;
       aa.end_time += a.end_time;
-      Animate(id, .angle, aa);
+      Animate(wd.id, .angle, aa);
     }
     angle = aa.lerp();
   }
   else {
     // first frame we are seeing the spinner
-    Animate(id, .angle, anim);
+    Animate(wd.id, .angle, anim);
   }
 
   const center = Point{.x = r.x + r.w / 2, .y = r.y + r.h / 2};
-  PathAddArc(center, size * rs.s / 3, angle + math.pi, angle, false);
+  PathAddArc(center, math.min(r.w, r.h) / 3, angle, 0, false);
   //PathAddPoint(center);
-  const fill_color = Color{.r = 200, .g = 0, .b = 0, .a = 255};
-  PathFillConvex(fill_color);
+  //PathFillConvex(options.color());
+  PathStroke(false, 3.0 * rs.s, .none, options.color());
 }
 
 pub fn Scale(src: std.builtin.SourceLocation, id_extra: usize, initial_scale: f32, opts: Options) *ScaleWidget {
@@ -4836,7 +4848,7 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
 
   if (bc.focused) {
     PathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
-    PathStroke(true, thick_focus * rs.s, ThemeGet().color_accent_bg);
+    PathStroke(true, thick_focus * rs.s, .none, ThemeGet().color_accent_bg);
   }
 
   rs.r = rs.r.insetAll(0.5 * rs.s);
@@ -4872,7 +4884,7 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     PathAddPoint(Point{.x = x - third, .y = y - third});
     PathAddPoint(Point{.x = x, .y = y});
     PathAddPoint(Point{.x = x + third * 2, .y = y - third * 2});
-    PathStroke(false, thick, ThemeGet().color_accent);
+    PathStroke(false, thick, .square, ThemeGet().color_accent);
   }
 
   LabelNoFormat(@src(), 0, label, options.override(.{
@@ -5448,10 +5460,10 @@ pub const WidgetData = struct {
     const rs = self.borderRectScale();
     PathAddRect(rs.r.insetAll(thick_px / 2 - 1), self.options.corner_radiusGet().scale(rs.s));
     if ((self.options.color_style orelse .custom) == .accent) {
-      PathStroke(true, thick_px, ThemeGet().color_control);
+      PathStroke(true, thick_px, .none, ThemeGet().color_control);
     }
     else {
-      PathStroke(true, thick_px, ThemeGet().color_accent_bg);
+      PathStroke(true, thick_px, .none, ThemeGet().color_accent_bg);
     }
   }
 

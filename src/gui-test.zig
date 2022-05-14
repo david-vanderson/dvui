@@ -290,7 +290,7 @@ pub fn main() void {
         }
 
         {
-          gui.Spinner(@src(), 0, 50);
+          gui.Spinner(@src(), 0, .{.color_style = .custom, .color_custom = .{.r = 100, .g = 200, .b = 100}});
         }
 
         {
@@ -530,7 +530,7 @@ pub const StrokeTest = struct {
     }
 
     const stroke_color = gui.Color{.r = 0, .g = 0, .b = 255, .a = 150};
-    gui.PathStroke(false, rs.s * thickness, stroke_color);
+    gui.PathStroke(false, rs.s * thickness, .square, stroke_color);
 
     self.wd.minSizeSetAndCue();
     self.wd.minSizeReportToParent();
