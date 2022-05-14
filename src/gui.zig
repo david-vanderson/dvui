@@ -5446,8 +5446,13 @@ pub const WidgetData = struct {
   pub fn focusBorder(self: *const WidgetData) void {
     const thick_px = 4;
     const rs = self.borderRectScale();
-    PathAddRect(rs.r.insetAll(thick_px / 2), self.options.corner_radiusGet().scale(rs.s));
-    PathStroke(true, thick_px, ThemeGet().color_accent_bg);
+    PathAddRect(rs.r.insetAll(thick_px / 2 - 1), self.options.corner_radiusGet().scale(rs.s));
+    if ((self.options.color_style orelse .custom) == .accent) {
+      PathStroke(true, thick_px, ThemeGet().color_control);
+    }
+    else {
+      PathStroke(true, thick_px, ThemeGet().color_accent_bg);
+    }
   }
 
   pub fn placeInsideNoExpand(self: *WidgetData) void {

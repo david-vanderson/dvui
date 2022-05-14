@@ -1,7 +1,4 @@
 
-make button focus highlight expand outside the border?
- - how to show it on a accent button?
-
 convert:
 - ScrollBar
 - ScaleWidget

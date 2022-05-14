@@ -88,7 +88,7 @@ pub fn main() void {
     }
 
     win.endEvents();
-    defer win.end(3);
+    defer win.end(null);
 
     {
       const oo = gui.Options{.expand = .both};
