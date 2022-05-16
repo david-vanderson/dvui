@@ -1,8 +1,8 @@
+fossil git export
 
 convert:
 - ScrollBar
 - ScaleWidget
-- Spinner
 
 floating windows should have a close button
 
@@ -124,4 +124,9 @@ scroll widget when stuff is being added/deleted
 
 
 flag whether the app should show the mouse cursor
+
+better solution for the icon browser?
+- boxWidget rectFor should give all remaining space to a widget that both:
+  - has gravity in the direction of the box (leftish for .horizontal)
+  - and is not expanded in the direction of the box
 

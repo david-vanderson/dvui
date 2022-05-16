@@ -254,13 +254,13 @@ pub fn main() void {
           var button = gui.ButtonWidget{};
           _ = button.init(@src(), 0, "Wiggle", .{.tab_index = 10});
 
-          if (gui.AnimationGet(button.bc.wd.id, .xoffset)) |a| {
+          if (gui.AnimationGet(button.bc.wd.id, "xoffset")) |a| {
             button.bc.wd.rect.x += a.lerp();
           }
 
           if (button.install()) {
             const a = gui.Animation{.start_val = 0, .end_val = 200, .start_time = 0, .end_time = 10_000_000};
-            gui.Animate(button.bc.wd.id, .xoffset, a);
+            gui.Animate(button.bc.wd.id, "xoffset", a);
           }
         }
 
@@ -626,8 +626,8 @@ fn IconBrowserButtonAndWindow() void {
       if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
         const r = gui.Rect{.x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height};
         var iconbox = gui.Box(@src(), i, .horizontal, .{.expand = .horizontal, .rect = r});
-        gui.Icon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{.margin = gui.Rect.all(2)});
-        //_ = gui.ButtonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
+        //gui.Icon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{.margin = gui.Rect.all(2)});
+        _ = gui.ButtonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
         gui.Label(@src(), 0, d.name, .{}, .{});
 
         iconbox.deinit();

@@ -146,7 +146,7 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
     }
   }
 
-  var scroll = gui.ScrollArea(@src(), 0, .{.expand = .both, .color_style = .window, .background = false});
+  var scroll = gui.ScrollArea(@src(), 0, null, .{.expand = .both, .color_style = .window, .background = false});
 
   const oo3 = gui.Options{
     .expand = .horizontal,
@@ -210,7 +210,7 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
     }
   }
 
-  var scroll = gui.ScrollArea(@src(), 0, .{.expand = .both, .background = false});
+  var scroll = gui.ScrollArea(@src(), 0, null, .{.expand = .both, .background = false});
   defer scroll.deinit();
 
   var i: usize = 0;

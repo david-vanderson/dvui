@@ -223,7 +223,7 @@ pub const Options = struct {
       return cc;
     }
     else {
-      log.debug("Options.color() couldn't find a color, substituting magenta\n", .{});
+      log.debug("Options.color() couldn't find a color, substituting magenta", .{});
       return Color{.r = 255, .g = 0, .b = 255, .a = 255};
     }
   }
@@ -250,7 +250,7 @@ pub const Options = struct {
       return cc;
     }
     else {
-      log.debug("Options.color_bg() couldn't find a color, substituting green\n", .{});
+      log.debug("Options.color_bg() couldn't find a color, substituting green", .{});
       return Color{.r = 0, .g = 255, .b = 0, .a = 255};
     }
   }
@@ -279,7 +279,7 @@ pub const Options = struct {
       return ff;
     }
     else {
-      log.debug("Options.font() couldn't find a font, falling back\n", .{});
+      log.debug("Options.font() couldn't find a font, falling back", .{});
       return Font{.name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 12};
     }
   }
@@ -1691,21 +1691,18 @@ pub const EventIterator = struct {
 // deleted at the beginning of the next frame.  See Spinner for an example of
 // how to have a seemless continuous animation.
 
-pub const AnimationProperty = enum(u8) {
-  timer,
-  alpha,
-  angle,
-  xoffset,
-  split_ratio,
-  first_user,
-  _,
-};
-
 pub const Animation = struct {
   start_val: f32,
   end_val: f32,
   start_time: i32 = 0,
   end_time: i32,
+
+  pub fn hash(id: u32, key: []const u8) u32 {
+    var h = fnv.init();
+    h.value = id;
+    h.update(key);
+    return h.final();
+  }
 
   pub fn lerp(a: *const Animation) f32 {
     var frac = @intToFloat(f32, -a.start_time) / @intToFloat(f32, a.end_time - a.start_time);
@@ -1714,29 +1711,25 @@ pub const Animation = struct {
   }
 };
 
-pub fn Animate(id: u32, prop: AnimationProperty, a: Animation) void {
+pub fn Animate(id: u32, key: []const u8, a: Animation) void {
   var cw = current_window orelse unreachable;
-  var hash = fnv.init();
-  hash.value = id;
-  hash.update(std.mem.asBytes(&@enumToInt(prop)));
-  cw.animations.put(hash.final(), a) catch unreachable;
+  const h = Animation.hash(id, key);
+  cw.animations.put(h, a) catch unreachable;
 }
 
-pub fn AnimationGet(id: u32, prop: AnimationProperty) ?Animation {
+pub fn AnimationGet(id: u32, key: []const u8) ?Animation {
   var cw = current_window orelse unreachable;
-  var hash = fnv.init();
-  hash.value = id;
-  hash.update(std.mem.asBytes(&@enumToInt(prop)));
-  return cw.animations.get(hash.final());
+  const h = Animation.hash(id, key);
+  return cw.animations.get(h);
 }
 
 pub fn TimerSet(id: u32, micros: i32) void {
   const a = Animation{.start_val = 0, .end_val = 0, .start_time = micros, .end_time = micros};
-  Animate(id, .timer, a);
+  Animate(id, "_timer", a);
 }
 
 pub fn TimerGet(id: u32) ?i32 {
-  if (AnimationGet(id, .timer)) |a| {
+  if (AnimationGet(id, "_timer")) |a| {
     return a.start_time;
   }
   else {
@@ -3096,7 +3089,7 @@ pub const PanedWidget = struct {
       }
     }
 
-    if (gui.AnimationGet(self.wd.id, .split_ratio)) |a| {
+    if (gui.AnimationGet(self.wd.id, "_split_ratio")) |a| {
       self.split_ratio = a.lerp();
     }
 
@@ -3123,7 +3116,7 @@ pub const PanedWidget = struct {
   }
 
   fn animate(self: *Self, end_val: f32) void {
-    gui.Animate(self.wd.id, .split_ratio, gui.Animation{.start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000});
+    gui.Animate(self.wd.id, "_split_ratio", gui.Animation{.start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000});
   }
 
   pub fn processEvents(self: *Self) void {
@@ -3294,7 +3287,7 @@ pub const TextLayoutWidget = struct {
   prevClip: Rect = Rect{},
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-    const options = opts.overrideIfNull(Defaults);
+    const options = Defaults.override(opts);
     self.wd = WidgetData.init(src, id_extra, options);
   }
 
@@ -3309,6 +3302,9 @@ pub const TextLayoutWidget = struct {
   }
 
   pub fn addText(self: *Self, text: []const u8, opts: Options) void {
+    if (self.wd.contentRectScale().r.empty()) {
+      return;
+    }
     const options = self.wd.options.override(opts);
     var iter = std.mem.split(u8, text, "\n");
     var first: bool = true;
@@ -3327,6 +3323,9 @@ pub const TextLayoutWidget = struct {
   }
 
   pub fn addTextNoNewlines(self: *Self, text: []const u8, opts: Options) void {
+    if (self.wd.contentRectScale().r.empty()) {
+      return;
+    }
     const options = self.wd.options.override(opts);
     const msize = options.font().textSize("m");
     const lineskip = options.font().lineSkip();
@@ -3401,7 +3400,8 @@ pub const TextLayoutWidget = struct {
 
       // We want to render text, but no sense in doing it if we are off the end
       if (self.cursor.y < rect.y + rect.h) {
-        const rs = self.screenRectScale(Rect{.x = self.cursor.x, .y = self.cursor.y, .w = width, .h = math.max(0, rect.h - self.cursor.y)});
+        const rs = self.screenRectScale(Rect{.x = self.cursor.x, .y = self.cursor.y, .w = width, .h = math.max(0, rect.y + rect.h - self.cursor.y)});
+        //log.debug("renderText: {} {s} {}", .{rs.r, txt[0..end], options.color()});
         renderText(options.font(), txt[0..end], rs, options.color());
       }
 
@@ -3640,7 +3640,6 @@ pub const BoxWidget = struct {
   space_taken: f32 = 0,
   total_weight_prev: ?f32 = null,
   total_weight: f32 = 0,
-  current_weight: f32 = 0,
   childRect: Rect = Rect{},
   extra_pixels: f32 = 0,
 
@@ -3685,12 +3684,12 @@ pub const BoxWidget = struct {
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    self.current_weight = 0.0;
+    var current_weight: f32 = 0.0;
     if ((self.dir == .horizontal and e.Horizontal())
         or (self.dir == .vertical and e.Vertical())) {
-      self.current_weight = 1.0;
+      current_weight = 1.0;
     }
-    self.total_weight += self.current_weight;
+    self.total_weight += current_weight;
 
     var pixels_per_w: f32 = 0;
     if (self.total_weight_prev) |w| {
@@ -3706,7 +3705,7 @@ pub const BoxWidget = struct {
     if (self.dir == .horizontal) {
       rect.h = self.childRect.h;
       if (self.wd.options.expandHorizontal()) {
-        rect.w += pixels_per_w * self.current_weight;
+        rect.w += pixels_per_w * current_weight;
       }
 
       self.childRect.w = math.max(0, self.childRect.w - rect.w);
@@ -3715,7 +3714,7 @@ pub const BoxWidget = struct {
     else if (self.dir == .vertical) {
       rect.w = self.childRect.w;
       if (self.wd.options.expandVertical()) {
-        rect.h += pixels_per_w * self.current_weight;
+        rect.h += pixels_per_w * current_weight;
       }
 
       self.childRect.h = math.max(0, self.childRect.h - rect.h);
@@ -4166,7 +4165,7 @@ pub fn Spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
 
   var angle: f32 = 0;
   var anim = Animation{.start_val = 0, .end_val = 2 * math.pi, .start_time = 0, .end_time = 4_500_000};
-  if (AnimationGet(wd.id, .angle)) |a| {
+  if (AnimationGet(wd.id, "_angle")) |a| {
     // existing animation
     var aa = a;
     if (aa.end_time <= 0) {
@@ -4174,13 +4173,13 @@ pub fn Spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
       aa = anim;
       aa.start_time = a.end_time;
       aa.end_time += a.end_time;
-      Animate(wd.id, .angle, aa);
+      Animate(wd.id, "_angle", aa);
     }
     angle = aa.lerp();
   }
   else {
     // first frame we are seeing the spinner
-    Animate(wd.id, .angle, anim);
+    Animate(wd.id, "_angle", anim);
   }
 
   const center = Point{.x = r.x + r.w / 2, .y = r.y + r.h / 2};

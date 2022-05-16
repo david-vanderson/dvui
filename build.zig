@@ -54,7 +54,7 @@ pub fn build(b: *Builder) void {
       run_step.dependOn(&run_cmd.step);
     }
 
-    if (false)
+    if (true)
     {
       const exe = b.addExecutable("podcast", "src/podcast.zig");
       exe.addIncludeDir("/usr/local/include");
