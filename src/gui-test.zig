@@ -627,8 +627,8 @@ fn IconBrowserButtonAndWindow() void {
         const r = gui.Rect{.x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height};
         var iconbox = gui.Box(@src(), i, .horizontal, .{.expand = .horizontal, .rect = r});
         //gui.Icon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{.margin = gui.Rect.all(2)});
-        _ = gui.ButtonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
-        gui.Label(@src(), 0, d.name, .{}, .{});
+        _ = gui.ButtonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{.min_size = gui.Size.all(r.h)});
+        gui.Label(@src(), 0, d.name, .{}, .{.gravity = .left});
 
         iconbox.deinit();
 
