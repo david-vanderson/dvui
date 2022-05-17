@@ -70,13 +70,13 @@ pub fn main() void {
       var paned = gui.Paned(@src(), 0, .horizontal, 400, .{.expand = .both, .background = false});
       const collapsed = paned.collapsed();
 
-      podcastSide(arena, paned);
-      episodeSide(arena, paned);
+      podcastSide(paned);
+      episodeSide(paned);
 
       paned.deinit();
 
       if (collapsed) {
-        player(arena);
+        player();
       }
     }
 
@@ -90,7 +90,7 @@ pub fn main() void {
 
 var show_dialog: bool = false;
 
-fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
+fn podcastSide(paned: *gui.PanedWidget) void {
   var box = gui.Box(@src(), 0, .vertical, .{.expand = .both});
   defer box.deinit();
 
@@ -155,8 +155,9 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
   };
 
   var i: usize = 1;
+  var buf: [256]u8 = undefined;
   while (i < 8) : (i += 1) {
-    const title = std.fmt.allocPrint(arena, "Podcast {d}", .{i}) catch unreachable;
+    const title = std.fmt.bufPrint(&buf, "Podcast {d}", .{i}) catch unreachable;
     var margin: gui.Rect = .{.x = 8, .y = 0, .w = 8, .h = 0};
     var border: gui.Rect = .{.x = 1, .y = 0, .w = 1, .h = 0};
     var corner = gui.Rect.all(0);
@@ -191,12 +192,11 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
   scroll.deinit();
 
   if (!paned.collapsed()) {
-    player(arena);
+    player();
   }
 }
 
-fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
-  _ = arena;
+fn episodeSide(paned: *gui.PanedWidget) void {
   var box = gui.Box(@src(), 0, .vertical, .{.expand = .both});
   defer box.deinit();
 
@@ -235,8 +235,7 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) void {
   }
 }
 
-fn player(arena: std.mem.Allocator) void {
-  _ = arena;
+fn player() void {
   const oo = gui.Options{
     .expand = .horizontal,
     .color_style = .content,

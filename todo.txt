@@ -3,6 +3,16 @@ fossil git export
 Window needs a deinit
 - deinit caches, cursors, backend
 
+maybe parameterize gui based on given Vertex type?
+
+Window.begin() should be passed pixel size and logical size of the window so it doesn't need to call stuff internally
+
+Window.end() - break into 2 functions:
+ - end() instead of endNoTiming
+ - waitMaxFPS() instead of end()
+ - user has to pass return from end into waitMaxFPS(), and then they can do whatever render present stuff between the two
+
+
 convert:
 - ScrollBar
 - ScaleWidget
