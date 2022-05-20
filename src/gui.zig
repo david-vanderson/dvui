@@ -2110,9 +2110,8 @@ pub const Window = struct {
     return new_time;
   }
 
-  pub fn end(self: *Self, maxFPS: ?f32) void {
-    // naive micros we want to be between last begin and next begin
-    const end_micros = self.endNoTiming();
+  pub fn wait(self: *Self, end_micros: ?u32, maxFPS: ?f32) void {
+    // end_micros is the naive value we want to be between last begin and next begin
 
     // minimum time to wait to hit max fps target
     var min_micros: u32 = 0;
@@ -2411,12 +2410,10 @@ pub const Window = struct {
     }
   }
 
-  pub fn endNoTiming(self: *Self) ?u32 {
+  pub fn end(self: *Self) ?u32 {
     self.layout.deinit();
 
     DeferRenderPop();
-
-    c.SDL_RenderPresent(Renderer());
 
     // events may have been tagged with a focus widget that never showed up, so
     // we wouldn't even get them bubbled

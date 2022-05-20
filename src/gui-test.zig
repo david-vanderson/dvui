@@ -101,7 +101,6 @@ pub fn main() void {
     }
 
     win.endEvents();
-    defer win.end(null);
 
     {
       const oo = gui.Options{.expand = .both};
@@ -489,6 +488,12 @@ pub fn main() void {
         tl.deinit();
       }
     }
+
+    const end_micros = win.end();
+
+    c.SDL_RenderPresent(renderer);
+
+    win.wait(end_micros, null);
   }
 
   c.SDL_DestroyRenderer(renderer);

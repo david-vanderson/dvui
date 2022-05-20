@@ -92,7 +92,11 @@ pub fn main() void {
       }
     }
 
-    win.end(null);
+    const end_micros = win.end();
+
+    c.SDL_RenderPresent(renderer);
+
+    win.wait(end_micros, null);
   }
 
   c.SDL_DestroyRenderer(renderer);
