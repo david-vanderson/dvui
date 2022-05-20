@@ -1,5 +1,52 @@
 fossil git export
 
+make easier to use textSize without the max width
+
+text stuff should remove spaces from front and back of final strings
+- that's what's causing the jumping for the paragraphs I think
+
+integration points:
+- texture
+- renderGeometry
+  - sdl backend should use renderGeometry instead of texture blit
+- initialization
+- cursors
+- clipping
+- pollevent/waiteventtimeout
+- keysym and mods
+- colors
+
+
+@import gui
+
+win = gui.Window.init(gpa, ???)
+
+loop:
+make arena
+win.begin(arena)
+- add events
+win.endEvents();
+- gui code
+us = win.end();
+- present view
+win.wait(max_fps);
+
+
+
+IconWidth - use same strategy as TextCacheEntry
+
+cache glyph bitmaps and info for speed
+
+xstart and ystart for textSize
+
+kerning
+- check how sdl_ttf does it
+
+need to cache glyph stuff because doing it all the time is slow
+
+switch to stb_truetype?
+
+
 Window needs a deinit
 - deinit caches, cursors, backend
 
@@ -12,6 +59,8 @@ Window.end() - break into 2 functions:
  - waitMaxFPS() instead of end()
  - user has to pass return from end into waitMaxFPS(), and then they can do whatever render present stuff between the two
 
+premultiplied alpha for all textures (and vertices from PathStroke/Fill?)
+- also font glyphs
 
 convert:
 - ScrollBar

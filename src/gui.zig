@@ -443,6 +443,7 @@ pub const Font = struct {
     var tw: c_int = undefined;
     var th: c_int = undefined;
     _ = c.TTF_SizeUTF8(sdlfont, text0, &tw, &th);
+    //std.debug.print("textSize size {d} for \"{s}\" {d}x{d}\n", .{sized_font.size, text, tw, th});
     return Size{.w = @intToFloat(f32, tw) * target_fraction, .h = @intToFloat(f32, th) * target_fraction};
   }
 
@@ -472,6 +473,7 @@ const FontCacheEntry = struct {
 
 const TextCacheEntry = struct {
   texture: *c.SDL_Texture,
+  size: Size,
   used: bool = true,
 };
 
@@ -496,6 +498,7 @@ pub fn FontCacheGet(font: Font) *c.TTF_Font {
 
 const IconCacheEntry = struct {
   texture: *c.SDL_Texture,
+  size: Size,
   used: bool = true,
 
   pub fn hash(tvg_bytes: []const u8, height: f32) u32 {
@@ -507,32 +510,18 @@ const IconCacheEntry = struct {
 };
 
 pub fn IconWidth(name: []const u8, tvg_bytes: []const u8, height_natural: f32) f32 {
-  var cw = current_window orelse unreachable;
   const height = height_natural * WindowNaturalScale();
-  const icon_hash = IconCacheEntry.hash(tvg_bytes, height);
-
-  // ensure it's in the cache
-  _ = IconTexture(name, tvg_bytes, height);
-
-  if (cw.icon_cache.getPtr(icon_hash)) |ice| {
-    ice.used = true;
-    var w: c_int = undefined;
-    var h: c_int = undefined;
-    _ = c.SDL_QueryTexture(ice.texture, null, null, &w, &h);
-    return @intToFloat(f32, w) / WindowNaturalScale();
-  }
-  else {
-    unreachable;
-  }
+  const ice = IconTexture(name, tvg_bytes, height);
+  return ice.size.w / WindowNaturalScale();
 }
 
-pub fn IconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) *c.SDL_Texture {
+pub fn IconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) IconCacheEntry {
   var cw = current_window orelse unreachable;
   const icon_hash = IconCacheEntry.hash(tvg_bytes, ask_height);
 
   if (cw.icon_cache.getPtr(icon_hash)) |ice| {
     ice.used = true;
-    return ice.texture;
+    return ice.*;
   }
 
   var image = tvg.rendering.renderBuffer(
@@ -557,13 +546,13 @@ pub fn IconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) *c.
   _ = name;
   //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{name, ask_height, w, h});
 
-  const entry = IconCacheEntry{.texture = texture};
+  const entry = IconCacheEntry{.texture = texture, .size = .{.w = @intToFloat(f32, surface.*.w), .h = @intToFloat(f32, surface.*.h)}};
   cw.icon_cache.put(icon_hash, entry) catch unreachable;
 
-  return texture;
+  return entry;
 }
 
-pub fn TextTexture(font: Font, text: []const u8) *c.SDL_Texture {
+pub fn TextTexture(font: Font, text: []const u8) TextCacheEntry {
   var cw = current_window orelse unreachable;
   var hash = fnv.init();
   hash.update(std.mem.asBytes(&font.size));
@@ -573,7 +562,7 @@ pub fn TextTexture(font: Font, text: []const u8) *c.SDL_Texture {
 
   if (cw.text_cache.getPtr(textHash)) |tce| {
     tce.used = true;
-    return tce.texture;
+    return tce.*;
   }
 
   //std.debug.print("creating text texture size {d} for \"{s}\"\n", .{font.size, text});
@@ -588,12 +577,12 @@ pub fn TextTexture(font: Font, text: []const u8) *c.SDL_Texture {
   const textSurface = c.TTF_RenderUTF8_Blended(sdlfont, text0, white);
   defer c.SDL_FreeSurface(textSurface);
 
-  const ret = c.SDL_CreateTextureFromSurface(Renderer(), textSurface) orelse unreachable;
+  const tex = c.SDL_CreateTextureFromSurface(Renderer(), textSurface) orelse unreachable;
 
-  const entry = TextCacheEntry{.texture = ret};
+  const entry = TextCacheEntry{.texture = tex, .size = .{.w = @intToFloat(f32, textSurface.*.w), .h = @intToFloat(f32, textSurface.*.h)}};
   cw.text_cache.put(textHash, entry) catch unreachable;
 
-  return ret;
+  return entry;
 }
 
 pub const RenderCmd = struct {
@@ -5285,26 +5274,44 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
   const sized_font = font.resize(ask_size);
   // make sure we refresh the font cache
   _ = FontCacheGet(sized_font);
-  const textTexture = TextTexture(sized_font, text);
+  const tce = TextTexture(sized_font, text);
 
-  var w: c_int = undefined;
-  var h: c_int = undefined;
-  _ = c.SDL_QueryTexture(textTexture, null, null, &w, &h);
+  var vtx = std.ArrayList(c.SDL_Vertex).initCapacity(cw.arena, 4) catch unreachable;
+  defer vtx.deinit();
+  var idx = std.ArrayList(c_int).initCapacity(cw.arena, 6) catch unreachable;
+  defer idx.deinit();
 
-  const tsrcr = c.SDL_Rect{.x = 0, .y = 0,
-    .w = w,
-    .h = h,
-  };
-  const tdesr = c.SDL_FRect{
-    .x = rs.r.x,
-    .y = rs.r.y,
-    .w = @intToFloat(f32, tsrcr.w) * target_fraction,
-    .h = @intToFloat(f32, tsrcr.h) * target_fraction,
-  };
+  var v: c.SDL_Vertex = undefined;
+  // inner vertex
+  v.position.x = rs.r.x;
+  v.position.y = rs.r.y;
+  v.color = color.sdlcolor();
+  v.tex_coord.x = 0;
+  v.tex_coord.y = 0;
+  vtx.append(v) catch unreachable;
 
-  _ = c.SDL_SetTextureAlphaMod(textTexture, color.a);
-  _ = c.SDL_SetTextureColorMod(textTexture, color.r, color.g, color.b);
-  _ = c.SDL_RenderCopyF(Renderer(), textTexture, &tsrcr, &tdesr);
+  v.position.x = rs.r.x + tce.size.w * target_fraction;
+  v.tex_coord.x = 1;
+  vtx.append(v) catch unreachable;
+
+  v.position.y = rs.r.y + tce.size.h * target_fraction;
+  v.tex_coord.y = 1;
+  vtx.append(v) catch unreachable;
+
+  v.position.x = rs.r.x;
+  v.tex_coord.x = 0;
+  vtx.append(v) catch unreachable;
+
+  idx.append(@intCast(c_int, 0)) catch unreachable;
+  idx.append(@intCast(c_int, 1)) catch unreachable;
+  idx.append(@intCast(c_int, 2)) catch unreachable;
+  idx.append(@intCast(c_int, 0)) catch unreachable;
+  idx.append(@intCast(c_int, 2)) catch unreachable;
+  idx.append(@intCast(c_int, 3)) catch unreachable;
+
+  _ = c.SDL_RenderGeometry(Renderer(), tce.texture,
+    vtx.items.ptr, @intCast(c_int, vtx.items.len),
+    idx.items.ptr, @intCast(c_int, idx.items.len));
 }
 
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colormod: Color) void {
@@ -5327,29 +5334,44 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
   const ask_height = @ceil(target_size);
   const target_fraction = target_size / ask_height;
 
-  const texture = IconTexture(name, tvg_bytes, ask_height);
+  const ice = IconTexture(name, tvg_bytes, ask_height);
 
-  var w: c_int = undefined;
-  var h: c_int = undefined;
-  _ = c.SDL_QueryTexture(texture, null, null, &w, &h);
+  var vtx = std.ArrayList(c.SDL_Vertex).initCapacity(cw.arena, 4) catch unreachable;
+  defer vtx.deinit();
+  var idx = std.ArrayList(c_int).initCapacity(cw.arena, 6) catch unreachable;
+  defer idx.deinit();
 
-  const tsrcr = c.SDL_Rect{.x = 0, .y = 0,
-    .w = w,
-    .h = h,
-  };
-  const tdesr = c.SDL_FRect{
-    .x = rs.r.x,
-    .y = rs.r.y,
-    .w = @intToFloat(f32, tsrcr.w) * target_fraction,
-    .h = @intToFloat(f32, tsrcr.h) * target_fraction,
-  };
+  var v: c.SDL_Vertex = undefined;
+  // inner vertex
+  v.position.x = rs.r.x;
+  v.position.y = rs.r.y;
+  v.color = colormod.sdlcolor();
+  v.tex_coord.x = 0;
+  v.tex_coord.y = 0;
+  vtx.append(v) catch unreachable;
 
-  //_ = c.SDL_SetRenderDrawColor(Renderer(), 100, 100, 0, 255);
-  //_ = c.SDL_RenderFillRectF(Renderer(), &tdesr);
+  v.position.x = rs.r.x + ice.size.w * target_fraction;
+  v.tex_coord.x = 1;
+  vtx.append(v) catch unreachable;
 
-  _ = c.SDL_SetTextureAlphaMod(texture, colormod.a);
-  _ = c.SDL_SetTextureColorMod(texture, colormod.r, colormod.g, colormod.b);
-  _ = c.SDL_RenderCopyF(Renderer(), texture, &tsrcr, &tdesr);
+  v.position.y = rs.r.y + ice.size.h * target_fraction;
+  v.tex_coord.y = 1;
+  vtx.append(v) catch unreachable;
+
+  v.position.x = rs.r.x;
+  v.tex_coord.x = 0;
+  vtx.append(v) catch unreachable;
+
+  idx.append(@intCast(c_int, 0)) catch unreachable;
+  idx.append(@intCast(c_int, 1)) catch unreachable;
+  idx.append(@intCast(c_int, 2)) catch unreachable;
+  idx.append(@intCast(c_int, 0)) catch unreachable;
+  idx.append(@intCast(c_int, 2)) catch unreachable;
+  idx.append(@intCast(c_int, 3)) catch unreachable;
+
+  _ = c.SDL_RenderGeometry(Renderer(), ice.texture,
+    vtx.items.ptr, @intCast(c_int, vtx.items.len),
+    idx.items.ptr, @intCast(c_int, idx.items.len));
 }
 
 pub const KeyEvent = struct {
