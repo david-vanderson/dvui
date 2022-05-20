@@ -8,7 +8,6 @@ text stuff should remove spaces from front and back of final strings
 integration points:
 - texture
 - renderGeometry
-  - sdl backend should use renderGeometry instead of texture blit
 - initialization
 - cursors
 - clipping
@@ -23,7 +22,7 @@ win = gui.Window.init(gpa, ???)
 
 loop:
 make arena
-win.begin(arena)
+win.begin(arena, logical_size, pixel_size)
 - add events
 win.endEvents();
 - gui code
@@ -32,8 +31,6 @@ us = win.end();
 win.wait(max_fps);
 
 
-
-IconWidth - use same strategy as TextCacheEntry
 
 cache glyph bitmaps and info for speed
 

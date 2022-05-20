@@ -1900,7 +1900,6 @@ pub const Window = struct {
   icon_cache: std.AutoHashMap(u32, IconCacheEntry),
   deferred_render_queues: std.ArrayList(DeferredRenderQueue) = undefined,
 
-  window: *c.SDL_Window,
   renderer: *c.SDL_Renderer,
 
   cursor_requested_last_frame: ?CursorKind = null,
@@ -1921,7 +1920,7 @@ pub const Window = struct {
   arena: std.mem.Allocator = undefined,
   path: std.ArrayList(Point) = undefined,
 
-  pub fn init(gpa: std.mem.Allocator, window: *c.SDL_Window, renderer: *c.SDL_Renderer) Self {
+  pub fn init(gpa: std.mem.Allocator, renderer: *c.SDL_Renderer) Self {
     var self = Self{.floating_windows_prev = std.ArrayList(FloatingData).init(gpa),
                     .floating_windows = std.ArrayList(FloatingData).init(gpa),
                     .widgets_min_size = std.AutoHashMap(u32, Size).init(gpa),
@@ -1936,7 +1935,6 @@ pub const Window = struct {
                     .text_cache = std.AutoHashMap(u32, TextCacheEntry).init(gpa),
                     .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
                     .icon_cache = std.AutoHashMap(u32, IconCacheEntry).init(gpa),
-                    .window = window,
                     .wd = WidgetData{.id = fnv.init().final()},
                     .renderer = renderer};
 
@@ -2076,7 +2074,7 @@ pub const Window = struct {
     return fps;
   }
 
-  pub fn begin(self: *Self, arena: std.mem.Allocator) void {
+  pub fn beginWait(self: *Self) i128 {
     var new_time = math.max(self.frame_time_ns, std.time.nanoTimestamp());
 
     if (self.loop_wait_target) |target| {
@@ -2109,7 +2107,7 @@ pub const Window = struct {
     }
 
     //std.debug.print("begin {d:6}\n", .{self.loop_target_slop});
-    self.beginNoTiming(arena, new_time);
+    return new_time;
   }
 
   pub fn end(self: *Self, maxFPS: ?f32) void {
@@ -2210,7 +2208,14 @@ pub const Window = struct {
     }
   }
 
-  pub fn beginNoTiming(self: *Self, arena: std.mem.Allocator, time_ns: i128) void {
+  pub fn begin(self: *Self,
+    arena: std.mem.Allocator,
+    time_ns: i128,
+    window_w: i32,
+    window_h: i32,
+    pixel_w: i32,
+    pixel_h: i32,
+  ) void {
     var micros_since_last: u32 = 0;
     if (time_ns > self.frame_time_ns) {
       // enforce monotinicity
@@ -2282,18 +2287,9 @@ pub const Window = struct {
     self.tab_index_prev = self.tab_index;
     self.tab_index = @TypeOf(self.tab_index).init(self.tab_index.allocator);
 
-    var pixel_w: i32 = undefined;
-    var pixel_h: i32 = undefined;
-    _ = c.SDL_GetRendererOutputSize(self.renderer, &pixel_w, &pixel_h);
     self.rect_pixels = Rect{.x = 0, .y = 0, .w = @intToFloat(f32, pixel_w), .h = @intToFloat(f32, pixel_h)};
     ClipSet(self.rect_pixels);
 
-    _ = c.SDL_SetRenderDrawColor(self.renderer, 75, 75, 75, 255);
-    _ = c.SDL_RenderClear(self.renderer);
-
-    var window_w: i32 = undefined;
-    var window_h: i32 = undefined;
-    _ = c.SDL_GetWindowSize(self.window, &window_w, &window_h);
     self.wd.rect = Rect{.x = 0, .y = 0, .w = @intToFloat(f32, window_w), .h = @intToFloat(f32, window_h)};
     self.natural_scale = self.rect_pixels.w / self.wd.rect.w; 
 

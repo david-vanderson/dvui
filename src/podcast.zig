@@ -33,14 +33,26 @@ pub fn main() void {
 
   _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_BLEND);
 
-  var win = gui.Window.init(gpa, window, renderer);
+  var win = gui.Window.init(gpa, renderer);
 
   main_loop: while (true) {
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
-    win.begin(arena);
+    var window_w: i32 = undefined;
+    var window_h: i32 = undefined;
+    _ = c.SDL_GetWindowSize(window, &window_w, &window_h);
+
+    var pixel_w: i32 = undefined;
+    var pixel_h: i32 = undefined;
+    _ = c.SDL_GetRendererOutputSize(renderer, &pixel_w, &pixel_h);
+
+    _ = c.SDL_SetRenderDrawColor(renderer, 75, 75, 75, 255);
+    _ = c.SDL_RenderClear(renderer);
+
+    var nstime = win.beginWait();
+    win.begin(arena, nstime, window_w, window_h, pixel_w, pixel_h);
 
     var event: c.SDL_Event = undefined;
     while (c.SDL_PollEvent(&event) != 0) {
