@@ -16,7 +16,6 @@ const log = std.log.scoped(.gui);
 const gui = @This();
 
 var current_window: ?*Window = null;
-var cursor_backing: [@typeInfo(CursorKind).Enum.fields.len]*c.SDL_Cursor = undefined;
 
 pub var log_debug: bool = false;
 pub fn debug(comptime str: []const u8, args: anytype) void {
@@ -785,17 +784,6 @@ pub fn cursorsCreate() void {
     return;
   }
 
-  cursor_backing[@enumToInt(CursorKind.arrow)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_ARROW) orelse unreachable;
-  cursor_backing[@enumToInt(CursorKind.ibeam)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_IBEAM) orelse unreachable;
-  cursor_backing[@enumToInt(CursorKind.wait)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_WAIT) orelse unreachable;
-  cursor_backing[@enumToInt(CursorKind.crosshair)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_CROSSHAIR) orelse unreachable;
-  cursor_backing[@enumToInt(CursorKind.arrow_nw_se)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENWSE) orelse unreachable;
-  cursor_backing[@enumToInt(CursorKind.arrow_ne_sw)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENESW) orelse unreachable;
-  cursor_backing[@enumToInt(CursorKind.arrow_w_e)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZEWE) orelse unreachable;
-  cursor_backing[@enumToInt(CursorKind.arrow_n_s)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENS) orelse unreachable;
-  cursor_backing[@enumToInt(CursorKind.arrow_all)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZEALL) orelse unreachable;
-  cursor_backing[@enumToInt(CursorKind.bad)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_NO) orelse unreachable;
-  cursor_backing[@enumToInt(CursorKind.hand)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_HAND) orelse unreachable;
 }
 
 pub fn CursorGetDragging() ?CursorKind {
@@ -1309,7 +1297,7 @@ pub fn DragStart(p: Point, cursor: CursorKind) void {
 
 pub fn DragSetCursor() void {
   const cw = current_window orelse unreachable;
-  cw.CursorSet(cw.cursor_dragging orelse CursorKind.arrow);
+  cw.cursor_requested = (cw.cursor_dragging orelse CursorKind.arrow);
 }
 
 pub fn Dragging(p: Point) ?Point {
@@ -1891,7 +1879,6 @@ pub const Window = struct {
 
   cursor_requested_last_frame: ?CursorKind = null,
   cursor_requested: ?CursorKind = null,
-  cursor_current: CursorKind = CursorKind.arrow,
   cursor_dragging: ?CursorKind = null,
 
   defer_render: bool = false,
@@ -2402,11 +2389,15 @@ pub const Window = struct {
     self.layout.install();
   }
 
-  pub fn CursorSet(self: *Self, cursor: CursorKind) void {
-    if (cursor != self.cursor_current) {
-      self.cursor_current = cursor;
-      c.SDL_SetCursor(cursor_backing[@enumToInt(cursor)]);
+  pub fn CursorRequested(self: *const Self) ?CursorKind {
+    if (self.cursor_requested) |cursor| {
+      return cursor;
     }
+    else if (self.drag_state != .dragging and self.cursor_requested_last_frame != null) {
+      return CursorKind.arrow;
+    }
+
+    return null;
   }
 
   pub fn end(self: *Self) ?u32 {
@@ -2438,15 +2429,6 @@ pub const Window = struct {
       }
     }
 
-    if (self.drag_state != .dragging) {
-      if (self.cursor_requested) |cursor| {
-        self.CursorSet(cursor);
-      }
-      else if (self.cursor_requested_last_frame != null) {
-        self.CursorSet(CursorKind.arrow);
-      }
-    }
-    
     if (self.FocusedWindowLost()) {
       // The floating window with focus disappeared, so do another frame and
       // we'll focus a new window in begin()

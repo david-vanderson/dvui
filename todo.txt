@@ -1,17 +1,10 @@
 fossil git export
 
-scissor
-
-make easier to use textSize without the max width
-
-text stuff should remove spaces from front and back of final strings
-- that's what's causing the jumping for the paragraphs I think
-
 integration points:
 !- texture
 !- renderGeometry
 - initialization
-- cursors
+!- cursors
 !- clipping
 - pollevent/waiteventtimeout
 - keysym and mods
@@ -29,9 +22,15 @@ win.begin(arena, logical_size, pixel_size)
 win.endEvents();
 - gui code
 us = win.end();
+set_cursor(win.cursor);
 - present view
 win.wait(max_fps);
 
+
+make easier to use textSize without the max width
+
+text stuff should remove spaces from front and back of final strings
+- that's what's causing the jumping for the paragraphs I think
 
 
 cache glyph bitmaps and info for speed
@@ -52,18 +51,16 @@ Window needs a deinit
 
 maybe parameterize gui based on given Vertex type?
 
-Window.begin() should be passed pixel size and logical size of the window so it doesn't need to call stuff internally
-
-Window.end() - break into 2 functions:
- - end() instead of endNoTiming
- - waitMaxFPS() instead of end()
- - user has to pass return from end into waitMaxFPS(), and then they can do whatever render present stuff between the two
-
 premultiplied alpha for all textures (and vertices from PathStroke/Fill?)
 - also font glyphs
 
 sometimes the scrollbar handle gets a 1-pixel line in the middle partway through?
 - are the rounded corner verticies overlapping?
+
+cursor stuff needs to differentiate between owning the whole gui and doing extra gui stuff on top
+- if the last mouse point is over the gui OR the gui has captured the mouse
+  - then the gui sets the cursor (or sets it to arrow if it was set last frame)
+- otherwise gui doesn't want to set the cursor
 
 convert:
 - ScrollBar
