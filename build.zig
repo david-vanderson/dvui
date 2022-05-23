@@ -12,7 +12,7 @@ pub fn build(b: *Builder) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const mode = b.standardReleaseOptions();
 
-    if (true)
+    if (false)
     {
       const exe = b.addExecutable("gui-test", "src/gui-test.zig");
       exe.addIncludeDir("/usr/local/include");

@@ -1,16 +1,18 @@
 fossil git export
 
+scissor
+
 make easier to use textSize without the max width
 
 text stuff should remove spaces from front and back of final strings
 - that's what's causing the jumping for the paragraphs I think
 
 integration points:
-- texture
-- renderGeometry
+!- texture
+!- renderGeometry
 - initialization
 - cursors
-- clipping
+!- clipping
 - pollevent/waiteventtimeout
 - keysym and mods
 - colors
@@ -43,6 +45,7 @@ need to cache glyph stuff because doing it all the time is slow
 
 switch to stb_truetype?
 
+DataSet/Get should use widget id and name like Animations
 
 Window needs a deinit
 - deinit caches, cursors, backend
@@ -58,6 +61,9 @@ Window.end() - break into 2 functions:
 
 premultiplied alpha for all textures (and vertices from PathStroke/Fill?)
 - also font glyphs
+
+sometimes the scrollbar handle gets a 1-pixel line in the middle partway through?
+- are the rounded corner verticies overlapping?
 
 convert:
 - ScrollBar

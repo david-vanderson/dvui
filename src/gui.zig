@@ -497,7 +497,7 @@ pub fn FontCacheGet(font: Font) *c.TTF_Font {
 }
 
 const IconCacheEntry = struct {
-  texture: *c.SDL_Texture,
+  texture: *anyopaque,
   size: Size,
   used: bool = true,
 
@@ -533,20 +533,12 @@ pub fn IconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) Ico
   ) catch unreachable;
   defer image.deinit(cw.arena);
 
-  var surface = c.SDL_CreateRGBSurfaceWithFormatFrom(image.pixels.ptr,
-    @intCast(c_int, image.width), @intCast(c_int, image.height), 32, @intCast(c_int, 4*image.width), c.SDL_PIXELFORMAT_ABGR8888);
-  defer c.SDL_FreeSurface(surface);
-
-  const texture = c.SDL_CreateTextureFromSurface(Renderer(), surface) orelse unreachable;
-
-  var w: c_int = undefined;
-  var h: c_int = undefined;
-  _ = c.SDL_QueryTexture(texture, null, null, &w, &h);
+  const texture = cw.textureCreate(cw.userdata, image.pixels.ptr, image.width, image.height);
 
   _ = name;
   //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{name, ask_height, w, h});
 
-  const entry = IconCacheEntry{.texture = texture, .size = .{.w = @intToFloat(f32, surface.*.w), .h = @intToFloat(f32, surface.*.h)}};
+  const entry = IconCacheEntry{.texture = texture, .size = .{.w = @intToFloat(f32, image.width), .h = @intToFloat(f32, image.height)}};
   cw.icon_cache.put(icon_hash, entry) catch unreachable;
 
   return entry;
@@ -940,9 +932,7 @@ pub fn PathFillConvex(col: Color) void {
     idx.append(@intCast(c_int, bi * 2)) catch unreachable;
   }
 
-  _ = c.SDL_RenderGeometry(Renderer(), null,
-    vtx.items.ptr, @intCast(c_int, vtx.items.len),
-    idx.items.ptr, @intCast(c_int, idx.items.len));
+  cw.renderGeometry(cw.userdata, null, vtx.items, idx.items);
 
   cw.path.clearAndFree();
 }
@@ -1179,9 +1169,7 @@ pub fn PathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, co
     }
   }
 
-  _ = c.SDL_RenderGeometry(Renderer(), null,
-    vtx.items.ptr, @intCast(c_int, vtx.items.len),
-    idx.items.ptr, @intCast(c_int, idx.items.len));
+  cw.renderGeometry(cw.userdata, null, vtx.items, idx.items);
 
   cw.path.clearAndFree();
 }
@@ -1401,26 +1389,21 @@ pub fn CaptureMouseGet() ?u32 {
   return cw.captureID;
 }
 
-fn ClipGet() Rect {
+pub fn ClipGet() Rect {
   const cw = current_window orelse unreachable;
   return cw.clipRect;
 }
 
-fn Clip(new: Rect) Rect {
+pub fn Clip(new: Rect) Rect {
   const cw = current_window orelse unreachable;
   var ret = cw.clipRect;
   ClipSet(cw.clipRect.intersect(new));
   return ret;
 }
 
-fn ClipSet(r: Rect) void {
+pub fn ClipSet(r: Rect) void {
   const cw = current_window orelse unreachable;
   cw.clipRect = r;
-  const clip = c.SDL_Rect{.x = @floatToInt(c_int, r.x),
-                          .y = @floatToInt(c_int, r.y),
-                          .w = math.max(1, @floatToInt(c_int, @ceil(r.w))),
-                          .h = math.max(1, @floatToInt(c_int, @ceil(r.h)))};
-  _ = c.SDL_RenderSetClipRect(Renderer(), &clip);
 }
 
 pub fn CueFrame() void {
@@ -1849,6 +1832,12 @@ pub const Window = struct {
     focused_widgetId: ?u32 = null,
   };
 
+  userdata: ?*anyopaque,
+  renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []c.SDL_Vertex, idx: []c_int) void,
+  textureCreate: fn (userdata: ?*anyopaque, pixels: *anyopaque, width: u32, height: u32) *anyopaque,
+  textureDestroy: fn (userdata: ?*anyopaque, texture: *anyopaque) void,
+  renderer: *c.SDL_Renderer,
+
   floating_windows_prev: std.ArrayList(FloatingData),
   floating_windows: std.ArrayList(FloatingData),
 
@@ -1900,8 +1889,6 @@ pub const Window = struct {
   icon_cache: std.AutoHashMap(u32, IconCacheEntry),
   deferred_render_queues: std.ArrayList(DeferredRenderQueue) = undefined,
 
-  renderer: *c.SDL_Renderer,
-
   cursor_requested_last_frame: ?CursorKind = null,
   cursor_requested: ?CursorKind = null,
   cursor_current: CursorKind = CursorKind.arrow,
@@ -1920,7 +1907,14 @@ pub const Window = struct {
   arena: std.mem.Allocator = undefined,
   path: std.ArrayList(Point) = undefined,
 
-  pub fn init(gpa: std.mem.Allocator, renderer: *c.SDL_Renderer) Self {
+  pub fn init(
+    gpa: std.mem.Allocator,
+    userdata: ?*anyopaque,
+    renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []c.SDL_Vertex, idx: []c_int) void,
+    textureCreate: fn (userdata: ?*anyopaque, pixels: *anyopaque, width: u32, height: u32) *anyopaque,
+    textureDestroy: fn (userdata: ?*anyopaque, texture: *anyopaque) void,
+    renderer: *c.SDL_Renderer,
+    ) Self {
     var self = Self{.floating_windows_prev = std.ArrayList(FloatingData).init(gpa),
                     .floating_windows = std.ArrayList(FloatingData).init(gpa),
                     .widgets_min_size = std.AutoHashMap(u32, Size).init(gpa),
@@ -1936,7 +1930,12 @@ pub const Window = struct {
                     .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
                     .icon_cache = std.AutoHashMap(u32, IconCacheEntry).init(gpa),
                     .wd = WidgetData{.id = fnv.init().final()},
-                    .renderer = renderer};
+                    .userdata = userdata,
+                    .renderGeometry = renderGeometry,
+                    .textureCreate = textureCreate,
+                    .textureDestroy = textureDestroy,
+                    .renderer = renderer,
+                    };
 
     self.focused_windowId = self.wd.id;
     self.frame_time_ns = std.time.nanoTimestamp();
@@ -2384,7 +2383,7 @@ pub const Window = struct {
 
       for (deadIcons.items) |id| {
         const ice = self.icon_cache.fetchRemove(id);
-        c.SDL_DestroyTexture(ice.?.value.texture);
+        self.textureDestroy(self.userdata, ice.?.value.texture);
       }
 
       //std.debug.print("icon_cache {d}\n", .{self.icon_cache.count()});
@@ -5302,9 +5301,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
   idx.append(@intCast(c_int, 2)) catch unreachable;
   idx.append(@intCast(c_int, 3)) catch unreachable;
 
-  _ = c.SDL_RenderGeometry(Renderer(), tce.texture,
-    vtx.items.ptr, @intCast(c_int, vtx.items.len),
-    idx.items.ptr, @intCast(c_int, idx.items.len));
+  cw.renderGeometry(cw.userdata, tce.texture, vtx.items, idx.items);
 }
 
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colormod: Color) void {
@@ -5362,9 +5359,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
   idx.append(@intCast(c_int, 2)) catch unreachable;
   idx.append(@intCast(c_int, 3)) catch unreachable;
 
-  _ = c.SDL_RenderGeometry(Renderer(), ice.texture,
-    vtx.items.ptr, @intCast(c_int, vtx.items.len),
-    idx.items.ptr, @intCast(c_int, idx.items.len));
+  cw.renderGeometry(cw.userdata, ice.texture, vtx.items, idx.items);
 }
 
 pub const KeyEvent = struct {

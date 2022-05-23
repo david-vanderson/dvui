@@ -6,6 +6,48 @@ const gui = @import("gui.zig");
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
+fn renderGeometry(userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []c.SDL_Vertex, idx: []c_int) void {
+  const clipr = gui.WindowRectPixels().intersect(gui.ClipGet());
+  if (clipr.empty()) {
+    return;
+  }
+
+  const renderer = @ptrCast(*c.SDL_Renderer, userdata);
+
+  const clip = c.SDL_Rect{.x = @floatToInt(c_int, clipr.x),
+                          .y = @floatToInt(c_int, clipr.y),
+                          .w = std.math.max(0, @floatToInt(c_int, @ceil(clipr.w))),
+                          .h = std.math.max(0, @floatToInt(c_int, @ceil(clipr.h)))};
+  _ = c.SDL_RenderSetClipRect(renderer, &clip);
+
+    const tex = @ptrCast(?*c.SDL_Texture, texture);
+
+  _ = c.SDL_RenderGeometry(renderer, tex,
+    vtx.ptr, @intCast(c_int, vtx.len),
+    idx.ptr, @intCast(c_int, idx.len));
+}
+
+fn textureCreate(userdata: ?*anyopaque, pixels: *anyopaque, width: u32, height: u32) *anyopaque {
+  const renderer = @ptrCast(*c.SDL_Renderer, userdata);
+  var surface = c.SDL_CreateRGBSurfaceWithFormatFrom(
+    pixels,
+    @intCast(c_int, width),
+    @intCast(c_int, height),
+    32,
+    @intCast(c_int, 4*width),
+    c.SDL_PIXELFORMAT_ABGR8888);
+  defer c.SDL_FreeSurface(surface);
+
+  const texture = c.SDL_CreateTextureFromSurface(renderer, surface) orelse unreachable;
+  return texture;
+}
+
+fn textureDestroy(userdata: ?*anyopaque, texture: *anyopaque) void {
+  _ = userdata;
+  c.SDL_DestroyTexture(@ptrCast(*c.SDL_Texture, texture));
+}
+
+
 pub fn main() void {
   if (c.SDL_Init(c.SDL_INIT_EVERYTHING) < 0) {
     std.debug.print("Couldn't initialize SDL: {s}\n", .{c.SDL_GetError()});
@@ -33,7 +75,7 @@ pub fn main() void {
 
   _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_BLEND);
 
-  var win = gui.Window.init(gpa, renderer);
+  var win = gui.Window.init(gpa, renderer, renderGeometry, textureCreate, textureDestroy, renderer);
 
   main_loop: while (true) {
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
