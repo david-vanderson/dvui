@@ -5,6 +5,7 @@ const tvg = @import("tinyvg/tinyvg.zig");
 const fnv = std.hash.Fnv1a_32;
 pub const icons = @import("icons.zig");
 pub const fonts = @import("fonts.zig");
+pub const keys = @import("keys.zig");
 
 //const stb = @cImport({
 //    @cInclude("stb_rect_pack.h");
@@ -22,6 +23,61 @@ pub fn debug(comptime str: []const u8, args: anytype) void {
   if (log_debug) {
     log.debug(str, args);
   }
+}
+
+pub fn SDL_keymod_to_gui(keymod: u16) keys.Mod {
+  if (keymod == c.KMOD_NONE) return keys.Mod.none;
+
+  var m: u16 = 0;
+  if (keymod & c.KMOD_LSHIFT > 0) m |= @enumToInt(keys.Mod.lshift);
+  if (keymod & c.KMOD_RSHIFT > 0) m |= @enumToInt(keys.Mod.rshift);
+  if (keymod & c.KMOD_LCTRL > 0) m |= @enumToInt(keys.Mod.lctrl);
+  if (keymod & c.KMOD_RCTRL > 0) m |= @enumToInt(keys.Mod.rctrl);
+  if (keymod & c.KMOD_LALT > 0) m |= @enumToInt(keys.Mod.lalt);
+  if (keymod & c.KMOD_RALT > 0) m |= @enumToInt(keys.Mod.ralt);
+  if (keymod & c.KMOD_LGUI > 0) m |= @enumToInt(keys.Mod.lgui);
+  if (keymod & c.KMOD_RGUI > 0) m |= @enumToInt(keys.Mod.rgui);
+
+  return @intToEnum(keys.Mod, m);
+}
+
+pub fn SDL_keysym_to_gui(keysym: i32) keys.Key {
+  return switch (keysym) {
+    c.SDLK_a => .a,
+    c.SDLK_b => .b,
+    c.SDLK_c => .c,
+    c.SDLK_d => .d,
+    c.SDLK_e => .e,
+    c.SDLK_f => .f,
+    c.SDLK_g => .g,
+    c.SDLK_h => .h,
+    c.SDLK_i => .i,
+    c.SDLK_j => .j,
+    c.SDLK_k => .k,
+    c.SDLK_l => .l,
+    c.SDLK_m => .m,
+    c.SDLK_n => .n,
+    c.SDLK_o => .o,
+    c.SDLK_p => .p,
+    c.SDLK_q => .q,
+    c.SDLK_r => .r,
+    c.SDLK_s => .s,
+    c.SDLK_t => .t,
+    c.SDLK_u => .u,
+    c.SDLK_v => .v,
+    c.SDLK_w => .w,
+    c.SDLK_x => .x,
+    c.SDLK_y => .y,
+    c.SDLK_z => .z,
+
+    c.SDLK_SPACE => .space,
+    c.SDLK_BACKSPACE => .backspace,
+    c.SDLK_UP => .up,
+    c.SDLK_DOWN => .down,
+    c.SDLK_TAB => .tab,
+    c.SDLK_ESCAPE => .escape,
+    else => .unknown,
+  };
 }
 
 pub const Theme = struct {
@@ -1938,8 +1994,8 @@ pub const Window = struct {
           .focus_widgetId = self.focused_widgetId_last_frame,
           .evt = AnyEvent{.key = KeyEvent{
             .state = if (event.key.repeat > 0) .repeat else .down,
-            .keysym = event.key.keysym.sym,
-            .mod = event.key.keysym.mod,
+            .keysym = SDL_keysym_to_gui(event.key.keysym.sym),
+            .mod = SDL_keymod_to_gui(event.key.keysym.mod),
           }}
         }) catch unreachable;
       },
@@ -2418,8 +2474,8 @@ pub const Window = struct {
         }
       }
       else if (e.evt == .key) {
-        if (e.evt.key.state == .down and e.evt.key.keysym == c.SDLK_TAB) {
-          if ((e.evt.key.mod & c.KMOD_SHIFT) > 0) {
+        if (e.evt.key.state == .down and e.evt.key.keysym == .tab) {
+          if (e.evt.key.mod.shift()) {
             TabIndexPrev(&iter);
           }
           else {
@@ -2640,7 +2696,7 @@ pub const PopupWidget = struct {
         }
       }
       else if (e.evt == .key) {
-        if (e.evt.key.state == .down and e.evt.key.keysym == c.SDLK_ESCAPE) {
+        if (e.evt.key.state == .down and e.evt.key.keysym == .escape) {
           var closeE = Event{.evt = AnyEvent{.close_popup = ClosePopupEvent{.defocus = false}}};
           self.bubbleEvent(&closeE);
         }
@@ -2884,8 +2940,8 @@ pub const FloatingWindowWidget = struct {
       }
       else if (e.evt == .key) {
         // catch any tabs that weren't handled by widgets (we passed true to iter.next)
-        if (e.evt.key.state == .down and e.evt.key.keysym == c.SDLK_TAB) {
-          if ((e.evt.key.mod & c.KMOD_SHIFT) > 0) {
+        if (e.evt.key.state == .down and e.evt.key.keysym == .tab) {
+          if (e.evt.key.mod.shift()) {
             TabIndexPrev(&iter);
           }
           else {
@@ -4023,7 +4079,7 @@ pub const ScrollAreaWidget = struct {
   pub fn bubbleEvent(self: *Self, e: *Event) void {
     switch (e.evt) {
       .key => {
-        if (e.evt.key.keysym == c.SDLK_UP and
+        if (e.evt.key.keysym == .up and
             (e.evt.key.state == .down or e.evt.key.state == .repeat)) {
           e.handled = true;
           self.scrollAfter -= 10;
@@ -4031,7 +4087,7 @@ pub const ScrollAreaWidget = struct {
             self.scrollAfter = math.min(0, -self.scroll);
           }
         }
-        else if (e.evt.key.keysym == c.SDLK_DOWN and
+        else if (e.evt.key.keysym == .down and
                  (e.evt.key.state == .down or e.evt.key.state == .repeat)) {
           e.handled = true;
           self.scrollAfter += 10;
@@ -4466,7 +4522,7 @@ pub const MenuItemWidget = struct {
           }
         },
         .key => {
-          if (e.evt.key.state == .down and e.evt.key.keysym == c.SDLK_SPACE) {
+          if (e.evt.key.state == .down and e.evt.key.keysym == .space) {
             e.handled = true;
             if (self.submenu) {
               FocusWidget(self.wd.id, &iter);
@@ -4684,7 +4740,7 @@ pub const ButtonContainerWidget = struct {
           }
         },
         .key => {
-          if (e.evt.key.state == .down and e.evt.key.keysym == c.SDLK_SPACE) {
+          if (e.evt.key.state == .down and e.evt.key.keysym == .space) {
             e.handled = true;
             ret = true;
           }
@@ -4926,13 +4982,13 @@ pub const TextEntryWidget = struct {
     while (iter.next()) |e| {
       switch (e.evt) {
         .key => {
-          if (e.evt.key.keysym == c.SDLK_BACKSPACE and
+          if (e.evt.key.keysym == .backspace and
               (e.evt.key.state == .down or e.evt.key.state == .repeat)) {
             e.handled = true;
             self.len -|= 1;
             self.text[self.len] = 0;
           }
-          else if (e.evt.key.keysym == c.SDLK_v and e.evt.key.state == .down and (e.evt.key.mod & c.KMOD_GUI) > 0) {
+          else if (e.evt.key.keysym == .v and e.evt.key.state == .down and e.evt.key.mod.gui()) {
             const ct = c.SDL_GetClipboardText();
             defer c.SDL_free(ct);
 
@@ -5350,8 +5406,8 @@ pub const KeyEvent = struct {
     repeat,
     up,
   };
-  keysym: i32,
-  mod: u16,
+  keysym: keys.Key,
+  mod: keys.Mod,
   state: Kind,
 };
 
