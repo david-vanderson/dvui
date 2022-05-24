@@ -25,61 +25,6 @@ pub fn debug(comptime str: []const u8, args: anytype) void {
   }
 }
 
-pub fn SDL_keymod_to_gui(keymod: u16) keys.Mod {
-  if (keymod == c.KMOD_NONE) return keys.Mod.none;
-
-  var m: u16 = 0;
-  if (keymod & c.KMOD_LSHIFT > 0) m |= @enumToInt(keys.Mod.lshift);
-  if (keymod & c.KMOD_RSHIFT > 0) m |= @enumToInt(keys.Mod.rshift);
-  if (keymod & c.KMOD_LCTRL > 0) m |= @enumToInt(keys.Mod.lctrl);
-  if (keymod & c.KMOD_RCTRL > 0) m |= @enumToInt(keys.Mod.rctrl);
-  if (keymod & c.KMOD_LALT > 0) m |= @enumToInt(keys.Mod.lalt);
-  if (keymod & c.KMOD_RALT > 0) m |= @enumToInt(keys.Mod.ralt);
-  if (keymod & c.KMOD_LGUI > 0) m |= @enumToInt(keys.Mod.lgui);
-  if (keymod & c.KMOD_RGUI > 0) m |= @enumToInt(keys.Mod.rgui);
-
-  return @intToEnum(keys.Mod, m);
-}
-
-pub fn SDL_keysym_to_gui(keysym: i32) keys.Key {
-  return switch (keysym) {
-    c.SDLK_a => .a,
-    c.SDLK_b => .b,
-    c.SDLK_c => .c,
-    c.SDLK_d => .d,
-    c.SDLK_e => .e,
-    c.SDLK_f => .f,
-    c.SDLK_g => .g,
-    c.SDLK_h => .h,
-    c.SDLK_i => .i,
-    c.SDLK_j => .j,
-    c.SDLK_k => .k,
-    c.SDLK_l => .l,
-    c.SDLK_m => .m,
-    c.SDLK_n => .n,
-    c.SDLK_o => .o,
-    c.SDLK_p => .p,
-    c.SDLK_q => .q,
-    c.SDLK_r => .r,
-    c.SDLK_s => .s,
-    c.SDLK_t => .t,
-    c.SDLK_u => .u,
-    c.SDLK_v => .v,
-    c.SDLK_w => .w,
-    c.SDLK_x => .x,
-    c.SDLK_y => .y,
-    c.SDLK_z => .z,
-
-    c.SDLK_SPACE => .space,
-    c.SDLK_BACKSPACE => .backspace,
-    c.SDLK_UP => .up,
-    c.SDLK_DOWN => .down,
-    c.SDLK_TAB => .tab,
-    c.SDLK_ESCAPE => .escape,
-    else => .unknown,
-  };
-}
-
 pub const Theme = struct {
   name: []const u8,
 
@@ -527,7 +472,7 @@ const FontCacheEntry = struct {
 };
 
 const TextCacheEntry = struct {
-  texture: *c.SDL_Texture,
+  texture: *anyopaque,
   size: Size,
   used: bool = true,
 };
@@ -624,9 +569,11 @@ pub fn TextTexture(font: Font, text: []const u8) TextCacheEntry {
   const textSurface = c.TTF_RenderUTF8_Blended(sdlfont, text0, white);
   defer c.SDL_FreeSurface(textSurface);
 
-  const tex = c.SDL_CreateTextureFromSurface(Renderer(), textSurface) orelse unreachable;
+  _ = c.SDL_LockSurface(textSurface);
+  const texture = cw.textureCreate(cw.userdata, textSurface[0].pixels.?, @intCast(u32, textSurface[0].w), @intCast(u32, textSurface[0].h));
+  c.SDL_UnlockSurface(textSurface);
 
-  const entry = TextCacheEntry{.texture = tex, .size = .{.w = @intToFloat(f32, textSurface.*.w), .h = @intToFloat(f32, textSurface.*.h)}};
+  const entry = TextCacheEntry{.texture = texture, .size = .{.w = @intToFloat(f32, textSurface.*.w), .h = @intToFloat(f32, textSurface.*.h)}};
   cw.text_cache.put(textHash, entry) catch unreachable;
 
   return entry;
@@ -1504,11 +1451,6 @@ pub fn WindowNaturalScale() f32 {
   return cw.natural_scale;
 }
 
-pub fn Renderer() *c.SDL_Renderer {
-  var cw = current_window orelse unreachable;
-  return cw.renderer;
-}
-
 pub fn MinSizeGetPrevious(id: u32) ?Size {
   var cw = current_window orelse unreachable;
   const ret = cw.widgets_min_size_prev.get(id);
@@ -1880,7 +1822,6 @@ pub const Window = struct {
   renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []c.SDL_Vertex, idx: []c_int) void,
   textureCreate: fn (userdata: ?*anyopaque, pixels: *anyopaque, width: u32, height: u32) *anyopaque,
   textureDestroy: fn (userdata: ?*anyopaque, texture: *anyopaque) void,
-  renderer: *c.SDL_Renderer,
 
   floating_windows_prev: std.ArrayList(FloatingData),
   floating_windows: std.ArrayList(FloatingData),
@@ -1956,7 +1897,6 @@ pub const Window = struct {
     renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []c.SDL_Vertex, idx: []c_int) void,
     textureCreate: fn (userdata: ?*anyopaque, pixels: *anyopaque, width: u32, height: u32) *anyopaque,
     textureDestroy: fn (userdata: ?*anyopaque, texture: *anyopaque) void,
-    renderer: *c.SDL_Renderer,
     ) Self {
     var self = Self{.floating_windows_prev = std.ArrayList(FloatingData).init(gpa),
                     .floating_windows = std.ArrayList(FloatingData).init(gpa),
@@ -1977,7 +1917,6 @@ pub const Window = struct {
                     .renderGeometry = renderGeometry,
                     .textureCreate = textureCreate,
                     .textureDestroy = textureDestroy,
-                    .renderer = renderer,
                     };
 
     self.focused_windowId = self.wd.id;
@@ -1986,99 +1925,78 @@ pub const Window = struct {
     return self;
   }
 
-  pub fn addEvent(self: *Self, event: c.SDL_Event) void {
-    switch (event.type) {
-      c.SDL_KEYDOWN => {
-        self.events.append(Event{
-          .focus_windowId = self.focused_windowId,
-          .focus_widgetId = self.focused_widgetId_last_frame,
-          .evt = AnyEvent{.key = KeyEvent{
-            .state = if (event.key.repeat > 0) .repeat else .down,
-            .keysym = SDL_keysym_to_gui(event.key.keysym.sym),
-            .mod = SDL_keymod_to_gui(event.key.keysym.mod),
-          }}
-        }) catch unreachable;
-      },
-      c.SDL_TEXTINPUT => {
-        self.events.append(Event{
-          .focus_windowId = self.focused_windowId,
-          .focus_widgetId = self.focused_widgetId_last_frame,
-          .evt = AnyEvent{.text = TextEvent{
-            .text = event.text.text,
-          }}
-        }) catch unreachable;
-      },
-      c.SDL_MOUSEMOTION => {
-        self.mouse_pt.x = @intToFloat(f32, event.motion.x) * self.natural_scale;
-        self.mouse_pt.y = @intToFloat(f32, event.motion.y) * self.natural_scale;
-        self.events.append(Event{
-          .focus_windowId = self.focused_windowId,
-          .focus_widgetId = self.focused_widgetId_last_frame,
-          .evt = AnyEvent{.mouse = MouseEvent{
-            .p = self.mouse_pt,
-            .dp = Point{.x = @intToFloat(f32, event.motion.xrel) * self.natural_scale,
-                        .y = @intToFloat(f32, event.motion.yrel) * self.natural_scale},
-            .wheel = 0,
-            .floating_win = WindowFor(self.mouse_pt),
-            .state = .motion,
-          }}
-        }) catch unreachable;
-      },
-      c.SDL_MOUSEBUTTONDOWN, c.SDL_MOUSEBUTTONUP => |updown| {
-        self.mouse_pt.x = @intToFloat(f32, event.button.x) * self.natural_scale;
-        self.mouse_pt.y = @intToFloat(f32, event.button.y) * self.natural_scale;
-        const winId = WindowFor(self.mouse_pt);
+  pub fn addEventKey(self: *Self, keysym: keys.Key, mod: keys.Mod, state: KeyEvent.Kind) void {
+    self.events.append(Event{
+      .focus_windowId = self.focused_windowId,
+      .focus_widgetId = self.focused_widgetId_last_frame,
+      .evt = AnyEvent{.key = KeyEvent{
+        .keysym = keysym,
+        .mod = mod,
+        .state = state,
+      }}
+    }) catch unreachable;
+  }
 
-        if (updown == c.SDL_MOUSEBUTTONDOWN) {
-          FocusWindow(winId, null);
-        }
+  pub fn addEventText(self: *Self, text: []const u8) void {
+    self.events.append(Event{
+      .focus_windowId = self.focused_windowId,
+      .focus_widgetId = self.focused_widgetId_last_frame,
+      .evt = AnyEvent{.text = TextEvent{
+        .text = self.arena.dupe(u8, text) catch unreachable,
+      }}
+    }) catch unreachable;
+  }
 
-        var state: MouseEvent.Kind = undefined;
-        if (event.button.button == c.SDL_BUTTON_LEFT) {
-          if (updown == c.SDL_MOUSEBUTTONDOWN) {
-            state = .leftdown;
-          }
-          else {
-            state = .leftup;
-          }
-        }
-        else if (event.button.button == c.SDL_BUTTON_RIGHT) {
-          if (updown == c.SDL_MOUSEBUTTONDOWN) {
-            state = .rightdown;
-          }
-          else {
-            state = .rightup;
-          }
-        }
+  pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) void {
+    const newpt = (Point{.x = x, .y = y}).scale(self.natural_scale);
+    const dp = newpt.diff(self.mouse_pt);
+    self.mouse_pt = newpt;
+    
+    self.events.append(Event{
+      .focus_windowId = self.focused_windowId,
+      .focus_widgetId = self.focused_widgetId_last_frame,
+      .evt = AnyEvent{.mouse = MouseEvent{
+        .p = self.mouse_pt,
+        .dp = dp,
+        .wheel = 0,
+        .floating_win = WindowFor(self.mouse_pt),
+        .state = .motion,
+      }}
+    }) catch unreachable;
+  }
 
-        self.events.append(Event{
-          .focus_windowId = self.focused_windowId,
-          .focus_widgetId = self.focused_widgetId_last_frame,
-          .evt = AnyEvent{.mouse = MouseEvent{
-            .p = self.mouse_pt,
-            .dp = Point{},
-            .wheel = 0,
-            .floating_win = winId,
-            .state = state,
-          }}
-        }) catch unreachable;
-      },
-      c.SDL_MOUSEWHEEL => {
-        const ticks = @intToFloat(f32, event.wheel.y);
-        self.events.append(Event{
-          .focus_windowId = self.focused_windowId,
-          .focus_widgetId = self.focused_widgetId_last_frame,
-          .evt = AnyEvent{.mouse = MouseEvent{
-            .p = self.mouse_pt,
-            .dp = Point{},
-            .wheel = ticks,
-            .floating_win = WindowFor(self.mouse_pt),
-            .state = .wheel_y,
-          }}
-        }) catch unreachable;
-      },
-      else => {},
+  pub fn addEventMouseButton(self: *Self, state: MouseEvent.Kind) void {
+    const winId = WindowFor(self.mouse_pt);
+
+    if (state == .leftdown or state == .rightdown) {
+      FocusWindow(winId, null);
     }
+
+    self.events.append(Event{
+      .focus_windowId = self.focused_windowId,
+      .focus_widgetId = self.focused_widgetId_last_frame,
+      .evt = AnyEvent{.mouse = MouseEvent{
+        .p = self.mouse_pt,
+        .dp = Point{},
+        .wheel = 0,
+        .floating_win = winId,
+        .state = state,
+      }}
+    }) catch unreachable;
+  }
+
+  pub fn addEventMouseWheel(self: *Self, ticks: f32) void {
+    self.events.append(Event{
+      .focus_windowId = self.focused_windowId,
+      .focus_widgetId = self.focused_widgetId_last_frame,
+      .evt = AnyEvent{.mouse = MouseEvent{
+        .p = self.mouse_pt,
+        .dp = Point{},
+        .wheel = ticks,
+        .floating_win = WindowFor(self.mouse_pt),
+        .state = .wheel_y,
+      }}
+    }) catch unreachable;
   }
 
   pub fn endEvents(self: *Self) void {
@@ -2384,7 +2302,7 @@ pub const Window = struct {
 
       for (deadTexts.items) |id| {
         const tce = self.text_cache.fetchRemove(id);
-        c.SDL_DestroyTexture(tce.?.value.texture);
+        self.textureDestroy(self.userdata, tce.?.value.texture);
       }
 
       //std.debug.print("text_cache {d}\n", .{self.text_cache.count()});
@@ -5001,7 +4919,7 @@ pub const TextEntryWidget = struct {
         },
         .text => {
           e.handled = true;
-          var new = std.mem.sliceTo(&e.evt.text.text, 0);
+          var new = std.mem.sliceTo(e.evt.text.text, 0);
           new.len = math.min(new.len, self.text.len - self.len);
           std.mem.copy(u8, self.text[self.len..], new);
           self.len += new.len;
@@ -5401,7 +5319,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
 }
 
 pub const KeyEvent = struct {
-  const Kind = enum {
+  pub const Kind = enum {
     down,
     repeat,
     up,
@@ -5412,11 +5330,11 @@ pub const KeyEvent = struct {
 };
 
 pub const TextEvent = struct {
-  text: [32]u8,
+  text: []u8,
 };
 
 pub const MouseEvent = struct {
-  const Kind = enum {
+  pub const Kind = enum {
     leftdown,
     leftup,
     rightdown,

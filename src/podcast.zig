@@ -9,6 +9,107 @@ const gpa = gpa_instance.allocator();
 
 var cursor_backing: [@typeInfo(gui.CursorKind).Enum.fields.len]*c.SDL_Cursor = undefined;
 
+pub fn addEventSDL(win: *gui.Window, event: c.SDL_Event) void {
+  switch (event.type) {
+    c.SDL_KEYDOWN => {
+      win.addEventKey(
+        SDL_keysym_to_gui(event.key.keysym.sym),
+        SDL_keymod_to_gui(event.key.keysym.mod),
+        if (event.key.repeat > 0) .repeat else .down,
+      );
+    },
+    c.SDL_TEXTINPUT => {
+      win.addEventText(&event.text.text);
+    },
+    c.SDL_MOUSEMOTION => {
+      win.addEventMouseMotion(@intToFloat(f32, event.motion.x), @intToFloat(f32, event.motion.y));
+    },
+    c.SDL_MOUSEBUTTONDOWN, c.SDL_MOUSEBUTTONUP => |updown| {
+      var state: gui.MouseEvent.Kind = undefined;
+      if (event.button.button == c.SDL_BUTTON_LEFT) {
+        if (updown == c.SDL_MOUSEBUTTONDOWN) {
+          state = .leftdown;
+        }
+        else {
+          state = .leftup;
+        }
+      }
+      else if (event.button.button == c.SDL_BUTTON_RIGHT) {
+        if (updown == c.SDL_MOUSEBUTTONDOWN) {
+          state = .rightdown;
+        }
+        else {
+          state = .rightup;
+        }
+      }
+
+      win.addEventMouseButton(state);
+    },
+    c.SDL_MOUSEWHEEL => {
+      const ticks = @intToFloat(f32, event.wheel.y);
+      win.addEventMouseWheel(ticks);
+    },
+    else => {
+      std.debug.print("unhandled SDL event type {}\n", .{event.type});
+    },
+  }
+}
+
+pub fn SDL_keymod_to_gui(keymod: u16) gui.keys.Mod {
+  if (keymod == c.KMOD_NONE) return gui.keys.Mod.none;
+
+  var m: u16 = 0;
+  if (keymod & c.KMOD_LSHIFT > 0) m |= @enumToInt(gui.keys.Mod.lshift);
+  if (keymod & c.KMOD_RSHIFT > 0) m |= @enumToInt(gui.keys.Mod.rshift);
+  if (keymod & c.KMOD_LCTRL > 0) m |= @enumToInt(gui.keys.Mod.lctrl);
+  if (keymod & c.KMOD_RCTRL > 0) m |= @enumToInt(gui.keys.Mod.rctrl);
+  if (keymod & c.KMOD_LALT > 0) m |= @enumToInt(gui.keys.Mod.lalt);
+  if (keymod & c.KMOD_RALT > 0) m |= @enumToInt(gui.keys.Mod.ralt);
+  if (keymod & c.KMOD_LGUI > 0) m |= @enumToInt(gui.keys.Mod.lgui);
+  if (keymod & c.KMOD_RGUI > 0) m |= @enumToInt(gui.keys.Mod.rgui);
+
+  return @intToEnum(gui.keys.Mod, m);
+}
+
+pub fn SDL_keysym_to_gui(keysym: i32) gui.keys.Key {
+  return switch (keysym) {
+    c.SDLK_a => .a,
+    c.SDLK_b => .b,
+    c.SDLK_c => .c,
+    c.SDLK_d => .d,
+    c.SDLK_e => .e,
+    c.SDLK_f => .f,
+    c.SDLK_g => .g,
+    c.SDLK_h => .h,
+    c.SDLK_i => .i,
+    c.SDLK_j => .j,
+    c.SDLK_k => .k,
+    c.SDLK_l => .l,
+    c.SDLK_m => .m,
+    c.SDLK_n => .n,
+    c.SDLK_o => .o,
+    c.SDLK_p => .p,
+    c.SDLK_q => .q,
+    c.SDLK_r => .r,
+    c.SDLK_s => .s,
+    c.SDLK_t => .t,
+    c.SDLK_u => .u,
+    c.SDLK_v => .v,
+    c.SDLK_w => .w,
+    c.SDLK_x => .x,
+    c.SDLK_y => .y,
+    c.SDLK_z => .z,
+
+    c.SDLK_SPACE => .space,
+    c.SDLK_BACKSPACE => .backspace,
+    c.SDLK_UP => .up,
+    c.SDLK_DOWN => .down,
+    c.SDLK_TAB => .tab,
+    c.SDLK_ESCAPE => .escape,
+    else => .unknown,
+  };
+}
+
 fn renderGeometry(userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []c.SDL_Vertex, idx: []c_int) void {
   const clipr = gui.WindowRectPixels().intersect(gui.ClipGet());
   if (clipr.empty()) {
@@ -90,7 +191,7 @@ pub fn main() void {
   cursor_backing[@enumToInt(gui.CursorKind.bad)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_NO) orelse unreachable;
   cursor_backing[@enumToInt(gui.CursorKind.hand)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_HAND) orelse unreachable;
 
-  var win = gui.Window.init(gpa, renderer, renderGeometry, textureCreate, textureDestroy, renderer);
+  var win = gui.Window.init(gpa, renderer, renderGeometry, textureCreate, textureDestroy);
 
   main_loop: while (true) {
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -113,7 +214,6 @@ pub fn main() void {
 
     var event: c.SDL_Event = undefined;
     while (c.SDL_PollEvent(&event) != 0) {
-      win.addEvent(event);
       switch (event.type) {
         c.SDL_KEYDOWN, c.SDL_KEYUP => |updown| {
           if (updown == c.SDL_KEYDOWN and ((event.key.keysym.mod & c.KMOD_CTRL) > 0) and event.key.keysym.sym == c.SDLK_q) {
@@ -128,6 +228,7 @@ pub fn main() void {
           //std.debug.print("other event\n", .{});
         }
       }
+      addEventSDL(&win, event);
     }
 
     win.endEvents();

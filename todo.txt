@@ -7,7 +7,7 @@ integration points:
 !- cursors
 !- clipping
 - pollevent/waiteventtimeout
-- keysym and mods
+!- keysym and mods
 - colors
 
 
