@@ -13,6 +13,9 @@ pub const Mod = enum(u16) {
 
   lgui   = 0b01000000,
   rgui   = 0b10000000,
+  
+  // make non-exhaustive so that we can take combinations of the values
+  _,
 
   pub fn shift(self: Mod) bool {
     return self == .lshift or self == .rshift;

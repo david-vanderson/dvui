@@ -232,6 +232,9 @@ pub fn main() void {
     win.endEvents();
 
     {
+      var scale = gui.Scale(@src(), 0, 1.0, .{.expand = .both, .background = false}); 
+      defer scale.deinit();
+
       var box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .background = false});
       defer box.deinit();
 

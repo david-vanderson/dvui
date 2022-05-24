@@ -445,44 +445,35 @@ pub const Font = struct {
 
   // doesn't scale the font or max_width
   pub fn textSizeRaw(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize) Size {
-    const face = FontCacheGet(self.*);
+    const fce = FontCacheGet(self.*);
 
-    const mwint: i32 = if (max_width) |mw| @floatToInt(i32, mw) else 1000000;
+    const mwidth = max_width orelse 1000000.0;
 
-    const ascender = @intToFloat(f64, face.ascender());
-    const scale = @intToFloat(f64, face.sizeMetrics().?.y_scale);
-    const ascent = ((@floatToInt(i32, ascender * scale / 0x10000) + 63) & -64) >> 6;
-    var x: i32 = 0;
-    var minx: i32 = 0;
-    var maxx: i32 = 0;
-    var miny: i32 = 0;
-    var maxy: i32 = @intCast(i32, face.sizeMetrics().?.height >> 6);
+    var x: f32 = 0;
+    var minx: f32 = 0;
+    var maxx: f32 = 0;
+    var miny: f32 = 0;
+    var maxy: f32 = fce.height;
+    var tw: f32 = 0;
+    var th: f32 = 0;
 
-    var tw: i32 = 0;
-    var th: i32 = 0;
     var ei: usize = 0;
 
     var utf8 = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
     while (utf8.nextCodepoint()) |codepoint| {
-      face.loadChar(@intCast(u32, codepoint), .{.render = false}) catch unreachable;
+      const gi = fce.glyphInfoGet(@intCast(u32, codepoint));
+
+      minx = math.min(minx, x + gi.minx);
+      maxx = math.max(maxx, x + gi.maxx);
+      maxx = math.max(maxx, x + gi.advance);
+
+      miny = math.min(miny, gi.miny);
+      maxy = math.max(maxy, gi.maxy);
 
       // TODO: kerning
 
-      const m = face.glyph.metrics();
-      const gmaxy = (m.horiBearingY & -64) >> 6;
-      const gminy = gmaxy - (((m.height + 63) & -64) >> 6);
-      const advance = ((m.horiAdvance + 63) & -64) >> 6;
-      minx = math.min(minx, x + @intCast(i32, ((m.horiBearingX & -64) >> 6)));
-      maxx = math.max(maxx, x + @intCast(i32, (((m.horiBearingX + m.width) + 63) & -64) >> 6));
-      maxx = math.max(maxx, x + @intCast(i32, advance));
-
-      miny = math.min(miny, @intCast(i32, ascent - gmaxy));
-      maxy = math.max(maxy, @intCast(i32, ascent - gminy));
-
-      //std.debug.print("  codepoint {d} ascent {d} gmaxy {d} gminy {d}\n", .{codepoint, ascent, gmaxy, gminy});
-
       // always include the first codepoint
-      if (ei > 0 and (maxx - minx) > mwint) {
+      if (ei > 0 and (maxx - minx) > mwidth) {
         // went too far
         break;
       }
@@ -490,8 +481,7 @@ pub const Font = struct {
       tw = maxx - minx;
       th = maxy - miny;
       ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
-
-      x += @intCast(i32, advance);
+      x += gi.advance;
     }
 
     // TODO: xstart and ystart
@@ -500,8 +490,8 @@ pub const Font = struct {
       endout.* = ei;
     }
 
-    //std.debug.print("textSize size {d} for \"{s}\" {d}x{d}\n", .{sized_font.size, text, tw, th});
-    return Size{.w = @intToFloat(f32, tw), .h = @intToFloat(f32, th)};
+    //std.debug.print("textSizeRaw size {d} for \"{s}\" {d}x{d} -> {d}x{d}\n", .{self.size, text, tw, th, ftw, fth});
+    return Size{.w = tw, .h = th};
   }
 
   pub fn lineSkip(self: *const Font) f32 {
@@ -510,22 +500,55 @@ pub const Font = struct {
     const target_fraction = self.size / ask_size;
     const sized_font = self.resize(ask_size);
 
-    const face = FontCacheGet(sized_font);
-    const skip = face.sizeMetrics().?.height >> 6;
+    const fce = FontCacheGet(sized_font);
+    const skip = fce.height;
     //std.debug.print("lineSkip fontsize {d} is {d}\n", .{sized_font.size, skip});
-    return @intToFloat(f32, skip) * target_fraction * self.line_skip_factor;
+    return skip * target_fraction * self.line_skip_factor;
   }
 };
 
+const GlyphInfo = struct {
+  minx: f32,
+  maxx: f32,
+  advance: f32,
+  miny: f32,
+  maxy: f32,
+};
+
 const FontCacheEntry = struct {
-  face: freetype.Face,
   used: bool = true,
+  face: freetype.Face,
+  height: f32, 
+  ascent: f32,
+  glyph_info: std.AutoHashMap(u32, GlyphInfo),
 
   pub fn hash(font: Font) u32 {
     var h = fnv.init();
     h.update(std.mem.asBytes(&font.ttf_bytes.ptr));
     h.update(std.mem.asBytes(&font.size));
     return h.final();
+  }
+
+  pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32) GlyphInfo {
+    if (self.glyph_info.get(codepoint)) |gi| {
+      return gi;
+    }
+
+    self.face.loadChar(@intCast(u32, codepoint), .{.render = false}) catch unreachable;
+    const m = self.face.glyph.metrics();
+    const minx = @intToFloat(f32, m.horiBearingX) / 64.0;
+    const miny = self.ascent - @intToFloat(f32, m.horiBearingY) / 64.0;
+
+    const gi = GlyphInfo{
+      .minx = minx,
+      .maxx = minx + @intToFloat(f32, m.width) / 64.0,
+      .advance = @intToFloat(f32, m.horiAdvance) / 64.0,
+      .miny = miny,
+      .maxy = miny + @intToFloat(f32, m.height) / 64.0,
+    };
+
+    self.glyph_info.put(codepoint, gi) catch unreachable;
+    return gi;
   }
 };
 
@@ -535,12 +558,12 @@ const TextCacheEntry = struct {
   used: bool = true,
 };
 
-pub fn FontCacheGet(font: Font) freetype.Face {
+pub fn FontCacheGet(font: Font) *FontCacheEntry {
   var cw = current_window orelse unreachable;
   const fontHash = FontCacheEntry.hash(font);
   if (cw.font_cache.getPtr(fontHash)) |fce| {
     fce.used = true;
-    return fce.face;
+    return fce;
   }
 
   //std.debug.print("FontCacheGet creating font size {d} name \"{s}\"\n", .{font.size, font.name});
@@ -548,13 +571,23 @@ pub fn FontCacheGet(font: Font) freetype.Face {
   //const rwops = c.SDL_RWFromConstMem(font.ttf_bytes.ptr, @intCast(c_int, font.ttf_bytes.len));
   //const ret = c.TTF_OpenFontRW(rwops, 1, @floatToInt(c_int, font.size)) orelse unreachable;
 
-  var ret = cw.ft2lib.newFaceMemory(font.ttf_bytes, 0) catch unreachable;
-  ret.setPixelSizes(0, @floatToInt(u32, font.size)) catch unreachable;
+  var face = cw.ft2lib.newFaceMemory(font.ttf_bytes, 0) catch unreachable;
+  face.setPixelSizes(0, @floatToInt(u32, font.size)) catch unreachable;
 
-  const entry = FontCacheEntry{.face = ret};
+  const ascender = @intToFloat(f32, face.ascender()) / 64.0;
+  const scale = @intToFloat(f32, face.sizeMetrics().?.y_scale) / 0x10000;
+  const ascent = ascender * scale;
+  //std.debug.print("fontcache size {d} ascender {d} scale {d} ascent {d}\n", .{font.size, ascender, scale, ascent});
+
+  const entry = FontCacheEntry{
+    .face = face,
+    .height = @intToFloat(f32, face.sizeMetrics().?.height) / 64.0,
+    .ascent = ascent,
+    .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
+  };
   cw.font_cache.put(fontHash, entry) catch unreachable;
 
-  return ret;
+  return cw.font_cache.getPtr(fontHash).?;
 }
 
 const IconCacheEntry = struct {
@@ -624,18 +657,18 @@ pub fn TextTexture(font: Font, text: []const u8) TextCacheEntry {
 
   //std.debug.print("creating text texture size {} font size {d} for \"{s}\"\n", .{size, font.size, text});
 
-  const face = FontCacheGet(font);
+  const fce = FontCacheGet(font);
 
-  const ascender = @intToFloat(f64, face.ascender());
-  const scale = @intToFloat(f64, face.sizeMetrics().?.y_scale);
+  const ascender = @intToFloat(f64, fce.face.ascender());
+  const scale = @intToFloat(f64, fce.face.sizeMetrics().?.y_scale);
   const ascent = ((@floatToInt(i32, ascender * scale / 0x10000) + 63) & -64) >> 6;
   var x: i32 = 0;
 
   var utf8 = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
   while (utf8.nextCodepoint()) |codepoint| {
-    face.loadChar(@intCast(u32, codepoint), .{.render = true}) catch unreachable;
+    fce.face.loadChar(@intCast(u32, codepoint), .{.render = true}) catch unreachable;
 
-    const m = face.glyph.metrics();
+    const m = fce.face.glyph.metrics();
     const minx = @intCast(i32, ((m.horiBearingX & -64) >> 6));
     const gmaxy = (m.horiBearingY & -64) >> 6;
     const yoffset = ascent - gmaxy;
@@ -644,7 +677,7 @@ pub fn TextTexture(font: Font, text: []const u8) TextCacheEntry {
 
     // TODO: kerning
 
-    const bitmap = face.glyph.bitmap();
+    const bitmap = fce.face.glyph.bitmap();
     //const buffer = bitmap.buffer();
     //for (buffer) |bu| {
       //std.debug.print("{d} ", .{bu});
@@ -1992,6 +2025,7 @@ pub const Window = struct {
   captureID: ?u32 = null,
   captured_last_frame: bool = false,
 
+  gpa: std.mem.Allocator = undefined,
   arena: std.mem.Allocator = undefined,
   path: std.ArrayList(Point) = undefined,
 
@@ -2002,26 +2036,28 @@ pub const Window = struct {
     textureCreate: fn (userdata: ?*anyopaque, pixels: *anyopaque, width: u32, height: u32) *anyopaque,
     textureDestroy: fn (userdata: ?*anyopaque, texture: *anyopaque) void,
     ) Self {
-    var self = Self{.floating_windows_prev = std.ArrayList(FloatingData).init(gpa),
-                    .floating_windows = std.ArrayList(FloatingData).init(gpa),
-                    .widgets_min_size = std.AutoHashMap(u32, Size).init(gpa),
-                    .widgets_min_size_prev = std.AutoHashMap(u32, Size).init(gpa),
-                    .data_prev = std.ArrayList(u8).init(gpa),
-                    .data = std.ArrayList(u8).init(gpa),
-                    .data_offset_prev = std.AutoHashMap(u32, DataOffset).init(gpa),
-                    .data_offset = std.AutoHashMap(u32, DataOffset).init(gpa),
-                    .animations = std.AutoHashMap(u32, Animation).init(gpa),
-                    .tab_index_prev = std.ArrayList(TabIndex).init(gpa),
-                    .tab_index = std.ArrayList(TabIndex).init(gpa),
-                    .text_cache = std.AutoHashMap(u32, TextCacheEntry).init(gpa),
-                    .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
-                    .icon_cache = std.AutoHashMap(u32, IconCacheEntry).init(gpa),
-                    .wd = WidgetData{.id = fnv.init().final()},
-                    .userdata = userdata,
-                    .renderGeometry = renderGeometry,
-                    .textureCreate = textureCreate,
-                    .textureDestroy = textureDestroy,
-                    };
+    var self = Self{
+      .gpa = gpa,
+      .floating_windows_prev = std.ArrayList(FloatingData).init(gpa),
+      .floating_windows = std.ArrayList(FloatingData).init(gpa),
+      .widgets_min_size = std.AutoHashMap(u32, Size).init(gpa),
+      .widgets_min_size_prev = std.AutoHashMap(u32, Size).init(gpa),
+      .data_prev = std.ArrayList(u8).init(gpa),
+      .data = std.ArrayList(u8).init(gpa),
+      .data_offset_prev = std.AutoHashMap(u32, DataOffset).init(gpa),
+      .data_offset = std.AutoHashMap(u32, DataOffset).init(gpa),
+      .animations = std.AutoHashMap(u32, Animation).init(gpa),
+      .tab_index_prev = std.ArrayList(TabIndex).init(gpa),
+      .tab_index = std.ArrayList(TabIndex).init(gpa),
+      .text_cache = std.AutoHashMap(u32, TextCacheEntry).init(gpa),
+      .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
+      .icon_cache = std.AutoHashMap(u32, IconCacheEntry).init(gpa),
+      .wd = WidgetData{.id = fnv.init().final()},
+      .userdata = userdata,
+      .renderGeometry = renderGeometry,
+      .textureCreate = textureCreate,
+      .textureDestroy = textureDestroy,
+      };
 
     self.focused_windowId = self.wd.id;
     self.frame_time_ns = std.time.nanoTimestamp();
@@ -2428,7 +2464,8 @@ pub const Window = struct {
       }
 
       for (deadFonts.items) |id| {
-        const tce = self.font_cache.fetchRemove(id);
+        var tce = self.font_cache.fetchRemove(id);
+        tce.?.value.glyph_info.deinit();
         tce.?.value.face.deinit();
       }
 
