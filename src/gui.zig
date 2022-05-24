@@ -872,10 +872,10 @@ pub fn PathFillConvex(col: Color) void {
     return;
   }
 
-  var vtx = std.ArrayList(c.SDL_Vertex).initCapacity(cw.arena, cw.path.items.len * 2) catch unreachable;
+  var vtx = std.ArrayList(Vertex).initCapacity(cw.arena, cw.path.items.len * 2) catch unreachable;
   defer vtx.deinit();
   const idx_count = (cw.path.items.len - 2) * 3 + cw.path.items.len * 6;
-  var idx = std.ArrayList(c_int).initCapacity(cw.arena, idx_count) catch unreachable;
+  var idx = std.ArrayList(u32).initCapacity(cw.arena, idx_count) catch unreachable;
   defer idx.deinit();
   var col_trans = col;
   col_trans.a = 0;
@@ -894,33 +894,33 @@ pub fn PathFillConvex(col: Color) void {
     // average of normals on each side
     const halfnorm = (Point{.x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2}).normalize().scale(0.5);
 
-    var v: c.SDL_Vertex = undefined;
+    var v: Vertex = undefined;
     // inner vertex
-    v.position.x = bb.x - halfnorm.x;
-    v.position.y = bb.y - halfnorm.y;
-    v.color = col.sdlcolor();
+    v.pos.x = bb.x - halfnorm.x;
+    v.pos.y = bb.y - halfnorm.y;
+    v.col = col;
     vtx.append(v) catch unreachable;
 
     // outer vertex
-    v.position.x = bb.x + halfnorm.x;
-    v.position.y = bb.y + halfnorm.y;
-    v.color = col_trans.sdlcolor();
+    v.pos.x = bb.x + halfnorm.x;
+    v.pos.y = bb.y + halfnorm.y;
+    v.col = col_trans;
     vtx.append(v) catch unreachable;
 
     // indexes for fill
     if (i > 1) {
-      idx.append(@intCast(c_int, 0)) catch unreachable;
-      idx.append(@intCast(c_int, ai * 2)) catch unreachable;
-      idx.append(@intCast(c_int, bi * 2)) catch unreachable;
+      idx.append(@intCast(u32, 0)) catch unreachable;
+      idx.append(@intCast(u32, ai * 2)) catch unreachable;
+      idx.append(@intCast(u32, bi * 2)) catch unreachable;
     }
 
     // indexes for aa fade from inner to outer
-    idx.append(@intCast(c_int, ai * 2)) catch unreachable;
-    idx.append(@intCast(c_int, ai * 2 + 1)) catch unreachable;
-    idx.append(@intCast(c_int, bi * 2)) catch unreachable;
-    idx.append(@intCast(c_int, ai * 2 + 1)) catch unreachable;
-    idx.append(@intCast(c_int, bi * 2 + 1)) catch unreachable;
-    idx.append(@intCast(c_int, bi * 2)) catch unreachable;
+    idx.append(@intCast(u32, ai * 2)) catch unreachable;
+    idx.append(@intCast(u32, ai * 2 + 1)) catch unreachable;
+    idx.append(@intCast(u32, bi * 2)) catch unreachable;
+    idx.append(@intCast(u32, ai * 2 + 1)) catch unreachable;
+    idx.append(@intCast(u32, bi * 2 + 1)) catch unreachable;
+    idx.append(@intCast(u32, bi * 2)) catch unreachable;
   }
 
   cw.renderGeometry(cw.userdata, null, vtx.items, idx.items);
@@ -972,7 +972,7 @@ pub fn PathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, co
   if (!closed) {
     vtx_count += 4;
   }
-  var vtx = std.ArrayList(c.SDL_Vertex).initCapacity(cw.arena, vtx_count) catch unreachable;
+  var vtx = std.ArrayList(Vertex).initCapacity(cw.arena, vtx_count) catch unreachable;
   defer vtx.deinit();
   var idx_count = (cw.path.items.len - 1) * 18;
   if (closed) {
@@ -981,7 +981,7 @@ pub fn PathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, co
   else {
     idx_count += 8*3;
   }
-  var idx = std.ArrayList(c_int).initCapacity(cw.arena, idx_count) catch unreachable;
+  var idx = std.ArrayList(u32).initCapacity(cw.arena, idx_count) catch unreachable;
   defer idx.deinit();
   var col_trans = col;
   col_trans.a = 0;
@@ -999,7 +999,7 @@ pub fn PathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, co
     // the amount to move from bb to the edge of the line
     var halfnorm: Point = undefined;
 
-    var v: c.SDL_Vertex = undefined;
+    var v: Vertex = undefined;
     var diffab: Point = undefined;
 
     if (!closed and ((i == 0) or ((i + 1) == cw.path.items.len))) {
@@ -1017,32 +1017,32 @@ pub fn PathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, co
         // add 2 extra vertexes for endcap fringe
         vtx_start += 2;
 
-        v.position.x = bb.x - halfnorm.x * (thickness + 1.0) + diffbc.x;
-        v.position.y = bb.y - halfnorm.y * (thickness + 1.0) + diffbc.y;
-        v.color = col_trans.sdlcolor();
+        v.pos.x = bb.x - halfnorm.x * (thickness + 1.0) + diffbc.x;
+        v.pos.y = bb.y - halfnorm.y * (thickness + 1.0) + diffbc.y;
+        v.col = col_trans;
         vtx.append(v) catch unreachable;
 
-        v.position.x = bb.x + halfnorm.x * (thickness + 1.0) + diffbc.x;
-        v.position.y = bb.y + halfnorm.y * (thickness + 1.0) + diffbc.y;
-        v.color = col_trans.sdlcolor();
+        v.pos.x = bb.x + halfnorm.x * (thickness + 1.0) + diffbc.x;
+        v.pos.y = bb.y + halfnorm.y * (thickness + 1.0) + diffbc.y;
+        v.col = col_trans;
         vtx.append(v) catch unreachable;
 
         // add indexes for endcap fringe
-        idx.append(@intCast(c_int, 0)) catch unreachable;
-        idx.append(@intCast(c_int, vtx_start)) catch unreachable;
-        idx.append(@intCast(c_int, vtx_start + 1)) catch unreachable;
+        idx.append(@intCast(u32, 0)) catch unreachable;
+        idx.append(@intCast(u32, vtx_start)) catch unreachable;
+        idx.append(@intCast(u32, vtx_start + 1)) catch unreachable;
 
-        idx.append(@intCast(c_int, 0)) catch unreachable;
-        idx.append(@intCast(c_int, 1)) catch unreachable;
-        idx.append(@intCast(c_int, vtx_start)) catch unreachable;
+        idx.append(@intCast(u32, 0)) catch unreachable;
+        idx.append(@intCast(u32, 1)) catch unreachable;
+        idx.append(@intCast(u32, vtx_start)) catch unreachable;
 
-        idx.append(@intCast(c_int, 1)) catch unreachable;
-        idx.append(@intCast(c_int, vtx_start)) catch unreachable;
-        idx.append(@intCast(c_int, vtx_start + 2)) catch unreachable;
+        idx.append(@intCast(u32, 1)) catch unreachable;
+        idx.append(@intCast(u32, vtx_start)) catch unreachable;
+        idx.append(@intCast(u32, vtx_start + 2)) catch unreachable;
 
-        idx.append(@intCast(c_int, 1)) catch unreachable;
-        idx.append(@intCast(c_int, vtx_start + 2)) catch unreachable;
-        idx.append(@intCast(c_int, vtx_start + 2 + 1)) catch unreachable;
+        idx.append(@intCast(u32, 1)) catch unreachable;
+        idx.append(@intCast(u32, vtx_start + 2)) catch unreachable;
+        idx.append(@intCast(u32, vtx_start + 2 + 1)) catch unreachable;
       }
       else if ((i + 1) == cw.path.items.len) {
         diffab = Point.diff(aa, bb).normalize();
@@ -1078,85 +1078,85 @@ pub fn PathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, co
     }
 
     // side 1 inner vertex
-    v.position.x = bb.x - halfnorm.x * thickness;
-    v.position.y = bb.y - halfnorm.y * thickness;
-    v.color = col.sdlcolor();
+    v.pos.x = bb.x - halfnorm.x * thickness;
+    v.pos.y = bb.y - halfnorm.y * thickness;
+    v.col = col;
     vtx.append(v) catch unreachable;
 
     // side 1 AA vertex
-    v.position.x = bb.x - halfnorm.x * (thickness + 1.0);
-    v.position.y = bb.y - halfnorm.y * (thickness + 1.0);
-    v.color = col_trans.sdlcolor();
+    v.pos.x = bb.x - halfnorm.x * (thickness + 1.0);
+    v.pos.y = bb.y - halfnorm.y * (thickness + 1.0);
+    v.col = col_trans;
     vtx.append(v) catch unreachable;
 
     // side 2 inner vertex
-    v.position.x = bb.x + halfnorm.x * thickness;
-    v.position.y = bb.y + halfnorm.y * thickness;
-    v.color = col.sdlcolor();
+    v.pos.x = bb.x + halfnorm.x * thickness;
+    v.pos.y = bb.y + halfnorm.y * thickness;
+    v.col = col;
     vtx.append(v) catch unreachable;
 
     // side 2 AA vertex
-    v.position.x = bb.x + halfnorm.x * (thickness + 1.0);
-    v.position.y = bb.y + halfnorm.y * (thickness + 1.0);
-    v.color = col_trans.sdlcolor();
+    v.pos.x = bb.x + halfnorm.x * (thickness + 1.0);
+    v.pos.y = bb.y + halfnorm.y * (thickness + 1.0);
+    v.col = col_trans;
     vtx.append(v) catch unreachable;
 
     if (closed or ((i + 1) != cw.path.items.len)) {
       // indexes for fill
-      idx.append(@intCast(c_int, vtx_start + bi * 4)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + ci * 4)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + ci * 4)) catch unreachable;
 
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + ci * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + ci * 4)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + ci * 4 + 2)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + ci * 4)) catch unreachable;
 
       // indexes for aa fade from inner to outer side 1
-      idx.append(@intCast(c_int, vtx_start + bi * 4)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 1)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + ci * 4 + 1)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 1)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + ci * 4 + 1)) catch unreachable;
 
-      idx.append(@intCast(c_int, vtx_start + bi * 4)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + ci * 4 + 1)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + ci * 4)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + ci * 4 + 1)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + ci * 4)) catch unreachable;
 
       // indexes for aa fade from inner to outer side 2
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 3)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + ci * 4 + 3)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 3)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + ci * 4 + 3)) catch unreachable;
 
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + ci * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + ci * 4 + 3)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + ci * 4 + 2)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + ci * 4 + 3)) catch unreachable;
     }
     else if (!closed and (i + 1) == cw.path.items.len) {
       // add 2 extra vertexes for endcap fringe
-      v.position.x = bb.x - halfnorm.x * (thickness + 1.0) - diffab.x;
-      v.position.y = bb.y - halfnorm.y * (thickness + 1.0) - diffab.y;
-      v.color = col_trans.sdlcolor();
+      v.pos.x = bb.x - halfnorm.x * (thickness + 1.0) - diffab.x;
+      v.pos.y = bb.y - halfnorm.y * (thickness + 1.0) - diffab.y;
+      v.col = col_trans;
       vtx.append(v) catch unreachable;
 
-      v.position.x = bb.x + halfnorm.x * (thickness + 1.0) - diffab.x;
-      v.position.y = bb.y + halfnorm.y * (thickness + 1.0) - diffab.y;
-      v.color = col_trans.sdlcolor();
+      v.pos.x = bb.x + halfnorm.x * (thickness + 1.0) - diffab.x;
+      v.pos.y = bb.y + halfnorm.y * (thickness + 1.0) - diffab.y;
+      v.col = col_trans;
       vtx.append(v) catch unreachable;
 
       // add indexes for endcap fringe
-      idx.append(@intCast(c_int, vtx_start + bi * 4)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 1)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 4)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 1)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 4)) catch unreachable;
 
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 4)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + bi * 4)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 4)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
 
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 4)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 5)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 4)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 5)) catch unreachable;
 
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 2)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 3)) catch unreachable;
-      idx.append(@intCast(c_int, vtx_start + bi * 4 + 5)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 3)) catch unreachable;
+      idx.append(@intCast(u32, vtx_start + bi * 4 + 5)) catch unreachable;
     }
   }
 
@@ -1806,6 +1806,12 @@ pub fn TabIndexPrev(iter: ?*EventIterator) void {
   FocusWidget(newId, iter);
 }
 
+pub const Vertex = struct {
+    pos: Point,
+    col: Color,
+    uv: @Vector(2, f32),
+};
+
 // maps to OS window
 pub const Window = struct {
   const Self = @This();
@@ -1819,7 +1825,7 @@ pub const Window = struct {
   };
 
   userdata: ?*anyopaque,
-  renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []c.SDL_Vertex, idx: []c_int) void,
+  renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
   textureCreate: fn (userdata: ?*anyopaque, pixels: *anyopaque, width: u32, height: u32) *anyopaque,
   textureDestroy: fn (userdata: ?*anyopaque, texture: *anyopaque) void,
 
@@ -1894,7 +1900,7 @@ pub const Window = struct {
   pub fn init(
     gpa: std.mem.Allocator,
     userdata: ?*anyopaque,
-    renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []c.SDL_Vertex, idx: []c_int) void,
+    renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
     textureCreate: fn (userdata: ?*anyopaque, pixels: *anyopaque, width: u32, height: u32) *anyopaque,
     textureDestroy: fn (userdata: ?*anyopaque, texture: *anyopaque) void,
     ) Self {
@@ -4987,10 +4993,6 @@ pub const Color = struct {
   b: u8 = 0xff,
   a: u8 = 0xff,
 
-  pub fn sdlcolor(self: *const Color) c.SDL_Color {
-    return c.SDL_Color{.r = self.r, .g = self.g, .b = self.b, .a = self.a};
-  }
-
   pub fn transparent(x: Color, y: f32) Color {
     return Color{.r = x.r, .g = x.g, .b = x.b,
       .a = @floatToInt(u8, @intToFloat(f32, x.a) * y),
@@ -5224,38 +5226,38 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
   _ = FontCacheGet(sized_font);
   const tce = TextTexture(sized_font, text);
 
-  var vtx = std.ArrayList(c.SDL_Vertex).initCapacity(cw.arena, 4) catch unreachable;
+  var vtx = std.ArrayList(Vertex).initCapacity(cw.arena, 4) catch unreachable;
   defer vtx.deinit();
-  var idx = std.ArrayList(c_int).initCapacity(cw.arena, 6) catch unreachable;
+  var idx = std.ArrayList(u32).initCapacity(cw.arena, 6) catch unreachable;
   defer idx.deinit();
 
-  var v: c.SDL_Vertex = undefined;
+  var v: Vertex = undefined;
   // inner vertex
-  v.position.x = rs.r.x;
-  v.position.y = rs.r.y;
-  v.color = color.sdlcolor();
-  v.tex_coord.x = 0;
-  v.tex_coord.y = 0;
+  v.pos.x = rs.r.x;
+  v.pos.y = rs.r.y;
+  v.col= color;
+  v.uv[0] = 0;
+  v.uv[1] = 0;
   vtx.append(v) catch unreachable;
 
-  v.position.x = rs.r.x + tce.size.w * target_fraction;
-  v.tex_coord.x = 1;
+  v.pos.x = rs.r.x + tce.size.w * target_fraction;
+  v.uv[0] = 1;
   vtx.append(v) catch unreachable;
 
-  v.position.y = rs.r.y + tce.size.h * target_fraction;
-  v.tex_coord.y = 1;
+  v.pos.y = rs.r.y + tce.size.h * target_fraction;
+  v.uv[1] = 1;
   vtx.append(v) catch unreachable;
 
-  v.position.x = rs.r.x;
-  v.tex_coord.x = 0;
+  v.pos.x = rs.r.x;
+  v.uv[0] = 0;
   vtx.append(v) catch unreachable;
 
-  idx.append(@intCast(c_int, 0)) catch unreachable;
-  idx.append(@intCast(c_int, 1)) catch unreachable;
-  idx.append(@intCast(c_int, 2)) catch unreachable;
-  idx.append(@intCast(c_int, 0)) catch unreachable;
-  idx.append(@intCast(c_int, 2)) catch unreachable;
-  idx.append(@intCast(c_int, 3)) catch unreachable;
+  idx.append(0) catch unreachable;
+  idx.append(1) catch unreachable;
+  idx.append(2) catch unreachable;
+  idx.append(0) catch unreachable;
+  idx.append(2) catch unreachable;
+  idx.append(3) catch unreachable;
 
   cw.renderGeometry(cw.userdata, tce.texture, vtx.items, idx.items);
 }
@@ -5282,38 +5284,37 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
 
   const ice = IconTexture(name, tvg_bytes, ask_height);
 
-  var vtx = std.ArrayList(c.SDL_Vertex).initCapacity(cw.arena, 4) catch unreachable;
+  var vtx = std.ArrayList(Vertex).initCapacity(cw.arena, 4) catch unreachable;
   defer vtx.deinit();
-  var idx = std.ArrayList(c_int).initCapacity(cw.arena, 6) catch unreachable;
+  var idx = std.ArrayList(u32).initCapacity(cw.arena, 6) catch unreachable;
   defer idx.deinit();
 
-  var v: c.SDL_Vertex = undefined;
-  // inner vertex
-  v.position.x = rs.r.x;
-  v.position.y = rs.r.y;
-  v.color = colormod.sdlcolor();
-  v.tex_coord.x = 0;
-  v.tex_coord.y = 0;
+  var v: Vertex = undefined;
+  v.pos.x = rs.r.x;
+  v.pos.y = rs.r.y;
+  v.col = colormod;
+  v.uv[0] = 0;
+  v.uv[1] = 0;
   vtx.append(v) catch unreachable;
 
-  v.position.x = rs.r.x + ice.size.w * target_fraction;
-  v.tex_coord.x = 1;
+  v.pos.x = rs.r.x + ice.size.w * target_fraction;
+  v.uv[0] = 1;
   vtx.append(v) catch unreachable;
 
-  v.position.y = rs.r.y + ice.size.h * target_fraction;
-  v.tex_coord.y = 1;
+  v.pos.y = rs.r.y + ice.size.h * target_fraction;
+  v.uv[1] = 1;
   vtx.append(v) catch unreachable;
 
-  v.position.x = rs.r.x;
-  v.tex_coord.x = 0;
+  v.pos.x = rs.r.x;
+  v.uv[0] = 0;
   vtx.append(v) catch unreachable;
 
-  idx.append(@intCast(c_int, 0)) catch unreachable;
-  idx.append(@intCast(c_int, 1)) catch unreachable;
-  idx.append(@intCast(c_int, 2)) catch unreachable;
-  idx.append(@intCast(c_int, 0)) catch unreachable;
-  idx.append(@intCast(c_int, 2)) catch unreachable;
-  idx.append(@intCast(c_int, 3)) catch unreachable;
+  idx.append(0) catch unreachable;
+  idx.append(1) catch unreachable;
+  idx.append(2) catch unreachable;
+  idx.append(0) catch unreachable;
+  idx.append(2) catch unreachable;
+  idx.append(3) catch unreachable;
 
   cw.renderGeometry(cw.userdata, ice.texture, vtx.items, idx.items);
 }

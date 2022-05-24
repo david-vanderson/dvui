@@ -110,7 +110,7 @@ pub fn SDL_keysym_to_gui(keysym: i32) gui.keys.Key {
   };
 }
 
-fn renderGeometry(userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []c.SDL_Vertex, idx: []c_int) void {
+fn renderGeometry(userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []gui.Vertex, idx: []u32) void {
   const clipr = gui.WindowRectPixels().intersect(gui.ClipGet());
   if (clipr.empty()) {
     return;
@@ -126,9 +126,12 @@ fn renderGeometry(userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []c.SDL_Vert
 
     const tex = @ptrCast(?*c.SDL_Texture, texture);
 
-  _ = c.SDL_RenderGeometry(renderer, tex,
-    vtx.ptr, @intCast(c_int, vtx.len),
-    idx.ptr, @intCast(c_int, idx.len));
+  _ = c.SDL_RenderGeometryRaw(renderer, tex,
+    @ptrCast(*f32, &vtx[0].pos), @sizeOf(gui.Vertex),
+    @ptrCast(*c_int, @alignCast(4, &vtx[0].col)), @sizeOf(gui.Vertex),
+    @ptrCast(*f32, &vtx[0].uv), @sizeOf(gui.Vertex),
+    @intCast(c_int, vtx.len),
+    idx.ptr, @intCast(c_int, idx.len), @sizeOf(u32));
 }
 
 fn textureCreate(userdata: ?*anyopaque, pixels: *anyopaque, width: u32, height: u32) *anyopaque {
