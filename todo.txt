@@ -27,8 +27,6 @@ set_cursor(win.cursor);
 win.wait(max_fps);
 
 
-make easier to use textSize without the max width
-
 text stuff should remove spaces from front and back of final strings
 - that's what's causing the jumping for the paragraphs I think
 

@@ -1,11 +1,13 @@
 const std = @import("std");
 const math = std.math;
-const c = @import("c.zig");
 const tvg = @import("tinyvg/tinyvg.zig");
 const fnv = std.hash.Fnv1a_32;
+const freetype = @import("freetype");
 pub const icons = @import("icons.zig");
 pub const fonts = @import("fonts.zig");
 pub const keys = @import("keys.zig");
+
+const c = @import("c.zig");
 
 //const stb = @cImport({
 //    @cInclude("stb_rect_pack.h");
@@ -426,41 +428,97 @@ pub const Font = struct {
   }
 
   pub fn textSize(self: *const Font, text: []const u8) Size {
-    var cw = current_window orelse unreachable;
+    return self.textSizeEx(text, null, null);
+  }
 
+  pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize) Size {
     // ask for a font that matches the natural display pixels so we get a more
     // accurate size
+
     const ask_size = @ceil(self.size * WindowNaturalScale());
+    const max_width_sized = (max_width orelse 1000000.0) * WindowNaturalScale();
     const target_fraction = self.size / ask_size;
     const sized_font = self.resize(ask_size);
+    const s = sized_font.textSizeRaw(text, max_width_sized, end_idx);
+    return s.scale(target_fraction);
+  }
 
-    //std.debug.print("textSize size {d} for \"{s}\"\n", .{sized_font.size, text});
-    const sdlfont = FontCacheGet(sized_font);
+  // doesn't scale the font or max_width
+  pub fn textSizeRaw(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize) Size {
+    const face = FontCacheGet(self.*);
 
-    var text0 = cw.arena.allocWithOptions(u8, text.len, null, 0) catch unreachable;
-    std.mem.copy(u8, text0, text);
+    const mwint: i32 = if (max_width) |mw| @floatToInt(i32, mw) else 1000000;
 
-    var tw: c_int = undefined;
-    var th: c_int = undefined;
-    _ = c.TTF_SizeUTF8(sdlfont, text0, &tw, &th);
+    const ascender = @intToFloat(f64, face.ascender());
+    const scale = @intToFloat(f64, face.sizeMetrics().?.y_scale);
+    const ascent = ((@floatToInt(i32, ascender * scale / 0x10000) + 63) & -64) >> 6;
+    var x: i32 = 0;
+    var minx: i32 = 0;
+    var maxx: i32 = 0;
+    var miny: i32 = 0;
+    var maxy: i32 = @intCast(i32, face.sizeMetrics().?.height >> 6);
+
+    var tw: i32 = 0;
+    var th: i32 = 0;
+    var ei: usize = 0;
+
+    var utf8 = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
+    while (utf8.nextCodepoint()) |codepoint| {
+      face.loadChar(@intCast(u32, codepoint), .{.render = false}) catch unreachable;
+
+      // TODO: kerning
+
+      const m = face.glyph.metrics();
+      const gmaxy = (m.horiBearingY & -64) >> 6;
+      const gminy = gmaxy - (((m.height + 63) & -64) >> 6);
+      const advance = ((m.horiAdvance + 63) & -64) >> 6;
+      minx = math.min(minx, x + @intCast(i32, ((m.horiBearingX & -64) >> 6)));
+      maxx = math.max(maxx, x + @intCast(i32, (((m.horiBearingX + m.width) + 63) & -64) >> 6));
+      maxx = math.max(maxx, x + @intCast(i32, advance));
+
+      miny = math.min(miny, @intCast(i32, ascent - gmaxy));
+      maxy = math.max(maxy, @intCast(i32, ascent - gminy));
+
+      //std.debug.print("  codepoint {d} ascent {d} gmaxy {d} gminy {d}\n", .{codepoint, ascent, gmaxy, gminy});
+
+      // always include the first codepoint
+      if (ei > 0 and (maxx - minx) > mwint) {
+        // went too far
+        break;
+      }
+
+      tw = maxx - minx;
+      th = maxy - miny;
+      ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+
+      x += @intCast(i32, advance);
+    }
+
+    // TODO: xstart and ystart
+
+    if (end_idx) |endout| {
+      endout.* = ei;
+    }
+
     //std.debug.print("textSize size {d} for \"{s}\" {d}x{d}\n", .{sized_font.size, text, tw, th});
-    return Size{.w = @intToFloat(f32, tw) * target_fraction, .h = @intToFloat(f32, th) * target_fraction};
+    return Size{.w = @intToFloat(f32, tw), .h = @intToFloat(f32, th)};
   }
 
   pub fn lineSkip(self: *const Font) f32 {
-    // do the same sized thing as textSize so they will cache the same font
+    // do the same sized thing as textSizeEx so they will cache the same font
     const ask_size = @ceil(self.size * WindowNaturalScale());
     const target_fraction = self.size / ask_size;
     const sized_font = self.resize(ask_size);
 
-    const sdlfont = FontCacheGet(sized_font);
-    const skip = c.TTF_FontLineSkip(sdlfont);
+    const face = FontCacheGet(sized_font);
+    const skip = face.sizeMetrics().?.height >> 6;
+    //std.debug.print("lineSkip fontsize {d} is {d}\n", .{sized_font.size, skip});
     return @intToFloat(f32, skip) * target_fraction * self.line_skip_factor;
   }
 };
 
 const FontCacheEntry = struct {
-  ttf_font: *c.TTF_Font,
+  face: freetype.Face,
   used: bool = true,
 
   pub fn hash(font: Font) u32 {
@@ -477,20 +535,23 @@ const TextCacheEntry = struct {
   used: bool = true,
 };
 
-pub fn FontCacheGet(font: Font) *c.TTF_Font {
+pub fn FontCacheGet(font: Font) freetype.Face {
   var cw = current_window orelse unreachable;
   const fontHash = FontCacheEntry.hash(font);
   if (cw.font_cache.getPtr(fontHash)) |fce| {
     fce.used = true;
-    return fce.ttf_font;
+    return fce.face;
   }
 
   //std.debug.print("FontCacheGet creating font size {d} name \"{s}\"\n", .{font.size, font.name});
 
-  const rwops = c.SDL_RWFromConstMem(font.ttf_bytes.ptr, @intCast(c_int, font.ttf_bytes.len));
-  const ret = c.TTF_OpenFontRW(rwops, 1, @floatToInt(c_int, font.size)) orelse unreachable;
+  //const rwops = c.SDL_RWFromConstMem(font.ttf_bytes.ptr, @intCast(c_int, font.ttf_bytes.len));
+  //const ret = c.TTF_OpenFontRW(rwops, 1, @floatToInt(c_int, font.size)) orelse unreachable;
 
-  const entry = FontCacheEntry{.ttf_font = ret};
+  var ret = cw.ft2lib.newFaceMemory(font.ttf_bytes, 0) catch unreachable;
+  ret.setPixelSizes(0, @floatToInt(u32, font.size)) catch unreachable;
+
+  const entry = FontCacheEntry{.face = ret};
   cw.font_cache.put(fontHash, entry) catch unreachable;
 
   return ret;
@@ -557,23 +618,58 @@ pub fn TextTexture(font: Font, text: []const u8) TextCacheEntry {
     return tce.*;
   }
 
-  //std.debug.print("creating text texture size {d} for \"{s}\"\n", .{font.size, text});
+  const size = font.textSizeRaw(text, null, null).ceil();
+  var pixels = cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h * 4)) catch unreachable;
+  std.mem.set(u8, pixels, 0);
 
-  const sdlfont = FontCacheGet(font);
+  //std.debug.print("creating text texture size {} font size {d} for \"{s}\"\n", .{size, font.size, text});
 
-  var text0 = cw.arena.allocWithOptions(u8, text.len, null, 0) catch unreachable;
-  defer cw.arena.free(text0);
-  std.mem.copy(u8, text0, text);
+  const face = FontCacheGet(font);
 
-  const white = c.SDL_Color{.r = 255, .g = 255, .b = 255, .a = 255};
-  const textSurface = c.TTF_RenderUTF8_Blended(sdlfont, text0, white);
-  defer c.SDL_FreeSurface(textSurface);
+  const ascender = @intToFloat(f64, face.ascender());
+  const scale = @intToFloat(f64, face.sizeMetrics().?.y_scale);
+  const ascent = ((@floatToInt(i32, ascender * scale / 0x10000) + 63) & -64) >> 6;
+  var x: i32 = 0;
 
-  _ = c.SDL_LockSurface(textSurface);
-  const texture = cw.textureCreate(cw.userdata, textSurface[0].pixels.?, @intCast(u32, textSurface[0].w), @intCast(u32, textSurface[0].h));
-  c.SDL_UnlockSurface(textSurface);
+  var utf8 = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
+  while (utf8.nextCodepoint()) |codepoint| {
+    face.loadChar(@intCast(u32, codepoint), .{.render = true}) catch unreachable;
 
-  const entry = TextCacheEntry{.texture = texture, .size = .{.w = @intToFloat(f32, textSurface.*.w), .h = @intToFloat(f32, textSurface.*.h)}};
+    const m = face.glyph.metrics();
+    const minx = @intCast(i32, ((m.horiBearingX & -64) >> 6));
+    const gmaxy = (m.horiBearingY & -64) >> 6;
+    const yoffset = ascent - gmaxy;
+
+    // TODO: xstart and ystart
+
+    // TODO: kerning
+
+    const bitmap = face.glyph.bitmap();
+    //const buffer = bitmap.buffer();
+    //for (buffer) |bu| {
+      //std.debug.print("{d} ", .{bu});
+    //}
+    var row: i32 = 0;
+    while (row < bitmap.rows()) : (row += 1) {
+      var col: i32 = 0;
+      while (col < bitmap.width()) : (col += 1) {
+        const src = bitmap.buffer()[@intCast(usize, row * bitmap.pitch() + col)];
+        //std.debug.print("r {d} c {d} src {d} yoff {d} x {d} minx {d}\n", .{row, col, src, yoffset, x, minx});
+        const di = @intCast(usize, (row + yoffset) * @floatToInt(i32, size.w) * 4 + (x + minx + col) * 4);
+        pixels[di] = src;
+        pixels[di+1] = src;
+        pixels[di+2] = src;
+        pixels[di+3] = src;
+      }
+    }
+
+    const advance = ((m.horiAdvance + 63) & -64) >> 6;
+    x += @intCast(i32, advance);
+  }
+
+  const texture = cw.textureCreate(cw.userdata, pixels.ptr, @floatToInt(u32, size.w), @floatToInt(u32, size.h));
+
+  const entry = TextCacheEntry{.texture = texture, .size = size};
   cw.text_cache.put(textHash, entry) catch unreachable;
 
   return entry;
@@ -1880,6 +1976,8 @@ pub const Window = struct {
   icon_cache: std.AutoHashMap(u32, IconCacheEntry),
   deferred_render_queues: std.ArrayList(DeferredRenderQueue) = undefined,
 
+  ft2lib: freetype.Library = undefined,
+
   cursor_requested_last_frame: ?CursorKind = null,
   cursor_requested: ?CursorKind = null,
   cursor_dragging: ?CursorKind = null,
@@ -1927,6 +2025,8 @@ pub const Window = struct {
 
     self.focused_windowId = self.wd.id;
     self.frame_time_ns = std.time.nanoTimestamp();
+
+    self.ft2lib = freetype.Library.init() catch unreachable;
 
     return self;
   }
@@ -2329,7 +2429,7 @@ pub const Window = struct {
 
       for (deadFonts.items) |id| {
         const tce = self.font_cache.fetchRemove(id);
-        c.TTF_CloseFont(tce.?.value.ttf_font);
+        tce.?.value.face.deinit();
       }
 
       //std.debug.print("font_cache {d}\n", .{self.font_cache.count()});
@@ -5065,6 +5165,10 @@ pub const Size = struct {
   
   pub fn all(v: f32) Self {
     return Self{.w = v, .h = v};
+  }
+
+  pub fn ceil(self: *const Self) Self {
+    return Self{.w = @ceil(self.w), .h = @ceil(self.h)};
   }
 
   pub fn pad(s: *const Self, padding: Rect) Self {

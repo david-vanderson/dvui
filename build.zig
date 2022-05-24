@@ -1,5 +1,6 @@
 const std = @import("std");
 const Builder = @import("std").build.Builder;
+const ftbuild = @import("mach-freetype/build.zig");
 
 pub fn build(b: *Builder) void {
     // Standard target options allows the person running `zig build` to choose
@@ -22,9 +23,9 @@ pub fn build(b: *Builder) void {
       exe.linkSystemLibrary("SDL2_image");
       exe.linkSystemLibrary("SDL2_ttf");
 
+
       exe.linkSystemLibrary("z");
       exe.linkSystemLibrary("bz2");
-      exe.linkSystemLibrary("freetype");
       exe.linkSystemLibrary("iconv");
       exe.linkFramework("AppKit");
       exe.linkFramework("AudioToolbox");
@@ -62,11 +63,12 @@ pub fn build(b: *Builder) void {
       exe.addLibPath("/usr/local/lib");
       exe.linkSystemLibrary("SDL2");
       exe.linkSystemLibrary("SDL2_image");
-      exe.linkSystemLibrary("SDL2_ttf");
+
+      exe.addPackage(ftbuild.pkg);
+      ftbuild.link(b, exe, .{});
 
       exe.linkSystemLibrary("z");
       exe.linkSystemLibrary("bz2");
-      exe.linkSystemLibrary("freetype");
       exe.linkSystemLibrary("iconv");
       exe.linkFramework("AppKit");
       exe.linkFramework("AudioToolbox");

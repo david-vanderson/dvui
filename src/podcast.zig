@@ -161,11 +161,6 @@ pub fn main() void {
     return;
   }
 
-  if (c.TTF_Init() < 0) {
-    std.debug.print("Couldn't initialize SDL_ttf: {s}\n", .{c.SDL_GetError()});
-    return;
-  }
-
   var window = c.SDL_CreateWindow("Gui Test", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, 360, 600, c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE)
   orelse {
     std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
