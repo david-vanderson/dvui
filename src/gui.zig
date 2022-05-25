@@ -5290,7 +5290,15 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
     const glyph_width = @floatToInt(i32, size.w);
 
     var pixels = cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * num_glyphs * 4) catch unreachable;
-    std.mem.set(u8, pixels, 0);
+    // set all pixels as white but with zero alpha
+    for (pixels) |*p, i| {
+      if (i % 4 == 3) {
+        p.* = 0;
+      }
+      else {
+        p.* = 255;
+      }
+    }
 
     //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{sized_font.size, num_glyphs, size});
 
@@ -5313,9 +5321,10 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
             const src = bitmap.buffer()[@intCast(usize, row * bitmap.pitch() + col)];
             //std.debug.print("r {d} c {d} src {d} yoff {d} x {d} minx {d}\n", .{row, col, src, yoffset, x, minx});
             const di = @intCast(usize, row * @floatToInt(i32, size.w) * 4 + (x + col) * 4);
-            pixels[di] = src;
-            pixels[di+1] = src;
-            pixels[di+2] = src;
+            // not doing premultiplied alpha (yet), so keep the white color but adjust the alpha
+            //pixels[di] = src;
+            //pixels[di+1] = src;
+            //pixels[di+2] = src;
             pixels[di+3] = src;
           }
         }
