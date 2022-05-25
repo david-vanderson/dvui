@@ -10,6 +10,7 @@ integration points:
 - pollevent/waiteventtimeout
 !- keysym and mods
 - colors
+- clipboard text
 
 
 @import gui
@@ -28,7 +29,7 @@ set_cursor(win.cursor);
 win.wait(max_fps);
 
 when "Podcast 1" is highlighted, then we get a weird artifact on top of "back" above episodes
-- sdl only?
+- sdl only?  Scale 1.0
 
 text stuff should remove spaces from front and back of final strings
 - that's what's causing the jumping for the paragraphs I think

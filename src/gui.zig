@@ -575,9 +575,6 @@ pub fn FontCacheGet(font: Font) *FontCacheEntry {
 
   //std.debug.print("FontCacheGet creating font size {d} name \"{s}\"\n", .{font.size, font.name});
 
-  //const rwops = c.SDL_RWFromConstMem(font.ttf_bytes.ptr, @intCast(c_int, font.ttf_bytes.len));
-  //const ret = c.TTF_OpenFontRW(rwops, 1, @floatToInt(c_int, font.size)) orelse unreachable;
-
   var face = cw.ft2lib.newFaceMemory(font.ttf_bytes, 0) catch unreachable;
   face.setPixelSizes(0, @floatToInt(u32, font.size)) catch unreachable;
 
@@ -2214,37 +2211,38 @@ pub const Window = struct {
       self.loop_wait_target = self.frame_time_ns + (target_min * 1000);
     }
 
-    if (c.SDL_PollEvent(null) == 1) {
-      // there is already an event
-      //std.debug.print("  wait event\n", .{});
-      // if we had a wait target from min_micros leave it
-      return;
-    }
+    _ = target;
+    //if (c.SDL_PollEvent(null) == 1) {
+    //  // there is already an event
+    //  //std.debug.print("  wait event\n", .{});
+    //  // if we had a wait target from min_micros leave it
+    //  return;
+    //}
 
-    if (end_micros == null) {
-      // no target, wait indefinitely for next event
-      //std.debug.print("  wait indef\n", .{});
-      _ = c.SDL_WaitEvent(null);
-      self.loop_wait_target = null;
-    }
-    else if (wait_micros > 0) {
-      // wait conditionally
-      //std.debug.print("  wait {d:6}\n", .{wait_micros});
-      const result = c.SDL_WaitEventTimeout(null, @intCast(c_int, wait_micros / 1000));
-      if (result == 1) {
-        // interuppted by event, so don't adjust slop for target
-        self.loop_wait_target = null;
-      }
-      else {
-        // timeout so we are trying to hit the target
-        self.loop_wait_target = self.frame_time_ns + (target * 1000);
-      }
-    }
-    else {
-      // trying to hit the target but ran out of time
-      //std.debug.print("  wait none\n", .{});
-      // if we had a wait target from min_micros leave it
-    }
+    //if (end_micros == null) {
+    //  // no target, wait indefinitely for next event
+    //  //std.debug.print("  wait indef\n", .{});
+    //  _ = c.SDL_WaitEvent(null);
+    //  self.loop_wait_target = null;
+    //}
+    //else if (wait_micros > 0) {
+    //  // wait conditionally
+    //  //std.debug.print("  wait {d:6}\n", .{wait_micros});
+    //  const result = c.SDL_WaitEventTimeout(null, @intCast(c_int, wait_micros / 1000));
+    //  if (result == 1) {
+    //    // interuppted by event, so don't adjust slop for target
+    //    self.loop_wait_target = null;
+    //  }
+    //  else {
+    //    // timeout so we are trying to hit the target
+    //    self.loop_wait_target = self.frame_time_ns + (target * 1000);
+    //  }
+    //}
+    //else {
+    //  // trying to hit the target but ran out of time
+    //  //std.debug.print("  wait none\n", .{});
+    //  // if we had a wait target from min_micros leave it
+    //}
   }
 
   pub fn begin(self: *Self,
@@ -4952,14 +4950,14 @@ pub const TextEntryWidget = struct {
             self.text[self.len] = 0;
           }
           else if (e.evt.key.keysym == .v and e.evt.key.state == .down and e.evt.key.mod.gui()) {
-            const ct = c.SDL_GetClipboardText();
-            defer c.SDL_free(ct);
+            //const ct = c.SDL_GetClipboardText();
+            //defer c.SDL_free(ct);
 
-            var i = self.len;
-            while (i < self.text.len and ct.* != 0) : (i += 1) {
-              self.text[i] = ct[i - self.len];
-            }
-            self.len = i;
+            //var i = self.len;
+            //while (i < self.text.len and ct.* != 0) : (i += 1) {
+            //  self.text[i] = ct[i - self.len];
+            //}
+            //self.len = i;
           }
         },
         .text => {
