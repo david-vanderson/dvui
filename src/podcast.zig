@@ -116,6 +116,14 @@ fn renderGeometry(userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []gui.Vertex
     return;
   }
 
+  //std.debug.print("renderGeometry:\n", .{});
+  //for (vtx) |v, i| {
+  //  std.debug.print("  {d} vertex {}\n", .{i, v});
+  //}
+  //for (idx) |id, i| {
+  //  std.debug.print("  {d} index {d}\n", .{i, id});
+  //}
+
   const renderer = @ptrCast(*c.SDL_Renderer, userdata);
 
   const clip = c.SDL_Rect{.x = @floatToInt(c_int, clipr.x),
@@ -169,7 +177,7 @@ pub fn main() void {
 
   _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
-  var renderer = c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_ACCELERATED | c.SDL_RENDERER_PRESENTVSYNC)
+  var renderer = c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_ACCELERATED) // | c.SDL_RENDERER_PRESENTVSYNC)
     orelse {
     std.debug.print("Failed to create renderer: {s}\n", .{c.SDL_GetError()});
     return;
@@ -232,7 +240,7 @@ pub fn main() void {
     win.endEvents();
 
     {
-      var scale = gui.Scale(@src(), 0, 1.0, .{.expand = .both, .background = false}); 
+      var scale = gui.Scale(@src(), 0, 1.2, .{.expand = .both, .background = false}); 
       defer scale.deinit();
 
       var box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .background = false});
@@ -259,7 +267,8 @@ pub fn main() void {
 
     c.SDL_RenderPresent(renderer);
 
-    win.wait(end_micros, null);
+    _ = end_micros;
+    //win.wait(end_micros, null);
   }
 
   c.SDL_DestroyRenderer(renderer);

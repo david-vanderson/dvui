@@ -1,5 +1,6 @@
 fossil git export
 
+
 integration points:
 !- texture
 !- renderGeometry
@@ -26,23 +27,24 @@ set_cursor(win.cursor);
 - present view
 win.wait(max_fps);
 
+when "Podcast 1" is highlighted, then we get a weird artifact on top of "back" above episodes
+- sdl only?
 
 text stuff should remove spaces from front and back of final strings
 - that's what's causing the jumping for the paragraphs I think
 
-
-cache glyph bitmaps and info for speed
+maybe adjust renderText to snap text to pixel grid?
 
 xstart and ystart for textSize
 
 kerning
 - check how sdl_ttf does it
 
-need to cache glyph stuff because doing it all the time is slow
-
-switch to stb_truetype?
-
 DataSet/Get should use widget id and name like Animations
+
+should popups and floating windows inherit the scale of their parents?
+
+SDL: setting cliprect on every renderGeometry call is slow
 
 Window needs a deinit
 - deinit caches, cursors, backend

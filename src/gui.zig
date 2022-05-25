@@ -435,8 +435,10 @@ pub const Font = struct {
     // ask for a font that matches the natural display pixels so we get a more
     // accurate size
 
-    const ask_size = @ceil(self.size * WindowNaturalScale());
-    const max_width_sized = (max_width orelse 1000000.0) * WindowNaturalScale();
+    const scale = ParentGet().screenRectScale(Rect{}).s;
+
+    const ask_size = @ceil(self.size * scale);
+    const max_width_sized = (max_width orelse 1000000.0) * scale;
     const target_fraction = self.size / ask_size;
     const sized_font = self.resize(ask_size);
     const s = sized_font.textSizeRaw(text, max_width_sized, end_idx);
@@ -496,7 +498,9 @@ pub const Font = struct {
 
   pub fn lineSkip(self: *const Font) f32 {
     // do the same sized thing as textSizeEx so they will cache the same font
-    const ask_size = @ceil(self.size * WindowNaturalScale());
+    const scale = ParentGet().screenRectScale(Rect{}).s;
+
+    const ask_size = @ceil(self.size * scale);
     const target_fraction = self.size / ask_size;
     const sized_font = self.resize(ask_size);
 
@@ -513,6 +517,7 @@ const GlyphInfo = struct {
   advance: f32,
   miny: f32,
   maxy: f32,
+  uv: @Vector(2, f32),
 };
 
 const FontCacheEntry = struct {
@@ -521,6 +526,9 @@ const FontCacheEntry = struct {
   height: f32, 
   ascent: f32,
   glyph_info: std.AutoHashMap(u32, GlyphInfo),
+  texture_atlas: *anyopaque,
+  texture_atlas_size: Size,
+  texture_atlas_regen: bool,
 
   pub fn hash(font: Font) u32 {
     var h = fnv.init();
@@ -540,22 +548,21 @@ const FontCacheEntry = struct {
     const miny = self.ascent - @intToFloat(f32, m.horiBearingY) / 64.0;
 
     const gi = GlyphInfo{
-      .minx = minx,
-      .maxx = minx + @intToFloat(f32, m.width) / 64.0,
-      .advance = @intToFloat(f32, m.horiAdvance) / 64.0,
-      .miny = miny,
-      .maxy = miny + @intToFloat(f32, m.height) / 64.0,
+      .minx = @floor(minx),
+      .maxx = @ceil(minx + @intToFloat(f32, m.width) / 64.0),
+      .advance = @ceil(@intToFloat(f32, m.horiAdvance) / 64.0),
+      .miny = @floor(miny),
+      .maxy = @ceil(miny + @intToFloat(f32, m.height) / 64.0),
+      .uv = .{ 0, 0 },
     };
+
+    // new glyph, need to regen texture atlas on next render
+    //std.debug.print("new glyph {}\n", .{codepoint});
+    self.texture_atlas_regen = true;
 
     self.glyph_info.put(codepoint, gi) catch unreachable;
     return gi;
   }
-};
-
-const TextCacheEntry = struct {
-  texture: *anyopaque,
-  size: Size,
-  used: bool = true,
 };
 
 pub fn FontCacheGet(font: Font) *FontCacheEntry {
@@ -579,11 +586,20 @@ pub fn FontCacheGet(font: Font) *FontCacheEntry {
   const ascent = ascender * scale;
   //std.debug.print("fontcache size {d} ascender {d} scale {d} ascent {d}\n", .{font.size, ascender, scale, ascent});
 
+  // make debug texture atlas so we can see if something later goes wrong, the
+  // size needs to be larger than any single glyph to keep the uvs in 0-1 range
+  const size = .{.w = 100, .h = 100};
+  var pixels = cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * 4) catch unreachable;
+  std.mem.set(u8, pixels, 255);
+
   const entry = FontCacheEntry{
     .face = face,
-    .height = @intToFloat(f32, face.sizeMetrics().?.height) / 64.0,
-    .ascent = ascent,
+    .height = @ceil(@intToFloat(f32, face.sizeMetrics().?.height) / 64.0),
+    .ascent = @ceil(ascent),
     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
+    .texture_atlas = cw.textureCreate(cw.userdata, pixels.ptr, @floatToInt(u32, size.w), @floatToInt(u32, size.h)),
+    .texture_atlas_size = size,
+    .texture_atlas_regen = true,
   };
   cw.font_cache.put(fontHash, entry) catch unreachable;
 
@@ -634,76 +650,6 @@ pub fn IconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) Ico
 
   const entry = IconCacheEntry{.texture = texture, .size = .{.w = @intToFloat(f32, image.width), .h = @intToFloat(f32, image.height)}};
   cw.icon_cache.put(icon_hash, entry) catch unreachable;
-
-  return entry;
-}
-
-pub fn TextTexture(font: Font, text: []const u8) TextCacheEntry {
-  var cw = current_window orelse unreachable;
-  var hash = fnv.init();
-  hash.update(std.mem.asBytes(&font.size));
-  hash.update(font.name);
-  hash.update(text);
-  const textHash = hash.final();
-
-  if (cw.text_cache.getPtr(textHash)) |tce| {
-    tce.used = true;
-    return tce.*;
-  }
-
-  const size = font.textSizeRaw(text, null, null).ceil();
-  var pixels = cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h * 4)) catch unreachable;
-  std.mem.set(u8, pixels, 0);
-
-  //std.debug.print("creating text texture size {} font size {d} for \"{s}\"\n", .{size, font.size, text});
-
-  const fce = FontCacheGet(font);
-
-  const ascender = @intToFloat(f64, fce.face.ascender());
-  const scale = @intToFloat(f64, fce.face.sizeMetrics().?.y_scale);
-  const ascent = ((@floatToInt(i32, ascender * scale / 0x10000) + 63) & -64) >> 6;
-  var x: i32 = 0;
-
-  var utf8 = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
-  while (utf8.nextCodepoint()) |codepoint| {
-    fce.face.loadChar(@intCast(u32, codepoint), .{.render = true}) catch unreachable;
-
-    const m = fce.face.glyph.metrics();
-    const minx = @intCast(i32, ((m.horiBearingX & -64) >> 6));
-    const gmaxy = (m.horiBearingY & -64) >> 6;
-    const yoffset = ascent - gmaxy;
-
-    // TODO: xstart and ystart
-
-    // TODO: kerning
-
-    const bitmap = fce.face.glyph.bitmap();
-    //const buffer = bitmap.buffer();
-    //for (buffer) |bu| {
-      //std.debug.print("{d} ", .{bu});
-    //}
-    var row: i32 = 0;
-    while (row < bitmap.rows()) : (row += 1) {
-      var col: i32 = 0;
-      while (col < bitmap.width()) : (col += 1) {
-        const src = bitmap.buffer()[@intCast(usize, row * bitmap.pitch() + col)];
-        //std.debug.print("r {d} c {d} src {d} yoff {d} x {d} minx {d}\n", .{row, col, src, yoffset, x, minx});
-        const di = @intCast(usize, (row + yoffset) * @floatToInt(i32, size.w) * 4 + (x + minx + col) * 4);
-        pixels[di] = src;
-        pixels[di+1] = src;
-        pixels[di+2] = src;
-        pixels[di+3] = src;
-      }
-    }
-
-    const advance = ((m.horiAdvance + 63) & -64) >> 6;
-    x += @intCast(i32, advance);
-  }
-
-  const texture = cw.textureCreate(cw.userdata, pixels.ptr, @floatToInt(u32, size.w), @floatToInt(u32, size.h));
-
-  const entry = TextCacheEntry{.texture = texture, .size = size};
-  cw.text_cache.put(textHash, entry) catch unreachable;
 
   return entry;
 }
@@ -911,12 +857,6 @@ pub const CursorKind = enum(u8) {
   hand,
 };
 
-pub fn cursorsCreate() void {
-  if (current_window != null) {
-    return;
-  }
-
-}
 
 pub fn CursorGetDragging() ?CursorKind {
   const cw = current_window orelse unreachable;
@@ -2004,7 +1944,6 @@ pub const Window = struct {
   animations: std.AutoHashMap(u32, Animation),
   tab_index_prev: std.ArrayList(TabIndex),
   tab_index: std.ArrayList(TabIndex),
-  text_cache: std.AutoHashMap(u32, TextCacheEntry),
   font_cache: std.AutoHashMap(u32, FontCacheEntry),
   icon_cache: std.AutoHashMap(u32, IconCacheEntry),
   deferred_render_queues: std.ArrayList(DeferredRenderQueue) = undefined,
@@ -2049,7 +1988,6 @@ pub const Window = struct {
       .animations = std.AutoHashMap(u32, Animation).init(gpa),
       .tab_index_prev = std.ArrayList(TabIndex).init(gpa),
       .tab_index = std.ArrayList(TabIndex).init(gpa),
-      .text_cache = std.AutoHashMap(u32, TextCacheEntry).init(gpa),
       .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
       .icon_cache = std.AutoHashMap(u32, IconCacheEntry).init(gpa),
       .wd = WidgetData{.id = fnv.init().final()},
@@ -2327,7 +2265,6 @@ pub const Window = struct {
 
     //std.debug.print(" frame_time_ns {d}\n", .{self.frame_time_ns});
 
-    cursorsCreate();
     current_window = self;
     self.defer_render = false;
 
@@ -2427,27 +2364,6 @@ pub const Window = struct {
       for (deadAnimations.items) |id| {
         _ = self.animations.remove(id);
       }
-    }
-
-    {
-      var deadTexts = std.ArrayList(u32).init(arena);
-      defer deadTexts.deinit();
-      var it = self.text_cache.iterator();
-      while (it.next()) |kv| {
-        if (kv.value_ptr.used) {
-          kv.value_ptr.used = false;
-        }
-        else {
-          deadTexts.append(kv.key_ptr.*) catch unreachable;
-        }
-      }
-
-      for (deadTexts.items) |id| {
-        const tce = self.text_cache.fetchRemove(id);
-        self.textureDestroy(self.userdata, tce.?.value.texture);
-      }
-
-      //std.debug.print("text_cache {d}\n", .{self.text_cache.count()});
     }
 
     {
@@ -3434,24 +3350,10 @@ pub const TextLayoutWidget = struct {
         }
       }
 
-      const lineguess = @floatToInt(usize, @ceil(math.max(0, width) / msize.w));
-      var end: usize = math.max(1, math.min(lineguess, txt.len));
+      var end: usize = undefined;
+      var s = options.font().textSizeEx(txt, width, &end);
 
-      // make sure we've got as many characters as we can
-      var s = options.font().textSize(txt[0..end]);
       //std.debug.print("1 txt to {d} \"{s}\"\n", .{end, txt[0..end]});
-      while (s.w < width and end < txt.len) {
-        end += 1;
-        s = options.font().textSize(txt[0..end]);
-        //std.debug.print("2 txt to {d} \"{s}\"\n", .{end, txt[0..end]});
-      }
-
-      // make sure we're not too long
-      while (s.w > width and end > 1) {
-        end -= 1;
-        s = options.font().textSize(txt[0..end]);
-        //std.debug.print("3 txt to {d} \"{s}\"\n", .{end, txt[0..end]});
-      }
 
       // if we are boxed in too much by corner widgets drop to next line
       if (s.w > width and linewidth < rect.w) {
@@ -3463,11 +3365,11 @@ pub const TextLayoutWidget = struct {
       if (end < txt.len and linewidth > (10 * msize.w)) {
         const space: []const u8 = &[_]u8{' '};
         // now we are under the length limit but might be in the middle of a word
-        const spaceIdx = std.mem.lastIndexOfLinear(u8, txt[0..end], space);
+        // look one char further because we might be right at the end of a word
+        const spaceIdx = std.mem.lastIndexOfLinear(u8, txt[0..end+1], space);
         if (spaceIdx) |si| {
           end = si + 1;
           s = options.font().textSize(txt[0..end]);
-          //std.debug.print("4 txt to {d} \"{s}\"\n", .{end, txt[0..end]});
         }
         else if (self.cursor.x > linestart) {
           // can't fit breaking on space, but we aren't starting at the left edge
@@ -5363,44 +5265,146 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
   const target_fraction = target_size / ask_size;
 
   const sized_font = font.resize(ask_size);
-  // make sure we refresh the font cache
-  _ = FontCacheGet(sized_font);
-  const tce = TextTexture(sized_font, text);
+  var fce = FontCacheGet(sized_font);
 
-  var vtx = std.ArrayList(Vertex).initCapacity(cw.arena, 4) catch unreachable;
+  // make sure the cache has all the glyphs we need 
+  var utf8it = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
+  while (utf8it.nextCodepoint()) |codepoint| {
+    _ = fce.glyphInfoGet(@intCast(u32, codepoint));
+  }
+
+  if (fce.texture_atlas_regen) {
+    fce.texture_atlas_regen = false;
+    cw.textureDestroy(cw.userdata, fce.texture_atlas);
+
+    const num_glyphs = fce.glyph_info.count();
+    var size = Size{};
+    {
+      var it = fce.glyph_info.valueIterator();
+      while (it.next()) |gi| {
+        size.w = math.max(size.w, gi.maxx - gi.minx);
+        size.h = math.max(size.h, gi.maxy - gi.miny);
+      }
+
+      size = size.ceil();
+    }
+
+    const glyph_width = @floatToInt(i32, size.w);
+
+    var pixels = cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * num_glyphs * 4) catch unreachable;
+    std.mem.set(u8, pixels, 0);
+
+    //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{sized_font.size, num_glyphs, size});
+
+    // change size to be size of texture
+    size.w *= @intToFloat(f32, num_glyphs);
+
+    {
+      var x: i32 = 0;
+      var it = fce.glyph_info.iterator();
+      while (it.next()) |e| {
+        e.value_ptr.uv[0] = @intToFloat(f32, x) / size.w;
+        e.value_ptr.uv[1] = 0.0;
+
+        fce.face.loadChar(@intCast(u32, e.key_ptr.*), .{.render = true}) catch unreachable;
+        const bitmap = fce.face.glyph.bitmap();
+        var row: i32 = 0;
+        while (row < bitmap.rows()) : (row += 1) {
+          var col: i32 = 0;
+          while (col < bitmap.width()) : (col += 1) {
+            const src = bitmap.buffer()[@intCast(usize, row * bitmap.pitch() + col)];
+            //std.debug.print("r {d} c {d} src {d} yoff {d} x {d} minx {d}\n", .{row, col, src, yoffset, x, minx});
+            const di = @intCast(usize, row * @floatToInt(i32, size.w) * 4 + (x + col) * 4);
+            pixels[di] = src;
+            pixels[di+1] = src;
+            pixels[di+2] = src;
+            pixels[di+3] = src;
+          }
+        }
+
+        x += glyph_width;
+      }
+    }
+
+    fce.texture_atlas = cw.textureCreate(cw.userdata, pixels.ptr, @floatToInt(u32, size.w), @floatToInt(u32, size.h));
+    fce.texture_atlas_size = size;
+  }
+
+  //std.debug.print("creating text texture size {} font size {d} for \"{s}\"\n", .{size, font.size, text});
+  var vtx = std.ArrayList(Vertex).init(cw.arena);
   defer vtx.deinit();
-  var idx = std.ArrayList(u32).initCapacity(cw.arena, 6) catch unreachable;
+  var idx = std.ArrayList(u32).init(cw.arena);
   defer idx.deinit();
 
-  var v: Vertex = undefined;
-  // inner vertex
-  v.pos.x = rs.r.x;
-  v.pos.y = rs.r.y;
-  v.col= color;
-  v.uv[0] = 0;
-  v.uv[1] = 0;
-  vtx.append(v) catch unreachable;
+  //{
+  //  const len = @intCast(u32, vtx.items.len);
+  //  var v: Vertex = undefined;
+  //  v.pos.x = 10;
+  //  v.pos.y = 10;
+  //  v.col = color;
+  //  v.uv = .{ 0, 0 };
+  //  vtx.append(v) catch unreachable;
 
-  v.pos.x = rs.r.x + tce.size.w * target_fraction;
-  v.uv[0] = 1;
-  vtx.append(v) catch unreachable;
+  //  v.pos.x = 10 + fce.texture_atlas_size.w;
+  //  v.uv[0] = 1;
+  //  vtx.append(v) catch unreachable;
 
-  v.pos.y = rs.r.y + tce.size.h * target_fraction;
-  v.uv[1] = 1;
-  vtx.append(v) catch unreachable;
+  //  v.pos.y = 10 + fce.texture_atlas_size.h;
+  //  v.uv[1] = 1;
+  //  vtx.append(v) catch unreachable;
 
-  v.pos.x = rs.r.x;
-  v.uv[0] = 0;
-  vtx.append(v) catch unreachable;
+  //  v.pos.x = 10;
+  //  v.uv[0] = 0;
+  //  vtx.append(v) catch unreachable;
 
-  idx.append(0) catch unreachable;
-  idx.append(1) catch unreachable;
-  idx.append(2) catch unreachable;
-  idx.append(0) catch unreachable;
-  idx.append(2) catch unreachable;
-  idx.append(3) catch unreachable;
+  //  idx.append(len + 0) catch unreachable;
+  //  idx.append(len + 1) catch unreachable;
+  //  idx.append(len + 2) catch unreachable;
+  //  idx.append(len + 0) catch unreachable;
+  //  idx.append(len + 2) catch unreachable;
+  //  idx.append(len + 3) catch unreachable;
+  //}
 
-  cw.renderGeometry(cw.userdata, tce.texture, vtx.items, idx.items);
+  var x: f32 = rs.r.x;
+  var y: f32 = rs.r.y;
+
+  var utf8 = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
+  while (utf8.nextCodepoint()) |codepoint| {
+    const gi = fce.glyphInfoGet(@intCast(u32, codepoint));
+
+    // TODO: kerning
+
+    const len = @intCast(u32, vtx.items.len);
+    var v: Vertex = undefined;
+    v.pos.x = x + gi.minx * target_fraction;
+    v.pos.y = y + gi.miny * target_fraction;
+    v.col = color;
+    v.uv = gi.uv;
+    vtx.append(v) catch unreachable;
+
+    v.pos.x = x + gi.maxx * target_fraction;
+    v.uv[0] = gi.uv[0] + (gi.maxx - gi.minx) / fce.texture_atlas_size.w;
+    vtx.append(v) catch unreachable;
+
+    v.pos.y = y + gi.maxy * target_fraction;
+    v.uv[1] = gi.uv[1] + (gi.maxy - gi.miny) / fce.texture_atlas_size.h;
+    vtx.append(v) catch unreachable;
+
+    v.pos.x = x + gi.minx * target_fraction;
+    v.uv[0] = gi.uv[0];
+    vtx.append(v) catch unreachable;
+
+    idx.append(len + 0) catch unreachable;
+    idx.append(len + 1) catch unreachable;
+    idx.append(len + 2) catch unreachable;
+    idx.append(len + 0) catch unreachable;
+    idx.append(len + 2) catch unreachable;
+    idx.append(len + 3) catch unreachable;
+
+    x += gi.advance * target_fraction;
+  }
+
+  cw.renderGeometry(cw.userdata, fce.texture_atlas, vtx.items, idx.items);
 }
 
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colormod: Color) void {

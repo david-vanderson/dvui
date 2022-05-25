@@ -1,6 +1,6 @@
 const std = @import("std");
 const Builder = @import("std").build.Builder;
-const ftbuild = @import("mach-freetype/build.zig");
+const freetype = @import("mach-freetype/build.zig");
 
 pub fn build(b: *Builder) void {
     // Standard target options allows the person running `zig build` to choose
@@ -64,8 +64,8 @@ pub fn build(b: *Builder) void {
       exe.linkSystemLibrary("SDL2");
       exe.linkSystemLibrary("SDL2_image");
 
-      exe.addPackage(ftbuild.pkg);
-      ftbuild.link(b, exe, .{});
+      exe.addPackage(freetype.pkg);
+      freetype.link(b, exe, .{});
 
       exe.linkSystemLibrary("z");
       exe.linkSystemLibrary("bz2");
