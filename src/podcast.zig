@@ -142,10 +142,10 @@ fn renderGeometry(userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []gui.Vertex
     idx.ptr, @intCast(c_int, idx.len), @sizeOf(u32));
 }
 
-fn textureCreate(userdata: ?*anyopaque, pixels: *anyopaque, width: u32, height: u32) *anyopaque {
+fn textureCreate(userdata: ?*anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque {
   const renderer = @ptrCast(*c.SDL_Renderer, userdata);
   var surface = c.SDL_CreateRGBSurfaceWithFormatFrom(
-    pixels,
+    pixels.ptr,
     @intCast(c_int, width),
     @intCast(c_int, height),
     32,
@@ -204,19 +204,24 @@ pub fn main() void {
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
-    var window_w: i32 = undefined;
-    var window_h: i32 = undefined;
+    var window_w: c_int = undefined;
+    var window_h: c_int = undefined;
     _ = c.SDL_GetWindowSize(window, &window_w, &window_h);
 
-    var pixel_w: i32 = undefined;
-    var pixel_h: i32 = undefined;
+    var pixel_w: c_int = undefined;
+    var pixel_h: c_int = undefined;
     _ = c.SDL_GetRendererOutputSize(renderer, &pixel_w, &pixel_h);
 
     _ = c.SDL_SetRenderDrawColor(renderer, 75, 75, 75, 255);
     _ = c.SDL_RenderClear(renderer);
 
     var nstime = win.beginWait();
-    win.begin(arena, nstime, window_w, window_h, pixel_w, pixel_h);
+    win.begin(arena, nstime,
+      @intCast(u32, window_w),
+      @intCast(u32, window_h),
+      @intCast(u32, pixel_w),
+      @intCast(u32, pixel_h),
+    );
 
     var event: c.SDL_Event = undefined;
     while (c.SDL_PollEvent(&event) != 0) {

@@ -7,8 +7,6 @@ pub const icons = @import("icons.zig");
 pub const fonts = @import("fonts.zig");
 pub const keys = @import("keys.zig");
 
-const c = @import("c.zig");
-
 //const stb = @cImport({
 //    @cInclude("stb_rect_pack.h");
 //    @cDefine("STB_TRUETYPE_IMPLEMENTATION", "1");
@@ -594,7 +592,7 @@ pub fn FontCacheGet(font: Font) *FontCacheEntry {
     .height = @ceil(@intToFloat(f32, face.sizeMetrics().?.height) / 64.0),
     .ascent = @ceil(ascent),
     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-    .texture_atlas = cw.textureCreate(cw.userdata, pixels.ptr, @floatToInt(u32, size.w), @floatToInt(u32, size.h)),
+    .texture_atlas = cw.textureCreate(cw.userdata, pixels, @floatToInt(u32, size.w), @floatToInt(u32, size.h)),
     .texture_atlas_size = size,
     .texture_atlas_regen = true,
   };
@@ -640,10 +638,19 @@ pub fn IconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) Ico
   ) catch unreachable;
   defer image.deinit(cw.arena);
 
-  const texture = cw.textureCreate(cw.userdata, image.pixels.ptr, image.width, image.height);
+  var pixels = cw.arena.alloc(u8, image.width * image.height * 4) catch unreachable;
+  defer cw.arena.free(pixels);
+  for (image.pixels) |p, i| {
+    pixels[i * 4] = p.r;
+    pixels[i * 4 + 1] = p.g;
+    pixels[i * 4 + 2] = p.b;
+    pixels[i * 4 + 3] = p.a;
+  }
+
+  const texture = cw.textureCreate(cw.userdata, pixels, image.width, image.height);
 
   _ = name;
-  //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{name, ask_height, w, h});
+  //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{name, ask_height, image.width, image.height});
 
   const entry = IconCacheEntry{.texture = texture, .size = .{.w = @intToFloat(f32, image.width), .h = @intToFloat(f32, image.height)}};
   cw.icon_cache.put(icon_hash, entry) catch unreachable;
@@ -1892,7 +1899,7 @@ pub const Window = struct {
 
   userdata: ?*anyopaque,
   renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
-  textureCreate: fn (userdata: ?*anyopaque, pixels: *anyopaque, width: u32, height: u32) *anyopaque,
+  textureCreate: fn (userdata: ?*anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
   textureDestroy: fn (userdata: ?*anyopaque, texture: *anyopaque) void,
 
   floating_windows_prev: std.ArrayList(FloatingData),
@@ -1969,7 +1976,7 @@ pub const Window = struct {
     gpa: std.mem.Allocator,
     userdata: ?*anyopaque,
     renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
-    textureCreate: fn (userdata: ?*anyopaque, pixels: *anyopaque, width: u32, height: u32) *anyopaque,
+    textureCreate: fn (userdata: ?*anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
     textureDestroy: fn (userdata: ?*anyopaque, texture: *anyopaque) void,
     ) Self {
     var self = Self{
@@ -2248,10 +2255,10 @@ pub const Window = struct {
   pub fn begin(self: *Self,
     arena: std.mem.Allocator,
     time_ns: i128,
-    window_w: i32,
-    window_h: i32,
-    pixel_w: i32,
-    pixel_h: i32,
+    window_w: u32,
+    window_h: u32,
+    pixel_w: u32,
+    pixel_h: u32,
   ) void {
     var micros_since_last: u32 = 0;
     if (time_ns > self.frame_time_ns) {
@@ -5238,14 +5245,12 @@ pub const RectScale = struct {
   }
 };
 
-//pub var render_text: bool = false;
-
 pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) void {
   if (text.len == 0 or ClipGet().intersect(rs.r).empty()) {
     return;
   }
 
-  //if (!render_text) return;
+  //if (true) return;
 
   var cw = current_window orelse unreachable;
   const drqlen = cw.deferred_render_queues.items.len;
@@ -5333,7 +5338,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
       }
     }
 
-    fce.texture_atlas = cw.textureCreate(cw.userdata, pixels.ptr, @floatToInt(u32, size.w), @floatToInt(u32, size.h));
+    fce.texture_atlas = cw.textureCreate(cw.userdata, pixels, @floatToInt(u32, size.w), @floatToInt(u32, size.h));
     fce.texture_atlas_size = size;
   }
 
@@ -5418,6 +5423,8 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
   if (ClipGet().intersect(rs.r).empty()) {
     return;
   }
+
+  //if (true) return;
 
   var cw = current_window orelse unreachable;
   const drqlen = cw.deferred_render_queues.items.len;

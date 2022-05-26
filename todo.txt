@@ -1,5 +1,10 @@
 fossil git export
 
+color stuff in renderGeometry
+
+diff the two gui.zig
+
+IconTexture shouldn't have to copy all the pixels just to change the type passed to textureCreate
 
 integration points:
 !- texture
@@ -31,9 +36,6 @@ win.wait(max_fps);
 when "Podcast 1" is highlighted, then we get a weird artifact on top of "back" above episodes
 - sdl only?  Scale 1.0
 
-text stuff should remove spaces from front and back of final strings
-- that's what's causing the jumping for the paragraphs I think
-
 maybe adjust renderText to snap text to pixel grid?
 
 xstart and ystart for textSize
@@ -46,6 +48,9 @@ DataSet/Get should use widget id and name like Animations
 should popups and floating windows inherit the scale of their parents?
 
 SDL: setting cliprect on every renderGeometry call is slow
+
+PanedWidget should do it's mouse events after children
+- otherwise it's hard to grab a scroll grab just to the side of the sash
 
 Window needs a deinit
 - deinit caches, cursors, backend
