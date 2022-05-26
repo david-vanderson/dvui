@@ -1,7 +1,11 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const c = @import("c.zig");
-const gui = @import("gui.zig");
+const gui = @import("gui/gui.zig");
+
+const c = @cImport({
+    @cInclude("SDL2/SDL.h");
+    //@cInclude("SDL2/SDL_image.h");
+});
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
@@ -50,7 +54,7 @@ pub fn addEventSDL(win: *gui.Window, event: c.SDL_Event) void {
       win.addEventMouseWheel(ticks);
     },
     else => {
-      std.debug.print("unhandled SDL event type {}\n", .{event.type});
+      //std.debug.print("unhandled SDL event type {}\n", .{event.type});
     },
   }
 }
@@ -245,7 +249,7 @@ pub fn main() void {
     win.endEvents();
 
     {
-      var scale = gui.Scale(@src(), 0, 1.2, .{.expand = .both, .background = false}); 
+      var scale = gui.Scale(@src(), 0, 1.0, .{.expand = .both, .background = false}); 
       defer scale.deinit();
 
       var box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .background = false});

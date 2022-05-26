@@ -1,8 +1,6 @@
 fossil git export
 
-color stuff in renderGeometry
-
-diff the two gui.zig
+text still looks cutoff at the bottom in gui-test
 
 IconTexture shouldn't have to copy all the pixels just to change the type passed to textureCreate
 

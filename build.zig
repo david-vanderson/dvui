@@ -13,16 +13,18 @@ pub fn build(b: *Builder) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const mode = b.standardReleaseOptions();
 
-    if (false)
+    if (true)
     {
-      const exe = b.addExecutable("gui-test", "src/gui-test.zig");
+      const exe = b.addExecutable("gui-test", "gui-test.zig");
       exe.addIncludeDir("/usr/local/include");
       exe.defineCMacro("_THREAD_SAFE", "1");
       exe.addLibPath("/usr/local/lib");
       exe.linkSystemLibrary("SDL2");
-      exe.linkSystemLibrary("SDL2_image");
-      exe.linkSystemLibrary("SDL2_ttf");
+      //exe.linkSystemLibrary("SDL2_image");
+      //exe.linkSystemLibrary("SDL2_ttf");
 
+      exe.addPackage(freetype.pkg);
+      freetype.link(b, exe, .{});
 
       exe.linkSystemLibrary("z");
       exe.linkSystemLibrary("bz2");
@@ -57,7 +59,7 @@ pub fn build(b: *Builder) void {
 
     if (true)
     {
-      const exe = b.addExecutable("podcast", "src/podcast.zig");
+      const exe = b.addExecutable("podcast", "podcast.zig");
       exe.addIncludeDir("/usr/local/include");
       exe.defineCMacro("_THREAD_SAFE", "1");
       exe.addLibPath("/usr/local/lib");
