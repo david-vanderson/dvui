@@ -57,7 +57,7 @@ fn textureCreate(userdata: ?*anyopaque, pixels: []const u8, width: u32, height: 
   };
 
   var queue = app.app_engine.gpu_driver.device.getQueue();
-  queue.writeTexture(&.{ .texture = texture.* }, pixels, &data_layout, &img_size);
+  queue.writeTexture(&.{ .texture = texture.* }, &data_layout, &img_size, u8, pixels);
 
   return texture;
 }
