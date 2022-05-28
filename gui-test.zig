@@ -633,8 +633,12 @@ pub fn main() void {
         defer scroll.deinit();
         var tl = gui.TextLayout(@src(), 0, .{.expand = .both});
         {
-          _ = gui.Button(@src(), 0, "Corner", .{.gravity = .upleft});
-          _ = gui.Button(@src(), 0, "Corner", .{.gravity = .upright});
+          if (gui.Button(@src(), 0, "Up .1", .{.gravity = .upleft})) {
+            fwin.wd.rect.y -= 0.1;
+          }
+          if (gui.Button(@src(), 0, "Down .1", .{.gravity = .upright})) {
+            fwin.wd.rect.y += 0.1;
+          }
         }
         const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
         //const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore";

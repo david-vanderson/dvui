@@ -1,8 +1,17 @@
 fossil git export
 
-text still looks cutoff at the bottom in gui-test
+coalesce similar renderGeometries
+- cliprect and texture have to be the same
 
 IconTexture shouldn't have to copy all the pixels just to change the type passed to textureCreate
+
+zargio:
+- do resizing like the other examples so it doesn't crash
+- better scroll area behavior so that when you are scrolled to the bottom and the content gets shorter it doesn't slowly scroll back into view
+- can assign app_engine just once
+
+ayush:
+Btw you can set up a build file yourself by using the App struct in mach's build.zig. It is basically a module to make it easy to make your applications in mach
 
 integration points:
 !- texture

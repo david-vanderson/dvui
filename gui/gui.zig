@@ -5292,9 +5292,21 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
       size = size.ceil();
     }
 
-    const glyph_width = @floatToInt(i32, size.w);
+    // Add a 1 pixel edge to our texture to eliminate edge effects
+    // 1 extra pixel at the start of each glyph
+    // 1 extra pixel above each
+    size.w += 1;
+    size.h += 1;
 
-    var pixels = cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * num_glyphs * 4) catch unreachable;
+    const glyph_width = @floatToInt(i32, size.w);
+    // change size to be size of texture
+    size.w *= @intToFloat(f32, num_glyphs);
+
+    // 1 extra pixel at the very right and bottom edge
+    size.w += 1;
+    size.h += 1;
+  
+    var pixels = cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * 4) catch unreachable;
     // set all pixels as white but with zero alpha
     for (pixels) |*p, i| {
       if (i % 4 == 3) {
@@ -5307,25 +5319,25 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
 
     //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{sized_font.size, num_glyphs, size});
 
-    // change size to be size of texture
-    size.w *= @intToFloat(f32, num_glyphs);
-
     {
       var x: i32 = 0;
       var it = fce.glyph_info.iterator();
       while (it.next()) |e| {
         e.value_ptr.uv[0] = @intToFloat(f32, x) / size.w;
-        e.value_ptr.uv[1] = 0.0;
+        e.value_ptr.uv[1] = 0.0 / size.h;
 
         fce.face.loadChar(@intCast(u32, e.key_ptr.*), .{.render = true}) catch unreachable;
         const bitmap = fce.face.glyph.bitmap();
+        //std.debug.print("codepoint {d} gi height {d} bitmap rows {d}\n", .{e.key_ptr.*, e.value_ptr.maxy - e.value_ptr.miny, bitmap.rows()});
         var row: i32 = 0;
         while (row < bitmap.rows()) : (row += 1) {
           var col: i32 = 0;
           while (col < bitmap.width()) : (col += 1) {
             const src = bitmap.buffer()[@intCast(usize, row * bitmap.pitch() + col)];
-            //std.debug.print("r {d} c {d} src {d} yoff {d} x {d} minx {d}\n", .{row, col, src, yoffset, x, minx});
-            const di = @intCast(usize, row * @floatToInt(i32, size.w) * 4 + (x + col) * 4);
+
+            // because of the extra edge, offset by 1 row and 1 col
+            const di = @intCast(usize, (row+1) * @floatToInt(i32, size.w) * 4 + (x + col + 1) * 4);
+
             // not doing premultiplied alpha (yet), so keep the white color but adjust the alpha
             //pixels[di] = src;
             //pixels[di+1] = src;
@@ -5351,21 +5363,21 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
   //{
   //  const len = @intCast(u32, vtx.items.len);
   //  var v: Vertex = undefined;
-  //  v.pos.x = 10;
-  //  v.pos.y = 10;
+  //  v.pos.x = 0;
+  //  v.pos.y = 0;
   //  v.col = color;
   //  v.uv = .{ 0, 0 };
   //  vtx.append(v) catch unreachable;
 
-  //  v.pos.x = 10 + fce.texture_atlas_size.w;
+  //  v.pos.x = 0 + fce.texture_atlas_size.w;
   //  v.uv[0] = 1;
   //  vtx.append(v) catch unreachable;
 
-  //  v.pos.y = 10 + fce.texture_atlas_size.h;
+  //  v.pos.y = 0 + fce.texture_atlas_size.h;
   //  v.uv[1] = 1;
   //  vtx.append(v) catch unreachable;
 
-  //  v.pos.x = 10;
+  //  v.pos.x = 0;
   //  v.uv[0] = 0;
   //  vtx.append(v) catch unreachable;
 
@@ -5388,21 +5400,22 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
 
     const len = @intCast(u32, vtx.items.len);
     var v: Vertex = undefined;
-    v.pos.x = x + gi.minx * target_fraction;
-    v.pos.y = y + gi.miny * target_fraction;
+    // account for 1 pixel fringe around glyph
+    v.pos.x = x + (gi.minx-1) * target_fraction;
+    v.pos.y = y + (gi.miny-1) * target_fraction;
     v.col = color;
     v.uv = gi.uv;
     vtx.append(v) catch unreachable;
 
-    v.pos.x = x + gi.maxx * target_fraction;
-    v.uv[0] = gi.uv[0] + (gi.maxx - gi.minx) / fce.texture_atlas_size.w;
+    v.pos.x = x + (gi.maxx+1) * target_fraction;
+    v.uv[0] = gi.uv[0] + (gi.maxx - gi.minx + 2) / fce.texture_atlas_size.w;
     vtx.append(v) catch unreachable;
 
-    v.pos.y = y + gi.maxy * target_fraction;
-    v.uv[1] = gi.uv[1] + (gi.maxy - gi.miny) / fce.texture_atlas_size.h;
+    v.pos.y = y + (gi.maxy+1) * target_fraction;
+    v.uv[1] = gi.uv[1] + (gi.maxy - gi.miny + 2) / fce.texture_atlas_size.h;
     vtx.append(v) catch unreachable;
 
-    v.pos.x = x + gi.minx * target_fraction;
+    v.pos.x = x + (gi.minx-1) * target_fraction;
     v.uv[0] = gi.uv[0];
     vtx.append(v) catch unreachable;
 
