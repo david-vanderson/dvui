@@ -6,7 +6,6 @@ coalesce similar renderGeometries
 IconTexture shouldn't have to copy all the pixels just to change the type passed to textureCreate
 
 zargio:
-- do resizing like the other examples so it doesn't crash
 - better scroll area behavior so that when you are scrolled to the bottom and the content gets shorter it doesn't slowly scroll back into view
 - can assign app_engine just once
 

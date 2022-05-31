@@ -352,8 +352,8 @@ pub fn update(app: *App, engine: *mach.Engine) !bool {
     const arena = arena_allocator.allocator();
     defer arena_allocator.deinit();
 
-    const size = engine.core.internal.window.getSize() catch unreachable; // TODO: return type inference can't handle this
-    const psize = engine.core.getFramebufferSize() catch unreachable; // TODO: return type inference can't handle this
+    const size = engine.core.getWindowSize();
+    const psize = engine.core.getFramebufferSize();
     var nstime = app.win.beginWait();
     app.win.begin(arena, nstime, size.width, size.height, psize.width, psize.height);
 
