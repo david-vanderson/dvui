@@ -181,7 +181,7 @@ const Framebuffer = struct {
             return;
         if (x >= self.width or y >= self.height)
             return;
-        const offset = (std.math.cast(usize, y) catch return) * self.stride + (std.math.cast(usize, x) catch return);
+        const offset = (std.math.cast(usize, y) orelse return) * self.stride + (std.math.cast(usize, x) orelse return);
 
         const destination_pixel = &self.slice[offset];
 
@@ -621,21 +621,11 @@ inline fn toRadians(a: f32) f32 {
 }
 
 inline fn cos(val: anytype) @TypeOf(val) {
-    // Workaround for https://github.com/ziglang/zig/issues/10318
-    if (builtin.os.tag.isDarwin()) {
-        return @cos(val);
-    } else {
-        return @cos(val);
-    }
+    return @cos(val);
 }
 
 inline fn sin(val: anytype) @TypeOf(val) {
-    // Workaround for https://github.com/ziglang/zig/issues/10318
-    if (builtin.os.tag.isDarwin()) {
-        return @sin(val);
-    } else {
-        return @sin(val);
-    }
+    return @sin(val);
 }
 inline fn sqrt(val: anytype) @TypeOf(val) {
     return @sqrt(val);
@@ -793,8 +783,8 @@ fn pointFromInts(x: i16, y: i16) Point {
 const IntPoint = struct { x: i16, y: i16 };
 fn pointToInts(point: Point) IntPoint {
     return IntPoint{
-        .x = floatToIntClamped(i16, std.math.round(point.x)),
-        .y = floatToIntClamped(i16, std.math.round(point.y)),
+        .x = floatToIntClamped(i16, @round(point.x)),
+        .y = floatToIntClamped(i16, @round(point.y)),
     };
 }
 
@@ -998,18 +988,18 @@ const Painter = struct {
     ///     pb -= pa;
     ///     float h = dot(pb,pb);
     ///     vec2  q = vec2( dot(p,vec2(pb.y,-pb.x)), dot(p,pb) )/h;
-    ///     
+    ///
     ///     //-----------
-    ///     
+    ///
     ///     q.x = abs(q.x);
-    ///     
+    ///
     ///     float b = ra-rb;
     ///     vec2  c = vec2(sqrt(h-b*b),b);
-    ///     
+    ///
     ///     float k = cro(c,q);
     ///     float m = dot(c,q);
     ///     float n = dot(q,q);
-    ///     
+    ///
     ///          if( k < 0.0 ) return sqrt(h*(n            )) - ra;
     ///     else if( k > c.x ) return sqrt(h*(n+1.0-2.0*q.y)) - rb;
     ///                        return m                       - ra;

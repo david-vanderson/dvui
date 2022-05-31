@@ -143,12 +143,12 @@ pub fn Parser(comptime Reader: type) type {
                     const width: u32 = switch (range) {
                         .reduced => mapZeroToMax(try reader.readIntLittle(u8)),
                         .default => mapZeroToMax(try reader.readIntLittle(u16)),
-                        .enhanced => std.math.cast(u32, mapZeroToMax(try reader.readIntLittle(u32))) catch return error.InvalidData,
+                        .enhanced => std.math.cast(u32, mapZeroToMax(try reader.readIntLittle(u32))) orelse return error.InvalidData,
                     };
                     const height: u32 = switch (range) {
                         .reduced => mapZeroToMax(try reader.readIntLittle(u8)),
                         .default => mapZeroToMax(try reader.readIntLittle(u16)),
-                        .enhanced => std.math.cast(u32, mapZeroToMax(try reader.readIntLittle(u32))) catch return error.InvalidData,
+                        .enhanced => std.math.cast(u32, mapZeroToMax(try reader.readIntLittle(u32))) orelse return error.InvalidData,
                     };
 
                     const color_count = try self.readUInt();

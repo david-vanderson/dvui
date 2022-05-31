@@ -774,6 +774,6 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
         }
     };
 
-    var parser = Parser{ .builder = &builder, .tokenizer = Parser.Tokenizer.init(source), .allocator = allocator };
+    var parser = Parser{ .builder = &builder, .tokenizer = Parser.Tokenizer.init(source, null), .allocator = allocator };
     try parser.parse();
 }
