@@ -64,7 +64,7 @@ pub fn build(b: *Builder) void {
       exe.defineCMacro("_THREAD_SAFE", "1");
       exe.addLibPath("/usr/local/lib");
       exe.linkSystemLibrary("SDL2");
-      exe.linkSystemLibrary("SDL2_image");
+      //exe.linkSystemLibrary("SDL2_image");
 
       exe.addPackage(freetype.pkg);
       freetype.link(b, exe, .{});
