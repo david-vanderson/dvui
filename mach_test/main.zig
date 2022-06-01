@@ -21,12 +21,13 @@ sampler: gpu.Sampler,
 
 texture: ?*anyopaque,
 clipr: gui.Rect,
-vertex_buffer: gpu.Buffer,
 vtx: std.ArrayList(gui.Vertex),
-index_buffer: gpu.Buffer,
 idx: std.ArrayList(u32),
-const vertex_buffer_size = 10000;
-const index_buffer_size = 10000;
+
+vertex_buffer: ?gpu.Buffer,
+index_buffer: ?gpu.Buffer,
+var vertex_buffer_size: u32 = 0;
+var index_buffer_size: u32 = 0;
 
 const App = @This();
 
@@ -154,6 +155,37 @@ fn flushRender(app: *App) void {
     const arena = arena_allocator.allocator();
     defer arena_allocator.deinit();
 
+    if (vertex_buffer_size < app.vtx.items.len) {
+      if (app.vertex_buffer) |vb| {
+        vb.release();
+      }
+
+      vertex_buffer_size = @intCast(u32, app.vtx.items.len);
+        
+      //std.debug.print("creating vertex buffer {d}\n", .{vertex_buffer_size});
+      app.vertex_buffer = engine.gpu_driver.device.createBuffer(&.{
+          .usage = .{ .vertex = true, .copy_dst = true },
+          .size = @sizeOf(Vertex) * vertex_buffer_size,
+          .mapped_at_creation = false,
+      });
+    }
+
+    if (index_buffer_size < app.idx.items.len) {
+      if (app.index_buffer) |ib| {
+        ib.release();
+      }
+
+      index_buffer_size = @intCast(u32, app.idx.items.len);
+
+      //std.debug.print("creating index buffer {d}\n", .{index_buffer_size});
+      app.index_buffer = engine.gpu_driver.device.createBuffer(&.{
+          .usage = .{ .index = true, .copy_dst = true },
+          .size = @sizeOf(u32) * index_buffer_size,
+          .mapped_at_creation = false,
+      });
+    }
+
+
     var vertices = arena.alloc(Vertex, app.vtx.items.len) catch unreachable; 
     for (app.vtx.items) |vin, i| {
       vertices[i] = Vertex{.pos = vin.pos, .col = .{
@@ -163,8 +195,8 @@ fn flushRender(app: *App) void {
         @intToFloat(f32, vin.col.a) / 255.0 },
         .uv = vin.uv };
     }
-    encoder.writeBuffer(app.vertex_buffer, 0, Vertex, vertices);
-    encoder.writeBuffer(app.index_buffer, 0, u32, app.idx.items);
+    encoder.writeBuffer(app.vertex_buffer.?, 0, Vertex, vertices);
+    encoder.writeBuffer(app.index_buffer.?, 0, u32, app.idx.items);
 
     {
         const model = zm.translation(-gui.WindowRectPixels().w / 2, gui.WindowRectPixels().h / 2, 0);
@@ -189,8 +221,8 @@ fn flushRender(app: *App) void {
     };
     const pass = encoder.beginRenderPass(&render_pass_info);
     pass.setPipeline(app.pipeline);
-    pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(Vertex) * app.vtx.items.len);
-    pass.setIndexBuffer(app.index_buffer, .uint32, 0, @sizeOf(u32) * app.idx.items.len);
+    pass.setVertexBuffer(0, app.vertex_buffer.?, 0, @sizeOf(Vertex) * app.vtx.items.len);
+    pass.setIndexBuffer(app.index_buffer.?, .uint32, 0, @sizeOf(u32) * app.idx.items.len);
     pass.setBindGroup(0, bind_group, &.{});
 
     pass.setScissorRect(@floatToInt(u32, app.clipr.x), @floatToInt(u32, app.clipr.y), @floatToInt(u32, @ceil(app.clipr.w)), @floatToInt(u32, @ceil(app.clipr.h)));
@@ -226,20 +258,10 @@ pub fn init(app: *App, engine: *mach.Engine) !void {
 
     app.texture = null;
     app.clipr = gui.Rect{};
+    app.vertex_buffer = null;
+    app.index_buffer = null;
 
-    app.vertex_buffer = engine.gpu_driver.device.createBuffer(&.{
-        .usage = .{ .vertex = true, .copy_dst = true },
-        .size = @sizeOf(Vertex) * vertex_buffer_size,
-        .mapped_at_creation = false,
-    });
-
-    app.index_buffer = engine.gpu_driver.device.createBuffer(&.{
-        .usage = .{ .index = true, .copy_dst = true },
-        .size = @sizeOf(u32) * index_buffer_size,
-        .mapped_at_creation = false,
-    });
-
-
+    
     const mouse_motion_callback = struct {
       fn callback(window: glfw.Window, xpos: f64, ypos: f64) void {
         _ = window;
