@@ -18,8 +18,13 @@ win: gui.Window,
 
 uniform_buffer: gpu.Buffer,
 sampler: gpu.Sampler,
+
+texture: ?*anyopaque,
+clipr: gui.Rect,
 vertex_buffer: gpu.Buffer,
+vtx: std.ArrayList(gui.Vertex),
 index_buffer: gpu.Buffer,
+idx: std.ArrayList(u32),
 const vertex_buffer_size = 10000;
 const index_buffer_size = 10000;
 
@@ -63,7 +68,11 @@ fn textureCreate(userdata: ?*anyopaque, pixels: []const u8, width: u32, height: 
 }
 
 fn textureDestroy(userdata: ?*anyopaque, texture: *anyopaque) void {
-    _ = userdata;
+    const app = @ptrCast(*App, @alignCast(@alignOf(App), userdata));
+    if (app.texture != null and app.texture.? == texture) {
+      // we need this texture for the next flush, delay destroying it
+      app.flushRender();
+    }
     const tex = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), texture));
     tex.release();
     gpa.destroy(tex);
@@ -76,58 +85,38 @@ fn renderGeometry(userdata: ?*anyopaque, tex: ?*anyopaque, vtx: []gui.Vertex, id
     }
 
     const app = @ptrCast(*App, @alignCast(@alignOf(App), userdata));
+
+    //std.debug.print("renderGeometry {} {x}\n", .{clipr, tex});
+
+    if (clipr.x != app.clipr.x or
+        clipr.y != app.clipr.y or
+        clipr.w != app.clipr.w or
+        clipr.h != app.clipr.h or
+        (app.texture == null and tex != null) or
+        (app.texture != null and tex == null) or
+        (app.texture != null and tex != null and app.texture.? != tex.?)) {
+      // clip rect or texture changed, can't coalesce so flush
+      app.flushRender();
+    }
+
+    app.clipr = clipr;
+    app.texture = tex;
+
+    for (idx) |id| {
+      app.idx.append(id + @intCast(u32, app.vtx.items.len)) catch unreachable;
+    }
+
+    for (vtx) |v| {
+      app.vtx.append(v) catch unreachable;
+    }
+}
+
+fn flushRender(app: *App) void {
     const engine = app.app_engine;
-    var texture: ?gpu.Texture = null;
-    if (tex) |t| {
-      texture = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), t)).*;
+
+    if (app.vtx.items.len == 0) {
+      return;
     }
-
-    const encoder = engine.gpu_driver.device.createCommandEncoder(null);
-
-    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const arena = arena_allocator.allocator();
-    defer arena_allocator.deinit();
-
-    var vertices = arena.alloc(Vertex, vtx.len) catch unreachable; 
-    for (vtx) |vin, i| {
-      vertices[i] = Vertex{.pos = vin.pos, .col = .{
-        @intToFloat(f32, vin.col.r) / 255.0,
-        @intToFloat(f32, vin.col.g) / 255.0,
-        @intToFloat(f32, vin.col.b) / 255.0,
-        @intToFloat(f32, vin.col.a) / 255.0 },
-        .uv = vin.uv };
-    }
-    encoder.writeBuffer(app.vertex_buffer, 0, Vertex, vertices);
-
-    //const vertex_buffer = engine.gpu_driver.device.createBuffer(&.{
-    //    .usage = .{ .vertex = true },
-    //    .size = @sizeOf(Vertex) * vtx.len,
-    //    .mapped_at_creation = true,
-    //});
-    //defer vertex_buffer.release();
-    //var vertex_mapped = vertex_buffer.getMappedRange(Vertex, 0, vtx.len);
-    //for (vtx) |vin, i| {
-    //  vertex_mapped[i] = Vertex{.pos = vin.pos, .col = .{
-    //    @intToFloat(f32, vin.col.r) / 255.0,
-    //    @intToFloat(f32, vin.col.g) / 255.0,
-    //    @intToFloat(f32, vin.col.b) / 255.0,
-    //    @intToFloat(f32, vin.col.a) / 255.0 },
-    //    .uv = vin.uv };
-    //}
-
-    //vertex_buffer.unmap();
-
-    encoder.writeBuffer(app.index_buffer, 0, u32, idx);
-
-    //const index_buffer = engine.gpu_driver.device.createBuffer(&.{
-    //    .usage = .{ .index = true },
-    //    .size = @sizeOf(u32) * idx.len,
-    //    .mapped_at_creation = true,
-    //});
-    //defer index_buffer.release();
-    //var index_mapped = index_buffer.getMappedRange(u32, 0, idx.len);
-    //std.mem.copy(u32, index_mapped, idx);
-    //index_buffer.unmap();
 
     const back_buffer_view = engine.gpu_driver.swap_chain.?.getCurrentTextureView();
     defer back_buffer_view.release();
@@ -143,6 +132,11 @@ fn renderGeometry(userdata: ?*anyopaque, tex: ?*anyopaque, vtx: []gui.Vertex, id
     const default_texture_ptr = gui.IconTexture("default_texture", gui.icons.papirus.actions.media_playback_start_symbolic, 1.0).texture;
     const default_texture = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), default_texture_ptr)).*;
 
+    var texture: ?gpu.Texture = null;
+    if (app.texture) |t| {
+      texture = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), t)).*;
+    }
+
     const bind_group = engine.gpu_driver.device.createBindGroup(
         &gpu.BindGroup.Descriptor{
             .layout = app.pipeline.getBindGroupLayout(0),
@@ -154,6 +148,23 @@ fn renderGeometry(userdata: ?*anyopaque, tex: ?*anyopaque, vtx: []gui.Vertex, id
         },
     );
 
+    const encoder = engine.gpu_driver.device.createCommandEncoder(null);
+
+    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const arena = arena_allocator.allocator();
+    defer arena_allocator.deinit();
+
+    var vertices = arena.alloc(Vertex, app.vtx.items.len) catch unreachable; 
+    for (app.vtx.items) |vin, i| {
+      vertices[i] = Vertex{.pos = vin.pos, .col = .{
+        @intToFloat(f32, vin.col.r) / 255.0,
+        @intToFloat(f32, vin.col.g) / 255.0,
+        @intToFloat(f32, vin.col.b) / 255.0,
+        @intToFloat(f32, vin.col.a) / 255.0 },
+        .uv = vin.uv };
+    }
+    encoder.writeBuffer(app.vertex_buffer, 0, Vertex, vertices);
+    encoder.writeBuffer(app.index_buffer, 0, u32, app.idx.items);
 
     {
         const model = zm.translation(-gui.WindowRectPixels().w / 2, gui.WindowRectPixels().h / 2, 0);
@@ -178,12 +189,12 @@ fn renderGeometry(userdata: ?*anyopaque, tex: ?*anyopaque, vtx: []gui.Vertex, id
     };
     const pass = encoder.beginRenderPass(&render_pass_info);
     pass.setPipeline(app.pipeline);
-    pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(Vertex) * vtx.len);
-    pass.setIndexBuffer(app.index_buffer, .uint32, 0, @sizeOf(u32) * idx.len);
+    pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(Vertex) * app.vtx.items.len);
+    pass.setIndexBuffer(app.index_buffer, .uint32, 0, @sizeOf(u32) * app.idx.items.len);
     pass.setBindGroup(0, bind_group, &.{});
 
-    pass.setScissorRect(@floatToInt(u32, clipr.x), @floatToInt(u32, clipr.y), @floatToInt(u32, @ceil(clipr.w)), @floatToInt(u32, @ceil(clipr.h)));
-    pass.drawIndexed(@intCast(u32, idx.len), 1, 0, 0, 0);
+    pass.setScissorRect(@floatToInt(u32, app.clipr.x), @floatToInt(u32, app.clipr.y), @floatToInt(u32, @ceil(app.clipr.w)), @floatToInt(u32, @ceil(app.clipr.h)));
+    pass.drawIndexed(@intCast(u32, app.idx.items.len), 1, 0, 0, 0);
     pass.end();
     pass.release();
     bind_group.release();
@@ -194,10 +205,14 @@ fn renderGeometry(userdata: ?*anyopaque, tex: ?*anyopaque, vtx: []gui.Vertex, id
     var queue = app.app_engine.gpu_driver.device.getQueue();
     queue.submit(&.{command});
     command.release();
+
+    app.vtx.clearRetainingCapacity();
+    app.idx.clearRetainingCapacity();
 }
 
 pub fn init(app: *App, engine: *mach.Engine) !void {
 
+    app.app_engine = engine;
     app.uniform_buffer = engine.gpu_driver.device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = @sizeOf(UniformBufferObject),
@@ -208,6 +223,9 @@ pub fn init(app: *App, engine: *mach.Engine) !void {
         .mag_filter = .linear,
         .min_filter = .linear,
     });
+
+    app.texture = null;
+    app.clipr = gui.Rect{};
 
     app.vertex_buffer = engine.gpu_driver.device.createBuffer(&.{
         .usage = .{ .vertex = true, .copy_dst = true },
@@ -346,11 +364,17 @@ pub fn deinit(app: *App, _: *mach.Engine) void {
 }
 
 pub fn update(app: *App, engine: *mach.Engine) !bool {
-    app.app_engine = engine;
+
+    //std.debug.print("UPDATE\n", .{});
+    app.clipr = gui.Rect{};
+    app.texture = null;
 
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     const arena = arena_allocator.allocator();
     defer arena_allocator.deinit();
+
+    app.vtx = std.ArrayList(gui.Vertex).init(arena);
+    app.idx = std.ArrayList(u32).init(arena);
 
     const size = engine.core.getWindowSize();
     const psize = engine.core.getFramebufferSize();
@@ -390,6 +414,8 @@ pub fn update(app: *App, engine: *mach.Engine) !bool {
 
     const end_micros = app.win.end();
 
+    // flush remaining renders
+    app.flushRender();
     engine.gpu_driver.swap_chain.?.present();
 
     app.win.wait(end_micros, null);
@@ -400,10 +426,10 @@ pub fn update(app: *App, engine: *mach.Engine) !bool {
 
 pub fn TestGui() void {
     {
-      var box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .background = false});
+      var box = gui.Box(@src(), 0, .vertical, .{.expand = .both});
       defer box.deinit();
 
-      var paned = gui.Paned(@src(), 0, .horizontal, 400, .{.expand = .both, .background = false});
+      var paned = gui.Paned(@src(), 0, .horizontal, 400, .{.expand = .both});
       const collapsed = paned.collapsed();
 
       podcastSide(paned);
