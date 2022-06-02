@@ -1,6 +1,7 @@
 fossil git export
 
-mach_test: need to regen vertex_buffer and index_buffer if they are too small
+begin should not draw anything?
+- Window should do simple cursor top-down widget positioning
 
 IconTexture shouldn't have to copy all the pixels just to change the type passed to textureCreate
 

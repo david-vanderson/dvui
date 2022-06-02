@@ -17,6 +17,8 @@ pipeline: gpu.RenderPipeline,
 win: gui.Window,
 
 uniform_buffer: gpu.Buffer,
+uniform_buffer_size: u32,
+uniform_buffer_len: u32,
 sampler: gpu.Sampler,
 
 texture: ?*anyopaque,
@@ -24,14 +26,20 @@ clipr: gui.Rect,
 vtx: std.ArrayList(gui.Vertex),
 idx: std.ArrayList(u32),
 
-vertex_buffer: ?gpu.Buffer,
-index_buffer: ?gpu.Buffer,
-var vertex_buffer_size: u32 = 0;
-var index_buffer_size: u32 = 0;
+encoder: gpu.CommandEncoder,
+
+vertex_buffer: gpu.Buffer,
+index_buffer: gpu.Buffer,
+vertex_buffer_len: u32,
+index_buffer_len: u32,
+vertex_buffer_size: u32,
+index_buffer_size: u32,
 
 const App = @This();
 
 pub const UniformBufferObject = struct {
+    // dawn gives me an error when trying to align uniforms to less than this
+    const Size = 256;
     mat: zm.Mat,
     use_tex: i32,
 };
@@ -70,8 +78,9 @@ fn textureCreate(userdata: ?*anyopaque, pixels: []const u8, width: u32, height: 
 
 fn textureDestroy(userdata: ?*anyopaque, texture: *anyopaque) void {
     const app = @ptrCast(*App, @alignCast(@alignOf(App), userdata));
+    _ = app;
     if (app.texture != null and app.texture.? == texture) {
-      // we need this texture for the next flush, delay destroying it
+      // flush so we don't accidentally release this texture before we use it
       app.flushRender();
     }
     const tex = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), texture));
@@ -119,6 +128,58 @@ fn flushRender(app: *App) void {
       return;
     }
 
+    //std.debug.print("  flush {d} {d}\n", .{app.uniform_buffer_size, app.uniform_buffer_len});
+
+    if (app.uniform_buffer_size < app.uniform_buffer_len + 1 or
+        app.vertex_buffer_size < app.vertex_buffer_len + app.vtx.items.len or
+        app.index_buffer_size < app.index_buffer_len + app.idx.items.len) {
+
+      if (app.uniform_buffer_size < app.uniform_buffer_len + 1) {
+        app.uniform_buffer.release();
+
+        app.uniform_buffer_size = app.uniform_buffer_len + 1;
+
+        //std.debug.print("creating uniform buffer {d}\n", .{app.uniform_buffer_size});
+        app.uniform_buffer = engine.gpu_driver.device.createBuffer(&.{
+            .usage = .{ .copy_dst = true, .uniform = true },
+            .size = UniformBufferObject.Size * app.uniform_buffer_size,
+            .mapped_at_creation = false,
+        });
+
+        app.uniform_buffer_len = 0;
+      }
+
+      if (app.vertex_buffer_size < app.vertex_buffer_len + app.vtx.items.len) {
+        app.vertex_buffer.release();
+
+        app.vertex_buffer_size = app.vertex_buffer_len + @intCast(u32, app.vtx.items.len);
+          
+        //std.debug.print("creating vertex buffer {d}\n", .{app.vertex_buffer_size});
+        app.vertex_buffer = engine.gpu_driver.device.createBuffer(&.{
+            .usage = .{ .vertex = true, .copy_dst = true },
+            .size = @sizeOf(Vertex) * app.vertex_buffer_size,
+            .mapped_at_creation = false,
+        });
+
+        app.vertex_buffer_len = 0;
+      }
+
+      if (app.index_buffer_size < app.index_buffer_len + app.idx.items.len) {
+        app.index_buffer.release();
+
+        app.index_buffer_size = app.index_buffer_len + @intCast(u32, app.idx.items.len);
+
+        //std.debug.print("creating index buffer {d}\n", .{app.index_buffer_size});
+        app.index_buffer = engine.gpu_driver.device.createBuffer(&.{
+            .usage = .{ .index = true, .copy_dst = true },
+            .size = @sizeOf(u32) * app.index_buffer_size,
+            .mapped_at_creation = false,
+        });
+
+        app.index_buffer_len = 0;
+      }
+    }
+
     const back_buffer_view = engine.gpu_driver.swap_chain.?.getCurrentTextureView();
     defer back_buffer_view.release();
 
@@ -138,66 +199,6 @@ fn flushRender(app: *App) void {
       texture = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), t)).*;
     }
 
-    const bind_group = engine.gpu_driver.device.createBindGroup(
-        &gpu.BindGroup.Descriptor{
-            .layout = app.pipeline.getBindGroupLayout(0),
-            .entries = &.{
-                gpu.BindGroup.Entry.buffer(0, app.uniform_buffer, 0, @sizeOf(UniformBufferObject)),
-                gpu.BindGroup.Entry.sampler(1, app.sampler),
-                gpu.BindGroup.Entry.textureView(2, (texture orelse default_texture).createView(&gpu.TextureView.Descriptor{})),
-            },
-        },
-    );
-
-    const encoder = engine.gpu_driver.device.createCommandEncoder(null);
-
-    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const arena = arena_allocator.allocator();
-    defer arena_allocator.deinit();
-
-    if (vertex_buffer_size < app.vtx.items.len) {
-      if (app.vertex_buffer) |vb| {
-        vb.release();
-      }
-
-      vertex_buffer_size = @intCast(u32, app.vtx.items.len);
-        
-      //std.debug.print("creating vertex buffer {d}\n", .{vertex_buffer_size});
-      app.vertex_buffer = engine.gpu_driver.device.createBuffer(&.{
-          .usage = .{ .vertex = true, .copy_dst = true },
-          .size = @sizeOf(Vertex) * vertex_buffer_size,
-          .mapped_at_creation = false,
-      });
-    }
-
-    if (index_buffer_size < app.idx.items.len) {
-      if (app.index_buffer) |ib| {
-        ib.release();
-      }
-
-      index_buffer_size = @intCast(u32, app.idx.items.len);
-
-      //std.debug.print("creating index buffer {d}\n", .{index_buffer_size});
-      app.index_buffer = engine.gpu_driver.device.createBuffer(&.{
-          .usage = .{ .index = true, .copy_dst = true },
-          .size = @sizeOf(u32) * index_buffer_size,
-          .mapped_at_creation = false,
-      });
-    }
-
-
-    var vertices = arena.alloc(Vertex, app.vtx.items.len) catch unreachable; 
-    for (app.vtx.items) |vin, i| {
-      vertices[i] = Vertex{.pos = vin.pos, .col = .{
-        @intToFloat(f32, vin.col.r) / 255.0,
-        @intToFloat(f32, vin.col.g) / 255.0,
-        @intToFloat(f32, vin.col.b) / 255.0,
-        @intToFloat(f32, vin.col.a) / 255.0 },
-        .uv = vin.uv };
-    }
-    encoder.writeBuffer(app.vertex_buffer.?, 0, Vertex, vertices);
-    encoder.writeBuffer(app.index_buffer.?, 0, u32, app.idx.items);
-
     {
         const model = zm.translation(-gui.WindowRectPixels().w / 2, gui.WindowRectPixels().h / 2, 0);
         const view = zm.lookAtLh(
@@ -211,43 +212,73 @@ fn flushRender(app: *App) void {
             .mat = mvp,
             .use_tex = if (texture != null) 1 else 0,
         };
-        encoder.writeBuffer(app.uniform_buffer, 0, UniformBufferObject, &.{ubo});
+        app.encoder.writeBuffer(app.uniform_buffer, UniformBufferObject.Size * app.uniform_buffer_len, UniformBufferObject, &.{ubo});
     }
+
+    const bind_group = engine.gpu_driver.device.createBindGroup(
+        &gpu.BindGroup.Descriptor{
+            .layout = app.pipeline.getBindGroupLayout(0),
+            .entries = &.{
+                gpu.BindGroup.Entry.buffer(0, app.uniform_buffer, UniformBufferObject.Size * app.uniform_buffer_len, @sizeOf(UniformBufferObject)),
+                gpu.BindGroup.Entry.sampler(1, app.sampler),
+                gpu.BindGroup.Entry.textureView(2, (texture orelse default_texture).createView(&gpu.TextureView.Descriptor{})),
+            },
+        },
+    );
+
+    app.uniform_buffer_len += 1;
+
+    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const arena = arena_allocator.allocator();
+    defer arena_allocator.deinit();
+
+    var vertices = arena.alloc(Vertex, app.vtx.items.len) catch unreachable; 
+    for (app.vtx.items) |vin, i| {
+      vertices[i] = Vertex{.pos = vin.pos, .col = .{
+        @intToFloat(f32, vin.col.r) / 255.0,
+        @intToFloat(f32, vin.col.g) / 255.0,
+        @intToFloat(f32, vin.col.b) / 255.0,
+        @intToFloat(f32, vin.col.a) / 255.0 },
+        .uv = vin.uv };
+    }
+    //std.debug.print("vertexes {d} + {d} indexes {d} + {d}\n", .{app.vertex_buffer_len, app.vtx.items.len, app.index_buffer_len, app.idx.items.len});
+    app.encoder.writeBuffer(app.vertex_buffer, app.vertex_buffer_len * @sizeOf(Vertex), Vertex, vertices);
+    app.encoder.writeBuffer(app.index_buffer, app.index_buffer_len * @sizeOf(u32), u32, app.idx.items);
 
 
     const render_pass_info = gpu.RenderPassEncoder.Descriptor{
         .color_attachments = &.{color_attachment},
         .depth_stencil_attachment = null,
     };
-    const pass = encoder.beginRenderPass(&render_pass_info);
+    const pass = app.encoder.beginRenderPass(&render_pass_info);
     pass.setPipeline(app.pipeline);
-    pass.setVertexBuffer(0, app.vertex_buffer.?, 0, @sizeOf(Vertex) * app.vtx.items.len);
-    pass.setIndexBuffer(app.index_buffer.?, .uint32, 0, @sizeOf(u32) * app.idx.items.len);
+    pass.setVertexBuffer(0, app.vertex_buffer, @sizeOf(Vertex) * app.vertex_buffer_len, @sizeOf(Vertex) * @intCast(u32, app.vtx.items.len));
+    pass.setIndexBuffer(app.index_buffer, .uint32, @sizeOf(u32) * app.index_buffer_len, @sizeOf(u32) * @intCast(u32, app.idx.items.len));
     pass.setBindGroup(0, bind_group, &.{});
 
     pass.setScissorRect(@floatToInt(u32, app.clipr.x), @floatToInt(u32, app.clipr.y), @floatToInt(u32, @ceil(app.clipr.w)), @floatToInt(u32, @ceil(app.clipr.h)));
+
     pass.drawIndexed(@intCast(u32, app.idx.items.len), 1, 0, 0, 0);
     pass.end();
     pass.release();
     bind_group.release();
 
-    var command = encoder.finish(null);
-    encoder.release();
-
-    var queue = app.app_engine.gpu_driver.device.getQueue();
-    queue.submit(&.{command});
-    command.release();
+    app.vertex_buffer_len += @intCast(u32, app.vtx.items.len);
+    app.index_buffer_len += @intCast(u32, app.idx.items.len);
 
     app.vtx.clearRetainingCapacity();
     app.idx.clearRetainingCapacity();
 }
 
+
 pub fn init(app: *App, engine: *mach.Engine) !void {
 
     app.app_engine = engine;
+    app.uniform_buffer_size = 1;
+    app.uniform_buffer_len = 0;
     app.uniform_buffer = engine.gpu_driver.device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
-        .size = @sizeOf(UniformBufferObject),
+        .size = UniformBufferObject.Size * app.uniform_buffer_size,
         .mapped_at_creation = false,
     });
 
@@ -258,9 +289,20 @@ pub fn init(app: *App, engine: *mach.Engine) !void {
 
     app.texture = null;
     app.clipr = gui.Rect{};
-    app.vertex_buffer = null;
-    app.index_buffer = null;
-
+    app.vertex_buffer_size = 1000;
+    app.index_buffer_size = 1000;
+    app.vertex_buffer_len = 0;
+    app.index_buffer_len = 0;
+    app.vertex_buffer = engine.gpu_driver.device.createBuffer(&.{
+        .usage = .{ .vertex = true, .copy_dst = true },
+        .size = @sizeOf(Vertex) * app.vertex_buffer_size,
+        .mapped_at_creation = false,
+    });
+    app.index_buffer = engine.gpu_driver.device.createBuffer(&.{
+        .usage = .{ .index = true, .copy_dst = true },
+        .size = @sizeOf(u32) * app.index_buffer_size,
+        .mapped_at_creation = false,
+    });
     
     const mouse_motion_callback = struct {
       fn callback(window: glfw.Window, xpos: f64, ypos: f64) void {
@@ -398,6 +440,12 @@ pub fn update(app: *App, engine: *mach.Engine) !bool {
     app.vtx = std.ArrayList(gui.Vertex).init(arena);
     app.idx = std.ArrayList(u32).init(arena);
 
+    //std.debug.print("create encoder\n", .{});
+    app.encoder = engine.gpu_driver.device.createCommandEncoder(null);
+    app.uniform_buffer_len = 0;
+    app.vertex_buffer_len = 0;
+    app.index_buffer_len = 0;
+
     const size = engine.core.getWindowSize();
     const psize = engine.core.getFramebufferSize();
     var nstime = app.win.beginWait();
@@ -436,8 +484,15 @@ pub fn update(app: *App, engine: *mach.Engine) !bool {
 
     const end_micros = app.win.end();
 
-    // flush remaining renders
     app.flushRender();
+    var command = app.encoder.finish(null);
+    //std.debug.print("  release encoder\n", .{});
+    app.encoder.release();
+
+    var queue = app.app_engine.gpu_driver.device.getQueue();
+    queue.submit(&.{command});
+    command.release();
+
     engine.gpu_driver.swap_chain.?.present();
 
     app.win.wait(end_micros, null);
