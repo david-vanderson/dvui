@@ -210,10 +210,6 @@ pub fn main() void {
     var pixel_h: i32 = undefined;
     _ = c.SDL_GetRendererOutputSize(renderer, &pixel_w, &pixel_h);
 
-    _ = c.SDL_SetRenderDrawColor(renderer, 75, 75, 75, 255);
-    _ = c.SDL_RenderClear(renderer);
-
-
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
@@ -260,6 +256,8 @@ pub fn main() void {
     }
 
     win.endEvents();
+
+    var window_box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
 
     {
       const oo = gui.Options{.expand = .both};
@@ -651,6 +649,8 @@ pub fn main() void {
         tl.deinit();
       }
     }
+
+    window_box.deinit();
 
     const end_micros = win.end();
 

@@ -440,12 +440,6 @@ pub fn update(app: *App, engine: *mach.Engine) !bool {
     app.vtx = std.ArrayList(gui.Vertex).init(arena);
     app.idx = std.ArrayList(u32).init(arena);
 
-    //std.debug.print("create encoder\n", .{});
-    app.encoder = engine.gpu_driver.device.createCommandEncoder(null);
-    app.uniform_buffer_len = 0;
-    app.vertex_buffer_len = 0;
-    app.index_buffer_len = 0;
-
     const size = engine.core.getWindowSize();
     const psize = engine.core.getFramebufferSize();
     var nstime = app.win.beginWait();
@@ -480,6 +474,12 @@ pub fn update(app: *App, engine: *mach.Engine) !bool {
 
     app.win.endEvents();
 
+    //std.debug.print("create encoder\n", .{});
+    app.encoder = engine.gpu_driver.device.createCommandEncoder(null);
+    app.uniform_buffer_len = 0;
+    app.vertex_buffer_len = 0;
+    app.index_buffer_len = 0;
+
     TestGui();
 
     const end_micros = app.win.end();
@@ -503,6 +503,9 @@ pub fn update(app: *App, engine: *mach.Engine) !bool {
 
 pub fn TestGui() void {
     {
+      var window_box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
+      defer window_box.deinit();
+
       var box = gui.Box(@src(), 0, .vertical, .{.expand = .both});
       defer box.deinit();
 

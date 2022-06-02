@@ -1963,7 +1963,7 @@ pub const Window = struct {
   wd: WidgetData = undefined,
   rect_pixels: Rect = Rect{},  // pixels
   natural_scale: f32 = 1.0,
-  layout: BoxWidget = undefined,
+  cursor: f32 = 0,
 
   captureID: ?u32 = null,
   captured_last_frame: bool = false,
@@ -2422,9 +2422,7 @@ pub const Window = struct {
     self.wd.parent = self.widget();
     self.menu_current = null;
 
-    self.layout = BoxWidget{};
-    self.layout.init(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
-    self.layout.install();
+    self.cursor = self.wd.rect.y;
   }
 
   pub fn CursorRequested(self: *const Self) ?CursorKind {
@@ -2439,8 +2437,6 @@ pub const Window = struct {
   }
 
   pub fn end(self: *Self) ?u32 {
-    self.layout.deinit();
-
     DeferRenderPop();
 
     // events may have been tagged with a focus widget that never showed up, so
@@ -2520,13 +2516,13 @@ pub const Window = struct {
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    return PlaceIn(id, self.wd.rect, min_size, e, g);
+    var r = self.wd.rect;
+    r.y = self.cursor;
+    return PlaceIn(id, r, min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
-    // the base window doesn't react to min sizes
-    _ = self;
-    _ = s;
+    self.cursor += s.h;
   }
 
   pub fn screenRectScale(self: *Self, r: Rect) RectScale {

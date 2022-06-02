@@ -216,9 +216,6 @@ pub fn main() void {
     var pixel_h: c_int = undefined;
     _ = c.SDL_GetRendererOutputSize(renderer, &pixel_w, &pixel_h);
 
-    _ = c.SDL_SetRenderDrawColor(renderer, 75, 75, 75, 255);
-    _ = c.SDL_RenderClear(renderer);
-
     var nstime = win.beginWait();
     win.begin(arena, nstime,
       @intCast(u32, window_w),
@@ -249,6 +246,9 @@ pub fn main() void {
     win.endEvents();
 
     {
+      var window_box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
+      defer window_box.deinit();
+
       var scale = gui.Scale(@src(), 0, 1.0, .{.expand = .both, .background = false}); 
       defer scale.deinit();
 
