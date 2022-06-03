@@ -55,7 +55,7 @@ fn textureCreate(userdata: ?*anyopaque, pixels: []const u8, width: u32, height: 
 
   const img_size = gpu.Extent3D{ .width = width, .height = height };
   var texture = gpa.create(gpu.Texture) catch unreachable;
-  texture.* = app.app_engine.gpu_driver.device.createTexture(&.{
+  texture.* = app.app_engine.device.createTexture(&.{
       .size = img_size,
       .format = .rgba8_unorm,
       .usage = .{
@@ -70,7 +70,7 @@ fn textureCreate(userdata: ?*anyopaque, pixels: []const u8, width: u32, height: 
       .rows_per_image = @intCast(u32, height),
   };
 
-  var queue = app.app_engine.gpu_driver.device.getQueue();
+  var queue = app.app_engine.device.getQueue();
   queue.writeTexture(&.{ .texture = texture.* }, &data_layout, &img_size, u8, pixels);
 
   return texture;
@@ -140,7 +140,7 @@ fn flushRender(app: *App) void {
         app.uniform_buffer_size = app.uniform_buffer_len + 1;
 
         //std.debug.print("creating uniform buffer {d}\n", .{app.uniform_buffer_size});
-        app.uniform_buffer = engine.gpu_driver.device.createBuffer(&.{
+        app.uniform_buffer = engine.device.createBuffer(&.{
             .usage = .{ .copy_dst = true, .uniform = true },
             .size = UniformBufferObject.Size * app.uniform_buffer_size,
             .mapped_at_creation = false,
@@ -155,7 +155,7 @@ fn flushRender(app: *App) void {
         app.vertex_buffer_size = app.vertex_buffer_len + @intCast(u32, app.vtx.items.len);
           
         //std.debug.print("creating vertex buffer {d}\n", .{app.vertex_buffer_size});
-        app.vertex_buffer = engine.gpu_driver.device.createBuffer(&.{
+        app.vertex_buffer = engine.device.createBuffer(&.{
             .usage = .{ .vertex = true, .copy_dst = true },
             .size = @sizeOf(Vertex) * app.vertex_buffer_size,
             .mapped_at_creation = false,
@@ -170,7 +170,7 @@ fn flushRender(app: *App) void {
         app.index_buffer_size = app.index_buffer_len + @intCast(u32, app.idx.items.len);
 
         //std.debug.print("creating index buffer {d}\n", .{app.index_buffer_size});
-        app.index_buffer = engine.gpu_driver.device.createBuffer(&.{
+        app.index_buffer = engine.device.createBuffer(&.{
             .usage = .{ .index = true, .copy_dst = true },
             .size = @sizeOf(u32) * app.index_buffer_size,
             .mapped_at_creation = false,
@@ -180,7 +180,7 @@ fn flushRender(app: *App) void {
       }
     }
 
-    const back_buffer_view = engine.gpu_driver.swap_chain.?.getCurrentTextureView();
+    const back_buffer_view = engine.swap_chain.?.getCurrentTextureView();
     defer back_buffer_view.release();
 
     const color_attachment = gpu.RenderPassColorAttachment{
@@ -215,7 +215,7 @@ fn flushRender(app: *App) void {
         app.encoder.writeBuffer(app.uniform_buffer, UniformBufferObject.Size * app.uniform_buffer_len, UniformBufferObject, &.{ubo});
     }
 
-    const bind_group = engine.gpu_driver.device.createBindGroup(
+    const bind_group = engine.device.createBindGroup(
         &gpu.BindGroup.Descriptor{
             .layout = app.pipeline.getBindGroupLayout(0),
             .entries = &.{
@@ -276,13 +276,13 @@ pub fn init(app: *App, engine: *mach.Engine) !void {
     app.app_engine = engine;
     app.uniform_buffer_size = 1;
     app.uniform_buffer_len = 0;
-    app.uniform_buffer = engine.gpu_driver.device.createBuffer(&.{
+    app.uniform_buffer = engine.device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = UniformBufferObject.Size * app.uniform_buffer_size,
         .mapped_at_creation = false,
     });
 
-    app.sampler = engine.gpu_driver.device.createSampler(&.{
+    app.sampler = engine.device.createSampler(&.{
         .mag_filter = .linear,
         .min_filter = .linear,
     });
@@ -293,12 +293,12 @@ pub fn init(app: *App, engine: *mach.Engine) !void {
     app.index_buffer_size = 1000;
     app.vertex_buffer_len = 0;
     app.index_buffer_len = 0;
-    app.vertex_buffer = engine.gpu_driver.device.createBuffer(&.{
+    app.vertex_buffer = engine.device.createBuffer(&.{
         .usage = .{ .vertex = true, .copy_dst = true },
         .size = @sizeOf(Vertex) * app.vertex_buffer_size,
         .mapped_at_creation = false,
     });
-    app.index_buffer = engine.gpu_driver.device.createBuffer(&.{
+    app.index_buffer = engine.device.createBuffer(&.{
         .usage = .{ .index = true, .copy_dst = true },
         .size = @sizeOf(u32) * app.index_buffer_size,
         .mapped_at_creation = false,
@@ -320,7 +320,7 @@ pub fn init(app: *App, engine: *mach.Engine) !void {
         pending_events.append(e) catch unreachable;
       }
     }.callback;
-    engine.core.internal.window.setCursorPosCallback(mouse_motion_callback);
+    engine.internal.window.setCursorPosCallback(mouse_motion_callback);
 
     const mouse_button_callback = struct {
       fn callback(window: glfw.Window, button: glfw.mouse_button.MouseButton, action: glfw.Action, mods: glfw.Mods) void {
@@ -354,9 +354,9 @@ pub fn init(app: *App, engine: *mach.Engine) !void {
         pending_events.append(e) catch unreachable;
       }
     }.callback;
-    engine.core.internal.window.setMouseButtonCallback(mouse_button_callback);
+    engine.internal.window.setMouseButtonCallback(mouse_button_callback);
 
-    const vs_module = engine.gpu_driver.device.createShaderModule(&.{
+    const vs_module = engine.device.createShaderModule(&.{
         .label = "my vertex shader",
         .code = .{ .wgsl = @embedFile("vert.wgsl") },
     });
@@ -373,7 +373,7 @@ pub fn init(app: *App, engine: *mach.Engine) !void {
         .attributes = &vertex_attributes,
     };
 
-    const fs_module = engine.gpu_driver.device.createShaderModule(&.{
+    const fs_module = engine.device.createShaderModule(&.{
         .label = "my fragment shader",
         .code = .{ .wgsl = @embedFile("frag.wgsl") },
     });
@@ -392,7 +392,7 @@ pub fn init(app: *App, engine: *mach.Engine) !void {
         },
     };
     const color_target = gpu.ColorTargetState{
-        .format = engine.gpu_driver.swap_chain_format,
+        .format = engine.swap_chain_format,
         .blend = &blend,
         .write_mask = gpu.ColorWriteMask.all,
     };
@@ -415,7 +415,7 @@ pub fn init(app: *App, engine: *mach.Engine) !void {
         },
     };
 
-    app.pipeline = engine.gpu_driver.device.createRenderPipeline(&pipeline_descriptor);
+    app.pipeline = engine.device.createRenderPipeline(&pipeline_descriptor);
 
     vs_module.release();
     fs_module.release();
@@ -440,16 +440,16 @@ pub fn update(app: *App, engine: *mach.Engine) !bool {
     app.vtx = std.ArrayList(gui.Vertex).init(arena);
     app.idx = std.ArrayList(u32).init(arena);
 
-    const size = engine.core.getWindowSize();
-    const psize = engine.core.getFramebufferSize();
+    const size = engine.getWindowSize();
+    const psize = engine.getFramebufferSize();
     var nstime = app.win.beginWait();
     app.win.begin(arena, nstime, size.width, size.height, psize.width, psize.height);
 
-    while (engine.core.pollEvent()) |event| {
+    while (engine.pollEvent()) |event| {
         switch (event) {
             .key_press => |ev| {
                 if (ev.key == .space)
-                    engine.core.setShouldClose(true);
+                    engine.setShouldClose(true);
             },
             else => {},
         }
@@ -475,7 +475,7 @@ pub fn update(app: *App, engine: *mach.Engine) !bool {
     app.win.endEvents();
 
     //std.debug.print("create encoder\n", .{});
-    app.encoder = engine.gpu_driver.device.createCommandEncoder(null);
+    app.encoder = engine.device.createCommandEncoder(null);
     app.uniform_buffer_len = 0;
     app.vertex_buffer_len = 0;
     app.index_buffer_len = 0;
@@ -489,11 +489,11 @@ pub fn update(app: *App, engine: *mach.Engine) !bool {
     //std.debug.print("  release encoder\n", .{});
     app.encoder.release();
 
-    var queue = app.app_engine.gpu_driver.device.getQueue();
+    var queue = app.app_engine.device.getQueue();
     queue.submit(&.{command});
     command.release();
 
-    engine.gpu_driver.swap_chain.?.present();
+    engine.swap_chain.?.present();
 
     app.win.wait(end_micros, null);
 
