@@ -3937,13 +3937,13 @@ pub const ScrollAreaWidget = struct {
 
     const max_scroll = math.max(0, self.virtualSize.h - self.wd.contentRect().h);
     if (self.scroll < 0) {
-      self.scroll = math.min(0, self.scroll + 250 * AnimationRate());
+      self.scroll = math.min(0, math.max(-20 * self.wd.scale(), self.scroll + 250 * AnimationRate()));
       if (self.scroll < 0) {
         CueFrame();
       }
     }
     else if (self.scroll > max_scroll) {
-      self.scroll = math.max(max_scroll, self.scroll - 250 * AnimationRate());
+      self.scroll = math.max(max_scroll, math.min(max_scroll + 20 * self.wd.scale(), self.scroll - 250 * AnimationRate()));
       if (self.scroll > max_scroll) {
         CueFrame();
       }
@@ -5597,6 +5597,10 @@ pub const WidgetData = struct {
 
   pub fn placeInsideNoExpand(self: *WidgetData) void {
     self.rect = PlaceIn(null, self.rect, self.min_size, .none, self.options.gravity orelse .upleft);
+  }
+
+  pub fn scale(self: *const WidgetData) f32 {
+    return self.parent.screenRectScale(self.rect).s;
   }
 
   pub fn borderRect(self: *const WidgetData) Rect {

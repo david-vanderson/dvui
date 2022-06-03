@@ -1,9 +1,5 @@
 fossil git export
 
-zargio:
-- better scroll area behavior so that when you are scrolled to the bottom and the content gets shorter it doesn't slowly scroll back into view
-- can assign app_engine just once
-
 ayush:
 Btw you can set up a build file yourself by using the App struct in mach's build.zig. It is basically a module to make it easy to make your applications in mach
 
@@ -67,6 +63,8 @@ cursor stuff needs to differentiate between owning the whole gui and doing extra
 - if the last mouse point is over the gui OR the gui has captured the mouse
   - then the gui sets the cursor (or sets it to arrow if it was set last frame)
 - otherwise gui doesn't want to set the cursor
+
+when we have a widget that has captured the mouse, need to capture the mouse in the underlying window system so click-dragging works even when the mouse pointer goes outside the window
 
 convert:
 - ScrollBar
