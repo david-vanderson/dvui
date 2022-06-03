@@ -9,7 +9,7 @@ integration points:
 - initialization
 !- cursors
 !- clipping
-- pollevent/waiteventtimeout
+!- pollevent/waiteventtimeout
 !- keysym and mods
 - colors
 - clipboard text

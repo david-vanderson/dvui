@@ -164,6 +164,21 @@ fn textureDestroy(userdata: ?*anyopaque, texture: *anyopaque) void {
   c.SDL_DestroyTexture(@ptrCast(*c.SDL_Texture, texture));
 }
 
+fn hasEvent(userdata: ?*anyopaque) bool {
+  _ = userdata;
+  return c.SDL_PollEvent(null) == 1;
+}
+
+fn waitEvent(userdata: ?*anyopaque) void {
+  _ = userdata;
+  _ = c.SDL_WaitEvent(null);
+}
+
+fn waitEventTimeout(userdata: ?*anyopaque, timeout: f64) void {
+  _ = userdata;
+  _ = c.SDL_WaitEventTimeout(null, @floatToInt(c_int, @ceil(timeout * 1000)));
+}
+
 pub fn main() void {
   if (c.SDL_Init(c.SDL_INIT_EVERYTHING) < 0) {
     std.debug.print("Couldn't initialize SDL: {s}\n", .{c.SDL_GetError()});
@@ -186,7 +201,7 @@ pub fn main() void {
 
   _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_BLEND);
 
-  var win = gui.Window.init(gpa, renderer, renderGeometry, textureCreate, textureDestroy);
+  var win = gui.Window.init(gpa, renderer, renderGeometry, textureCreate, textureDestroy, hasEvent, waitEvent, waitEventTimeout);
 
   var theme_dark = false;
 

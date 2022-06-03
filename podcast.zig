@@ -166,6 +166,21 @@ fn textureDestroy(userdata: ?*anyopaque, texture: *anyopaque) void {
   c.SDL_DestroyTexture(@ptrCast(*c.SDL_Texture, texture));
 }
 
+fn hasEvent(userdata: ?*anyopaque) bool {
+  _ = userdata;
+  return c.SDL_PollEvent(null) == 1;
+}
+
+fn waitEvent(userdata: ?*anyopaque) void {
+  _ = userdata;
+  _ = c.SDL_WaitEvent(null);
+}
+
+fn waitEventTimeout(userdata: ?*anyopaque, timeout: f64) void {
+  _ = userdata;
+  _ = c.SDL_WaitEventTimeout(null, @floatToInt(c_int, @ceil(timeout * 1000)));
+}
+
 
 pub fn main() void {
   if (c.SDL_Init(c.SDL_INIT_EVERYTHING) < 0) {
@@ -201,7 +216,7 @@ pub fn main() void {
   cursor_backing[@enumToInt(gui.CursorKind.bad)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_NO) orelse unreachable;
   cursor_backing[@enumToInt(gui.CursorKind.hand)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_HAND) orelse unreachable;
 
-  var win = gui.Window.init(gpa, renderer, renderGeometry, textureCreate, textureDestroy);
+  var win = gui.Window.init(gpa, renderer, renderGeometry, textureCreate, textureDestroy, hasEvent, waitEvent, waitEventTimeout);
 
   main_loop: while (true) {
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -276,8 +291,7 @@ pub fn main() void {
 
     c.SDL_RenderPresent(renderer);
 
-    _ = end_micros;
-    //win.wait(end_micros, null);
+    win.wait(end_micros, null);
   }
 
   c.SDL_DestroyRenderer(renderer);
