@@ -1,10 +1,5 @@
 fossil git export
 
-begin should not draw anything?
-- Window should do simple cursor top-down widget positioning
-
-IconTexture shouldn't have to copy all the pixels just to change the type passed to textureCreate
-
 zargio:
 - better scroll area behavior so that when you are scrolled to the bottom and the content gets shorter it doesn't slowly scroll back into view
 - can assign app_engine just once
@@ -33,6 +28,7 @@ make arena
 win.begin(arena, logical_size, pixel_size)
 - add events
 win.endEvents();
+- start frame
 - gui code
 us = win.end();
 set_cursor(win.cursor);
@@ -52,8 +48,6 @@ kerning
 DataSet/Get should use widget id and name like Animations
 
 should popups and floating windows inherit the scale of their parents?
-
-SDL: setting cliprect on every renderGeometry call is slow
 
 PanedWidget should do it's mouse events after children
 - otherwise it's hard to grab a scroll grab just to the side of the sash

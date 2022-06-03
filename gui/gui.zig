@@ -581,9 +581,8 @@ pub fn FontCacheGet(font: Font) *FontCacheEntry {
   const ascent = ascender * scale;
   //std.debug.print("fontcache size {d} ascender {d} scale {d} ascent {d}\n", .{font.size, ascender, scale, ascent});
 
-  // make debug texture atlas so we can see if something later goes wrong, the
-  // size needs to be larger than any single glyph to keep the uvs in 0-1 range
-  const size = .{.w = 100, .h = 100};
+  // make debug texture atlas so we can see if something later goes wrong
+  const size = .{.w = 10, .h = 10};
   var pixels = cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * 4) catch unreachable;
   std.mem.set(u8, pixels, 255);
 
@@ -638,14 +637,9 @@ pub fn IconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) Ico
   ) catch unreachable;
   defer image.deinit(cw.arena);
 
-  var pixels = cw.arena.alloc(u8, image.width * image.height * 4) catch unreachable;
-  defer cw.arena.free(pixels);
-  for (image.pixels) |p, i| {
-    pixels[i * 4] = p.r;
-    pixels[i * 4 + 1] = p.g;
-    pixels[i * 4 + 2] = p.b;
-    pixels[i * 4 + 3] = p.a;
-  }
+  var pixels: []u8 = undefined;
+  pixels.ptr = @ptrCast([*]u8, image.pixels.ptr);
+  pixels.len = image.pixels.len * 4;
 
   const texture = cw.textureCreate(cw.userdata, pixels, image.width, image.height);
 
