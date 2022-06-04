@@ -16,5 +16,9 @@ A [Zig](https://ziglang.org/) native GUI toolkit for whole applications or extra
 
 ## Building
 
-Coming soon!
+Current hacky way to build a mach example:
+- In the mach repo, add a new example dir "guidemo"
+- copy gui/ and the contents of mach_test/
+- In mach's build.zig, duplicate the gkurve example line and rename to "guidemo"
+- In mach: zig build run-example-guidemo
 

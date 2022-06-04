@@ -9,7 +9,6 @@ const gui = @import("gui/gui.zig");
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
-var pending_events = std.ArrayList(gui.Event).init(gpa);
 
 app_engine: *mach.Engine,
 pipeline: gpu.RenderPipeline,
@@ -87,6 +86,7 @@ fn textureDestroy(userdata: ?*anyopaque, texture: *anyopaque) void {
     tex.release();
     gpa.destroy(tex);
 }
+
 
 fn renderGeometry(userdata: ?*anyopaque, tex: ?*anyopaque, vtx: []gui.Vertex, idx: []u32) void {
     const clipr = gui.WindowRectPixels().intersect(gui.ClipGet());
@@ -304,58 +304,6 @@ pub fn init(app: *App, engine: *mach.Engine) !void {
         .mapped_at_creation = false,
     });
     
-    const mouse_motion_callback = struct {
-      fn callback(window: glfw.Window, xpos: f64, ypos: f64) void {
-        _ = window;
-        //std.debug.print("mouse motion {d} {d}\n", .{xpos, ypos});
-        var e = gui.Event{
-          .evt = gui.AnyEvent{.mouse = gui.MouseEvent{
-            .state = .motion,
-            .p = .{.x = @floatCast(f32, xpos), .y = @floatCast(f32, ypos)},
-            .dp = .{},
-            .wheel = 0,
-            .floating_win = undefined,
-          }}
-        };
-        pending_events.append(e) catch unreachable;
-      }
-    }.callback;
-    engine.internal.window.setCursorPosCallback(mouse_motion_callback);
-
-    const mouse_button_callback = struct {
-      fn callback(window: glfw.Window, button: glfw.mouse_button.MouseButton, action: glfw.Action, mods: glfw.Mods) void {
-        _ = window;
-        _ = mods;
-        //std.debug.print("mouse button {x} {x} {x}\n", .{button, action, mods});
-        var state: gui.MouseEvent.Kind = undefined;
-        switch (button) {
-          .left => switch (action) {
-            .press => {state = .leftdown;},
-            .release => {state = .leftup;},
-            else => {},
-          },
-          .right => switch (action) { 
-            .press => {state = .rightdown;},
-            .release => {state = .rightup;},
-            else => {},
-          },
-          else => {},
-        }
-
-        var e = gui.Event{
-          .evt = gui.AnyEvent{.mouse = gui.MouseEvent{
-            .state = state,
-            .p = .{},
-            .dp = .{},
-            .wheel = 0,
-            .floating_win = undefined,
-          }}
-        };
-        pending_events.append(e) catch unreachable;
-      }
-    }.callback;
-    engine.internal.window.setMouseButtonCallback(mouse_button_callback);
-
     const vs_module = engine.device.createShaderModule(&.{
         .label = "my vertex shader",
         .code = .{ .wgsl = @embedFile("vert.wgsl") },
@@ -427,6 +375,13 @@ pub fn deinit(app: *App, _: *mach.Engine) void {
     _ = app;
 }
 
+fn toGUIKey(key: mach.Key) gui.keys.Key {
+    return switch (key) {
+        .a => .a,
+        else => .z,
+    };
+}
+
 pub fn update(app: *App, engine: *mach.Engine) !bool {
 
     //std.debug.print("UPDATE\n", .{});
@@ -448,29 +403,37 @@ pub fn update(app: *App, engine: *mach.Engine) !bool {
     while (engine.pollEvent()) |event| {
         switch (event) {
             .key_press => |ev| {
-                if (ev.key == .space)
+                if (ev.key == .space) {
                     engine.setShouldClose(true);
+                }
+                app.win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .down);
             },
-            else => {},
+            .key_release => |ev| {
+                app.win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .up);
+            },
+            .mouse_motion => |mm| {
+                app.win.addEventMouseMotion(@floatCast(f32, mm.x), @floatCast(f32, mm.y));
+            },
+            .mouse_press => |mb| {
+                switch (mb.button) {
+                  .left => app.win.addEventMouseButton(.leftdown),
+                  .right => app.win.addEventMouseButton(.rightdown),
+                  else => {},
+                }
+            },
+            .mouse_release => |mb| {
+                switch (mb.button) {
+                  .left => app.win.addEventMouseButton(.leftup),
+                  .right => app.win.addEventMouseButton(.rightup),
+                  else => {},
+                }
+            },
+            .scroll => |s| {
+                app.win.addEventMouseWheel(@floatCast(f32, s.yoffset));
+            },
+            //else => {},
         }
     }
-
-    for (pending_events.items) |pe| {
-      switch (pe.evt) {
-        .mouse => |me| {
-          switch (me.state) {
-            .motion => {
-              app.win.addEventMouseMotion(me.p.x, me.p.y);
-            },
-            else => {
-              app.win.addEventMouseButton(me.state);
-            },
-          }
-        },
-        else => {},
-      }
-    }
-    pending_events.clearAndFree();
 
     app.win.endEvents();
 

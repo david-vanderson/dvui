@@ -1,4 +1,10 @@
-fossil git export
+
+switch to git
+ - use git submodule for tinyvg and mach-freetype
+
+switch mouse button events to use separate button and action
+
+define events like mach does it
 
 ayush:
 Btw you can set up a build file yourself by using the App struct in mach's build.zig. It is basically a module to make it easy to make your applications in mach

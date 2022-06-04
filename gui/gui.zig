@@ -1895,9 +1895,9 @@ pub const Window = struct {
   renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
   textureCreate: fn (userdata: ?*anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
   textureDestroy: fn (userdata: ?*anyopaque, texture: *anyopaque) void,
-  hasEvent: fn (userdata: ?*anyopaque) bool,
-  waitEvent: fn (userdata: ?*anyopaque) void,
-  waitEventTimeout: fn (userdata: ?*anyopaque, timeout: f64) void,
+  //hasEvent: fn (userdata: ?*anyopaque) bool,
+  //waitEvent: fn (userdata: ?*anyopaque) void,
+  //waitEventTimeout: fn (userdata: ?*anyopaque, timeout: f64) void,
 
   floating_windows_prev: std.ArrayList(FloatingData),
   floating_windows: std.ArrayList(FloatingData),
@@ -1975,9 +1975,9 @@ pub const Window = struct {
     renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
     textureCreate: fn (userdata: ?*anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
     textureDestroy: fn (userdata: ?*anyopaque, texture: *anyopaque) void,
-    hasEvent: fn (userdata: ?*anyopaque) bool,
-    waitEvent: fn (userdata: ?*anyopaque) void,
-    waitEventTimeout: fn (userdata: ?*anyopaque, timeout: f64) void,
+    //hasEvent: fn (userdata: ?*anyopaque) bool,
+    //waitEvent: fn (userdata: ?*anyopaque) void,
+    //waitEventTimeout: fn (userdata: ?*anyopaque, timeout: f64) void,
     ) Self {
     var self = Self{
       .gpa = gpa,
@@ -1999,9 +1999,9 @@ pub const Window = struct {
       .renderGeometry = renderGeometry,
       .textureCreate = textureCreate,
       .textureDestroy = textureDestroy,
-      .hasEvent = hasEvent,
-      .waitEvent = waitEvent,
-      .waitEventTimeout = waitEventTimeout,
+      //.hasEvent = hasEvent,
+      //.waitEvent = waitEvent,
+      //.waitEventTimeout = waitEventTimeout,
       };
 
     self.focused_windowId = self.wd.id;
@@ -2222,37 +2222,37 @@ pub const Window = struct {
     }
 
     _ = target;
-    if (self.hasEvent(self.userdata)) {
-      // there is already an event
-      //std.debug.print("  wait event\n", .{});
-      // if we had a wait target from min_micros leave it
-      return;
-    }
+    //if (self.hasEvent(self.userdata)) {
+    //  // there is already an event
+    //  //std.debug.print("  wait event\n", .{});
+    //  // if we had a wait target from min_micros leave it
+    //  return;
+    //}
 
-    if (end_micros == null) {
-      // no target, wait indefinitely for next event
-      //std.debug.print("  wait indef\n", .{});
-      self.waitEvent(self.userdata);
-      self.loop_wait_target = null;
-    }
-    else if (wait_micros > 0) {
-      // wait conditionally
-      //std.debug.print("  wait {d:6}\n", .{wait_micros});
-      self.waitEventTimeout(self.userdata, @intToFloat(f64, wait_micros) / 1_000_000);
-      if (self.hasEvent(self.userdata)) {
-        // interuppted by event, so don't adjust slop for target
-        self.loop_wait_target = null;
-      }
-      else {
-        // timeout so we are trying to hit the target
-        self.loop_wait_target = self.frame_time_ns + (target * 1000);
-      }
-    }
-    else {
-      // trying to hit the target but ran out of time
-      //std.debug.print("  wait none\n", .{});
-      // if we had a wait target from min_micros leave it
-    }
+    //if (end_micros == null) {
+    //  // no target, wait indefinitely for next event
+    //  //std.debug.print("  wait indef\n", .{});
+    //  self.waitEvent(self.userdata);
+    //  self.loop_wait_target = null;
+    //}
+    //else if (wait_micros > 0) {
+    //  // wait conditionally
+    //  //std.debug.print("  wait {d:6}\n", .{wait_micros});
+    //  self.waitEventTimeout(self.userdata, @intToFloat(f64, wait_micros) / 1_000_000);
+    //  if (self.hasEvent(self.userdata)) {
+    //    // interuppted by event, so don't adjust slop for target
+    //    self.loop_wait_target = null;
+    //  }
+    //  else {
+    //    // timeout so we are trying to hit the target
+    //    self.loop_wait_target = self.frame_time_ns + (target * 1000);
+    //  }
+    //}
+    //else {
+    //  // trying to hit the target but ran out of time
+    //  //std.debug.print("  wait none\n", .{});
+    //  // if we had a wait target from min_micros leave it
+    //}
   }
 
   pub fn begin(self: *Self,
