@@ -201,7 +201,7 @@ pub fn main() void {
 
   _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_BLEND);
 
-  var win = gui.Window.init(gpa, renderer, renderGeometry, textureCreate, textureDestroy, hasEvent, waitEvent, waitEventTimeout);
+  var win = gui.Window.init(gpa, renderer, renderGeometry, textureCreate, textureDestroy);
 
   var theme_dark = false;
 

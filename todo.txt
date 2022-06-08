@@ -47,6 +47,8 @@ xstart and ystart for textSize
 kerning
 - check how sdl_ttf does it
 
+mach: do clipping in the shader?
+
 DataSet/Get should use widget id and name like Animations
 
 should popups and floating windows inherit the scale of their parents?

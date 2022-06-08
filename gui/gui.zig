@@ -2521,11 +2521,14 @@ pub const Window = struct {
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     var r = self.wd.rect;
     r.y = self.cursor;
-    return PlaceIn(id, r, min_size, e, g);
+    const ret = PlaceIn(id, r, min_size, e, g);
+    self.cursor += ret.h;
+    return ret;
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
-    self.cursor += s.h;
+    _ = self;
+    _ = s;
   }
 
   pub fn screenRectScale(self: *Self, r: Rect) RectScale {
@@ -4767,7 +4770,7 @@ pub const ButtonWidget = struct {
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) void {
     self.bc = ButtonContainerWidget{};
-    _ = self.bc.init(src, id_extra, true, opts.overrideIfNull(Defaults));
+    _ = self.bc.init(src, id_extra, true, Defaults.override(opts));
     self.label = label;
   }
 
@@ -4776,7 +4779,7 @@ pub const ButtonWidget = struct {
     self.bc.install();
     const clicked = self.bc.clicked;
 
-    LabelNoFormat(@src(), 0, self.label, self.bc.wd.options.plain());
+    LabelNoFormat(@src(), 0, self.label, self.bc.wd.options.plain().override(.{.gravity = .center}));
 
     self.bc.deinit();
     return clicked;

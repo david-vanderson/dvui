@@ -216,7 +216,7 @@ pub fn main() void {
   cursor_backing[@enumToInt(gui.CursorKind.bad)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_NO) orelse unreachable;
   cursor_backing[@enumToInt(gui.CursorKind.hand)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_HAND) orelse unreachable;
 
-  var win = gui.Window.init(gpa, renderer, renderGeometry, textureCreate, textureDestroy, hasEvent, waitEvent, waitEventTimeout);
+  var win = gui.Window.init(gpa, renderer, renderGeometry, textureCreate, textureDestroy);
 
   main_loop: while (true) {
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
