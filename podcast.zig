@@ -1,6 +1,6 @@
 const std = @import("std");
-const gui = @import("gui/gui.zig");
-const Backend = @import("gui/SDLBackend.zig");
+const gui = @import("src/gui.zig");
+const Backend = @import("src/SDLBackend.zig");
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();

@@ -1,6 +1,6 @@
 const std = @import("std");
-const gui = @import("gui/gui.zig");
-const Backend = @import("gui/SDLBackend.zig");
+const gui = @import("src/gui.zig");
+const Backend = @import("src/SDLBackend.zig");
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
@@ -9,7 +9,7 @@ const gpa = gpa_instance.allocator();
 pub fn main() !void {
   var backend = try Backend.init(800, 600);
 
-  var win = gui.Window.init(gpa, backend.backend());
+  var win = gui.Window.init(gpa, backend.guiBackend());
 
   var theme_dark = false;
 
@@ -443,6 +443,10 @@ pub fn main() !void {
     window_box.deinit();
 
     const end_micros = win.end();
+
+    if (win.CursorRequested()) |cursor| {
+      backend.setCursor(cursor);
+    }
 
     backend.renderPresent();
 
