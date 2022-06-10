@@ -1,7 +1,5 @@
 
-do real backends
-- conditional compilation on which backend to pick for examples?
-- can build.zig build same test with different backends?
+try to put gui on top of an existing mach app
 
 switch to git
  - use git submodule for tinyvg and mach-freetype

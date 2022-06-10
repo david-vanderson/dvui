@@ -154,19 +154,6 @@ pub const Vertex = struct {
 };
 
 
-pub fn renderPresent(self: *MachBackend) void {
-  self.flushRender();
-  var command = self.encoder.finish(null);
-  //std.debug.print("  release encoder\n", .{});
-  self.encoder.release();
-
-  var queue = self.engine.device.getQueue();
-  queue.submit(&.{command});
-  command.release();
-
-  self.engine.swap_chain.?.present();
-}
-
 //pub fn CreateCursors(self: *MachBackend) void {
   //self.cursor_backing[@enumToInt(gui.CursorKind.arrow)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_ARROW) orelse unreachable;
   //self.cursor_backing[@enumToInt(gui.CursorKind.ibeam)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_IBEAM) orelse unreachable;
@@ -188,39 +175,47 @@ fn toGUIKey(key: mach.Key) gui.keys.Key {
     };
 }
 
+pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) void {
+    switch (event) {
+        .key_press => |ev| {
+            win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .down);
+        },
+        .key_release => |ev| {
+            win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .up);
+        },
+        .mouse_motion => |mm| {
+            win.addEventMouseMotion(@floatCast(f32, mm.x), @floatCast(f32, mm.y));
+        },
+        .mouse_press => |mb| {
+            switch (mb.button) {
+              .left => win.addEventMouseButton(.leftdown),
+              .right => win.addEventMouseButton(.rightdown),
+              else => {},
+            }
+        },
+        .mouse_release => |mb| {
+            switch (mb.button) {
+              .left => win.addEventMouseButton(.leftup),
+              .right => win.addEventMouseButton(.rightup),
+              else => {},
+            }
+        },
+        .mouse_scroll => |s| {
+            win.addEventMouseWheel(s.yoffset);
+        },
+        //else => {},
+    }
+}
+
 pub fn pumpEvents(self: *MachBackend, win: *gui.Window) bool {
     while (self.engine.pollEvent()) |event| {
+        self.addEvent(win, event);
         switch (event) {
             .key_press => |ev| {
-                if (ev.key == .space) {
+                if (ev.key == .space)
                     return true;
-                }
-                win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .down);
             },
-            .key_release => |ev| {
-                win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .up);
-            },
-            .mouse_motion => |mm| {
-                win.addEventMouseMotion(@floatCast(f32, mm.x), @floatCast(f32, mm.y));
-            },
-            .mouse_press => |mb| {
-                switch (mb.button) {
-                  .left => win.addEventMouseButton(.leftdown),
-                  .right => win.addEventMouseButton(.rightdown),
-                  else => {},
-                }
-            },
-            .mouse_release => |mb| {
-                switch (mb.button) {
-                  .left => win.addEventMouseButton(.leftup),
-                  .right => win.addEventMouseButton(.rightup),
-                  else => {},
-                }
-            },
-            .mouse_scroll => |s| {
-                win.addEventMouseWheel(s.yoffset);
-            },
-            //else => {},
+            else => {},
         }
     }
 
@@ -228,7 +223,7 @@ pub fn pumpEvents(self: *MachBackend, win: *gui.Window) bool {
 }
 
 pub fn guiBackend(self: *MachBackend) gui.Backend {
-  return gui.Backend.init(self, begin, renderGeometry, textureCreate, textureDestroy);
+  return gui.Backend.init(self, begin, end, renderGeometry, textureCreate, textureDestroy);
 }
 
 pub fn begin(self: *MachBackend, arena: std.mem.Allocator) void {
@@ -241,6 +236,17 @@ pub fn begin(self: *MachBackend, arena: std.mem.Allocator) void {
     self.uniform_buffer_len = 0;
     self.vertex_buffer_len = 0;
     self.index_buffer_len = 0;
+}
+
+pub fn end(self: *MachBackend) void {
+  self.flushRender();
+  var command = self.encoder.finish(null);
+  //std.debug.print("  release encoder\n", .{});
+  self.encoder.release();
+
+  var queue = self.engine.device.getQueue();
+  queue.submit(&.{command});
+  command.release();
 }
 
 pub fn renderGeometry(self: *MachBackend, tex: ?*anyopaque, vtx: []gui.Vertex, idx: []u32) void {

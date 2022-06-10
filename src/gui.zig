@@ -1995,6 +1995,22 @@ pub const Window = struct {
     return self;
   }
 
+  pub fn deinit(self: *Self) void {
+    self.floating_windows_prev.deinit();
+    self.floating_windows.deinit();
+    self.widgets_min_size.deinit();
+    self.widgets_min_size_prev.deinit();
+    self.data_prev.deinit();
+    self.data.deinit();
+    self.data_offset_prev.deinit();
+    self.data_offset.deinit();
+    self.animations.deinit();
+    self.tab_index_prev.deinit();
+    self.tab_index.deinit();
+    self.font_cache.deinit();
+    self.icon_cache.deinit();
+  }
+
   pub fn addEventKey(self: *Self, keysym: keys.Key, mod: keys.Mod, state: KeyEvent.Kind) void {
     self.events.append(Event{
       .focus_windowId = self.focused_windowId,
@@ -2451,6 +2467,8 @@ pub const Window = struct {
       // we'll focus a new window in begin()
       CueFrame();
     }
+
+    self.backend.end();
 
     // This is what CueFrame affects
     if (self.extra_frames_needed > 0) {
@@ -3012,6 +3030,7 @@ pub const PanedWidget = struct {
   collapse_size: f32 = 0,
   data: Data = undefined,
   first_side_id: ?u32 = null,
+  prevClip: Rect = Rect{},
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) void {
     self.wd = WidgetData.init(src, id_extra, opts);
@@ -3024,6 +3043,7 @@ pub const PanedWidget = struct {
     gui.debug("{x} Paned {}", .{self.wd.id, self.wd.rect});
     self.wd.borderAndBackground();
     const rect = self.wd.contentRect();
+    self.prevClip = Clip(self.wd.parent.screenRectScale(rect).r);
 
     if (gui.DataGet(self.wd.id, Data)) |d| {
       self.split_ratio = d.split_ratio;
@@ -3079,6 +3099,7 @@ pub const PanedWidget = struct {
     if (!self.collapsed()) {
       self.processEvents();
     }
+
   }
 
   pub fn collapsed(self: *Self) bool {
@@ -3239,6 +3260,7 @@ pub const PanedWidget = struct {
   }
 
   pub fn deinit(self: *Self) void {
+    ClipSet(self.prevClip);
     gui.DataSet(self.wd.id, Data{.split_ratio = self.split_ratio, .rect = self.wd.contentRect()});
     self.wd.minSizeSetAndCue();
     self.wd.minSizeReportToParent();
@@ -5762,6 +5784,7 @@ pub const Backend = struct {
 
   const VTable = struct {
     begin: fn (ptr: *anyopaque, arena: std.mem.Allocator) void,
+    end: fn (ptr: *anyopaque) void,
     renderGeometry: fn (ptr: *anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
     textureCreate: fn (ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
     textureDestroy: fn (ptr: *anyopaque, texture: *anyopaque) void,
@@ -5769,6 +5792,7 @@ pub const Backend = struct {
 
   pub fn init(pointer: anytype,
     comptime beginFn: fn (ptr: @TypeOf(pointer), arena: std.mem.Allocator) void,
+    comptime endFn: fn (ptr: @TypeOf(pointer)) void,
     comptime renderGeometryFn: fn (ptr: @TypeOf(pointer), texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
     comptime textureCreateFn: fn (ptr: @TypeOf(pointer), pixels: []u8, width: u32, height: u32) *anyopaque,
     comptime textureDestroyFn: fn (ptr: @TypeOf(pointer), texture: *anyopaque) void,
@@ -5783,6 +5807,11 @@ pub const Backend = struct {
       fn beginImpl(ptr: *anyopaque, arena: std.mem.Allocator) void {
         const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
         return @call(.{.modifier = .always_inline}, beginFn, .{self, arena});
+      }
+
+      fn endImpl(ptr: *anyopaque) void {
+        const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+        return @call(.{.modifier = .always_inline}, endFn, .{self});
       }
 
       fn renderGeometryImpl(ptr: *anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void {
@@ -5802,6 +5831,7 @@ pub const Backend = struct {
 
       const vtable = VTable {
         .begin = beginImpl,
+        .end = endImpl,
         .renderGeometry = renderGeometryImpl,
         .textureCreate = textureCreateImpl,
         .textureDestroy = textureDestroyImpl,
@@ -5816,6 +5846,10 @@ pub const Backend = struct {
 
   pub fn begin(self: *Backend, arena: std.mem.Allocator) void {
     self.vtable.begin(self.ptr, arena);
+  }
+
+  pub fn end(self: *Backend) void {
+    self.vtable.end(self.ptr);
   }
 
   pub fn renderGeometry(self: *Backend, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void {
@@ -5837,9 +5871,6 @@ pub fn demo() void {
   };
   var float = gui.FloatingWindow(@src(), 0, false, null, &g.show_demo, .{});
   defer float.deinit();
-
-  var window_box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
-  defer window_box.deinit();
 
   var box = gui.Box(@src(), 0, .vertical, .{.expand = .both});
   defer box.deinit();

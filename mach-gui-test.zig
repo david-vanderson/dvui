@@ -10,17 +10,17 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 win: gui.Window,
-backend: Backend,
+gui_backend: Backend,
 
 const App = @This();
 
 pub fn init(app: *App, engine: *mach.Engine) !void {
-    app.backend = try Backend.init(gpa, engine);
-    app.win = gui.Window.init(gpa, app.backend.guiBackend());
+    app.gui_backend = try Backend.init(gpa, engine);
+    app.win = gui.Window.init(gpa, app.gui_backend.guiBackend());
 }
 
 pub fn deinit(app: *App, _: *mach.Engine) void {
-    app.backend.deinit();
+    app.gui_backend.deinit();
 }
 
 pub fn update(app: *App, engine: *mach.Engine) !void {
@@ -38,7 +38,7 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
         gui.Size{.w = @intToFloat(f32, psize.width), .h = @intToFloat(f32, psize.height)},
     );
 
-    const quit = app.backend.pumpEvents(&app.win);
+    const quit = app.gui_backend.pumpEvents(&app.win);
     if (quit) {
       return engine.setShouldClose(true);
     }
@@ -50,17 +50,17 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
     const end_micros = app.win.end();
 
     //if (app.win.CursorRequested()) |cursor| {
-    //  backend.setCursor(cursor);
+    //  gui_backend.setCursor(cursor);
     //}
 
-    app.backend.renderPresent();
+    engine.swap_chain.?.present();
 
     const wait_event_micros = app.win.wait(end_micros, null);
     if (wait_event_micros == std.math.maxInt(u32)) {
-      app.backend.engine.setWaitEvent(std.math.floatMax(f64));
+      app.gui_backend.engine.setWaitEvent(std.math.floatMax(f64));
     }
     else {
-      app.backend.engine.setWaitEvent(@intToFloat(f64, wait_event_micros) / 1_000_000);
+      app.gui_backend.engine.setWaitEvent(@intToFloat(f64, wait_event_micros) / 1_000_000);
     }
 }
 
