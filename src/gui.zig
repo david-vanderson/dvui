@@ -2950,7 +2950,7 @@ pub const FloatingWindowWidget = struct {
   }
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    return PlaceIn(id, self.wd.rect, min_size, e, g);
+    return PlaceIn(id, self.wd.rect.inset(self.wd.options.borderGet()), min_size, e, g);
   }
 
   pub fn minSizeForChild(self: *Self, s: Size) void {
