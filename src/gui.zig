@@ -5832,23 +5832,29 @@ pub const Backend = struct {
 };
 
 pub fn demo() void {
-    var window_box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
-    defer window_box.deinit();
+  const g = struct {
+    var show_demo: bool = true;
+  };
+  var float = gui.FloatingWindow(@src(), 0, false, null, &g.show_demo, .{});
+  defer float.deinit();
 
-    var box = gui.Box(@src(), 0, .vertical, .{.expand = .both});
-    defer box.deinit();
+  var window_box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
+  defer window_box.deinit();
 
-    var paned = gui.Paned(@src(), 0, .horizontal, 400, .{.expand = .both});
-    const collapsed = paned.collapsed();
+  var box = gui.Box(@src(), 0, .vertical, .{.expand = .both});
+  defer box.deinit();
 
-    podcastSide(paned);
-    episodeSide(paned);
+  var paned = gui.Paned(@src(), 0, .horizontal, 400, .{.expand = .both});
+  const collapsed = paned.collapsed();
 
-    paned.deinit();
+  podcastSide(paned);
+  episodeSide(paned);
 
-    if (collapsed) {
-      player();
-    }
+  paned.deinit();
+
+  if (collapsed) {
+    player();
+  }
 }
 
 fn podcastSide(paned: *gui.PanedWidget) void {
