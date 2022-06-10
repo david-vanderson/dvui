@@ -1,6 +1,14 @@
 
+do real backends
+- conditional compilation on which backend to pick for examples?
+- can build.zig build same test with different backends?
+
+put example/demo gui code into it's own file so anyone can call it
+
 switch to git
  - use git submodule for tinyvg and mach-freetype
+
+update mach-freetype
 
 switch mouse button events to use separate button and action
 

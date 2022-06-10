@@ -541,7 +541,7 @@ const FontCacheEntry = struct {
     }
 
     self.face.loadChar(@intCast(u32, codepoint), .{.render = false}) catch unreachable;
-    const m = self.face.glyph.metrics();
+    const m = self.face.glyph().metrics();
     const minx = @intToFloat(f32, m.horiBearingX) / 64.0;
     const miny = self.ascent - @intToFloat(f32, m.horiBearingY) / 64.0;
 
@@ -577,7 +577,7 @@ pub fn FontCacheGet(font: Font) *FontCacheEntry {
   face.setPixelSizes(0, @floatToInt(u32, font.size)) catch unreachable;
 
   const ascender = @intToFloat(f32, face.ascender()) / 64.0;
-  const scale = @intToFloat(f32, face.sizeMetrics().?.y_scale) / 0x10000;
+  const scale = @intToFloat(f32, face.size().metrics().y_scale) / 0x10000;
   const ascent = ascender * scale;
   //std.debug.print("fontcache size {d} ascender {d} scale {d} ascent {d}\n", .{font.size, ascender, scale, ascent});
 
@@ -588,10 +588,10 @@ pub fn FontCacheGet(font: Font) *FontCacheEntry {
 
   const entry = FontCacheEntry{
     .face = face,
-    .height = @ceil(@intToFloat(f32, face.sizeMetrics().?.height) / 64.0),
+    .height = @ceil(@intToFloat(f32, face.size().metrics().height) / 64.0),
     .ascent = @ceil(ascent),
     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-    .texture_atlas = cw.textureCreate(cw.userdata, pixels, @floatToInt(u32, size.w), @floatToInt(u32, size.h)),
+    .texture_atlas = cw.backend.textureCreate(pixels, @floatToInt(u32, size.w), @floatToInt(u32, size.h)),
     .texture_atlas_size = size,
     .texture_atlas_regen = true,
   };
@@ -641,7 +641,7 @@ pub fn IconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) Ico
   pixels.ptr = @ptrCast([*]u8, image.pixels.ptr);
   pixels.len = image.pixels.len * 4;
 
-  const texture = cw.textureCreate(cw.userdata, pixels, image.width, image.height);
+  const texture = cw.backend.textureCreate(pixels, image.width, image.height);
 
   _ = name;
   //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{name, ask_height, image.width, image.height});
@@ -990,7 +990,7 @@ pub fn PathFillConvex(col: Color) void {
     idx.append(@intCast(u32, bi * 2)) catch unreachable;
   }
 
-  cw.renderGeometry(cw.userdata, null, vtx.items, idx.items);
+  cw.backend.renderGeometry(null, vtx.items, idx.items);
 
   cw.path.clearAndFree();
 }
@@ -1227,7 +1227,7 @@ pub fn PathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, co
     }
   }
 
-  cw.renderGeometry(cw.userdata, null, vtx.items, idx.items);
+  cw.backend.renderGeometry(null, vtx.items, idx.items);
 
   cw.path.clearAndFree();
 }
@@ -1891,13 +1891,7 @@ pub const Window = struct {
     focused_widgetId: ?u32 = null,
   };
 
-  userdata: ?*anyopaque,
-  renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
-  textureCreate: fn (userdata: ?*anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
-  textureDestroy: fn (userdata: ?*anyopaque, texture: *anyopaque) void,
-  //hasEvent: fn (userdata: ?*anyopaque) bool,
-  //waitEvent: fn (userdata: ?*anyopaque) void,
-  //waitEventTimeout: fn (userdata: ?*anyopaque, timeout: f64) void,
+  backend: Backend,
 
   floating_windows_prev: std.ArrayList(FloatingData),
   floating_windows: std.ArrayList(FloatingData),
@@ -1925,6 +1919,7 @@ pub const Window = struct {
 
   frame_time_ns: i128 = 0,
   loop_wait_target: ?i128 = null,
+  loop_wait_target_event: bool = false,
   loop_target_slop: i32 = 0,
   loop_target_slop_frames: i32 = 0,
   frame_times: [30]u32 = [_]u32{0} ** 30,
@@ -1971,13 +1966,7 @@ pub const Window = struct {
 
   pub fn init(
     gpa: std.mem.Allocator,
-    userdata: ?*anyopaque,
-    renderGeometry: fn (userdata: ?*anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
-    textureCreate: fn (userdata: ?*anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
-    textureDestroy: fn (userdata: ?*anyopaque, texture: *anyopaque) void,
-    //hasEvent: fn (userdata: ?*anyopaque) bool,
-    //waitEvent: fn (userdata: ?*anyopaque) void,
-    //waitEventTimeout: fn (userdata: ?*anyopaque, timeout: f64) void,
+    backend: Backend,
     ) Self {
     var self = Self{
       .gpa = gpa,
@@ -1995,13 +1984,7 @@ pub const Window = struct {
       .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
       .icon_cache = std.AutoHashMap(u32, IconCacheEntry).init(gpa),
       .wd = WidgetData{.id = fnv.init().final()},
-      .userdata = userdata,
-      .renderGeometry = renderGeometry,
-      .textureCreate = textureCreate,
-      .textureDestroy = textureDestroy,
-      //.hasEvent = hasEvent,
-      //.waitEvent = waitEvent,
-      //.waitEventTimeout = waitEventTimeout,
+      .backend = backend,
       };
 
     self.focused_windowId = self.wd.id;
@@ -2121,10 +2104,17 @@ pub const Window = struct {
     return fps;
   }
 
-  pub fn beginWait(self: *Self) i128 {
+  pub fn beginWait(self: *Self, has_event: bool) i128 {
     var new_time = math.max(self.frame_time_ns, std.time.nanoTimestamp());
 
     if (self.loop_wait_target) |target| {
+      if (self.loop_wait_target_event and has_event) {
+        // interrupted by event, so don't adjust slop for target
+        //std.debug.print("beginWait interrupted by event\n", .{});
+        return new_time;
+      }
+
+      //std.debug.print("beginWait adjusting slop\n", .{});
       // we were trying to sleep for a specific amount of time, adjust slop to
       // compensate if we didn't hit our target
       if (new_time > target) {
@@ -2153,11 +2143,11 @@ pub const Window = struct {
       }
     }
 
-    //std.debug.print("begin {d:6}\n", .{self.loop_target_slop});
+    //std.debug.print("beginWait {d:6}\n", .{self.loop_target_slop});
     return new_time;
   }
 
-  pub fn wait(self: *Self, end_micros: ?u32, maxFPS: ?f32) void {
+  pub fn wait(self: *Self, end_micros: ?u32, maxFPS: ?f32) u32 {
     // end_micros is the naive value we want to be between last begin and next begin
 
     // minimum time to wait to hit max fps target
@@ -2174,6 +2164,7 @@ pub const Window = struct {
     // assume that we won't target a specific time to sleep but if we do
     // calculate the targets before removing so_far and slop
     self.loop_wait_target = null;
+    self.loop_wait_target_event = false;
     const target_min = min_micros;
     const target = min_micros + wait_micros;
 
@@ -2221,47 +2212,34 @@ pub const Window = struct {
       self.loop_wait_target = self.frame_time_ns + (target_min * 1000);
     }
 
-    _ = target;
-    //if (self.hasEvent(self.userdata)) {
-    //  // there is already an event
-    //  //std.debug.print("  wait event\n", .{});
-    //  // if we had a wait target from min_micros leave it
-    //  return;
-    //}
-
-    //if (end_micros == null) {
-    //  // no target, wait indefinitely for next event
-    //  //std.debug.print("  wait indef\n", .{});
-    //  self.waitEvent(self.userdata);
-    //  self.loop_wait_target = null;
-    //}
-    //else if (wait_micros > 0) {
-    //  // wait conditionally
-    //  //std.debug.print("  wait {d:6}\n", .{wait_micros});
-    //  self.waitEventTimeout(self.userdata, @intToFloat(f64, wait_micros) / 1_000_000);
-    //  if (self.hasEvent(self.userdata)) {
-    //    // interuppted by event, so don't adjust slop for target
-    //    self.loop_wait_target = null;
-    //  }
-    //  else {
-    //    // timeout so we are trying to hit the target
-    //    self.loop_wait_target = self.frame_time_ns + (target * 1000);
-    //  }
-    //}
-    //else {
-    //  // trying to hit the target but ran out of time
-    //  //std.debug.print("  wait none\n", .{});
-    //  // if we had a wait target from min_micros leave it
-    //}
+    if (end_micros == null) {
+      // no target, wait indefinitely for next event
+      self.loop_wait_target = null;
+      //std.debug.print("  wait indef\n", .{});
+      return std.math.maxInt(u32);
+    }
+    else if (wait_micros > 0) {
+      // wait conditionally
+      // since we have a timeout we will try to hit that target but set our
+      // flag so that we don't adjust for the target if we wake up to an event
+      self.loop_wait_target = self.frame_time_ns + (target * 1000);
+      self.loop_wait_target_event = true;
+      //std.debug.print("  wait {d:6}\n", .{wait_micros});
+      return wait_micros;
+    }
+    else {
+      // trying to hit the target but ran out of time
+      //std.debug.print("  wait none\n", .{});
+      return 0;
+      // if we had a wait target from min_micros leave it
+    }
   }
 
   pub fn begin(self: *Self,
     arena: std.mem.Allocator,
     time_ns: i128,
-    window_w: u32,
-    window_h: u32,
-    pixel_w: u32,
-    pixel_h: u32,
+    window_size: Size,
+    pixel_size: Size,
   ) void {
     var micros_since_last: u32 = 0;
     if (time_ns > self.frame_time_ns) {
@@ -2333,10 +2311,10 @@ pub const Window = struct {
     self.tab_index_prev = self.tab_index;
     self.tab_index = @TypeOf(self.tab_index).init(self.tab_index.allocator);
 
-    self.rect_pixels = Rect{.x = 0, .y = 0, .w = @intToFloat(f32, pixel_w), .h = @intToFloat(f32, pixel_h)};
+    self.rect_pixels = pixel_size.rect();
     ClipSet(self.rect_pixels);
 
-    self.wd.rect = Rect{.x = 0, .y = 0, .w = @intToFloat(f32, window_w), .h = @intToFloat(f32, window_h)};
+    self.wd.rect = window_size.rect();
     self.natural_scale = self.rect_pixels.w / self.wd.rect.w; 
 
     debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale});
@@ -2411,7 +2389,7 @@ pub const Window = struct {
 
       for (deadIcons.items) |id| {
         const ice = self.icon_cache.fetchRemove(id);
-        self.textureDestroy(self.userdata, ice.?.value.texture);
+        self.backend.textureDestroy(ice.?.value.texture);
       }
 
       //std.debug.print("icon_cache {d}\n", .{self.icon_cache.count()});
@@ -5113,6 +5091,10 @@ pub const Size = struct {
     return Self{.w = v, .h = v};
   }
 
+  pub fn rect(self: *const Self) Rect {
+    return Rect{.x = 0, .y = 0, .w = self.w, .h = self.h};
+  }
+
   pub fn ceil(self: *const Self) Self {
     return Self{.w = @ceil(self.w), .h = @ceil(self.h)};
   }
@@ -5280,7 +5262,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
 
   if (fce.texture_atlas_regen) {
     fce.texture_atlas_regen = false;
-    cw.textureDestroy(cw.userdata, fce.texture_atlas);
+    cw.backend.textureDestroy(fce.texture_atlas);
 
     const num_glyphs = fce.glyph_info.count();
     var size = Size{};
@@ -5329,7 +5311,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
         e.value_ptr.uv[1] = 0.0 / size.h;
 
         fce.face.loadChar(@intCast(u32, e.key_ptr.*), .{.render = true}) catch unreachable;
-        const bitmap = fce.face.glyph.bitmap();
+        const bitmap = fce.face.glyph().bitmap();
         //std.debug.print("codepoint {d} gi height {d} bitmap rows {d}\n", .{e.key_ptr.*, e.value_ptr.maxy - e.value_ptr.miny, bitmap.rows()});
         var row: i32 = 0;
         while (row < bitmap.rows()) : (row += 1) {
@@ -5352,7 +5334,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
       }
     }
 
-    fce.texture_atlas = cw.textureCreate(cw.userdata, pixels, @floatToInt(u32, size.w), @floatToInt(u32, size.h));
+    fce.texture_atlas = cw.backend.textureCreate(pixels, @floatToInt(u32, size.w), @floatToInt(u32, size.h));
     fce.texture_atlas_size = size;
   }
 
@@ -5431,7 +5413,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
     x += gi.advance * target_fraction;
   }
 
-  cw.renderGeometry(cw.userdata, fce.texture_atlas, vtx.items, idx.items);
+  cw.backend.renderGeometry(fce.texture_atlas, vtx.items, idx.items);
 }
 
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colormod: Color) void {
@@ -5490,7 +5472,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
   idx.append(2) catch unreachable;
   idx.append(3) catch unreachable;
 
-  cw.renderGeometry(cw.userdata, ice.texture, vtx.items, idx.items);
+  cw.backend.renderGeometry(ice.texture, vtx.items, idx.items);
 }
 
 pub const KeyEvent = struct {
@@ -5769,5 +5751,68 @@ pub const Widget = struct {
 
   pub fn bubbleEvent(self: Widget, e: *Event) void {
     return self.vtable.bubbleEvent(self.ptr, e);
+  }
+};
+
+pub const Backend = struct {
+  ptr: *anyopaque,
+  vtable: *const VTable,
+
+  const VTable = struct {
+    renderGeometry: fn (ptr: *anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
+    textureCreate: fn (ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
+    textureDestroy: fn (ptr: *anyopaque, texture: *anyopaque) void,
+  };
+
+  pub fn init(pointer: anytype,
+    comptime renderGeometryFn: fn (ptr: @TypeOf(pointer), texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
+    comptime textureCreateFn: fn (ptr: @TypeOf(pointer), pixels: []u8, width: u32, height: u32) *anyopaque,
+    comptime textureDestroyFn: fn (ptr: @TypeOf(pointer), texture: *anyopaque) void,
+    ) Backend {
+    const Ptr = @TypeOf(pointer);
+    const ptr_info = @typeInfo(Ptr);
+    std.debug.assert(ptr_info == .Pointer); // Must be a pointer
+    std.debug.assert(ptr_info.Pointer.size == .One); // Must be a single-item pointer
+    const alignment = ptr_info.Pointer.alignment;
+
+    const gen = struct {
+      fn renderGeometryImpl(ptr: *anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void {
+        const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+        return @call(.{.modifier = .always_inline}, renderGeometryFn, .{self, texture, vtx, idx});
+      }
+
+      fn textureCreateImpl(ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque {
+        const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+        return @call(.{.modifier = .always_inline}, textureCreateFn, .{self, pixels, width, height});
+      }
+
+      fn textureDestroyImpl(ptr: *anyopaque, texture: *anyopaque) void {
+        const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+        return @call(.{.modifier = .always_inline}, textureDestroyFn, .{self, texture});
+      }
+
+      const vtable = VTable {
+        .renderGeometry = renderGeometryImpl,
+        .textureCreate = textureCreateImpl,
+        .textureDestroy = textureDestroyImpl,
+      };
+    };
+
+    return .{
+      .ptr = pointer,
+      .vtable = &gen.vtable,
+    };
+  }
+
+  pub fn renderGeometry(self: *Backend, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void {
+    self.vtable.renderGeometry(self.ptr, texture, vtx, idx);
+  }
+
+  pub fn textureCreate(self: *Backend, pixels: []u8, width: u32, height: u32) *anyopaque {
+    return self.vtable.textureCreate(self.ptr, pixels, width, height);
+  }
+
+  pub fn textureDestroy(self: *Backend, texture: *anyopaque) void {
+    self.vtable.textureDestroy(self.ptr, texture);
   }
 };

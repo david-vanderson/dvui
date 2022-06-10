@@ -23,7 +23,7 @@ pub fn build(b: *Builder) void {
       //exe.linkSystemLibrary("SDL2_image");
       //exe.linkSystemLibrary("SDL2_ttf");
 
-      exe.addPackage(freetype.pkg);
+      exe.addPackage(freetype.freetype_pkg);
       freetype.link(b, exe, .{});
 
       exe.linkSystemLibrary("z");
@@ -66,7 +66,7 @@ pub fn build(b: *Builder) void {
       exe.linkSystemLibrary("SDL2");
       //exe.linkSystemLibrary("SDL2_image");
 
-      exe.addPackage(freetype.pkg);
+      exe.addPackage(freetype.freetype_pkg);
       freetype.link(b, exe, .{});
 
       exe.linkSystemLibrary("z");
