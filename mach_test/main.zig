@@ -3,7 +3,6 @@ const mach = @import("mach");
 const gpu = @import("gpu");
 const glfw = @import("glfw");
 const zm = @import("zmath");
-const zigimg = @import("zigimg");
 const gui = @import("gui/gui.zig");
 
 
