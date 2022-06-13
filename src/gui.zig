@@ -5340,7 +5340,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
         while (row < bitmap.rows()) : (row += 1) {
           var col: i32 = 0;
           while (col < bitmap.width()) : (col += 1) {
-            const src = bitmap.buffer()[@intCast(usize, row * bitmap.pitch() + col)];
+            const src = bitmap.buffer().?[@intCast(usize, row * bitmap.pitch() + col)];
 
             // because of the extra edge, offset by 1 row and 1 col
             const di = @intCast(usize, (row+1) * @floatToInt(i32, size.w) * 4 + (x + col + 1) * 4);

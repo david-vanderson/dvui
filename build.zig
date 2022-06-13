@@ -31,7 +31,7 @@ pub fn build(b: *Builder) void {
               .name = "mach-test",
               .src = "mach-test.zig",
               .target = target,
-              .deps = &[_]Pkg{ Packages.zmath, freetype.freetype_pkg },
+              .deps = &[_]Pkg{ Packages.zmath, freetype.pkg },
           },
       );
       example_app.setBuildMode(mode);
@@ -54,7 +54,7 @@ pub fn build(b: *Builder) void {
       //exe.linkSystemLibrary("SDL2_image");
       //exe.linkSystemLibrary("SDL2_ttf");
 
-      exe.addPackage(freetype.freetype_pkg);
+      exe.addPackage(freetype.pkg);
       freetype.link(b, exe, .{});
 
       exe.linkSystemLibrary("z");
@@ -97,7 +97,7 @@ pub fn build(b: *Builder) void {
       exe.linkSystemLibrary("SDL2");
       //exe.linkSystemLibrary("SDL2_image");
 
-      exe.addPackage(freetype.freetype_pkg);
+      exe.addPackage(freetype.pkg);
       freetype.link(b, exe, .{});
 
       exe.linkSystemLibrary("z");
