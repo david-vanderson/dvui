@@ -1,15 +1,15 @@
 const std = @import("std");
 const gui = @import("src/gui.zig");
-const Backend = @import("src/SDLBackend.zig");
+const SDLBackend = @import("src/SDLBackend.zig");
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 
 pub fn main() !void {
-  var backend = try Backend.init(800, 600);
+  var win_backend = try SDLBackend.init(800, 600);
 
-  var win = gui.Window.init(gpa, backend.guiBackend());
+  var win = gui.Window.init(gpa, win_backend.guiBackend());
 
   var theme_dark = false;
 
@@ -36,10 +36,10 @@ pub fn main() !void {
       win.theme = &gui.Theme_Adwaita;
     }
 
-    var nstime = win.beginWait(backend.hasEvent());
+    var nstime = win.beginWait(win_backend.hasEvent());
     win.begin(arena, nstime);
 
-    const quit = backend.addAllEvents(&win);
+    const quit = win_backend.addAllEvents(&win);
     if (quit) break :main_loop;
 
     var window_box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
@@ -440,17 +440,19 @@ pub fn main() !void {
     const end_micros = win.end();
 
     if (win.CursorRequested()) |cursor| {
-      backend.setCursor(cursor);
+      win_backend.setCursor(cursor);
     }
 
-    backend.renderPresent();
+    win_backend.renderPresent();
 
     const wait_event_micros = win.wait(end_micros, null);
 
-    backend.waitEventTimeout(wait_event_micros);
+    win_backend.waitEventTimeout(wait_event_micros);
   }
   
-  backend.deinit();
+  win.deinit();
+  win_backend.deinit();
+  win_backend.quit();
 }
 
 fn show_stroke_test_window() void {

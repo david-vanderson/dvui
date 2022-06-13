@@ -5,6 +5,7 @@ A [Zig](https://ziglang.org/) native GUI toolkit for whole applications or extra
 ## Contents
 
 - Immediate Mode Interface
+- Use for whole UI or for debugging on top of existing application
 - Integrate with just a few functions
   - Existing integrations with [Mach](https://machengine.org/) and [SDL](https://libsdl.org/)
 - Icon support via [TinyVG](https://tinyvg.tech/)

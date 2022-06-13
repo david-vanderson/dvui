@@ -3,29 +3,29 @@ const mach = @import("mach");
 const gpu = @import("gpu");
 const zm = @import("zmath");
 const gui = @import("src/gui.zig");
-const Backend = @import("src/MachBackend.zig");
+const MachGuiBackend = @import("src/MachBackend.zig");
 
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 win: gui.Window,
-gui_backend: Backend,
+win_backend: MachGuiBackend,
 
 const App = @This();
 
 pub fn init(app: *App, engine: *mach.Engine) !void {
-    app.gui_backend = try Backend.init(gpa, engine);
-    app.win = gui.Window.init(gpa, app.gui_backend.guiBackend());
+    app.win_backend = try MachGuiBackend.init(gpa, engine);
+    app.win = gui.Window.init(gpa, app.win_backend.guiBackend());
 }
 
 pub fn deinit(app: *App, _: *mach.Engine) void {
-    app.gui_backend.deinit();
+    app.win.deinit();
+    app.win_backend.deinit();
 }
 
 pub fn update(app: *App, engine: *mach.Engine) !void {
 
-    //std.debug.print("UPDATE\n", .{});
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     const arena = arena_allocator.allocator();
     defer arena_allocator.deinit();
@@ -33,7 +33,7 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
     var nstime = app.win.beginWait(engine.hasEvent());
     app.win.begin(arena, nstime);
 
-    const quit = app.gui_backend.addAllEvents(&app.win);
+    const quit = app.win_backend.addAllEvents(&app.win);
     if (quit) {
       return engine.setShouldClose(true);
     }
@@ -43,13 +43,13 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
     const end_micros = app.win.end();
 
     //if (app.win.CursorRequested()) |cursor| {
-    //  gui_backend.setCursor(cursor);
+    //  app.win_backend.setCursor(cursor);
     //}
 
     engine.swap_chain.?.present();
 
     const wait_event_micros = app.win.wait(end_micros, null);
-    app.gui_backend.waitEventTimeout(wait_event_micros);
+    app.win_backend.waitEventTimeout(wait_event_micros);
 }
 
 
