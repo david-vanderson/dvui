@@ -42,7 +42,7 @@ Add the necessary packages to the example (need zmath and freetype):
 ```
 git diff ../../build.zig
 -        .{ .name = "instanced-cube", .packages = &[_]Pkg{Packages.zmath} },
-+        .{ .name = "instanced-cube", .packages = &[_]Pkg{Packages.zmath, freetype.freetype_pkg } },
++        .{ .name = "instanced-cube", .packages = &[_]Pkg{Packages.zmath, freetype.pkg } },
 ```
 
 Add the following to the example:
