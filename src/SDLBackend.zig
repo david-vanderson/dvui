@@ -87,20 +87,6 @@ pub fn renderPresent(self: *SDLBackend) void {
   c.SDL_RenderPresent(self.renderer);
 }
 
-pub fn windowSize(self: *SDLBackend) gui.Size {
-  var w: i32 = undefined;
-  var h: i32 = undefined;
-  _ = c.SDL_GetWindowSize(self.window, &w, &h);
-  return gui.Size{.w = @intToFloat(f32, w), .h = @intToFloat(f32, h)};
-}
-
-pub fn windowPixelSize(self: *SDLBackend) gui.Size {
-  var w: i32 = undefined;
-  var h: i32 = undefined;
-  _ = c.SDL_GetRendererOutputSize(self.renderer, &w, &h);
-  return gui.Size{.w = @intToFloat(f32, w), .h = @intToFloat(f32, h)};
-}
-
 pub fn hasEvent(_: *SDLBackend) bool {
   return c.SDL_PollEvent(null) == 1;
 }
@@ -120,10 +106,27 @@ pub fn CreateCursors(self: *SDLBackend) void {
 }
 
 pub fn guiBackend(self: *SDLBackend) gui.Backend {
-  return gui.Backend.init(self, begin, renderGeometry, textureCreate, textureDestroy);
+  return gui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy);
 }
 
 pub fn begin(_: *SDLBackend, _: std.mem.Allocator) void {
+}
+
+pub fn end(_: *SDLBackend) void {
+}
+
+pub fn pixelSize(self: *SDLBackend) gui.Size {
+  var w: i32 = undefined;
+  var h: i32 = undefined;
+  _ = c.SDL_GetRendererOutputSize(self.renderer, &w, &h);
+  return gui.Size{.w = @intToFloat(f32, w), .h = @intToFloat(f32, h)};
+}
+
+pub fn windowSize(self: *SDLBackend) gui.Size {
+  var w: i32 = undefined;
+  var h: i32 = undefined;
+  _ = c.SDL_GetWindowSize(self.window, &w, &h);
+  return gui.Size{.w = @intToFloat(f32, w), .h = @intToFloat(f32, h)};
 }
 
 pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []gui.Vertex, idx: []u32) void {

@@ -207,6 +207,15 @@ pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) void {
     }
 }
 
+pub fn waitEventTimeout(self: *MachBackend, timeout_micros: u32) void {
+  if (timeout_micros == std.math.maxInt(u32)) {
+    self.engine.setWaitEvent(std.math.floatMax(f64));
+  }
+  else {
+    self.engine.setWaitEvent(@intToFloat(f64, timeout_micros) / 1_000_000);
+  }
+}
+
 pub fn pumpEvents(self: *MachBackend, win: *gui.Window) bool {
     while (self.engine.pollEvent()) |event| {
         self.addEvent(win, event);
@@ -223,7 +232,7 @@ pub fn pumpEvents(self: *MachBackend, win: *gui.Window) bool {
 }
 
 pub fn guiBackend(self: *MachBackend) gui.Backend {
-  return gui.Backend.init(self, begin, end, renderGeometry, textureCreate, textureDestroy);
+  return gui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy);
 }
 
 pub fn begin(self: *MachBackend, arena: std.mem.Allocator) void {
@@ -247,6 +256,16 @@ pub fn end(self: *MachBackend) void {
   var queue = self.engine.device.getQueue();
   queue.submit(&.{command});
   command.release();
+}
+
+pub fn pixelSize(self: *MachBackend) gui.Size {
+    const psize = self.engine.getFramebufferSize();
+    return gui.Size{.w = @intToFloat(f32, psize.width), .h = @intToFloat(f32, psize.height)};
+}
+
+pub fn windowSize(self: *MachBackend) gui.Size {
+    const size = self.engine.getWindowSize();
+    return gui.Size{.w = @intToFloat(f32, size.width), .h = @intToFloat(f32, size.height)};
 }
 
 pub fn renderGeometry(self: *MachBackend, tex: ?*anyopaque, vtx: []gui.Vertex, idx: []u32) void {

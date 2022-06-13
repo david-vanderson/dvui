@@ -25,9 +25,6 @@ pub fn main() !void {
   //var rng = std.rand.DefaultPrng.init(0);
 
   main_loop: while (true) {
-    const window_size = backend.windowSize();
-    const pixel_size = backend.windowPixelSize();
-
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
@@ -40,7 +37,7 @@ pub fn main() !void {
     }
 
     var nstime = win.beginWait(backend.hasEvent());
-    win.begin(arena, nstime, window_size, pixel_size);
+    win.begin(arena, nstime);
 
     const quit = backend.pumpEvents(&win);
     if (quit) break :main_loop;

@@ -1,5 +1,13 @@
 
+get rid of endEvents, do it lazily on first gui call?
+
+start making real demo() contents
+
+write up instructions in readme for how to put on top of a mach app
+
 try to put gui on top of an existing mach app
+- need a slider widget
+- try folding the backend type into Window.init?
 
 switch to git
  - use git submodule for tinyvg and mach-freetype
@@ -7,6 +15,11 @@ switch to git
 switch mouse button events to use separate button and action
 
 define events like mach does it
+
+test what happens if std.time.nanoTimestamp() jumps backwards or forwards
+- if backwards just a tiny bit, stay on frame_time_ns?
+- if backwards more (or forwards a lot), reset frame_time_ns and also shift any animations?
+- check begin() and beginWait()
 
 
 integration points:
@@ -46,6 +59,8 @@ xstart and ystart for textSize
 
 kerning
 - check how sdl_ttf does it
+
+switch to adwaita default font?
 
 mach: do clipping in the shader?
 

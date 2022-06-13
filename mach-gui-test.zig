@@ -30,13 +30,8 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
     const arena = arena_allocator.allocator();
     defer arena_allocator.deinit();
 
-    const size = engine.getWindowSize();
-    const psize = engine.getFramebufferSize();
     var nstime = app.win.beginWait(engine.hasEvent());
-    app.win.begin(arena, nstime,
-        gui.Size{.w = @intToFloat(f32, size.width), .h = @intToFloat(f32, size.height)},
-        gui.Size{.w = @intToFloat(f32, psize.width), .h = @intToFloat(f32, psize.height)},
-    );
+    app.win.begin(arena, nstime);
 
     const quit = app.gui_backend.pumpEvents(&app.win);
     if (quit) {
@@ -56,12 +51,7 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
     engine.swap_chain.?.present();
 
     const wait_event_micros = app.win.wait(end_micros, null);
-    if (wait_event_micros == std.math.maxInt(u32)) {
-      app.gui_backend.engine.setWaitEvent(std.math.floatMax(f64));
-    }
-    else {
-      app.gui_backend.engine.setWaitEvent(@intToFloat(f64, wait_event_micros) / 1_000_000);
-    }
+    app.gui_backend.waitEventTimeout(wait_event_micros);
 }
 
 

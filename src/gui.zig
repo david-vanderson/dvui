@@ -2254,8 +2254,6 @@ pub const Window = struct {
   pub fn begin(self: *Self,
     arena: std.mem.Allocator,
     time_ns: i128,
-    window_size: Size,
-    pixel_size: Size,
   ) void {
     var micros_since_last: u32 = 0;
     if (time_ns > self.frame_time_ns) {
@@ -2327,10 +2325,10 @@ pub const Window = struct {
     self.tab_index_prev = self.tab_index;
     self.tab_index = @TypeOf(self.tab_index).init(self.tab_index.allocator);
 
-    self.rect_pixels = pixel_size.rect();
+    self.rect_pixels = self.backend.pixelSize().rect();
     ClipSet(self.rect_pixels);
 
-    self.wd.rect = window_size.rect();
+    self.wd.rect = self.backend.windowSize().rect();
     self.natural_scale = self.rect_pixels.w / self.wd.rect.w; 
 
     debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale});
@@ -5785,6 +5783,8 @@ pub const Backend = struct {
   const VTable = struct {
     begin: fn (ptr: *anyopaque, arena: std.mem.Allocator) void,
     end: fn (ptr: *anyopaque) void,
+    pixelSize: fn (ptr: *anyopaque) Size,
+    windowSize: fn (ptr: *anyopaque) Size,
     renderGeometry: fn (ptr: *anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
     textureCreate: fn (ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
     textureDestroy: fn (ptr: *anyopaque, texture: *anyopaque) void,
@@ -5793,6 +5793,8 @@ pub const Backend = struct {
   pub fn init(pointer: anytype,
     comptime beginFn: fn (ptr: @TypeOf(pointer), arena: std.mem.Allocator) void,
     comptime endFn: fn (ptr: @TypeOf(pointer)) void,
+    comptime pixelSizeFn: fn (ptr: @TypeOf(pointer)) Size,
+    comptime windowSizeFn: fn (ptr: @TypeOf(pointer)) Size,
     comptime renderGeometryFn: fn (ptr: @TypeOf(pointer), texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
     comptime textureCreateFn: fn (ptr: @TypeOf(pointer), pixels: []u8, width: u32, height: u32) *anyopaque,
     comptime textureDestroyFn: fn (ptr: @TypeOf(pointer), texture: *anyopaque) void,
@@ -5814,6 +5816,16 @@ pub const Backend = struct {
         return @call(.{.modifier = .always_inline}, endFn, .{self});
       }
 
+      fn pixelSizeImpl(ptr: *anyopaque) Size {
+        const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+        return @call(.{.modifier = .always_inline}, pixelSizeFn, .{self});
+      }
+
+      fn windowSizeImpl(ptr: *anyopaque) Size {
+        const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+        return @call(.{.modifier = .always_inline}, windowSizeFn, .{self});
+      }
+
       fn renderGeometryImpl(ptr: *anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void {
         const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
         return @call(.{.modifier = .always_inline}, renderGeometryFn, .{self, texture, vtx, idx});
@@ -5832,6 +5844,8 @@ pub const Backend = struct {
       const vtable = VTable {
         .begin = beginImpl,
         .end = endImpl,
+        .pixelSize = pixelSizeImpl,
+        .windowSize = windowSizeImpl,
         .renderGeometry = renderGeometryImpl,
         .textureCreate = textureCreateImpl,
         .textureDestroy = textureDestroyImpl,
@@ -5850,6 +5864,14 @@ pub const Backend = struct {
 
   pub fn end(self: *Backend) void {
     self.vtable.end(self.ptr);
+  }
+
+  pub fn pixelSize(self: *Backend) Size {
+    return self.vtable.pixelSize(self.ptr);
+  }
+
+  pub fn windowSize(self: *Backend) Size {
+    return self.vtable.windowSize(self.ptr);
   }
 
   pub fn renderGeometry(self: *Backend, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void {

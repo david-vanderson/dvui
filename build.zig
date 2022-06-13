@@ -48,7 +48,7 @@ pub fn build(b: *Builder) void {
       example_run_step.dependOn(&example_run_cmd.step);
     }
 
-    if (false)
+    if (true)
     {
       const exe = b.addExecutable("gui-test", "gui-test.zig");
       exe.addIncludeDir("/usr/local/include");
