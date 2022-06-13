@@ -25,8 +25,6 @@ pub fn main() !void {
     const quit = backend.pumpEvents(&win);
     if (quit) break :main_loop;
 
-    win.endEvents();
-
     {
       var window_box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
       defer window_box.deinit();

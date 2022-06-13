@@ -38,8 +38,6 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
       return engine.setShouldClose(true);
     }
 
-    app.win.endEvents();
-
     gui.demo();
 
     const end_micros = app.win.end();

@@ -2085,30 +2085,6 @@ pub const Window = struct {
     }) catch unreachable;
   }
 
-  pub fn endEvents(self: *Self) void {
-    var haveMotion: bool = false;
-    for (self.events.items) |e| {
-      if (e.evt == .mouse and e.evt.mouse.state == .motion) {
-        haveMotion = true;
-        break;
-      }
-    }
-
-    // synthesize a zero mouse motion event so that we can do mouse cursors
-    // using the motion event path
-    if (!haveMotion) {
-      self.events.append(Event{
-        .evt = AnyEvent{.mouse = MouseEvent{
-          .p = self.mouse_pt,
-          .dp = Point{},
-          .wheel = 0,
-          .floating_win = WindowFor(self.mouse_pt),
-          .state = .motion,
-        }}
-      }) catch unreachable;
-    }
-  }
-
   pub fn FPS(self: *const Self) f32 {
     const diff = self.frame_times[0];
     if (diff == 0) {
@@ -2418,6 +2394,18 @@ pub const Window = struct {
     self.menu_current = null;
 
     self.cursor = self.wd.rect.y;
+
+    // We always want a mouse motion event to do mouse cursors.  So make one (0
+    // motion) at the start.
+    self.events.append(Event{
+      .evt = AnyEvent{.mouse = MouseEvent{
+        .p = self.mouse_pt,
+        .dp = Point{},
+        .wheel = 0,
+        .floating_win = WindowFor(self.mouse_pt),
+        .state = .motion,
+      }}
+    }) catch unreachable;
 
     self.backend.begin(arena);
   }

@@ -1,6 +1,4 @@
 
-get rid of endEvents, do it lazily on first gui call?
-
 start making real demo() contents
 
 write up instructions in readme for how to put on top of a mach app
@@ -81,6 +79,7 @@ premultiplied alpha for all textures (and vertices from PathStroke/Fill?)
 
 sometimes the scrollbar handle gets a 1-pixel line in the middle partway through?
 - are the rounded corner verticies overlapping?
+- see this in run-mach-gui-test
 
 cursor stuff needs to differentiate between owning the whole gui and doing extra gui stuff on top
 - if the last mouse point is over the gui OR the gui has captured the mouse
