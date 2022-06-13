@@ -39,7 +39,7 @@ pub fn main() !void {
     var nstime = win.beginWait(backend.hasEvent());
     win.begin(arena, nstime);
 
-    const quit = backend.pumpEvents(&win);
+    const quit = backend.addAllEvents(&win);
     if (quit) break :main_loop;
 
     var window_box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});

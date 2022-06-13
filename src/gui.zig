@@ -2011,7 +2011,7 @@ pub const Window = struct {
     self.icon_cache.deinit();
   }
 
-  pub fn addEventKey(self: *Self, keysym: keys.Key, mod: keys.Mod, state: KeyEvent.Kind) void {
+  pub fn addEventKey(self: *Self, keysym: keys.Key, mod: keys.Mod, state: KeyEvent.Kind) bool {
     self.events.append(Event{
       .focus_windowId = self.focused_windowId,
       .focus_widgetId = self.focused_widgetId_last_frame,
@@ -2021,9 +2021,11 @@ pub const Window = struct {
         .state = state,
       }}
     }) catch unreachable;
+
+    return (self.wd.id != self.focused_windowId);
   }
 
-  pub fn addEventText(self: *Self, text: []const u8) void {
+  pub fn addEventText(self: *Self, text: []const u8) bool {
     self.events.append(Event{
       .focus_windowId = self.focused_windowId,
       .focus_widgetId = self.focused_widgetId_last_frame,
@@ -2031,13 +2033,16 @@ pub const Window = struct {
         .text = self.arena.dupe(u8, text) catch unreachable,
       }}
     }) catch unreachable;
+
+    return (self.wd.id != self.focused_windowId);
   }
 
-  pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) void {
+  pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) bool {
     const newpt = (Point{.x = x, .y = y}).scale(self.natural_scale);
     const dp = newpt.diff(self.mouse_pt);
     self.mouse_pt = newpt;
     
+    const winId = WindowFor(self.mouse_pt);
     self.events.append(Event{
       .focus_windowId = self.focused_windowId,
       .focus_widgetId = self.focused_widgetId_last_frame,
@@ -2045,13 +2050,15 @@ pub const Window = struct {
         .p = self.mouse_pt,
         .dp = dp,
         .wheel = 0,
-        .floating_win = WindowFor(self.mouse_pt),
+        .floating_win = winId,
         .state = .motion,
       }}
     }) catch unreachable;
+
+    return (self.wd.id != winId);
   }
 
-  pub fn addEventMouseButton(self: *Self, state: MouseEvent.Kind) void {
+  pub fn addEventMouseButton(self: *Self, state: MouseEvent.Kind) bool {
     const winId = WindowFor(self.mouse_pt);
 
     if (state == .leftdown or state == .rightdown) {
@@ -2069,9 +2076,13 @@ pub const Window = struct {
         .state = state,
       }}
     }) catch unreachable;
+
+    return (self.wd.id != winId);
   }
 
-  pub fn addEventMouseWheel(self: *Self, ticks: f32) void {
+  pub fn addEventMouseWheel(self: *Self, ticks: f32) bool {
+    const winId = WindowFor(self.mouse_pt);
+
     self.events.append(Event{
       .focus_windowId = self.focused_windowId,
       .focus_widgetId = self.focused_widgetId_last_frame,
@@ -2079,10 +2090,12 @@ pub const Window = struct {
         .p = self.mouse_pt,
         .dp = Point{},
         .wheel = ticks,
-        .floating_win = WindowFor(self.mouse_pt),
+        .floating_win = winId,
         .state = .wheel_y,
       }}
     }) catch unreachable;
+
+    return (self.wd.id != winId);
   }
 
   pub fn FPS(self: *const Self) f32 {

@@ -6,6 +6,7 @@ write up instructions in readme for how to put on top of a mach app
 try to put gui on top of an existing mach app
 - need a slider widget
 - try folding the backend type into Window.init?
+- need to deal with events and choosing whether gui uses them or not
 
 switch to git
  - use git submodule for tinyvg and mach-freetype
@@ -13,6 +14,7 @@ switch to git
 switch mouse button events to use separate button and action
 
 define events like mach does it
+- only key and text events need the window focus stuff
 
 test what happens if std.time.nanoTimestamp() jumps backwards or forwards
 - if backwards just a tiny bit, stay on frame_time_ns?
@@ -197,9 +199,6 @@ forms where you can press "enter" in a form field and it clicks the ok button
   - bubbleEvent can catch "enter" from text entry
   - FormEvent() call for user side to use on button press that creates and bubbles an event?
 
-
-ability to use gui floating windows alongside a game
-- addEvent should return whether gui wants the event or not
 
 need to free widgets that are allocated on the arena
 - like TextWidget does it

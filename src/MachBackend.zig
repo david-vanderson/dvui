@@ -175,36 +175,38 @@ fn toGUIKey(key: mach.Key) gui.keys.Key {
     };
 }
 
-pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) void {
+pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) bool {
     switch (event) {
         .key_press => |ev| {
-            win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .down);
+            return win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .down);
         },
         .key_release => |ev| {
-            win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .up);
+            return win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .up);
         },
         .mouse_motion => |mm| {
-            win.addEventMouseMotion(@floatCast(f32, mm.x), @floatCast(f32, mm.y));
+            return win.addEventMouseMotion(@floatCast(f32, mm.x), @floatCast(f32, mm.y));
         },
         .mouse_press => |mb| {
             switch (mb.button) {
-              .left => win.addEventMouseButton(.leftdown),
-              .right => win.addEventMouseButton(.rightdown),
+              .left => return win.addEventMouseButton(.leftdown),
+              .right => return win.addEventMouseButton(.rightdown),
               else => {},
             }
         },
         .mouse_release => |mb| {
             switch (mb.button) {
-              .left => win.addEventMouseButton(.leftup),
-              .right => win.addEventMouseButton(.rightup),
+              .left => return win.addEventMouseButton(.leftup),
+              .right => return win.addEventMouseButton(.rightup),
               else => {},
             }
         },
         .mouse_scroll => |s| {
-            win.addEventMouseWheel(s.yoffset);
+            return win.addEventMouseWheel(s.yoffset);
         },
         //else => {},
     }
+
+    return false;
 }
 
 pub fn waitEventTimeout(self: *MachBackend, timeout_micros: u32) void {
@@ -216,9 +218,9 @@ pub fn waitEventTimeout(self: *MachBackend, timeout_micros: u32) void {
   }
 }
 
-pub fn pumpEvents(self: *MachBackend, win: *gui.Window) bool {
+pub fn addAllEvents(self: *MachBackend, win: *gui.Window) bool {
     while (self.engine.pollEvent()) |event| {
-        self.addEvent(win, event);
+        _ = self.addEvent(win, event);
         switch (event) {
             .key_press => |ev| {
                 if (ev.key == .space)

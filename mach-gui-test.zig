@@ -33,7 +33,7 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
     var nstime = app.win.beginWait(engine.hasEvent());
     app.win.begin(arena, nstime);
 
-    const quit = app.gui_backend.pumpEvents(&app.win);
+    const quit = app.gui_backend.addAllEvents(&app.win);
     if (quit) {
       return engine.setShouldClose(true);
     }

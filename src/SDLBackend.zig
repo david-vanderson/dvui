@@ -53,10 +53,10 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) void {
   }
 }
 
-pub fn pumpEvents(self: *SDLBackend, win: *gui.Window) bool {
+pub fn addAllEvents(self: *SDLBackend, win: *gui.Window) bool {
   var event: c.SDL_Event = undefined;
   while (c.SDL_PollEvent(&event) != 0) {
-    self.addEvent(win, event);
+    _ = self.addEvent(win, event);
     switch (event.type) {
       c.SDL_KEYDOWN => {
         if (((event.key.keysym.mod & c.KMOD_CTRL) > 0) and event.key.keysym.sym == c.SDLK_q) {
@@ -177,20 +177,20 @@ pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
   c.SDL_DestroyTexture(@ptrCast(*c.SDL_Texture, texture));
 }
 
-pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) void {
+pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) bool {
   switch (event.type) {
     c.SDL_KEYDOWN => {
-      win.addEventKey(
+      return win.addEventKey(
         SDL_keysym_to_gui(event.key.keysym.sym),
         SDL_keymod_to_gui(event.key.keysym.mod),
         if (event.key.repeat > 0) .repeat else .down,
       );
     },
     c.SDL_TEXTINPUT => {
-      win.addEventText(&event.text.text);
+      return win.addEventText(&event.text.text);
     },
     c.SDL_MOUSEMOTION => {
-      win.addEventMouseMotion(@intToFloat(f32, event.motion.x), @intToFloat(f32, event.motion.y));
+      return win.addEventMouseMotion(@intToFloat(f32, event.motion.x), @intToFloat(f32, event.motion.y));
     },
     c.SDL_MOUSEBUTTONDOWN, c.SDL_MOUSEBUTTONUP => |updown| {
       var state: gui.MouseEvent.Kind = undefined;
@@ -211,14 +211,15 @@ pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) void {
         }
       }
 
-      win.addEventMouseButton(state);
+      return win.addEventMouseButton(state);
     },
     c.SDL_MOUSEWHEEL => {
       const ticks = @intToFloat(f32, event.wheel.y);
-      win.addEventMouseWheel(ticks);
+      return win.addEventMouseWheel(ticks);
     },
     else => {
       //std.debug.print("unhandled SDL event type {}\n", .{event.type});
+      return false;
     },
   }
 }
