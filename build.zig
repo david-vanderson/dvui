@@ -9,10 +9,6 @@ const Packages = struct {
         .name = "zmath",
         .source = .{ .path = "libs/zmath/src/zmath.zig" },
     };
-    const zigimg = std.build.Pkg{
-        .name = "zigimg",
-        .source = .{ .path = "libs/zigimg/zigimg.zig" },
-    };
 };
 
 pub fn build(b: *Builder) void {
@@ -32,8 +28,8 @@ pub fn build(b: *Builder) void {
       const example_app = mach.App.init(
           b,
           .{
-              .name = "mach-gui-test",
-              .src = "mach-gui-test.zig",
+              .name = "mach-test",
+              .src = "mach-test.zig",
               .target = target,
               .deps = &[_]Pkg{ Packages.zmath, freetype.freetype_pkg },
           },
@@ -44,11 +40,11 @@ pub fn build(b: *Builder) void {
       example_app.install();
       const example_run_cmd = example_app.run();
       example_run_cmd.step.dependOn(&example_app.getInstallStep().?.step);
-      const example_run_step = b.step("run-mach-gui-test", "Run mach-gui-test example");
+      const example_run_step = b.step("run-mach-test", "Run mach-test example");
       example_run_step.dependOn(&example_run_cmd.step);
     }
 
-    if (true)
+    if (false)
     {
       const exe = b.addExecutable("gui-test", "gui-test.zig");
       exe.addIncludeDir("/usr/local/include");

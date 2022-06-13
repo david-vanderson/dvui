@@ -175,7 +175,7 @@ fn toGUIKey(key: mach.Key) gui.keys.Key {
     };
 }
 
-pub fn addEvent(win: *gui.Window, event: mach.Event) bool {
+pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) bool {
     switch (event) {
         .key_press => |ev| {
             return win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .down);
@@ -220,7 +220,7 @@ pub fn waitEventTimeout(self: *MachBackend, timeout_micros: u32) void {
 
 pub fn addAllEvents(self: *MachBackend, win: *gui.Window) bool {
     while (self.engine.pollEvent()) |event| {
-        _ = addEvent(win, event);
+        _ = self.addEvent(win, event);
         switch (event) {
             .key_press => |ev| {
                 if (ev.key == .space)
