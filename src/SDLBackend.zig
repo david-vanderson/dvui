@@ -82,6 +82,9 @@ pub fn setCursor(self: *SDLBackend, cursor: gui.CursorKind) void {
 }
 
 pub fn deinit(self: *SDLBackend) void {
+  for (self.cursor_backing) |cursor| {
+    c.SDL_FreeCursor(cursor);
+  }
   c.SDL_DestroyRenderer(self.renderer);
   c.SDL_DestroyWindow(self.window);
 }
