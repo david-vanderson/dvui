@@ -29,6 +29,7 @@ index_buffer_len: u32,
 vertex_buffer_size: u32,
 index_buffer_size: u32,
 
+cursor_last: gui.CursorKind = .arrow,
 
 pub fn init(gpa: std.mem.Allocator, engine: *mach.Engine) !MachBackend {
   var back: MachBackend = undefined;
@@ -132,6 +133,32 @@ pub fn init(gpa: std.mem.Allocator, engine: *mach.Engine) !MachBackend {
   return back;
 }
 
+fn toMachCursor(cursor: gui.CursorKind) mach.MouseCursor {
+  return switch (cursor) {
+    .arrow => .arrow,
+    .ibeam => .ibeam,
+    .crosshair => .crosshair,
+    .arrow_w_e => .resize_ew,
+    .arrow_n_s => .resize_ns,
+    .arrow_nw_se => .resize_nwse,
+    .arrow_ne_sw => .resize_nesw,
+    .arrow_all => .resize_all,
+    .bad => .not_allowed,
+    .hand => .pointing_hand,
+
+    // not supported in mach glfw backend
+    .wait => .not_allowed,
+    .small_wait => .not_allowed,
+  };
+}
+
+pub fn setCursor(self: *MachBackend, cursor: gui.CursorKind) void {
+  if (cursor != self.cursor_last) {
+    self.cursor_last = cursor;
+    self.engine.setMouseCursor(toMachCursor(cursor)) catch {};
+  }
+}
+
 pub fn deinit(self: *MachBackend) void {
   self.uniform_buffer.release();
   self.sampler.release();
@@ -152,21 +179,6 @@ pub const Vertex = struct {
     col: @Vector(4, f32),
     uv: @Vector(2, f32),
 };
-
-
-//pub fn CreateCursors(self: *MachBackend) void {
-  //self.cursor_backing[@enumToInt(gui.CursorKind.arrow)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_ARROW) orelse unreachable;
-  //self.cursor_backing[@enumToInt(gui.CursorKind.ibeam)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_IBEAM) orelse unreachable;
-  //self.cursor_backing[@enumToInt(gui.CursorKind.wait)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_WAIT) orelse unreachable;
-  //self.cursor_backing[@enumToInt(gui.CursorKind.crosshair)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_CROSSHAIR) orelse unreachable;
-  //self.cursor_backing[@enumToInt(gui.CursorKind.arrow_nw_se)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENWSE) orelse unreachable;
-  //self.cursor_backing[@enumToInt(gui.CursorKind.arrow_ne_sw)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENESW) orelse unreachable;
-  //self.cursor_backing[@enumToInt(gui.CursorKind.arrow_w_e)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZEWE) orelse unreachable;
-  //self.cursor_backing[@enumToInt(gui.CursorKind.arrow_n_s)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENS) orelse unreachable;
-  //self.cursor_backing[@enumToInt(gui.CursorKind.arrow_all)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZEALL) orelse unreachable;
-  //self.cursor_backing[@enumToInt(gui.CursorKind.bad)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_NO) orelse unreachable;
-  //self.cursor_backing[@enumToInt(gui.CursorKind.hand)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_HAND) orelse unreachable;
-//}
 
 fn toGUIKey(key: mach.Key) gui.keys.Key {
     return switch (key) {

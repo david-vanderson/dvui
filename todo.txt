@@ -1,8 +1,16 @@
 
+cursor support in mach
+- destroying the glfw cursors?
+
+sdl backend: deinit all the mouse cursors
+
 rename all uses of "cursor" that aren't for mouse cursors
 
 start making real demo() contents
 - document stuff inside there?
+- mouse cursors
+- gravity
+- themes
 
 try to put gui on top of an existing mach app
 - need a slider widget

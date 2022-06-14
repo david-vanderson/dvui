@@ -61,10 +61,9 @@ pub fn main() !void {
 
     backend.renderPresent();
 
-    _ = end_micros;
-    //const wait_event_micros = win.wait(end_micros, null);
+    const wait_event_micros = win.wait(end_micros, null);
 
-    //backend.waitEventTimeout(wait_event_micros);
+    backend.waitEventTimeout(wait_event_micros);
   }
 
   backend.deinit();
