@@ -22,33 +22,8 @@ test what happens if std.time.nanoTimestamp() jumps backwards or forwards
 - check begin() and beginWait()
 
 
-integration points:
-!- texture
-!- renderGeometry
-- initialization
-!- cursors
-!- clipping
-!- pollevent/waiteventtimeout
-!- keysym and mods
-- colors
-- clipboard text
-
-
-@import gui
-
-win = gui.Window.init(gpa, ???)
-
-loop:
-make arena
-win.begin(arena, logical_size, pixel_size)
-- add events
-win.endEvents();
-- start frame
-- gui code
-us = win.end();
-set_cursor(win.cursor);
-- present view
-win.wait(max_fps);
+text input support in mach
+clipboard support in mach
 
 when "Podcast 1" is highlighted, then we get a weird artifact on top of "back" above episodes
 - sdl only?  Scale 1.0
@@ -78,10 +53,6 @@ maybe parameterize gui based on given Vertex type?
 
 premultiplied alpha for all textures (and vertices from PathStroke/Fill?)
 - also font glyphs
-
-sometimes the scrollbar handle gets a 1-pixel line in the middle partway through?
-- are the rounded corner verticies overlapping?
-- see this in run-mach-gui-test
 
 cursor stuff needs to differentiate between owning the whole gui and doing extra gui stuff on top
 - if the last mouse point is over the gui OR the gui has captured the mouse

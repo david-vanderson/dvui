@@ -884,15 +884,19 @@ pub fn PathAddPoint(p: Point) void {
 
 pub fn PathAddRect(r: Rect, radius: Rect) void {
   var rad = radius;
-  const maxrad = math.min(r.w, r.h) / 2 - 0.0001;
+  const maxrad = math.min(r.w, r.h) / 2;
   rad.x = math.min(rad.x, maxrad);
   rad.y = math.min(rad.y, maxrad);
   rad.w = math.min(rad.w, maxrad);
   rad.h = math.min(rad.h, maxrad);
-  PathAddArc(Point{.x = r.x + rad.x, .y = r.y + rad.x}, rad.x, math.pi * 1.5, math.pi, false);
-  PathAddArc(Point{.x = r.x + rad.h, .y = r.y + r.h - rad.h}, rad.h, math.pi, math.pi * 0.5, false);
-  PathAddArc(Point{.x = r.x + r.w - rad.w, .y = r.y + r.h - rad.w}, rad.w, math.pi * 0.5, 0, false);
-  PathAddArc(Point{.x = r.x + r.w - rad.y, .y = r.y + rad.y}, rad.y, math.pi * 2.0, math.pi * 1.5, false);
+  const tl = Point{.x = r.x + rad.x, .y = r.y + rad.x};
+  const bl = Point{.x = r.x + rad.h, .y = r.y + r.h - rad.h};
+  const br = Point{.x = r.x + r.w - rad.w, .y = r.y + r.h - rad.w};
+  const tr = Point{.x = r.x + r.w - rad.y, .y = r.y + rad.y};
+  PathAddArc(tl, rad.x, math.pi * 1.5, math.pi,       @fabs(tl.y - bl.y) < 0.5);
+  PathAddArc(bl, rad.h, math.pi,       math.pi * 0.5, @fabs(bl.x - br.x) < 0.5);
+  PathAddArc(br, rad.w, math.pi * 0.5, 0,             @fabs(br.y - tr.y) < 0.5);
+  PathAddArc(tr, rad.y, math.pi * 2.0, math.pi * 1.5, @fabs(tr.x - tl.x) < 0.5);
 }
 
 pub fn PathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool) void {
