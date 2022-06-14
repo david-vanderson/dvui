@@ -1,6 +1,5 @@
 
-cursors:
-- save whether the winId for the last mouse motion event was over a floating window or not
+rename all uses of "cursor" that aren't for mouse cursors
 
 start making real demo() contents
 - document stuff inside there?

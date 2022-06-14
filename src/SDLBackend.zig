@@ -6,6 +6,7 @@ const SDLBackend = @This();
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
+cursor_last: gui.CursorKind = .arrow,
 cursor_backing: [@typeInfo(gui.CursorKind).Enum.fields.len]*c.SDL_Cursor = undefined,
 
 
@@ -74,7 +75,10 @@ pub fn addAllEvents(self: *SDLBackend, win: *gui.Window) bool {
 }
 
 pub fn setCursor(self: *SDLBackend, cursor: gui.CursorKind) void {
-  c.SDL_SetCursor(self.cursor_backing[@enumToInt(cursor)]);
+  if (cursor != self.cursor_last) {
+    self.cursor_last = cursor;
+    c.SDL_SetCursor(self.cursor_backing[@enumToInt(cursor)]);
+  }
 }
 
 pub fn deinit(self: *SDLBackend) void {
@@ -106,6 +110,11 @@ pub fn CreateCursors(self: *SDLBackend) void {
   self.cursor_backing[@enumToInt(gui.CursorKind.arrow_all)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZEALL) orelse unreachable;
   self.cursor_backing[@enumToInt(gui.CursorKind.bad)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_NO) orelse unreachable;
   self.cursor_backing[@enumToInt(gui.CursorKind.hand)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_HAND) orelse unreachable;
+}
+
+pub fn clear(self: *SDLBackend) void {
+  _ = c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 255);  
+  _ = c.SDL_RenderClear(self.renderer);
 }
 
 pub fn guiBackend(self: *SDLBackend) gui.Backend {

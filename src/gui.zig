@@ -1362,12 +1362,6 @@ pub fn DragStart(p: Point, cursor: CursorKind) void {
   cw.drag_state = .dragging;
   cw.drag_pt = p;
   cw.cursor_dragging = cursor;
-  DragSetCursor();
-}
-
-pub fn DragSetCursor() void {
-  const cw = current_window orelse unreachable;
-  cw.cursor_requested = (cw.cursor_dragging orelse CursorKind.arrow);
 }
 
 pub fn Dragging(p: Point) ?Point {
@@ -1385,7 +1379,6 @@ pub fn Dragging(p: Point) ?Point {
       if (@fabs(dps.x) > 3 or @fabs(dps.y) > 3) {
         cw.drag_pt = p;
         cw.drag_state = .dragging;
-        DragSetCursor();
         return dp;
       }
       else {
@@ -1398,10 +1391,6 @@ pub fn Dragging(p: Point) ?Point {
 pub fn DragEnd() void {
   const cw = current_window orelse unreachable;
   cw.drag_state = .none;
-  // set this so that if the mouse is somewhere nobody is requesting a specific
-  // cursor, it will reset
-  cw.cursor_requested_last_frame = cw.cursor_dragging;
-  cw.cursor_dragging = null;
 }
 
 pub fn CaptureMouse(id: ?u32) void {
@@ -1946,9 +1935,8 @@ pub const Window = struct {
 
   ft2lib: freetype.Library = undefined,
 
-  cursor_requested_last_frame: ?CursorKind = null,
-  cursor_requested: ?CursorKind = null,
-  cursor_dragging: ?CursorKind = null,
+  cursor_requested: CursorKind = .arrow,
+  cursor_dragging: CursorKind = .arrow,
 
   defer_render: bool = false,
 
@@ -2012,6 +2000,9 @@ pub const Window = struct {
   }
 
   pub fn addEventKey(self: *Self, keysym: keys.Key, mod: keys.Mod, state: KeyEvent.Kind) bool {
+    self.zeroMouseMotionEventRemove();
+    defer self.zeroMouseMotionEventAdd();
+
     self.events.append(Event{
       .focus_windowId = self.focused_windowId,
       .focus_widgetId = self.focused_widgetId_last_frame,
@@ -2026,6 +2017,9 @@ pub const Window = struct {
   }
 
   pub fn addEventText(self: *Self, text: []const u8) bool {
+    self.zeroMouseMotionEventRemove();
+    defer self.zeroMouseMotionEventAdd();
+
     self.events.append(Event{
       .focus_windowId = self.focused_windowId,
       .focus_widgetId = self.focused_widgetId_last_frame,
@@ -2038,6 +2032,9 @@ pub const Window = struct {
   }
 
   pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) bool {
+    self.zeroMouseMotionEventRemove();
+    defer self.zeroMouseMotionEventAdd();
+
     const newpt = (Point{.x = x, .y = y}).scale(self.natural_scale);
     const dp = newpt.diff(self.mouse_pt);
     self.mouse_pt = newpt;
@@ -2059,6 +2056,9 @@ pub const Window = struct {
   }
 
   pub fn addEventMouseButton(self: *Self, state: MouseEvent.Kind) bool {
+    self.zeroMouseMotionEventRemove();
+    defer self.zeroMouseMotionEventAdd();
+
     const winId = WindowFor(self.mouse_pt);
 
     if (state == .leftdown or state == .rightdown) {
@@ -2081,6 +2081,9 @@ pub const Window = struct {
   }
 
   pub fn addEventMouseWheel(self: *Self, ticks: f32) bool {
+    self.zeroMouseMotionEventRemove();
+    defer self.zeroMouseMotionEventAdd();
+
     const winId = WindowFor(self.mouse_pt);
 
     self.events.append(Event{
@@ -2257,8 +2260,7 @@ pub const Window = struct {
     current_window = self;
     self.defer_render = false;
 
-    self.cursor_requested_last_frame = self.cursor_requested;
-    self.cursor_requested = null;
+    self.cursor_requested = .arrow;
 
     self.arena = arena;
     self.path = std.ArrayList(Point).init(arena);
@@ -2408,8 +2410,17 @@ pub const Window = struct {
 
     self.cursor = self.wd.rect.y;
 
-    // We always want a mouse motion event to do mouse cursors.  So make one (0
-    // motion) at the start.
+    // We always want a final zero motion mouse event to do mouse cursors.
+    // Needs to be final so if there was a drag end the cursor will still be
+    // set correctly.  We don't know when the client gives us the last event,
+    // so make our motion event now, and addEvent* functions will remove and
+    // re-add to keep it as the final event.
+    self.zeroMouseMotionEventAdd();
+
+    self.backend.begin(arena);
+  }
+
+  fn zeroMouseMotionEventAdd(self: *Self) void {
     self.events.append(Event{
       .evt = AnyEvent{.mouse = MouseEvent{
         .p = self.mouse_pt,
@@ -2419,19 +2430,39 @@ pub const Window = struct {
         .state = .motion,
       }}
     }) catch unreachable;
-
-    self.backend.begin(arena);
   }
 
-  pub fn CursorRequested(self: *const Self) ?CursorKind {
-    if (self.cursor_requested) |cursor| {
-      return cursor;
+  fn zeroMouseMotionEventRemove(self: *Self) void {
+    const e = self.events.pop();
+    if (e.evt != .mouse or e.evt.mouse.state != .motion or e.evt.mouse.dp.x != 0 or e.evt.mouse.dp.y != 0) {
+      std.debug.print("zeroMouseMotionEventRemove removed a non-mouse or non-zero event\n", .{});
     }
-    else if (self.drag_state != .dragging and self.cursor_requested_last_frame != null) {
-      return CursorKind.arrow;
-    }
+  }
 
-    return null;
+  // Return the cursor the gui wants.  Client code should cache this if
+  // switching the platform's cursor is expensive.
+  pub fn CursorRequested(self: *const Self) CursorKind {
+    if (self.drag_state == .dragging) {
+      return self.cursor_dragging;
+    }
+    else {
+      return self.cursor_requested;
+    }
+  }
+
+  // Return the cursor the gui wants or null if mouse is not in gui windows.
+  // Client code should cache this if switching the platform's cursor is
+  // expensive.
+  pub fn CursorRequestedFloating(self: *const Self) ?CursorKind {
+    if (self.captureID != null or WindowFor(self.mouse_pt) != self.wd.id) {
+      // gui owns the cursor if we have mouse capture or if the mouse is above
+      // a floating window
+      return self.CursorRequested();
+    }
+    else {
+      // no capture, not above a floating window, so client owns the cursor
+      return null;
+    }
   }
 
   pub fn end(self: *Self) ?u32 {
@@ -2466,6 +2497,11 @@ pub const Window = struct {
       // we'll focus a new window in begin()
       CueFrame();
     }
+
+    // Check that the final event was our synthetic mouse motion event.  If one
+    // of the addEvent* functions forgot to add the synthetic mouse event to
+    // the end this will print a debug message.
+    self.zeroMouseMotionEventRemove();
 
     self.backend.end();
 

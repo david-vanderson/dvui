@@ -9,25 +9,27 @@ const gpa = gpa_instance.allocator();
 pub fn main() !void {
   var backend = try Backend.init(360, 600);
 
-  var win = gui.Window.init(gpa, backend.backend());
+  var win = gui.Window.init(gpa, backend.guiBackend());
 
   main_loop: while (true) {
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
-    const window_size = backend.windowSize();
-    const pixel_size = backend.windowPixelSize();
-
     var nstime = win.beginWait(backend.hasEvent());
-    win.begin(arena, nstime, window_size, pixel_size);
+    win.begin(arena, nstime);
 
-    const quit = backend.pumpEvents(&win);
+    const quit = backend.addAllEvents(&win);
     if (quit) break :main_loop;
 
+    backend.clear();
+
     {
-      var window_box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
-      defer window_box.deinit();
+      var float = gui.FloatingWindow(@src(), 0, false, null, null, .{});
+      defer float.deinit();
+
+      //var window_box = gui.Box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
+      //defer window_box.deinit();
 
       var scale = gui.Scale(@src(), 0, 1.0, .{.expand = .both, .background = false}); 
       defer scale.deinit();
@@ -50,15 +52,19 @@ pub fn main() !void {
 
     const end_micros = win.end();
 
-    if (win.CursorRequested()) |cursor| {
+    if (win.CursorRequestedFloating()) |cursor| {
       backend.setCursor(cursor);
+    }
+    else {
+      backend.setCursor(.bad);
     }
 
     backend.renderPresent();
 
-    const wait_event_micros = win.wait(end_micros, null);
+    _ = end_micros;
+    //const wait_event_micros = win.wait(end_micros, null);
 
-    backend.waitEventTimeout(wait_event_micros);
+    //backend.waitEventTimeout(wait_event_micros);
   }
 
   backend.deinit();
