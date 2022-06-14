@@ -7,3 +7,6 @@
 [submodule "libs/zmath"]
 	path = libs/zmath
 	url = https://github.com/PiergiorgioZagaria/zmath.git
+[submodule "libs/tinyvg"]
+	path = libs/tinyvg
+	url = https://github.com/TinyVG/sdk

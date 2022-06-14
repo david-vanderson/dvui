@@ -1,15 +1,12 @@
 
-start making real demo() contents
+cursors:
+- save whether the winId for the last mouse motion event was over a floating window or not
 
-write up instructions in readme for how to put on top of a mach app
+start making real demo() contents
+- document stuff inside there?
 
 try to put gui on top of an existing mach app
 - need a slider widget
-- try folding the backend type into Window.init?
-- need to deal with events and choosing whether gui uses them or not
-
-switch to git
- - use git submodule for tinyvg and mach-freetype
 
 switch mouse button events to use separate button and action
 

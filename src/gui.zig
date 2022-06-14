@@ -1,6 +1,6 @@
 const std = @import("std");
 const math = std.math;
-const tvg = @import("tinyvg/tinyvg.zig");
+const tvg = @import("../libs/tinyvg/src/lib/tinyvg.zig");
 const fnv = std.hash.Fnv1a_32;
 const freetype = @import("freetype");
 pub const icons = @import("icons.zig");
