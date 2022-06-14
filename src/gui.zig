@@ -1943,7 +1943,7 @@ pub const Window = struct {
   wd: WidgetData = undefined,
   rect_pixels: Rect = Rect{},  // pixels
   natural_scale: f32 = 1.0,
-  cursor: f32 = 0,
+  next_widget_ypos: f32 = 0,
 
   captureID: ?u32 = null,
   captured_last_frame: bool = false,
@@ -2408,7 +2408,7 @@ pub const Window = struct {
     self.wd.parent = self.widget();
     self.menu_current = null;
 
-    self.cursor = self.wd.rect.y;
+    self.next_widget_ypos = self.wd.rect.y;
 
     // We always want a final zero motion mouse event to do mouse cursors.
     // Needs to be final so if there was a drag end the cursor will still be
@@ -2553,9 +2553,9 @@ pub const Window = struct {
 
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     var r = self.wd.rect;
-    r.y = self.cursor;
+    r.y = self.next_widget_ypos;
     const ret = PlaceIn(id, r, min_size, e, g);
-    self.cursor += ret.h;
+    self.next_widget_ypos += ret.h;
     return ret;
   }
 
@@ -3323,7 +3323,7 @@ pub const TextLayoutWidget = struct {
 
   wd: WidgetData = undefined,
   corners: [4]?Rect = [_]?Rect{null} ** 4,
-  cursor: Point = Point{},
+  insert_pt: Point = Point{},
   prevClip: Rect = Rect{},
 
   pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
@@ -3338,7 +3338,7 @@ pub const TextLayoutWidget = struct {
 
     const rs = self.wd.contentRectScale();
     self.prevClip = Clip(rs.r);
-    self.cursor = self.wd.contentRect().topleft();
+    self.insert_pt = self.wd.contentRect().topleft();
   }
 
   pub fn addText(self: *Self, text: []const u8, opts: Options) void {
@@ -3355,8 +3355,8 @@ pub const TextLayoutWidget = struct {
         first = false;
       }
       else {
-        self.cursor.y += lineskip;
-        self.cursor.x = startx;
+        self.insert_pt.y += lineskip;
+        self.insert_pt.x = startx;
       }
       self.addTextNoNewlines(line, options);
     }
@@ -3375,19 +3375,19 @@ pub const TextLayoutWidget = struct {
       const rect = self.wd.contentRect();
       var linestart = rect.x;
       var linewidth = rect.w;
-      var width = rect.w - self.cursor.x;
+      var width = rect.w - self.insert_pt.x;
       for (self.corners) |corner| {
         if (corner) |cor| {
-          if (math.max(cor.y, self.cursor.y) < math.min(cor.y + cor.h, self.cursor.y + lineskip)) {
+          if (math.max(cor.y, self.insert_pt.y) < math.min(cor.y + cor.h, self.insert_pt.y + lineskip)) {
             linewidth -= cor.w;
             if (linestart == cor.x) {
               linestart = (cor.x + cor.w);
             }
 
-            if (self.cursor.x <= (cor.x + cor.w)) {
+            if (self.insert_pt.x <= (cor.x + cor.w)) {
               width -= cor.w;
-              if (self.cursor.x >= cor.x) {
-                self.cursor.x = (cor.x + cor.w);
+              if (self.insert_pt.x >= cor.x) {
+                self.insert_pt.x = (cor.x + cor.w);
               }
             }
           }
@@ -3401,8 +3401,8 @@ pub const TextLayoutWidget = struct {
 
       // if we are boxed in too much by corner widgets drop to next line
       if (s.w > width and linewidth < rect.w) {
-        self.cursor.y += lineskip;
-        self.cursor.x = rect.x;
+        self.insert_pt.y += lineskip;
+        self.insert_pt.x = rect.x;
         continue;
       }
 
@@ -3415,34 +3415,34 @@ pub const TextLayoutWidget = struct {
           end = si + 1;
           s = options.font().textSize(txt[0..end]);
         }
-        else if (self.cursor.x > linestart) {
+        else if (self.insert_pt.x > linestart) {
           // can't fit breaking on space, but we aren't starting at the left edge
           // so drop to next line
-          self.cursor.y += lineskip;
-          self.cursor.x = rect.x;
+          self.insert_pt.y += lineskip;
+          self.insert_pt.x = rect.x;
           continue;
         }
       }
 
       // We want to render text, but no sense in doing it if we are off the end
-      if (self.cursor.y < rect.y + rect.h) {
-        const rs = self.screenRectScale(Rect{.x = self.cursor.x, .y = self.cursor.y, .w = width, .h = math.max(0, rect.y + rect.h - self.cursor.y)});
+      if (self.insert_pt.y < rect.y + rect.h) {
+        const rs = self.screenRectScale(Rect{.x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.y + rect.h - self.insert_pt.y)});
         //log.debug("renderText: {} {s} {}", .{rs.r, txt[0..end], options.color()});
         renderText(options.font(), txt[0..end], rs, options.color());
       }
 
-      // even if we don't actually render, need to update cursor and minSize
+      // even if we don't actually render, need to update insert_pt and minSize
       // like we did because our parent might size based on that (might be in a
       // scroll area)
-      self.cursor.x += s.w;
-      const size = Size{.w = 0, .h = self.cursor.y - rect.y + s.h};
+      self.insert_pt.x += s.w;
+      const size = Size{.w = 0, .h = self.insert_pt.y - rect.y + s.h};
       self.wd.min_size.h = math.max(self.wd.min_size.h, self.wd.padSize(size).h);
       txt = txt[end..];
 
-      // move cursor to next line if we have more text
+      // move insert_pt to next line if we have more text
       if (txt.len > 0) {
-        self.cursor.y += lineskip;
-        self.cursor.x = rect.x;
+        self.insert_pt.y += lineskip;
+        self.insert_pt.x = rect.x;
       }
     }
   }
@@ -3958,7 +3958,7 @@ pub const ScrollAreaWidget = struct {
   prevClip: Rect = Rect{},
   virtualSize: Size = Size{},
   nextVirtualSize: Size = Size{},
-  cursor: f32 = 0,  // goes from 0 to viritualSize.h
+  next_widget_ypos: f32 = 0,  // goes from 0 to viritualSize.h
   scroll: f32 = 0,  // how far down we are scrolled (natural scale pixels)
   scrollAfter: f32 = 0,  // how far we need to scroll after this frame
 
@@ -3975,7 +3975,7 @@ pub const ScrollAreaWidget = struct {
       }
       self.scroll = d.scroll;
     }
-    self.cursor = 0;
+    self.next_widget_ypos = 0;
   }
 
   pub fn install(self: *Self) void {
@@ -4062,11 +4062,11 @@ pub const ScrollAreaWidget = struct {
   pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     var child_size = MinSize(id, min_size);
 
-    const y = self.cursor;
-    const h = self.virtualSize.h - self.cursor;
+    const y = self.next_widget_ypos;
+    const h = self.virtualSize.h - self.next_widget_ypos;
     const rect = Rect{.x = 0, .y = y, .w = math.max(0, self.wd.contentRect().w - grab_thick), .h = math.min(h, child_size.h)};
     const ret = PlaceIn(id, rect, child_size, e, g);
-    self.cursor = (ret.y + ret.h);
+    self.next_widget_ypos = (ret.y + ret.h);
     return ret;
   }
 
