@@ -183,6 +183,8 @@ Each widget gets a `u32` id by combining:
 - @src() passed to widget
 - extra `usize` passed to widget for loops
 
+The id a widget gets should be the same each frame, even if other widgets are being added or removed.  Mixing in the parent's id also means you can package up a collection of widgets in a function and call that function in many different parents making it easy to replicate parts of the gui.
+
 The extra `usize` is to differentiate many children being added to the same parent in a loop.
 
 ### Single Pass
