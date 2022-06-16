@@ -177,16 +177,44 @@ if (gui.Button(@src(), 0, "Ok", .{})) {
 ```
 Widgets are not stored between frames like in traditional gui toolkits (gtk, win32, cocoa).  `gui.Button()` processes input events, draws the button on the screen, and returns true if a button click happened this frame.
 
+### Widget Ids
+Each widget gets a `u32` id by combining:
+- parent's id
+- @src() passed to widget
+- extra `usize` passed to widget for loops
+
+The extra `usize` is to differentiate many children being added to the same parent in a loop.
+
 ### Single Pass
-Widgets handle events and draw themselves in install().  This is before they know of any child widgets, so some information is stored from last frame about minimum sizes.  For a new widget, it will typically receive a zero-sized rectangle and draw nothing on the first frame, and draw normally on the second frame.  For smooth UIs a new widget can be animated from zero-sized to normal size.
+Widgets handle events and draw themselves in install().  This is before they know of any child widgets, so some information is stored from last frame about minimum sizes.
+
+A new widget will typically receive a zero-sized rectangle, draw nothing on the first frame, and draw normally on the second frame.  For smooth UIs a new widget can be animated from zero-sized to normal size.
+
+Between a widget's `install()` and `deinit()`, that widget becomes the parent to any widgets run between.  Each widget maintains a pointer to their parent, used for getting the screen rectangle for the child, and for key event propogation.
+
+### Drawing
+All drawing happens in pixel space.  A widget receives a rectangle from their parent in their parent's coordinate system.  They then call `parent.screenRectScale(rect)` to get their rectangle in pixel screen coordinates plus the scale value in pixels per rect unit.
+
+This provides scaling (see `ScaleWidget`) while looking sharp, because nothing is being drawn and then scaled.
 
 ### Handle All Events
-Unlike many immediate mode toolkits, gui processes every input event, making it useable in low framerate situations.  A button can receive a mouse-down event and a mouse-up event in the same frame and correctly report a click.  A custom button can even report multiple clicks per frame.  (the higher level `gui.Button()` function only reports 1 click per frame)
+This library processes every input event, making it useable in low framerate situations.  A button can receive a mouse-down event and a mouse-up event in the same frame and correctly report a click.  A custom button can even report multiple clicks per frame.  (the higher level `gui.Button()` function only reports 1 click per frame)
 
 In the same frame these can all happen:
 - text entry field A receives text events
 - text entry field A receives a tab that moves keyboard focus to field B
 - text entry field B receives more text events
+
+Because everything is in a single pass, this works in the normal case where widget A is `install()`ed before widget B.  If keyboard focus moves to a previously installed widget, it can't process further key events this frame.
+
+### Event Propogation
+`gui.EventIterator` helps widgets process events.  It takes the widget id (for focus and mouse capture) and a rect (for mouse events).
+
+For mouse events, `EventIterator` checks if the widget has mouse capture, or if the mouse event is within the given rect (and within the current clipping rect).  Mouse events can also be handled in a widget's `deinit()` if child widgets should get priority.  For example, `FloatingWindow.deinit()` handles remaining mouse events to allow click-dragging of floating windows anywhere a child widget doesn't handle the events.
+
+For key events, `EventIterator` checks if the widget has focus and the current floating window has focus.  `EventIterator.nextCleanup()` can be used to catch key events not processed by child widgets.  For example, `FloatingWindow.deinit()` handles remaining key events to catch a tab if no widget had focus in the window.
+
+Key events are also bubbled up to parent widgets if the child doesn't process them.  That is how `ScrollArea` can catch up/down key events and scroll even when it doesn't have focus.
 
 ### Floating Windows
 This library can be used in 2 ways:
