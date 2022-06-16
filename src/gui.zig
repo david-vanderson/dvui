@@ -334,20 +334,6 @@ pub const Options = struct {
     return ret;
   }
 
-  pub fn overrideIfNull(self: *const Options, over: Options) Options {
-    var ret = self.*;
-
-    inline for (@typeInfo(Options).Struct.fields) |f| {
-      if (@field(over, f.name)) |fval| {
-        if (@field(ret, f.name) == null) {
-          @field(ret, f.name) = fval;
-        }
-      }
-    }
-
-    return ret;
-  }
-
   pub fn format(self: *const Options, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
     try std.fmt.format(writer, "Options{{ .background = {}, .color_style = {} }}", .{self.background, self.color_style});
   }
@@ -3990,7 +3976,7 @@ pub const ScrollAreaWidget = struct {
 
   pub fn init(src: std.builtin.SourceLocation, id_extra: usize, virtual_size: ?Size, opts: Options) Self {
     var self = Self{};
-    const options = opts.overrideIfNull(Defaults);
+    const options = Defaults.override(opts);
     self.wd = WidgetData.init(src, id_extra, options);
     if (virtual_size) |vs| {
       self.virtualSize = vs;
@@ -4455,7 +4441,7 @@ pub const MenuItemWidget = struct {
 
   pub fn init(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, opts: Options) Self {
     var self = Self{};
-    const options = opts.overrideIfNull(Defaults);
+    const options = Defaults.override(opts);
     self.wd = WidgetData.init(src, id_extra, options);
     self.submenu = submenu;
     if (!self.wd.rect.empty()) {
@@ -4979,7 +4965,7 @@ pub const TextEntryWidget = struct {
 
   pub fn init(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) Self {
     var self = Self{};
-    const options = opts.overrideIfNull(Defaults);
+    const options = Defaults.override(opts);
 
     const msize = options.font().textSize("M");
     const size = Size{.w = msize.w * width, .h = msize.h};
