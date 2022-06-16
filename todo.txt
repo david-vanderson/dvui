@@ -1,6 +1,8 @@
 
-cursor support in mach
-- destroying the glfw cursors?
+-Dtarget=wasm32-freestanding-none
+
+write up some design docs
+- seamless animations
 
 start making real demo() contents
 - document stuff inside there?
@@ -25,15 +27,17 @@ test what happens if std.time.nanoTimestamp() jumps backwards or forwards
 text input support in mach
 clipboard support in mach
 
-when "Podcast 1" is highlighted, then we get a weird artifact on top of "back" above episodes
-- sdl only?  Scale 1.0
-
 maybe adjust renderText to snap text to pixel grid?
 
 xstart and ystart for textSize
 
 kerning
 - check how sdl_ttf does it
+
+make paned widget render something in the middle if the mouse is over the sash
+
+popup needs to align it's text with the label that popped it
+- take a flag for whether it's popping updown or sideways, then adjust x or y to account for border and padding
 
 switch to adwaita default font?
 
