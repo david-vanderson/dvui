@@ -177,6 +177,9 @@ if (gui.Button(@src(), 0, "Ok", .{})) {
 ```
 Widgets are not stored between frames like in traditional gui toolkits (gtk, win32, cocoa).  `gui.Button()` processes input events, draws the button on the screen, and returns true if a button click happened this frame.
 
+### Single Pass
+Widgets handle events and draw themselves in install().  This is before they know of any child widgets, so some information is stored from last frame about minimum sizes.  For a new widget, it will typically receive a zero-sized rectangle and draw nothing on the first frame, and draw normally on the second frame.  For smooth UIs a new widget can be animated from zero-sized to normal size.
+
 ### Handle All Events
 Unlike many immediate mode toolkits, gui processes every input event, making it useable in low framerate situations.  A button can receive a mouse-down event and a mouse-up event in the same frame and correctly report a click.  A custom button can even report multiple clicks per frame.  (the higher level `gui.Button()` function only reports 1 click per frame)
 
@@ -276,3 +279,9 @@ else {
 The current theme's color_accent is also used to show keyboard focus.
 
 ### Layout
+A widget receives it's position rectangle from the parent, but can influence layout with Options:
+- `.expand` - whether to take up all the space available (horizontal or vertical)
+- `.gravity` - position a non-expanded widget inside a larger rectangle
+- `.min_size` - get at least this much space (unless parent is unable)
+- `.rect` - rarely used to directly specify position in parent
+
