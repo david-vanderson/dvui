@@ -18,13 +18,13 @@ A [Zig](https://ziglang.org/) native GUI toolkit for whole applications or extra
 
 ## Contents
 
-- [Build As Standalone Mach App](#As a standalone Mach app)
-- [Build On Top of Existing Mach App](#On top of an existing Mach app)
+- [Build Standalone Mach App](#standalone-mach-app)
+- [Build On Top of Existing Mach App](#on-top-of-existing-mach-app)
 - [Design](#Design)
 
 ## Building
 
-### As a standalone Mach app
+### Standalone Mach App
 
 ```
 git clone https://github.com/david-vanderson/gui.git
@@ -35,7 +35,7 @@ git submodule add https://github.com/PiergiorgioZagaria/zmath.git libs/zmath
 zig build run-mach-gui-test
 ```
 
-### On top of an existing Mach app
+### On Top of Existing Mach App
 
 As an example, we'll extend the mach example `instanced-cube`.
 
@@ -177,7 +177,8 @@ if (gui.Button(@src(), 0, "Ok", .{})) {
 ```
 Widgets are not stored between frames like in traditional gui toolkits (gtk, win32, cocoa).  `gui.Button()` processes input events, draws the button on the screen, and returns true if a button click happened this frame.
 
-Unlike many immediate mode toolkits, we process every input event, making it useable in low framerate situations.  A button can receive a mouse-down event and a mouse-up event in the same frame and correctly report a click.  A custom button can even report multiple clicks per frame.  (the higher level `gui.Button()` function only reports 1 click per frame)
+### Handle All Events
+Unlike many immediate mode toolkits, gui processes every input event, making it useable in low framerate situations.  A button can receive a mouse-down event and a mouse-up event in the same frame and correctly report a click.  A custom button can even report multiple clicks per frame.  (the higher level `gui.Button()` function only reports 1 click per frame)
 
 In the same frame these can all happen:
 - text entry field A receives text events
