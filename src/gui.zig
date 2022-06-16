@@ -2594,8 +2594,8 @@ pub const Window = struct {
 pub fn Popup(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, openflag: ?*bool, menu: ?*MenuWidget, opts: Options) *PopupWidget {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(PopupWidget) catch unreachable;
-  ret.* = PopupWidget{};
-  ret.install(src, id_extra, initialRect, openflag, menu, opts);
+  ret.* = PopupWidget.init(src, id_extra, initialRect, openflag, menu, opts);
+  ret.install();
   return ret;
 }
 
@@ -2610,34 +2610,46 @@ pub const PopupWidget = struct {
   };
 
   wd: WidgetData = undefined,
+  options: Options = undefined,
   prev_windowId: u32 = 0,
   layout: MenuWidget = undefined,
+  initialRect: Rect = Rect{},
   openflag: ?*bool = null,
   menu: ?*MenuWidget = null,
   deferred_render_queue: DeferredRenderQueue = undefined,
 
-  pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, openflag: ?*bool, menu: ?*MenuWidget, opts: Options) void {
-    const options = opts.overrideIfNull(Defaults);
-    DeferRender();
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, openflag: ?*bool, menu: ?*MenuWidget, opts: Options) Self {
+    var self = Self{};
+
+    // need to save options because we override .rect for WidgetData but need to not override .rect later
+    self.options = Defaults.override(opts);
 
     // passing options.rect will stop WidgetData.init from calling rectFor
     // which is important because we are outside normal layout
-    self.wd = WidgetData.init(src, id_extra, options.override(.{.rect = .{}}));
+    self.wd = WidgetData.init(src, id_extra, self.options.override(.{.rect = .{}}));
+
+    self.initialRect = initialRect;
+    self.openflag = openflag;
+    self.menu = menu;
+    return self;
+  }
+
+  pub fn install(self: *Self) void {
+    DeferRender();
+
     _ = ParentSet(self.widget());
 
     self.prev_windowId = WindowCurrentSet(self.wd.id);
-    self.openflag = openflag;
-    self.menu = menu;
 
     if (DataGet(self.wd.id, Rect)) |p| {
       self.wd.rect = p;
-      const ms = MinSize(self.wd.id, options.min_size orelse .{});
+      const ms = MinSize(self.wd.id, self.options.min_size orelse .{});
       self.wd.rect.w = ms.w;
       self.wd.rect.h = ms.h;
-      self.wd.rect = PlaceOnScreen(initialRect, self.wd.rect);
+      self.wd.rect = PlaceOnScreen(self.initialRect, self.wd.rect);
     }
     else {
-      self.wd.rect = PlaceOnScreen(initialRect, Rect.fromPoint(initialRect.topleft()));
+      self.wd.rect = PlaceOnScreen(self.initialRect, Rect.fromPoint(self.initialRect.topleft()));
       FocusWindow(self.wd.id, null);
 
       // need a second frame to fit contents (FocusWindow calls CueFrame but
@@ -2653,8 +2665,7 @@ pub const PopupWidget = struct {
 
     // we are using MenuWidget to do border/background but floating windows
     // don't have margin, so turn that off
-    self.layout = MenuWidget{};
-    self.layout.init(@src(), 0, .vertical, options.override(.{.margin = .{}}));
+    self.layout = MenuWidget.init(@src(), 0, .vertical, self.options.override(.{.margin = .{}}));
     self.layout.install();
   }
 
@@ -2743,8 +2754,8 @@ pub const PopupWidget = struct {
 pub fn FloatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, rect: ?*Rect, openflag: ?*bool, opts: Options) *FloatingWindowWidget {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(FloatingWindowWidget) catch unreachable;
-  ret.* = FloatingWindowWidget{};
-  ret.install(src, id_extra, modal, rect, openflag, opts);
+  ret.* = FloatingWindowWidget.init(src, id_extra, modal, rect, openflag, opts);
+  ret.install();
   return ret;
 }
 
@@ -2758,6 +2769,7 @@ pub const FloatingWindowWidget = struct {
   };
 
   wd: WidgetData = undefined,
+  options: Options = undefined,
   modal: bool = false,
   prev_windowId: u32 = 0,
   io_rect: ?*Rect = null,
@@ -2770,19 +2782,30 @@ pub const FloatingWindowWidget = struct {
     autosize: bool,
   } = undefined,
 
-  pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, modal: bool, io_rect: ?*Rect, openflag: ?*bool, opts: Options) void {
-    const options = Defaults.override(opts);
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, io_rect: ?*Rect, openflag: ?*bool, opts: Options) Self {
+    var self = Self{};
+
+    // save options separately from WidgetData because we need .rect to be null
+    // for our BoxWidget at the end of install()
+    self.options = Defaults.override(opts);
+
+    // passing options.rect will stop WidgetData.init from calling rectFor
+    // which is important because we are outside normal layout
+    self.wd = WidgetData.init(src, id_extra, self.options.override(.{.rect = .{}}));
+
+    self.modal = modal;
+    self.io_rect = io_rect;
+    self.openflag = openflag;
+
+    return self;
+  }
+
+  pub fn install(self: *Self) void {
 
     DeferRender();
     
-    // passing options.rect will stop WidgetData.init from calling rectFor
-    // which is important because we are outside normal layout
-    self.wd = WidgetData.init(src, id_extra, options.override(.{.rect = .{}}));
     _ = ParentSet(self.widget());
-    self.io_rect = io_rect;
-    self.modal = modal;
     self.prev_windowId = WindowCurrentSet(self.wd.id);
-    self.openflag = openflag;
 
     if (self.io_rect) |ior| {
       // user is storing the rect for us across open/close
@@ -2804,7 +2827,7 @@ pub const FloatingWindowWidget = struct {
       };
     }
 
-    var ms = options.min_size orelse Size{};
+    var ms = self.options.min_size orelse Size{};
     if (MinSizeGetPrevious(self.wd.id)) |min_size| {
       ms = Size.max(ms, min_size);
 
@@ -2849,15 +2872,14 @@ pub const FloatingWindowWidget = struct {
     if (self.modal) {
       // paint over everything below
       PathAddRect(WindowRectPixels(), Rect.all(0));
-      var col = options.color();
+      var col = self.options.color();
       col.a = 100;
       PathFillConvex(col);
     }
 
     // we are using BoxWidget to do border/background but floating windows
     // don't have margin, so turn that off
-    self.layout = BoxWidget{};
-    self.layout.init(@src(), 0, .vertical, options.override(.{.margin = .{}, .expand = .both}));
+    self.layout = BoxWidget.init(@src(), 0, .vertical, self.options.override(.{.margin = .{}, .expand = .both}));
     self.layout.install();
   }
 
@@ -3048,8 +3070,7 @@ pub const FloatingWindowWidget = struct {
 
 pub fn Paned(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) *PanedWidget {
   var ret = gui.CurrentWindow().arena.create(PanedWidget) catch unreachable;
-  ret.* = PanedWidget{};
-  ret.init(src, id_extra, dir, collapse_size, opts);
+  ret.* = PanedWidget.init(src, id_extra, dir, collapse_size, opts);
   ret.install();
   return ret;
 }
@@ -3071,10 +3092,12 @@ pub const PanedWidget = struct {
   first_side_id: ?u32 = null,
   prevClip: Rect = Rect{},
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) void {
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) Self {
+    var self = Self{};
     self.wd = WidgetData.init(src, id_extra, opts);
     self.dir = dir;
     self.collapse_size = collapse_size;
+    return self;
   }
 
   pub fn install(self: *Self) void {
@@ -3310,8 +3333,7 @@ pub const PanedWidget = struct {
 pub fn TextLayout(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *TextLayoutWidget {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(TextLayoutWidget) catch unreachable;
-  ret.* = TextLayoutWidget{};
-  ret.init(src, id_extra, opts);
+  ret.* = TextLayoutWidget.init(src, id_extra, opts);
   ret.install();
   return ret;
 }
@@ -3330,9 +3352,9 @@ pub const TextLayoutWidget = struct {
   insert_pt: Point = Point{},
   prevClip: Rect = Rect{},
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Self {
     const options = Defaults.override(opts);
-    self.wd = WidgetData.init(src, id_extra, options);
+    return Self{.wd = WidgetData.init(src, id_extra, options)};
   }
 
   pub fn install(self: *Self) void {
@@ -3497,8 +3519,7 @@ pub const TextLayoutWidget = struct {
 pub fn Context(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *ContextWidget {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(ContextWidget) catch unreachable;
-  ret.* = ContextWidget{};
-  ret.init(src, id_extra, opts);
+  ret.* = ContextWidget.init(src, id_extra, opts);
   ret.install();
   return ret;
 }
@@ -3511,13 +3532,15 @@ pub const ContextWidget = struct {
   active: bool = false,
   activePt: Point = Point{},
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Self {
+    var self = Self{};
     self.wd = WidgetData.init(src, id_extra, opts);
     self.winId = WindowCurrentId();
     if (DataGet(self.wd.id, Point)) |a| {
       self.active = true;
       self.activePt = a;
     }
+    return self;
   }
 
   pub fn install(self: *Self) void {
@@ -3595,8 +3618,7 @@ pub const ContextWidget = struct {
 pub fn Overlay(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *OverlayWidget {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(OverlayWidget) catch unreachable;
-  ret.* = OverlayWidget{};
-  ret.init(src, id_extra, opts);
+  ret.* = OverlayWidget.init(src, id_extra, opts);
   ret.install();
   return ret;
 }
@@ -3605,8 +3627,8 @@ pub const OverlayWidget = struct {
   const Self = @This();
   wd: WidgetData = undefined,
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-    self.wd = WidgetData.init(src, id_extra, opts);
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Self {
+    return Self{.wd = WidgetData.init(src, id_extra, opts)};
   }
 
   pub fn install(self: *Self) void {
@@ -3654,8 +3676,7 @@ pub const Direction = enum {
 pub fn Box(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) *BoxWidget {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(BoxWidget) catch unreachable;
-  ret.* = BoxWidget{};
-  ret.init(src, id_extra, dir, opts);
+  ret.* = BoxWidget.init(src, id_extra, dir, opts);
   ret.install();
   return ret;
 }
@@ -3673,12 +3694,14 @@ pub const BoxWidget = struct {
   childRect: Rect = Rect{},
   extra_pixels: f32 = 0,
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) void {
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) BoxWidget {
+    var self = Self{};
     self.wd = WidgetData.init(src, id_extra, opts);
     self.dir = dir;
     if (DataGet(self.wd.id, f32)) |weight| {
       self.total_weight_prev = weight;
     }
+    return self;
   }
 
   pub fn install(self: *Self) void {
@@ -3931,8 +3954,7 @@ pub const ScrollBar = struct {
 pub fn ScrollArea(src: std.builtin.SourceLocation, id_extra: usize, virtual_size: ?Size, opts: Options) *ScrollAreaWidget {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(ScrollAreaWidget) catch unreachable;
-  ret.* = ScrollAreaWidget{};
-  ret.init(src, id_extra, virtual_size, opts);
+  ret.* = ScrollAreaWidget.init(src, id_extra, virtual_size, opts);
   ret.install();
   return ret;
 }
@@ -3966,7 +3988,8 @@ pub const ScrollAreaWidget = struct {
   scroll: f32 = 0,  // how far down we are scrolled (natural scale pixels)
   scrollAfter: f32 = 0,  // how far we need to scroll after this frame
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, virtual_size: ?Size, opts: Options) void {
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, virtual_size: ?Size, opts: Options) Self {
+    var self = Self{};
     const options = opts.overrideIfNull(Defaults);
     self.wd = WidgetData.init(src, id_extra, options);
     if (virtual_size) |vs| {
@@ -3980,6 +4003,7 @@ pub const ScrollAreaWidget = struct {
       self.scroll = d.scroll;
     }
     self.next_widget_ypos = 0;
+    return self;
   }
 
   pub fn install(self: *Self) void {
@@ -4222,8 +4246,7 @@ pub fn Spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
 pub fn Scale(src: std.builtin.SourceLocation, id_extra: usize, initial_scale: f32, opts: Options) *ScaleWidget {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(ScaleWidget) catch unreachable;
-  ret.* = ScaleWidget{};
-  ret.init(src, id_extra, initial_scale, opts);
+  ret.* = ScaleWidget.init(src, id_extra, initial_scale, opts);
   ret.install();
   return ret;
 }
@@ -4233,12 +4256,14 @@ pub const ScaleWidget = struct {
   wd: WidgetData = undefined,
   scale: f32 = 1.0,
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, initial_scale: f32, opts: Options) void {
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, initial_scale: f32, opts: Options) Self {
+    var self = Self{};
     self.wd = WidgetData.init(src, id_extra, opts);
     self.scale = initial_scale;
     if (DataGet(self.wd.id, f32)) |s| {
       self.scale = s;
     }
+    return self;
   }
 
   pub fn install(self: *Self) void {
@@ -4307,8 +4332,7 @@ pub const ScaleWidget = struct {
 pub fn Menu(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) *MenuWidget {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(MenuWidget) catch unreachable;
-  ret.* = MenuWidget{};
-  ret.init(src, id_extra, dir, opts);
+  ret.* = MenuWidget.init(src, id_extra, dir, opts);
   ret.install();
   return ret;
 }
@@ -4323,7 +4347,8 @@ pub const MenuWidget = struct {
   box: BoxWidget = undefined,
   submenus_activated: bool = false,
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) void {
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) MenuWidget {
+    var self = Self{};
     self.wd = WidgetData.init(src, id_extra, opts);
 
     self.dir = dir;
@@ -4333,6 +4358,8 @@ pub const MenuWidget = struct {
     else if (DataGet(self.wd.id, bool)) |a| {
       self.submenus_activated = a;
     }
+
+    return self;
   }
 
   pub fn install(self: *Self) void {
@@ -4342,8 +4369,7 @@ pub const MenuWidget = struct {
 
     self.wd.borderAndBackground();
 
-    self.box = BoxWidget{};
-    self.box.init(@src(), 0, self.dir, self.wd.options.plain());
+    self.box = BoxWidget.init(@src(), 0, self.dir, self.wd.options.plain());
     self.box.install();
   }
 
@@ -4409,8 +4435,7 @@ pub fn MenuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label: []
 pub fn MenuItem(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, opts: Options) *MenuItemWidget {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(MenuItemWidget) catch unreachable;
-  ret.* = MenuItemWidget{};
-  ret.init(src, id_extra, submenu, opts);
+  ret.* = MenuItemWidget.init(src, id_extra, submenu, opts);
   ret.install();
   return ret;
 }
@@ -4428,13 +4453,15 @@ pub const MenuItemWidget = struct {
   submenu: bool = false,
   activated: bool = false,
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, opts: Options) void {
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, opts: Options) Self {
+    var self = Self{};
     const options = opts.overrideIfNull(Defaults);
     self.wd = WidgetData.init(src, id_extra, options);
     self.submenu = submenu;
     if (!self.wd.rect.empty()) {
       TabIndexSet(self.wd.id, options.tab_index);
     }
+    return self;
   }
 
   pub fn install(self: *Self) void {
@@ -4593,18 +4620,20 @@ pub const LabelWidget = struct {
   wd: WidgetData = undefined,
   label: []const u8 = undefined,
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) void {
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) Self {
     var cw = current_window orelse unreachable;
     const label = std.fmt.allocPrint(cw.arena, fmt, args) catch unreachable;
-    self.initNoFormat(src, id_extra, label, opts);
+    return Self.initNoFormat(src, id_extra, label, opts);
   }
 
-  pub fn initNoFormat(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) void {
+  pub fn initNoFormat(src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) Self {
+    var self = Self{};
     const options = Defaults.override(opts);
     self.label = label;
     const size = options.font().textSize(self.label);
     self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
     self.wd.placeInsideNoExpand();
+    return self;
   }
 
   pub fn install(self: *Self) void {
@@ -4624,14 +4653,12 @@ pub const LabelWidget = struct {
 };
 
 pub fn Label(src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) void {
-  var lw = LabelWidget{};
-  lw.init(src, id_extra, fmt, args, opts);
+  var lw = LabelWidget.init(src, id_extra, fmt, args, opts);
   lw.install();
 }
 
 pub fn LabelNoFormat(src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) void {
-  var lw = LabelWidget{};
-  lw.initNoFormat(src, id_extra, label, opts);
+  var lw = LabelWidget.initNoFormat(src, id_extra, label, opts);
   lw.install();
 }
 
@@ -4654,8 +4681,7 @@ pub fn Icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name:
 pub fn ButtonContainer(src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) *ButtonContainerWidget {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(ButtonContainerWidget) catch unreachable;
-  ret.* = ButtonContainerWidget{};
-  ret.init(src, id_extra, show_focus, opts);
+  ret.* = ButtonContainerWidget.init(src, id_extra, show_focus, opts);
   ret.install();
   return ret;
 }
@@ -4669,12 +4695,14 @@ pub const ButtonContainerWidget = struct {
   show_focus: bool = false,
   clicked: bool = false,
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) void {
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) Self {
+    var self = Self{};
     self.wd = WidgetData.init(src, id_extra, opts);
     if (!self.wd.rect.empty()) {
       TabIndexSet(self.wd.id, opts.tab_index);
     }
     self.show_focus = show_focus;
+    return self;
   }
 
   pub fn install(self: *Self) void {
@@ -4809,10 +4837,11 @@ pub const ButtonWidget = struct {
   bc: ButtonContainerWidget = undefined,
   label: []const u8 = undefined,
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) void {
-    self.bc = ButtonContainerWidget{};
-    _ = self.bc.init(src, id_extra, true, Defaults.override(opts));
-    self.label = label;
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) Self {
+    return Self{
+      .bc = ButtonContainerWidget.init(src, id_extra, true, Defaults.override(opts)),
+      .label = label,
+    };
   }
 
   pub fn install(self: *ButtonWidget) bool {
@@ -4828,8 +4857,7 @@ pub const ButtonWidget = struct {
 };
 
 pub fn Button(src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) bool {
-  var button = ButtonWidget{};
-  button.init(src, id_extra, label, opts);
+  var button = ButtonWidget.init(src, id_extra, label, opts);
   return button.install();
 }
 
@@ -4925,9 +4953,8 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
 pub fn TextEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) void {
   const cw = current_window orelse unreachable;
   var ret = cw.arena.create(TextEntryWidget) catch unreachable;
-  ret.* = TextEntryWidget{};
+  ret.* = TextEntryWidget.init(src, id_extra, width, text, opts);
   ret.allocator = cw.arena;
-  ret.init(src, id_extra, width, text, opts);
   ret.install();
   ret.deinit();
 }
@@ -4950,7 +4977,8 @@ pub const TextEntryWidget = struct {
   text: []u8 = undefined,
   len: usize = undefined,
 
-  pub fn init(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) void {
+  pub fn init(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) Self {
+    var self = Self{};
     const options = opts.overrideIfNull(Defaults);
 
     const msize = options.font().textSize("M");
@@ -4962,6 +4990,7 @@ pub const TextEntryWidget = struct {
     }
     self.text = text;
     self.len = std.mem.indexOfScalar(u8, self.text, 0) orelse self.text.len;
+    return self;
   }
 
   pub fn install(self: *Self) void {

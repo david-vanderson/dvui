@@ -205,8 +205,7 @@ pub fn main() !void {
         }
 
         {
-          var button = gui.ButtonWidget{};
-          _ = button.init(@src(), 0, "Wiggle", .{.tab_index = 10});
+          var button = gui.ButtonWidget.init(@src(), 0, "Wiggle", .{.tab_index = 10});
 
           if (gui.AnimationGet(button.bc.wd.id, "xoffset")) |a| {
             button.bc.wd.rect.x += a.lerp();
@@ -232,8 +231,7 @@ pub fn main() !void {
           const millis = @divFloor(gui.frameTimeNS(), 1_000_000);
           const left = @intCast(i32, @rem(millis, 1000));
 
-          var label = gui.LabelWidget{};
-          label.init(@src(), 0, "{d} {d}", .{@divTrunc(millis, 1000), @intCast(u32, left)}, .{.margin = gui.Rect.all(4), .min_size = (gui.Options{}).font().textSize("0" ** 15), .gravity = .left});
+          var label = gui.LabelWidget.init(@src(), 0, "{d} {d}", .{@divTrunc(millis, 1000), @intCast(u32, left)}, .{.margin = gui.Rect.all(4), .min_size = (gui.Options{}).font().textSize("0" ** 15), .gravity = .left});
           label.install();
 
           if (gui.TimerDone(label.wd.id) or !gui.TimerExists(label.wd.id)) {
@@ -439,9 +437,7 @@ pub fn main() !void {
 
     const end_micros = win.end();
 
-    if (win.CursorRequested()) |cursor| {
-      win_backend.setCursor(cursor);
-    }
+    win_backend.setCursor(win.CursorRequested());
 
     win_backend.renderPresent();
 
