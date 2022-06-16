@@ -26,7 +26,7 @@ A [Zig](https://ziglang.org/) native GUI toolkit for whole applications or extra
 
 ### Standalone Mach App
 
-```
+```sh
 git clone https://github.com/david-vanderson/gui.git
 cd gui
 git submodule add https://github.com/hexops/mach libs/mach
@@ -40,20 +40,20 @@ zig build run-mach-test
 As an example, we'll extend the mach example `instanced-cube`.
 
 Link or copy this repo into the example:
-```
+```sh
 cd mach/examples/instanced-cube
 ln -s ~/gui gui
 ```
 
 Add the necessary packages to the example (need zmath and freetype):
-```
+```diff
 git diff ../../build.zig
 -        .{ .name = "instanced-cube", .packages = &[_]Pkg{Packages.zmath} },
 +        .{ .name = "instanced-cube", .packages = &[_]Pkg{Packages.zmath, freetype.pkg } },
 ```
 
 Add the following to the example:
-```
+```diff
 git diff main.zig
 diff --git a/examples/instanced-cube/main.zig b/examples/instanced-cube/main.zig
 index 1f17475..e1b6450 100755
@@ -170,7 +170,7 @@ index 1f17475..e1b6450 100755
 ## Design
 
 ### Immediate Mode
-```
+```zig
 if (gui.Button(@src(), 0, "Ok", .{})) {
   dialog.close();
 }
@@ -243,7 +243,7 @@ If you want to only render frames when needed, add `window.beginWait()` at the s
 
 ### Widget init and deinit
 The easiest way to use widgets is through the functions that create and install them:
-```
+```zig
 {
     var box = gui.Box(@src(), 0, .vertical, .{.expand = .both});
     defer box.deinit();
@@ -252,7 +252,7 @@ The easiest way to use widgets is through the functions that create and install 
 These functions allocate memory for the widget onto the arena allocator passed to `window.begin()`.
 
 Instead you can allocate the widget on the stack:
-```
+```zig
 {
     var box = BoxWidget.init(@src(), 0, .vertical, .{.expand = .both});
     // box now has an id, can look up animations/timers
@@ -273,7 +273,7 @@ Each widget has the following options that can be changed through the Options st
 - color_custom/color_custom_bg (used if color_style is .custom)
 - font_style (use theme's fonts)
 - font_custom (used if font_style is .custom)
-```
+```zig
 if (gui.Button(@src(), 0, "Wild", .{
     .margin = gui.Rect.All(2),
     .padding = gui.Rect.all(8),
@@ -286,19 +286,19 @@ if (gui.Button(@src(), 0, "Wild", .{
 ```
 
 Each widget has it's own default options.  These can be changed directly:
-```
+```zig
 gui.ButtonWidget.Defaults.background = false;
 ```
 
 Colors come in foreground/background pairs.  Usually you want to use colors from the theme:
-```
+```zig
 if (gui.MenuItemLabel(@src(), 0, "Cut", false, .{.color_style = .warning, .background = true}) != null) {
     // selected
 }
 ```
 
 Themes can be changed freely, and control the fonts and colors referenced by font_style and color_style.
-```
+```zig
 if (theme_dark) {
     win.theme = &gui.Theme_Adwaita_Dark;
 }
