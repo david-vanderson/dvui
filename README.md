@@ -32,7 +32,7 @@ cd gui
 git submodule add https://github.com/hexops/mach libs/mach
 git submodule add https://github.com/hexops/mach-freetype libs/mach-freetype
 git submodule add https://github.com/PiergiorgioZagaria/zmath.git libs/zmath
-zig build run-mach-gui-test
+zig build run-mach-test
 ```
 
 ### On Top of Existing Mach App
@@ -169,7 +169,7 @@ index 1f17475..e1b6450 100755
 
 ## Design
 
-### Single Pass Immediate Mode
+### Immediate Mode
 ```
 if (gui.Button(@src(), 0, "Ok", .{})) {
   dialog.close();
@@ -186,7 +186,7 @@ In the same frame these can all happen:
 - text entry field B receives more text events
 
 ### Floating Windows
-This library can be used in 2 main ways:
+This library can be used in 2 ways:
 - as the gui for the whole application, drawing over the entire OS window
 - as floating windows on top of an existing application with minimal changes:
   - use widgets only inside `gui.FloatingWindow()` calls
@@ -229,3 +229,50 @@ Instead you can allocate the widget on the stack:
 ```
 This is also shows how to get a widget's id before install() (processes events and draws).  This is primarily used for animations.
 
+### Appearance
+Each widget has the following options that can be changed through the Options struct when creating the widget:
+- margin (space oustide border)
+- border (on each side)
+- background (fills space inside border with background color)
+- padding (space inside border)
+- corner radius (for each corner)
+- color_style (use theme's colors)
+- color_custom/color_custom_bg (used if color_style is .custom)
+- font_style (use theme's fonts)
+- font_custom (used if font_style is .custom)
+```
+if (gui.Button(@src(), 0, "Wild", .{
+    .margin = gui.Rect.All(2),
+    .padding = gui.Rect.all(8),
+    .color_style = .custom,
+    .color_custom = gui.Color{.r = 255, .g = 0, .b = 0, .a = 255},
+    .color_custom_bg = gui.Color{.r = 255, .g = 0, .b = 255, .a = 255},
+    })) {
+    // clicked
+}
+```
+
+Each widget has it's own default options.  These can be changed directly:
+```
+gui.ButtonWidget.Defaults.background = false;
+```
+
+Colors come in foreground/background pairs.  Usually you want to use colors from the theme:
+```
+if (gui.MenuItemLabel(@src(), 0, "Cut", false, .{.color_style = .warning, .background = true}) != null) {
+    // selected
+}
+```
+
+Themes can be changed freely, and control the fonts and colors referenced by font_style and color_style.
+```
+if (theme_dark) {
+    win.theme = &gui.Theme_Adwaita_Dark;
+}
+else {
+    win.theme = &gui.Theme_Adwaita;
+}
+```
+The current theme's color_accent is also used to show keyboard focus.
+
+### Layout

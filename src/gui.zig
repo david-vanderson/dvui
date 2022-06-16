@@ -202,11 +202,7 @@ pub const Options = struct {
   font_style: ?FontStyle = null,
 
   pub fn color(self: *const Options) Color {
-    return self.colorWithDefault(.control);
-  }
-
-  pub fn colorWithDefault(self: *const Options, style_default: ColorStyle) Color {
-    const style = self.color_style orelse style_default;
+    const style = self.color_style orelse .control;
     const col =
       switch (style) {
         .custom => self.color_custom,
@@ -229,11 +225,7 @@ pub const Options = struct {
   }
 
   pub fn color_bg(self: *const Options) Color {
-    return self.color_bgWithDefault(.control);
-  }
-
-  pub fn color_bgWithDefault(self: *const Options, style_default: ColorStyle) Color {
-    const style = self.color_style orelse style_default;
+    const style = self.color_style orelse .control;
     const col =
       switch (style) {
         .custom => self.color_custom_bg,
@@ -2587,7 +2579,7 @@ pub fn Popup(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect
 
 pub const PopupWidget = struct {
   const Self = @This();
-  var Defaults: Options = .{
+  pub var Defaults: Options = .{
     .corner_radius = Rect.all(5),
     .border = Rect.all(1),
     .padding = Rect.all(4),
@@ -2747,7 +2739,7 @@ pub fn FloatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: b
 
 pub const FloatingWindowWidget = struct {
   const Self = @This();
-  var Defaults: Options = .{
+  pub var Defaults: Options = .{
     .corner_radius = Rect.all(5),
     .border = Rect.all(1),
     .background = true,
@@ -3326,7 +3318,7 @@ pub fn TextLayout(src: std.builtin.SourceLocation, id_extra: usize, opts: Option
 
 pub const TextLayoutWidget = struct {
   const Self = @This();
-  var Defaults: Options = .{
+  pub var Defaults: Options = .{
     .margin = Rect.all(4),
     .padding = Rect.all(4),
     .background = true,
@@ -3947,7 +3939,7 @@ pub fn ScrollArea(src: std.builtin.SourceLocation, id_extra: usize, virtual_size
 
 pub const ScrollAreaWidget = struct {
   const Self = @This();
-  var Defaults: Options = .{
+  pub var Defaults: Options = .{
     .background = true,
     .corner_radius = Rect.all(5),
     .color_style = .content,
@@ -4428,7 +4420,7 @@ pub fn MenuItem(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool,
 
 pub const MenuItemWidget = struct {
   const Self = @This();
-  var Defaults: Options = .{
+  pub var Defaults: Options = .{
     .corner_radius = Rect.all(5),
     .padding = Rect.all(4),
   };
@@ -4597,7 +4589,7 @@ pub const MenuItemWidget = struct {
 
 pub const LabelWidget = struct {
   const Self = @This();
-  var Defaults: Options = .{
+  pub var Defaults: Options = .{
     .padding = Rect.all(4),
     .color_style = .control,
     .background = false,
@@ -4812,7 +4804,7 @@ pub const ButtonContainerWidget = struct {
 
 pub const ButtonWidget = struct {
   const Self = @This();
-  var Defaults: Options = .{
+  pub var Defaults: Options = .{
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .padding = Rect.all(4),
@@ -4947,7 +4939,7 @@ pub fn TextEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, t
 
 pub const TextEntryWidget = struct {
   const Self = @This();
-  var Defaults: Options = .{
+  pub var Defaults: Options = .{
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .border = Rect.all(1),
