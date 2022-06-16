@@ -2,6 +2,7 @@
 -Dtarget=wasm32-freestanding-none
 
 write up some design docs
+- tabindex
 - seamless animations
 
 start making real demo() contents

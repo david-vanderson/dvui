@@ -186,7 +186,7 @@ Each widget gets a `u32` id by combining:
 The extra `usize` is to differentiate many children being added to the same parent in a loop.
 
 ### Single Pass
-Widgets handle events and draw themselves in install().  This is before they know of any child widgets, so some information is stored from last frame about minimum sizes.
+Widgets handle events and draw themselves in `install()`.  This is before they know of any child widgets, so some information is stored from last frame about minimum sizes.
 
 A new widget will typically receive a zero-sized rectangle, draw nothing on the first frame, and draw normally on the second frame.  For smooth UIs a new widget can be animated from zero-sized to normal size.
 

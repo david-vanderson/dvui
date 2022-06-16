@@ -2960,7 +2960,7 @@ pub const FloatingWindowWidget = struct {
         }
       }
       else if (e.evt == .key) {
-        // catch any tabs that weren't handled by widgets (we passed true to iter.next)
+        // catch any tabs that weren't handled by widgets
         if (e.evt.key.state == .down and e.evt.key.keysym == .tab) {
           if (e.evt.key.mod.shift()) {
             TabIndexPrev(&iter);
@@ -3061,6 +3061,8 @@ pub const PanedWidget = struct {
     rect: Rect,
   };
 
+  const handle_size = 4;
+
   wd: WidgetData = undefined,
 
   split_ratio: f32 = undefined,
@@ -3137,9 +3139,30 @@ pub const PanedWidget = struct {
     }
 
     if (!self.collapsed()) {
-      self.processEvents();
+      if (self.processEvents()) {
+        const rs = self.wd.contentRectScale();
+        var r = rs.r;
+        const thick = handle_size * rs.s;
+        switch (self.dir) {
+          .horizontal => {
+            r.x += r.w * self.split_ratio - thick / 2;
+            r.w = thick;
+            const height = r.h / 5;
+            r.y += r.h / 2 - height / 2;
+            r.h = height;
+          },
+          .vertical => {
+            r.y += r.h * self.split_ratio - thick / 2;
+            r.h = thick;
+            const width = r.w / 5;
+            r.x += r.w / 2 - width / 2;
+            r.w = width;
+          },
+        }
+        PathAddRect(r, Rect.all(thick));
+        PathFillConvex(self.wd.options.color().transparent(0.5));
+      }
     }
-
   }
 
   pub fn collapsed(self: *Self) bool {
@@ -3163,7 +3186,8 @@ pub const PanedWidget = struct {
     gui.Animate(self.wd.id, "_split_ratio", gui.Animation{.start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000});
   }
 
-  pub fn processEvents(self: *Self) void {
+  pub fn processEvents(self: *Self) bool {
+    var ret = false;
     const rs = self.wd.contentRectScale();
     var iter = EventIterator.init(self.wd.id, rs.r);
     const captured = CaptureMouseMaintain(self.wd.id);
@@ -3186,6 +3210,7 @@ pub const PanedWidget = struct {
         }
 
         if (captured or @fabs(mouse - target) < (5 * WindowNaturalScale())) {
+          ret = true;
           e.handled = true;
           if (e.evt.mouse.state == .leftdown) {
             // capture and start drag
@@ -3209,6 +3234,8 @@ pub const PanedWidget = struct {
                   self.split_ratio = (e.evt.mouse.p.y - rs.r.y) / rs.r.h;
                 },
               }
+
+              self.split_ratio = math.max(0.0, math.min(1.0, self.split_ratio));
             }
             else {
               CursorSet(e.evt.mouse.p, cursor);
@@ -3217,6 +3244,8 @@ pub const PanedWidget = struct {
         }
       }
     }
+
+    return ret;
   }
 
   fn widget(self: *Self) Widget {
@@ -3245,8 +3274,8 @@ pub const PanedWidget = struct {
       }
       else {
         switch (self.dir) {
-          .horizontal => r.w *= self.split_ratio,
-          .vertical => r.h *= self.split_ratio,
+          .horizontal => r.w = r.w * self.split_ratio - handle_size / 2,
+          .vertical => r.h = r.h * self.split_ratio - handle_size / 2,
         }
       }
       return gui.PlaceIn(id, r, min_size, e, g);
@@ -3272,14 +3301,14 @@ pub const PanedWidget = struct {
       else {
         switch (self.dir) {
           .horizontal => {
-            const first = r.w * self.split_ratio;
+            const first = r.w * self.split_ratio - handle_size / 2;
             r.w -= first;
-            r.x += first;
+            r.x += first + handle_size / 2;
           },
           .vertical => {
-            const first = r.h * self.split_ratio;
+            const first = r.h * self.split_ratio - handle_size / 2;
             r.h -= first;
-            r.y += first;
+            r.y += first + handle_size / 2;
           },
         }
       }
