@@ -32,139 +32,139 @@ index_buffer_size: u32,
 cursor_last: gui.CursorKind = .arrow,
 
 pub fn init(gpa: std.mem.Allocator, engine: *mach.Engine) !MachBackend {
-  var back: MachBackend = undefined;
+    var back: MachBackend = undefined;
 
-  back.gpa = gpa;
-  back.engine = engine;
-  back.uniform_buffer_size = 1;
-  back.uniform_buffer_len = 0;
-  back.uniform_buffer = engine.device.createBuffer(&.{
-      .usage = .{ .copy_dst = true, .uniform = true },
-      .size = UniformBufferObject.Size * back.uniform_buffer_size,
-      .mapped_at_creation = false,
-  });
+    back.gpa = gpa;
+    back.engine = engine;
+    back.uniform_buffer_size = 1;
+    back.uniform_buffer_len = 0;
+    back.uniform_buffer = engine.device.createBuffer(&.{
+        .usage = .{ .copy_dst = true, .uniform = true },
+        .size = UniformBufferObject.Size * back.uniform_buffer_size,
+        .mapped_at_creation = false,
+    });
 
-  back.sampler = engine.device.createSampler(&.{
-      .mag_filter = .linear,
-      .min_filter = .linear,
-  });
+    back.sampler = engine.device.createSampler(&.{
+        .mag_filter = .linear,
+        .min_filter = .linear,
+    });
 
-  back.texture = null;
-  back.clipr = gui.Rect{};
-  back.vertex_buffer_size = 1000;
-  back.index_buffer_size = 1000;
-  back.vertex_buffer_len = 0;
-  back.index_buffer_len = 0;
-  back.vertex_buffer = engine.device.createBuffer(&.{
-      .usage = .{ .vertex = true, .copy_dst = true },
-      .size = @sizeOf(Vertex) * back.vertex_buffer_size,
-      .mapped_at_creation = false,
-  });
-  back.index_buffer = engine.device.createBuffer(&.{
-      .usage = .{ .index = true, .copy_dst = true },
-      .size = @sizeOf(u32) * back.index_buffer_size,
-      .mapped_at_creation = false,
-  });
-  
-  const vs_module = engine.device.createShaderModule(&.{
-      .label = "my vertex shader",
-      .code = .{ .wgsl = vert_wgsl },
-  });
+    back.texture = null;
+    back.clipr = gui.Rect{};
+    back.vertex_buffer_size = 1000;
+    back.index_buffer_size = 1000;
+    back.vertex_buffer_len = 0;
+    back.index_buffer_len = 0;
+    back.vertex_buffer = engine.device.createBuffer(&.{
+        .usage = .{ .vertex = true, .copy_dst = true },
+        .size = @sizeOf(Vertex) * back.vertex_buffer_size,
+        .mapped_at_creation = false,
+    });
+    back.index_buffer = engine.device.createBuffer(&.{
+        .usage = .{ .index = true, .copy_dst = true },
+        .size = @sizeOf(u32) * back.index_buffer_size,
+        .mapped_at_creation = false,
+    });
 
-  const vertex_attributes = [_]gpu.VertexAttribute{
-      .{ .format = .float32x2, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
-      .{ .format = .float32x4, .offset = @offsetOf(Vertex, "col"), .shader_location = 1 },
-      .{ .format = .float32x2, .offset = @offsetOf(Vertex, "uv"), .shader_location = 2 },
-  };
-  const vertex_buffer_layout = gpu.VertexBufferLayout{
-      .array_stride = @sizeOf(Vertex),
-      .step_mode = .vertex,
-      .attribute_count = vertex_attributes.len,
-      .attributes = &vertex_attributes,
-  };
+    const vs_module = engine.device.createShaderModule(&.{
+        .label = "my vertex shader",
+        .code = .{ .wgsl = vert_wgsl },
+    });
 
-  const fs_module = engine.device.createShaderModule(&.{
-      .label = "my fragment shader",
-      .code = .{ .wgsl = frag_wgsl },
-  });
+    const vertex_attributes = [_]gpu.VertexAttribute{
+        .{ .format = .float32x2, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
+        .{ .format = .float32x4, .offset = @offsetOf(Vertex, "col"), .shader_location = 1 },
+        .{ .format = .float32x2, .offset = @offsetOf(Vertex, "uv"), .shader_location = 2 },
+    };
+    const vertex_buffer_layout = gpu.VertexBufferLayout{
+        .array_stride = @sizeOf(Vertex),
+        .step_mode = .vertex,
+        .attribute_count = vertex_attributes.len,
+        .attributes = &vertex_attributes,
+    };
 
-  // Fragment state
-  const blend = gpu.BlendState{
-      .color = .{
-          .operation = .add,
-          .src_factor = .src_alpha,
-          .dst_factor = .one_minus_src_alpha,
-      },
-      .alpha = .{
-          .operation = .add,
-          .src_factor = .src_alpha,
-          .dst_factor = .one_minus_src_alpha,
-      },
-  };
-  const color_target = gpu.ColorTargetState{
-      .format = engine.swap_chain_format,
-      .blend = &blend,
-      .write_mask = gpu.ColorWriteMask.all,
-  };
-  const fragment = gpu.FragmentState{
-      .module = fs_module,
-      .entry_point = "main",
-      .targets = &.{color_target},
-      .constants = null,
-  };
-  const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
-      .fragment = &fragment,
-      .vertex = .{
-          .module = vs_module,
-          .entry_point = "main",
-          .buffers = &.{vertex_buffer_layout},
-      },
-      .primitive = .{
-          .cull_mode = .none,
-          .topology = .triangle_list,
-      },
-  };
+    const fs_module = engine.device.createShaderModule(&.{
+        .label = "my fragment shader",
+        .code = .{ .wgsl = frag_wgsl },
+    });
 
-  back.pipeline = engine.device.createRenderPipeline(&pipeline_descriptor);
+    // Fragment state
+    const blend = gpu.BlendState{
+        .color = .{
+            .operation = .add,
+            .src_factor = .src_alpha,
+            .dst_factor = .one_minus_src_alpha,
+        },
+        .alpha = .{
+            .operation = .add,
+            .src_factor = .src_alpha,
+            .dst_factor = .one_minus_src_alpha,
+        },
+    };
+    const color_target = gpu.ColorTargetState{
+        .format = engine.swap_chain_format,
+        .blend = &blend,
+        .write_mask = gpu.ColorWriteMask.all,
+    };
+    const fragment = gpu.FragmentState{
+        .module = fs_module,
+        .entry_point = "main",
+        .targets = &.{color_target},
+        .constants = null,
+    };
+    const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
+        .fragment = &fragment,
+        .vertex = .{
+            .module = vs_module,
+            .entry_point = "main",
+            .buffers = &.{vertex_buffer_layout},
+        },
+        .primitive = .{
+            .cull_mode = .none,
+            .topology = .triangle_list,
+        },
+    };
 
-  vs_module.release();
-  fs_module.release();
+    back.pipeline = engine.device.createRenderPipeline(&pipeline_descriptor);
 
-  return back;
+    vs_module.release();
+    fs_module.release();
+
+    return back;
 }
 
 fn toMachCursor(cursor: gui.CursorKind) mach.MouseCursor {
-  return switch (cursor) {
-    .arrow => .arrow,
-    .ibeam => .ibeam,
-    .crosshair => .crosshair,
-    .arrow_w_e => .resize_ew,
-    .arrow_n_s => .resize_ns,
-    .arrow_nw_se => .resize_nwse,
-    .arrow_ne_sw => .resize_nesw,
-    .arrow_all => .resize_all,
-    .bad => .not_allowed,
-    .hand => .pointing_hand,
+    return switch (cursor) {
+        .arrow => .arrow,
+        .ibeam => .ibeam,
+        .crosshair => .crosshair,
+        .arrow_w_e => .resize_ew,
+        .arrow_n_s => .resize_ns,
+        .arrow_nw_se => .resize_nwse,
+        .arrow_ne_sw => .resize_nesw,
+        .arrow_all => .resize_all,
+        .bad => .not_allowed,
+        .hand => .pointing_hand,
 
-    // not supported in mach glfw backend
-    .wait => .not_allowed,
-    .small_wait => .not_allowed,
-  };
+        // not supported in mach glfw backend
+        .wait => .not_allowed,
+        .small_wait => .not_allowed,
+    };
 }
 
 pub fn setCursor(self: *MachBackend, cursor: gui.CursorKind) void {
-  if (cursor != self.cursor_last) {
-    self.cursor_last = cursor;
-    self.engine.setMouseCursor(toMachCursor(cursor)) catch {};
-  }
+    if (cursor != self.cursor_last) {
+        self.cursor_last = cursor;
+        self.engine.setMouseCursor(toMachCursor(cursor)) catch {};
+    }
 }
 
 pub fn deinit(self: *MachBackend) void {
-  self.uniform_buffer.release();
-  self.sampler.release();
-  self.vertex_buffer.release();
-  self.index_buffer.release();
-  self.pipeline.release();
+    self.uniform_buffer.release();
+    self.sampler.release();
+    self.vertex_buffer.release();
+    self.index_buffer.release();
+    self.pipeline.release();
 }
 
 pub const UniformBufferObject = struct {
@@ -200,16 +200,16 @@ pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) bool {
         },
         .mouse_press => |mb| {
             switch (mb.button) {
-              .left => return win.addEventMouseButton(.leftdown),
-              .right => return win.addEventMouseButton(.rightdown),
-              else => {},
+                .left => return win.addEventMouseButton(.leftdown),
+                .right => return win.addEventMouseButton(.rightdown),
+                else => {},
             }
         },
         .mouse_release => |mb| {
             switch (mb.button) {
-              .left => return win.addEventMouseButton(.leftup),
-              .right => return win.addEventMouseButton(.rightup),
-              else => {},
+                .left => return win.addEventMouseButton(.leftup),
+                .right => return win.addEventMouseButton(.rightup),
+                else => {},
             }
         },
         .mouse_scroll => |s| {
@@ -222,12 +222,11 @@ pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) bool {
 }
 
 pub fn waitEventTimeout(self: *MachBackend, timeout_micros: u32) void {
-  if (timeout_micros == std.math.maxInt(u32)) {
-    self.engine.setWaitEvent(std.math.floatMax(f64));
-  }
-  else {
-    self.engine.setWaitEvent(@intToFloat(f64, timeout_micros) / 1_000_000);
-  }
+    if (timeout_micros == std.math.maxInt(u32)) {
+        self.engine.setWaitEvent(std.math.floatMax(f64));
+    } else {
+        self.engine.setWaitEvent(@intToFloat(f64, timeout_micros) / 1_000_000);
+    }
 }
 
 pub fn addAllEvents(self: *MachBackend, win: *gui.Window) bool {
@@ -246,7 +245,7 @@ pub fn addAllEvents(self: *MachBackend, win: *gui.Window) bool {
 }
 
 pub fn guiBackend(self: *MachBackend) gui.Backend {
-  return gui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy);
+    return gui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy);
 }
 
 pub fn begin(self: *MachBackend, arena: std.mem.Allocator) void {
@@ -262,30 +261,30 @@ pub fn begin(self: *MachBackend, arena: std.mem.Allocator) void {
 }
 
 pub fn end(self: *MachBackend) void {
-  self.flushRender();
-  var command = self.encoder.finish(null);
-  //std.debug.print("  release encoder\n", .{});
-  self.encoder.release();
+    self.flushRender();
+    var command = self.encoder.finish(null);
+    //std.debug.print("  release encoder\n", .{});
+    self.encoder.release();
 
-  var queue = self.engine.device.getQueue();
-  queue.submit(&.{command});
-  command.release();
+    var queue = self.engine.device.getQueue();
+    queue.submit(&.{command});
+    command.release();
 }
 
 pub fn pixelSize(self: *MachBackend) gui.Size {
     const psize = self.engine.getFramebufferSize();
-    return gui.Size{.w = @intToFloat(f32, psize.width), .h = @intToFloat(f32, psize.height)};
+    return gui.Size{ .w = @intToFloat(f32, psize.width), .h = @intToFloat(f32, psize.height) };
 }
 
 pub fn windowSize(self: *MachBackend) gui.Size {
     const size = self.engine.getWindowSize();
-    return gui.Size{.w = @intToFloat(f32, size.width), .h = @intToFloat(f32, size.height)};
+    return gui.Size{ .w = @intToFloat(f32, size.width), .h = @intToFloat(f32, size.height) };
 }
 
 pub fn renderGeometry(self: *MachBackend, tex: ?*anyopaque, vtx: []gui.Vertex, idx: []u32) void {
     const clipr = gui.WindowRectPixels().intersect(gui.ClipGet());
     if (clipr.empty()) {
-      return;
+        return;
     }
 
     //std.debug.print("renderGeometry {} {x}\n", .{clipr, tex});
@@ -296,78 +295,79 @@ pub fn renderGeometry(self: *MachBackend, tex: ?*anyopaque, vtx: []gui.Vertex, i
         clipr.h != self.clipr.h or
         (self.texture == null and tex != null) or
         (self.texture != null and tex == null) or
-        (self.texture != null and tex != null and self.texture.? != tex.?)) {
-      // clip rect or texture changed, can't coalesce so flush
-      self.flushRender();
+        (self.texture != null and tex != null and self.texture.? != tex.?))
+    {
+        // clip rect or texture changed, can't coalesce so flush
+        self.flushRender();
     }
 
     self.clipr = clipr;
     self.texture = tex;
 
     for (idx) |id| {
-      self.idx.append(id + @intCast(u32, self.vtx.items.len)) catch unreachable;
+        self.idx.append(id + @intCast(u32, self.vtx.items.len)) catch unreachable;
     }
 
     for (vtx) |v| {
-      self.vtx.append(v) catch unreachable;
+        self.vtx.append(v) catch unreachable;
     }
 }
 
 pub fn flushRender(self: *MachBackend) void {
     if (self.vtx.items.len == 0) {
-      return;
+        return;
     }
 
     //std.debug.print("  flush {d} {d}\n", .{self.uniform_buffer_size, self.uniform_buffer_len});
 
     if (self.uniform_buffer_size < self.uniform_buffer_len + 1 or
         self.vertex_buffer_size < self.vertex_buffer_len + self.vtx.items.len or
-        self.index_buffer_size < self.index_buffer_len + self.idx.items.len) {
+        self.index_buffer_size < self.index_buffer_len + self.idx.items.len)
+    {
+        if (self.uniform_buffer_size < self.uniform_buffer_len + 1) {
+            self.uniform_buffer.release();
 
-      if (self.uniform_buffer_size < self.uniform_buffer_len + 1) {
-        self.uniform_buffer.release();
+            self.uniform_buffer_size = self.uniform_buffer_len + 1;
 
-        self.uniform_buffer_size = self.uniform_buffer_len + 1;
+            //std.debug.print("creating uniform buffer {d}\n", .{self.uniform_buffer_size});
+            self.uniform_buffer = self.engine.device.createBuffer(&.{
+                .usage = .{ .copy_dst = true, .uniform = true },
+                .size = UniformBufferObject.Size * self.uniform_buffer_size,
+                .mapped_at_creation = false,
+            });
 
-        //std.debug.print("creating uniform buffer {d}\n", .{self.uniform_buffer_size});
-        self.uniform_buffer = self.engine.device.createBuffer(&.{
-            .usage = .{ .copy_dst = true, .uniform = true },
-            .size = UniformBufferObject.Size * self.uniform_buffer_size,
-            .mapped_at_creation = false,
-        });
+            self.uniform_buffer_len = 0;
+        }
 
-        self.uniform_buffer_len = 0;
-      }
+        if (self.vertex_buffer_size < self.vertex_buffer_len + self.vtx.items.len) {
+            self.vertex_buffer.release();
 
-      if (self.vertex_buffer_size < self.vertex_buffer_len + self.vtx.items.len) {
-        self.vertex_buffer.release();
+            self.vertex_buffer_size = self.vertex_buffer_len + @intCast(u32, self.vtx.items.len);
 
-        self.vertex_buffer_size = self.vertex_buffer_len + @intCast(u32, self.vtx.items.len);
-          
-        //std.debug.print("creating vertex buffer {d}\n", .{self.vertex_buffer_size});
-        self.vertex_buffer = self.engine.device.createBuffer(&.{
-            .usage = .{ .vertex = true, .copy_dst = true },
-            .size = @sizeOf(Vertex) * self.vertex_buffer_size,
-            .mapped_at_creation = false,
-        });
+            //std.debug.print("creating vertex buffer {d}\n", .{self.vertex_buffer_size});
+            self.vertex_buffer = self.engine.device.createBuffer(&.{
+                .usage = .{ .vertex = true, .copy_dst = true },
+                .size = @sizeOf(Vertex) * self.vertex_buffer_size,
+                .mapped_at_creation = false,
+            });
 
-        self.vertex_buffer_len = 0;
-      }
+            self.vertex_buffer_len = 0;
+        }
 
-      if (self.index_buffer_size < self.index_buffer_len + self.idx.items.len) {
-        self.index_buffer.release();
+        if (self.index_buffer_size < self.index_buffer_len + self.idx.items.len) {
+            self.index_buffer.release();
 
-        self.index_buffer_size = self.index_buffer_len + @intCast(u32, self.idx.items.len);
+            self.index_buffer_size = self.index_buffer_len + @intCast(u32, self.idx.items.len);
 
-        //std.debug.print("creating index buffer {d}\n", .{self.index_buffer_size});
-        self.index_buffer = self.engine.device.createBuffer(&.{
-            .usage = .{ .index = true, .copy_dst = true },
-            .size = @sizeOf(u32) * self.index_buffer_size,
-            .mapped_at_creation = false,
-        });
+            //std.debug.print("creating index buffer {d}\n", .{self.index_buffer_size});
+            self.index_buffer = self.engine.device.createBuffer(&.{
+                .usage = .{ .index = true, .copy_dst = true },
+                .size = @sizeOf(u32) * self.index_buffer_size,
+                .mapped_at_creation = false,
+            });
 
-        self.index_buffer_len = 0;
-      }
+            self.index_buffer_len = 0;
+        }
     }
 
     const back_buffer_view = self.engine.swap_chain.?.getCurrentTextureView();
@@ -386,7 +386,7 @@ pub fn flushRender(self: *MachBackend) void {
 
     var texture: ?gpu.Texture = null;
     if (self.texture) |t| {
-      texture = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), t)).*;
+        texture = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), t)).*;
     }
 
     {
@@ -422,19 +422,13 @@ pub fn flushRender(self: *MachBackend) void {
     const arena = arena_allocator.allocator();
     defer arena_allocator.deinit();
 
-    var vertices = arena.alloc(Vertex, self.vtx.items.len) catch unreachable; 
+    var vertices = arena.alloc(Vertex, self.vtx.items.len) catch unreachable;
     for (self.vtx.items) |vin, i| {
-      vertices[i] = Vertex{.pos = vin.pos, .col = .{
-        @intToFloat(f32, vin.col.r) / 255.0,
-        @intToFloat(f32, vin.col.g) / 255.0,
-        @intToFloat(f32, vin.col.b) / 255.0,
-        @intToFloat(f32, vin.col.a) / 255.0 },
-        .uv = vin.uv };
+        vertices[i] = Vertex{ .pos = vin.pos, .col = .{ @intToFloat(f32, vin.col.r) / 255.0, @intToFloat(f32, vin.col.g) / 255.0, @intToFloat(f32, vin.col.b) / 255.0, @intToFloat(f32, vin.col.a) / 255.0 }, .uv = vin.uv };
     }
     //std.debug.print("vertexes {d} + {d} indexes {d} + {d}\n", .{self.vertex_buffer_len, self.vtx.items.len, self.index_buffer_len, self.idx.items.len});
     self.encoder.writeBuffer(self.vertex_buffer, self.vertex_buffer_len * @sizeOf(Vertex), Vertex, vertices);
     self.encoder.writeBuffer(self.index_buffer, self.index_buffer_len * @sizeOf(u32), u32, self.idx.items);
-
 
     const render_pass_info = gpu.RenderPassEncoder.Descriptor{
         .color_attachments = &.{color_attachment},
@@ -461,33 +455,33 @@ pub fn flushRender(self: *MachBackend) void {
 }
 
 pub fn textureCreate(self: *MachBackend, pixels: []const u8, width: u32, height: u32) *anyopaque {
-  const img_size = gpu.Extent3D{ .width = width, .height = height };
-  var texture = self.gpa.create(gpu.Texture) catch unreachable;
-  texture.* = self.engine.device.createTexture(&.{
-      .size = img_size,
-      .format = .rgba8_unorm,
-      .usage = .{
-          .texture_binding = true,
-          .copy_dst = true,
-          .render_attachment = true,
-      },
-  });
+    const img_size = gpu.Extent3D{ .width = width, .height = height };
+    var texture = self.gpa.create(gpu.Texture) catch unreachable;
+    texture.* = self.engine.device.createTexture(&.{
+        .size = img_size,
+        .format = .rgba8_unorm,
+        .usage = .{
+            .texture_binding = true,
+            .copy_dst = true,
+            .render_attachment = true,
+        },
+    });
 
-  const data_layout = gpu.Texture.DataLayout{
-      .bytes_per_row = @intCast(u32, width * 4),
-      .rows_per_image = @intCast(u32, height),
-  };
+    const data_layout = gpu.Texture.DataLayout{
+        .bytes_per_row = @intCast(u32, width * 4),
+        .rows_per_image = @intCast(u32, height),
+    };
 
-  var queue = self.engine.device.getQueue();
-  queue.writeTexture(&.{ .texture = texture.* }, &data_layout, &img_size, u8, pixels);
+    var queue = self.engine.device.getQueue();
+    queue.writeTexture(&.{ .texture = texture.* }, &data_layout, &img_size, u8, pixels);
 
-  return texture;
+    return texture;
 }
 
 pub fn textureDestroy(self: *MachBackend, texture: *anyopaque) void {
     if (self.texture != null and self.texture.? == texture) {
-      // flush so we don't accidentally release this texture before we use it
-      self.flushRender();
+        // flush so we don't accidentally release this texture before we use it
+        self.flushRender();
     }
     const tex = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), texture));
     tex.release();
@@ -495,55 +489,55 @@ pub fn textureDestroy(self: *MachBackend, texture: *anyopaque) void {
 }
 
 const vert_wgsl =
-\\struct Uniforms {
-\\  matrix: mat4x4<f32>,
-\\  use_tex: i32,
-\\};
-\\
-\\@group(0) @binding(0) var<uniform> uniforms : Uniforms;
-\\
-\\struct VertexOutput {
-\\  @builtin(position) position : vec4<f32>,
-\\  @location(0) color : vec4<f32>,
-\\  @location(1) uv: vec2<f32>,
-\\};
-\\
-\\@stage(vertex) fn main(
-\\  @location(0) position : vec2<f32>,
-\\  @location(1) color : vec4<f32>,
-\\  @location(2) uv: vec2<f32>,
-\\) -> VertexOutput {
-\\  var output : VertexOutput;
-\\
-\\  var pos = vec4<f32>(position, 0.0, 1.0);
-\\  output.position = uniforms.matrix * pos;
-\\
-\\  output.color = color;
-\\  output.uv = uv;
-\\
-\\  return output;
-\\}
+    \\struct Uniforms {
+    \\  matrix: mat4x4<f32>,
+    \\  use_tex: i32,
+    \\};
+    \\
+    \\@group(0) @binding(0) var<uniform> uniforms : Uniforms;
+    \\
+    \\struct VertexOutput {
+    \\  @builtin(position) position : vec4<f32>,
+    \\  @location(0) color : vec4<f32>,
+    \\  @location(1) uv: vec2<f32>,
+    \\};
+    \\
+    \\@stage(vertex) fn main(
+    \\  @location(0) position : vec2<f32>,
+    \\  @location(1) color : vec4<f32>,
+    \\  @location(2) uv: vec2<f32>,
+    \\) -> VertexOutput {
+    \\  var output : VertexOutput;
+    \\
+    \\  var pos = vec4<f32>(position, 0.0, 1.0);
+    \\  output.position = uniforms.matrix * pos;
+    \\
+    \\  output.color = color;
+    \\  output.uv = uv;
+    \\
+    \\  return output;
+    \\}
 ;
 
 const frag_wgsl =
-\\struct Uniforms {
-\\  matrix: mat4x4<f32>,
-\\  use_tex: i32,
-\\};
-\\
-\\@group(0) @binding(0) var<uniform> uniforms : Uniforms;
-\\@group(0) @binding(1) var mySampler : sampler;
-\\@group(0) @binding(2) var myTexture : texture_2d<f32>;
-\\
-\\@stage(fragment) fn main(
-\\  @location(0) color : vec4<f32>,
-\\  @location(1) uv : vec2<f32>,
-\\) -> @location(0) vec4<f32> {
-\\    if (uniforms.use_tex == 1) {
-\\      return textureSample(myTexture, mySampler, uv) * color;
-\\    }
-\\    else {
-\\      return color;
-\\    }
-\\}
+    \\struct Uniforms {
+    \\  matrix: mat4x4<f32>,
+    \\  use_tex: i32,
+    \\};
+    \\
+    \\@group(0) @binding(0) var<uniform> uniforms : Uniforms;
+    \\@group(0) @binding(1) var mySampler : sampler;
+    \\@group(0) @binding(2) var myTexture : texture_2d<f32>;
+    \\
+    \\@stage(fragment) fn main(
+    \\  @location(0) color : vec4<f32>,
+    \\  @location(1) uv : vec2<f32>,
+    \\) -> @location(0) vec4<f32> {
+    \\    if (uniforms.use_tex == 1) {
+    \\      return textureSample(myTexture, mySampler, uv) * color;
+    \\    }
+    \\    else {
+    \\      return color;
+    \\    }
+    \\}
 ;
