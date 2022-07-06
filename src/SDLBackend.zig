@@ -139,7 +139,7 @@ pub fn windowSize(self: *SDLBackend) gui.Size {
 }
 
 pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []gui.Vertex, idx: []u32) void {
-    const clipr = gui.WindowRectPixels().intersect(gui.ClipGet());
+    const clipr = gui.windowRectPixels().intersect(gui.clipGet());
     if (clipr.empty()) {
         return;
     }

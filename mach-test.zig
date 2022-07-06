@@ -40,7 +40,7 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
 
     const end_micros = app.win.end();
 
-    if (app.win.CursorRequestedFloating()) |cursor| {
+    if (app.win.cursorRequestedFloating()) |cursor| {
         app.win_backend.setCursor(cursor);
     } else {
         app.win_backend.setCursor(.bad);
