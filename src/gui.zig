@@ -821,11 +821,9 @@ pub fn cursorGetDragging() ?CursorKind {
     return cw.cursor_dragging;
 }
 
-pub fn cursorSet(p: Point, cursor: CursorKind) void {
+pub fn cursorSet(cursor: CursorKind) void {
     const cw = current_window orelse unreachable;
-    if (cw.mouse_pt.equals(p)) {
-        cw.cursor_requested = cursor;
-    }
+    cw.cursor_requested = cursor;
 }
 
 pub fn highlight(p: Point, r: Rect) bool {
@@ -1944,8 +1942,8 @@ pub const Window = struct {
     }
 
     pub fn addEventKey(self: *Self, keysym: keys.Key, mod: keys.Mod, state: KeyEvent.Kind) bool {
-        self.zeroMouseMotionEventRemove();
-        defer self.zeroMouseMotionEventAdd();
+        self.cursorMouseMotionEventRemove();
+        defer self.cursorMouseMotionEventAdd();
 
         self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .key = KeyEvent{
             .keysym = keysym,
@@ -1957,8 +1955,8 @@ pub const Window = struct {
     }
 
     pub fn addEventText(self: *Self, text: []const u8) bool {
-        self.zeroMouseMotionEventRemove();
-        defer self.zeroMouseMotionEventAdd();
+        self.cursorMouseMotionEventRemove();
+        defer self.cursorMouseMotionEventAdd();
 
         self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .text = TextEvent{
             .text = self.arena.dupe(u8, text) catch unreachable,
@@ -1968,8 +1966,8 @@ pub const Window = struct {
     }
 
     pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) bool {
-        self.zeroMouseMotionEventRemove();
-        defer self.zeroMouseMotionEventAdd();
+        self.cursorMouseMotionEventRemove();
+        defer self.cursorMouseMotionEventAdd();
 
         const newpt = (Point{ .x = x, .y = y }).scale(self.natural_scale);
         const dp = newpt.diff(self.mouse_pt);
@@ -1988,8 +1986,8 @@ pub const Window = struct {
     }
 
     pub fn addEventMouseButton(self: *Self, state: MouseEvent.Kind) bool {
-        self.zeroMouseMotionEventRemove();
-        defer self.zeroMouseMotionEventAdd();
+        self.cursorMouseMotionEventRemove();
+        defer self.cursorMouseMotionEventAdd();
 
         const winId = windowFor(self.mouse_pt);
 
@@ -2009,8 +2007,8 @@ pub const Window = struct {
     }
 
     pub fn addEventMouseWheel(self: *Self, ticks: f32) bool {
-        self.zeroMouseMotionEventRemove();
-        defer self.zeroMouseMotionEventAdd();
+        self.cursorMouseMotionEventRemove();
+        defer self.cursorMouseMotionEventAdd();
 
         const winId = windowFor(self.mouse_pt);
 
@@ -2325,30 +2323,30 @@ pub const Window = struct {
 
         self.next_widget_ypos = self.wd.rect.y;
 
-        // We always want a final zero motion mouse event to do mouse cursors.
-        // Needs to be final so if there was a drag end the cursor will still be
-        // set correctly.  We don't know when the client gives us the last event,
-        // so make our motion event now, and addEvent* functions will remove and
-        // re-add to keep it as the final event.
-        self.zeroMouseMotionEventAdd();
+        // We want a cursor mouse event to do mouse cursors.  It needs to be
+        // final so if there was a drag end the cursor will still be set
+        // correctly.  We don't know when the client gives us the last event,
+        // so make our cursor event now, and addEvent* functions will remove
+        // and re-add to keep it as the final event.
+        self.cursorMouseMotionEventAdd();
 
         self.backend.begin(arena);
     }
 
-    fn zeroMouseMotionEventAdd(self: *Self) void {
+    fn cursorMouseMotionEventAdd(self: *Self) void {
         self.events.append(Event{ .evt = AnyEvent{ .mouse = MouseEvent{
             .p = self.mouse_pt,
             .dp = Point{},
             .wheel = 0,
             .floating_win = windowFor(self.mouse_pt),
-            .state = .motion,
+            .state = .cursor,
         } } }) catch unreachable;
     }
 
-    fn zeroMouseMotionEventRemove(self: *Self) void {
+    fn cursorMouseMotionEventRemove(self: *Self) void {
         const e = self.events.pop();
-        if (e.evt != .mouse or e.evt.mouse.state != .motion or e.evt.mouse.dp.x != 0 or e.evt.mouse.dp.y != 0) {
-            std.debug.print("zeroMouseMotionEventRemove removed a non-mouse or non-zero event\n", .{});
+        if (e.evt != .mouse or e.evt.mouse.state != .cursor) {
+            std.debug.print("cursorMouseMotionEventRemove removed a non-mouse or non-cursor event\n", .{});
         }
     }
 
@@ -2410,7 +2408,7 @@ pub const Window = struct {
         // Check that the final event was our synthetic mouse motion event.  If one
         // of the addEvent* functions forgot to add the synthetic mouse event to
         // the end this will print a debug message.
-        self.zeroMouseMotionEventRemove();
+        self.cursorMouseMotionEventRemove();
 
         self.backend.end();
 
@@ -2830,8 +2828,10 @@ pub const FloatingWindowWidget = struct {
                             }
                             // don't need cueFrame() because we're before drawing
                             e.handled = true;
-                        } else if (corner) {
-                            cursorSet(e.evt.mouse.p, .arrow_nw_se);
+                        }
+                    } else if (e.evt.mouse.state == .cursor) {
+                        if (corner) {
+                            cursorSet(.arrow_nw_se);
                             e.handled = true;
                         }
                     }
@@ -3148,9 +3148,9 @@ pub const PanedWidget = struct {
                             }
 
                             self.split_ratio = math.max(0.0, math.min(1.0, self.split_ratio));
-                        } else {
-                            cursorSet(e.evt.mouse.p, cursor);
                         }
+                    } else if (e.evt.mouse.state == .cursor) {
+                        cursorSet(cursor);
                     }
                 }
             }
@@ -5468,6 +5468,9 @@ pub const MouseEvent = struct {
         rightdown,
         rightup,
         motion,
+        // cursor event is always last to figure out what the mouse cursor
+        // should be
+        cursor,
         wheel_y,
     };
     p: Point,
