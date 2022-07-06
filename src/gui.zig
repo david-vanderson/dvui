@@ -1303,18 +1303,25 @@ pub fn windowCurrentId() u32 {
     return cw.window_currentId;
 }
 
-pub fn dragPreStart(p: Point, cursor: CursorKind) void {
+pub fn dragPreStart(p: Point, cursor: CursorKind, offset: Point) void {
     const cw = current_window orelse unreachable;
     cw.drag_state = .prestart;
     cw.drag_pt = p;
+    cw.drag_offset = offset;
     cw.cursor_dragging = cursor;
 }
 
-pub fn dragStart(p: Point, cursor: CursorKind) void {
+pub fn dragStart(p: Point, cursor: CursorKind, offset: Point) void {
     const cw = current_window orelse unreachable;
     cw.drag_state = .dragging;
     cw.drag_pt = p;
+    cw.drag_offset = offset;
     cw.cursor_dragging = cursor;
+}
+
+pub fn dragOffset() Point {
+    const cw = current_window orelse unreachable;
+    return cw.drag_offset;
 }
 
 pub fn dragging(p: Point) ?Point {
@@ -1847,6 +1854,7 @@ pub const Window = struct {
         dragging,
     } = .none,
     drag_pt: Point = Point{},
+    drag_offset: Point = Point{},
 
     frame_time_ns: i128 = 0,
     loop_wait_target: ?i128 = null,
@@ -2806,7 +2814,7 @@ pub const FloatingWindowWidget = struct {
                     if (e.evt.mouse.state == .leftdown) {
                         // capture and start drag
                         captureMouse(self.wd.id);
-                        dragStart(e.evt.mouse.p, .arrow_nw_se);
+                        dragStart(e.evt.mouse.p, .arrow_nw_se, Point.diff(rs.r.bottomRight(), e.evt.mouse.p));
                         e.handled = true;
                     } else if (e.evt.mouse.state == .leftup) {
                         // stop drag and capture
@@ -2821,7 +2829,7 @@ pub const FloatingWindowWidget = struct {
                                 self.wd.rect.x += dp.x;
                                 self.wd.rect.y += dp.y;
                             } else if (cursorGetDragging() == CursorKind.arrow_nw_se) {
-                                const p = e.evt.mouse.p.scale(1 / rs.s);
+                                const p = e.evt.mouse.p.plus(dragOffset()).scale(1 / rs.s);
                                 self.wd.rect.w = math.max(40, p.x - self.wd.rect.x);
                                 self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
                                 self.autoPosSize.autosize = false;
@@ -2859,7 +2867,7 @@ pub const FloatingWindowWidget = struct {
 
                     // capture and start drag
                     captureMouse(self.wd.id);
-                    dragPreStart(e.evt.mouse.p, .crosshair);
+                    dragPreStart(e.evt.mouse.p, .crosshair, Point{});
                 } else if (e.evt.mouse.state == .leftup) {
                     // stop drag and capture
                     captureMouse(null);
@@ -2872,7 +2880,7 @@ pub const FloatingWindowWidget = struct {
                             self.wd.rect.x += dp.x;
                             self.wd.rect.y += dp.y;
                         } else if (cursorGetDragging() == CursorKind.arrow_nw_se) {
-                            const p = e.evt.mouse.p.scale(1 / rs.s);
+                            const p = e.evt.mouse.p.plus(dragOffset()).scale(1 / rs.s);
                             self.wd.rect.w = math.max(40, p.x - self.wd.rect.x);
                             self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
                             self.autoPosSize.autosize = false;
@@ -3129,7 +3137,7 @@ pub const PanedWidget = struct {
                     if (e.evt.mouse.state == .leftdown) {
                         // capture and start drag
                         captureMouse(self.wd.id);
-                        dragPreStart(e.evt.mouse.p, cursor);
+                        dragPreStart(e.evt.mouse.p, cursor, Point{});
                     } else if (e.evt.mouse.state == .leftup) {
                         // stop possible drag and capture
                         captureMouse(null);
@@ -3729,26 +3737,18 @@ pub const BoxWidget = struct {
 pub const ScrollBar = struct {
     const Self = @This();
     const thick = 10;
-    const Data = struct {
-        graboff: f32,
-    };
     id: u32,
     parent: Widget,
     rect: Rect = Rect{},
     grabRect: Rect = Rect{},
     area: *ScrollAreaWidget,
-    data: ?Data = null,
     highlight: bool = false,
 
     pub fn run(src: std.builtin.SourceLocation, id_extra: usize, area: *ScrollAreaWidget, rect_in: Rect, opts: Options) void {
         const parent = parentGet();
         var self = Self{ .id = parent.extendID(src, id_extra), .parent = parent, .area = area };
-        self.data = dataGet(self.id, Data);
 
         const captured = captureMouseMaintain(self.id);
-        if (!captured) {
-            self.data = null;
-        }
 
         self.rect = rect_in;
         debug("{x} ScrollBar {}", .{ self.id, self.rect });
@@ -3786,10 +3786,6 @@ pub const ScrollBar = struct {
         const grabrs = self.parent.screenRectScale(self.grabRect);
         pathAddRect(grabrs.r, Rect.all(grabrs.r.w));
         pathFillConvex(fill);
-
-        if (self.data) |d| {
-            dataSet(self.id, d);
-        }
     }
 
     pub fn processEvents(self: *Self, grabrs: Rect) void {
@@ -3802,9 +3798,7 @@ pub const ScrollBar = struct {
                     if (grabrs.contains(e.evt.mouse.p)) {
                         // capture and start drag
                         captureMouse(self.id);
-                        dragPreStart(e.evt.mouse.p, .arrow);
-                        const off = e.evt.mouse.p.y - (grabrs.y + grabrs.h / 2);
-                        self.data = Data{ .graboff = off };
+                        dragPreStart(e.evt.mouse.p, .arrow, .{.x = 0, .y = e.evt.mouse.p.y - (grabrs.y + grabrs.h / 2)});
                     } else {
                         const si = self.area.scrollInfo();
                         var fi = si.fraction_visible;
@@ -3833,10 +3827,7 @@ pub const ScrollBar = struct {
                         _ = dps;
                         const min = rs.r.y + grabrs.h / 2;
                         const max = rs.r.y + rs.r.h - grabrs.h / 2;
-                        var grabmid = e.evt.mouse.p.y;
-                        if (self.data) |d| {
-                            grabmid -= d.graboff;
-                        }
+                        var grabmid = e.evt.mouse.p.y - dragOffset().y;
                         var f: f32 = 0;
                         if (max > min) {
                             f = (grabmid - min) / (max - min);
@@ -5129,6 +5120,10 @@ pub const Rect = struct {
 
     pub fn topleft(self: *const Self) Point {
         return Point{ .x = self.x, .y = self.y };
+    }
+
+    pub fn bottomRight(self: *const Self) Point {
+        return Point{ .x = self.x + self.w, .y = self.y + self.h };
     }
 
     pub fn size(self: *const Self) Size {
