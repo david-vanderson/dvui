@@ -124,19 +124,19 @@ index 1f17475..e1b6450 100755
      }
 
 +    {
-+        var fw = gui.FloatingWindow(@src(), 0, false, null, null, .{});
++        var fw = gui.floatingWindow(@src(), 0, false, null, null, .{});
 +        defer fw.deinit();
 +
-+        var box = gui.Box(@src(), 0, .horizontal, .{});
++        var box = gui.box(@src(), 0, .horizontal, .{});
 +        defer box.deinit();
 +
-+        if (gui.Button(@src(), 0, "more", .{})) {
++        if (gui.button(@src(), 0, "more", .{})) {
 +            if (app.shown_instances < 16) {
 +                app.shown_instances += 1;
 +            }
 +        }
 +
-+        if (gui.Button(@src(), 0, "less", .{})) {
++        if (gui.button(@src(), 0, "less", .{})) {
 +            if (app.shown_instances > 0) {
 +                app.shown_instances -= 1;
 +            }
@@ -171,7 +171,7 @@ index 1f17475..e1b6450 100755
 
 ### Immediate Mode
 ```zig
-if (gui.Button(@src(), 0, "Ok", .{})) {
+if (gui.button(@src(), 0, "Ok", .{})) {
   dialog.close();
 }
 ```
@@ -202,7 +202,7 @@ All drawing happens in pixel space.  A widget receives a rectangle from their pa
 This provides scaling (see `ScaleWidget`) while looking sharp, because nothing is being drawn and then scaled.
 
 ### Handle All Events
-This library processes every input event, making it useable in low framerate situations.  A button can receive a mouse-down event and a mouse-up event in the same frame and correctly report a click.  A custom button can even report multiple clicks per frame.  (the higher level `gui.Button()` function only reports 1 click per frame)
+This library processes every input event, making it useable in low framerate situations.  A button can receive a mouse-down event and a mouse-up event in the same frame and correctly report a click.  A custom button can even report multiple clicks per frame.  (the higher level `gui.button()` function only reports 1 click per frame)
 
 In the same frame these can all happen:
 - text entry field A receives text events
@@ -224,9 +224,9 @@ Key events are also bubbled up to parent widgets if the child doesn't process th
 This library can be used in 2 ways:
 - as the gui for the whole application, drawing over the entire OS window
 - as floating windows on top of an existing application with minimal changes:
-  - use widgets only inside `gui.FloatingWindow()` calls
+  - use widgets only inside `gui.floatingWindow()` calls
   - `gui.addEvent...` functions return false if event won't be handled by gui (main application should handle it)
-  - change `gui.CursorRequested()` to `gui.CursorRequestedFloating()` which returns null if the mouse cursor should be set by the main application
+  - change `gui.cursorRequested()` to `gui.cursorRequestedFloating()` which returns null if the mouse cursor should be set by the main application
 
 Floating windows and popups are handled by deferring their rendering so that they render properly on top of windows below them.  Rendering of all floating windows and popups happens during `window.end()`.
 
@@ -247,7 +247,7 @@ If you want to only render frames when needed, add `window.beginWait()` at the s
 The easiest way to use widgets is through the functions that create and install them:
 ```zig
 {
-    var box = gui.Box(@src(), 0, .vertical, .{.expand = .both});
+    var box = gui.box(@src(), 0, .vertical, .{.expand = .both});
     defer box.deinit();
 }
 ```
@@ -276,7 +276,7 @@ Each widget has the following options that can be changed through the Options st
 - font_style (use theme's fonts)
 - font_custom (used if font_style is .custom)
 ```zig
-if (gui.Button(@src(), 0, "Wild", .{
+if (gui.button(@src(), 0, "Wild", .{
     .margin = gui.Rect.All(2),
     .padding = gui.Rect.all(8),
     .color_style = .custom,
@@ -294,7 +294,7 @@ gui.ButtonWidget.Defaults.background = false;
 
 Colors come in foreground/background pairs.  Usually you want to use colors from the theme:
 ```zig
-if (gui.MenuItemLabel(@src(), 0, "Cut", false, .{.color_style = .warning, .background = true}) != null) {
+if (gui.menuItemLabel(@src(), 0, "Cut", false, .{.color_style = .warning, .background = true}) != null) {
     // selected
 }
 ```
@@ -302,10 +302,10 @@ if (gui.MenuItemLabel(@src(), 0, "Cut", false, .{.color_style = .warning, .backg
 Themes can be changed between frames or even within a frame.  The theme controls the fonts and colors referenced by font_style and color_style.
 ```zig
 if (theme_dark) {
-    win.theme = &gui.Theme_Adwaita_Dark;
+    win.theme = &gui.theme_Adwaita_Dark;
 }
 else {
-    win.theme = &gui.Theme_Adwaita;
+    win.theme = &gui.theme_Adwaita;
 }
 ```
 The theme's color_accent is also used to show keyboard focus.
