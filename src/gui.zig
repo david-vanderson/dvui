@@ -721,7 +721,7 @@ pub fn FocusWindow(window_id: ?u32, iter: ?*EventIterator) void {
   const winId = window_id orelse cw.window_currentId;
   if (cw.focused_windowId != winId) {
     cw.focused_windowId = winId;
-    CueFrame();
+    cueFrame();
     if (iter) |it| {
       if (cw.focused_windowId == cw.wd.id) {
         it.focusRemainingEvents(cw.focused_windowId, cw.focused_widgetId);
@@ -758,7 +758,7 @@ pub fn FocusWidget(id: ?u32, iter: ?*EventIterator) void {
       if (iter) |it| {
         it.focusRemainingEvents(cw.focused_windowId, cw.focused_widgetId);
       }
-      CueFrame();
+      cueFrame();
     }
   }
   else {
@@ -769,7 +769,7 @@ pub fn FocusWidget(id: ?u32, iter: ?*EventIterator) void {
           if (iter) |it| {
             it.focusRemainingEvents(cw.focused_windowId, cw.focused_widgetId);
           }
-          CueFrame();
+          cueFrame();
           break;
         }
       }
@@ -1426,7 +1426,7 @@ pub fn ClipSet(r: Rect) void {
   cw.clipRect = r;
 }
 
-pub fn CueFrame() void {
+pub fn cueFrame() void {
   const cw = current_window orelse unreachable;
   cw.extra_frames_needed = 1;
 }
@@ -2320,7 +2320,7 @@ pub const Window = struct {
           kv.value_ptr.start_time -|= micros;
           kv.value_ptr.end_time -|= micros;
           if (kv.value_ptr.start_time <= 0 and kv.value_ptr.end_time > 0) {
-            CueFrame();
+            cueFrame();
           }
         }
       }
@@ -2468,7 +2468,7 @@ pub const Window = struct {
     if (self.FocusedWindowLost()) {
       // The floating window with focus disappeared, so do another frame and
       // we'll focus a new window in begin()
-      CueFrame();
+      cueFrame();
     }
 
     // Check that the final event was our synthetic mouse motion event.  If one
@@ -2478,7 +2478,7 @@ pub const Window = struct {
 
     self.backend.end();
 
-    // This is what CueFrame affects
+    // This is what cueFrame affects
     if (self.extra_frames_needed > 0) {
       return 0;
     }
@@ -2627,9 +2627,9 @@ pub const PopupWidget = struct {
       self.wd.rect = PlaceOnScreen(self.initialRect, Rect.fromPoint(self.initialRect.topleft()));
       FocusWindow(self.wd.id, null);
 
-      // need a second frame to fit contents (FocusWindow calls CueFrame but
+      // need a second frame to fit contents (FocusWindow calls cueFrame but
       // here for clarity)
-      CueFrame();
+      cueFrame();
     }
 
     debug("{x} Popup {}", .{self.wd.id, self.wd.rect});
@@ -2830,8 +2830,8 @@ pub const FloatingWindowWidget = struct {
 
       if (self.autoPosSize.autopos or self.autoPosSize.autosize) {
         // need a second frame to position or fit contents (FocusWindow calls
-        // CueFrame but here for clarity)
-        CueFrame();
+        // cueFrame but here for clarity)
+        cueFrame();
 
         // hide our first frame so the user doesn't see a jump when we
         // autopos/autosize
@@ -2904,7 +2904,7 @@ pub const FloatingWindowWidget = struct {
                 self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
                 self.autoPosSize.autosize = false;
               }
-              // don't need CueFrame() because we're before drawing
+              // don't need cueFrame() because we're before drawing
               e.handled = true;
             }
             else if (corner) {
@@ -2958,7 +2958,7 @@ pub const FloatingWindowWidget = struct {
               self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
               self.autoPosSize.autosize = false;
             }
-            CueFrame();
+            cueFrame();
           }
         }
       }
@@ -4027,13 +4027,13 @@ pub const ScrollAreaWidget = struct {
     if (self.scroll < 0) {
       self.scroll = math.min(0, math.max(-20 * self.wd.scale(), self.scroll + 250 * AnimationRate()));
       if (self.scroll < 0) {
-        CueFrame();
+        cueFrame();
       }
     }
     else if (self.scroll > max_scroll) {
       self.scroll = math.max(max_scroll, math.min(max_scroll + 20 * self.wd.scale(), self.scroll - 250 * AnimationRate()));
       if (self.scroll > max_scroll) {
-        CueFrame();
+        cueFrame();
       }
     }
 
@@ -4179,7 +4179,7 @@ pub const ScrollAreaWidget = struct {
     var scroll = self.scroll;
     if (self.scrollAfter != 0) {
       scroll += self.scrollAfter;
-      CueFrame();
+      cueFrame();
     }
 
     const d = Data{.virtualSize = self.nextVirtualSize, .scroll = scroll};
@@ -4295,7 +4295,7 @@ pub const ScaleWidget = struct {
             const zs = @exp(@log(base) * e.evt.mouse.wheel);
             if (zs != 1.0) {
               self.scale *= zs;
-              CueFrame();
+              cueFrame();
             }
           }
         },
@@ -4724,7 +4724,7 @@ pub const ButtonContainerWidget = struct {
     self.captured = CaptureMouseMaintain(self.wd.id);
     self.clicked = self.processEvents();
     if (self.clicked) {
-      CueFrame();
+      cueFrame();
     }
     self.focused = (self.wd.id == FocusedWidgetId());
 
@@ -5743,14 +5743,14 @@ pub const WidgetData = struct {
       // a different size than our previous min size.
       if ((self.rect.w == ms.w and ms.w != self.min_size.w) or
           (self.rect.h == ms.h and ms.h != self.min_size.h)) {
-        CueFrame();
+        cueFrame();
       }
     }
     else {
       // This is the first frame for this widget.  Almost always need a
       // second frame to appear correctly since nobody knew our min size the
       // first frame.
-      CueFrame();
+      cueFrame();
     }
     MinSizeSet(self.id, self.min_size);
   }
