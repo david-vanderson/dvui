@@ -282,7 +282,7 @@ pub fn windowSize(self: *MachBackend) gui.Size {
 }
 
 pub fn renderGeometry(self: *MachBackend, tex: ?*anyopaque, vtx: []gui.Vertex, idx: []u32) void {
-    const clipr = gui.WindowRectPixels().intersect(gui.ClipGet());
+    const clipr = gui.windowRectPixels().intersect(gui.clipGet());
     if (clipr.empty()) {
         return;
     }
@@ -381,7 +381,7 @@ pub fn flushRender(self: *MachBackend) void {
         .store_op = .store,
     };
 
-    const default_texture_ptr = gui.IconTexture("default_texture", gui.icons.papirus.actions.media_playback_start_symbolic, 1.0).texture;
+    const default_texture_ptr = gui.iconTexture("default_texture", gui.icons.papirus.actions.media_playback_start_symbolic, 1.0).texture;
     const default_texture = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), default_texture_ptr)).*;
 
     var texture: ?gpu.Texture = null;
@@ -390,13 +390,13 @@ pub fn flushRender(self: *MachBackend) void {
     }
 
     {
-        const model = zm.translation(-gui.WindowRectPixels().w / 2, gui.WindowRectPixels().h / 2, 0);
+        const model = zm.translation(-gui.windowRectPixels().w / 2, gui.windowRectPixels().h / 2, 0);
         const view = zm.lookAtLh(
             zm.f32x4(0, 0, 1, 1),
             zm.f32x4(0, 0, 0, 1),
             zm.f32x4(0, -1, 0, 0),
         );
-        const proj = zm.orthographicLh(gui.WindowRectPixels().w, gui.WindowRectPixels().h, 1, 0);
+        const proj = zm.orthographicLh(gui.windowRectPixels().w, gui.windowRectPixels().h, 1, 0);
         const mvp = zm.mul(zm.mul(view, model), proj);
         const ubo = UniformBufferObject{
             .mat = mvp,

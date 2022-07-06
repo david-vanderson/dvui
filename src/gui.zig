@@ -52,7 +52,7 @@ pub const Theme = struct {
     font_title_4: Font,
 };
 
-pub const Theme_Adwaita = Theme{
+pub const theme_Adwaita = Theme{
     .name = "Adwaita",
     .font_body = Font{ .size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
     .font_heading = Font{ .size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
@@ -77,7 +77,7 @@ pub const Theme_Adwaita = Theme{
     .color_control_bg = Color{ .r = 0xe0, .g = 0xe0, .b = 0xe0 },
 };
 
-pub const Theme_Adwaita_Dark = Theme{
+pub const theme_Adwaita_Dark = Theme{
     .name = "Adwaita Dark",
     .font_body = Font{ .size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
     .font_heading = Font{ .size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
@@ -109,11 +109,11 @@ pub const Options = struct {
         vertical,
         both,
 
-        pub fn Horizontal(self: *const Expand) bool {
+        pub fn horizontal(self: *const Expand) bool {
             return (self.* == .horizontal or self.* == .both);
         }
 
-        pub fn Vertical(self: *const Expand) bool {
+        pub fn vertical(self: *const Expand) bool {
             return (self.* == .vertical or self.* == .both);
         }
     };
@@ -199,12 +199,12 @@ pub const Options = struct {
         const col =
             switch (style) {
             .custom => self.color_custom,
-            .accent => ThemeGet().color_accent,
-            .success => ThemeGet().color_success,
-            .err => ThemeGet().color_err,
-            .content => ThemeGet().color_content,
-            .window => ThemeGet().color_window,
-            .control => ThemeGet().color_control,
+            .accent => themeGet().color_accent,
+            .success => themeGet().color_success,
+            .err => themeGet().color_err,
+            .content => themeGet().color_content,
+            .window => themeGet().color_window,
+            .control => themeGet().color_control,
         };
 
         if (col) |cc| {
@@ -220,12 +220,12 @@ pub const Options = struct {
         const col =
             switch (style) {
             .custom => self.color_custom_bg,
-            .accent => ThemeGet().color_accent_bg,
-            .success => ThemeGet().color_success_bg,
-            .err => ThemeGet().color_err_bg,
-            .content => ThemeGet().color_content_bg,
-            .window => ThemeGet().color_window_bg,
-            .control => ThemeGet().color_control_bg,
+            .accent => themeGet().color_accent_bg,
+            .success => themeGet().color_success_bg,
+            .err => themeGet().color_err_bg,
+            .content => themeGet().color_content_bg,
+            .window => themeGet().color_window_bg,
+            .control => themeGet().color_control_bg,
         };
 
         if (col) |cc| {
@@ -245,15 +245,15 @@ pub const Options = struct {
         const f =
             switch (style) {
             .custom => self.font_custom,
-            .body => ThemeGet().font_body,
-            .heading => ThemeGet().font_heading,
-            .caption => ThemeGet().font_caption,
-            .caption_heading => ThemeGet().font_caption_heading,
-            .title_large => ThemeGet().font_title_large,
-            .title_1 => ThemeGet().font_title_1,
-            .title_2 => ThemeGet().font_title_2,
-            .title_3 => ThemeGet().font_title_3,
-            .title_4 => ThemeGet().font_title_4,
+            .body => themeGet().font_body,
+            .heading => themeGet().font_heading,
+            .caption => themeGet().font_caption,
+            .caption_heading => themeGet().font_caption_heading,
+            .title_large => themeGet().font_title_large,
+            .title_1 => themeGet().font_title_1,
+            .title_2 => themeGet().font_title_2,
+            .title_3 => themeGet().font_title_3,
+            .title_4 => themeGet().font_title_4,
         };
 
         if (f) |ff| {
@@ -281,11 +281,11 @@ pub const Options = struct {
     }
 
     pub fn expandHorizontal(self: *const Options) bool {
-        return (self.expand orelse Expand.none).Horizontal();
+        return (self.expand orelse Expand.none).horizontal();
     }
 
     pub fn expandVertical(self: *const Options) bool {
-        return (self.expand orelse Expand.none).Vertical();
+        return (self.expand orelse Expand.none).vertical();
     }
 
     pub fn expandAny(self: *const Options) bool {
@@ -319,19 +319,19 @@ pub const Options = struct {
     }
 };
 
-pub fn ThemeGet() *const Theme {
+pub fn themeGet() *const Theme {
     var cw = current_window orelse unreachable;
     return cw.theme;
 }
 
-pub fn ThemeSet(theme: *const Theme) void {
+pub fn themeSet(theme: *const Theme) void {
     var cw = current_window orelse unreachable;
     cw.theme = theme;
 }
 
-pub fn PlaceOnScreen(spawner: Rect, start: Rect) Rect {
+pub fn placeOnScreen(spawner: Rect, start: Rect) Rect {
     var r = start;
-    const wr = WindowRect();
+    const wr = windowRect();
     if ((r.x + r.w) > wr.w) {
         if (spawner.w == 0) {
             r.x = wr.w - r.w;
@@ -349,7 +349,7 @@ pub fn PlaceOnScreen(spawner: Rect, start: Rect) Rect {
     return r;
 }
 
-pub fn CurrentWindow() *Window {
+pub fn currentWindow() *Window {
     return current_window orelse unreachable;
 }
 
@@ -361,7 +361,7 @@ pub fn frameTimeNS() i128 {
 // All widgets have to bubble keyboard events if they can have keyboard focus
 // so that pressing the up key in any child of a scrollarea will scroll.  Call
 // this helper at the end of processing normal events.
-fn BubbleEvents(w: Widget) void {
+fn bubbleEvents(w: Widget) void {
     var iter = EventIterator.init(w.data().id, Rect{});
     while (iter.next()) |e| {
         if (e.handled) {
@@ -400,10 +400,10 @@ pub const Font = struct {
         // ask for a font that matches the natural display pixels so we get a more
         // accurate size
 
-        const scale = ParentGet().screenRectScale(Rect{}).s;
+        const ss = parentGet().screenRectScale(Rect{}).s;
 
-        const ask_size = @ceil(self.size * scale);
-        const max_width_sized = (max_width orelse 1000000.0) * scale;
+        const ask_size = @ceil(self.size * ss);
+        const max_width_sized = (max_width orelse 1000000.0) * ss;
         const target_fraction = self.size / ask_size;
         const sized_font = self.resize(ask_size);
         const s = sized_font.textSizeRaw(text, max_width_sized, end_idx);
@@ -412,7 +412,7 @@ pub const Font = struct {
 
     // doesn't scale the font or max_width
     pub fn textSizeRaw(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize) Size {
-        const fce = FontCacheGet(self.*);
+        const fce = fontCacheGet(self.*);
 
         const mwidth = max_width orelse 1000000.0;
 
@@ -463,13 +463,13 @@ pub const Font = struct {
 
     pub fn lineSkip(self: *const Font) f32 {
         // do the same sized thing as textSizeEx so they will cache the same font
-        const scale = ParentGet().screenRectScale(Rect{}).s;
+        const ss = parentGet().screenRectScale(Rect{}).s;
 
-        const ask_size = @ceil(self.size * scale);
+        const ask_size = @ceil(self.size * ss);
         const target_fraction = self.size / ask_size;
         const sized_font = self.resize(ask_size);
 
-        const fce = FontCacheGet(sized_font);
+        const fce = fontCacheGet(sized_font);
         const skip = fce.height;
         //std.debug.print("lineSkip fontsize {d} is {d}\n", .{sized_font.size, skip});
         return skip * target_fraction * self.line_skip_factor;
@@ -530,7 +530,7 @@ const FontCacheEntry = struct {
     }
 };
 
-pub fn FontCacheGet(font: Font) *FontCacheEntry {
+pub fn fontCacheGet(font: Font) *FontCacheEntry {
     var cw = current_window orelse unreachable;
     const fontHash = FontCacheEntry.hash(font);
     if (cw.font_cache.getPtr(fontHash)) |fce| {
@@ -544,8 +544,8 @@ pub fn FontCacheGet(font: Font) *FontCacheEntry {
     face.setPixelSizes(0, @floatToInt(u32, font.size)) catch unreachable;
 
     const ascender = @intToFloat(f32, face.ascender()) / 64.0;
-    const scale = @intToFloat(f32, face.size().metrics().y_scale) / 0x10000;
-    const ascent = ascender * scale;
+    const ss = @intToFloat(f32, face.size().metrics().y_scale) / 0x10000;
+    const ascent = ascender * ss;
     //std.debug.print("fontcache size {d} ascender {d} scale {d} ascent {d}\n", .{font.size, ascender, scale, ascent});
 
     // make debug texture atlas so we can see if something later goes wrong
@@ -580,13 +580,13 @@ const IconCacheEntry = struct {
     }
 };
 
-pub fn IconWidth(name: []const u8, tvg_bytes: []const u8, height_natural: f32) f32 {
-    const height = height_natural * WindowNaturalScale();
-    const ice = IconTexture(name, tvg_bytes, height);
-    return ice.size.w / WindowNaturalScale();
+pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height_natural: f32) f32 {
+    const height = height_natural * windowNaturalScale();
+    const ice = iconTexture(name, tvg_bytes, height);
+    return ice.size.w / windowNaturalScale();
 }
 
-pub fn IconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) IconCacheEntry {
+pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) IconCacheEntry {
     var cw = current_window orelse unreachable;
     const icon_hash = IconCacheEntry.hash(tvg_bytes, ask_height);
 
@@ -658,13 +658,13 @@ pub const DeferredRenderQueue = struct {
     }
 };
 
-pub fn DeferRender() void {
+pub fn deferRender() void {
     var cw = current_window orelse unreachable;
     const drq = DeferredRenderQueue.init(cw.arena);
     cw.deferred_render_queues.append(drq) catch unreachable;
 }
 
-pub fn DeferRenderPop() void {
+pub fn deferRenderPop() void {
     var cw = current_window orelse unreachable;
     const drq = cw.deferred_render_queues.pop();
     const len = cw.deferred_render_queues.items.len;
@@ -673,9 +673,9 @@ pub fn DeferRenderPop() void {
         return;
     }
 
-    const oldclip = ClipGet();
+    const oldclip = clipGet();
     for (drq.cmds.items) |drc| {
-        ClipSet(drc.clip);
+        clipSet(drc.clip);
         switch (drc.cmd) {
             .text => |t| {
                 renderText(t.font, t.text, t.rs, t.color);
@@ -685,22 +685,22 @@ pub fn DeferRenderPop() void {
             },
             .pathFillConvex => |pf| {
                 cw.path.appendSlice(pf.path.items) catch unreachable;
-                PathFillConvex(pf.color);
+                pathFillConvex(pf.color);
                 pf.path.deinit();
             },
             .pathStroke => |ps| {
                 cw.path.appendSlice(ps.path.items) catch unreachable;
-                PathStroke(ps.closed, ps.thickness, ps.endcap_style, ps.color);
+                pathStroke(ps.closed, ps.thickness, ps.endcap_style, ps.color);
                 ps.path.deinit();
             },
         }
     }
 
-    ClipSet(oldclip);
+    clipSet(oldclip);
     drq.cmds.deinit();
 }
 
-pub fn FocusedWindow() bool {
+pub fn focusedWindow() bool {
     const cw = current_window orelse unreachable;
     if (cw.window_currentId == cw.focused_windowId) {
         return true;
@@ -709,12 +709,12 @@ pub fn FocusedWindow() bool {
     return false;
 }
 
-pub fn FocusedWindowId() u32 {
+pub fn focusedWindowId() u32 {
     const cw = current_window orelse unreachable;
     return cw.focused_windowId;
 }
 
-pub fn FocusWindow(window_id: ?u32, iter: ?*EventIterator) void {
+pub fn focusWindow(window_id: ?u32, iter: ?*EventIterator) void {
     const cw = current_window orelse unreachable;
     const winId = window_id orelse cw.window_currentId;
     if (cw.focused_windowId != winId) {
@@ -745,7 +745,7 @@ fn optionalEqual(comptime T: type, a: ?T, b: ?T) bool {
     }
 }
 
-pub fn FocusWidget(id: ?u32, iter: ?*EventIterator) void {
+pub fn focusWidget(id: ?u32, iter: ?*EventIterator) void {
     const cw = current_window orelse unreachable;
     if (cw.focused_windowId == cw.wd.id) {
         if (!optionalEqual(u32, cw.focused_widgetId, id)) {
@@ -771,7 +771,7 @@ pub fn FocusWidget(id: ?u32, iter: ?*EventIterator) void {
     }
 }
 
-pub fn FocusedWidgetId() ?u32 {
+pub fn focusedWidgetId() ?u32 {
     const cw = current_window orelse unreachable;
     if (cw.focused_windowId == cw.wd.id) {
         return cw.focused_widgetId;
@@ -786,7 +786,7 @@ pub fn FocusedWidgetId() ?u32 {
     return null;
 }
 
-pub fn FocusedWidgetIdInCurrentWindow() ?u32 {
+pub fn focusedWidgetIdInCurrentWindow() ?u32 {
     const cw = current_window orelse unreachable;
     if (cw.window_currentId == cw.wd.id) {
         return cw.focused_widgetId;
@@ -816,19 +816,19 @@ pub const CursorKind = enum(u8) {
     hand,
 };
 
-pub fn CursorGetDragging() ?CursorKind {
+pub fn cursorGetDragging() ?CursorKind {
     const cw = current_window orelse unreachable;
     return cw.cursor_dragging;
 }
 
-pub fn CursorSet(p: Point, cursor: CursorKind) void {
+pub fn cursorSet(p: Point, cursor: CursorKind) void {
     const cw = current_window orelse unreachable;
     if (cw.mouse_pt.equals(p)) {
         cw.cursor_requested = cursor;
     }
 }
 
-pub fn Highlight(p: Point, r: Rect) bool {
+pub fn highlight(p: Point, r: Rect) bool {
     const cw = current_window orelse unreachable;
     if (cw.mouse_pt.equals(p) and r.contains(cw.mouse_pt)) {
         return true;
@@ -837,12 +837,12 @@ pub fn Highlight(p: Point, r: Rect) bool {
     return false;
 }
 
-pub fn PathAddPoint(p: Point) void {
+pub fn pathAddPoint(p: Point) void {
     const cw = current_window orelse unreachable;
     cw.path.append(p) catch unreachable;
 }
 
-pub fn PathAddRect(r: Rect, radius: Rect) void {
+pub fn pathAddRect(r: Rect, radius: Rect) void {
     var rad = radius;
     const maxrad = math.min(r.w, r.h) / 2;
     rad.x = math.min(rad.x, maxrad);
@@ -853,15 +853,15 @@ pub fn PathAddRect(r: Rect, radius: Rect) void {
     const bl = Point{ .x = r.x + rad.h, .y = r.y + r.h - rad.h };
     const br = Point{ .x = r.x + r.w - rad.w, .y = r.y + r.h - rad.w };
     const tr = Point{ .x = r.x + r.w - rad.y, .y = r.y + rad.y };
-    PathAddArc(tl, rad.x, math.pi * 1.5, math.pi, @fabs(tl.y - bl.y) < 0.5);
-    PathAddArc(bl, rad.h, math.pi, math.pi * 0.5, @fabs(bl.x - br.x) < 0.5);
-    PathAddArc(br, rad.w, math.pi * 0.5, 0, @fabs(br.y - tr.y) < 0.5);
-    PathAddArc(tr, rad.y, math.pi * 2.0, math.pi * 1.5, @fabs(tr.x - tl.x) < 0.5);
+    pathAddArc(tl, rad.x, math.pi * 1.5, math.pi, @fabs(tl.y - bl.y) < 0.5);
+    pathAddArc(bl, rad.h, math.pi, math.pi * 0.5, @fabs(bl.x - br.x) < 0.5);
+    pathAddArc(br, rad.w, math.pi * 0.5, 0, @fabs(br.y - tr.y) < 0.5);
+    pathAddArc(tr, rad.y, math.pi * 2.0, math.pi * 1.5, @fabs(tr.x - tl.x) < 0.5);
 }
 
-pub fn PathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool) void {
+pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool) void {
     if (rad == 0) {
-        PathAddPoint(center);
+        pathAddPoint(center);
         return;
     }
     const err = 1.0;
@@ -876,17 +876,17 @@ pub fn PathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool)
     var a: f32 = start;
     var i: u32 = 0;
     while (i < num) : (i += 1) {
-        PathAddPoint(Point{ .x = center.x + rad * @cos(a), .y = center.y + rad * @sin(a) });
+        pathAddPoint(Point{ .x = center.x + rad * @cos(a), .y = center.y + rad * @sin(a) });
         a -= step;
     }
 
     if (!skip_end) {
         a = end;
-        PathAddPoint(Point{ .x = center.x + rad * @cos(a), .y = center.y + rad * @sin(a) });
+        pathAddPoint(Point{ .x = center.x + rad * @cos(a), .y = center.y + rad * @sin(a) });
     }
 }
 
-pub fn PathFillConvex(col: Color) void {
+pub fn pathFillConvex(col: Color) void {
     const cw = current_window orelse unreachable;
     if (cw.path.items.len < 3) {
         cw.path.clearAndFree();
@@ -897,7 +897,7 @@ pub fn PathFillConvex(col: Color) void {
     if (drqlen > 1) {
         var path_copy = std.ArrayList(Point).init(cw.arena);
         path_copy.appendSlice(cw.path.items) catch unreachable;
-        var cmd = RenderCmd{ .clip = ClipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
+        var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
         cw.deferred_render_queues.items[drqlen - 2].cmds.append(cmd) catch unreachable;
         cw.path.clearAndFree();
         return;
@@ -964,7 +964,7 @@ pub const EndCapStyle = enum {
     square,
 };
 
-pub fn PathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) void {
+pub fn pathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) void {
     const cw = current_window orelse unreachable;
     if (cw.path.items.len == 0) {
         return;
@@ -974,7 +974,7 @@ pub fn PathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, co
     if (drqlen > 1) {
         var path_copy = std.ArrayList(Point).init(cw.arena);
         path_copy.appendSlice(cw.path.items) catch unreachable;
-        var cmd = RenderCmd{ .clip = ClipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
+        var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
         cw.deferred_render_queues.items[drqlen - 2].cmds.append(cmd) catch unreachable;
         cw.path.clearAndFree();
         return;
@@ -987,8 +987,8 @@ pub fn PathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, co
         // remove old path so we don't have a center point
         cw.path.clearAndFree();
 
-        PathAddArc(center, thickness, math.pi * 2.0, 0, true);
-        PathFillConvex(col);
+        pathAddArc(center, thickness, math.pi * 2.0, 0, true);
+        pathFillConvex(col);
         cw.path.clearAndFree();
         return;
     }
@@ -1192,7 +1192,7 @@ pub fn PathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, co
     cw.path.clearAndFree();
 }
 
-pub fn WindowFor(p: Point) u32 {
+pub fn windowFor(p: Point) u32 {
     const cw = current_window orelse unreachable;
     var i = cw.floating_windows_prev.items.len;
     while (i > 0) : (i -= 1) {
@@ -1206,7 +1206,7 @@ pub fn WindowFor(p: Point) u32 {
 }
 
 // Are we in a popup currently?
-pub fn PopupIn() bool {
+pub fn popupIn() bool {
     const cw = current_window orelse unreachable;
 
     var i = cw.floating_windows.items.len;
@@ -1226,7 +1226,7 @@ pub fn PopupIn() bool {
     return false;
 }
 
-pub fn PopupAncestorFocused(id: u32) bool {
+pub fn popupAncestorFocused(id: u32) bool {
     const cw = current_window orelse unreachable;
 
     var prevId = id;
@@ -1250,7 +1250,7 @@ pub fn PopupAncestorFocused(id: u32) bool {
     return false;
 }
 
-pub fn FloatingWindowNoChildren() bool {
+pub fn floatingWindowNoChildren() bool {
     const cw = current_window orelse unreachable;
     if (cw.floating_windows.items.len == 0) {
         return true;
@@ -1264,21 +1264,21 @@ pub fn FloatingWindowNoChildren() bool {
     }
 }
 
-pub fn FloatingWindowClosing(id: u32) void {
+pub fn floatingWindowClosing(id: u32) void {
     const cw = current_window orelse unreachable;
     if (cw.floating_windows.items.len > 0) {
         const fd = cw.floating_windows.items[cw.floating_windows.items.len - 1];
         if (fd.id == id) {
             _ = cw.floating_windows.pop();
         } else {
-            debug("FloatingWindowClosing: last added floating window id {x} doesn't match {x}\n", .{ fd.id, id });
+            debug("floatingWindowClosing: last added floating window id {x} doesn't match {x}\n", .{ fd.id, id });
         }
     } else {
-        debug("FloatingWindowClosing: no floating windows\n", .{});
+        debug("floatingWindowClosing: no floating windows\n", .{});
     }
 }
 
-pub fn FloatingWindowAdd(id: u32, prevWinId: ?u32, rect: Rect, modal: bool) void {
+pub fn floatingWindowAdd(id: u32, prevWinId: ?u32, rect: Rect, modal: bool) void {
     const cw = current_window orelse unreachable;
     // copy focus from previous frame
     var focus_widgetId: ?u32 = null;
@@ -1293,33 +1293,33 @@ pub fn FloatingWindowAdd(id: u32, prevWinId: ?u32, rect: Rect, modal: bool) void
     cw.floating_windows.append(fd) catch unreachable;
 }
 
-pub fn WindowCurrentSet(id: u32) u32 {
+pub fn windowCurrentSet(id: u32) u32 {
     const cw = current_window orelse unreachable;
     const ret = cw.window_currentId;
     cw.window_currentId = id;
     return ret;
 }
 
-pub fn WindowCurrentId() u32 {
+pub fn windowCurrentId() u32 {
     const cw = current_window orelse unreachable;
     return cw.window_currentId;
 }
 
-pub fn DragPreStart(p: Point, cursor: CursorKind) void {
+pub fn dragPreStart(p: Point, cursor: CursorKind) void {
     const cw = current_window orelse unreachable;
     cw.drag_state = .prestart;
     cw.drag_pt = p;
     cw.cursor_dragging = cursor;
 }
 
-pub fn DragStart(p: Point, cursor: CursorKind) void {
+pub fn dragStart(p: Point, cursor: CursorKind) void {
     const cw = current_window orelse unreachable;
     cw.drag_state = .dragging;
     cw.drag_pt = p;
     cw.cursor_dragging = cursor;
 }
 
-pub fn Dragging(p: Point) ?Point {
+pub fn dragging(p: Point) ?Point {
     const cw = current_window orelse unreachable;
     switch (cw.drag_state) {
         .none => return null,
@@ -1330,7 +1330,7 @@ pub fn Dragging(p: Point) ?Point {
         },
         .prestart => {
             const dp = Point.diff(p, cw.drag_pt);
-            const dps = dp.scale(1 / WindowNaturalScale());
+            const dps = dp.scale(1 / windowNaturalScale());
             if (@fabs(dps.x) > 3 or @fabs(dps.y) > 3) {
                 cw.drag_pt = p;
                 cw.drag_state = .dragging;
@@ -1342,12 +1342,12 @@ pub fn Dragging(p: Point) ?Point {
     }
 }
 
-pub fn DragEnd() void {
+pub fn dragEnd() void {
     const cw = current_window orelse unreachable;
     cw.drag_state = .none;
 }
 
-pub fn CaptureMouse(id: ?u32) void {
+pub fn captureMouse(id: ?u32) void {
     const cw = current_window orelse unreachable;
     cw.captureID = id;
     if (id != null) {
@@ -1355,7 +1355,7 @@ pub fn CaptureMouse(id: ?u32) void {
     }
 }
 
-pub fn CaptureMouseMaintain(id: u32) bool {
+pub fn captureMouseMaintain(id: u32) bool {
     const cw = current_window orelse unreachable;
     if (cw.captureID == id) {
         // to maintain capture, we must be on or above the
@@ -1370,7 +1370,7 @@ pub fn CaptureMouseMaintain(id: u32) bool {
                 // found modal before we found current
                 // cancel the capture, and cancel
                 // any drag being done
-                DragEnd();
+                dragEnd();
                 return false;
             }
         }
@@ -1384,24 +1384,24 @@ pub fn CaptureMouseMaintain(id: u32) bool {
     return false;
 }
 
-pub fn CaptureMouseGet() ?u32 {
+pub fn captureMouseGet() ?u32 {
     const cw = current_window orelse unreachable;
     return cw.captureID;
 }
 
-pub fn ClipGet() Rect {
+pub fn clipGet() Rect {
     const cw = current_window orelse unreachable;
     return cw.clipRect;
 }
 
-pub fn Clip(new: Rect) Rect {
+pub fn clip(new: Rect) Rect {
     const cw = current_window orelse unreachable;
     var ret = cw.clipRect;
-    ClipSet(cw.clipRect.intersect(new));
+    clipSet(cw.clipRect.intersect(new));
     return ret;
 }
 
-pub fn ClipSet(r: Rect) void {
+pub fn clipSet(r: Rect) void {
     const cw = current_window orelse unreachable;
     cw.clipRect = r;
 }
@@ -1411,7 +1411,7 @@ pub fn cueFrame() void {
     cw.extra_frames_needed = 1;
 }
 
-pub fn AnimationRate() f32 {
+pub fn animationRate() f32 {
     const cw = current_window orelse unreachable;
     return cw.rate;
 }
@@ -1421,54 +1421,54 @@ pub fn FPS() f32 {
     return cw.FPS();
 }
 
-pub fn ParentGet() Widget {
+pub fn parentGet() Widget {
     const cw = current_window orelse unreachable;
     return cw.wd.parent;
 }
 
-pub fn ParentSet(w: Widget) Widget {
+pub fn parentSet(w: Widget) Widget {
     var cw = current_window orelse unreachable;
     const ret = cw.wd.parent;
     cw.wd.parent = w;
     return ret;
 }
 
-pub fn MenuGet() ?*MenuWidget {
+pub fn menuGet() ?*MenuWidget {
     const cw = current_window orelse unreachable;
     return cw.menu_current;
 }
 
-pub fn MenuSet(m: ?*MenuWidget) ?*MenuWidget {
+pub fn menuSet(m: ?*MenuWidget) ?*MenuWidget {
     var cw = current_window orelse unreachable;
     const ret = cw.menu_current;
     cw.menu_current = m;
     return ret;
 }
 
-pub fn WindowRect() Rect {
+pub fn windowRect() Rect {
     var cw = current_window orelse unreachable;
     return cw.wd.rect;
 }
 
-pub fn WindowRectPixels() Rect {
+pub fn windowRectPixels() Rect {
     var cw = current_window orelse unreachable;
     return cw.rect_pixels;
 }
 
-pub fn WindowNaturalScale() f32 {
+pub fn windowNaturalScale() f32 {
     var cw = current_window orelse unreachable;
     return cw.natural_scale;
 }
 
-pub fn MinSizeGetPrevious(id: u32) ?Size {
+pub fn minSizeGetPrevious(id: u32) ?Size {
     var cw = current_window orelse unreachable;
     const ret = cw.widgets_min_size_prev.get(id);
-    debug("{x} MinSizeGetPrevious {}", .{ id, ret });
+    debug("{x} minSizeGetPrevious {}", .{ id, ret });
     return ret;
 }
 
-pub fn MinSizeSet(id: u32, s: Size) void {
-    debug("{x} MinSizeSet {}", .{ id, s });
+pub fn minSizeSet(id: u32, s: Size) void {
+    debug("{x} minSizeSet {}", .{ id, s });
     var cw = current_window orelse unreachable;
     return cw.widgets_min_size.put(id, s) catch unreachable;
 }
@@ -1478,7 +1478,7 @@ const DataOffset = struct {
     end: u32,
 };
 
-pub fn DataSet(id: u32, data: anytype) void {
+pub fn dataSet(id: u32, data: anytype) void {
     var cw = current_window orelse unreachable;
     var bytes: []const u8 = undefined;
     const dt = @typeInfo(@TypeOf(data));
@@ -1493,7 +1493,7 @@ pub fn DataSet(id: u32, data: anytype) void {
     cw.data_offset.put(id, DataOffset{ .begin = begin, .end = end }) catch unreachable;
 }
 
-pub fn DataGet(id: u32, comptime T: type) ?T {
+pub fn dataGet(id: u32, comptime T: type) ?T {
     var cw = current_window orelse unreachable;
     const offset = cw.data_offset_prev.get(id);
     if (offset) |o| {
@@ -1505,7 +1505,7 @@ pub fn DataGet(id: u32, comptime T: type) ?T {
     }
 }
 
-pub fn DataGetSlice(id: u32, comptime T: type, arena: std.mem.Allocator) ?[]T {
+pub fn dataGetSlice(id: u32, comptime T: type, arena: std.mem.Allocator) ?[]T {
     var cw = current_window orelse unreachable;
     const offset = cw.data_offset_prev.get(id);
     if (offset) |o| {
@@ -1518,14 +1518,14 @@ pub fn DataGetSlice(id: u32, comptime T: type, arena: std.mem.Allocator) ?[]T {
     }
 }
 
-pub fn MinSize(id: ?u32, min_size: Size) Size {
+pub fn minSize(id: ?u32, min_size: Size) Size {
     var size = min_size;
 
     // Need to take the max of both given and previous.  ScrollArea could be
     // passed a min size Size{.w = 0, .h = 200} meaning to get the width from the
     // previous min size.
     if (id) |id2| {
-        if (MinSizeGetPrevious(id2)) |ms| {
+        if (minSizeGetPrevious(id2)) |ms| {
             size = Size.max(size, ms);
         }
     }
@@ -1533,14 +1533,14 @@ pub fn MinSize(id: ?u32, min_size: Size) Size {
     return size;
 }
 
-pub fn PlaceIn(id: ?u32, avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    var size = MinSize(id, min_size);
+pub fn placeIn(id: ?u32, avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    var size = minSize(id, min_size);
 
-    if (e.Horizontal()) {
+    if (e.horizontal()) {
         size.w = avail.w;
     }
 
-    if (e.Vertical()) {
+    if (e.vertical()) {
         size.h = avail.h;
     }
 
@@ -1560,7 +1560,7 @@ pub fn PlaceIn(id: ?u32, avail: Rect, min_size: Size, e: Options.Expand, g: Opti
     return r;
 }
 
-pub fn Events() *[]Event {
+pub fn events() *[]Event {
     var cw = current_window orelse unreachable;
     return &cw.events.items;
 }
@@ -1577,9 +1577,9 @@ pub const EventIterator = struct {
 
     pub fn focusRemainingEvents(self: *Self, focusWindowId: u32, focusWidgetId: ?u32) void {
         var k = self.i;
-        var events = Events();
-        while (k < events.len) : (k += 1) {
-            var e: *Event = &events.*[k];
+        var evts = events();
+        while (k < evts.len) : (k += 1) {
+            var e: *Event = &evts.*[k];
             e.focus_windowId = focusWindowId;
             e.focus_widgetId = focusWidgetId;
         }
@@ -1590,9 +1590,9 @@ pub const EventIterator = struct {
     }
 
     pub fn nextCleanup(self: *Self, cleanup: bool) ?*Event {
-        var events = Events();
-        while (self.i < events.len) : (self.i += 1) {
-            var e: *Event = &events.*[self.i];
+        var evts = events();
+        while (self.i < evts.len) : (self.i += 1) {
+            var e: *Event = &evts.*[self.i];
             if (e.handled) {
                 continue;
             }
@@ -1615,12 +1615,12 @@ pub const EventIterator = struct {
                 },
 
                 .mouse => {
-                    if (CaptureMouseGet()) |id| {
+                    if (captureMouseGet()) |id| {
                         if (id != self.id) {
                             continue;
                         }
                     } else {
-                        if (e.evt.mouse.floating_win != WindowCurrentId()) {
+                        if (e.evt.mouse.floating_win != windowCurrentId()) {
                             continue;
                         }
 
@@ -1628,7 +1628,7 @@ pub const EventIterator = struct {
                             continue;
                         }
 
-                        if (!ClipGet().contains(e.evt.mouse.p)) {
+                        if (!clipGet().contains(e.evt.mouse.p)) {
                             continue;
                         }
                     }
@@ -1673,38 +1673,38 @@ pub const Animation = struct {
     }
 };
 
-pub fn Animate(id: u32, key: []const u8, a: Animation) void {
+pub fn animate(id: u32, key: []const u8, a: Animation) void {
     var cw = current_window orelse unreachable;
     const h = Animation.hash(id, key);
     cw.animations.put(h, a) catch unreachable;
 }
 
-pub fn AnimationGet(id: u32, key: []const u8) ?Animation {
+pub fn animationGet(id: u32, key: []const u8) ?Animation {
     var cw = current_window orelse unreachable;
     const h = Animation.hash(id, key);
     return cw.animations.get(h);
 }
 
-pub fn TimerSet(id: u32, micros: i32) void {
+pub fn timerSet(id: u32, micros: i32) void {
     const a = Animation{ .start_val = 0, .end_val = 0, .start_time = micros, .end_time = micros };
-    Animate(id, "_timer", a);
+    animate(id, "_timer", a);
 }
 
-pub fn TimerGet(id: u32) ?i32 {
-    if (AnimationGet(id, "_timer")) |a| {
+pub fn timerGet(id: u32) ?i32 {
+    if (animationGet(id, "_timer")) |a| {
         return a.start_time;
     } else {
         return null;
     }
 }
 
-pub fn TimerExists(id: u32) bool {
-    return TimerGet(id) != null;
+pub fn timerExists(id: u32) bool {
+    return timerGet(id) != null;
 }
 
 // returns true only on the frame where the timer expired
-pub fn TimerDone(id: u32) bool {
-    if (TimerGet(id)) |start| {
+pub fn timerDone(id: u32) bool {
+    if (timerGet(id)) |start| {
         if (start <= 0) {
             return true;
         }
@@ -1719,15 +1719,15 @@ const TabIndex = struct {
     tabIndex: u16,
 };
 
-pub fn TabIndexSet(widget_id: u32, tab_index: ?u16) void {
+pub fn tabIndexSet(widget_id: u32, tab_index: ?u16) void {
     var cw = current_window orelse unreachable;
     const ti = TabIndex{ .windowId = cw.window_currentId, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
     cw.tab_index.append(ti) catch unreachable;
 }
 
-pub fn TabIndexNext(iter: ?*EventIterator) void {
+pub fn tabIndexNext(iter: ?*EventIterator) void {
     const cw = current_window orelse unreachable;
-    const widgetId = FocusedWidgetId();
+    const widgetId = focusedWidgetId();
     var oldtab: ?u16 = null;
     if (widgetId != null) {
         for (cw.tab_index_prev.items) |ti| {
@@ -1762,12 +1762,12 @@ pub fn TabIndexNext(iter: ?*EventIterator) void {
         }
     }
 
-    FocusWidget(newId, iter);
+    focusWidget(newId, iter);
 }
 
-pub fn TabIndexPrev(iter: ?*EventIterator) void {
+pub fn tabIndexPrev(iter: ?*EventIterator) void {
     const cw = current_window orelse unreachable;
-    const widgetId = FocusedWidgetId();
+    const widgetId = focusedWidgetId();
     var oldtab: ?u16 = null;
     if (widgetId != null) {
         for (cw.tab_index_prev.items) |ti| {
@@ -1803,7 +1803,7 @@ pub fn TabIndexPrev(iter: ?*EventIterator) void {
         }
     }
 
-    FocusWidget(newId, iter);
+    focusWidget(newId, iter);
 }
 
 pub const Vertex = struct {
@@ -1862,7 +1862,7 @@ pub const Window = struct {
     clipRect: Rect = Rect{},
 
     menu_current: ?*MenuWidget = null,
-    theme: *const Theme = &Theme_Adwaita,
+    theme: *const Theme = &theme_Adwaita,
 
     widgets_min_size_prev: std.AutoHashMap(u32, Size),
     widgets_min_size: std.AutoHashMap(u32, Size),
@@ -1975,7 +1975,7 @@ pub const Window = struct {
         const dp = newpt.diff(self.mouse_pt);
         self.mouse_pt = newpt;
 
-        const winId = WindowFor(self.mouse_pt);
+        const winId = windowFor(self.mouse_pt);
         self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
             .p = self.mouse_pt,
             .dp = dp,
@@ -1991,10 +1991,10 @@ pub const Window = struct {
         self.zeroMouseMotionEventRemove();
         defer self.zeroMouseMotionEventAdd();
 
-        const winId = WindowFor(self.mouse_pt);
+        const winId = windowFor(self.mouse_pt);
 
         if (state == .leftdown or state == .rightdown) {
-            FocusWindow(winId, null);
+            focusWindow(winId, null);
         }
 
         self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
@@ -2012,7 +2012,7 @@ pub const Window = struct {
         self.zeroMouseMotionEventRemove();
         defer self.zeroMouseMotionEventAdd();
 
-        const winId = WindowFor(self.mouse_pt);
+        const winId = windowFor(self.mouse_pt);
 
         self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
             .p = self.mouse_pt,
@@ -2188,7 +2188,7 @@ pub const Window = struct {
 
         // setup the initial deferred render queue, won't be used until someone
         // calls DeferRender again
-        DeferRender();
+        deferRender();
 
         self.events = std.ArrayList(Event).init(arena);
 
@@ -2200,20 +2200,20 @@ pub const Window = struct {
             }
         }
 
-        // FocusedWindowLost uses floating_windows, so use it before we swap
-        if (self.FocusedWindowLost()) {
+        // focusedWindowLost uses floating_windows, so use it before we swap
+        if (self.focusedWindowLost()) {
             // if the floating window that was focused went away, focus the highest
             // remaining one
             if (self.floating_windows.items.len > 0) {
                 const fdata = self.floating_windows.items[self.floating_windows.items.len - 1];
-                FocusWindow(fdata.id, null);
+                focusWindow(fdata.id, null);
             } else {
-                FocusWindow(self.wd.id, null);
+                focusWindow(self.wd.id, null);
             }
         }
 
-        // FocusedWidgetId() uses floating_windows, so use it before we swap
-        self.focused_widgetId_last_frame = FocusedWidgetId();
+        // focusedWidgetId() uses floating_windows, so use it before we swap
+        self.focused_widgetId_last_frame = focusedWidgetId();
 
         self.floating_windows_prev.deinit();
         self.floating_windows_prev = self.floating_windows;
@@ -2236,14 +2236,14 @@ pub const Window = struct {
         self.tab_index = @TypeOf(self.tab_index).init(self.tab_index.allocator);
 
         self.rect_pixels = self.backend.pixelSize().rect();
-        ClipSet(self.rect_pixels);
+        clipSet(self.rect_pixels);
 
         self.wd.rect = self.backend.windowSize().rect();
         self.natural_scale = self.rect_pixels.w / self.wd.rect.w;
 
         debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
-        _ = WindowCurrentSet(self.wd.id);
+        _ = windowCurrentSet(self.wd.id);
 
         self.extra_frames_needed -|= 1;
         if (micros_since_last == 0) {
@@ -2340,7 +2340,7 @@ pub const Window = struct {
             .p = self.mouse_pt,
             .dp = Point{},
             .wheel = 0,
-            .floating_win = WindowFor(self.mouse_pt),
+            .floating_win = windowFor(self.mouse_pt),
             .state = .motion,
         } } }) catch unreachable;
     }
@@ -2354,7 +2354,7 @@ pub const Window = struct {
 
     // Return the cursor the gui wants.  Client code should cache this if
     // switching the platform's cursor is expensive.
-    pub fn CursorRequested(self: *const Self) CursorKind {
+    pub fn cursorRequested(self: *const Self) CursorKind {
         if (self.drag_state == .dragging) {
             return self.cursor_dragging;
         } else {
@@ -2365,11 +2365,11 @@ pub const Window = struct {
     // Return the cursor the gui wants or null if mouse is not in gui windows.
     // Client code should cache this if switching the platform's cursor is
     // expensive.
-    pub fn CursorRequestedFloating(self: *const Self) ?CursorKind {
-        if (self.captureID != null or WindowFor(self.mouse_pt) != self.wd.id) {
+    pub fn cursorRequestedFloating(self: *const Self) ?CursorKind {
+        if (self.captureID != null or windowFor(self.mouse_pt) != self.wd.id) {
             // gui owns the cursor if we have mouse capture or if the mouse is above
             // a floating window
-            return self.CursorRequested();
+            return self.cursorRequested();
         } else {
             // no capture, not above a floating window, so client owns the cursor
             return null;
@@ -2377,7 +2377,7 @@ pub const Window = struct {
     }
 
     pub fn end(self: *Self) ?u32 {
-        DeferRenderPop();
+        deferRenderPop();
 
         // events may have been tagged with a focus widget that never showed up, so
         // we wouldn't even get them bubbled
@@ -2388,20 +2388,20 @@ pub const Window = struct {
             if (e.evt == .mouse) {
                 if (e.evt.mouse.state == .leftdown or e.evt.mouse.state == .rightdown) {
                     // unhandled click, clear focus
-                    FocusWidget(null, null);
+                    focusWidget(null, null);
                 }
             } else if (e.evt == .key) {
                 if (e.evt.key.state == .down and e.evt.key.keysym == .tab) {
                     if (e.evt.key.mod.shift()) {
-                        TabIndexPrev(&iter);
+                        tabIndexPrev(&iter);
                     } else {
-                        TabIndexNext(&iter);
+                        tabIndexNext(&iter);
                     }
                 }
             }
         }
 
-        if (self.FocusedWindowLost()) {
+        if (self.focusedWindowLost()) {
             // The floating window with focus disappeared, so do another frame and
             // we'll focus a new window in begin()
             cueFrame();
@@ -2436,7 +2436,7 @@ pub const Window = struct {
         return ret;
     }
 
-    pub fn FocusedWindowLost(self: *Self) bool {
+    pub fn focusedWindowLost(self: *Self) bool {
         if (self.wd.id == self.focused_windowId) {
             return false;
         } else {
@@ -2461,7 +2461,7 @@ pub const Window = struct {
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         var r = self.wd.rect;
         r.y = self.next_widget_ypos;
-        const ret = PlaceIn(id, r, min_size, e, g);
+        const ret = placeIn(id, r, min_size, e, g);
         self.next_widget_ypos += ret.h;
         return ret;
     }
@@ -2482,9 +2482,9 @@ pub const Window = struct {
                 e.handled = true;
                 // when a popup is closed, the window that spawned it (which had focus
                 // previously) should become focused again
-                FocusWindow(self.wd.id, null);
+                focusWindow(self.wd.id, null);
                 if (cp.defocus) {
-                    FocusWidget(null, null);
+                    focusWidget(null, null);
                 }
             },
             else => {},
@@ -2494,10 +2494,10 @@ pub const Window = struct {
     }
 };
 
-pub fn Popup(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, openflag: ?*bool, menu: ?*MenuWidget, opts: Options) *PopupWidget {
+pub fn popup(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, openflag: ?*bool, opts: Options) *PopupWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(PopupWidget) catch unreachable;
-    ret.* = PopupWidget.init(src, id_extra, initialRect, openflag, menu, opts);
+    ret.* = PopupWidget.init(src, id_extra, initialRect, openflag, opts);
     ret.install();
     return ret;
 }
@@ -2513,10 +2513,9 @@ pub const PopupWidget = struct {
     initialRect: Rect = Rect{},
     openflag: ?*bool = null,
     prevClip: Rect = Rect{},
-    menu: ?*MenuWidget = null,
     deferred_render_queue: DeferredRenderQueue = undefined,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, openflag: ?*bool, menu: ?*MenuWidget, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, openflag: ?*bool, opts: Options) Self {
         var self = Self{};
 
         // need to save options because we override .rect for WidgetData but need to not override .rect later
@@ -2528,31 +2527,30 @@ pub const PopupWidget = struct {
 
         self.initialRect = initialRect;
         self.openflag = openflag;
-        self.menu = menu;
         return self;
     }
 
     pub fn install(self: *Self) void {
         // Popup is outside normal widget flow, a menu can pop up outside the
         // current clip
-        self.prevClip = ClipGet();
-        ClipSet(WindowRectPixels());
+        self.prevClip = clipGet();
+        clipSet(windowRectPixels());
 
-        DeferRender();
+        deferRender();
 
-        _ = ParentSet(self.widget());
+        _ = parentSet(self.widget());
 
-        self.prev_windowId = WindowCurrentSet(self.wd.id);
+        self.prev_windowId = windowCurrentSet(self.wd.id);
 
-        if (DataGet(self.wd.id, Rect)) |p| {
+        if (dataGet(self.wd.id, Rect)) |p| {
             self.wd.rect = p;
-            const ms = MinSize(self.wd.id, self.options.min_size orelse .{});
+            const ms = minSize(self.wd.id, self.options.min_size orelse .{});
             self.wd.rect.w = ms.w;
             self.wd.rect.h = ms.h;
-            self.wd.rect = PlaceOnScreen(self.initialRect, self.wd.rect);
+            self.wd.rect = placeOnScreen(self.initialRect, self.wd.rect);
         } else {
-            self.wd.rect = PlaceOnScreen(self.initialRect, Rect.fromPoint(self.initialRect.topleft()));
-            FocusWindow(self.wd.id, null);
+            self.wd.rect = placeOnScreen(self.initialRect, Rect.fromPoint(self.initialRect.topleft()));
+            focusWindow(self.wd.id, null);
 
             // need a second frame to fit contents (FocusWindow calls cueFrame but
             // here for clarity)
@@ -2563,7 +2561,7 @@ pub const PopupWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.screenRectScale(self.wd.rect);
-        FloatingWindowAdd(self.wd.id, self.prev_windowId, rs.r, false);
+        floatingWindowAdd(self.wd.id, self.prev_windowId, rs.r, false);
 
         // we are using MenuWidget to do border/background but floating windows
         // don't have margin, so turn that off
@@ -2572,7 +2570,7 @@ pub const PopupWidget = struct {
     }
 
     pub fn close(self: *Self) void {
-        FloatingWindowClosing(self.wd.id);
+        floatingWindowClosing(self.wd.id);
         if (self.openflag) |of| {
             of.* = false;
         }
@@ -2587,7 +2585,7 @@ pub const PopupWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return PlaceIn(id, self.wd.rect, min_size, e, g);
+        return placeIn(id, self.wd.rect, min_size, e, g);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -2596,9 +2594,9 @@ pub const PopupWidget = struct {
 
     pub fn screenRectScale(self: *Self, r: Rect) RectScale {
         _ = self;
-        const s = WindowNaturalScale();
+        const s = windowNaturalScale();
         const scaled = r.scale(s);
-        return RectScale{ .r = scaled.offset(WindowRectPixels()), .s = s };
+        return RectScale{ .r = scaled.offset(windowRectPixels()), .s = s };
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -2626,7 +2624,7 @@ pub const PopupWidget = struct {
             if (e.evt == .mouse) {
                 if (e.evt.mouse.state == .leftdown or e.evt.mouse.state == .rightdown) {
                     // unhandled click, clear focus
-                    FocusWidget(null, null);
+                    focusWidget(null, null);
                 }
             } else if (e.evt == .key) {
                 if (e.evt.key.state == .down and e.evt.key.keysym == .escape) {
@@ -2636,24 +2634,24 @@ pub const PopupWidget = struct {
             }
         }
 
-        if (FloatingWindowNoChildren() and !PopupAncestorFocused(self.wd.id)) {
+        if (floatingWindowNoChildren() and !popupAncestorFocused(self.wd.id)) {
             // this popup is the last popup in the chain and none of them are focused
             self.close();
         }
 
         self.layout.deinit();
-        DataSet(self.wd.id, self.wd.rect);
+        dataSet(self.wd.id, self.wd.rect);
         self.wd.minSizeSetAndCue();
         // outside normal layout, don't call minSizeForChild or
         // wd.minSizeReportToParent
-        _ = ParentSet(self.wd.parent);
-        _ = WindowCurrentSet(self.prev_windowId);
-        DeferRenderPop();
-        ClipSet(self.prevClip);
+        _ = parentSet(self.wd.parent);
+        _ = windowCurrentSet(self.prev_windowId);
+        deferRenderPop();
+        clipSet(self.prevClip);
     }
 };
 
-pub fn FloatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, rect: ?*Rect, openflag: ?*bool, opts: Options) *FloatingWindowWidget {
+pub fn floatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, rect: ?*Rect, openflag: ?*bool, opts: Options) *FloatingWindowWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(FloatingWindowWidget) catch unreachable;
     ret.* = FloatingWindowWidget.init(src, id_extra, modal, rect, openflag, opts);
@@ -2706,24 +2704,24 @@ pub const FloatingWindowWidget = struct {
     pub fn install(self: *Self) void {
         // FloatingWindow is outside normal widget flow, a dialog needs to paint on
         // top of the whole screen
-        self.prevClip = ClipGet();
-        ClipSet(WindowRectPixels());
+        self.prevClip = clipGet();
+        clipSet(windowRectPixels());
 
-        DeferRender();
+        deferRender();
 
-        _ = ParentSet(self.widget());
-        self.prev_windowId = WindowCurrentSet(self.wd.id);
+        _ = parentSet(self.widget());
+        self.prev_windowId = windowCurrentSet(self.wd.id);
 
         if (self.io_rect) |ior| {
             // user is storing the rect for us across open/close
             self.wd.rect = ior.*;
         } else {
             // we store the rect (only while the window is open)
-            self.wd.rect = DataGet(self.wd.id, Rect) orelse Rect{};
+            self.wd.rect = dataGet(self.wd.id, Rect) orelse Rect{};
         }
 
-        self.autoId = ParentGet().extendID(@src(), 0);
-        if (DataGet(self.autoId, @TypeOf(self.autoPosSize))) |aps| {
+        self.autoId = parentGet().extendID(@src(), 0);
+        if (dataGet(self.autoId, @TypeOf(self.autoPosSize))) |aps| {
             self.autoPosSize = aps;
         } else {
             self.autoPosSize = .{
@@ -2733,7 +2731,7 @@ pub const FloatingWindowWidget = struct {
         }
 
         var ms = self.options.min_size orelse Size{};
-        if (MinSizeGetPrevious(self.wd.id)) |min_size| {
+        if (minSizeGetPrevious(self.wd.id)) |min_size| {
             ms = Size.max(ms, min_size);
 
             if (self.autoPosSize.autosize) {
@@ -2744,12 +2742,12 @@ pub const FloatingWindowWidget = struct {
             if (self.autoPosSize.autopos) {
                 // only position ourselves once
                 self.autoPosSize.autopos = false;
-                self.wd.rect.x = WindowRect().w / 2 - self.wd.rect.w / 2;
-                self.wd.rect.y = WindowRect().h / 2 - self.wd.rect.h / 2;
+                self.wd.rect.x = windowRect().w / 2 - self.wd.rect.w / 2;
+                self.wd.rect.y = windowRect().h / 2 - self.wd.rect.h / 2;
             }
         } else {
             // first frame we are being shown
-            FocusWindow(self.wd.id, null);
+            focusWindow(self.wd.id, null);
 
             if (self.autoPosSize.autopos or self.autoPosSize.autosize) {
                 // need a second frame to position or fit contents (FocusWindow calls
@@ -2764,21 +2762,21 @@ pub const FloatingWindowWidget = struct {
 
         debug("{x} FloatingWindow {}", .{ self.wd.id, self.wd.rect });
 
-        const captured = CaptureMouseMaintain(self.wd.id);
+        const captured = captureMouseMaintain(self.wd.id);
 
         // processEventsBefore can change self.wd.rect
         self.processEventsBefore(captured);
 
         // outside normal flow, so don't get rect from parent
         const rs = self.screenRectScale(self.wd.rect);
-        FloatingWindowAdd(self.wd.id, null, rs.r, self.modal);
+        floatingWindowAdd(self.wd.id, null, rs.r, self.modal);
 
         if (self.modal) {
             // paint over everything below
-            PathAddRect(WindowRectPixels(), Rect.all(0));
+            pathAddRect(windowRectPixels(), Rect.all(0));
             var col = self.options.color();
             col.a = 100;
-            PathFillConvex(col);
+            pathFillConvex(col);
         }
 
         // we are using BoxWidget to do border/background but floating windows
@@ -2804,22 +2802,22 @@ pub const FloatingWindowWidget = struct {
                 if (captured or corner) {
                     if (e.evt.mouse.state == .leftdown) {
                         // capture and start drag
-                        CaptureMouse(self.wd.id);
-                        DragStart(e.evt.mouse.p, .arrow_nw_se);
+                        captureMouse(self.wd.id);
+                        dragStart(e.evt.mouse.p, .arrow_nw_se);
                         e.handled = true;
                     } else if (e.evt.mouse.state == .leftup) {
                         // stop drag and capture
-                        CaptureMouse(null);
-                        DragEnd();
+                        captureMouse(null);
+                        dragEnd();
                         e.handled = true;
                     } else if (e.evt.mouse.state == .motion) {
                         // move if dragging
-                        if (Dragging(e.evt.mouse.p)) |dps| {
-                            if (CursorGetDragging() == CursorKind.crosshair) {
+                        if (dragging(e.evt.mouse.p)) |dps| {
+                            if (cursorGetDragging() == CursorKind.crosshair) {
                                 const dp = dps.scale(1 / rs.s);
                                 self.wd.rect.x += dp.x;
                                 self.wd.rect.y += dp.y;
-                            } else if (CursorGetDragging() == CursorKind.arrow_nw_se) {
+                            } else if (cursorGetDragging() == CursorKind.arrow_nw_se) {
                                 const p = e.evt.mouse.p.scale(1 / rs.s);
                                 self.wd.rect.w = math.max(40, p.x - self.wd.rect.x);
                                 self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
@@ -2828,7 +2826,7 @@ pub const FloatingWindowWidget = struct {
                             // don't need cueFrame() because we're before drawing
                             e.handled = true;
                         } else if (corner) {
-                            CursorSet(e.evt.mouse.p, .arrow_nw_se);
+                            cursorSet(e.evt.mouse.p, .arrow_nw_se);
                             e.handled = true;
                         }
                     }
@@ -2850,25 +2848,25 @@ pub const FloatingWindowWidget = struct {
             e.handled = true;
             if (e.evt == .mouse) {
                 if (e.evt.mouse.state == .rightdown) {
-                    FocusWidget(null, null);
+                    focusWidget(null, null);
                 } else if (e.evt.mouse.state == .leftdown) {
-                    FocusWidget(null, null);
+                    focusWidget(null, null);
 
                     // capture and start drag
-                    CaptureMouse(self.wd.id);
-                    DragPreStart(e.evt.mouse.p, .crosshair);
+                    captureMouse(self.wd.id);
+                    dragPreStart(e.evt.mouse.p, .crosshair);
                 } else if (e.evt.mouse.state == .leftup) {
                     // stop drag and capture
-                    CaptureMouse(null);
-                    DragEnd();
+                    captureMouse(null);
+                    dragEnd();
                 } else if (e.evt.mouse.state == .motion) {
                     // move if dragging
-                    if (Dragging(e.evt.mouse.p)) |dps| {
-                        if (CursorGetDragging() == CursorKind.crosshair) {
+                    if (dragging(e.evt.mouse.p)) |dps| {
+                        if (cursorGetDragging() == CursorKind.crosshair) {
                             const dp = dps.scale(1 / rs.s);
                             self.wd.rect.x += dp.x;
                             self.wd.rect.y += dp.y;
-                        } else if (CursorGetDragging() == CursorKind.arrow_nw_se) {
+                        } else if (cursorGetDragging() == CursorKind.arrow_nw_se) {
                             const p = e.evt.mouse.p.scale(1 / rs.s);
                             self.wd.rect.w = math.max(40, p.x - self.wd.rect.x);
                             self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
@@ -2881,9 +2879,9 @@ pub const FloatingWindowWidget = struct {
                 // catch any tabs that weren't handled by widgets
                 if (e.evt.key.state == .down and e.evt.key.keysym == .tab) {
                     if (e.evt.key.mod.shift()) {
-                        TabIndexPrev(&iter);
+                        tabIndexPrev(&iter);
                     } else {
-                        TabIndexNext(&iter);
+                        tabIndexNext(&iter);
                     }
                 }
             }
@@ -2891,7 +2889,7 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn close(self: *Self) void {
-        FloatingWindowClosing(self.wd.id);
+        floatingWindowClosing(self.wd.id);
         if (self.openflag) |of| {
             of.* = false;
         }
@@ -2906,7 +2904,7 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return PlaceIn(id, self.wd.rect.inset(self.wd.options.borderGet()), min_size, e, g);
+        return placeIn(id, self.wd.rect.inset(self.wd.options.borderGet()), min_size, e, g);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -2915,9 +2913,9 @@ pub const FloatingWindowWidget = struct {
 
     pub fn screenRectScale(self: *Self, r: Rect) RectScale {
         _ = self;
-        const s = WindowNaturalScale();
+        const s = windowNaturalScale();
         const scaled = r.scale(s);
-        return RectScale{ .r = scaled.offset(WindowRectPixels()), .s = s };
+        return RectScale{ .r = scaled.offset(windowRectPixels()), .s = s };
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -2926,9 +2924,9 @@ pub const FloatingWindowWidget = struct {
                 e.handled = true;
                 // when a popup is closed, the window that spawned it (which had focus
                 // previously) should become focused again
-                FocusWindow(self.wd.id, null);
+                focusWindow(self.wd.id, null);
                 if (cp.defocus) {
-                    FocusWidget(null, null);
+                    focusWidget(null, null);
                 }
             },
             else => {},
@@ -2950,21 +2948,21 @@ pub const FloatingWindowWidget = struct {
             }
         } else {
             // we store the rect
-            DataSet(self.wd.id, self.wd.rect);
+            dataSet(self.wd.id, self.wd.rect);
         }
-        DataSet(self.autoId, self.autoPosSize);
+        dataSet(self.autoId, self.autoPosSize);
         self.wd.minSizeSetAndCue();
         // outside normal layout, don't call minSizeForChild or
         // wd.minSizeReportToParent
-        _ = ParentSet(self.wd.parent);
-        _ = WindowCurrentSet(self.prev_windowId);
-        DeferRenderPop();
-        ClipSet(self.prevClip);
+        _ = parentSet(self.wd.parent);
+        _ = windowCurrentSet(self.prev_windowId);
+        deferRenderPop();
+        clipSet(self.prevClip);
     }
 };
 
-pub fn Paned(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) *PanedWidget {
-    var ret = gui.CurrentWindow().arena.create(PanedWidget) catch unreachable;
+pub fn paned(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) *PanedWidget {
+    var ret = gui.currentWindow().arena.create(PanedWidget) catch unreachable;
     ret.* = PanedWidget.init(src, id_extra, dir, collapse_size, opts);
     ret.install();
     return ret;
@@ -2998,13 +2996,13 @@ pub const PanedWidget = struct {
     }
 
     pub fn install(self: *Self) void {
-        _ = ParentSet(self.widget());
+        _ = parentSet(self.widget());
         gui.debug("{x} Paned {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
         const rect = self.wd.contentRect();
-        self.prevClip = Clip(self.wd.parent.screenRectScale(rect).r);
+        self.prevClip = clip(self.wd.parent.screenRectScale(rect).r);
 
-        if (gui.DataGet(self.wd.id, Data)) |d| {
+        if (gui.dataGet(self.wd.id, Data)) |d| {
             self.split_ratio = d.split_ratio;
             switch (self.dir) {
                 .horizontal => {
@@ -3046,7 +3044,7 @@ pub const PanedWidget = struct {
             }
         }
 
-        if (gui.AnimationGet(self.wd.id, "_split_ratio")) |a| {
+        if (gui.animationGet(self.wd.id, "_split_ratio")) |a| {
             self.split_ratio = a.lerp();
         }
 
@@ -3071,8 +3069,8 @@ pub const PanedWidget = struct {
                         r.w = width;
                     },
                 }
-                PathAddRect(r, Rect.all(thick));
-                PathFillConvex(self.wd.options.color().transparent(0.5));
+                pathAddRect(r, Rect.all(thick));
+                pathFillConvex(self.wd.options.color().transparent(0.5));
             }
         }
     }
@@ -3094,14 +3092,14 @@ pub const PanedWidget = struct {
     }
 
     fn animate(self: *Self, end_val: f32) void {
-        gui.Animate(self.wd.id, "_split_ratio", gui.Animation{ .start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000 });
+        gui.animate(self.wd.id, "_split_ratio", gui.Animation{ .start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000 });
     }
 
     pub fn processEvents(self: *Self) bool {
         var ret = false;
         const rs = self.wd.contentRectScale();
         var iter = EventIterator.init(self.wd.id, rs.r);
-        const captured = CaptureMouseMaintain(self.wd.id);
+        const captured = captureMouseMaintain(self.wd.id);
         while (iter.next()) |e| {
             if (e.evt == .mouse) {
                 var target: f32 = undefined;
@@ -3120,20 +3118,20 @@ pub const PanedWidget = struct {
                     },
                 }
 
-                if (captured or @fabs(mouse - target) < (5 * WindowNaturalScale())) {
+                if (captured or @fabs(mouse - target) < (5 * windowNaturalScale())) {
                     ret = true;
                     e.handled = true;
                     if (e.evt.mouse.state == .leftdown) {
                         // capture and start drag
-                        CaptureMouse(self.wd.id);
-                        DragPreStart(e.evt.mouse.p, cursor);
+                        captureMouse(self.wd.id);
+                        dragPreStart(e.evt.mouse.p, cursor);
                     } else if (e.evt.mouse.state == .leftup) {
                         // stop possible drag and capture
-                        CaptureMouse(null);
-                        DragEnd();
+                        captureMouse(null);
+                        dragEnd();
                     } else if (e.evt.mouse.state == .motion) {
                         // move if dragging
-                        if (Dragging(e.evt.mouse.p)) |dps| {
+                        if (dragging(e.evt.mouse.p)) |dps| {
                             _ = dps;
                             switch (self.dir) {
                                 .horizontal => {
@@ -3146,7 +3144,7 @@ pub const PanedWidget = struct {
 
                             self.split_ratio = math.max(0.0, math.min(1.0, self.split_ratio));
                         } else {
-                            CursorSet(e.evt.mouse.p, cursor);
+                            cursorSet(e.evt.mouse.p, cursor);
                         }
                     }
                 }
@@ -3184,7 +3182,7 @@ pub const PanedWidget = struct {
                     .vertical => r.h = r.h * self.split_ratio - handle_size / 2,
                 }
             }
-            return gui.PlaceIn(id, r, min_size, e, g);
+            return gui.placeIn(id, r, min_size, e, g);
         } else {
             var r = self.wd.contentRect();
             if (self.collapsed()) {
@@ -3215,7 +3213,7 @@ pub const PanedWidget = struct {
                     },
                 }
             }
-            return gui.PlaceIn(id, r, min_size, e, g);
+            return gui.placeIn(id, r, min_size, e, g);
         }
     }
 
@@ -3232,15 +3230,15 @@ pub const PanedWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        ClipSet(self.prevClip);
-        gui.DataSet(self.wd.id, Data{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
+        clipSet(self.prevClip);
+        gui.dataSet(self.wd.id, Data{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
-        _ = gui.ParentSet(self.wd.parent);
+        _ = gui.parentSet(self.wd.parent);
     }
 };
 
-pub fn TextLayout(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *TextLayoutWidget {
+pub fn textLayout(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *TextLayoutWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(TextLayoutWidget) catch unreachable;
     ret.* = TextLayoutWidget.init(src, id_extra, opts);
@@ -3268,12 +3266,12 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn install(self: *Self) void {
-        _ = ParentSet(self.widget());
+        _ = parentSet(self.widget());
         debug("{x} TextLayout {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
 
         const rs = self.wd.contentRectScale();
-        self.prevClip = Clip(rs.r);
+        self.prevClip = clip(rs.r);
         self.insert_pt = self.wd.contentRect().topleft();
     }
 
@@ -3390,7 +3388,7 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        const ret = PlaceIn(id, self.wd.contentRect(), min_size, e, g);
+        const ret = placeIn(id, self.wd.contentRect(), min_size, e, g);
         const i: usize = switch (g) {
             .upleft => 0,
             .upright => 1,
@@ -3417,14 +3415,14 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        ClipSet(self.prevClip);
+        clipSet(self.prevClip);
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
-        _ = ParentSet(self.wd.parent);
+        _ = parentSet(self.wd.parent);
     }
 };
 
-pub fn Context(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *ContextWidget {
+pub fn context(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *ContextWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(ContextWidget) catch unreachable;
     ret.* = ContextWidget.init(src, id_extra, opts);
@@ -3443,8 +3441,8 @@ pub const ContextWidget = struct {
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Self {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
-        self.winId = WindowCurrentId();
-        if (DataGet(self.wd.id, Point)) |a| {
+        self.winId = windowCurrentId();
+        if (dataGet(self.wd.id, Point)) |a| {
             self.active = true;
             self.activePt = a;
         }
@@ -3452,7 +3450,7 @@ pub const ContextWidget = struct {
     }
 
     pub fn install(self: *Self) void {
-        _ = ParentSet(self.widget());
+        _ = parentSet(self.widget());
         debug("{x} Context {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
     }
@@ -3474,7 +3472,7 @@ pub const ContextWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return PlaceIn(id, self.wd.contentRect(), min_size, e, g);
+        return placeIn(id, self.wd.contentRect(), min_size, e, g);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -3500,7 +3498,7 @@ pub const ContextWidget = struct {
                         self.active = true;
 
                         // scale the point back to natural so we can use it in Popup
-                        self.activePt = e.evt.mouse.p.scale(1 / WindowNaturalScale());
+                        self.activePt = e.evt.mouse.p.scale(1 / windowNaturalScale());
 
                         // offset just enough so when Popup first appears nothing is highlighted
                         self.activePt.x += 1;
@@ -3514,15 +3512,15 @@ pub const ContextWidget = struct {
     pub fn deinit(self: *Self) void {
         self.processMouseEventsAfter();
         if (self.active) {
-            DataSet(self.wd.id, self.activePt);
+            dataSet(self.wd.id, self.activePt);
         }
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
-        _ = ParentSet(self.wd.parent);
+        _ = parentSet(self.wd.parent);
     }
 };
 
-pub fn Overlay(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *OverlayWidget {
+pub fn overlay(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *OverlayWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(OverlayWidget) catch unreachable;
     ret.* = OverlayWidget.init(src, id_extra, opts);
@@ -3539,7 +3537,7 @@ pub const OverlayWidget = struct {
     }
 
     pub fn install(self: *Self) void {
-        _ = ParentSet(self.widget());
+        _ = parentSet(self.widget());
         debug("{x} Overlay {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
     }
@@ -3553,7 +3551,7 @@ pub const OverlayWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return PlaceIn(id, self.wd.contentRect(), min_size, e, g);
+        return placeIn(id, self.wd.contentRect(), min_size, e, g);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -3571,7 +3569,7 @@ pub const OverlayWidget = struct {
     pub fn deinit(self: *Self) void {
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
-        _ = ParentSet(self.wd.parent);
+        _ = parentSet(self.wd.parent);
     }
 };
 
@@ -3580,7 +3578,7 @@ pub const Direction = enum {
     vertical,
 };
 
-pub fn Box(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) *BoxWidget {
+pub fn box(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) *BoxWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(BoxWidget) catch unreachable;
     ret.* = BoxWidget.init(src, id_extra, dir, opts);
@@ -3605,14 +3603,14 @@ pub const BoxWidget = struct {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
         self.dir = dir;
-        if (DataGet(self.wd.id, f32)) |weight| {
+        if (dataGet(self.wd.id, f32)) |weight| {
             self.total_weight_prev = weight;
         }
         return self;
     }
 
     pub fn install(self: *Self) void {
-        _ = ParentSet(self.widget());
+        _ = parentSet(self.widget());
         debug("{x} Box {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
 
@@ -3621,7 +3619,7 @@ pub const BoxWidget = struct {
         self.childRect.x = 0;
         self.childRect.y = 0;
 
-        const ms = MinSize(self.wd.id, self.wd.options.min_size orelse .{});
+        const ms = minSize(self.wd.id, self.wd.options.min_size orelse .{});
         const newRect = self.wd.rect;
         defer self.wd.rect = newRect;
 
@@ -3644,7 +3642,7 @@ pub const BoxWidget = struct {
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         var current_weight: f32 = 0.0;
-        if ((self.dir == .horizontal and e.Horizontal()) or (self.dir == .vertical and e.Vertical())) {
+        if ((self.dir == .horizontal and e.horizontal()) or (self.dir == .vertical and e.vertical())) {
             current_weight = 1.0;
         }
         self.total_weight += current_weight;
@@ -3654,7 +3652,7 @@ pub const BoxWidget = struct {
             pixels_per_w = self.extra_pixels / w;
         }
 
-        var child_size = MinSize(id, min_size);
+        var child_size = minSize(id, min_size);
 
         var rect = self.childRect;
         rect.w = math.min(rect.w, child_size.w);
@@ -3678,7 +3676,7 @@ pub const BoxWidget = struct {
             self.childRect.y += rect.h;
         }
 
-        return PlaceIn(null, rect, child_size, e, g);
+        return placeIn(null, rect, child_size, e, g);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -3716,10 +3714,10 @@ pub const BoxWidget = struct {
         self.wd.minSizeReportToParent();
 
         if (self.total_weight > 0) {
-            DataSet(self.wd.id, self.total_weight);
+            dataSet(self.wd.id, self.total_weight);
         }
 
-        _ = ParentSet(self.wd.parent);
+        _ = parentSet(self.wd.parent);
     }
 };
 
@@ -3738,11 +3736,11 @@ pub const ScrollBar = struct {
     highlight: bool = false,
 
     pub fn run(src: std.builtin.SourceLocation, id_extra: usize, area: *ScrollAreaWidget, rect_in: Rect, opts: Options) void {
-        const parent = ParentGet();
+        const parent = parentGet();
         var self = Self{ .id = parent.extendID(src, id_extra), .parent = parent, .area = area };
-        self.data = DataGet(self.id, Data);
+        self.data = dataGet(self.id, Data);
 
-        const captured = CaptureMouseMaintain(self.id);
+        const captured = captureMouseMaintain(self.id);
         if (!captured) {
             self.data = null;
         }
@@ -3781,11 +3779,11 @@ pub const ScrollBar = struct {
         }
         self.grabRect = self.grabRect.insetAll(2);
         const grabrs = self.parent.screenRectScale(self.grabRect);
-        PathAddRect(grabrs.r, Rect.all(grabrs.r.w));
-        PathFillConvex(fill);
+        pathAddRect(grabrs.r, Rect.all(grabrs.r.w));
+        pathFillConvex(fill);
 
         if (self.data) |d| {
-            DataSet(self.id, d);
+            dataSet(self.id, d);
         }
     }
 
@@ -3798,8 +3796,8 @@ pub const ScrollBar = struct {
                     e.handled = true;
                     if (grabrs.contains(e.evt.mouse.p)) {
                         // capture and start drag
-                        CaptureMouse(self.id);
-                        DragPreStart(e.evt.mouse.p, .arrow);
+                        captureMouse(self.id);
+                        dragPreStart(e.evt.mouse.p, .arrow);
                         const off = e.evt.mouse.p.y - (grabrs.y + grabrs.h / 2);
                         self.data = Data{ .graboff = off };
                     } else {
@@ -3821,12 +3819,12 @@ pub const ScrollBar = struct {
                 } else if (e.evt.mouse.state == .leftup) {
                     e.handled = true;
                     // stop possible drag and capture
-                    CaptureMouse(null);
-                    DragEnd();
+                    captureMouse(null);
+                    dragEnd();
                 } else if (e.evt.mouse.state == .motion) {
                     e.handled = true;
                     // move if dragging
-                    if (Dragging(e.evt.mouse.p)) |dps| {
+                    if (dragging(e.evt.mouse.p)) |dps| {
                         _ = dps;
                         const min = rs.r.y + grabrs.h / 2;
                         const max = rs.r.y + rs.r.h - grabrs.h / 2;
@@ -3839,7 +3837,7 @@ pub const ScrollBar = struct {
                             f = (grabmid - min) / (max - min);
                         }
                         self.area.scrollToFraction(f);
-                    } else if (Highlight(e.evt.mouse.p, rs.r)) {
+                    } else if (highlight(e.evt.mouse.p, rs.r)) {
                         self.highlight = true;
                     }
                 }
@@ -3848,7 +3846,7 @@ pub const ScrollBar = struct {
     }
 };
 
-pub fn ScrollArea(src: std.builtin.SourceLocation, id_extra: usize, virtual_size: ?Size, opts: Options) *ScrollAreaWidget {
+pub fn scrollArea(src: std.builtin.SourceLocation, id_extra: usize, virtual_size: ?Size, opts: Options) *ScrollAreaWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(ScrollAreaWidget) catch unreachable;
     ret.* = ScrollAreaWidget.init(src, id_extra, virtual_size, opts);
@@ -3893,7 +3891,7 @@ pub const ScrollAreaWidget = struct {
             self.virtualSize = vs;
         }
 
-        if (DataGet(self.wd.id, Data)) |d| {
+        if (dataGet(self.wd.id, Data)) |d| {
             if (virtual_size == null) {
                 self.virtualSize = d.virtualSize;
             }
@@ -3907,22 +3905,22 @@ pub const ScrollAreaWidget = struct {
         debug("{x} ScrollArea {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
 
-        BubbleEvents(self.widget());
+        bubbleEvents(self.widget());
 
         const max_scroll = math.max(0, self.virtualSize.h - self.wd.contentRect().h);
         if (self.scroll < 0) {
-            self.scroll = math.min(0, math.max(-20 * self.wd.scale(), self.scroll + 250 * AnimationRate()));
+            self.scroll = math.min(0, math.max(-20 * self.wd.scale(), self.scroll + 250 * animationRate()));
             if (self.scroll < 0) {
                 cueFrame();
             }
         } else if (self.scroll > max_scroll) {
-            self.scroll = math.max(max_scroll, math.min(max_scroll + 20 * self.wd.scale(), self.scroll - 250 * AnimationRate()));
+            self.scroll = math.max(max_scroll, math.min(max_scroll + 20 * self.wd.scale(), self.scroll - 250 * animationRate()));
             if (self.scroll > max_scroll) {
                 cueFrame();
             }
         }
 
-        self.prevClip = Clip(self.wd.contentRectScale().r);
+        self.prevClip = clip(self.wd.contentRectScale().r);
 
         var rect = self.wd.contentRect();
         if (rect.w >= grab_thick) {
@@ -3931,7 +3929,7 @@ pub const ScrollAreaWidget = struct {
         }
         ScrollBar.run(@src(), 0, self, rect, self.wd.options);
 
-        _ = ParentSet(self.widget());
+        _ = parentSet(self.widget());
     }
 
     pub fn scrollInfo(self: *Self) ScrollInfo {
@@ -3983,12 +3981,12 @@ pub const ScrollAreaWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        var child_size = MinSize(id, min_size);
+        var child_size = minSize(id, min_size);
 
         const y = self.next_widget_ypos;
         const h = self.virtualSize.h - self.next_widget_ypos;
         const rect = Rect{ .x = 0, .y = y, .w = math.max(0, self.wd.contentRect().w - grab_thick), .h = math.min(h, child_size.h) };
-        const ret = PlaceIn(id, rect, child_size, e, g);
+        const ret = placeIn(id, rect, child_size, e, g);
         self.next_widget_ypos = (ret.y + ret.h);
         return ret;
     }
@@ -4044,7 +4042,7 @@ pub const ScrollAreaWidget = struct {
                 .mouse => {
                     if (e.evt.mouse.state == .leftdown) {
                         e.handled = true;
-                        FocusWidget(self.wd.id, &iter);
+                        focusWidget(self.wd.id, &iter);
                     } else if (e.evt.mouse.state == .wheel_y) {
                         e.handled = true;
                         self.scrollAfter += e.evt.mouse.wheel * 3;
@@ -4058,7 +4056,7 @@ pub const ScrollAreaWidget = struct {
     pub fn deinit(self: *Self) void {
         self.processEventsAfter();
 
-        ClipSet(self.prevClip);
+        clipSet(self.prevClip);
 
         var scroll = self.scroll;
         if (self.scrollAfter != 0) {
@@ -4067,15 +4065,15 @@ pub const ScrollAreaWidget = struct {
         }
 
         const d = Data{ .virtualSize = self.nextVirtualSize, .scroll = scroll };
-        DataSet(self.wd.id, d);
+        dataSet(self.wd.id, d);
 
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
-        _ = ParentSet(self.wd.parent);
+        _ = parentSet(self.wd.parent);
     }
 };
 
-pub fn Separator(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
+pub fn separator(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
     var wd = WidgetData.init(src, id_extra, opts);
     debug("{x} Spacer {}", .{ wd.id, wd.rect });
     wd.borderAndBackground();
@@ -4083,11 +4081,11 @@ pub fn Separator(src: std.builtin.SourceLocation, id_extra: usize, opts: Options
     wd.minSizeReportToParent();
 }
 
-pub fn Spacer(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-    _ = SpacerRect(src, id_extra, opts);
+pub fn spacer(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
+    _ = spacerRect(src, id_extra, opts);
 }
 
-pub fn SpacerRect(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Rect {
+pub fn spacerRect(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Rect {
     var wd = WidgetData.init(src, id_extra, opts);
     debug("{x} Spacer {}", .{ wd.id, wd.rect });
     wd.minSizeSetAndCue();
@@ -4095,7 +4093,7 @@ pub fn SpacerRect(src: std.builtin.SourceLocation, id_extra: usize, opts: Option
     return wd.rect;
 }
 
-pub fn Spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
+pub fn spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
     var Defaults: Options = .{
         .min_size = .{ .w = 50, .h = 50 },
     };
@@ -4114,7 +4112,7 @@ pub fn Spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
 
     var angle: f32 = 0;
     var anim = Animation{ .start_val = 0, .end_val = 2 * math.pi, .start_time = 0, .end_time = 4_500_000 };
-    if (AnimationGet(wd.id, "_angle")) |a| {
+    if (animationGet(wd.id, "_angle")) |a| {
         // existing animation
         var aa = a;
         if (aa.end_time <= 0) {
@@ -4122,22 +4120,22 @@ pub fn Spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
             aa = anim;
             aa.start_time = a.end_time;
             aa.end_time += a.end_time;
-            Animate(wd.id, "_angle", aa);
+            animate(wd.id, "_angle", aa);
         }
         angle = aa.lerp();
     } else {
         // first frame we are seeing the spinner
-        Animate(wd.id, "_angle", anim);
+        animate(wd.id, "_angle", anim);
     }
 
     const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
-    PathAddArc(center, math.min(r.w, r.h) / 3, angle, 0, false);
+    pathAddArc(center, math.min(r.w, r.h) / 3, angle, 0, false);
     //PathAddPoint(center);
     //PathFillConvex(options.color());
-    PathStroke(false, 3.0 * rs.s, .none, options.color());
+    pathStroke(false, 3.0 * rs.s, .none, options.color());
 }
 
-pub fn Scale(src: std.builtin.SourceLocation, id_extra: usize, initial_scale: f32, opts: Options) *ScaleWidget {
+pub fn scale(src: std.builtin.SourceLocation, id_extra: usize, initial_scale: f32, opts: Options) *ScaleWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(ScaleWidget) catch unreachable;
     ret.* = ScaleWidget.init(src, id_extra, initial_scale, opts);
@@ -4154,14 +4152,14 @@ pub const ScaleWidget = struct {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
         self.scale = initial_scale;
-        if (DataGet(self.wd.id, f32)) |s| {
+        if (dataGet(self.wd.id, f32)) |s| {
             self.scale = s;
         }
         return self;
     }
 
     pub fn install(self: *Self) void {
-        _ = ParentSet(self.widget());
+        _ = parentSet(self.widget());
         debug("{x} Scale {d} {}", .{ self.wd.id, self.scale, self.wd.rect });
         self.wd.borderAndBackground();
     }
@@ -4196,7 +4194,7 @@ pub const ScaleWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return PlaceIn(id, self.wd.contentRect().justSize().scale(1.0 / self.scale), min_size, e, g);
+        return placeIn(id, self.wd.contentRect().justSize().scale(1.0 / self.scale), min_size, e, g);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -4216,14 +4214,14 @@ pub const ScaleWidget = struct {
 
     pub fn deinit(self: *Self) void {
         self.processEventsAfter();
-        DataSet(self.wd.id, self.scale);
+        dataSet(self.wd.id, self.scale);
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
-        _ = ParentSet(self.wd.parent);
+        _ = parentSet(self.wd.parent);
     }
 };
 
-pub fn Menu(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) *MenuWidget {
+pub fn menu(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) *MenuWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(MenuWidget) catch unreachable;
     ret.* = MenuWidget.init(src, id_extra, dir, opts);
@@ -4246,9 +4244,9 @@ pub const MenuWidget = struct {
         self.wd = WidgetData.init(src, id_extra, opts);
 
         self.dir = dir;
-        if (MenuGet()) |m| {
+        if (menuGet()) |m| {
             self.submenus_activated = m.submenus_activated;
-        } else if (DataGet(self.wd.id, bool)) |a| {
+        } else if (dataGet(self.wd.id, bool)) |a| {
             self.submenus_activated = a;
         }
 
@@ -4256,8 +4254,8 @@ pub const MenuWidget = struct {
     }
 
     pub fn install(self: *Self) void {
-        _ = ParentSet(self.widget());
-        self.parentMenu = MenuSet(self);
+        _ = parentSet(self.widget());
+        self.parentMenu = menuSet(self);
         debug("{x} Menu {}", .{ self.wd.id, self.wd.rect });
 
         self.wd.borderAndBackground();
@@ -4281,7 +4279,7 @@ pub const MenuWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return PlaceIn(id, self.wd.contentRect(), min_size, e, g);
+        return placeIn(id, self.wd.contentRect(), min_size, e, g);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -4298,22 +4296,22 @@ pub const MenuWidget = struct {
 
     pub fn deinit(self: *Self) void {
         self.box.deinit();
-        DataSet(self.wd.id, self.submenus_activated);
+        dataSet(self.wd.id, self.submenus_activated);
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
-        _ = MenuSet(self.parentMenu);
-        _ = ParentSet(self.wd.parent);
+        _ = menuSet(self.parentMenu);
+        _ = parentSet(self.wd.parent);
     }
 };
 
-pub fn MenuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, submenu: bool, opts: Options) ?Rect {
-    var mi = MenuItem(src, id_extra, submenu, opts);
+pub fn menuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, submenu: bool, opts: Options) ?Rect {
+    var mi = menuItem(src, id_extra, submenu, opts);
 
     var labelopts = opts.plain();
     if (mi.active()) {
         labelopts = labelopts.override(.{ .color_style = .accent });
     }
-    LabelNoFormat(@src(), 0, label, labelopts);
+    labelNoFormat(@src(), 0, label_str, labelopts);
 
     var ret: ?Rect = null;
     if (mi.activeRect()) |r| {
@@ -4325,7 +4323,7 @@ pub fn MenuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label: []
     return ret;
 }
 
-pub fn MenuItem(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, opts: Options) *MenuItemWidget {
+pub fn menuItem(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, opts: Options) *MenuItemWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(MenuItemWidget) catch unreachable;
     ret.* = MenuItemWidget.init(src, id_extra, submenu, opts);
@@ -4352,16 +4350,16 @@ pub const MenuItemWidget = struct {
         self.wd = WidgetData.init(src, id_extra, options);
         self.submenu = submenu;
         if (!self.wd.rect.empty()) {
-            TabIndexSet(self.wd.id, options.tab_index);
+            tabIndexSet(self.wd.id, options.tab_index);
         }
         return self;
     }
 
     pub fn install(self: *Self) void {
-        _ = ParentSet(self.widget());
+        _ = parentSet(self.widget());
         debug("{x} MenuItem {}", .{ self.wd.id, self.wd.rect });
 
-        if (self.wd.id == FocusedWidgetId()) {
+        if (self.wd.id == focusedWidgetId()) {
             self.focused = true;
         }
 
@@ -4369,22 +4367,22 @@ pub const MenuItemWidget = struct {
 
         if (self.wd.options.borderGet().nonZero()) {
             const rs = self.wd.borderRectScale();
-            PathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
+            pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
             var col = Color.lerp(self.wd.options.color_bg(), 0.3, self.wd.options.color());
-            PathFillConvex(col);
+            pathFillConvex(col);
         }
 
         if (self.active()) {
             // hovered
-            const fill = ThemeGet().color_accent_bg;
+            const fill = themeGet().color_accent_bg;
             const rs = self.wd.backgroundRectScale();
-            PathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            PathFillConvex(fill);
+            pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
+            pathFillConvex(fill);
         } else if (self.wd.options.background orelse false) {
             const fill = self.wd.options.color_bg();
             const rs = self.wd.backgroundRectScale();
-            PathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            PathFillConvex(fill);
+            pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
+            pathFillConvex(fill);
         }
     }
 
@@ -4395,8 +4393,8 @@ pub const MenuItemWidget = struct {
     pub fn activeRect(self: *const Self) ?Rect {
         var act = false;
         if (self.submenu) {
-            if (MenuGet().?.submenus_activated) {
-                if (FocusedWidgetIdInCurrentWindow()) |id| {
+            if (menuGet().?.submenus_activated) {
+                if (focusedWidgetIdInCurrentWindow()) |id| {
                     if (id == self.wd.id) {
                         act = true;
                     }
@@ -4408,7 +4406,7 @@ pub const MenuItemWidget = struct {
 
         if (act) {
             const rs = self.wd.borderRectScale();
-            return rs.r.scale(1 / WindowNaturalScale());
+            return rs.r.scale(1 / windowNaturalScale());
         } else {
             return null;
         }
@@ -4423,8 +4421,8 @@ pub const MenuItemWidget = struct {
                     if (e.evt.mouse.state == .leftdown) {
                         e.handled = true;
                         if (self.submenu) {
-                            FocusWidget(self.wd.id, &iter);
-                            MenuGet().?.submenus_activated = true;
+                            focusWidget(self.wd.id, &iter);
+                            menuGet().?.submenus_activated = true;
                         }
                     } else if (e.evt.mouse.state == .leftup) {
                         e.handled = true;
@@ -4435,14 +4433,14 @@ pub const MenuItemWidget = struct {
                         e.handled = true;
                         // TODO don't do the rest here if the menu has an existing popup and the motion is towards the popup
                         self.highlight = true;
-                        if (MenuGet().?.submenus_activated) {
-                            const winId = FocusedWindowId();
-                            FocusWindow(null, null);
-                            FocusWidget(self.wd.id, null);
-                            if (!PopupIn()) {
+                        if (menuGet().?.submenus_activated) {
+                            const winId = focusedWindowId();
+                            focusWindow(null, null);
+                            focusWidget(self.wd.id, null);
+                            if (!popupIn()) {
                                 // if we are in a regular window (like File), then we don't want
                                 // to focus the main window, so keep the focus on the popups
-                                FocusWindow(winId, null);
+                                focusWindow(winId, null);
                             }
                         }
                     }
@@ -4451,8 +4449,8 @@ pub const MenuItemWidget = struct {
                     if (e.evt.key.state == .down and e.evt.key.keysym == .space) {
                         e.handled = true;
                         if (self.submenu) {
-                            FocusWidget(self.wd.id, &iter);
-                            MenuGet().?.submenus_activated = true;
+                            focusWidget(self.wd.id, &iter);
+                            menuGet().?.submenus_activated = true;
                         } else {
                             self.activated = true;
                         }
@@ -4462,7 +4460,7 @@ pub const MenuItemWidget = struct {
             }
         }
 
-        BubbleEvents(self.widget());
+        bubbleEvents(self.widget());
     }
 
     fn widget(self: *Self) Widget {
@@ -4474,7 +4472,7 @@ pub const MenuItemWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return PlaceIn(id, self.wd.contentRect(), min_size, e, g);
+        return placeIn(id, self.wd.contentRect(), min_size, e, g);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -4492,7 +4490,7 @@ pub const MenuItemWidget = struct {
     pub fn deinit(self: *Self) void {
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
-        _ = ParentSet(self.wd.parent);
+        _ = parentSet(self.wd.parent);
     }
 };
 
@@ -4505,52 +4503,52 @@ pub const LabelWidget = struct {
     };
 
     wd: WidgetData = undefined,
-    label: []const u8 = undefined,
+    label_str: []const u8 = undefined,
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) Self {
         var cw = current_window orelse unreachable;
-        const label = std.fmt.allocPrint(cw.arena, fmt, args) catch unreachable;
-        return Self.initNoFormat(src, id_extra, label, opts);
+        const l = std.fmt.allocPrint(cw.arena, fmt, args) catch unreachable;
+        return Self.initNoFormat(src, id_extra, l, opts);
     }
 
-    pub fn initNoFormat(src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) Self {
+    pub fn initNoFormat(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) Self {
         var self = Self{};
         const options = Defaults.override(opts);
-        self.label = label;
-        const size = options.font().textSize(self.label);
+        self.label_str = label_str;
+        const size = options.font().textSize(self.label_str);
         self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
         self.wd.placeInsideNoExpand();
         return self;
     }
 
     pub fn install(self: *Self) void {
-        debug("{x} Label \"{s:<10}\" {}", .{ self.wd.id, self.label, self.wd.rect });
+        debug("{x} Label \"{s:<10}\" {}", .{ self.wd.id, self.label_str, self.wd.rect });
         self.wd.borderAndBackground();
         const rs = self.wd.contentRectScale();
 
-        const oldclip = Clip(rs.r);
-        if (!ClipGet().empty()) {
-            renderText(self.wd.options.font(), self.label, rs, self.wd.options.color());
+        const oldclip = clip(rs.r);
+        if (!clipGet().empty()) {
+            renderText(self.wd.options.font(), self.label_str, rs, self.wd.options.color());
         }
-        ClipSet(oldclip);
+        clipSet(oldclip);
 
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
     }
 };
 
-pub fn Label(src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) void {
+pub fn label(src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) void {
     var lw = LabelWidget.init(src, id_extra, fmt, args, opts);
     lw.install();
 }
 
-pub fn LabelNoFormat(src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) void {
-    var lw = LabelWidget.initNoFormat(src, id_extra, label, opts);
+pub fn labelNoFormat(src: std.builtin.SourceLocation, id_extra: usize, str: []const u8, opts: Options) void {
+    var lw = LabelWidget.initNoFormat(src, id_extra, str, opts);
     lw.install();
 }
 
-pub fn Icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) void {
-    const size = Size{ .w = IconWidth(name, tvg_bytes, height), .h = height };
+pub fn icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) void {
+    const size = Size{ .w = iconWidth(name, tvg_bytes, height), .h = height };
 
     var wd = WidgetData.init(src, id_extra, opts.overrideMinSizeContent(size));
     debug("{x} Icon \"{s:<10}\" {}", .{ wd.id, name, wd.rect });
@@ -4565,7 +4563,7 @@ pub fn Icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name:
     wd.minSizeReportToParent();
 }
 
-pub fn ButtonContainer(src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) *ButtonContainerWidget {
+pub fn buttonContainer(src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) *ButtonContainerWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(ButtonContainerWidget) catch unreachable;
     ret.* = ButtonContainerWidget.init(src, id_extra, show_focus, opts);
@@ -4586,29 +4584,29 @@ pub const ButtonContainerWidget = struct {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
         if (!self.wd.rect.empty()) {
-            TabIndexSet(self.wd.id, opts.tab_index);
+            tabIndexSet(self.wd.id, opts.tab_index);
         }
         self.show_focus = show_focus;
         return self;
     }
 
     pub fn install(self: *Self) void {
-        _ = ParentSet(self.widget());
+        _ = parentSet(self.widget());
 
         debug("{x} ButtonContainer {}", .{ self.wd.id, self.wd.rect });
 
-        self.captured = CaptureMouseMaintain(self.wd.id);
+        self.captured = captureMouseMaintain(self.wd.id);
         self.clicked = self.processEvents();
         if (self.clicked) {
             cueFrame();
         }
-        self.focused = (self.wd.id == FocusedWidgetId());
+        self.focused = (self.wd.id == focusedWidgetId());
 
         if (self.wd.options.borderGet().nonZero()) {
             const rs = self.wd.borderRectScale();
-            PathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
+            pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
             var col = Color.lerp(self.wd.options.color_bg(), 0.3, self.wd.options.color());
-            PathFillConvex(col);
+            pathFillConvex(col);
         }
 
         if (self.wd.options.background orelse false) {
@@ -4624,8 +4622,8 @@ pub const ButtonContainerWidget = struct {
                 fill = self.wd.options.color_bg();
             }
 
-            PathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            PathFillConvex(fill);
+            pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
+            pathFillConvex(fill);
         }
 
         if (self.focused and self.show_focus) {
@@ -4642,13 +4640,13 @@ pub const ButtonContainerWidget = struct {
                 .mouse => {
                     if (e.evt.mouse.state == .leftdown) {
                         e.handled = true;
-                        CaptureMouse(self.wd.id);
+                        captureMouse(self.wd.id);
                         self.captured = true;
-                        FocusWidget(self.wd.id, &iter);
+                        focusWidget(self.wd.id, &iter);
                     } else if (e.evt.mouse.state == .leftup) {
                         e.handled = true;
                         if (self.captured) {
-                            CaptureMouse(null);
+                            captureMouse(null);
                             self.captured = false;
                             if (rs.r.contains(e.evt.mouse.p)) {
                                 ret = true;
@@ -4656,7 +4654,7 @@ pub const ButtonContainerWidget = struct {
                         }
                     } else if (e.evt.mouse.state == .motion) {
                         e.handled = true;
-                        if (Highlight(e.evt.mouse.p, rs.r)) {
+                        if (highlight(e.evt.mouse.p, rs.r)) {
                             self.highlight = true;
                         }
                     }
@@ -4671,7 +4669,7 @@ pub const ButtonContainerWidget = struct {
             }
         }
 
-        BubbleEvents(self.widget());
+        bubbleEvents(self.widget());
 
         return ret;
     }
@@ -4685,7 +4683,7 @@ pub const ButtonContainerWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return PlaceIn(id, self.wd.contentRect(), min_size, e, g);
+        return placeIn(id, self.wd.contentRect(), min_size, e, g);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -4703,7 +4701,7 @@ pub const ButtonContainerWidget = struct {
     pub fn deinit(self: *Self) void {
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
-        _ = ParentSet(self.wd.parent);
+        _ = parentSet(self.wd.parent);
     }
 };
 
@@ -4718,33 +4716,33 @@ pub const ButtonWidget = struct {
     };
 
     bc: ButtonContainerWidget = undefined,
-    label: []const u8 = undefined,
+    label_str: []const u8 = undefined,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, str: []const u8, opts: Options) Self {
         return Self{
             .bc = ButtonContainerWidget.init(src, id_extra, true, Defaults.override(opts)),
-            .label = label,
+            .label_str = str,
         };
     }
 
     pub fn install(self: *ButtonWidget) bool {
-        debug("Button {s}", .{self.label});
+        debug("Button {s}", .{self.label_str});
         self.bc.install();
         const clicked = self.bc.clicked;
 
-        LabelNoFormat(@src(), 0, self.label, self.bc.wd.options.plain().override(.{ .gravity = .center }));
+        labelNoFormat(@src(), 0, self.label_str, self.bc.wd.options.plain().override(.{ .gravity = .center }));
 
         self.bc.deinit();
         return clicked;
     }
 };
 
-pub fn Button(src: std.builtin.SourceLocation, id_extra: usize, label: []const u8, opts: Options) bool {
-    var button = ButtonWidget.init(src, id_extra, label, opts);
-    return button.install();
+pub fn button(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) bool {
+    var bw = ButtonWidget.init(src, id_extra, label_str, opts);
+    return bw.install();
 }
 
-pub fn ButtonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) bool {
+pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) bool {
     var Defaults: Options = .{
         .margin = gui.Rect.all(4),
         .corner_radius = Rect.all(5),
@@ -4755,48 +4753,48 @@ pub fn ButtonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32,
     };
     const options = Defaults.override(opts);
     debug("ButtonIcon \"{s}\" {}", .{ name, options });
-    var bc = ButtonContainer(src, id_extra, true, options);
+    var bc = buttonContainer(src, id_extra, true, options);
     defer bc.deinit();
 
-    Icon(@src(), 0, height, name, tvg_bytes, options.plain());
+    icon(@src(), 0, height, name, tvg_bytes, options.plain());
 
     return bc.clicked;
 }
 
-pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label: []const u8, options: Options) void {
-    debug("Checkbox {s}", .{label});
-    var bc = ButtonContainer(src, id_extra, false, options.override(.{ .background = false }));
+pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label_str: []const u8, options: Options) void {
+    debug("Checkbox {s}", .{label_str});
+    var bc = buttonContainer(src, id_extra, false, options.override(.{ .background = false }));
     defer bc.deinit();
 
     if (bc.clicked) {
         target.* = !target.*;
     }
 
-    var box = Box(@src(), 0, .horizontal, options.plain().override(.{ .expand = .both }));
-    defer box.deinit();
+    var b = box(@src(), 0, .horizontal, options.plain().override(.{ .expand = .both }));
+    defer b.deinit();
 
     var check_size = options.font().lineSkip();
-    const r = SpacerRect(@src(), 0, .{ .min_size = Size.all(check_size), .gravity = .left });
+    const r = spacerRect(@src(), 0, .{ .min_size = Size.all(check_size), .gravity = .left });
 
-    var rs = ParentGet().screenRectScale(r);
+    var rs = parentGet().screenRectScale(r);
     const thick_focus = 2;
     rs.r = rs.r.insetAll(thick_focus / 2 * rs.s);
 
-    PathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
+    pathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
     var col = Color.lerp(options.color_bg(), 0.3, options.color());
-    PathFillConvex(col);
+    pathFillConvex(col);
 
     if (bc.focused) {
-        PathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
-        PathStroke(true, thick_focus * rs.s, .none, ThemeGet().color_accent_bg);
+        pathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
+        pathStroke(true, thick_focus * rs.s, .none, themeGet().color_accent_bg);
     }
 
     rs.r = rs.r.insetAll(0.5 * rs.s);
 
-    PathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
+    pathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
     var fill = options.color_bg();
     if (target.*) {
-        fill = ThemeGet().color_accent_bg;
+        fill = themeGet().color_accent_bg;
     }
 
     if (bc.captured) {
@@ -4807,7 +4805,7 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
         fill = Color.lerp(fill, 0.1, options.color());
     }
 
-    PathFillConvex(fill);
+    pathFillConvex(fill);
 
     if (target.*) {
         const pad = math.max(1.0, rs.r.w / 6);
@@ -4820,19 +4818,19 @@ pub fn Checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
 
         thick /= 1.5;
 
-        PathAddPoint(Point{ .x = x - third, .y = y - third });
-        PathAddPoint(Point{ .x = x, .y = y });
-        PathAddPoint(Point{ .x = x + third * 2, .y = y - third * 2 });
-        PathStroke(false, thick, .square, ThemeGet().color_accent);
+        pathAddPoint(Point{ .x = x - third, .y = y - third });
+        pathAddPoint(Point{ .x = x, .y = y });
+        pathAddPoint(Point{ .x = x + third * 2, .y = y - third * 2 });
+        pathStroke(false, thick, .square, themeGet().color_accent);
     }
 
-    LabelNoFormat(@src(), 0, label, options.override(.{
+    labelNoFormat(@src(), 0, label_str, options.override(.{
         .background = false,
         .margin = .{ .x = 4, .y = 0, .w = 0, .h = 0 },
     }));
 }
 
-pub fn TextEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) void {
+pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) void {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(TextEntryWidget) catch unreachable;
     ret.* = TextEntryWidget.init(src, id_extra, width, text, opts);
@@ -4868,7 +4866,7 @@ pub const TextEntryWidget = struct {
         self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
 
         if (!self.wd.rect.empty()) {
-            TabIndexSet(self.wd.id, options.tab_index);
+            tabIndexSet(self.wd.id, options.tab_index);
         }
         self.text = text;
         self.len = std.mem.indexOfScalar(u8, self.text, 0) orelse self.text.len;
@@ -4876,22 +4874,22 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn install(self: *Self) void {
-        _ = ParentSet(self.widget());
+        _ = parentSet(self.widget());
         debug("{x} Text {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
 
-        self.captured = CaptureMouseMaintain(self.wd.id);
+        self.captured = captureMouseMaintain(self.wd.id);
 
         self.processEvents();
-        const focused = (self.wd.id == FocusedWidgetId());
+        const focused = (self.wd.id == focusedWidgetId());
 
         const rs = self.wd.contentRectScale();
 
-        const oldclip = Clip(rs.r);
-        if (!ClipGet().empty()) {
+        const oldclip = clip(rs.r);
+        if (!clipGet().empty()) {
             renderText(self.wd.options.font(), self.text[0..self.len], rs, self.wd.options.color());
         }
-        ClipSet(oldclip);
+        clipSet(oldclip);
 
         if (focused) {
             self.wd.focusBorder();
@@ -4931,12 +4929,12 @@ pub const TextEntryWidget = struct {
                 .mouse => {
                     if (e.evt.mouse.state == .leftdown) {
                         e.handled = true;
-                        CaptureMouse(self.wd.id);
+                        captureMouse(self.wd.id);
                         self.captured = true;
-                        FocusWidget(self.wd.id, &iter);
+                        focusWidget(self.wd.id, &iter);
                     } else if (e.evt.mouse.state == .leftup) {
                         e.handled = true;
-                        CaptureMouse(null);
+                        captureMouse(null);
                         self.captured = false;
                     } else if (e.evt.mouse.state == .motion) {}
                 },
@@ -4944,7 +4942,7 @@ pub const TextEntryWidget = struct {
             }
         }
 
-        BubbleEvents(self.widget());
+        bubbleEvents(self.widget());
     }
 
     fn widget(self: *Self) Widget {
@@ -4956,7 +4954,7 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return PlaceIn(id, self.wd.contentRect(), min_size, e, g);
+        return placeIn(id, self.wd.contentRect(), min_size, e, g);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -4974,7 +4972,7 @@ pub const TextEntryWidget = struct {
     pub fn deinit(self: *Self) void {
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
-        _ = ParentSet(self.wd.parent);
+        _ = parentSet(self.wd.parent);
 
         if (self.allocator) |a| {
             a.destroy(self);
@@ -5199,7 +5197,7 @@ pub const RectScale = struct {
 };
 
 pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) void {
-    if (text.len == 0 or ClipGet().intersect(rs.r).empty()) {
+    if (text.len == 0 or clipGet().intersect(rs.r).empty()) {
         return;
     }
 
@@ -5210,7 +5208,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
     if (drqlen > 1) {
         var txt = cw.arena.alloc(u8, text.len) catch unreachable;
         std.mem.copy(u8, txt, text);
-        var cmd = RenderCmd{ .clip = ClipGet(), .cmd = .{ .text = .{ .font = font, .text = txt, .rs = rs, .color = color } } };
+        var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .text = .{ .font = font, .text = txt, .rs = rs, .color = color } } };
         cw.deferred_render_queues.items[drqlen - 2].cmds.append(cmd) catch unreachable;
         return;
     }
@@ -5221,7 +5219,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
     const target_fraction = target_size / ask_size;
 
     const sized_font = font.resize(ask_size);
-    var fce = FontCacheGet(sized_font);
+    var fce = fontCacheGet(sized_font);
 
     // make sure the cache has all the glyphs we need
     var utf8it = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
@@ -5385,7 +5383,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
 }
 
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colormod: Color) void {
-    if (ClipGet().intersect(rs.r).empty()) {
+    if (clipGet().intersect(rs.r).empty()) {
         return;
     }
 
@@ -5396,7 +5394,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
     if (drqlen > 1) {
         var name_copy = cw.arena.alloc(u8, name.len) catch unreachable;
         std.mem.copy(u8, name_copy, name);
-        var cmd = RenderCmd{ .clip = ClipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .colormod = colormod } } };
+        var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .colormod = colormod } } };
         cw.deferred_render_queues.items[drqlen - 2].cmds.append(cmd) catch unreachable;
         return;
     }
@@ -5406,7 +5404,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
     const ask_height = @ceil(target_size);
     const target_fraction = target_size / ask_height;
 
-    const ice = IconTexture(name, tvg_bytes, ask_height);
+    const ice = iconTexture(name, tvg_bytes, ask_height);
 
     var vtx = std.ArrayList(Vertex).initCapacity(cw.arena, 4) catch unreachable;
     defer vtx.deinit();
@@ -5505,7 +5503,7 @@ pub const WidgetData = struct {
         var self = WidgetData{};
         self.options = opts;
 
-        self.parent = ParentGet();
+        self.parent = parentGet();
         self.id = self.parent.extendID(src, id_extra);
         self.min_size = self.options.min_size orelse Size{};
         if (self.options.rect) |r| {
@@ -5524,7 +5522,7 @@ pub const WidgetData = struct {
     }
 
     pub fn visible(self: *const WidgetData) bool {
-        return !ClipGet().intersect(self.borderRectScale().r).empty();
+        return !clipGet().intersect(self.borderRectScale().r).empty();
     }
 
     pub fn borderAndBackground(self: *const WidgetData) void {
@@ -5532,31 +5530,31 @@ pub const WidgetData = struct {
         if (self.options.borderGet().nonZero()) {
             bg = true;
             const rs = self.borderRectScale();
-            PathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
+            pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
             var col = Color.lerp(self.options.color_bg(), 0.3, self.options.color());
-            PathFillConvex(col);
+            pathFillConvex(col);
         }
 
         if (bg) {
             const rs = self.backgroundRectScale();
-            PathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-            PathFillConvex(self.options.color_bg());
+            pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
+            pathFillConvex(self.options.color_bg());
         }
     }
 
     pub fn focusBorder(self: *const WidgetData) void {
         const thick_px = 4;
         const rs = self.borderRectScale();
-        PathAddRect(rs.r.insetAll(thick_px / 2 - 1), self.options.corner_radiusGet().scale(rs.s));
+        pathAddRect(rs.r.insetAll(thick_px / 2 - 1), self.options.corner_radiusGet().scale(rs.s));
         if ((self.options.color_style orelse .custom) == .accent) {
-            PathStroke(true, thick_px, .none, ThemeGet().color_control);
+            pathStroke(true, thick_px, .none, themeGet().color_control);
         } else {
-            PathStroke(true, thick_px, .none, ThemeGet().color_accent_bg);
+            pathStroke(true, thick_px, .none, themeGet().color_accent_bg);
         }
     }
 
     pub fn placeInsideNoExpand(self: *WidgetData) void {
-        self.rect = PlaceIn(null, self.rect, self.min_size, .none, self.options.gravity orelse .upleft);
+        self.rect = placeIn(null, self.rect, self.min_size, .none, self.options.gravity orelse .upleft);
     }
 
     pub fn scale(self: *const WidgetData) f32 {
@@ -5596,7 +5594,7 @@ pub const WidgetData = struct {
     }
 
     pub fn minSizeSetAndCue(self: *const WidgetData) void {
-        if (MinSizeGetPrevious(self.id)) |ms| {
+        if (minSizeGetPrevious(self.id)) |ms| {
             // If the size we got was exactly our previous min size then our min size
             // was a binding constraint.  So if our min size changed it might cause
             // layout changes.
@@ -5615,7 +5613,7 @@ pub const WidgetData = struct {
             // first frame.
             cueFrame();
         }
-        MinSizeSet(self.id, self.min_size);
+        minSizeSet(self.id, self.min_size);
     }
 
     pub fn minSizeReportToParent(self: *const WidgetData) void {
@@ -5837,62 +5835,62 @@ pub fn demo() void {
     const g = struct {
         var show_demo: bool = true;
     };
-    var float = gui.FloatingWindow(@src(), 0, false, null, &g.show_demo, .{});
+    var float = gui.floatingWindow(@src(), 0, false, null, &g.show_demo, .{});
     defer float.deinit();
 
-    var box = gui.Box(@src(), 0, .vertical, .{ .expand = .both });
-    defer box.deinit();
+    var b = gui.box(@src(), 0, .vertical, .{ .expand = .both });
+    defer b.deinit();
 
-    var paned = gui.Paned(@src(), 0, .horizontal, 400, .{ .expand = .both });
-    const collapsed = paned.collapsed();
+    var pane = gui.paned(@src(), 0, .horizontal, 400, .{ .expand = .both });
+    const collapsed = pane.collapsed();
 
-    podcastSide(paned);
-    episodeSide(paned);
+    podcastSide(pane);
+    episodeSide(pane);
 
-    paned.deinit();
+    pane.deinit();
 
     if (collapsed) {
         player();
     }
 }
 
-fn podcastSide(paned: *gui.PanedWidget) void {
+fn podcastSide(pane: *gui.PanedWidget) void {
     const d = struct {
         var show_dialog: bool = false;
     };
-    var box = gui.Box(@src(), 0, .vertical, .{ .expand = .both });
-    defer box.deinit();
+    var b = gui.box(@src(), 0, .vertical, .{ .expand = .both });
+    defer b.deinit();
 
     {
-        var overlay = gui.Overlay(@src(), 0, .{ .expand = .horizontal });
-        defer overlay.deinit();
+        var over = gui.overlay(@src(), 0, .{ .expand = .horizontal });
+        defer over.deinit();
 
         {
-            var menu = gui.Menu(@src(), 0, .horizontal, .{ .expand = .horizontal });
-            defer menu.deinit();
+            var m = gui.menu(@src(), 0, .horizontal, .{ .expand = .horizontal });
+            defer m.deinit();
 
-            gui.Spacer(@src(), 0, .{ .expand = .horizontal });
+            gui.spacer(@src(), 0, .{ .expand = .horizontal });
 
-            if (gui.MenuItemLabel(@src(), 0, "Hello", true, .{})) |r| {
-                var fw = gui.Popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, menu, .{});
+            if (gui.menuItemLabel(@src(), 0, "Hello", true, .{})) |r| {
+                var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &m.submenus_activated, .{});
                 defer fw.deinit();
-                if (gui.MenuItemLabel(@src(), 0, "Add RSS", false, .{})) |rr| {
+                if (gui.menuItemLabel(@src(), 0, "Add RSS", false, .{})) |rr| {
                     _ = rr;
                     d.show_dialog = true;
-                    gui.MenuGet().?.close();
+                    gui.menuGet().?.close();
                 }
             }
         }
 
-        gui.Label(@src(), 0, "fps {d}", .{@round(gui.FPS())}, .{});
+        gui.label(@src(), 0, "fps {d}", .{@round(gui.FPS())}, .{});
         //std.debug.print("fps: {d}\n", .{@round(gui.FPS())});
     }
 
     if (d.show_dialog) {
-        var dialog = gui.FloatingWindow(@src(), 0, true, null, &d.show_dialog, .{});
+        var dialog = gui.floatingWindow(@src(), 0, true, null, &d.show_dialog, .{});
         defer dialog.deinit();
 
-        gui.LabelNoFormat(@src(), 0, "Add RSS Feed", .{ .gravity = .center });
+        gui.labelNoFormat(@src(), 0, "Add RSS Feed", .{ .gravity = .center });
 
         const TextEntryText = struct {
             //var text = array(u8, 100, "abcdefghijklmnopqrstuvwxyz");
@@ -5904,19 +5902,19 @@ fn podcastSide(paned: *gui.PanedWidget) void {
             }
         };
 
-        gui.TextEntry(@src(), 0, 26.0, &TextEntryText.text1, .{ .gravity = .center });
+        gui.textEntry(@src(), 0, 26.0, &TextEntryText.text1, .{ .gravity = .center });
 
-        var box2 = gui.Box(@src(), 0, .horizontal, .{ .gravity = .right });
+        var box2 = gui.box(@src(), 0, .horizontal, .{ .gravity = .right });
         defer box2.deinit();
-        if (gui.Button(@src(), 0, "Ok", .{})) {
+        if (gui.button(@src(), 0, "Ok", .{})) {
             dialog.close();
         }
-        if (gui.Button(@src(), 0, "Cancel", .{})) {
+        if (gui.button(@src(), 0, "Cancel", .{})) {
             dialog.close();
         }
     }
 
-    var scroll = gui.ScrollArea(@src(), 0, null, .{ .expand = .both, .color_style = .window, .background = false });
+    var scroll = gui.scrollArea(@src(), 0, null, .{ .expand = .both, .color_style = .window, .background = false });
 
     const oo3 = gui.Options{
         .expand = .horizontal,
@@ -5933,7 +5931,7 @@ fn podcastSide(paned: *gui.PanedWidget) void {
         var corner = gui.Rect.all(0);
 
         if (i != 1) {
-            gui.Separator(@src(), i, oo3.override(.{ .margin = margin, .min_size = .{ .w = 1, .h = 1 }, .border = .{ .x = 1, .y = 1, .w = 0, .h = 0 } }));
+            gui.separator(@src(), i, oo3.override(.{ .margin = margin, .min_size = .{ .w = 1, .h = 1 }, .border = .{ .x = 1, .y = 1, .w = 0, .h = 0 } }));
         }
 
         if (i == 1) {
@@ -5948,52 +5946,52 @@ fn podcastSide(paned: *gui.PanedWidget) void {
             corner.h = 9;
         }
 
-        if (gui.Button(@src(), i, title, oo3.override(.{
+        if (gui.button(@src(), i, title, oo3.override(.{
             .margin = margin,
             .border = border,
             .corner_radius = corner,
             .padding = gui.Rect.all(8),
         }))) {
-            paned.showOther();
+            pane.showOther();
         }
     }
 
     scroll.deinit();
 
-    if (!paned.collapsed()) {
+    if (!pane.collapsed()) {
         player();
     }
 }
 
-fn episodeSide(paned: *gui.PanedWidget) void {
-    var box = gui.Box(@src(), 0, .vertical, .{ .expand = .both });
-    defer box.deinit();
+fn episodeSide(pane: *gui.PanedWidget) void {
+    var b = gui.box(@src(), 0, .vertical, .{ .expand = .both });
+    defer b.deinit();
 
-    if (paned.collapsed()) {
-        var menu = gui.Menu(@src(), 0, .horizontal, .{ .expand = .horizontal });
-        defer menu.deinit();
+    if (pane.collapsed()) {
+        var m = gui.menu(@src(), 0, .horizontal, .{ .expand = .horizontal });
+        defer m.deinit();
 
-        if (gui.MenuItemLabel(@src(), 0, "Back", false, .{})) |rr| {
+        if (gui.menuItemLabel(@src(), 0, "Back", false, .{})) |rr| {
             _ = rr;
-            paned.showOther();
+            pane.showOther();
         }
     }
 
-    var scroll = gui.ScrollArea(@src(), 0, null, .{ .expand = .both, .background = false });
+    var scroll = gui.scrollArea(@src(), 0, null, .{ .expand = .both, .background = false });
     defer scroll.deinit();
 
     var i: usize = 0;
     while (i < 10) : (i += 1) {
-        var tl = gui.TextLayout(@src(), i, .{ .expand = .horizontal });
+        var tl = gui.textLayout(@src(), i, .{ .expand = .horizontal });
 
-        var cbox = gui.Box(@src(), 0, .vertical, gui.Options{ .gravity = .upright });
+        var cbox = gui.box(@src(), 0, .vertical, gui.Options{ .gravity = .upright });
 
-        _ = gui.ButtonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) });
-        _ = gui.ButtonIcon(@src(), 0, 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) });
+        _ = gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) });
+        _ = gui.buttonIcon(@src(), 0, 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) });
 
         cbox.deinit();
 
-        var f = gui.ThemeGet().font_heading;
+        var f = gui.themeGet().font_heading;
         f.line_skip_factor = 1.3;
         tl.addText("Episode Title\n", .{ .font_style = .custom, .font_custom = f });
         const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
@@ -6008,24 +6006,24 @@ fn player() void {
         .color_style = .content,
     };
 
-    var box2 = gui.Box(@src(), 0, .vertical, oo.override(.{ .background = true }));
+    var box2 = gui.box(@src(), 0, .vertical, oo.override(.{ .background = true }));
     defer box2.deinit();
 
-    gui.Label(@src(), 0, "Title of the playing episode", .{}, oo.override(.{
+    gui.label(@src(), 0, "Title of the playing episode", .{}, oo.override(.{
         .margin = gui.Rect{ .x = 8, .y = 4, .w = 8, .h = 4 },
         .font_style = .heading,
     }));
 
-    var box3 = gui.Box(@src(), 0, .horizontal, oo.override(.{ .padding = .{ .x = 4, .y = 0, .w = 4, .h = 4 } }));
+    var box3 = gui.box(@src(), 0, .horizontal, oo.override(.{ .padding = .{ .x = 4, .y = 0, .w = 4, .h = 4 } }));
     defer box3.deinit();
 
     const oo2 = gui.Options{ .expand = .horizontal, .gravity = .center };
 
-    _ = gui.ButtonIcon(@src(), 0, 20, "back", gui.icons.papirus.actions.media_seek_backward_symbolic, oo2);
+    _ = gui.buttonIcon(@src(), 0, 20, "back", gui.icons.papirus.actions.media_seek_backward_symbolic, oo2);
 
-    gui.Label(@src(), 0, "0.00%", .{}, oo2.override(.{ .color_style = .content }));
+    gui.label(@src(), 0, "0.00%", .{}, oo2.override(.{ .color_style = .content }));
 
-    _ = gui.ButtonIcon(@src(), 0, 20, "forward", gui.icons.papirus.actions.media_seek_forward_symbolic, oo2);
+    _ = gui.buttonIcon(@src(), 0, 20, "forward", gui.icons.papirus.actions.media_seek_forward_symbolic, oo2);
 
-    _ = gui.ButtonIcon(@src(), 0, 20, "play", gui.icons.papirus.actions.media_playback_start_symbolic, oo2);
+    _ = gui.buttonIcon(@src(), 0, 20, "play", gui.icons.papirus.actions.media_playback_start_symbolic, oo2);
 }

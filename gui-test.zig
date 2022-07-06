@@ -29,9 +29,9 @@ pub fn main() !void {
         const arena = arena_allocator.allocator();
 
         if (theme_dark) {
-            win.theme = &gui.Theme_Adwaita_Dark;
+            win.theme = &gui.theme_Adwaita_Dark;
         } else {
-            win.theme = &gui.Theme_Adwaita;
+            win.theme = &gui.theme_Adwaita;
         }
 
         var nstime = win.beginWait(win_backend.hasEvent());
@@ -40,85 +40,85 @@ pub fn main() !void {
         const quit = win_backend.addAllEvents(&win);
         if (quit) break :main_loop;
 
-        var window_box = gui.Box(@src(), 0, .vertical, .{ .expand = .both, .color_style = .window, .background = true });
+        var window_box = gui.box(@src(), 0, .vertical, .{ .expand = .both, .color_style = .window, .background = true });
 
         {
             const oo = gui.Options{ .expand = .both };
-            var overlay = gui.Overlay(@src(), 0, oo);
+            var overlay = gui.overlay(@src(), 0, oo);
             defer overlay.deinit();
 
-            const scale = gui.Scale(@src(), 0, 1, oo);
+            const scale = gui.scale(@src(), 0, 1, oo);
             defer scale.deinit();
 
-            const context = gui.Context(@src(), 0, oo);
+            const context = gui.context(@src(), 0, oo);
             defer context.deinit();
 
             if (context.activePoint()) |cp| {
                 //std.debug.print("context.rect {}\n", .{context.rect});
-                var fw2 = gui.Popup(@src(), 0, gui.Rect.fromPoint(cp), &context.active, null, .{});
+                var fw2 = gui.popup(@src(), 0, gui.Rect.fromPoint(cp), &context.active, .{});
                 defer fw2.deinit();
 
-                _ = gui.MenuItemLabel(@src(), 0, "Cut", false, .{});
-                if (gui.MenuItemLabel(@src(), 0, "Close", false, .{}) != null) {
-                    gui.MenuGet().?.close();
+                _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
+                if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
+                    gui.menuGet().?.close();
                 }
-                _ = gui.MenuItemLabel(@src(), 0, "Paste", false, .{});
+                _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{});
             }
 
             {
-                var layout = gui.Box(@src(), 0, .vertical, .{});
+                var layout = gui.box(@src(), 0, .vertical, .{});
                 defer layout.deinit();
 
                 {
-                    var menu = gui.Menu(@src(), 0, .horizontal, .{});
+                    var menu = gui.menu(@src(), 0, .horizontal, .{});
                     defer menu.deinit();
 
                     {
-                        if (gui.MenuItemLabel(@src(), 0, "File", true, .{})) |r| {
-                            var fw = gui.Popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, menu, .{});
+                        if (gui.menuItemLabel(@src(), 0, "File", true, .{})) |r| {
+                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, .{});
                             defer fw.deinit();
 
-                            if (gui.MenuItemLabel(@src(), 0, "Open...", true, .{})) |rr| {
+                            if (gui.menuItemLabel(@src(), 0, "Open...", true, .{})) |rr| {
                                 var menu_rect2 = rr;
                                 menu_rect2.x += menu_rect2.w;
-                                var fw2 = gui.Popup(@src(), 0, menu_rect2, null, null, .{});
+                                var fw2 = gui.popup(@src(), 0, menu_rect2, null, .{});
                                 defer fw2.deinit();
 
-                                _ = gui.MenuItemLabel(@src(), 0, "Cut", false, .{});
-                                if (gui.MenuItemLabel(@src(), 0, "Close", false, .{}) != null) {
-                                    gui.MenuGet().?.close();
+                                _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
+                                if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
+                                    gui.menuGet().?.close();
                                 }
-                                _ = gui.MenuItemLabel(@src(), 0, "Paste", false, .{});
+                                _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{});
                             }
 
-                            if (gui.MenuItemLabel(@src(), 0, "Close", false, .{}) != null) {
-                                gui.MenuGet().?.close();
+                            if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
+                                gui.menuGet().?.close();
                             }
-                            _ = gui.MenuItemLabel(@src(), 0, "Print", false, .{});
+                            _ = gui.menuItemLabel(@src(), 0, "Print", false, .{});
                         }
                     }
 
                     {
-                        if (gui.MenuItemLabel(@src(), 0, "Edit", true, .{})) |r| {
-                            var fw = gui.Popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, menu, .{});
+                        if (gui.menuItemLabel(@src(), 0, "Edit", true, .{})) |r| {
+                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, .{});
                             defer fw.deinit();
 
-                            _ = gui.MenuItemLabel(@src(), 0, "Cut", false, .{});
-                            _ = gui.MenuItemLabel(@src(), 0, "Copy", false, .{});
-                            _ = gui.MenuItemLabel(@src(), 0, "Paste", false, .{});
+                            _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
+                            _ = gui.menuItemLabel(@src(), 0, "Copy", false, .{});
+                            _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{});
                         }
                     }
 
                     {
-                        if (gui.MenuItemLabel(@src(), 0, "Theme", true, .{})) |r| {
-                            var fw = gui.Popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, menu, .{});
+                        if (gui.menuItemLabel(@src(), 0, "Theme", true, .{})) |r| {
+                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, .{});
                             defer fw.deinit();
 
-                            gui.Checkbox(@src(), 0, &theme_dark, "Dark", .{});
+                            gui.checkbox(@src(), 0, &theme_dark, "Dark", .{});
 
-                            _ = gui.MenuItemLabel(@src(), 0, "Cut", false, .{});
-                            _ = gui.MenuItemLabel(@src(), 0, "Copy", false, .{});
-                            _ = gui.MenuItemLabel(@src(), 0, "Paste", false, .{});
+                            _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
+                            _ = gui.menuItemLabel(@src(), 0, "Copy", false, .{});
+                            _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{});
                         }
                     }
                 }
@@ -183,14 +183,14 @@ pub fn main() !void {
                 //}
 
                 {
-                    var scroll = gui.ScrollArea(@src(), 0, null, .{});
+                    var scroll = gui.scrollArea(@src(), 0, null, .{});
                     defer scroll.deinit();
 
                     var buf: [100]u8 = undefined;
                     var z: usize = 0;
                     while (z < maxz) : (z += 1) {
                         const buf_slice = std.fmt.bufPrint(&buf, "Button {d}", .{z}) catch unreachable;
-                        if (gui.Button(@src(), z, buf_slice, .{})) {
+                        if (gui.button(@src(), z, buf_slice, .{})) {
                             if (z % 2 == 0) {
                                 maxz += 1;
                             } else {
@@ -203,18 +203,18 @@ pub fn main() !void {
                 {
                     var button = gui.ButtonWidget.init(@src(), 0, "Wiggle", .{ .tab_index = 10 });
 
-                    if (gui.AnimationGet(button.bc.wd.id, "xoffset")) |a| {
+                    if (gui.animationGet(button.bc.wd.id, "xoffset")) |a| {
                         button.bc.wd.rect.x += a.lerp();
                     }
 
                     if (button.install()) {
                         const a = gui.Animation{ .start_val = 0, .end_val = 200, .start_time = 0, .end_time = 10_000_000 };
-                        gui.Animate(button.bc.wd.id, "xoffset", a);
+                        gui.animate(button.bc.wd.id, "xoffset", a);
                     }
                 }
 
                 {
-                    if (gui.Button(@src(), 0, "Stroke Test", .{})) {
+                    if (gui.button(@src(), 0, "Stroke Test", .{})) {
                         StrokeTest.show_dialog = !StrokeTest.show_dialog;
                     }
 
@@ -230,15 +230,15 @@ pub fn main() !void {
                     var label = gui.LabelWidget.init(@src(), 0, "{d} {d}", .{ @divTrunc(millis, 1000), @intCast(u32, left) }, .{ .margin = gui.Rect.all(4), .min_size = (gui.Options{}).font().textSize("0" ** 15), .gravity = .left });
                     label.install();
 
-                    if (gui.TimerDone(label.wd.id) or !gui.TimerExists(label.wd.id)) {
+                    if (gui.timerDone(label.wd.id) or !gui.timerExists(label.wd.id)) {
                         const wait = 1000 * (1000 - left);
-                        gui.TimerSet(label.wd.id, wait);
+                        gui.timerSet(label.wd.id, wait);
                         //std.debug.print("add timer {d}\n", .{wait});
                     }
                 }
 
                 {
-                    gui.Spinner(@src(), 0, .{ .color_style = .custom, .color_custom = .{ .r = 100, .g = 200, .b = 100 } });
+                    gui.spinner(@src(), 0, .{ .color_style = .custom, .color_custom = .{ .r = 100, .g = 200, .b = 100 } });
                 }
 
                 {
@@ -251,7 +251,7 @@ pub fn main() !void {
                         checklabel = "Check Me Yes";
                     }
 
-                    gui.Checkbox(@src(), 0, &CheckboxBool.b, checklabel, .{ .tab_index = 6, .min_size = .{ .w = 100, .h = 0 }, .color_style = .content, .margin = gui.Rect.all(4), .corner_radius = gui.Rect.all(2) });
+                    gui.checkbox(@src(), 0, &CheckboxBool.b, checklabel, .{ .tab_index = 6, .min_size = .{ .w = 100, .h = 0 }, .color_style = .content, .margin = gui.Rect.all(4), .corner_radius = gui.Rect.all(2) });
                 }
 
                 {
@@ -266,22 +266,22 @@ pub fn main() !void {
                         }
                     };
 
-                    gui.TextEntry(@src(), 0, 26.0, &TextEntryText.text1, .{});
-                    gui.TextEntry(@src(), 0, 26.0, &TextEntryText.text2, .{});
+                    gui.textEntry(@src(), 0, 26.0, &TextEntryText.text1, .{});
+                    gui.textEntry(@src(), 0, 26.0, &TextEntryText.text2, .{});
                 }
 
                 {
-                    var box = gui.Box(@src(), 0, .horizontal, .{});
+                    var box = gui.box(@src(), 0, .horizontal, .{});
 
-                    _ = gui.Button(@src(), 0, "Accent", .{ .color_style = .accent });
-                    _ = gui.Button(@src(), 0, "Success", .{ .color_style = .success });
-                    _ = gui.Button(@src(), 0, "Error", .{ .color_style = .err });
+                    _ = gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
+                    _ = gui.button(@src(), 0, "Success", .{ .color_style = .success });
+                    _ = gui.button(@src(), 0, "Error", .{ .color_style = .err });
 
                     box.deinit();
 
-                    gui.Label(@src(), 0, "Theme: {s}", .{gui.ThemeGet().name}, .{});
+                    gui.label(@src(), 0, "Theme: {s}", .{gui.themeGet().name}, .{});
 
-                    if (gui.Button(@src(), 0, "Toggle Theme", .{})) {
+                    if (gui.button(@src(), 0, "Toggle Theme", .{})) {
                         theme_dark = !theme_dark;
                     }
                 }
@@ -292,7 +292,7 @@ pub fn main() !void {
             const fps = gui.FPS();
             //std.debug.print("fps {d}\n", .{@round(fps)});
             //gui.render_text = true;
-            gui.Label(@src(), 0, "fps {d:4.2}", .{fps}, .{ .gravity = .upright });
+            gui.label(@src(), 0, "fps {d:4.2}", .{fps}, .{ .gravity = .upright });
             //gui.render_text = false;
         }
 
@@ -302,59 +302,59 @@ pub fn main() !void {
                 var rect = gui.Rect{ .x = 300.25, .y = 200.25, .w = 300, .h = 200 };
             };
 
-            if (gui.Button(@src(), 0, "Floating Window", .{})) {
+            if (gui.button(@src(), 0, "Floating Window", .{})) {
                 FloatingWindowTest.show = !FloatingWindowTest.show;
             }
 
             if (FloatingWindowTest.show) {
-                var fwin = gui.FloatingWindow(@src(), 0, false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
+                var fwin = gui.floatingWindow(@src(), 0, false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
                 defer fwin.deinit();
-                gui.LabelNoFormat(@src(), 0, "Floating Window", .{ .gravity = .center });
+                gui.labelNoFormat(@src(), 0, "Floating Window", .{ .gravity = .center });
 
                 {
-                    var menu = gui.Menu(@src(), 0, .horizontal, .{});
+                    var menu = gui.menu(@src(), 0, .horizontal, .{});
                     defer menu.deinit();
 
                     {
-                        if (gui.MenuItemLabel(@src(), 0, "File", true, .{})) |r| {
-                            var fw = gui.Popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, menu, .{});
+                        if (gui.menuItemLabel(@src(), 0, "File", true, .{})) |r| {
+                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, .{});
                             defer fw.deinit();
 
-                            if (gui.MenuItemLabel(@src(), 0, "Open...", true, .{})) |rr| {
+                            if (gui.menuItemLabel(@src(), 0, "Open...", true, .{})) |rr| {
                                 var menu_rect2 = rr;
                                 menu_rect2.x += menu_rect2.w;
-                                var fw2 = gui.Popup(@src(), 0, menu_rect2, null, null, .{});
+                                var fw2 = gui.popup(@src(), 0, menu_rect2, null, .{});
                                 defer fw2.deinit();
 
-                                _ = gui.MenuItemLabel(@src(), 0, "Cut", false, .{});
-                                if (gui.MenuItemLabel(@src(), 0, "Close", false, .{}) != null) {
-                                    gui.MenuGet().?.close();
+                                _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
+                                if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
+                                    gui.menuGet().?.close();
                                 }
-                                _ = gui.MenuItemLabel(@src(), 0, "Paste", false, .{});
+                                _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{});
                             }
 
-                            if (gui.MenuItemLabel(@src(), 0, "Close", false, .{}) != null) {
-                                gui.MenuGet().?.close();
+                            if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
+                                gui.menuGet().?.close();
                             }
-                            _ = gui.MenuItemLabel(@src(), 0, "Print", false, .{});
+                            _ = gui.menuItemLabel(@src(), 0, "Print", false, .{});
                         }
                     }
 
                     {
-                        if (gui.MenuItemLabel(@src(), 0, "Edit", true, .{})) |r| {
-                            var fw = gui.Popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, menu, .{});
+                        if (gui.menuItemLabel(@src(), 0, "Edit", true, .{})) |r| {
+                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, .{});
                             defer fw.deinit();
 
-                            _ = gui.MenuItemLabel(@src(), 0, "Cut", false, .{});
-                            _ = gui.MenuItemLabel(@src(), 0, "Copy", false, .{});
-                            _ = gui.MenuItemLabel(@src(), 0, "Paste", false, .{});
+                            _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
+                            _ = gui.menuItemLabel(@src(), 0, "Copy", false, .{});
+                            _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{});
                         }
                     }
                 }
 
-                gui.Label(@src(), 0, "Pretty Cool", .{}, .{ .font_style = .custom, .font_custom = .{ .name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 20 } });
+                gui.label(@src(), 0, "Pretty Cool", .{}, .{ .font_style = .custom, .font_custom = .{ .name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 20 } });
 
-                if (gui.Button(@src(), 0, "button", .{})) {
+                if (gui.button(@src(), 0, "button", .{})) {
                     std.debug.print("floating button\n", .{});
                     floats[0] = true;
                 }
@@ -368,7 +368,7 @@ pub fn main() !void {
                     checklabel = "Check Me Yes";
                 }
 
-                gui.Checkbox(@src(), 0, &CheckboxBoolFloat.b, checklabel, .{});
+                gui.checkbox(@src(), 0, &CheckboxBoolFloat.b, checklabel, .{});
 
                 for (floats) |*f, fi| {
                     if (f.*) {
@@ -379,21 +379,21 @@ pub fn main() !void {
                         }
                         var buf = std.mem.zeroes([100]u8);
                         var buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{ fi, name }) catch unreachable;
-                        var fw2 = gui.FloatingWindow(@src(), fi, modal, null, f, .{ .color_style = .window, .min_size = .{ .w = 150, .h = 100 } });
+                        var fw2 = gui.floatingWindow(@src(), fi, modal, null, f, .{ .color_style = .window, .min_size = .{ .w = 150, .h = 100 } });
                         defer fw2.deinit();
-                        gui.LabelNoFormat(@src(), 0, buf_slice, .{ .gravity = .center });
+                        gui.labelNoFormat(@src(), 0, buf_slice, .{ .gravity = .center });
 
-                        gui.Label(@src(), 0, "Asking a Question", .{}, .{});
+                        gui.label(@src(), 0, "Asking a Question", .{}, .{});
 
                         const oo = gui.Options{ .margin = gui.Rect.all(4), .expand = .horizontal };
-                        var box = gui.Box(@src(), 0, .horizontal, oo);
+                        var box = gui.box(@src(), 0, .horizontal, oo);
 
-                        if (gui.Button(@src(), 0, "Yes", oo)) {
+                        if (gui.button(@src(), 0, "Yes", oo)) {
                             std.debug.print("Yes {d}\n", .{fi});
                             floats[fi + 1] = true;
                         }
 
-                        if (gui.Button(@src(), 0, "No", oo)) {
+                        if (gui.button(@src(), 0, "No", oo)) {
                             std.debug.print("No {d}\n", .{fi});
                             fw2.close();
                         }
@@ -402,14 +402,14 @@ pub fn main() !void {
                     }
                 }
 
-                var scroll = gui.ScrollArea(@src(), 0, null, .{ .expand = .both });
+                var scroll = gui.scrollArea(@src(), 0, null, .{ .expand = .both });
                 defer scroll.deinit();
-                var tl = gui.TextLayout(@src(), 0, .{ .expand = .both });
+                var tl = gui.textLayout(@src(), 0, .{ .expand = .both });
                 {
-                    if (gui.Button(@src(), 0, "Up .1", .{ .gravity = .upleft })) {
+                    if (gui.button(@src(), 0, "Up .1", .{ .gravity = .upleft })) {
                         fwin.wd.rect.y -= 0.1;
                     }
-                    if (gui.Button(@src(), 0, "Down .1", .{ .gravity = .upright })) {
+                    if (gui.button(@src(), 0, "Down .1", .{ .gravity = .upright })) {
                         fwin.wd.rect.y += 0.1;
                     }
                 }
@@ -429,7 +429,7 @@ pub fn main() !void {
 
         const end_micros = win.end();
 
-        win_backend.setCursor(win.CursorRequested());
+        win_backend.setCursor(win.cursorRequested());
 
         win_backend.renderPresent();
 
@@ -444,11 +444,11 @@ pub fn main() !void {
 }
 
 fn show_stroke_test_window() void {
-    var win = gui.FloatingWindow(@src(), 0, false, &StrokeTest.show_rect, &StrokeTest.show_dialog, .{});
+    var win = gui.floatingWindow(@src(), 0, false, &StrokeTest.show_rect, &StrokeTest.show_dialog, .{});
     defer win.deinit();
-    gui.LabelNoFormat(@src(), 0, "Stroke Test", .{ .gravity = .center });
+    gui.labelNoFormat(@src(), 0, "Stroke Test", .{ .gravity = .center });
 
-    //var scale = gui.Scale(@src(), 0, 1, .{.expand = .both});
+    //var scale = gui.scale(@src(), 0, 1, .{.expand = .both});
     //defer scale.deinit();
 
     var st = StrokeTest{};
@@ -470,34 +470,34 @@ pub const StrokeTest = struct {
         self.wd = gui.WidgetData.init(src, id_extra, options);
         gui.debug("{x} StrokeTest {}", .{ self.wd.id, self.wd.rect });
 
-        _ = gui.CaptureMouseMaintain(self.wd.id);
+        _ = gui.captureMouseMaintain(self.wd.id);
         self.processEvents();
 
         self.wd.borderAndBackground();
 
-        const rs = gui.ParentGet().screenRectScale(self.wd.rect);
+        const rs = gui.parentGet().screenRectScale(self.wd.rect);
         const fill_color = gui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
         for (points) |p| {
             var rect = gui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
             const rsrect = rect.scale(rs.s).offset(rs.r);
-            gui.PathAddRect(rsrect, gui.Rect.all(1));
-            gui.PathFillConvex(fill_color);
+            gui.pathAddRect(rsrect, gui.Rect.all(1));
+            gui.pathFillConvex(fill_color);
         }
 
         for (points) |p| {
             const rsp = rs.childPoint(p);
-            gui.PathAddPoint(rsp);
+            gui.pathAddPoint(rsp);
         }
 
         const stroke_color = gui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
-        gui.PathStroke(false, rs.s * thickness, .square, stroke_color);
+        gui.pathStroke(false, rs.s * thickness, .square, stroke_color);
 
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
     }
 
     pub fn processEvents(self: *Self) void {
-        const rs = gui.ParentGet().screenRectScale(self.wd.rect);
+        const rs = gui.parentGet().screenRectScale(self.wd.rect);
         var iter = gui.EventIterator.init(self.wd.id, rs.r);
         while (iter.next()) |e| {
             switch (e.evt) {
@@ -523,18 +523,18 @@ pub const StrokeTest = struct {
                             }
 
                             if (dragi != null) {
-                                gui.CaptureMouse(self.wd.id);
-                                gui.DragPreStart(me.p, .crosshair);
+                                gui.captureMouse(self.wd.id);
+                                gui.dragPreStart(me.p, .crosshair);
                             }
                         },
                         .leftup => {
                             e.handled = true;
-                            gui.CaptureMouse(null);
-                            gui.DragEnd();
+                            gui.captureMouse(null);
+                            gui.dragEnd();
                         },
                         .motion => {
                             e.handled = true;
-                            if (gui.Dragging(me.p)) |dps| {
+                            if (gui.dragging(me.p)) |dps| {
                                 const dp = dps.scale(1 / rs.s);
                                 points[dragi.?].x += dp.x;
                                 points[dragi.?].y += dp.y;
@@ -564,19 +564,19 @@ fn IconBrowserButtonAndWindow() void {
         var row_height: f32 = 0;
     };
 
-    if (gui.Button(@src(), 0, "Icon Browser", .{})) {
+    if (gui.button(@src(), 0, "Icon Browser", .{})) {
         IconBrowser.show = !IconBrowser.show;
     }
 
     if (IconBrowser.show) {
-        var fwin = gui.FloatingWindow(@src(), 0, false, &IconBrowser.rect, &IconBrowser.show, .{});
+        var fwin = gui.floatingWindow(@src(), 0, false, &IconBrowser.rect, &IconBrowser.show, .{});
         defer fwin.deinit();
-        gui.LabelNoFormat(@src(), 0, "Icon Browser", .{ .gravity = .center });
+        gui.labelNoFormat(@src(), 0, "Icon Browser", .{ .gravity = .center });
 
         const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len;
         const height = @intToFloat(f32, num_icons) * IconBrowser.row_height;
 
-        var scroll = gui.ScrollArea(@src(), 0, gui.Size{ .w = 0, .h = height }, .{ .expand = .both });
+        var scroll = gui.scrollArea(@src(), 0, gui.Size{ .w = 0, .h = height }, .{ .expand = .both });
         defer scroll.deinit();
 
         const visibleRect = scroll.visibleRect();
@@ -585,10 +585,10 @@ fn IconBrowserButtonAndWindow() void {
         inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls) |d, i| {
             if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
                 const r = gui.Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
-                var iconbox = gui.Box(@src(), i, .horizontal, .{ .expand = .horizontal, .rect = r });
-                //gui.Icon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{.margin = gui.Rect.all(2)});
-                _ = gui.ButtonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{ .min_size = gui.Size.all(r.h) });
-                gui.Label(@src(), 0, d.name, .{}, .{ .gravity = .left });
+                var iconbox = gui.box(@src(), i, .horizontal, .{ .expand = .horizontal, .rect = r });
+                //gui.icon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{.margin = gui.Rect.all(2)});
+                _ = gui.buttonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{ .min_size = gui.Size.all(r.h) });
+                gui.label(@src(), 0, d.name, .{}, .{ .gravity = .left });
 
                 iconbox.deinit();
 
