@@ -1,38 +1,36 @@
-
 pub const Mod = enum(u16) {
-  none = 0,
+    none = 0,
 
-  lshift = 0b00000001,
-  rshift = 0b00000010,
+    lshift = 0b00000001,
+    rshift = 0b00000010,
 
-  lctrl  = 0b00000100,
-  rctrl  = 0b00001000,
+    lctrl = 0b00000100,
+    rctrl = 0b00001000,
 
-  lalt   = 0b00010000,
-  ralt   = 0b00100000,
+    lalt = 0b00010000,
+    ralt = 0b00100000,
 
-  lgui   = 0b01000000,
-  rgui   = 0b10000000,
-  
-  // make non-exhaustive so that we can take combinations of the values
-  _,
+    lgui = 0b01000000,
+    rgui = 0b10000000,
 
-  pub fn shift(self: Mod) bool {
-    return self == .lshift or self == .rshift;
-  }
+    // make non-exhaustive so that we can take combinations of the values
+    _,
 
-  pub fn ctrl(self: Mod) bool {
-    return self == .lctrl or self == .rctrl;
-  }
+    pub fn shift(self: Mod) bool {
+        return self == .lshift or self == .rshift;
+    }
 
-  pub fn alt(self: Mod) bool {
-    return self == .lalt or self == .ralt;
-  }
+    pub fn ctrl(self: Mod) bool {
+        return self == .lctrl or self == .rctrl;
+    }
 
-  pub fn gui(self: Mod) bool {
-    return self == .lgui or self == .rgui;
-  }
+    pub fn alt(self: Mod) bool {
+        return self == .lalt or self == .ralt;
+    }
 
+    pub fn gui(self: Mod) bool {
+        return self == .lgui or self == .rgui;
+    }
 };
 
 pub const Key = enum {

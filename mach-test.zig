@@ -5,7 +5,6 @@ const zm = @import("zmath");
 const gui = @import("src/gui.zig");
 const MachGuiBackend = @import("src/MachBackend.zig");
 
-
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
@@ -25,7 +24,6 @@ pub fn deinit(app: *App, _: *mach.Engine) void {
 }
 
 pub fn update(app: *App, engine: *mach.Engine) !void {
-
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     const arena = arena_allocator.allocator();
     defer arena_allocator.deinit();
@@ -35,7 +33,7 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
 
     const quit = app.win_backend.addAllEvents(&app.win);
     if (quit) {
-      return engine.setShouldClose(true);
+        return engine.setShouldClose(true);
     }
 
     gui.demo();
@@ -43,10 +41,9 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
     const end_micros = app.win.end();
 
     if (app.win.CursorRequestedFloating()) |cursor| {
-      app.win_backend.setCursor(cursor);
-    }
-    else {
-      app.win_backend.setCursor(.bad);
+        app.win_backend.setCursor(cursor);
+    } else {
+        app.win_backend.setCursor(.bad);
     }
 
     engine.swap_chain.?.present();
@@ -54,5 +51,3 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
     const wait_event_micros = app.win.wait(end_micros, null);
     app.win_backend.waitEventTimeout(wait_event_micros);
 }
-
-
