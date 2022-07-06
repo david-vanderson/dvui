@@ -524,7 +524,7 @@ pub const StrokeTest = struct {
 
                             if (dragi != null) {
                                 gui.captureMouse(self.wd.id);
-                                gui.dragPreStart(me.p, .crosshair);
+                                gui.dragPreStart(me.p, .crosshair, .{});
                             }
                         },
                         .leftup => {
