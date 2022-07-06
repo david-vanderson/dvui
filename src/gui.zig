@@ -2584,6 +2584,7 @@ pub const PopupWidget = struct {
   layout: MenuWidget = undefined,
   initialRect: Rect = Rect{},
   openflag: ?*bool = null,
+  prevClip: Rect = Rect{},
   menu: ?*MenuWidget = null,
   deferred_render_queue: DeferredRenderQueue = undefined,
 
@@ -2604,6 +2605,11 @@ pub const PopupWidget = struct {
   }
 
   pub fn install(self: *Self) void {
+    // Popup is outside normal widget flow, a menu can pop up outside the
+    // current clip
+    self.prevClip = ClipGet();
+    ClipSet(WindowRectPixels());
+
     DeferRender();
 
     _ = ParentSet(self.widget());
@@ -2717,6 +2723,7 @@ pub const PopupWidget = struct {
     _ = ParentSet(self.wd.parent);
     _ = WindowCurrentSet(self.prev_windowId);
     DeferRenderPop();
+    ClipSet(self.prevClip);
   }
 };
 
@@ -2745,6 +2752,7 @@ pub const FloatingWindowWidget = struct {
   layout: BoxWidget = undefined,
   openflag: ?*bool = null,
   deferred_render_queue: DeferredRenderQueue = undefined,
+  prevClip: Rect = Rect{},
   autoId: u32 = undefined,
   autoPosSize: struct {
     autopos: bool,
@@ -2770,6 +2778,10 @@ pub const FloatingWindowWidget = struct {
   }
 
   pub fn install(self: *Self) void {
+    // FloatingWindow is outside normal widget flow, a dialog needs to paint on
+    // top of the whole screen
+    self.prevClip = ClipGet();
+    ClipSet(WindowRectPixels());
 
     DeferRender();
     
@@ -3034,6 +3046,7 @@ pub const FloatingWindowWidget = struct {
     _ = ParentSet(self.wd.parent);
     _ = WindowCurrentSet(self.prev_windowId);
     DeferRenderPop();
+    ClipSet(self.prevClip);
   }
 };
 
