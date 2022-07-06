@@ -4345,7 +4345,7 @@ pub const MenuItemWidget = struct {
         const options = Defaults.override(opts);
         self.wd = WidgetData.init(src, id_extra, options);
         self.submenu = submenu;
-        if (!self.wd.rect.empty()) {
+        if (self.wd.visible()) {
             tabIndexSet(self.wd.id, options.tab_index);
         }
         return self;
@@ -4579,7 +4579,7 @@ pub const ButtonContainerWidget = struct {
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) Self {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
-        if (!self.wd.rect.empty()) {
+        if (self.wd.visible()) {
             tabIndexSet(self.wd.id, opts.tab_index);
         }
         self.show_focus = show_focus;
@@ -4861,7 +4861,7 @@ pub const TextEntryWidget = struct {
         const size = Size{ .w = msize.w * width, .h = msize.h };
         self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
 
-        if (!self.wd.rect.empty()) {
+        if (self.wd.visible()) {
             tabIndexSet(self.wd.id, options.tab_index);
         }
         self.text = text;
