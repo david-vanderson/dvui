@@ -279,7 +279,6 @@ pub fn main() !void {
 
           _ = gui.Button(@src(), 0, "Accent", .{.color_style = .accent});
           _ = gui.Button(@src(), 0, "Success", .{.color_style = .success});
-          _ = gui.Button(@src(), 0, "Warning", .{.color_style = .warning});
           _ = gui.Button(@src(), 0, "Error", .{.color_style = .err});
 
           box.deinit();
