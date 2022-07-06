@@ -37,7 +37,7 @@ zig build run-mach-test
 
 ### On Top of Existing Mach App
 
-As an example, we'll extend the mach example `instanced-cube`.
+As an example, we'll extend the mach example `instanced-cube` to control the number of cubes on screen.  We'll start with 12 (`shown_instances` in the code) and have a button to add a cube and a button to remove a cube.
 
 Link or copy this repo into the example:
 ```sh
@@ -94,7 +94,7 @@ index 1f17475..e1b6450 100755
 +
 +    app.win_backend = try MachGuiBackend.init(gpa, engine);
 +    app.win = gui.Window.init(gpa, app.win_backend.guiBackend());
-+    app.shown_instances = 12;
++    app.shown_instances = 12;  // start with 12 cubes
  }
 
  pub fn deinit(app: *App, _: *mach.Engine) void {
@@ -177,6 +177,8 @@ if (gui.Button(@src(), 0, "Ok", .{})) {
 ```
 Widgets are not stored between frames like in traditional gui toolkits (gtk, win32, cocoa).  `gui.Button()` processes input events, draws the button on the screen, and returns true if a button click happened this frame.
 
+For an intro to immediate mode guis, see: https://github.com/ocornut/imgui/wiki#about-the-imgui-paradigm
+
 ### Widget Ids
 Each widget gets a `u32` id by combining:
 - parent's id
@@ -192,7 +194,7 @@ Widgets handle events and draw themselves in `install()`.  This is before they k
 
 A new widget will typically receive a zero-sized rectangle, draw nothing on the first frame, and draw normally on the second frame.  For smooth UIs a new widget can be animated from zero-sized to normal size.
 
-Between a widget's `install()` and `deinit()`, that widget becomes the parent to any widgets run between.  Each widget maintains a pointer to their parent, used for getting the screen rectangle for the child, and for key event propogation.
+Between a widget's `install()` and `deinit()`, that widget becomes the parent to any widgets run between.  Each widget maintains a pointer to their parent, used for getting the screen rectangle for the child, and for key event propagation.
 
 ### Drawing
 All drawing happens in pixel space.  A widget receives a rectangle from their parent in their parent's coordinate system.  They then call `parent.screenRectScale(rect)` to get their rectangle in pixel screen coordinates plus the scale value in pixels per rect unit.
@@ -209,7 +211,7 @@ In the same frame these can all happen:
 
 Because everything is in a single pass, this works in the normal case where widget A is `install()`ed before widget B.  If keyboard focus moves to a previously installed widget, it can't process further key events this frame.
 
-### Event Propogation
+### Event Propagation
 `gui.EventIterator` helps widgets process events.  It takes the widget id (for focus and mouse capture) and a rect (for mouse events).
 
 For mouse events, `EventIterator` checks if the widget has mouse capture, or if the mouse event is within the given rect (and within the current clipping rect).  Mouse events can also be handled in a widget's `deinit()` if child widgets should get priority.  For example, `FloatingWindow.deinit()` handles remaining mouse events to allow click-dragging of floating windows anywhere a child widget doesn't handle the events.
@@ -235,7 +237,7 @@ If you want to only render frames when needed, add `window.beginWait()` at the s
 - an event comes in
 - an animation is ongoing
 - a timer has expired
-- user code calls `gui.CueFrame()` (if your code knows you need a frame after the current one)
+- user code calls `gui.cueFrame()` (if your code knows you need a frame after the current one)
 
 `window.wait()` also accepts a max fps parameter which will ensure the framerate stays below the given value.
 
@@ -260,15 +262,15 @@ Instead you can allocate the widget on the stack:
     defer box.deinit();
 }
 ```
-This is also shows how to get a widget's id before install() (processes events and draws).  This is primarily used for animations.
+This also shows how to get a widget's id before install() (processes events and draws).  This is primarily used for animations.
 
 ### Appearance
 Each widget has the following options that can be changed through the Options struct when creating the widget:
-- margin (space oustide border)
+- margin (space outside border)
 - border (on each side)
 - background (fills space inside border with background color)
 - padding (space inside border)
-- corner radius (for each corner)
+- corner_radius (for each corner)
 - color_style (use theme's colors)
 - color_custom/color_custom_bg (used if color_style is .custom)
 - font_style (use theme's fonts)
@@ -285,7 +287,7 @@ if (gui.Button(@src(), 0, "Wild", .{
 }
 ```
 
-Each widget has it's own default options.  These can be changed directly:
+Each widget has its own default options.  These can be changed directly:
 ```zig
 gui.ButtonWidget.Defaults.background = false;
 ```
@@ -297,7 +299,7 @@ if (gui.MenuItemLabel(@src(), 0, "Cut", false, .{.color_style = .warning, .backg
 }
 ```
 
-Themes can be changed freely, and control the fonts and colors referenced by font_style and color_style.
+Themes can be changed between frames or even within a frame.  The theme controls the fonts and colors referenced by font_style and color_style.
 ```zig
 if (theme_dark) {
     win.theme = &gui.Theme_Adwaita_Dark;
@@ -306,10 +308,10 @@ else {
     win.theme = &gui.Theme_Adwaita;
 }
 ```
-The current theme's color_accent is also used to show keyboard focus.
+The theme's color_accent is also used to show keyboard focus.
 
 ### Layout
-A widget receives it's position rectangle from the parent, but can influence layout with Options:
+A widget receives its position rectangle from the parent, but can influence layout with Options:
 - `.expand` - whether to take up all the space available (horizontal or vertical)
 - `.gravity` - position a non-expanded widget inside a larger rectangle
 - `.min_size` - get at least this much space (unless parent is unable)
