@@ -2518,12 +2518,15 @@ pub const PopupWidget = struct {
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, openflag: ?*bool, opts: Options) Self {
         var self = Self{};
 
-        // need to save options because we override .rect for WidgetData but need to not override .rect later
+        // options is really for our embedded MenuWidget, so save them for the
+        // end of install()
         self.options = Defaults.override(opts);
 
-        // passing options.rect will stop WidgetData.init from calling rectFor
-        // which is important because we are outside normal layout
-        self.wd = WidgetData.init(src, id_extra, self.options.override(.{ .rect = .{} }));
+        // the popup itself doesn't have any styling, it comes from the
+        // embedded MenuWidget
+        // passing options.rect will stop WidgetData.init from calling
+        // rectFor which is important because we are outside normal layout
+        self.wd = WidgetData.init(src, id_extra, self.options.plain().override(.{ .rect = .{} }));
 
         self.initialRect = initialRect;
         self.openflag = openflag;
@@ -2686,13 +2689,15 @@ pub const FloatingWindowWidget = struct {
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, io_rect: ?*Rect, openflag: ?*bool, opts: Options) Self {
         var self = Self{};
 
-        // save options separately from WidgetData because we need .rect to be null
-        // for our BoxWidget at the end of install()
+        // options is really for our embedded BoxWidget, so save them for the
+        // end of install()
         self.options = Defaults.override(opts);
 
+        // the floating window itself doesn't have any styling, it comes from
+        // the embedded BoxWidget
         // passing options.rect will stop WidgetData.init from calling rectFor
         // which is important because we are outside normal layout
-        self.wd = WidgetData.init(src, id_extra, self.options.override(.{ .rect = .{} }));
+        self.wd = WidgetData.init(src, id_extra, self.options.plain().override(.{ .rect = .{} }));
 
         self.modal = modal;
         self.io_rect = io_rect;
