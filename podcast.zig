@@ -142,7 +142,7 @@ fn podcastSide(paned: *gui.PanedWidget) void {
         var corner = gui.Rect.all(0);
 
         if (i != 1) {
-            gui.separator(@src(), i, oo3.override(.{ .margin = margin, .min_size = .{ .w = 1, .h = 1 }, .border = .{ .x = 1, .y = 1, .w = 0, .h = 0 } }));
+            gui.separator(@src(), i, oo3.override(.{ .margin = margin }));
         }
 
         if (i == 1) {

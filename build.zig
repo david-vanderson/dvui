@@ -44,7 +44,7 @@ pub fn build(b: *Builder) void {
     }
 
     if (true) {
-        const exe = b.addExecutable("gui-test", "gui-test.zig");
+        const exe = b.addExecutable("sdl-test", "sdl-test.zig");
         exe.addIncludeDir("/usr/local/include");
         exe.defineCMacro("_THREAD_SAFE", "1");
         exe.addLibPath("/usr/local/lib");
@@ -82,7 +82,7 @@ pub fn build(b: *Builder) void {
             run_cmd.addArgs(args);
         }
 
-        const run_step = b.step("gui-test", "Run gui-test");
+        const run_step = b.step("sdl-test", "Run sdl-test");
         run_step.dependOn(&run_cmd.step);
     }
 

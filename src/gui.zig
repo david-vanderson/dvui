@@ -45,7 +45,7 @@ pub const Theme = struct {
     font_heading: Font,
     font_caption: Font,
     font_caption_heading: Font,
-    font_title_large: Font,
+    font_title: Font,
     font_title_1: Font,
     font_title_2: Font,
     font_title_3: Font,
@@ -58,7 +58,7 @@ pub const theme_Adwaita = Theme{
     .font_heading = Font{ .size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
     .font_caption = Font{ .size = 9, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
     .font_caption_heading = Font{ .size = 9, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .font_title_large = Font{ .size = 24, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
+    .font_title = Font{ .size = 24, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
     .font_title_1 = Font{ .size = 20, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
     .font_title_2 = Font{ .size = 17, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
     .font_title_3 = Font{ .size = 15, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
@@ -83,7 +83,7 @@ pub const theme_Adwaita_Dark = Theme{
     .font_heading = Font{ .size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
     .font_caption = Font{ .size = 9, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
     .font_caption_heading = Font{ .size = 9, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .font_title_large = Font{ .size = 24, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
+    .font_title = Font{ .size = 24, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
     .font_title_1 = Font{ .size = 20, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
     .font_title_2 = Font{ .size = 17, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
     .font_title_3 = Font{ .size = 15, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
@@ -136,7 +136,7 @@ pub const Options = struct {
         heading,
         caption,
         caption_heading,
-        title_large,
+        title,
         title_1,
         title_2,
         title_3,
@@ -249,7 +249,7 @@ pub const Options = struct {
             .heading => themeGet().font_heading,
             .caption => themeGet().font_caption,
             .caption_heading => themeGet().font_caption_heading,
-            .title_large => themeGet().font_title_large,
+            .title => themeGet().font_title,
             .title_1 => themeGet().font_title_1,
             .title_2 => themeGet().font_title_2,
             .title_3 => themeGet().font_title_3,
@@ -824,15 +824,6 @@ pub fn cursorGetDragging() ?CursorKind {
 pub fn cursorSet(cursor: CursorKind) void {
     const cw = current_window orelse unreachable;
     cw.cursor_requested = cursor;
-}
-
-pub fn highlight(p: Point, r: Rect) bool {
-    const cw = current_window orelse unreachable;
-    if (cw.mouse_pt.equals(p) and r.contains(cw.mouse_pt)) {
-        return true;
-    }
-
-    return false;
 }
 
 pub fn pathAddPoint(p: Point) void {
@@ -1843,8 +1834,8 @@ pub const Window = struct {
     events: std.ArrayList(Event) = undefined,
     // mouse_pt tracks the last position we got a mouse event for
     // 1) used to add position info to mouse wheel events
-    // 2) used to highlight the widget under the mouse
-    // 3) used to change the cursor (for the final point each frame)
+    // 2) used to highlight the widget under the mouse (in MouseEvent.Kind.cursor event)
+    // 3) used to change the cursor (in MouseEvent.Kind.cursor event)
     // Start off screen so nothing is highlighted on the first frame
     mouse_pt: Point = Point{ .x = -1, .y = -1 },
 
@@ -2510,7 +2501,7 @@ pub fn popup(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect
 
 pub const PopupWidget = struct {
     const Self = @This();
-    pub var Defaults: Options = .{ .corner_radius = Rect.all(5), .border = Rect.all(1), .padding = Rect.all(4), .background = true, .color_style = .window };
+    pub var defaults: Options = .{ .corner_radius = Rect.all(5), .border = Rect.all(1), .padding = Rect.all(4), .background = true, .color_style = .window };
 
     wd: WidgetData = undefined,
     options: Options = undefined,
@@ -2526,7 +2517,7 @@ pub const PopupWidget = struct {
 
         // options is really for our embedded MenuWidget, so save them for the
         // end of install()
-        self.options = Defaults.override(opts);
+        self.options = defaults.override(opts);
 
         // the popup itself doesn't have any styling, it comes from the
         // embedded MenuWidget
@@ -2670,7 +2661,7 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: b
 
 pub const FloatingWindowWidget = struct {
     const Self = @This();
-    pub var Defaults: Options = .{
+    pub var defaults: Options = .{
         .corner_radius = Rect.all(5),
         .border = Rect.all(1),
         .background = true,
@@ -2697,7 +2688,7 @@ pub const FloatingWindowWidget = struct {
 
         // options is really for our embedded BoxWidget, so save them for the
         // end of install()
-        self.options = Defaults.override(opts);
+        self.options = defaults.override(opts);
 
         // the floating window itself doesn't have any styling, it comes from
         // the embedded BoxWidget
@@ -2866,6 +2857,7 @@ pub const FloatingWindowWidget = struct {
                     focusWidget(null, null);
 
                     // capture and start drag
+                    //std.log.debug("start drag\n", .{});
                     captureMouse(self.wd.id);
                     dragPreStart(e.evt.mouse.p, .crosshair, Point{});
                 } else if (e.evt.mouse.state == .leftup) {
@@ -2917,7 +2909,7 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.rect.inset(self.wd.options.borderGet()), min_size, e, g);
+        return placeIn(id, self.wd.rect, min_size, e, g);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -2973,6 +2965,116 @@ pub const FloatingWindowWidget = struct {
         clipSet(self.prevClip);
     }
 };
+
+pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) void {
+    var over = gui.overlay(@src(), 0, .{ .expand = .horizontal });
+
+    if (gui.buttonIcon(@src(), 0, 14, "close", gui.icons.papirus.actions.window_close_symbolic, .{ .gravity = .left, .corner_radius = Rect.all(14), .padding = Rect.all(2), .margin = Rect.all(2) })) {
+        if (openflag) |of| {
+            of.* = false;
+        }
+    }
+
+    gui.labelNoFormat(@src(), 0, str, .{ .gravity = .center, .expand = .horizontal, .font_style = .heading });
+    gui.labelNoFormat(@src(), 0, right_str, .{ .gravity = .right });
+
+    over.deinit();
+
+    gui.separator(@src(), 0, .{ .gravity = .down, .expand = .horizontal });
+}
+
+pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) *ExpanderWidget {
+    var ret = gui.currentWindow().arena.create(ExpanderWidget) catch unreachable;
+    ret.* = ExpanderWidget.init(src, id_extra, label_str, opts);
+    ret.install();
+    return ret;
+}
+
+pub const ExpanderWidget = struct {
+    const Self = @This();
+
+    wd: WidgetData = undefined,
+    expand: bool = false,
+    label_str: []const u8 = undefined,
+    layout: BoxWidget = undefined,
+
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) Self {
+        var self = Self{};
+        self.wd = WidgetData.init(src, id_extra, opts);
+        self.label_str = label_str;
+        if (gui.dataGet(self.wd.id, bool)) |e| {
+            self.expand = e;
+        }
+        return self;
+    }
+
+    pub fn install(self: *Self) void {
+        _ = parentSet(self.widget());
+        gui.debug("{x} Expander {}", .{ self.wd.id, self.wd.rect });
+        self.wd.borderAndBackground();
+
+        self.layout = BoxWidget.init(@src(), 0, .vertical, self.wd.options.plain());
+        self.layout.install();
+
+        var bc = ButtonContainerWidget.init(@src(), 0, true, self.wd.options.plain().override(.{ .padding = Rect.all(2) }));
+        defer bc.deinit();
+        bc.install();
+        if (bc.clicked) {
+            self.expand = !self.expand;
+        }
+
+        {
+            var bcbox = BoxWidget.init(@src(), 0, .horizontal, self.wd.options.plain());
+            defer bcbox.deinit();
+            bcbox.install();
+            const size = self.wd.options.font().lineSkip();
+            if (self.expand) {
+                icon(@src(), 0, size, "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity = .left });
+            }
+            else {
+                icon(@src(), 0, size, "right_arrow", gui.icons.papirus.actions.pan_end_symbolic, .{ .gravity = .left });
+            }
+            labelNoFormat(@src(), 0, self.label_str, self.wd.options.plain());
+        }
+    }
+
+    pub fn expanded(self: *Self) bool {
+        return self.expand;
+    }
+
+    fn widget(self: *Self) Widget {
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+    }
+
+    fn data(self: *const Self) *const WidgetData {
+        return &self.wd;
+    }
+
+    pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) gui.Rect {
+        return placeIn(id, self.wd.contentRect(), min_size, e, g);
+    }
+
+    pub fn minSizeForChild(self: *Self, s: gui.Size) void {
+        self.wd.minSizeMax(self.wd.padSize(s));
+    }
+
+    pub fn screenRectScale(self: *Self, r: gui.Rect) gui.RectScale {
+        return self.wd.parent.screenRectScale(r);
+    }
+
+    pub fn bubbleEvent(self: *Self, e: *gui.Event) void {
+        self.wd.parent.bubbleEvent(e);
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.layout.deinit();
+        gui.dataSet(self.wd.id, self.expand);
+        self.wd.minSizeSetAndCue();
+        self.wd.minSizeReportToParent();
+        _ = gui.parentSet(self.wd.parent);
+    }
+};
+
 
 pub fn paned(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) *PanedWidget {
     var ret = gui.currentWindow().arena.create(PanedWidget) catch unreachable;
@@ -3261,7 +3363,7 @@ pub fn textLayout(src: std.builtin.SourceLocation, id_extra: usize, opts: Option
 
 pub const TextLayoutWidget = struct {
     const Self = @This();
-    pub var Defaults: Options = .{
+    pub var defaults: Options = .{
         .margin = Rect.all(4),
         .padding = Rect.all(4),
         .background = true,
@@ -3274,7 +3376,7 @@ pub const TextLayoutWidget = struct {
     prevClip: Rect = Rect{},
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Self {
-        const options = Defaults.override(opts);
+        const options = defaults.override(opts);
         return Self{ .wd = WidgetData.init(src, id_extra, options) };
     }
 
@@ -3602,12 +3704,16 @@ pub fn box(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opt
 pub const BoxWidget = struct {
     const Self = @This();
 
-    wd: WidgetData = undefined,
+    const Data = struct {
+        total_weight_prev: ?f32 = null,
+        space_taken_prev: ?f32 = null,
+    };
 
+    wd: WidgetData = undefined,
     dir: Direction = undefined,
     max_thick: f32 = 0,
+    data_prev: Data = Data{},
     space_taken: f32 = 0,
-    total_weight_prev: ?f32 = null,
     total_weight: f32 = 0,
     childRect: Rect = Rect{},
     extra_pixels: f32 = 0,
@@ -3616,8 +3722,8 @@ pub const BoxWidget = struct {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
         self.dir = dir;
-        if (dataGet(self.wd.id, f32)) |weight| {
-            self.total_weight_prev = weight;
+        if (dataGet(self.wd.id, Data)) |d| {
+            self.data_prev = d;
         }
         return self;
     }
@@ -3632,16 +3738,12 @@ pub const BoxWidget = struct {
         self.childRect.x = 0;
         self.childRect.y = 0;
 
-        const ms = minSize(self.wd.id, self.wd.options.min_size orelse .{});
-        const newRect = self.wd.rect;
-        defer self.wd.rect = newRect;
-
-        self.wd.rect.w = ms.w;
-        self.wd.rect.h = ms.h;
-        if (self.dir == .horizontal) {
-            self.extra_pixels = math.max(0, self.childRect.w - self.wd.contentRect().w);
-        } else {
-            self.extra_pixels = math.max(0, self.childRect.h - self.wd.contentRect().h);
+        if (self.data_prev.space_taken_prev) |taken_prev| {
+            if (self.dir == .horizontal) {
+                self.extra_pixels = math.max(0, self.childRect.w - taken_prev);
+            } else {
+                self.extra_pixels = math.max(0, self.childRect.h - taken_prev);
+            }
         }
     }
 
@@ -3661,8 +3763,10 @@ pub const BoxWidget = struct {
         self.total_weight += current_weight;
 
         var pixels_per_w: f32 = 0;
-        if (self.total_weight_prev) |w| {
-            pixels_per_w = self.extra_pixels / w;
+        if (self.data_prev.total_weight_prev) |w| {
+            if (w > 0) {
+                pixels_per_w = self.extra_pixels / w;
+            }
         }
 
         var child_size = minSize(id, min_size);
@@ -3726,9 +3830,7 @@ pub const BoxWidget = struct {
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
 
-        if (self.total_weight > 0) {
-            dataSet(self.wd.id, self.total_weight);
-        }
+        dataSet(self.wd.id, Data{ .total_weight_prev = self.total_weight, .space_taken_prev = self.space_taken });
 
         _ = parentSet(self.wd.parent);
     }
@@ -3833,9 +3935,10 @@ pub const ScrollBar = struct {
                             f = (grabmid - min) / (max - min);
                         }
                         self.area.scrollToFraction(f);
-                    } else if (highlight(e.evt.mouse.p, rs.r)) {
-                        self.highlight = true;
                     }
+                } else if (e.evt.mouse.state == .cursor) {
+                    e.handled = true;
+                    self.highlight = true;
                 }
             }
         }
@@ -3852,9 +3955,12 @@ pub fn scrollArea(src: std.builtin.SourceLocation, id_extra: usize, virtual_size
 
 pub const ScrollAreaWidget = struct {
     const Self = @This();
-    pub var Defaults: Options = .{
+    pub var defaults: Options = .{
         .background = true,
-        .corner_radius = Rect.all(5),
+        // generally the top of a scroll area is against something flat (like
+        // window header), and the bottom is against something curved (bottom
+        // of a window)
+        .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
         .color_style = .content,
         .min_size = .{ .w = 0, .h = 100 },
     };
@@ -3881,7 +3987,7 @@ pub const ScrollAreaWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, virtual_size: ?Size, opts: Options) Self {
         var self = Self{};
-        const options = Defaults.override(opts);
+        const options = defaults.override(opts);
         self.wd = WidgetData.init(src, id_extra, options);
         if (virtual_size) |vs| {
             self.virtualSize = vs;
@@ -4037,7 +4143,8 @@ pub const ScrollAreaWidget = struct {
             switch (e.evt) {
                 .mouse => {
                     if (e.evt.mouse.state == .leftdown) {
-                        e.handled = true;
+                        // focus but don't mark as handled so we can drag-move
+                        // a window beneath the scroll area
                         focusWidget(self.wd.id, &iter);
                     } else if (e.evt.mouse.state == .wheel_y) {
                         e.handled = true;
@@ -4069,9 +4176,15 @@ pub const ScrollAreaWidget = struct {
     }
 };
 
+pub var separator_defaults: Options = .{
+    .min_size = .{ .w = 1, .h = 1 },
+    .border = .{ .x = 1, .y = 1, .w = 0, .h = 0 },
+    .color_style = .content,
+};
+
 pub fn separator(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-    var wd = WidgetData.init(src, id_extra, opts);
-    debug("{x} Spacer {}", .{ wd.id, wd.rect });
+    var wd = WidgetData.init(src, id_extra, separator_defaults.override(opts));
+    debug("{x} Separator {}", .{ wd.id, wd.rect });
     wd.borderAndBackground();
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
@@ -4090,10 +4203,10 @@ pub fn spacerRect(src: std.builtin.SourceLocation, id_extra: usize, opts: Option
 }
 
 pub fn spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-    var Defaults: Options = .{
+    var defaults: Options = .{
         .min_size = .{ .w = 50, .h = 50 },
     };
-    const options = Defaults.override(opts);
+    const options = defaults.override(opts);
     var wd = WidgetData.init(src, id_extra, options);
     debug("{x} Spinner {}", .{ wd.id, wd.rect });
     wd.minSizeSetAndCue();
@@ -4329,7 +4442,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool,
 
 pub const MenuItemWidget = struct {
     const Self = @This();
-    pub var Defaults: Options = .{
+    pub var defaults: Options = .{
         .corner_radius = Rect.all(5),
         .padding = Rect.all(4),
     };
@@ -4342,7 +4455,7 @@ pub const MenuItemWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, opts: Options) Self {
         var self = Self{};
-        const options = Defaults.override(opts);
+        const options = defaults.override(opts);
         self.wd = WidgetData.init(src, id_extra, options);
         self.submenu = submenu;
         if (self.wd.visible()) {
@@ -4428,7 +4541,6 @@ pub const MenuItemWidget = struct {
                     } else if (e.evt.mouse.state == .motion) {
                         e.handled = true;
                         // TODO don't do the rest here if the menu has an existing popup and the motion is towards the popup
-                        self.highlight = true;
                         if (menuGet().?.submenus_activated) {
                             const winId = focusedWindowId();
                             focusWindow(null, null);
@@ -4439,6 +4551,9 @@ pub const MenuItemWidget = struct {
                                 focusWindow(winId, null);
                             }
                         }
+                    } else if (e.evt.mouse.state == .cursor) {
+                        e.handled = true;
+                        self.highlight = true;
                     }
                 },
                 .key => {
@@ -4492,7 +4607,7 @@ pub const MenuItemWidget = struct {
 
 pub const LabelWidget = struct {
     const Self = @This();
-    pub var Defaults: Options = .{
+    pub var defaults: Options = .{
         .padding = Rect.all(4),
         .color_style = .control,
         .background = false,
@@ -4509,7 +4624,7 @@ pub const LabelWidget = struct {
 
     pub fn initNoFormat(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) Self {
         var self = Self{};
-        const options = Defaults.override(opts);
+        const options = defaults.override(opts);
         self.label_str = label_str;
         const size = options.font().textSize(self.label_str);
         self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
@@ -4648,11 +4763,9 @@ pub const ButtonContainerWidget = struct {
                                 ret = true;
                             }
                         }
-                    } else if (e.evt.mouse.state == .motion) {
+                    } else if (e.evt.mouse.state == .cursor) {
                         e.handled = true;
-                        if (highlight(e.evt.mouse.p, rs.r)) {
-                            self.highlight = true;
-                        }
+                        self.highlight = true;
                     }
                 },
                 .key => {
@@ -4703,7 +4816,7 @@ pub const ButtonContainerWidget = struct {
 
 pub const ButtonWidget = struct {
     const Self = @This();
-    pub var Defaults: Options = .{
+    pub var defaults: Options = .{
         .margin = Rect.all(4),
         .corner_radius = Rect.all(5),
         .padding = Rect.all(4),
@@ -4716,7 +4829,7 @@ pub const ButtonWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, str: []const u8, opts: Options) Self {
         return Self{
-            .bc = ButtonContainerWidget.init(src, id_extra, true, Defaults.override(opts)),
+            .bc = ButtonContainerWidget.init(src, id_extra, true, defaults.override(opts)),
             .label_str = str,
         };
     }
@@ -4738,16 +4851,17 @@ pub fn button(src: std.builtin.SourceLocation, id_extra: usize, label_str: []con
     return bw.install();
 }
 
+pub var buttonIcon_defaults: Options = .{
+    .margin = gui.Rect.all(4),
+    .corner_radius = Rect.all(5),
+    .padding = Rect.all(4),
+    .background = true,
+    .color_style = .control,
+    .gravity = .center,
+};
+
 pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) bool {
-    var Defaults: Options = .{
-        .margin = gui.Rect.all(4),
-        .corner_radius = Rect.all(5),
-        .padding = Rect.all(4),
-        .background = true,
-        .color_style = .control,
-        .gravity = .center,
-    };
-    const options = Defaults.override(opts);
+    const options = buttonIcon_defaults.override(opts);
     debug("ButtonIcon \"{s}\" {}", .{ name, options });
     var bc = buttonContainer(src, id_extra, true, options);
     defer bc.deinit();
@@ -4837,7 +4951,7 @@ pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, t
 
 pub const TextEntryWidget = struct {
     const Self = @This();
-    pub var Defaults: Options = .{
+    pub var defaults: Options = .{
         .margin = Rect.all(4),
         .corner_radius = Rect.all(5),
         .border = Rect.all(1),
@@ -4855,7 +4969,7 @@ pub const TextEntryWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) Self {
         var self = Self{};
-        const options = Defaults.override(opts);
+        const options = defaults.override(opts);
 
         const msize = options.font().textSize("M");
         const size = Size{ .w = msize.w * width, .h = msize.h };
@@ -5834,199 +5948,37 @@ pub const Backend = struct {
     }
 };
 
-pub fn demo() void {
-    const g = struct {
-        var show_demo: bool = true;
-    };
-    var float = gui.floatingWindow(@src(), 0, false, null, &g.show_demo, .{});
-    defer float.deinit();
 
-    var b = gui.box(@src(), 0, .vertical, .{ .expand = .both });
-    defer b.deinit();
+pub const examples = struct {
+    
+    pub var show_demo_window: bool = true;
 
-    var pane = gui.paned(@src(), 0, .horizontal, 400, .{ .expand = .both });
-    const collapsed = pane.collapsed();
+    pub fn demo() void {
+        if (show_demo_window) {
+            var float = gui.floatingWindow(@src(), 0, false, null, &show_demo_window, .{.min_size = .{ .w = 300, .h = 200 } });
+            defer float.deinit();
 
-    podcastSide(pane);
-    episodeSide(pane);
+            var buf: [100]u8 = undefined;
+            const fps_str = std.fmt.bufPrint(&buf, "{d:4.0} fps", .{ gui.FPS() }) catch unreachable;
+            gui.windowHeader("GUI Demo", fps_str, &show_demo_window);
 
-    pane.deinit();
+            var scroll = gui.scrollArea(@src(), 0, null, .{ .expand = .both, .color_style = .content, .background = false });
+            defer scroll.deinit();
 
-    if (collapsed) {
-        player();
-    }
-}
-
-fn podcastSide(pane: *gui.PanedWidget) void {
-    const d = struct {
-        var show_dialog: bool = false;
-    };
-    var b = gui.box(@src(), 0, .vertical, .{ .expand = .both });
-    defer b.deinit();
-
-    {
-        var over = gui.overlay(@src(), 0, .{ .expand = .horizontal });
-        defer over.deinit();
-
-        {
-            var m = gui.menu(@src(), 0, .horizontal, .{ .expand = .horizontal });
-            defer m.deinit();
-
-            gui.spacer(@src(), 0, .{ .expand = .horizontal });
-
-            if (gui.menuItemLabel(@src(), 0, "Hello", true, .{})) |r| {
-                var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &m.submenus_activated, .{});
-                defer fw.deinit();
-                if (gui.menuItemLabel(@src(), 0, "Add RSS", false, .{})) |rr| {
-                    _ = rr;
-                    d.show_dialog = true;
-                    gui.menuGet().?.close();
+            {
+                var exp = gui.expander(@src(), 0, "Basic Widgets", .{ .font_style = .heading, .expand = .horizontal });
+                defer exp.deinit();
+                if (exp.expanded()) {
+                    basicWidgets();
                 }
             }
         }
-
-        gui.label(@src(), 0, "fps {d}", .{@round(gui.FPS())}, .{});
-        //std.debug.print("fps: {d}\n", .{@round(gui.FPS())});
     }
 
-    if (d.show_dialog) {
-        var dialog = gui.floatingWindow(@src(), 0, true, null, &d.show_dialog, .{});
-        defer dialog.deinit();
-
-        gui.labelNoFormat(@src(), 0, "Add RSS Feed", .{ .gravity = .center });
-
-        const TextEntryText = struct {
-            //var text = array(u8, 100, "abcdefghijklmnopqrstuvwxyz");
-            var text1 = array(u8, 100, "");
-            fn array(comptime T: type, comptime size: usize, items: ?[]const T) [size]T {
-                var output = std.mem.zeroes([size]T);
-                if (items) |slice| std.mem.copy(T, &output, slice);
-                return output;
-            }
-        };
-
-        gui.textEntry(@src(), 0, 26.0, &TextEntryText.text1, .{ .gravity = .center });
-
-        var box2 = gui.box(@src(), 0, .horizontal, .{ .gravity = .right });
-        defer box2.deinit();
-        if (gui.button(@src(), 0, "Ok", .{})) {
-            dialog.close();
-        }
-        if (gui.button(@src(), 0, "Cancel", .{})) {
-            dialog.close();
-        }
+    pub fn basicWidgets() void {
+        _ = gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
+        _ = gui.button(@src(), 0, "Success", .{ .color_style = .success });
+        _ = gui.button(@src(), 0, "Error", .{ .color_style = .err });
     }
+};
 
-    var scroll = gui.scrollArea(@src(), 0, null, .{ .expand = .both, .color_style = .window, .background = false });
-
-    const oo3 = gui.Options{
-        .expand = .horizontal,
-        .gravity = .left,
-        .color_style = .content,
-    };
-
-    var i: usize = 1;
-    var buf: [100]u8 = undefined;
-    while (i < 8) : (i += 1) {
-        const title = std.fmt.bufPrint(&buf, "Podcast {d}", .{i}) catch unreachable;
-        var margin: gui.Rect = .{ .x = 8, .y = 0, .w = 8, .h = 0 };
-        var border: gui.Rect = .{ .x = 1, .y = 0, .w = 1, .h = 0 };
-        var corner = gui.Rect.all(0);
-
-        if (i != 1) {
-            gui.separator(@src(), i, oo3.override(.{ .margin = margin, .min_size = .{ .w = 1, .h = 1 }, .border = .{ .x = 1, .y = 1, .w = 0, .h = 0 } }));
-        }
-
-        if (i == 1) {
-            margin.y = 8;
-            border.y = 1;
-            corner.x = 9;
-            corner.y = 9;
-        } else if (i == 7) {
-            margin.h = 8;
-            border.h = 1;
-            corner.w = 9;
-            corner.h = 9;
-        }
-
-        if (gui.button(@src(), i, title, oo3.override(.{
-            .margin = margin,
-            .border = border,
-            .corner_radius = corner,
-            .padding = gui.Rect.all(8),
-        }))) {
-            pane.showOther();
-        }
-    }
-
-    scroll.deinit();
-
-    if (!pane.collapsed()) {
-        player();
-    }
-}
-
-fn episodeSide(pane: *gui.PanedWidget) void {
-    var b = gui.box(@src(), 0, .vertical, .{ .expand = .both });
-    defer b.deinit();
-
-    if (pane.collapsed()) {
-        var m = gui.menu(@src(), 0, .horizontal, .{ .expand = .horizontal });
-        defer m.deinit();
-
-        if (gui.menuItemLabel(@src(), 0, "Back", false, .{})) |rr| {
-            _ = rr;
-            pane.showOther();
-        }
-    }
-
-    var scroll = gui.scrollArea(@src(), 0, null, .{ .expand = .both, .background = false });
-    defer scroll.deinit();
-
-    var i: usize = 0;
-    while (i < 10) : (i += 1) {
-        var tl = gui.textLayout(@src(), i, .{ .expand = .horizontal });
-
-        var cbox = gui.box(@src(), 0, .vertical, gui.Options{ .gravity = .upright });
-
-        _ = gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) });
-        _ = gui.buttonIcon(@src(), 0, 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) });
-
-        cbox.deinit();
-
-        var f = gui.themeGet().font_heading;
-        f.line_skip_factor = 1.3;
-        tl.addText("Episode Title\n", .{ .font_style = .custom, .font_custom = f });
-        const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-        tl.addText(lorem, .{});
-        tl.deinit();
-    }
-}
-
-fn player() void {
-    const oo = gui.Options{
-        .expand = .horizontal,
-        .color_style = .content,
-    };
-
-    var box2 = gui.box(@src(), 0, .vertical, oo.override(.{ .background = true }));
-    defer box2.deinit();
-
-    gui.label(@src(), 0, "Title of the playing episode", .{}, oo.override(.{
-        .margin = gui.Rect{ .x = 8, .y = 4, .w = 8, .h = 4 },
-        .font_style = .heading,
-    }));
-
-    var box3 = gui.box(@src(), 0, .horizontal, oo.override(.{ .padding = .{ .x = 4, .y = 0, .w = 4, .h = 4 } }));
-    defer box3.deinit();
-
-    const oo2 = gui.Options{ .expand = .horizontal, .gravity = .center };
-
-    _ = gui.buttonIcon(@src(), 0, 20, "back", gui.icons.papirus.actions.media_seek_backward_symbolic, oo2);
-
-    gui.label(@src(), 0, "0.00%", .{}, oo2.override(.{ .color_style = .content }));
-
-    _ = gui.buttonIcon(@src(), 0, 20, "forward", gui.icons.papirus.actions.media_seek_forward_symbolic, oo2);
-
-    _ = gui.buttonIcon(@src(), 0, 20, "play", gui.icons.papirus.actions.media_playback_start_symbolic, oo2);
-}
