@@ -36,7 +36,7 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
         return engine.setShouldClose(true);
     }
 
-    gui.demo();
+    gui.examples.demo();
 
     const end_micros = app.win.end();
 
