@@ -72,7 +72,7 @@ pub fn main() !void {
                 defer layout.deinit();
 
                 {
-                    var menu = gui.menu(@src(), 0, .horizontal, .{});
+                    var menu = gui.menu(@src(), 0, .horizontal, false, .{});
                     defer menu.deinit();
 
                     {
@@ -314,7 +314,7 @@ pub fn main() !void {
                 gui.labelNoFormat(@src(), 0, "Floating Window", .{ .gravity = .center });
 
                 {
-                    var menu = gui.menu(@src(), 0, .horizontal, .{});
+                    var menu = gui.menu(@src(), 0, .horizontal, false, .{});
                     defer menu.deinit();
 
                     {
