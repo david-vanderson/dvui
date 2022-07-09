@@ -1343,6 +1343,11 @@ pub fn dragEnd() void {
     cw.drag_state = .none;
 }
 
+pub fn mouseMovement() Point {
+    const cw = current_window orelse unreachable;
+    return Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
+}
+
 pub fn captureMouse(id: ?u32) void {
     const cw = current_window orelse unreachable;
     cw.captureID = id;
@@ -1834,10 +1839,11 @@ pub const Window = struct {
     events: std.ArrayList(Event) = undefined,
     // mouse_pt tracks the last position we got a mouse event for
     // 1) used to add position info to mouse wheel events
-    // 2) used to highlight the widget under the mouse (in MouseEvent.Kind.cursor event)
-    // 3) used to change the cursor (in MouseEvent.Kind.cursor event)
+    // 2) used to highlight the widget under the mouse (MouseEvent.Kind.position event)
+    // 3) used to change the cursor (MouseEvent.Kind.position event)
     // Start off screen so nothing is highlighted on the first frame
     mouse_pt: Point = Point{ .x = -1, .y = -1 },
+    mouse_pt_prev: Point = Point{ .x = -1, .y = -1 },
 
     drag_state: enum {
         none,
@@ -1941,8 +1947,8 @@ pub const Window = struct {
     }
 
     pub fn addEventKey(self: *Self, keysym: keys.Key, mod: keys.Mod, state: KeyEvent.Kind) bool {
-        self.cursorMouseMotionEventRemove();
-        defer self.cursorMouseMotionEventAdd();
+        self.positionMouseEventRemove();
+        defer self.positionMouseEventAdd();
 
         self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .key = KeyEvent{
             .keysym = keysym,
@@ -1954,8 +1960,8 @@ pub const Window = struct {
     }
 
     pub fn addEventText(self: *Self, text: []const u8) bool {
-        self.cursorMouseMotionEventRemove();
-        defer self.cursorMouseMotionEventAdd();
+        self.positionMouseEventRemove();
+        defer self.positionMouseEventAdd();
 
         self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .text = TextEvent{
             .text = self.arena.dupe(u8, text) catch unreachable,
@@ -1965,8 +1971,8 @@ pub const Window = struct {
     }
 
     pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) bool {
-        self.cursorMouseMotionEventRemove();
-        defer self.cursorMouseMotionEventAdd();
+        self.positionMouseEventRemove();
+        defer self.positionMouseEventAdd();
 
         const newpt = (Point{ .x = x, .y = y }).scale(self.natural_scale);
         const dp = newpt.diff(self.mouse_pt);
@@ -1985,13 +1991,22 @@ pub const Window = struct {
     }
 
     pub fn addEventMouseButton(self: *Self, state: MouseEvent.Kind) bool {
-        self.cursorMouseMotionEventRemove();
-        defer self.cursorMouseMotionEventAdd();
+        self.positionMouseEventRemove();
+        defer self.positionMouseEventAdd();
 
         const winId = windowFor(self.mouse_pt);
 
         if (state == .leftdown or state == .rightdown) {
             focusWindow(winId, null);
+
+            // add mouse focus event
+            self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
+                .p = self.mouse_pt,
+                .dp = Point{},
+                .wheel = 0,
+                .floating_win = winId,
+                .state = .focus,
+            } } }) catch unreachable;
         }
 
         self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
@@ -2006,8 +2021,8 @@ pub const Window = struct {
     }
 
     pub fn addEventMouseWheel(self: *Self, ticks: f32) bool {
-        self.cursorMouseMotionEventRemove();
-        defer self.cursorMouseMotionEventAdd();
+        self.positionMouseEventRemove();
+        defer self.positionMouseEventAdd();
 
         const winId = windowFor(self.mouse_pt);
 
@@ -2322,30 +2337,30 @@ pub const Window = struct {
 
         self.next_widget_ypos = self.wd.rect.y;
 
-        // We want a cursor mouse event to do mouse cursors.  It needs to be
+        // We want a position mouse event to do mouse cursors.  It needs to be
         // final so if there was a drag end the cursor will still be set
         // correctly.  We don't know when the client gives us the last event,
-        // so make our cursor event now, and addEvent* functions will remove
+        // so make our position event now, and addEvent* functions will remove
         // and re-add to keep it as the final event.
-        self.cursorMouseMotionEventAdd();
+        self.positionMouseEventAdd();
 
         self.backend.begin(arena);
     }
 
-    fn cursorMouseMotionEventAdd(self: *Self) void {
+    fn positionMouseEventAdd(self: *Self) void {
         self.events.append(Event{ .evt = AnyEvent{ .mouse = MouseEvent{
             .p = self.mouse_pt,
             .dp = Point{},
             .wheel = 0,
             .floating_win = windowFor(self.mouse_pt),
-            .state = .cursor,
+            .state = .position,
         } } }) catch unreachable;
     }
 
-    fn cursorMouseMotionEventRemove(self: *Self) void {
+    fn positionMouseEventRemove(self: *Self) void {
         const e = self.events.pop();
-        if (e.evt != .mouse or e.evt.mouse.state != .cursor) {
-            std.debug.print("cursorMouseMotionEventRemove removed a non-mouse or non-cursor event\n", .{});
+        if (e.evt != .mouse or e.evt.mouse.state != .position) {
+            std.debug.print("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
         }
     }
 
@@ -2383,7 +2398,7 @@ pub const Window = struct {
             // doesn't matter if we mark events has handled or not because this is
             // the end of the line for all events
             if (e.evt == .mouse) {
-                if (e.evt.mouse.state == .leftdown or e.evt.mouse.state == .rightdown) {
+                if (e.evt.mouse.state == .focus) {
                     // unhandled click, clear focus
                     focusWidget(null, null);
                 }
@@ -2398,16 +2413,18 @@ pub const Window = struct {
             }
         }
 
+        self.mouse_pt_prev = self.mouse_pt;
+
         if (self.focusedWindowLost()) {
             // The floating window with focus disappeared, so do another frame and
             // we'll focus a new window in begin()
             cueFrame();
         }
 
-        // Check that the final event was our synthetic mouse motion event.  If one
-        // of the addEvent* functions forgot to add the synthetic mouse event to
-        // the end this will print a debug message.
-        self.cursorMouseMotionEventRemove();
+        // Check that the final event was our synthetic mouse position event.
+        // If one of the addEvent* functions forgot to add the synthetic mouse
+        // event to the end this will print a debug message.
+        self.positionMouseEventRemove();
 
         self.backend.end();
 
@@ -2565,7 +2582,7 @@ pub const PopupWidget = struct {
 
         // we are using MenuWidget to do border/background but floating windows
         // don't have margin, so turn that off
-        self.layout = MenuWidget.init(@src(), 0, .vertical, self.options.override(.{ .margin = .{} }));
+        self.layout = MenuWidget.init(@src(), 0, .vertical, true, self.options.override(.{ .margin = .{} }));
         self.layout.install();
     }
 
@@ -2622,7 +2639,7 @@ pub const PopupWidget = struct {
             // under us
             e.handled = true;
             if (e.evt == .mouse) {
-                if (e.evt.mouse.state == .leftdown or e.evt.mouse.state == .rightdown) {
+                if (e.evt.mouse.state == .focus) {
                     // unhandled click, clear focus
                     focusWidget(null, null);
                 }
@@ -2828,7 +2845,7 @@ pub const FloatingWindowWidget = struct {
                             // don't need cueFrame() because we're before drawing
                             e.handled = true;
                         }
-                    } else if (e.evt.mouse.state == .cursor) {
+                    } else if (e.evt.mouse.state == .position) {
                         if (corner) {
                             cursorSet(.arrow_nw_se);
                             e.handled = true;
@@ -2851,13 +2868,10 @@ pub const FloatingWindowWidget = struct {
             // under us
             e.handled = true;
             if (e.evt == .mouse) {
-                if (e.evt.mouse.state == .rightdown) {
+                if (e.evt.mouse.state == .focus) {
                     focusWidget(null, null);
                 } else if (e.evt.mouse.state == .leftdown) {
-                    focusWidget(null, null);
-
                     // capture and start drag
-                    //std.log.debug("start drag\n", .{});
                     captureMouse(self.wd.id);
                     dragPreStart(e.evt.mouse.p, .crosshair, Point{});
                 } else if (e.evt.mouse.state == .leftup) {
@@ -3259,7 +3273,7 @@ pub const PanedWidget = struct {
 
                             self.split_ratio = math.max(0.0, math.min(1.0, self.split_ratio));
                         }
-                    } else if (e.evt.mouse.state == .cursor) {
+                    } else if (e.evt.mouse.state == .position) {
                         cursorSet(cursor);
                     }
                 }
@@ -3936,7 +3950,7 @@ pub const ScrollBar = struct {
                         }
                         self.area.scrollToFraction(f);
                     }
-                } else if (e.evt.mouse.state == .cursor) {
+                } else if (e.evt.mouse.state == .position) {
                     e.handled = true;
                     self.highlight = true;
                 }
@@ -4142,9 +4156,9 @@ pub const ScrollAreaWidget = struct {
         while (iter.next()) |e| {
             switch (e.evt) {
                 .mouse => {
-                    if (e.evt.mouse.state == .leftdown) {
-                        // focus but don't mark as handled so we can drag-move
-                        // a window beneath the scroll area
+                    if (e.evt.mouse.state == .focus) {
+                        e.handled = true;
+                        // focus so that we can receive keyboard input
                         focusWidget(self.wd.id, &iter);
                     } else if (e.evt.mouse.state == .wheel_y) {
                         e.handled = true;
@@ -4330,10 +4344,10 @@ pub const ScaleWidget = struct {
     }
 };
 
-pub fn menu(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) *MenuWidget {
+pub fn menu(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, submenus_activated: bool, opts: Options) *MenuWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(MenuWidget) catch unreachable;
-    ret.* = MenuWidget.init(src, id_extra, dir, opts);
+    ret.* = MenuWidget.init(src, id_extra, dir, submenus_activated, opts);
     ret.install();
     return ret;
 }
@@ -4348,11 +4362,12 @@ pub const MenuWidget = struct {
     box: BoxWidget = undefined,
     submenus_activated: bool = false,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) MenuWidget {
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, submenus_active_in: bool, opts: Options) MenuWidget {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
 
         self.dir = dir;
+        self.submenus_activated = submenus_active_in;
         if (menuGet()) |m| {
             self.submenus_activated = m.submenus_activated;
         } else if (dataGet(self.wd.id, bool)) |a| {
@@ -4417,15 +4432,17 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label_str
     var mi = menuItem(src, id_extra, submenu, opts);
 
     var labelopts = opts.plain();
-    if (mi.active()) {
-        labelopts = labelopts.override(.{ .color_style = .accent });
-    }
-    labelNoFormat(@src(), 0, label_str, labelopts);
 
     var ret: ?Rect = null;
     if (mi.activeRect()) |r| {
         ret = r;
     }
+
+    if (ret != null or mi.focused) {
+        labelopts = labelopts.override(.{ .color_style = .accent });
+    }
+
+    labelNoFormat(@src(), 0, label_str, labelopts);
 
     mi.deinit();
 
@@ -4468,11 +4485,11 @@ pub const MenuItemWidget = struct {
         _ = parentSet(self.widget());
         debug("{x} MenuItem {}", .{ self.wd.id, self.wd.rect });
 
-        if (self.wd.id == focusedWidgetId()) {
+        self.processEvents();
+
+        if (self.wd.id == focusedWidgetIdInCurrentWindow()) {
             self.focused = true;
         }
-
-        self.processEvents();
 
         if (self.wd.options.borderGet().nonZero()) {
             const rs = self.wd.borderRectScale();
@@ -4481,9 +4498,15 @@ pub const MenuItemWidget = struct {
             pathFillConvex(col);
         }
 
-        if (self.active()) {
-            // hovered
+        if (self.focused or (self.activeRect() != null)) {
+            // active
             const fill = themeGet().color_accent_bg;
+            const rs = self.wd.backgroundRectScale();
+            pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
+            pathFillConvex(fill);
+        } else if (self.highlight) {
+            // hovered
+            const fill = Color.lerp(self.wd.options.color_bg(), 0.1, self.wd.options.color());
             const rs = self.wd.backgroundRectScale();
             pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
             pathFillConvex(fill);
@@ -4495,19 +4518,11 @@ pub const MenuItemWidget = struct {
         }
     }
 
-    pub fn active(self: *const Self) bool {
-        return (self.focused or self.highlight or (self.activeRect() != null));
-    }
-
     pub fn activeRect(self: *const Self) ?Rect {
         var act = false;
         if (self.submenu) {
-            if (menuGet().?.submenus_activated) {
-                if (focusedWidgetIdInCurrentWindow()) |id| {
-                    if (id == self.wd.id) {
-                        act = true;
-                    }
-                }
+            if (menuGet().?.submenus_activated and self.focused) {
+                act = true;
             }
         } else if (self.activated) {
             act = true;
@@ -4527,33 +4542,36 @@ pub const MenuItemWidget = struct {
         while (iter.next()) |e| {
             switch (e.evt) {
                 .mouse => {
-                    if (e.evt.mouse.state == .leftdown) {
+                    if (e.evt.mouse.state == .focus) {
                         e.handled = true;
                         if (self.submenu) {
                             focusWidget(self.wd.id, &iter);
                             menuGet().?.submenus_activated = true;
                         }
+                    } else if (e.evt.mouse.state == .leftdown) {
+                        e.handled = true;
                     } else if (e.evt.mouse.state == .leftup) {
                         e.handled = true;
                         if (!self.submenu) {
                             self.activated = true;
                         }
-                    } else if (e.evt.mouse.state == .motion) {
-                        e.handled = true;
-                        // TODO don't do the rest here if the menu has an existing popup and the motion is towards the popup
-                        if (menuGet().?.submenus_activated) {
-                            const winId = focusedWindowId();
-                            focusWindow(null, null);
-                            focusWidget(self.wd.id, null);
-                            if (!popupIn()) {
-                                // if we are in a regular window (like File), then we don't want
-                                // to focus the main window, so keep the focus on the popups
-                                focusWindow(winId, null);
-                            }
-                        }
-                    } else if (e.evt.mouse.state == .cursor) {
+                    } else if (e.evt.mouse.state == .position) {
                         e.handled = true;
                         self.highlight = true;
+
+                        if (mouseMovement().nonZero()) {
+                            // TODO don't do the rest here if the menu has an existing popup and the motion is towards the popup
+                            if (menuGet().?.submenus_activated) {
+                                const winId = focusedWindowId();
+                                focusWindow(null, null);
+                                focusWidget(self.wd.id, null);
+                                if (!popupIn()) {
+                                    // if we are in a regular window (like File), then we don't want
+                                    // to focus the main window, so keep the focus on the popups
+                                    focusWindow(winId, null);
+                                }
+                            }
+                        }
                     }
                 },
                 .key => {
@@ -4749,11 +4767,13 @@ pub const ButtonContainerWidget = struct {
         while (iter.next()) |e| {
             switch (e.evt) {
                 .mouse => {
-                    if (e.evt.mouse.state == .leftdown) {
+                    if (e.evt.mouse.state == .focus) {
+                        e.handled = true;
+                        focusWidget(self.wd.id, &iter);
+                    } else if (e.evt.mouse.state == .leftdown) {
                         e.handled = true;
                         captureMouse(self.wd.id);
                         self.captured = true;
-                        focusWidget(self.wd.id, &iter);
                     } else if (e.evt.mouse.state == .leftup) {
                         e.handled = true;
                         if (self.captured) {
@@ -4763,7 +4783,7 @@ pub const ButtonContainerWidget = struct {
                                 ret = true;
                             }
                         }
-                    } else if (e.evt.mouse.state == .cursor) {
+                    } else if (e.evt.mouse.state == .position) {
                         e.handled = true;
                         self.highlight = true;
                     }
@@ -5037,11 +5057,13 @@ pub const TextEntryWidget = struct {
                     self.len += new.len;
                 },
                 .mouse => {
-                    if (e.evt.mouse.state == .leftdown) {
+                    if (e.evt.mouse.state == .focus) {
+                        e.handled = true;
+                        focusWidget(self.wd.id, &iter);
+                    } else if (e.evt.mouse.state == .leftdown) {
                         e.handled = true;
                         captureMouse(self.wd.id);
                         self.captured = true;
-                        focusWidget(self.wd.id, &iter);
                     } else if (e.evt.mouse.state == .leftup) {
                         e.handled = true;
                         captureMouse(null);
@@ -5123,6 +5145,10 @@ pub const Point = struct {
     const Self = @This();
     x: f32 = 0,
     y: f32 = 0,
+
+    pub fn nonZero(self: *const Self) bool {
+        return (self.x != 0 or self.y != 0);
+    }
 
     pub fn inRectScale(self: *const Self, rs: RectScale) Self {
         return Self{ .x = (self.x - rs.r.x) / rs.s, .y = (self.y - rs.r.y) / rs.s };
@@ -5576,11 +5602,19 @@ pub const MouseEvent = struct {
         leftup,
         rightdown,
         rightup,
-        motion,
-        // cursor event is always last to figure out what the mouse cursor
-        // should be
-        cursor,
         wheel_y,
+        // focus events typically come right before leftdown/rightdown events,
+        // because sometimes a scrollArea wants to get the focus but let the
+        // underlying window handle the click
+        focus,
+        // if you just want to react to the current mouse position if it got
+        // moved, use the .position event with mouseMovement()
+        motion,
+        // only one position event per frame, and it's always after all other
+        // mouse events, used to change mouse cursor and do widget highlighting
+        // - also useful with mouseMovement() to respond to mouse motion but
+        // only at the final location
+        position,
     };
     p: Point,
     dp: Point, // for .motion
