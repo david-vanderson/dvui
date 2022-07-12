@@ -2646,16 +2646,21 @@ pub const PopupWidget = struct {
         while (iter.nextCleanup(true)) |e| {
             // mark all events as handled so no mouse events are handled by windows
             // under us
-            e.handled = true;
             if (e.evt == .mouse) {
+                e.handled = true;
                 if (e.evt.mouse.state == .focus) {
                     // unhandled click, clear focus
                     focusWidget(null, null);
                 }
             } else if (e.evt == .key) {
                 if (e.evt.key.state == .down and e.evt.key.keysym == .escape) {
+                    e.handled = true;
                     var closeE = Event{ .evt = AnyEvent{ .close_popup = ClosePopupEvent{} } };
                     self.bubbleEvent(&closeE);
+                } else if (e.evt.key.state == .down and e.evt.key.keysym == .tab) {
+                    self.layout.bubbleEvent(e);
+                } else {
+                    e.handled = true;
                 }
             }
         }
@@ -4404,6 +4409,7 @@ pub const MenuWidget = struct {
 
     wd: WidgetData = undefined,
 
+    winId: u32 = undefined,
     dir: Direction = undefined,
     parentMenu: ?*MenuWidget = null,
     box: BoxWidget = undefined,
@@ -4417,6 +4423,7 @@ pub const MenuWidget = struct {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
 
+        self.winId = windowCurrentId();
         self.dir = dir;
         self.submenus_activated = submenus_active_in;
         if (menuGet()) |m| {
@@ -4466,7 +4473,26 @@ pub const MenuWidget = struct {
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
-        self.wd.parent.bubbleEvent(e);
+        switch (e.evt) {
+            .key => {
+                if (e.evt.key.state == .down and e.evt.key.keysym == .tab) {
+                    if (self.parentMenu == null) {
+                        e.handled = true;
+                        focusWindow(self.winId, null);
+                        if (e.evt.key.mod.shift()) {
+                            tabIndexPrev(null);
+                        } else {
+                            tabIndexNext(null);
+                        }
+                    }
+                }
+            },
+            else => {},
+        }
+
+        if (!e.handled) {
+            self.wd.parent.bubbleEvent(e);
+        }
     }
 
     pub fn deinit(self: *Self) void {
@@ -4496,7 +4522,7 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label_str
         focused = true;
     }
 
-    if (focused or (mi.focused_in_win and mi.highlight)) {
+    if (mi.show_active) {
         labelopts = labelopts.override(.{ .color_style = .accent });
     }
 
@@ -4527,6 +4553,7 @@ pub const MenuItemWidget = struct {
     highlight: bool = false,
     submenu: bool = false,
     activated: bool = false,
+    show_active: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, opts: Options) Self {
         var self = Self{};
@@ -4563,7 +4590,12 @@ pub const MenuItemWidget = struct {
         }
 
         if (focused or (self.focused_in_win and self.highlight)) {
-            // active
+            if (!self.submenu or !menuGet().?.submenus_activated) {
+                self.show_active = true;
+            }
+        }
+
+        if (self.show_active) {
             const fill = themeGet().color_accent_bg;
             const rs = self.wd.backgroundRectScale();
             pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
