@@ -1230,13 +1230,13 @@ pub fn popupAncestorFocused(id: u32) bool {
                 }
                 prevId = pid;
             } else {
-                // found a non popup window so stop
-                return false;
+                // non popup window
+                return (fd.id == cw.focused_windowId);
             }
         }
     }
 
-    return false;
+    return (cw.wd.id == cw.focused_windowId);
 }
 
 pub fn floatingWindowNoChildren() bool {
@@ -1343,7 +1343,7 @@ pub fn dragEnd() void {
     cw.drag_state = .none;
 }
 
-pub fn mouseMovement() Point {
+pub fn mouseTotalMotion() Point {
     const cw = current_window orelse unreachable;
     return Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
 }
@@ -1977,8 +1977,11 @@ pub const Window = struct {
         const newpt = (Point{ .x = x, .y = y }).scale(self.natural_scale);
         const dp = newpt.diff(self.mouse_pt);
         self.mouse_pt = newpt;
-
         const winId = windowFor(self.mouse_pt);
+
+        // focus follows mouse:
+        //focusWindow(winId, null);
+
         self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
             .p = self.mouse_pt,
             .dp = dp,
@@ -1996,9 +1999,15 @@ pub const Window = struct {
 
         const winId = windowFor(self.mouse_pt);
 
-        if (state == .leftdown or state == .rightdown) {
-            focusWindow(winId, null);
+        self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
+            .p = self.mouse_pt,
+            .dp = Point{},
+            .wheel = 0,
+            .floating_win = winId,
+            .state = state,
+        } } }) catch unreachable;
 
+        if (state == .leftdown or state == .rightdown) {
             // add mouse focus event
             self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
                 .p = self.mouse_pt,
@@ -2007,15 +2016,15 @@ pub const Window = struct {
                 .floating_win = winId,
                 .state = .focus,
             } } }) catch unreachable;
+
+            // have to check for the base window here because it doesn't have
+            // an install() step
+            if (winId == self.wd.id) {
+                // focus but let the focus event propagate to widgets
+                focusWindow(self.wd.id, null);
+            }
         }
 
-        self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
-            .p = self.mouse_pt,
-            .dp = Point{},
-            .wheel = 0,
-            .floating_win = winId,
-            .state = state,
-        } } }) catch unreachable;
 
         return (self.wd.id != winId);
     }
@@ -2494,11 +2503,11 @@ pub const Window = struct {
         switch (e.evt) {
             .close_popup => |cp| {
                 e.handled = true;
-                // when a popup is closed, the window that spawned it (which had focus
-                // previously) should become focused again
-                focusWindow(self.wd.id, null);
-                if (cp.defocus) {
-                    focusWidget(null, null);
+                if (cp.intentional) {
+                    // when a popup is closed due to a menu item being chosen,
+                    // the window that spawned it (which had focus previously)
+                    // should become focused again
+                    focusWindow(self.wd.id, null);
                 }
             },
             else => {},
@@ -2559,8 +2568,8 @@ pub const PopupWidget = struct {
 
         self.prev_windowId = windowCurrentSet(self.wd.id);
 
-        if (dataGet(self.wd.id, Rect)) |p| {
-            self.wd.rect = p;
+        if (minSizeGetPrevious(self.wd.id)) |_| {
+            self.wd.rect = Rect.fromPoint(self.initialRect.topleft());
             const ms = minSize(self.wd.id, self.options.min_size orelse .{});
             self.wd.rect.w = ms.w;
             self.wd.rect.h = ms.h;
@@ -2645,15 +2654,20 @@ pub const PopupWidget = struct {
                 }
             } else if (e.evt == .key) {
                 if (e.evt.key.state == .down and e.evt.key.keysym == .escape) {
-                    var closeE = Event{ .evt = AnyEvent{ .close_popup = ClosePopupEvent{ .defocus = false } } };
+                    var closeE = Event{ .evt = AnyEvent{ .close_popup = ClosePopupEvent{} } };
                     self.bubbleEvent(&closeE);
                 }
             }
         }
 
         if (floatingWindowNoChildren() and !popupAncestorFocused(self.wd.id)) {
-            // this popup is the last popup in the chain and none of them are focused
-            self.close();
+            // if a popup chain is open and the user focuses a different window
+            // (not the parent of the popups), then we want to close the popups
+
+            // only the last popup can do the check, you can't query the focus
+            // status of children, only parents
+            var closeE = Event{ .evt = AnyEvent{ .close_popup = ClosePopupEvent{ .intentional = false } } };
+            self.bubbleEvent(&closeE);
         }
 
         self.layout.deinit();
@@ -2818,6 +2832,11 @@ pub const FloatingWindowWidget = struct {
                     corner = true;
                 }
 
+                if (e.evt.mouse.state == .focus) {
+                    // focus but let the focus event propagate to widgets
+                    focusWindow(self.wd.id, &iter);
+                }
+
                 if (captured or corner) {
                     if (e.evt.mouse.state == .leftdown) {
                         // capture and start drag
@@ -2941,11 +2960,11 @@ pub const FloatingWindowWidget = struct {
         switch (e.evt) {
             .close_popup => |cp| {
                 e.handled = true;
-                // when a popup is closed, the window that spawned it (which had focus
-                // previously) should become focused again
-                focusWindow(self.wd.id, null);
-                if (cp.defocus) {
-                    focusWidget(null, null);
+                if (cp.intentional) {
+                    // when a popup is closed because the user chose to, the
+                    // window that spawned it (which had focus previously)
+                    // should become focused again
+                    focusWindow(self.wd.id, null);
                 }
             },
             else => {},
@@ -3564,17 +3583,23 @@ pub const ContextWidget = struct {
     wd: WidgetData = undefined,
 
     winId: u32 = undefined,
-    active: bool = false,
+    focused: bool = false,
     activePt: Point = Point{},
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Self {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
         self.winId = windowCurrentId();
+        if (focusedWidgetIdInCurrentWindow()) |fid| {
+            if (fid == self.wd.id) {
+                self.focused = true;
+            }
+        }
+
         if (dataGet(self.wd.id, Point)) |a| {
-            self.active = true;
             self.activePt = a;
         }
+
         return self;
     }
 
@@ -3585,11 +3610,11 @@ pub const ContextWidget = struct {
     }
 
     pub fn activePoint(self: *Self) ?Point {
-        if (self.active) {
+        if (self.focused) {
             return self.activePt;
-        } else {
-            return null;
         }
+
+        return null;
     }
 
     fn widget(self: *Self) Widget {
@@ -3613,10 +3638,25 @@ pub const ContextWidget = struct {
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
-        self.wd.parent.bubbleEvent(e);
+        switch (e.evt) {
+            .close_popup => {
+                if (self.focused) {
+                    const focused_winId = focusedWindowId();
+                    focusWindow(self.winId, null);
+                    focusWidget(null, null);
+                    focusWindow(focused_winId, null);
+                }
+            },
+            else => {},
+        }
+
+        if (!e.handled) {
+            self.wd.parent.bubbleEvent(e);
+        }
     }
 
     pub fn processMouseEventsAfter(self: *Self) void {
+        var focused_this_frame: bool = false;
         const rs = self.wd.borderRectScale();
         var iter = EventIterator.init(self.wd.id, rs.r);
         while (iter.next()) |e| {
@@ -3624,13 +3664,20 @@ pub const ContextWidget = struct {
                 .mouse => {
                     if (e.evt.mouse.state == .rightdown) {
                         e.handled = true;
-                        self.active = true;
+                        focusWidget(self.wd.id, &iter);
+                        self.focused = true;
+                        focused_this_frame = true;
 
                         // scale the point back to natural so we can use it in Popup
                         self.activePt = e.evt.mouse.p.scale(1 / windowNaturalScale());
 
                         // offset just enough so when Popup first appears nothing is highlighted
                         self.activePt.x += 1;
+                    }
+                    else if (e.evt.mouse.state == .focus) {
+                        if (focused_this_frame) {
+                            e.handled = true;
+                        }
                     }
                 },
                 else => {},
@@ -3640,7 +3687,7 @@ pub const ContextWidget = struct {
 
     pub fn deinit(self: *Self) void {
         self.processMouseEventsAfter();
-        if (self.active) {
+        if (self.focused) {
             dataSet(self.wd.id, self.activePt);
         }
         self.wd.minSizeSetAndCue();
@@ -4360,7 +4407,11 @@ pub const MenuWidget = struct {
     dir: Direction = undefined,
     parentMenu: ?*MenuWidget = null,
     box: BoxWidget = undefined,
+
     submenus_activated: bool = false,
+    // each MenuItemWidget child will set this if it has focus, so that we will
+    // automatically turn it off if none of our children have focus
+    submenus_activated_next_frame: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, submenus_active_in: bool, opts: Options) MenuWidget {
         var self = Self{};
@@ -4420,7 +4471,9 @@ pub const MenuWidget = struct {
 
     pub fn deinit(self: *Self) void {
         self.box.deinit();
-        dataSet(self.wd.id, self.submenus_activated);
+        if (self.submenus_activated and self.submenus_activated_next_frame) {
+            dataSet(self.wd.id, self.submenus_activated);
+        }
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
         _ = menuSet(self.parentMenu);
@@ -4438,7 +4491,12 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label_str
         ret = r;
     }
 
-    if (ret != null or mi.focused) {
+    var focused: bool = false;
+    if (mi.wd.id == focusedWidgetId()) {
+        focused = true;
+    }
+
+    if (focused or (mi.focused_in_win and mi.highlight)) {
         labelopts = labelopts.override(.{ .color_style = .accent });
     }
 
@@ -4465,7 +4523,7 @@ pub const MenuItemWidget = struct {
     };
 
     wd: WidgetData = undefined,
-    focused: bool = false,
+    focused_in_win: bool = false,
     highlight: bool = false,
     submenu: bool = false,
     activated: bool = false,
@@ -4488,7 +4546,8 @@ pub const MenuItemWidget = struct {
         self.processEvents();
 
         if (self.wd.id == focusedWidgetIdInCurrentWindow()) {
-            self.focused = true;
+            self.focused_in_win = true;
+            menuGet().?.submenus_activated_next_frame = true;
         }
 
         if (self.wd.options.borderGet().nonZero()) {
@@ -4498,13 +4557,18 @@ pub const MenuItemWidget = struct {
             pathFillConvex(col);
         }
 
-        if (self.focused or (self.activeRect() != null)) {
+        var focused: bool = false;
+        if (self.wd.id == focusedWidgetId()) {
+            focused = true;
+        }
+
+        if (focused or (self.focused_in_win and self.highlight)) {
             // active
             const fill = themeGet().color_accent_bg;
             const rs = self.wd.backgroundRectScale();
             pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
             pathFillConvex(fill);
-        } else if (self.highlight) {
+        } else if (self.focused_in_win or self.highlight) {
             // hovered
             const fill = Color.lerp(self.wd.options.color_bg(), 0.1, self.wd.options.color());
             const rs = self.wd.backgroundRectScale();
@@ -4521,7 +4585,7 @@ pub const MenuItemWidget = struct {
     pub fn activeRect(self: *const Self) ?Rect {
         var act = false;
         if (self.submenu) {
-            if (menuGet().?.submenus_activated and self.focused) {
+            if (menuGet().?.submenus_activated and self.focused_in_win) {
                 act = true;
             }
         } else if (self.activated) {
@@ -4559,7 +4623,7 @@ pub const MenuItemWidget = struct {
                         e.handled = true;
                         self.highlight = true;
 
-                        if (mouseMovement().nonZero()) {
+                        if (mouseTotalMotion().nonZero()) {
                             // TODO don't do the rest here if the menu has an existing popup and the motion is towards the popup
                             if (menuGet().?.submenus_activated) {
                                 const winId = focusedWindowId();
@@ -5603,16 +5667,16 @@ pub const MouseEvent = struct {
         rightdown,
         rightup,
         wheel_y,
-        // focus events typically come right before leftdown/rightdown events,
-        // because sometimes a scrollArea wants to get the focus but let the
-        // underlying window handle the click
+        // focus events come right before their associated mouse event, either
+        // leftdown/rightdown or motion, because sometimes a scrollArea wants
+        // to get the focus but let the underlying window handle the click
         focus,
         // if you just want to react to the current mouse position if it got
-        // moved, use the .position event with mouseMovement()
+        // moved, use the .position event with mouseTotalMotion()
         motion,
         // only one position event per frame, and it's always after all other
         // mouse events, used to change mouse cursor and do widget highlighting
-        // - also useful with mouseMovement() to respond to mouse motion but
+        // - also useful with mouseTotalMotion() to respond to mouse motion but
         // only at the final location
         position,
     };
@@ -5624,9 +5688,9 @@ pub const MouseEvent = struct {
 };
 
 pub const ClosePopupEvent = struct {
-    // if we are closing the popups because the user selected a menu item then we
-    // should defocus the original File menu
-    defocus: bool = true,
+    // are we closing because of a specific user action (clicked on menu item,
+    // pressed escape), or because they clicked off the menu somewhere?
+    intentional: bool = true,
 };
 
 pub const AnyEvent = union(enum) {
