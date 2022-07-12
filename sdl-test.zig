@@ -57,7 +57,7 @@ pub fn main() !void {
 
             if (context.activePoint()) |cp| {
                 //std.debug.print("context.rect {}\n", .{context.rect});
-                var fw2 = gui.popup(@src(), 0, gui.Rect.fromPoint(cp), &context.active, .{});
+                var fw2 = gui.popup(@src(), 0, gui.Rect.fromPoint(cp), null, .{});
                 defer fw2.deinit();
 
                 _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
