@@ -2589,7 +2589,7 @@ pub const PopupWidget = struct {
 
         // we are using MenuWidget to do border/background but floating windows
         // don't have margin, so turn that off
-        self.layout = MenuWidget.init(@src(), 0, .vertical, true, self.options.override(.{ .margin = .{} }));
+        self.layout = MenuWidget.init(@src(), 0, .vertical, self.options.override(.{ .margin = .{} }));
         self.layout.install();
     }
 
@@ -4404,10 +4404,10 @@ pub const ScaleWidget = struct {
     }
 };
 
-pub fn menu(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, submenus_activated: bool, opts: Options) *MenuWidget {
+pub fn menu(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) *MenuWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(MenuWidget) catch unreachable;
-    ret.* = MenuWidget.init(src, id_extra, dir, submenus_activated, opts);
+    ret.* = MenuWidget.init(src, id_extra, dir, opts);
     ret.install();
     return ret;
 }
@@ -4427,13 +4427,12 @@ pub const MenuWidget = struct {
     // automatically turn it off if none of our children have focus
     submenus_activated_next_frame: bool = false,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, submenus_active_in: bool, opts: Options) MenuWidget {
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) MenuWidget {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
 
         self.winId = windowCurrentId();
         self.dir = dir;
-        self.submenus_activated = submenus_active_in;
         if (dataGet(self.wd.id, bool)) |a| {
             self.submenus_activated = a;
             //std.debug.print("menu dataGet {x} {}\n", .{self.wd.id, self.submenus_activated});
