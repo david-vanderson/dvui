@@ -57,7 +57,7 @@ pub fn main() !void {
 
             if (context.activePoint()) |cp| {
                 //std.debug.print("context.rect {}\n", .{context.rect});
-                var fw2 = gui.popup(@src(), 0, gui.Rect.fromPoint(cp), null, .{});
+                var fw2 = gui.popup(@src(), 0, gui.Rect.fromPoint(cp), .{});
                 defer fw2.deinit();
 
                 _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
@@ -77,13 +77,13 @@ pub fn main() !void {
 
                     {
                         if (gui.menuItemLabel(@src(), 0, "File", true, .{})) |r| {
-                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, .{});
+                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                             defer fw.deinit();
 
                             if (gui.menuItemLabel(@src(), 0, "Open...", true, .{})) |rr| {
                                 var menu_rect2 = rr;
                                 menu_rect2.x += menu_rect2.w;
-                                var fw2 = gui.popup(@src(), 0, menu_rect2, null, .{});
+                                var fw2 = gui.popup(@src(), 0, menu_rect2, .{});
                                 defer fw2.deinit();
 
                                 _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
@@ -102,7 +102,7 @@ pub fn main() !void {
 
                     {
                         if (gui.menuItemLabel(@src(), 0, "Edit", true, .{})) |r| {
-                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, .{});
+                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                             defer fw.deinit();
 
                             _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
@@ -113,7 +113,7 @@ pub fn main() !void {
 
                     {
                         if (gui.menuItemLabel(@src(), 0, "Theme", true, .{})) |r| {
-                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, .{});
+                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                             defer fw.deinit();
 
                             gui.checkbox(@src(), 0, &theme_dark, "Dark", .{});
@@ -319,13 +319,13 @@ pub fn main() !void {
 
                     {
                         if (gui.menuItemLabel(@src(), 0, "File", true, .{})) |r| {
-                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, .{});
+                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                             defer fw.deinit();
 
                             if (gui.menuItemLabel(@src(), 0, "Open...", true, .{})) |rr| {
                                 var menu_rect2 = rr;
                                 menu_rect2.x += menu_rect2.w;
-                                var fw2 = gui.popup(@src(), 0, menu_rect2, null, .{});
+                                var fw2 = gui.popup(@src(), 0, menu_rect2, .{});
                                 defer fw2.deinit();
 
                                 _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
@@ -344,7 +344,7 @@ pub fn main() !void {
 
                     {
                         if (gui.menuItemLabel(@src(), 0, "Edit", true, .{})) |r| {
-                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, .{});
+                            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                             defer fw.deinit();
 
                             _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});

@@ -2517,10 +2517,10 @@ pub const Window = struct {
     }
 };
 
-pub fn popup(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, openflag: ?*bool, opts: Options) *PopupWidget {
+pub fn popup(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, opts: Options) *PopupWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(PopupWidget) catch unreachable;
-    ret.* = PopupWidget.init(src, id_extra, initialRect, openflag, opts);
+    ret.* = PopupWidget.init(src, id_extra, initialRect, opts);
     ret.install();
     return ret;
 }
@@ -2534,11 +2534,10 @@ pub const PopupWidget = struct {
     prev_windowId: u32 = 0,
     layout: MenuWidget = undefined,
     initialRect: Rect = Rect{},
-    openflag: ?*bool = null,
     prevClip: Rect = Rect{},
     deferred_render_queue: DeferredRenderQueue = undefined,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, openflag: ?*bool, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, opts: Options) Self {
         var self = Self{};
 
         // options is really for our embedded MenuWidget, so save them for the
@@ -2552,7 +2551,6 @@ pub const PopupWidget = struct {
         self.wd = WidgetData.init(src, id_extra, self.options.plain().override(.{ .rect = .{} }));
 
         self.initialRect = initialRect;
-        self.openflag = openflag;
         return self;
     }
 
@@ -2597,9 +2595,6 @@ pub const PopupWidget = struct {
 
     pub fn close(self: *Self) void {
         floatingWindowClosing(self.wd.id);
-        if (self.openflag) |of| {
-            of.* = false;
-        }
     }
 
     fn widget(self: *Self) Widget {
@@ -2641,12 +2636,13 @@ pub const PopupWidget = struct {
 
     pub fn deinit(self: *Self) void {
         // outside normal flow, so don't get rect from parent
+        var closing: bool = false;
         const rs = self.screenRectScale(self.wd.rect);
         var iter = EventIterator.init(self.wd.id, rs.r);
         while (iter.nextCleanup(true)) |e| {
-            // mark all events as handled so no mouse events are handled by windows
-            // under us
             if (e.evt == .mouse) {
+                // mark all events as handled so no mouse events are handled by
+                // windows under us
                 e.handled = true;
                 if (e.evt.mouse.state == .focus) {
                     // unhandled click, clear focus
@@ -2659,13 +2655,25 @@ pub const PopupWidget = struct {
                     self.bubbleEvent(&closeE);
                 } else if (e.evt.key.state == .down and e.evt.key.keysym == .tab) {
                     self.layout.bubbleEvent(e);
-                } else {
+                } else if (e.evt.key.state == .down and e.evt.key.keysym == .up) {
                     e.handled = true;
+                    tabIndexPrev(&iter);
+                } else if (e.evt.key.state == .down and e.evt.key.keysym == .down) {
+                    e.handled = true;
+                    tabIndexNext(&iter);
+                } else if (e.evt.key.state == .down and e.evt.key.keysym == .left) {
+                    e.handled = true;
+                    self.close();
+                    closing = true;
+                    focusWindow(self.prev_windowId, &iter);
+                    if (self.layout.parentMenu) |pm| {
+                        pm.submenus_activated = false;
+                    }
                 }
             }
         }
 
-        if (floatingWindowNoChildren() and !popupAncestorFocused(self.wd.id)) {
+        if (!closing and floatingWindowNoChildren() and !popupAncestorFocused(self.wd.id)) {
             // if a popup chain is open and the user focuses a different window
             // (not the parent of the popups), then we want to close the popups
 
@@ -4426,10 +4434,12 @@ pub const MenuWidget = struct {
         self.winId = windowCurrentId();
         self.dir = dir;
         self.submenus_activated = submenus_active_in;
-        if (menuGet()) |m| {
-            self.submenus_activated = m.submenus_activated;
-        } else if (dataGet(self.wd.id, bool)) |a| {
+        if (dataGet(self.wd.id, bool)) |a| {
             self.submenus_activated = a;
+            //std.debug.print("menu dataGet {x} {}\n", .{self.wd.id, self.submenus_activated});
+        } else if (menuGet()) |m| {
+            self.submenus_activated = m.submenus_activated;
+            //std.debug.print("menu menuGet {x} {}\n", .{self.wd.id, self.submenus_activated});
         }
 
         return self;
@@ -4474,6 +4484,9 @@ pub const MenuWidget = struct {
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
         switch (e.evt) {
+            .close_popup => {
+                self.submenus_activated = false;
+            },
             .key => {
                 if (e.evt.key.state == .down and e.evt.key.keysym == .tab) {
                     if (self.parentMenu == null) {
@@ -4497,7 +4510,7 @@ pub const MenuWidget = struct {
 
     pub fn deinit(self: *Self) void {
         self.box.deinit();
-        if (self.submenus_activated and self.submenus_activated_next_frame) {
+        if (self.submenus_activated_next_frame) {
             dataSet(self.wd.id, self.submenus_activated);
         }
         self.wd.minSizeSetAndCue();
@@ -4640,12 +4653,12 @@ pub const MenuItemWidget = struct {
                 .mouse => {
                     if (e.evt.mouse.state == .focus) {
                         e.handled = true;
-                        if (self.submenu) {
-                            focusWidget(self.wd.id, &iter);
-                            menuGet().?.submenus_activated = true;
-                        }
                     } else if (e.evt.mouse.state == .leftdown) {
                         e.handled = true;
+                        if (self.submenu) {
+                            focusWidget(self.wd.id, &iter);
+                            menuGet().?.submenus_activated = !menuGet().?.submenus_activated;
+                        }
                     } else if (e.evt.mouse.state == .leftup) {
                         e.handled = true;
                         if (!self.submenu) {
@@ -4674,10 +4687,14 @@ pub const MenuItemWidget = struct {
                     if (e.evt.key.state == .down and e.evt.key.keysym == .space) {
                         e.handled = true;
                         if (self.submenu) {
-                            focusWidget(self.wd.id, &iter);
                             menuGet().?.submenus_activated = true;
                         } else {
                             self.activated = true;
+                        }
+                    } else if (e.evt.key.state == .down and e.evt.key.keysym == .right) {
+                        e.handled = true;
+                        if (self.submenu) {
+                            menuGet().?.submenus_activated = true;
                         }
                     }
                 },
