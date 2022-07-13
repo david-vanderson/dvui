@@ -1474,12 +1474,19 @@ pub fn minSizeSet(id: u32, s: Size) void {
     return cw.widgets_min_size.put(id, s) catch unreachable;
 }
 
+pub fn hashIdKey(id: u32, key: []const u8) u32 {
+    var h = fnv.init();
+    h.value = id;
+    h.update(key);
+    return h.final();
+}
+
 const DataOffset = struct {
     begin: u32,
     end: u32,
 };
 
-pub fn dataSet(id: u32, data: anytype) void {
+pub fn dataSet(id: u32, key: []const u8, data: anytype) void {
     var cw = current_window orelse unreachable;
     var bytes: []const u8 = undefined;
     const dt = @typeInfo(@TypeOf(data));
@@ -1491,29 +1498,16 @@ pub fn dataSet(id: u32, data: anytype) void {
     const begin = @intCast(u32, cw.data.items.len);
     cw.data.appendSlice(bytes) catch unreachable;
     const end = @intCast(u32, cw.data.items.len);
-    cw.data_offset.put(id, DataOffset{ .begin = begin, .end = end }) catch unreachable;
+    cw.data_offset.put(hashIdKey(id, key), DataOffset{ .begin = begin, .end = end }) catch unreachable;
 }
 
-pub fn dataGet(id: u32, comptime T: type) ?T {
+pub fn dataGet(id: u32, key: []const u8, comptime T: type) ?T {
     var cw = current_window orelse unreachable;
-    const offset = cw.data_offset_prev.get(id);
+    const offset = cw.data_offset_prev.get(hashIdKey(id, key));
     if (offset) |o| {
         var bytes: [@sizeOf(T)]u8 = undefined;
         std.mem.copy(u8, &bytes, cw.data_prev.items[o.begin..o.end]);
         return std.mem.bytesAsValue(T, &bytes).*;
-    } else {
-        return null;
-    }
-}
-
-pub fn dataGetSlice(id: u32, comptime T: type, arena: std.mem.Allocator) ?[]T {
-    var cw = current_window orelse unreachable;
-    const offset = cw.data_offset_prev.get(id);
-    if (offset) |o| {
-        var slice = arena.alloc(T, @divExact(o.end - o.begin, @sizeOf(T))) catch unreachable;
-        var bytes: []u8 = std.mem.sliceAsBytes(slice);
-        std.mem.copy(u8, bytes, cw.data_prev.items[o.begin..o.end]);
-        return slice;
     } else {
         return null;
     }
@@ -1660,13 +1654,6 @@ pub const Animation = struct {
     start_time: i32 = 0,
     end_time: i32,
 
-    pub fn hash(id: u32, key: []const u8) u32 {
-        var h = fnv.init();
-        h.value = id;
-        h.update(key);
-        return h.final();
-    }
-
     pub fn lerp(a: *const Animation) f32 {
         var frac = @intToFloat(f32, -a.start_time) / @intToFloat(f32, a.end_time - a.start_time);
         frac = math.max(0, math.min(1, frac));
@@ -1676,13 +1663,13 @@ pub const Animation = struct {
 
 pub fn animate(id: u32, key: []const u8, a: Animation) void {
     var cw = current_window orelse unreachable;
-    const h = Animation.hash(id, key);
+    const h = hashIdKey(id, key);
     cw.animations.put(h, a) catch unreachable;
 }
 
 pub fn animationGet(id: u32, key: []const u8) ?Animation {
     var cw = current_window orelse unreachable;
-    const h = Animation.hash(id, key);
+    const h = hashIdKey(id, key);
     return cw.animations.get(h);
 }
 
@@ -2684,7 +2671,7 @@ pub const PopupWidget = struct {
         }
 
         self.layout.deinit();
-        dataSet(self.wd.id, self.wd.rect);
+        dataSet(self.wd.id, "_rect", self.wd.rect);
         self.wd.minSizeSetAndCue();
         // outside normal layout, don't call minSizeForChild or
         // wd.minSizeReportToParent
@@ -2721,7 +2708,6 @@ pub const FloatingWindowWidget = struct {
     openflag: ?*bool = null,
     deferred_render_queue: DeferredRenderQueue = undefined,
     prevClip: Rect = Rect{},
-    autoId: u32 = undefined,
     autoPosSize: struct {
         autopos: bool,
         autosize: bool,
@@ -2763,11 +2749,10 @@ pub const FloatingWindowWidget = struct {
             self.wd.rect = ior.*;
         } else {
             // we store the rect (only while the window is open)
-            self.wd.rect = dataGet(self.wd.id, Rect) orelse Rect{};
+            self.wd.rect = dataGet(self.wd.id, "_rect", Rect) orelse Rect{};
         }
 
-        self.autoId = parentGet().extendID(@src(), 0);
-        if (dataGet(self.autoId, @TypeOf(self.autoPosSize))) |aps| {
+        if (dataGet(self.wd.id, "_autoPosSize", @TypeOf(self.autoPosSize))) |aps| {
             self.autoPosSize = aps;
         } else {
             self.autoPosSize = .{
@@ -2999,9 +2984,9 @@ pub const FloatingWindowWidget = struct {
             }
         } else {
             // we store the rect
-            dataSet(self.wd.id, self.wd.rect);
+            dataSet(self.wd.id, "_rect", self.wd.rect);
         }
-        dataSet(self.autoId, self.autoPosSize);
+        dataSet(self.wd.id, "_autoPosSize", self.autoPosSize);
         self.wd.minSizeSetAndCue();
         // outside normal layout, don't call minSizeForChild or
         // wd.minSizeReportToParent
@@ -3041,7 +3026,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
     defer bc.deinit();
 
     var expanded: bool = false;
-    if (gui.dataGet(bc.wd.id, bool)) |e| {
+    if (gui.dataGet(bc.wd.id, "_expand", bool)) |e| {
         expanded = e;
     }
 
@@ -3063,7 +3048,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
     }
     labelNoFormat(@src(), 0, label_str, options.plain());
 
-    gui.dataSet(bc.wd.id, expanded);
+    gui.dataSet(bc.wd.id, "_expand", expanded);
 
     return expanded;
 }
@@ -3110,7 +3095,7 @@ pub const PanedWidget = struct {
         const rect = self.wd.contentRect();
         self.prevClip = clip(self.wd.parent.screenRectScale(rect).r);
 
-        if (gui.dataGet(self.wd.id, Data)) |d| {
+        if (gui.dataGet(self.wd.id, "_data", Data)) |d| {
             self.split_ratio = d.split_ratio;
             switch (self.dir) {
                 .horizontal => {
@@ -3339,7 +3324,7 @@ pub const PanedWidget = struct {
 
     pub fn deinit(self: *Self) void {
         clipSet(self.prevClip);
-        gui.dataSet(self.wd.id, Data{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
+        gui.dataSet(self.wd.id, "_data", Data{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
         _ = gui.parentSet(self.wd.parent);
@@ -3556,7 +3541,7 @@ pub const ContextWidget = struct {
             }
         }
 
-        if (dataGet(self.wd.id, Point)) |a| {
+        if (dataGet(self.wd.id, "_activePt", Point)) |a| {
             self.activePt = a;
         }
 
@@ -3648,7 +3633,7 @@ pub const ContextWidget = struct {
     pub fn deinit(self: *Self) void {
         self.processMouseEventsAfter();
         if (self.focused) {
-            dataSet(self.wd.id, self.activePt);
+            dataSet(self.wd.id, "_activePt", self.activePt);
         }
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
@@ -3743,7 +3728,7 @@ pub const BoxWidget = struct {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
         self.dir = dir;
-        if (dataGet(self.wd.id, Data)) |d| {
+        if (dataGet(self.wd.id, "_data", Data)) |d| {
             self.data_prev = d;
         }
         return self;
@@ -3851,7 +3836,7 @@ pub const BoxWidget = struct {
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
 
-        dataSet(self.wd.id, Data{ .total_weight_prev = self.total_weight, .space_taken_prev = self.space_taken });
+        dataSet(self.wd.id, "_data", Data{ .total_weight_prev = self.total_weight, .space_taken_prev = self.space_taken });
 
         _ = parentSet(self.wd.parent);
     }
@@ -4014,7 +3999,7 @@ pub const ScrollAreaWidget = struct {
             self.virtualSize = vs;
         }
 
-        if (dataGet(self.wd.id, Data)) |d| {
+        if (dataGet(self.wd.id, "_data", Data)) |d| {
             if (virtual_size == null) {
                 self.virtualSize = d.virtualSize;
             }
@@ -4189,7 +4174,7 @@ pub const ScrollAreaWidget = struct {
         }
 
         const d = Data{ .virtualSize = self.nextVirtualSize, .scroll = scroll };
-        dataSet(self.wd.id, d);
+        dataSet(self.wd.id, "_data", d);
 
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
@@ -4282,7 +4267,7 @@ pub const ScaleWidget = struct {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
         self.scale = initial_scale;
-        if (dataGet(self.wd.id, f32)) |s| {
+        if (dataGet(self.wd.id, "_scale", f32)) |s| {
             self.scale = s;
         }
         return self;
@@ -4344,7 +4329,7 @@ pub const ScaleWidget = struct {
 
     pub fn deinit(self: *Self) void {
         self.processEventsAfter();
-        dataSet(self.wd.id, self.scale);
+        dataSet(self.wd.id, "_scale", self.scale);
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
@@ -4380,7 +4365,7 @@ pub const MenuWidget = struct {
 
         self.winId = windowCurrentId();
         self.dir = dir;
-        if (dataGet(self.wd.id, bool)) |a| {
+        if (dataGet(self.wd.id, "_sub_act", bool)) |a| {
             self.submenus_activated = a;
             //std.debug.print("menu dataGet {x} {}\n", .{self.wd.id, self.submenus_activated});
         } else if (menuGet()) |m| {
@@ -4457,7 +4442,7 @@ pub const MenuWidget = struct {
     pub fn deinit(self: *Self) void {
         self.box.deinit();
         if (self.submenus_activated_next_frame) {
-            dataSet(self.wd.id, self.submenus_activated);
+            dataSet(self.wd.id, "_sub_act", self.submenus_activated);
         }
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
