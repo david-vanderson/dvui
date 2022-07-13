@@ -41,6 +41,7 @@ pub fn build(b: *Builder) void {
 
         const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
         compile_step.dependOn(&b.addInstallArtifact(example_app.step).step);
+        b.getInstallStep().dependOn(compile_step);
 
         const run_cmd = example_app.run();
         run_cmd.step.dependOn(compile_step);
@@ -82,6 +83,7 @@ pub fn build(b: *Builder) void {
 
         const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
         compile_step.dependOn(&b.addInstallArtifact(exe).step);
+        b.getInstallStep().dependOn(compile_step);
 
         const run_cmd = exe.run();
         run_cmd.step.dependOn(compile_step);
