@@ -240,10 +240,6 @@ pub fn main() !void {
                 }
 
                 {
-                    gui.spinner(@src(), 0, .{ .color_style = .custom, .color_custom = .{ .r = 100, .g = 200, .b = 100 } });
-                }
-
-                {
                     const CheckboxBool = struct {
                         var b: bool = false;
                     };

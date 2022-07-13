@@ -1649,6 +1649,7 @@ pub const EventIterator = struct {
 // how to have a seemless continuous animation.
 
 pub const Animation = struct {
+    used: bool = true,
     start_val: f32,
     end_val: f32,
     start_time: i32 = 0,
@@ -1670,7 +1671,13 @@ pub fn animate(id: u32, key: []const u8, a: Animation) void {
 pub fn animationGet(id: u32, key: []const u8) ?Animation {
     var cw = current_window orelse unreachable;
     const h = hashIdKey(id, key);
-    return cw.animations.get(h);
+    const val = cw.animations.getPtr(h);
+    if (val) |v| {
+        v.used = true;
+        return v.*;
+    }
+
+    return null;
 }
 
 pub fn timerSet(id: u32, micros: i32) void {
@@ -2266,9 +2273,10 @@ pub const Window = struct {
             defer deadAnimations.deinit();
             var it = self.animations.iterator();
             while (it.next()) |kv| {
-                if (kv.value_ptr.end_time <= 0) {
+                if (!kv.value_ptr.used or kv.value_ptr.end_time <= 0) {
                     deadAnimations.append(kv.key_ptr.*) catch unreachable;
                 } else {
+                    kv.value_ptr.used = false;
                     kv.value_ptr.start_time -|= micros;
                     kv.value_ptr.end_time -|= micros;
                     if (kv.value_ptr.start_time <= 0 and kv.value_ptr.end_time > 0) {
@@ -2434,12 +2442,14 @@ pub const Window = struct {
         var ret: ?u32 = null;
         var it = self.animations.iterator();
         while (it.next()) |kv| {
-            if (kv.value_ptr.start_time > 0) {
-                const st = @intCast(u32, kv.value_ptr.start_time);
-                ret = math.min(ret orelse st, st);
-            } else if (kv.value_ptr.end_time > 0) {
-                ret = 0;
-                break;
+            if (kv.value_ptr.used) {
+                if (kv.value_ptr.start_time > 0) {
+                    const st = @intCast(u32, kv.value_ptr.start_time);
+                    ret = math.min(ret orelse st, st);
+                } else if (kv.value_ptr.end_time > 0) {
+                    ret = 0;
+                    break;
+                }
             }
         }
 
@@ -6053,6 +6063,7 @@ pub const examples = struct {
         _ = gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
         _ = gui.button(@src(), 0, "Success", .{ .color_style = .success });
         _ = gui.button(@src(), 0, "Error", .{ .color_style = .err });
+        gui.spinner(@src(), 0, .{ .color_style = .custom, .color_custom = .{ .r = 100, .g = 200, .b = 100 } });
     }
 };
 
