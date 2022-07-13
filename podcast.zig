@@ -84,7 +84,7 @@ fn podcastSide(paned: *gui.PanedWidget) void {
             gui.spacer(@src(), 0, .{ .expand = .horizontal });
 
             if (gui.menuItemLabel(@src(), 0, "Hello", true, .{})) |r| {
-                var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), &menu.submenus_activated, .{});
+                var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                 defer fw.deinit();
                 if (gui.menuItemLabel(@src(), 0, "Add RSS", false, .{})) |rr| {
                     _ = rr;

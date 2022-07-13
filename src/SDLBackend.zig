@@ -265,6 +265,8 @@ pub fn SDL_keysym_to_gui(keysym: i32) gui.keys.Key {
         c.SDLK_BACKSPACE => .backspace,
         c.SDLK_UP => .up,
         c.SDLK_DOWN => .down,
+        c.SDLK_LEFT => .left,
+        c.SDLK_RIGHT => .right,
         c.SDLK_TAB => .tab,
         c.SDLK_ESCAPE => .escape,
         else => .unknown,
