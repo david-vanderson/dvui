@@ -3029,97 +3029,44 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) vo
     gui.separator(@src(), 0, .{ .gravity = .down, .expand = .horizontal });
 }
 
-pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) *ExpanderWidget {
-    var ret = gui.currentWindow().arena.create(ExpanderWidget) catch unreachable;
-    ret.* = ExpanderWidget.init(src, id_extra, label_str, opts);
-    ret.install();
-    return ret;
-}
-
-pub const ExpanderWidget = struct {
-    const Self = @This();
-
-    wd: WidgetData = undefined,
-    expand: bool = false,
-    label_str: []const u8 = undefined,
-    layout: BoxWidget = undefined,
-
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) Self {
-        var self = Self{};
-        self.wd = WidgetData.init(src, id_extra, opts);
-        self.label_str = label_str;
-        if (gui.dataGet(self.wd.id, bool)) |e| {
-            self.expand = e;
-        }
-        return self;
-    }
-
-    pub fn install(self: *Self) void {
-        _ = parentSet(self.widget());
-        gui.debug("{x} Expander {}", .{ self.wd.id, self.wd.rect });
-        self.wd.borderAndBackground();
-
-        self.layout = BoxWidget.init(@src(), 0, .vertical, self.wd.options.plain());
-        self.layout.install();
-
-        var bc = ButtonContainerWidget.init(@src(), 0, true, self.wd.options.plain().override(.{ .padding = Rect.all(2) }));
-        defer bc.deinit();
-        bc.install();
-        if (bc.clicked) {
-            self.expand = !self.expand;
-        }
-
-        {
-            var bcbox = BoxWidget.init(@src(), 0, .horizontal, self.wd.options.plain());
-            defer bcbox.deinit();
-            bcbox.install();
-            const size = self.wd.options.font().lineSkip();
-            if (self.expand) {
-                icon(@src(), 0, size, "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity = .left });
-            }
-            else {
-                icon(@src(), 0, size, "right_arrow", gui.icons.papirus.actions.pan_end_symbolic, .{ .gravity = .left });
-            }
-            labelNoFormat(@src(), 0, self.label_str, self.wd.options.plain());
-        }
-    }
-
-    pub fn expanded(self: *Self) bool {
-        return self.expand;
-    }
-
-    fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
-    }
-
-    fn data(self: *const Self) *const WidgetData {
-        return &self.wd;
-    }
-
-    pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) gui.Rect {
-        return placeIn(id, self.wd.contentRect(), min_size, e, g);
-    }
-
-    pub fn minSizeForChild(self: *Self, s: gui.Size) void {
-        self.wd.minSizeMax(self.wd.padSize(s));
-    }
-
-    pub fn screenRectScale(self: *Self, r: gui.Rect) gui.RectScale {
-        return self.wd.parent.screenRectScale(r);
-    }
-
-    pub fn bubbleEvent(self: *Self, e: *gui.Event) void {
-        self.wd.parent.bubbleEvent(e);
-    }
-
-    pub fn deinit(self: *Self) void {
-        self.layout.deinit();
-        gui.dataSet(self.wd.id, self.expand);
-        self.wd.minSizeSetAndCue();
-        self.wd.minSizeReportToParent();
-        _ = gui.parentSet(self.wd.parent);
-    }
+pub var expander_defaults: Options = .{
+    .padding = Rect.all(2),
+    .font_style = .heading,
 };
+
+pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) bool {
+    const options = expander_defaults.override(opts);
+
+    var bc = ButtonContainerWidget.init(src, id_extra, true, options);
+    defer bc.deinit();
+
+    var expanded: bool = false;
+    if (gui.dataGet(bc.wd.id, bool)) |e| {
+        expanded = e;
+    }
+
+    bc.install();
+
+    if (bc.clicked) {
+        expanded = !expanded;
+    }
+
+    var bcbox = BoxWidget.init(@src(), 0, .horizontal, options.plain());
+    defer bcbox.deinit();
+    bcbox.install();
+    const size = options.font().lineSkip();
+    if (expanded) {
+        icon(@src(), 0, size, "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity = .left });
+    }
+    else {
+        icon(@src(), 0, size, "right_arrow", gui.icons.papirus.actions.pan_end_symbolic, .{ .gravity = .left });
+    }
+    labelNoFormat(@src(), 0, label_str, options.plain());
+
+    gui.dataSet(bc.wd.id, expanded);
+
+    return expanded;
+}
 
 
 pub fn paned(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) *PanedWidget {
@@ -6111,12 +6058,8 @@ pub const examples = struct {
             var scroll = gui.scrollArea(@src(), 0, null, .{ .expand = .both, .color_style = .content, .background = false });
             defer scroll.deinit();
 
-            {
-                var exp = gui.expander(@src(), 0, "Basic Widgets", .{ .font_style = .heading, .expand = .horizontal });
-                defer exp.deinit();
-                if (exp.expanded()) {
-                    basicWidgets();
-                }
+            if (gui.expander(@src(), 0, "Basic Widgets", .{ .expand = .horizontal })) {
+                basicWidgets();
             }
         }
     }
