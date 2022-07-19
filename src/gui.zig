@@ -1194,27 +1194,6 @@ pub fn windowFor(p: Point) u32 {
     return cw.wd.id;
 }
 
-// Are we in a popup currently?
-pub fn popupIn() bool {
-    const cw = current_window orelse unreachable;
-
-    var i = cw.floating_windows.items.len;
-    while (i > 0) : (i -= 1) {
-        const fd = cw.floating_windows.items[i - 1];
-        if (fd.id == cw.window_currentId) {
-            if (fd.prevWinId != null) {
-                // popup
-                return true;
-            } else {
-                // not a popup
-                return false;
-            }
-        }
-    }
-
-    return false;
-}
-
 pub fn popupAncestorFocused(id: u32) bool {
     const cw = current_window orelse unreachable;
 
@@ -4615,14 +4594,8 @@ pub const MenuItemWidget = struct {
                         if (mouseTotalMotion().nonZero()) {
                             // TODO don't do the rest here if the menu has an existing popup and the motion is towards the popup
                             if (menuGet().?.submenus_activated) {
-                                const winId = focusedWindowId();
-                                focusWindow(null, null);
+                                focusWindow(null, null);  // focuses the window we are in
                                 focusWidget(self.wd.id, null);
-                                if (!popupIn()) {
-                                    // if we are in a regular window (like File), then we don't want
-                                    // to focus the main window, so keep the focus on the popups
-                                    focusWindow(winId, null);
-                                }
                             }
                         }
                     }
