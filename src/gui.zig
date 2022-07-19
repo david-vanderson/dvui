@@ -648,58 +648,6 @@ pub const RenderCmd = struct {
     },
 };
 
-pub const DeferredRenderQueue = struct {
-    cmds: std.ArrayList(RenderCmd),
-
-    pub fn init(arena: std.mem.Allocator) DeferredRenderQueue {
-        return DeferredRenderQueue{
-            .cmds = std.ArrayList(RenderCmd).init(arena),
-        };
-    }
-};
-
-pub fn deferRender() void {
-    var cw = current_window orelse unreachable;
-    const drq = DeferredRenderQueue.init(cw.arena);
-    cw.deferred_render_queues.append(drq) catch unreachable;
-}
-
-pub fn deferRenderPop() void {
-    var cw = current_window orelse unreachable;
-    const drq = cw.deferred_render_queues.pop();
-    const len = cw.deferred_render_queues.items.len;
-    if (len > 0) {
-        cw.deferred_render_queues.items[len - 1].cmds.appendSlice(drq.cmds.items) catch unreachable;
-        return;
-    }
-
-    const oldclip = clipGet();
-    for (drq.cmds.items) |drc| {
-        clipSet(drc.clip);
-        switch (drc.cmd) {
-            .text => |t| {
-                renderText(t.font, t.text, t.rs, t.color);
-            },
-            .icon => |i| {
-                renderIcon(i.name, i.tvg_bytes, i.rs, i.colormod);
-            },
-            .pathFillConvex => |pf| {
-                cw.path.appendSlice(pf.path.items) catch unreachable;
-                pathFillConvex(pf.color);
-                pf.path.deinit();
-            },
-            .pathStroke => |ps| {
-                cw.path.appendSlice(ps.path.items) catch unreachable;
-                pathStroke(ps.closed, ps.thickness, ps.endcap_style, ps.color);
-                ps.path.deinit();
-            },
-        }
-    }
-
-    clipSet(oldclip);
-    drq.cmds.deinit();
-}
-
 pub fn focusedWindow() bool {
     const cw = current_window orelse unreachable;
     if (cw.window_currentId == cw.focused_windowId) {
@@ -724,13 +672,24 @@ pub fn focusWindow(window_id: ?u32, iter: ?*EventIterator) void {
             if (cw.focused_windowId == cw.wd.id) {
                 it.focusRemainingEvents(cw.focused_windowId, cw.focused_widgetId);
             } else {
-                for (cw.floating_windows.items) |*fd| {
+                for (cw.floating_data.items) |*fd| {
                     if (cw.focused_windowId == fd.id) {
                         it.focusRemainingEvents(cw.focused_windowId, fd.focused_widgetId);
                         break;
                     }
                 }
             }
+        }
+    }
+}
+
+pub fn raiseWindow(window_id: u32) void {
+    const cw = current_window orelse unreachable;
+    for (cw.floating_data.items) |fd, i| {
+        if (fd.id == window_id) {
+            _ = cw.floating_data.orderedRemove(i);
+            cw.floating_data.append(fd) catch unreachable;
+            break;
         }
     }
 }
@@ -756,7 +715,7 @@ pub fn focusWidget(id: ?u32, iter: ?*EventIterator) void {
             cueFrame();
         }
     } else {
-        for (cw.floating_windows.items) |*fd| {
+        for (cw.floating_data.items) |*fd| {
             if (cw.focused_windowId == fd.id) {
                 if (!optionalEqual(u32, fd.focused_widgetId, id)) {
                     fd.focused_widgetId = id;
@@ -776,7 +735,7 @@ pub fn focusedWidgetId() ?u32 {
     if (cw.focused_windowId == cw.wd.id) {
         return cw.focused_widgetId;
     } else {
-        for (cw.floating_windows.items) |*fd| {
+        for (cw.floating_data.items) |*fd| {
             if (cw.focused_windowId == fd.id) {
                 return fd.focused_widgetId;
             }
@@ -791,7 +750,7 @@ pub fn focusedWidgetIdInCurrentWindow() ?u32 {
     if (cw.window_currentId == cw.wd.id) {
         return cw.focused_widgetId;
     } else {
-        for (cw.floating_windows.items) |*fd| {
+        for (cw.floating_data.items) |*fd| {
             if (cw.window_currentId == fd.id) {
                 return fd.focused_widgetId;
             }
@@ -882,12 +841,20 @@ pub fn pathFillConvex(col: Color) void {
         return;
     }
 
-    const drqlen = cw.deferred_render_queues.items.len;
-    if (drqlen > 1) {
+    if (cw.window_currentId != cw.wd.id) {
         var path_copy = std.ArrayList(Point).init(cw.arena);
         path_copy.appendSlice(cw.path.items) catch unreachable;
         var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
-        cw.deferred_render_queues.items[drqlen - 2].cmds.append(cmd) catch unreachable;
+
+        var i = cw.floating_data.items.len;
+        while (i > 0) : (i -= 1) {
+            const fw = &cw.floating_data.items[i - 1];
+            if (fw.id == cw.window_currentId) {
+                fw.render_cmds.append(cmd) catch unreachable;
+                break;
+            }
+        }
+
         cw.path.clearAndFree();
         return;
     }
@@ -959,12 +926,20 @@ pub fn pathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, co
         return;
     }
 
-    const drqlen = cw.deferred_render_queues.items.len;
-    if (drqlen > 1) {
+    if (cw.window_currentId != cw.wd.id) {
         var path_copy = std.ArrayList(Point).init(cw.arena);
         path_copy.appendSlice(cw.path.items) catch unreachable;
         var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
-        cw.deferred_render_queues.items[drqlen - 2].cmds.append(cmd) catch unreachable;
+
+        var i = cw.floating_data.items.len;
+        while (i > 0) : (i -= 1) {
+            const fw = &cw.floating_data.items[i - 1];
+            if (fw.id == cw.window_currentId) {
+                fw.render_cmds.append(cmd) catch unreachable;
+                break;
+            }
+        }
+
         cw.path.clearAndFree();
         return;
     }
@@ -1183,9 +1158,9 @@ pub fn pathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, co
 
 pub fn windowFor(p: Point) u32 {
     const cw = current_window orelse unreachable;
-    var i = cw.floating_windows_prev.items.len;
+    var i = cw.floating_data.items.len;
     while (i > 0) : (i -= 1) {
-        const fw = &cw.floating_windows_prev.items[i - 1];
+        const fw = &cw.floating_data.items[i - 1];
         if (fw.modal or fw.rect.contains(p)) {
             return fw.id;
         }
@@ -1196,10 +1171,10 @@ pub fn windowFor(p: Point) u32 {
 
 pub fn floatingWindowClosing(id: u32) void {
     const cw = current_window orelse unreachable;
-    if (cw.floating_windows.items.len > 0) {
-        const fd = cw.floating_windows.items[cw.floating_windows.items.len - 1];
+    if (cw.floating_data.items.len > 0) {
+        const fd = cw.floating_data.items[cw.floating_data.items.len - 1];
         if (fd.id == id) {
-            _ = cw.floating_windows.pop();
+            _ = cw.floating_data.pop();
         } else {
             debug("floatingWindowClosing: last added floating window id {x} doesn't match {x}\n", .{ fd.id, id });
         }
@@ -1208,19 +1183,23 @@ pub fn floatingWindowClosing(id: u32) void {
     }
 }
 
-pub fn floatingWindowAdd(id: u32, prevWinId: ?u32, rect: Rect, modal: bool) void {
+pub fn floatingWindowAdd(id: u32, rect: Rect, modal: bool) void {
     const cw = current_window orelse unreachable;
-    // copy focus from previous frame
-    var focus_widgetId: ?u32 = null;
-    for (cw.floating_windows_prev.items) |*fd| {
+
+    for (cw.floating_data.items) |*fd| {
         if (id == fd.id) {
-            focus_widgetId = fd.focused_widgetId;
-            break;
+            // this window was here previously, just update data
+            fd.used = true;
+            fd.rect = rect;
+            fd.modal = modal;
+            fd.render_cmds = std.ArrayList(RenderCmd).init(cw.arena);
+            return;
         }
     }
 
-    const fd = Window.FloatingData{ .id = id, .prevWinId = prevWinId, .rect = rect, .modal = modal, .focused_widgetId = focus_widgetId };
-    cw.floating_windows.append(fd) catch unreachable;
+    // haven't seen this window before, it goes on top
+    const fd = Window.FloatingData{ .id = id, .rect = rect, .modal = modal, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena) };
+    cw.floating_data.append(fd) catch unreachable;
 }
 
 pub fn windowCurrentSet(id: u32) u32 {
@@ -1302,9 +1281,9 @@ pub fn captureMouseMaintain(id: u32) bool {
     if (cw.captureID == id) {
         // to maintain capture, we must be on or above the
         // top modal window
-        var i = cw.floating_windows_prev.items.len;
+        var i = cw.floating_data.items.len;
         while (i > 0) : (i -= 1) {
-            const fw = &cw.floating_windows_prev.items[i - 1];
+            const fw = &cw.floating_data.items[i - 1];
             if (fw.id == cw.window_currentId) {
                 // maintaining capture
                 break;
@@ -1379,11 +1358,6 @@ pub fn popupSet(p: ?*PopupWidget) ?*PopupWidget {
     var cw = current_window orelse unreachable;
     const ret = cw.popup_current;
     cw.popup_current = p;
-    if (p) |pp| {
-        std.debug.print("popupSet {x}\n", .{ pp.wd.id });
-    } else {
-        std.debug.print("popupSet null\n", .{});
-    }
     return ret;
 }
 
@@ -1765,19 +1739,18 @@ pub const Window = struct {
     const Self = @This();
 
     pub const FloatingData = struct {
+        used: bool = true,
         id: u32 = 0,
-        prevWinId: ?u32 = 0,
         rect: Rect = Rect{},
         modal: bool = false,
         focused_widgetId: ?u32 = null,
+        render_cmds: std.ArrayList(RenderCmd),
     };
 
     backend: Backend,
 
-    floating_windows_prev: std.ArrayList(FloatingData),
-    floating_windows: std.ArrayList(FloatingData),
-
     window_currentId: u32 = 0,
+    floating_data: std.ArrayList(FloatingData), 
 
     focused_windowId: u32 = 0,
     focused_widgetId: ?u32 = null, // this is specific to the base window
@@ -1826,14 +1799,11 @@ pub const Window = struct {
     tab_index: std.ArrayList(TabIndex),
     font_cache: std.AutoHashMap(u32, FontCacheEntry),
     icon_cache: std.AutoHashMap(u32, IconCacheEntry),
-    deferred_render_queues: std.ArrayList(DeferredRenderQueue) = undefined,
 
     ft2lib: freetype.Library = undefined,
 
     cursor_requested: CursorKind = .arrow,
     cursor_dragging: CursorKind = .arrow,
-
-    defer_render: bool = false,
 
     wd: WidgetData = undefined,
     rect_pixels: Rect = Rect{}, // pixels
@@ -1853,8 +1823,7 @@ pub const Window = struct {
     ) Self {
         var self = Self{
             .gpa = gpa,
-            .floating_windows_prev = std.ArrayList(FloatingData).init(gpa),
-            .floating_windows = std.ArrayList(FloatingData).init(gpa),
+            .floating_data = std.ArrayList(FloatingData).init(gpa),
             .widgets_min_size = std.AutoHashMap(u32, Size).init(gpa),
             .widgets_min_size_prev = std.AutoHashMap(u32, Size).init(gpa),
             .data_prev = std.ArrayList(u8).init(gpa),
@@ -1879,8 +1848,7 @@ pub const Window = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.floating_windows_prev.deinit();
-        self.floating_windows.deinit();
+        self.floating_data.deinit();
         self.widgets_min_size.deinit();
         self.widgets_min_size_prev.deinit();
         self.data_prev.deinit();
@@ -2147,17 +2115,24 @@ pub const Window = struct {
         //std.debug.print(" frame_time_ns {d}\n", .{self.frame_time_ns});
 
         current_window = self;
-        self.defer_render = false;
 
         self.cursor_requested = .arrow;
 
         self.arena = arena;
         self.path = std.ArrayList(Point).init(arena);
-        self.deferred_render_queues = std.ArrayList(DeferredRenderQueue).init(arena);
 
-        // setup the initial deferred render queue, won't be used until someone
-        // calls DeferRender again
-        deferRender();
+        {
+            var i: usize = 0;
+            while (i < self.floating_data.items.len) {
+                var fd = &self.floating_data.items[i];
+                if (fd.used) {
+                    fd.used = false;
+                    i += 1;
+                } else {
+                    _ = self.floating_data.orderedRemove(i);
+                }
+            }
+        }
 
         self.events = std.ArrayList(Event).init(arena);
 
@@ -2169,24 +2144,7 @@ pub const Window = struct {
             }
         }
 
-        // focusedWindowLost uses floating_windows, so use it before we swap
-        if (self.focusedWindowLost()) {
-            // if the floating window that was focused went away, focus the highest
-            // remaining one
-            if (self.floating_windows.items.len > 0) {
-                const fdata = self.floating_windows.items[self.floating_windows.items.len - 1];
-                focusWindow(fdata.id, null);
-            } else {
-                focusWindow(self.wd.id, null);
-            }
-        }
-
-        // focusedWidgetId() uses floating_windows, so use it before we swap
         self.focused_widgetId_last_frame = focusedWidgetId();
-
-        self.floating_windows_prev.deinit();
-        self.floating_windows_prev = self.floating_windows;
-        self.floating_windows = @TypeOf(self.floating_windows).init(self.floating_windows.allocator);
 
         self.widgets_min_size_prev.deinit();
         self.widgets_min_size_prev = self.widgets_min_size;
@@ -2346,8 +2304,40 @@ pub const Window = struct {
         }
     }
 
+    pub fn renderFloatingWindows(self: *Self) void {
+        const oldclip = clipGet();
+
+        for (self.floating_data.items) |*fw| {
+            for (fw.render_cmds.items) |*drc| {
+                clipSet(drc.clip);
+                switch (drc.cmd) {
+                    .text => |t| {
+                        renderText(t.font, t.text, t.rs, t.color);
+                    },
+                    .icon => |i| {
+                        renderIcon(i.name, i.tvg_bytes, i.rs, i.colormod);
+                    },
+                    .pathFillConvex => |pf| {
+                        self.path.appendSlice(pf.path.items) catch unreachable;
+                        pathFillConvex(pf.color);
+                        pf.path.deinit();
+                    },
+                    .pathStroke => |ps| {
+                        self.path.appendSlice(ps.path.items) catch unreachable;
+                        pathStroke(ps.closed, ps.thickness, ps.endcap_style, ps.color);
+                        ps.path.deinit();
+                    },
+                }
+            }
+
+            fw.render_cmds.clearAndFree();
+        }
+
+        clipSet(oldclip);
+    }
+
     pub fn end(self: *Self) ?u32 {
-        deferRenderPop();
+        self.renderFloatingWindows();
 
         // events may have been tagged with a focus widget that never showed up, so
         // we wouldn't even get them bubbled
@@ -2374,10 +2364,18 @@ pub const Window = struct {
         self.mouse_pt_prev = self.mouse_pt;
 
         if (self.focusedWindowLost()) {
-            // The floating window with focus disappeared, so do another frame and
-            // we'll focus a new window in begin()
+            // if the floating window that was focused went away, focus the highest
+            // remaining one
+            if (self.floating_data.items.len > 0) {
+                const fdata = self.floating_data.items[self.floating_data.items.len - 1];
+                focusWindow(fdata.id, null);
+            } else {
+                focusWindow(self.wd.id, null);
+            }
+
             cueFrame();
         }
+
 
         // Check that the final event was our synthetic mouse position event.
         // If one of the addEvent* functions forgot to add the synthetic mouse
@@ -2414,7 +2412,7 @@ pub const Window = struct {
         if (self.wd.id == self.focused_windowId) {
             return false;
         } else {
-            for (self.floating_windows.items) |*fw| {
+            for (self.floating_data.items) |*fw| {
                 if (fw.id == self.focused_windowId) {
                     return false;
                 }
@@ -2488,7 +2486,6 @@ pub const PopupWidget = struct {
     layout: MenuWidget = undefined,
     initialRect: Rect = Rect{},
     prevClip: Rect = Rect{},
-    deferred_render_queue: DeferredRenderQueue = undefined,
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, opts: Options) Self {
         var self = Self{};
@@ -2512,8 +2509,6 @@ pub const PopupWidget = struct {
         // current clip
         self.prevClip = clipGet();
         clipSet(windowRectPixels());
-
-        deferRender();
 
         _ = parentSet(self.widget());
 
@@ -2539,7 +2534,7 @@ pub const PopupWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.screenRectScale(self.wd.rect);
-        floatingWindowAdd(self.wd.id, self.prev_windowId, rs.r, false);
+        floatingWindowAdd(self.wd.id, rs.r, false);
 
         // we are using MenuWidget to do border/background but floating windows
         // don't have margin, so turn that off
@@ -2675,7 +2670,6 @@ pub const PopupWidget = struct {
         _ = popupSet(self.parent_popup);
         _ = parentSet(self.wd.parent);
         _ = windowCurrentSet(self.prev_windowId);
-        deferRenderPop();
         clipSet(self.prevClip);
     }
 };
@@ -2704,7 +2698,6 @@ pub const FloatingWindowWidget = struct {
     io_rect: ?*Rect = null,
     layout: BoxWidget = undefined,
     openflag: ?*bool = null,
-    deferred_render_queue: DeferredRenderQueue = undefined,
     prevClip: Rect = Rect{},
     autoPosSize: struct {
         autopos: bool,
@@ -2736,8 +2729,6 @@ pub const FloatingWindowWidget = struct {
         // top of the whole screen
         self.prevClip = clipGet();
         clipSet(windowRectPixels());
-
-        deferRender();
 
         _ = parentSet(self.widget());
         self.prev_windowId = windowCurrentSet(self.wd.id);
@@ -2798,7 +2789,7 @@ pub const FloatingWindowWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.screenRectScale(self.wd.rect);
-        floatingWindowAdd(self.wd.id, null, rs.r, self.modal);
+        floatingWindowAdd(self.wd.id, rs.r, self.modal);
 
         if (self.modal) {
             // paint over everything below
@@ -2991,7 +2982,6 @@ pub const FloatingWindowWidget = struct {
         // wd.minSizeReportToParent
         _ = parentSet(self.wd.parent);
         _ = windowCurrentSet(self.prev_windowId);
-        deferRenderPop();
         clipSet(self.prevClip);
     }
 };
@@ -3007,6 +2997,13 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) vo
 
     gui.labelNoFormat(@src(), 0, str, .{ .gravity = .center, .expand = .horizontal, .font_style = .heading });
     gui.labelNoFormat(@src(), 0, right_str, .{ .gravity = .right });
+
+    var iter = EventIterator.init(over.wd.id, over.wd.contentRectScale().r);
+    while (iter.next()) |e| {
+        if (e.evt == .mouse and e.evt.mouse.state == .leftdown) {
+            raiseWindow(windowCurrentId());
+        }
+    }
 
     over.deinit();
 
@@ -4451,10 +4448,15 @@ pub const MenuWidget = struct {
     }
 };
 
-pub fn menuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, submenu: bool, opts: Options) ?Rect {
-    var mi = menuItem(src, id_extra, submenu, opts);
+pub var menuItemLabel_defaults: Options = .{
+    .color_style = .content,
+};
 
-    var labelopts = opts.plain();
+pub fn menuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, submenu: bool, opts: Options) ?Rect {
+    const options = menuItemLabel_defaults.override(opts);
+    var mi = menuItem(src, id_extra, submenu, options);
+
+    var labelopts = options.plain();
 
     var ret: ?Rect = null;
     if (mi.activeRect()) |r| {
@@ -5387,12 +5389,21 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
     //if (true) return;
 
     var cw = current_window orelse unreachable;
-    const drqlen = cw.deferred_render_queues.items.len;
-    if (drqlen > 1) {
+
+    if (cw.window_currentId != cw.wd.id) {
         var txt = cw.arena.alloc(u8, text.len) catch unreachable;
         std.mem.copy(u8, txt, text);
         var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .text = .{ .font = font, .text = txt, .rs = rs, .color = color } } };
-        cw.deferred_render_queues.items[drqlen - 2].cmds.append(cmd) catch unreachable;
+
+        var i = cw.floating_data.items.len;
+        while (i > 0) : (i -= 1) {
+            const fw = &cw.floating_data.items[i - 1];
+            if (fw.id == cw.window_currentId) {
+                fw.render_cmds.append(cmd) catch unreachable;
+                break;
+            }
+        }
+
         return;
     }
 
@@ -5573,12 +5584,21 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
     //if (true) return;
 
     var cw = current_window orelse unreachable;
-    const drqlen = cw.deferred_render_queues.items.len;
-    if (drqlen > 1) {
+
+    if (cw.window_currentId != cw.wd.id) {
         var name_copy = cw.arena.alloc(u8, name.len) catch unreachable;
         std.mem.copy(u8, name_copy, name);
         var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .colormod = colormod } } };
-        cw.deferred_render_queues.items[drqlen - 2].cmds.append(cmd) catch unreachable;
+
+        var i = cw.floating_data.items.len;
+        while (i > 0) : (i -= 1) {
+            const fw = &cw.floating_data.items[i - 1];
+            if (fw.id == cw.window_currentId) {
+                fw.render_cmds.append(cmd) catch unreachable;
+                break;
+            }
+        }
+
         return;
     }
 
@@ -6083,12 +6103,12 @@ pub const examples = struct {
                 }
             }
 
-            if (IconBrowser.show) {
-                icon_browser();
-            }
-
             if (show_dialog) {
                 dialog();
+            }
+
+            if (IconBrowser.show) {
+                icon_browser();
             }
         }
     }

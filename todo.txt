@@ -5,19 +5,6 @@ submit to:
 - https://allyourcodebase.com/gamedev/#help-improve-this-page
 - tell mach dude it's ready for broader consumption
 
-
-overhaul defer render
-- save FloatingData (render queues) in back-to-front render order (in gpa)
-- render queue data allocated on arena
-- need used flag to remove windows that disappeared
-
-Popup:
-- maintain pointer to parent window
-  - call parentFocused() on install to find out if any parent is focused
-  - if someone calls parentFocused() on us, we record that we had a child
-  - in deinit(), if we had no child and no parent was focused, close
-
-
 do all of the suggestions from Mike
 - screenshots in README
 - links to example code in README for each section
