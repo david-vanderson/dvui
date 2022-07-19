@@ -2592,6 +2592,7 @@ pub const PopupWidget = struct {
 
     pub fn close(self: *Self) void {
         floatingWindowClosing(self.wd.id);
+        cueFrame();
     }
 
     fn widget(self: *Self) Widget {
@@ -2939,6 +2940,7 @@ pub const FloatingWindowWidget = struct {
         if (self.openflag) |of| {
             of.* = false;
         }
+        cueFrame();
     }
 
     fn widget(self: *Self) Widget {
@@ -4401,6 +4403,7 @@ pub const MenuWidget = struct {
         // bubble this event to close all popups that had submenus leading to this
         var e = Event{ .evt = AnyEvent{ .close_popup = ClosePopupEvent{} } };
         self.bubbleEvent(&e);
+        cueFrame();
     }
 
     fn widget(self: *Self) Widget {
@@ -4945,7 +4948,15 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32,
     return bc.clicked;
 }
 
-pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label_str: []const u8, options: Options) void {
+pub var checkbox_defaults: Options = .{
+    .margin = .{ .x = 2, .y = 0, .w = 2, .h = 0 },
+    .corner_radius = gui.Rect.all(2),
+    .padding = Rect.all(2),
+    .color_style = .content,
+};
+
+pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label_str: []const u8, opts: Options) void {
+    const options = checkbox_defaults.override(opts);
     debug("Checkbox {s}", .{label_str});
     var bc = buttonContainer(src, id_extra, false, options.override(.{ .background = false }));
     defer bc.deinit();
@@ -5008,10 +5019,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
         pathStroke(false, thick, .square, themeGet().color_accent);
     }
 
-    labelNoFormat(@src(), 0, label_str, options.override(.{
-        .background = false,
-        .margin = .{ .x = 4, .y = 0, .w = 0, .h = 0 },
-    }));
+    labelNoFormat(@src(), 0, label_str, options);
 }
 
 pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) void {
@@ -6040,10 +6048,18 @@ pub const Backend = struct {
 pub const examples = struct {
     
     pub var show_demo_window: bool = true;
+    var checkbox_bool: bool = false;
+    var show_dialog: bool = false;
+
+    const IconBrowser = struct {
+        var show: bool = false;
+        var rect = gui.Rect{ .x = 0, .y = 0, .w = 300, .h = 400 };
+        var row_height: f32 = 0;
+    };
 
     pub fn demo() void {
         if (show_demo_window) {
-            var float = gui.floatingWindow(@src(), 0, false, null, &show_demo_window, .{.min_size = .{ .w = 300, .h = 200 } });
+            var float = gui.floatingWindow(@src(), 0, false, null, &show_demo_window, .{.min_size = .{ .w = 400, .h = 400 } });
             defer float.deinit();
 
             var buf: [100]u8 = undefined;
@@ -6056,14 +6072,218 @@ pub const examples = struct {
             if (gui.expander(@src(), 0, "Basic Widgets", .{ .expand = .horizontal })) {
                 basicWidgets();
             }
+
+            if (gui.expander(@src(), 0, "Text Layout", .{ .expand = .horizontal })) {
+                textDemo();
+            }
+
+            if (gui.expander(@src(), 0, "Menus", .{ .expand = .horizontal })) {
+                menus();
+            }
+
+            if (gui.expander(@src(), 0, "Animations", .{ .expand = .horizontal })) {
+                animations();
+            }
+
+            {
+                var hbox = gui.box(@src(), 0, .horizontal, .{});
+                defer hbox.deinit();
+
+                if (gui.button(@src(), 0, "Icon Browser", .{})) {
+                    IconBrowser.show = true;
+                }
+
+                if (gui.button(@src(), 0, "Toggle Theme", .{})) {
+                    if (gui.themeGet() == &gui.theme_Adwaita) {
+                        gui.themeSet(&gui.theme_Adwaita_Dark);
+                    } else {
+                        gui.themeSet(&gui.theme_Adwaita);
+                    }
+                }
+            }
+
+            if (IconBrowser.show) {
+                icon_browser();
+            }
+
+            if (show_dialog) {
+                dialog();
+            }
         }
     }
 
     pub fn basicWidgets() void {
-        _ = gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
-        _ = gui.button(@src(), 0, "Success", .{ .color_style = .success });
-        _ = gui.button(@src(), 0, "Error", .{ .color_style = .err });
-        gui.spinner(@src(), 0, .{ .color_style = .custom, .color_custom = .{ .r = 100, .g = 200, .b = 100 } });
+        var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 }});
+        defer b.deinit();
+        {
+            var hbox = gui.box(@src(), 0, .horizontal, .{});
+            defer hbox.deinit();
+            _ = gui.button(@src(), 0, "Normal", .{});
+            _ = gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
+            _ = gui.button(@src(), 0, "Success", .{ .color_style = .success });
+            _ = gui.button(@src(), 0, "Error", .{ .color_style = .err });
+        }
+
+        gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{});
+    }
+
+    pub fn textDemo() void {
+        var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 }});
+        defer b.deinit();
+        gui.label(@src(), 0, "Title", .{}, .{ .font_style = .title });
+        gui.label(@src(), 0, "Title-1", .{}, .{ .font_style = .title_1 });
+        gui.label(@src(), 0, "Title-2", .{}, .{ .font_style = .title_2 });
+        gui.label(@src(), 0, "Title-3", .{}, .{ .font_style = .title_3 });
+        gui.label(@src(), 0, "Title-4", .{}, .{ .font_style = .title_4 });
+        gui.label(@src(), 0, "Heading", .{}, .{ .font_style = .heading });
+        gui.label(@src(), 0, "Caption-Heading", .{}, .{ .font_style = .caption_heading });
+        gui.label(@src(), 0, "Caption", .{}, .{ .font_style = .caption });
+
+        {
+            var tl = gui.textLayout(@src(), 0, .{ .expand = .horizontal });
+            defer tl.deinit();
+
+            var cbox = gui.box(@src(), 0, .vertical, gui.Options{ .gravity = .upleft });
+            _ = gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) });
+            _ = gui.buttonIcon(@src(), 0, 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) });
+            cbox.deinit();
+
+            const start = "Notice that the text in this box is wrapping around the buttons in the corners.";
+            tl.addText(start, .{ .font_style = .title_4 });
+
+            tl.addText("\n\n", .{});
+
+            const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+            tl.addText(lorem, .{});
+        }
+    }
+
+    pub fn menus() void {
+        var m = gui.menu(@src(), 0, .horizontal, .{});
+        defer m.deinit();
+
+        if (gui.menuItemLabel(@src(), 0, "File", true, .{})) |r| {
+            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
+            defer fw.deinit();
+
+            submenus();
+
+            if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
+                gui.menuGet().?.close();
+            }
+
+            gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{ .min_size = .{ .w = 100, .h = 0 } });
+
+            if (gui.menuItemLabel(@src(), 0, "Dialog", false, .{}) != null) {
+                show_dialog = true;
+            }
+        }
+
+        if (gui.menuItemLabel(@src(), 0, "Edit", true, .{})) |r| {
+            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
+            defer fw.deinit();
+            _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
+            _ = gui.menuItemLabel(@src(), 0, "Copy", false, .{});
+            _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{});
+        }
+    }
+
+    pub fn submenus() void {
+        if (gui.menuItemLabel(@src(), 0, "Submenu...", true, .{})) |r| {
+            var menu_rect = r;
+            menu_rect.x += menu_rect.w;
+            var fw2 = gui.popup(@src(), 0, menu_rect, .{});
+            defer fw2.deinit();
+
+            submenus();
+
+            if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
+                gui.menuGet().?.close();
+            }
+
+            if (gui.menuItemLabel(@src(), 0, "Dialog", false, .{}) != null) {
+                show_dialog = true;
+            }
+        }
+    }
+
+    pub fn animations() void {
+        var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 }});
+        defer b.deinit();
+        if (gui.expander(@src(), 0, "Spinner", .{ .expand = .horizontal })) {
+            gui.label(@src(), 0, "Spinner maxes out frame rate", .{}, .{});
+            gui.spinner(@src(), 0, .{ .color_style = .custom, .color_custom = .{ .r = 100, .g = 200, .b = 100 } });
+        }
+
+        if (gui.expander(@src(), 0, "Clock", .{ .expand = .horizontal })) {
+            gui.label(@src(), 0, "Schedules a frame at the beginning of each second", .{}, .{});
+
+            const millis = @divFloor(gui.frameTimeNS(), 1_000_000);
+            const left = @intCast(i32, @rem(millis, 1000));
+
+            var mslabel = gui.LabelWidget.init(@src(), 0, "{d} ms into second", .{ @intCast(u32, left) }, .{});
+            mslabel.install();
+
+            if (gui.timerDone(mslabel.wd.id) or !gui.timerExists(mslabel.wd.id)) {
+                const wait = 1000 * (1000 - left);
+                gui.timerSet(mslabel.wd.id, wait);
+            }
+        }
+    }
+
+    pub fn dialog() void {
+        var dialog_win = gui.floatingWindow(@src(), 0, true, null, &show_dialog, .{ .color_style = .window });
+        defer dialog_win.deinit();
+
+        gui.windowHeader("Modal Dialog", "", &show_dialog);
+        gui.label(@src(), 0, "Asking a Question", .{}, .{ .font_style = .title_4 });
+        gui.label(@src(), 0, "Here's some more information", .{}, .{});
+
+        {
+            var hbox = gui.box(@src(), 0, .horizontal, .{ .gravity = .right });
+            defer hbox.deinit();
+
+            if (gui.button(@src(), 0, "Yes", .{})) {
+                dialog_win.close();
+            }
+
+            if (gui.button(@src(), 0, "No", .{})) {
+                show_dialog = false;
+            }
+        }
+    }
+
+    pub fn icon_browser() void {
+        var fwin = gui.floatingWindow(@src(), 0, false, &IconBrowser.rect, &IconBrowser.show, .{});
+        defer fwin.deinit();
+        gui.windowHeader("Icon Browser", "", &IconBrowser.show);
+
+        const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len;
+        const height = @intToFloat(f32, num_icons) * IconBrowser.row_height;
+
+        var scroll = gui.scrollArea(@src(), 0, gui.Size{ .w = 0, .h = height }, .{ .expand = .both });
+        defer scroll.deinit();
+
+        const visibleRect = scroll.visibleRect();
+        var cursor: f32 = 0;
+
+        inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls) |d, i| {
+            if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
+                const r = gui.Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
+                var iconbox = gui.box(@src(), i, .horizontal, .{ .expand = .horizontal, .rect = r });
+                //gui.icon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{.margin = gui.Rect.all(2)});
+                _ = gui.buttonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{ .min_size = gui.Size.all(r.h) });
+                gui.label(@src(), 0, d.name, .{}, .{ .gravity = .left });
+
+                iconbox.deinit();
+
+                if (IconBrowser.row_height == 0) {
+                    IconBrowser.row_height = iconbox.wd.min_size.h;
+                }
+            }
+
+            cursor += IconBrowser.row_height;
+        }
     }
 };
 

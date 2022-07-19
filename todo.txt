@@ -1,15 +1,55 @@
 
 -Dtarget=wasm32-freestanding-none
 
+submit to:
+- https://allyourcodebase.com/gamedev/#help-improve-this-page
+- tell mach dude it's ready for broader consumption
+
+
+overhaul defer render
+- save FloatingData (render queues) in back-to-front render order (in gpa)
+- render queue data allocated on arena
+- need used flag to remove windows that disappeared
+
+Popup:
+- maintain pointer to parent window
+  - call parentFocused() on install to find out if any parent is focused
+  - if someone calls parentFocused() on us, we record that we had a child
+  - in deinit(), if we had no child and no parent was focused, close
+
+
+do all of the suggestions from Mike
+- screenshots in README
+- links to example code in README for each section
+
 write up some design docs
 - tabindex
 - seamless animations
 
 start making real demo() contents
 - document stuff inside there?
+- following dear imgui demo
+ - Basic Widgets
+  - radio
+  - hold-repeat buttons
+  - tooltips
+  - label
+  - dropdown selection
+  - text entry
 - mouse cursors
 - gravity
 - themes
+
+problem of mousing off a menuItem and onto the theme change checkbox, and the menuItem stays highlighted
+- when a mouse motion event in a Menu happens:
+  - if "towards" an open submenu:
+    - Menu eats the event and nothing else happens
+  - otherwise it's passed to children:
+      - if it's on a MenuItem, focus it
+      - if not, and the MenuItem is focused, defocus it
+  - but that means that as you mouse off the edge, when the mouse goes into the margin, it will defocus the menu item?
+  - have to implement intention-motion MenuItem (de)activation to fix this
+
 
 try to put gui on top of an existing mach app
 - need a slider widget
@@ -70,8 +110,6 @@ convert:
 - ScrollBar
 - ScaleWidget
 
-floating windows should have a close button
-
 try animating a fade
 - does Options need a separate alpha?
 
@@ -85,7 +123,7 @@ some visual indication of non-focused windows
 - maybe change focus color inside?
 
 debugging:
-- highlight widgets that are causing CueFrames?
+- highlight widgets that are causing cueFrames?
 - show layout somehow (mouseover?)
 - maybe just a separate floating window that shows a tree-view of all the widgets
   - mouseover to highlight the widget?
@@ -153,7 +191,7 @@ change cursorlayout from top-to-bottom to left-to-right with optional extra floa
 - save info for each line
   - size and baseline offset
   - height is max of (height of items without baseline) and max of (max of baselines, max of underhangs) of items with baselines
-  - if new size/baseline is different, CueFrame()
+  - if new size/baseline is different, cueFrame()
 - replace menubar horizontal box with textlayout so that lots of menus will wrap
 
 baseline alignment
