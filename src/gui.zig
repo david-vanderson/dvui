@@ -1194,44 +1194,6 @@ pub fn windowFor(p: Point) u32 {
     return cw.wd.id;
 }
 
-pub fn popupAncestorFocused(id: u32) bool {
-    const cw = current_window orelse unreachable;
-
-    var prevId = id;
-    var i = cw.floating_windows.items.len;
-    while (i > 0) : (i -= 1) {
-        const fd = cw.floating_windows.items[i - 1];
-        if (fd.id == prevId) {
-            if (fd.prevWinId) |pid| {
-                // popup
-                if (fd.id == cw.focused_windowId) {
-                    return true;
-                }
-                prevId = pid;
-            } else {
-                // non popup window
-                return (fd.id == cw.focused_windowId);
-            }
-        }
-    }
-
-    return (cw.wd.id == cw.focused_windowId);
-}
-
-pub fn floatingWindowNoChildren() bool {
-    const cw = current_window orelse unreachable;
-    if (cw.floating_windows.items.len == 0) {
-        return true;
-    }
-
-    const fd = cw.floating_windows.items[cw.floating_windows.items.len - 1];
-    if (cw.window_currentId == fd.id) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
 pub fn floatingWindowClosing(id: u32) void {
     const cw = current_window orelse unreachable;
     if (cw.floating_windows.items.len > 0) {
@@ -1410,6 +1372,18 @@ pub fn parentSet(w: Widget) Widget {
     var cw = current_window orelse unreachable;
     const ret = cw.wd.parent;
     cw.wd.parent = w;
+    return ret;
+}
+
+pub fn popupSet(p: ?*PopupWidget) ?*PopupWidget {
+    var cw = current_window orelse unreachable;
+    const ret = cw.popup_current;
+    cw.popup_current = p;
+    if (p) |pp| {
+        std.debug.print("popupSet {x}\n", .{ pp.wd.id });
+    } else {
+        std.debug.print("popupSet null\n", .{});
+    }
     return ret;
 }
 
@@ -1838,6 +1812,7 @@ pub const Window = struct {
     clipRect: Rect = Rect{},
 
     menu_current: ?*MenuWidget = null,
+    popup_current: ?*PopupWidget = null,
     theme: *const Theme = &theme_Adwaita,
 
     widgets_min_size_prev: std.AutoHashMap(u32, Size),
@@ -2508,6 +2483,8 @@ pub const PopupWidget = struct {
     wd: WidgetData = undefined,
     options: Options = undefined,
     prev_windowId: u32 = 0,
+    parent_popup: ?*PopupWidget = null,
+    have_popup_child: bool = false,
     layout: MenuWidget = undefined,
     initialRect: Rect = Rect{},
     prevClip: Rect = Rect{},
@@ -2541,6 +2518,7 @@ pub const PopupWidget = struct {
         _ = parentSet(self.widget());
 
         self.prev_windowId = windowCurrentSet(self.wd.id);
+        self.parent_popup = popupSet(self);
 
         if (minSizeGetPrevious(self.wd.id)) |_| {
             self.wd.rect = Rect.fromPoint(self.initialRect.topleft());
@@ -2611,6 +2589,35 @@ pub const PopupWidget = struct {
         }
     }
 
+    pub fn chainFocused(self: *Self, self_call: bool) bool {
+        if (!self_call) {
+            // if we got called by someone else, then we have a popup child
+            self.have_popup_child = true;
+        }
+
+        var ret: bool = false;
+
+        // we have to call chainFocused on our parent if we have one so we
+        // can't return early
+
+        if (self.wd.id == focusedWindowId()) {
+            // we are focused
+            ret = true; 
+        }
+
+        if (self.parent_popup) |pp| {
+            // we had a parent popup, is that focused
+            if (pp.chainFocused(false)) {
+                ret = true;
+            }
+        } else if (self.prev_windowId == focusedWindowId()) {
+            // no parent popup, is our parent window focused
+            ret = true;
+        }
+
+        return ret;
+    }
+
     pub fn deinit(self: *Self) void {
         // outside normal flow, so don't get rect from parent
         var closing: bool = false;
@@ -2650,7 +2657,7 @@ pub const PopupWidget = struct {
             }
         }
 
-        if (!closing and floatingWindowNoChildren() and !popupAncestorFocused(self.wd.id)) {
+        if (!closing and !self.have_popup_child and !self.chainFocused(true)) {
             // if a popup chain is open and the user focuses a different window
             // (not the parent of the popups), then we want to close the popups
 
@@ -2665,6 +2672,7 @@ pub const PopupWidget = struct {
         self.wd.minSizeSetAndCue();
         // outside normal layout, don't call minSizeForChild or
         // wd.minSizeReportToParent
+        _ = popupSet(self.parent_popup);
         _ = parentSet(self.wd.parent);
         _ = windowCurrentSet(self.prev_windowId);
         deferRenderPop();
