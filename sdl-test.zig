@@ -18,6 +18,7 @@ pub fn main() !void {
     var maxz: usize = 20;
     _ = maxz;
     var floats: [6]bool = [_]bool{false} ** 6;
+    var scale_val: f32 = 1.0;
 
     //var rng = std.rand.DefaultPrng.init(0);
 
@@ -41,8 +42,28 @@ pub fn main() !void {
             var overlay = gui.overlay(@src(), 0, oo);
             defer overlay.deinit();
 
-            const scale = gui.scale(@src(), 0, 1, oo);
-            defer scale.deinit();
+            const scale = gui.scale(@src(), 0, scale_val, oo);
+            defer {
+                var iter = gui.EventIterator.init(scale.wd.id, scale.wd.borderRectScale().r);
+                while (iter.next()) |e| {
+                    switch (e.evt) {
+                        .mouse => |me| {
+                            if (me.state == .wheel_y) {
+                                e.handled = true;
+                                var base: f32 = 1.05;
+                                const zs = @exp(@log(base) * e.evt.mouse.wheel);
+                                if (zs != 1.0) {
+                                    scale_val *= zs;
+                                    gui.cueFrame();
+                                }
+                            }
+                        },
+                        else => {},
+                    }
+                }
+
+                scale.deinit();
+            }
 
             const context = gui.context(@src(), 0, oo);
             defer context.deinit();
