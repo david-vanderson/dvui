@@ -30,9 +30,6 @@ pub fn main() !void {
             //var window_box = gui.box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
             //defer window_box.deinit();
 
-            var scale = gui.scale(@src(), 0, 1.0, .{ .expand = .both, .background = false });
-            defer scale.deinit();
-
             var b = gui.box(@src(), 0, .vertical, .{ .expand = .both, .background = false });
             defer b.deinit();
 

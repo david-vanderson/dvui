@@ -4246,10 +4246,10 @@ pub fn spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
     pathStroke(false, 3.0 * rs.s, .none, options.color());
 }
 
-pub fn scale(src: std.builtin.SourceLocation, id_extra: usize, initial_scale: f32, opts: Options) *ScaleWidget {
+pub fn scale(src: std.builtin.SourceLocation, id_extra: usize, scale_in: f32, opts: Options) *ScaleWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(ScaleWidget) catch unreachable;
-    ret.* = ScaleWidget.init(src, id_extra, initial_scale, opts);
+    ret.* = ScaleWidget.init(src, id_extra, scale_in, opts);
     ret.install();
     return ret;
 }
@@ -4257,43 +4257,19 @@ pub fn scale(src: std.builtin.SourceLocation, id_extra: usize, initial_scale: f3
 pub const ScaleWidget = struct {
     const Self = @This();
     wd: WidgetData = undefined,
-    scale: f32 = 1.0,
+    scale_in: f32 = undefined,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, initial_scale: f32, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, scale_in: f32, opts: Options) Self {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
-        self.scale = initial_scale;
-        if (dataGet(self.wd.id, "_scale", f32)) |s| {
-            self.scale = s;
-        }
+        self.scale_in = scale_in;
         return self;
     }
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        debug("{x} Scale {d} {}", .{ self.wd.id, self.scale, self.wd.rect });
+        debug("{x} Scale {d} {}", .{ self.wd.id, self.scale_in, self.wd.rect });
         self.wd.borderAndBackground();
-    }
-
-    fn processEventsAfter(self: *Self) void {
-        const rs = self.wd.borderRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r);
-        while (iter.next()) |e| {
-            switch (e.evt) {
-                .mouse => |me| {
-                    if (me.state == .wheel_y) {
-                        e.handled = true;
-                        var base: f32 = 1.05;
-                        const zs = @exp(@log(base) * e.evt.mouse.wheel);
-                        if (zs != 1.0) {
-                            self.scale *= zs;
-                            cueFrame();
-                        }
-                    }
-                },
-                else => {},
-            }
-        }
     }
 
     fn widget(self: *Self) Widget {
@@ -4305,16 +4281,16 @@ pub const ScaleWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect().justSize().scale(1.0 / self.scale), min_size, e, g);
+        return placeIn(id, self.wd.contentRect().justSize().scale(1.0 / self.scale_in), min_size, e, g);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
-        self.wd.minSizeMax(self.wd.padSize(s.scale(self.scale)));
+        self.wd.minSizeMax(self.wd.padSize(s.scale(self.scale_in)));
     }
 
     pub fn screenRectScale(self: *Self, r: Rect) RectScale {
         const screenRS = self.wd.contentRectScale();
-        const s = screenRS.s * self.scale;
+        const s = screenRS.s * self.scale_in;
         const scaled = r.scale(s);
         return RectScale{ .r = scaled.offset(screenRS.r), .s = s };
     }
@@ -4324,8 +4300,6 @@ pub const ScaleWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.processEventsAfter();
-        dataSet(self.wd.id, "_scale", self.scale);
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
@@ -6051,6 +6025,7 @@ pub const examples = struct {
     pub var show_demo_window: bool = true;
     var checkbox_bool: bool = false;
     var show_dialog: bool = false;
+    var scale_val: f32 = 1.0;
 
     const IconBrowser = struct {
         var show: bool = false;
@@ -6070,6 +6045,12 @@ pub const examples = struct {
             var scroll = gui.scrollArea(@src(), 0, null, .{ .expand = .both, .color_style = .content, .background = false });
             defer scroll.deinit();
 
+            var scaler = gui.scale(@src(), 0, scale_val, .{ .expand = .horizontal });
+            defer scaler.deinit();
+
+            var vbox = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal });
+            defer vbox.deinit();
+
             if (gui.expander(@src(), 0, "Basic Widgets", .{ .expand = .horizontal })) {
                 basicWidgets();
             }
@@ -6086,21 +6067,24 @@ pub const examples = struct {
                 animations();
             }
 
-            {
-                var hbox = gui.box(@src(), 0, .horizontal, .{});
-                defer hbox.deinit();
+            if (gui.button(@src(), 0, "Icon Browser", .{})) {
+                IconBrowser.show = true;
+            }
 
-                if (gui.button(@src(), 0, "Icon Browser", .{})) {
-                    IconBrowser.show = true;
+            if (gui.button(@src(), 0, "Toggle Theme", .{})) {
+                if (gui.themeGet() == &gui.theme_Adwaita) {
+                    gui.themeSet(&gui.theme_Adwaita_Dark);
+                } else {
+                    gui.themeSet(&gui.theme_Adwaita);
                 }
+            }
 
-                if (gui.button(@src(), 0, "Toggle Theme", .{})) {
-                    if (gui.themeGet() == &gui.theme_Adwaita) {
-                        gui.themeSet(&gui.theme_Adwaita_Dark);
-                    } else {
-                        gui.themeSet(&gui.theme_Adwaita);
-                    }
-                }
+            if (gui.button(@src(), 0, "Zoom In", .{})) {
+                scale_val *= 1.1;
+            }
+
+            if (gui.button(@src(), 0, "Zoom Out", .{})) {
+                scale_val /= 1.1;
             }
 
             if (show_dialog) {
@@ -6116,9 +6100,11 @@ pub const examples = struct {
     pub fn basicWidgets() void {
         var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 }});
         defer b.deinit();
+
         {
             var hbox = gui.box(@src(), 0, .horizontal, .{});
             defer hbox.deinit();
+
             _ = gui.button(@src(), 0, "Normal", .{});
             _ = gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
             _ = gui.button(@src(), 0, "Success", .{ .color_style = .success });
@@ -6160,33 +6146,54 @@ pub const examples = struct {
     }
 
     pub fn menus() void {
-        var m = gui.menu(@src(), 0, .horizontal, .{});
-        defer m.deinit();
+        const ctext = gui.context(@src(), 0, .{ .expand = .horizontal });
+        defer ctext.deinit();
 
-        if (gui.menuItemLabel(@src(), 0, "File", true, .{})) |r| {
-            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
-            defer fw.deinit();
+        if (ctext.activePoint()) |cp| {
+            var fw2 = gui.popup(@src(), 0, gui.Rect.fromPoint(cp), .{});
+            defer fw2.deinit();
 
-            submenus();
-
+            _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
             if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
                 gui.menuGet().?.close();
             }
+            _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{});
+        }
 
-            gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{ .min_size = .{ .w = 100, .h = 0 } });
+        var vbox = gui.box(@src(), 0, .vertical, .{});
+        defer vbox.deinit();
 
-            if (gui.menuItemLabel(@src(), 0, "Dialog", false, .{}) != null) {
-                show_dialog = true;
+        {
+            var m = gui.menu(@src(), 0, .horizontal, .{});
+            defer m.deinit();
+
+            if (gui.menuItemLabel(@src(), 0, "File", true, .{})) |r| {
+                var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
+                defer fw.deinit();
+
+                submenus();
+
+                if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
+                    gui.menuGet().?.close();
+                }
+
+                gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{ .min_size = .{ .w = 100, .h = 0 } });
+
+                if (gui.menuItemLabel(@src(), 0, "Dialog", false, .{}) != null) {
+                    show_dialog = true;
+                }
+            }
+
+            if (gui.menuItemLabel(@src(), 0, "Edit", true, .{})) |r| {
+                var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
+                defer fw.deinit();
+                _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
+                _ = gui.menuItemLabel(@src(), 0, "Copy", false, .{});
+                _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{});
             }
         }
 
-        if (gui.menuItemLabel(@src(), 0, "Edit", true, .{})) |r| {
-            var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
-            defer fw.deinit();
-            _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
-            _ = gui.menuItemLabel(@src(), 0, "Copy", false, .{});
-            _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{});
-        }
+        gui.label(@src(), 0, "Right click for a context menu", .{}, .{});
     }
 
     pub fn submenus() void {
