@@ -20,9 +20,7 @@ start making real demo() contents
   - radio
   - hold-repeat buttons
   - tooltips
-  - label
   - dropdown selection
-  - text entry
 - mouse cursors
 - gravity
 - themes
