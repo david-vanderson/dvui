@@ -3779,17 +3779,13 @@ pub const BoxWidget = struct {
 
         if (self.dir == .horizontal) {
             rect.h = self.childRect.h;
-            if (self.wd.options.expandHorizontal()) {
-                rect.w += pixels_per_w * current_weight;
-            }
+            rect.w += pixels_per_w * current_weight;
 
             self.childRect.w = math.max(0, self.childRect.w - rect.w);
             self.childRect.x += rect.w;
         } else if (self.dir == .vertical) {
             rect.w = self.childRect.w;
-            if (self.wd.options.expandVertical()) {
-                rect.h += pixels_per_w * current_weight;
-            }
+            rect.h += pixels_per_w * current_weight;
 
             self.childRect.h = math.max(0, self.childRect.h - rect.h);
             self.childRect.y += rect.h;
@@ -6055,6 +6051,10 @@ pub const examples = struct {
                 basicWidgets();
             }
 
+            if (gui.expander(@src(), 0, "Layout", .{ .expand = .horizontal })) {
+                layout();
+            }
+
             if (gui.expander(@src(), 0, "Text Layout", .{ .expand = .horizontal })) {
                 textDemo();
             }
@@ -6112,6 +6112,39 @@ pub const examples = struct {
         }
 
         gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{});
+    }
+
+    pub fn layout() void {
+        const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .min_size = .{ .w = 200, .h = 120 }};
+        {
+            gui.label(@src(), 0, "gravity options:", .{}, .{});
+            var o = gui.overlay(@src(), 0, opts);
+            defer o.deinit();
+
+            inline for (@typeInfo(Options.Gravity).Enum.fields) |f, i| {
+                _ = gui.button(@src(), i, f.name, .{ .gravity = @intToEnum(Options.Gravity, f.value) });
+            }
+        }
+
+        {
+            gui.label(@src(), 0, "expand options:", .{}, .{});
+            var hbox = gui.box(@src(), 0, .horizontal, .{});
+            defer hbox.deinit();
+            {
+                var vbox = gui.box(@src(), 0, .vertical, opts);
+                defer vbox.deinit();
+
+                _ = gui.button(@src(), 0, "none", .{ .expand = .none });
+                _ = gui.button(@src(), 0, "horizontal", .{ .expand = .horizontal });
+                _ = gui.button(@src(), 0, "vertical", .{ .expand = .vertical });
+            }
+            {
+                var vbox = gui.box(@src(), 0, .vertical, opts);
+                defer vbox.deinit();
+
+                _ = gui.button(@src(), 0, "both", .{ .expand = .both });
+            }
+        }
     }
 
     pub fn textDemo() void {
