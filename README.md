@@ -2,6 +2,10 @@
 
 A [Zig](https://ziglang.org/) native GUI toolkit for whole applications or extra debugging windows in an existing application.
 
+## Screenshot
+
+![screenshot of demo](/screenshot_demo.png?raw=true)
+
 ## Features
 
 - Immediate Mode Interface
