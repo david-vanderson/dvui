@@ -83,9 +83,6 @@ pub fn deinit(self: *SDLBackend) void {
     }
     c.SDL_DestroyRenderer(self.renderer);
     c.SDL_DestroyWindow(self.window);
-}
-
-pub fn quit(_: *SDLBackend) void {
     c.SDL_Quit();
 }
 

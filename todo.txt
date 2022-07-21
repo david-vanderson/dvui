@@ -18,6 +18,7 @@ start making real demo() contents
 - following dear imgui demo
  - Basic Widgets
   - radio
+  - slider
   - hold-repeat buttons
   - tooltips
   - dropdown selection
@@ -35,9 +36,6 @@ problem of mousing off a menuItem and onto the theme change checkbox, and the me
   - but that means that as you mouse off the edge, when the mouse goes into the margin, it will defocus the menu item?
   - have to implement intention-motion MenuItem (de)activation to fix this
 
-
-try to put gui on top of an existing mach app
-- need a slider widget
 
 switch mouse button events to use separate button and action
 
@@ -60,8 +58,6 @@ xstart and ystart for textSize
 kerning
 - check how sdl_ttf does it
 
-make paned widget render something in the middle if the mouse is over the sash
-
 popup needs to align it's text with the label that popped it
 - take a flag for whether it's popping updown or sideways, then adjust x or y to account for border and padding
 
@@ -69,25 +65,12 @@ switch to adwaita default font?
 
 mach: do clipping in the shader?
 
-DataSet/Get should use widget id and name like Animations
-
 should popups and floating windows inherit the scale of their parents?
-
-PanedWidget should do it's mouse events after children
-- otherwise it's hard to grab a scroll grab just to the side of the sash
-
-Window needs a deinit
-- deinit caches, cursors, backend
 
 maybe parameterize gui based on given Vertex type?
 
 premultiplied alpha for all textures (and vertices from PathStroke/Fill?)
 - also font glyphs
-
-cursor stuff needs to differentiate between owning the whole gui and doing extra gui stuff on top
-- if the last mouse point is over the gui OR the gui has captured the mouse
-  - then the gui sets the cursor (or sets it to arrow if it was set last frame)
-- otherwise gui doesn't want to set the cursor
 
 when we have a widget that has captured the mouse, need to capture the mouse in the underlying window system so click-dragging works even when the mouse pointer goes outside the window
 
@@ -100,7 +83,6 @@ try animating a fade
 
 punchlist for podcast app:
 - equal-sized weight option to boxlayout
-- arbitrarily long scroll?
 - bitmaps
 - textentry needs to be able to paste a url
 
@@ -113,12 +95,8 @@ debugging:
 - maybe just a separate floating window that shows a tree-view of all the widgets
   - mouseover to highlight the widget?
 
-copy other widgets from imgui
-
 textlayout:
 - minSizeForChild should recalc based on the four corners
-
-options should have an explicit "rect" thing where the child doesn't ask the parent for a rect and doesn't report it's size, it just draws at that location (from the parent's screenRectScale), it's out of the normal flow
 
 split gravity into 2 0-1 values plus a text baseline?
 
@@ -143,21 +121,6 @@ dialog
   - are there other things a user could press?
 - rss textentry should bubble up the enter that it doesn't process so the dialog can record that it should "submit"
 
-stacking order of child windows?
-- each window's children are on top of their parent?
-  - but the stacking order of the children can be altered
-- window.floating_windows
-  - during a frame it only has windows that are ancestors of the current window
-  - at the end when we finally pop the render queue it will reget all windows in stacking order
-- windows persist a stacking list of children (along with positions in renderqueue)
-  - init
-    - child window records start in parent's deferredrenderqueue
-    - child does FloatingWindowAdd
-  - deinit
-    - child window records end in parent's deferredrenderqueue
-    - child pops itself from window.floating_windows
-  - deferredrenderpop does it in stacking order and re-adds FloatingWindowData
-
 popups need to have a scrollarea
 - scrollarea needs to not show the scrollbar if no need
 - also main window and floating windows
@@ -165,12 +128,6 @@ popups need to have a scrollarea
 
 maybe use stb_truetype or whatever so we don't need sdl_ttf?
 - translate-c is failing for a few of the functions
-
-popups need to bubble up tab event so that the root menu can decide what to do with it
-- File/Edit menu moves to next item_prev
-- all other menus do nothing
-
-menu/submenu keyboard nav
 
 change cursorlayout from top-to-bottom to left-to-right with optional extra floating widgets that get routed around
 - save info for each line
@@ -188,26 +145,11 @@ baseline alignment
 
 make Alt do special stuff with the menubar
 
-scroll area scroll to newly-focused widget?
-- bubble a special "show this screen rect" event
-- how to tell if a widget is just receiving focus instead of having it from last frame?
-
-forms where you can press "enter" in a form field and it clicks the ok button
-- also "esc" clicks the cancel button
-- maybe a FormWidget that wraps those
-  - bubbleEvent can catch "enter" from text entry
-  - FormEvent() call for user side to use on button press that creates and bubbles an event?
-
-
 need to free widgets that are allocated on the arena
 - like TextWidget does it
-
 
 scroll widget when stuff is being added/deleted
 - lock to top if there previously
 - scroll to bottom if there previously
 - otherwise scroll to widget that was in the middle?
-
-
-flag whether the app should show the mouse cursor
 

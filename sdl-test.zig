@@ -7,8 +7,10 @@ const gpa = gpa_instance.allocator();
 
 pub fn main() !void {
     var win_backend = try SDLBackend.init(800, 600);
+    defer win_backend.deinit();
 
     var win = gui.Window.init(gpa, win_backend.guiBackend());
+    defer win.deinit();
 
     var buttons: [3][6]bool = undefined;
     for (buttons) |*b| {
@@ -317,10 +319,6 @@ pub fn main() !void {
 
         win_backend.waitEventTimeout(wait_event_micros);
     }
-
-    win.deinit();
-    win_backend.deinit();
-    win_backend.quit();
 }
 
 fn show_stroke_test_window() void {

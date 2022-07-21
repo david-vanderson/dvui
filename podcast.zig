@@ -7,8 +7,10 @@ const gpa = gpa_instance.allocator();
 
 pub fn main() !void {
     var backend = try Backend.init(360, 600);
+    defer backend.deinit();
 
     var win = gui.Window.init(gpa, backend.guiBackend());
+    defer win.deinit();
 
     main_loop: while (true) {
         var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -60,8 +62,6 @@ pub fn main() !void {
 
         backend.waitEventTimeout(wait_event_micros);
     }
-
-    backend.deinit();
 }
 
 var show_dialog: bool = false;
