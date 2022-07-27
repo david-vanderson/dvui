@@ -298,7 +298,7 @@ gui.ButtonWidget.Defaults.background = false;
 
 Colors come in foreground/background pairs.  Usually you want to use colors from the theme:
 ```zig
-if (gui.menuItemLabel(@src(), 0, "Cut", false, .{.color_style = .warning, .background = true}) != null) {
+if (gui.menuItemLabel(@src(), 0, "Cut", false, .{.color_style = .success, .background = true}) != null) {
     // selected
 }
 ```
