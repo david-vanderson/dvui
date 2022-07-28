@@ -7,7 +7,7 @@ const zm = @import("zmath");
 const MachBackend = @This();
 
 gpa: std.mem.Allocator,
-engine: *mach.Core,
+core: *mach.Core,
 pipeline: gpu.RenderPipeline,
 
 uniform_buffer: gpu.Buffer,
@@ -31,20 +31,20 @@ index_buffer_size: u32,
 
 cursor_last: gui.CursorKind = .arrow,
 
-pub fn init(gpa: std.mem.Allocator, engine: *mach.Core) !MachBackend {
+pub fn init(gpa: std.mem.Allocator, core: *mach.Core) !MachBackend {
     var back: MachBackend = undefined;
 
     back.gpa = gpa;
-    back.engine = engine;
+    back.core = core;
     back.uniform_buffer_size = 1;
     back.uniform_buffer_len = 0;
-    back.uniform_buffer = engine.device.createBuffer(&.{
+    back.uniform_buffer = core.device.createBuffer(&.{
         .usage = .{ .copy_dst = true, .uniform = true },
         .size = UniformBufferObject.Size * back.uniform_buffer_size,
         .mapped_at_creation = false,
     });
 
-    back.sampler = engine.device.createSampler(&.{
+    back.sampler = core.device.createSampler(&.{
         .mag_filter = .linear,
         .min_filter = .linear,
     });
@@ -55,18 +55,18 @@ pub fn init(gpa: std.mem.Allocator, engine: *mach.Core) !MachBackend {
     back.index_buffer_size = 1000;
     back.vertex_buffer_len = 0;
     back.index_buffer_len = 0;
-    back.vertex_buffer = engine.device.createBuffer(&.{
+    back.vertex_buffer = core.device.createBuffer(&.{
         .usage = .{ .vertex = true, .copy_dst = true },
         .size = @sizeOf(Vertex) * back.vertex_buffer_size,
         .mapped_at_creation = false,
     });
-    back.index_buffer = engine.device.createBuffer(&.{
+    back.index_buffer = core.device.createBuffer(&.{
         .usage = .{ .index = true, .copy_dst = true },
         .size = @sizeOf(u32) * back.index_buffer_size,
         .mapped_at_creation = false,
     });
 
-    const vs_module = engine.device.createShaderModule(&.{
+    const vs_module = core.device.createShaderModule(&.{
         .label = "my vertex shader",
         .code = .{ .wgsl = vert_wgsl },
     });
@@ -83,7 +83,7 @@ pub fn init(gpa: std.mem.Allocator, engine: *mach.Core) !MachBackend {
         .attributes = &vertex_attributes,
     };
 
-    const fs_module = engine.device.createShaderModule(&.{
+    const fs_module = core.device.createShaderModule(&.{
         .label = "my fragment shader",
         .code = .{ .wgsl = frag_wgsl },
     });
@@ -102,7 +102,7 @@ pub fn init(gpa: std.mem.Allocator, engine: *mach.Core) !MachBackend {
         },
     };
     const color_target = gpu.ColorTargetState{
-        .format = engine.swap_chain_format,
+        .format = core.swap_chain_format,
         .blend = &blend,
         .write_mask = gpu.ColorWriteMask.all,
     };
@@ -125,7 +125,7 @@ pub fn init(gpa: std.mem.Allocator, engine: *mach.Core) !MachBackend {
         },
     };
 
-    back.pipeline = engine.device.createRenderPipeline(&pipeline_descriptor);
+    back.pipeline = core.device.createRenderPipeline(&pipeline_descriptor);
 
     vs_module.release();
     fs_module.release();
@@ -155,7 +155,7 @@ fn toMachCursor(cursor: gui.CursorKind) mach.MouseCursor {
 pub fn setCursor(self: *MachBackend, cursor: gui.CursorKind) void {
     if (cursor != self.cursor_last) {
         self.cursor_last = cursor;
-        self.engine.setMouseCursor(toMachCursor(cursor)) catch {};
+        self.core.setMouseCursor(toMachCursor(cursor)) catch {};
     }
 }
 
@@ -223,14 +223,14 @@ pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) bool {
 
 pub fn waitEventTimeout(self: *MachBackend, timeout_micros: u32) void {
     if (timeout_micros == std.math.maxInt(u32)) {
-        self.engine.setWaitEvent(std.math.floatMax(f64));
+        self.core.setWaitEvent(std.math.floatMax(f64));
     } else {
-        self.engine.setWaitEvent(@intToFloat(f64, timeout_micros) / 1_000_000);
+        self.core.setWaitEvent(@intToFloat(f64, timeout_micros) / 1_000_000);
     }
 }
 
 pub fn addAllEvents(self: *MachBackend, win: *gui.Window) bool {
-    while (self.engine.pollEvent()) |event| {
+    while (self.core.pollEvent()) |event| {
         _ = self.addEvent(win, event);
         switch (event) {
             .key_press => |ev| {
@@ -254,7 +254,7 @@ pub fn begin(self: *MachBackend, arena: std.mem.Allocator) void {
     self.vtx = std.ArrayList(gui.Vertex).init(arena);
     self.idx = std.ArrayList(u32).init(arena);
 
-    self.encoder = self.engine.device.createCommandEncoder(null);
+    self.encoder = self.core.device.createCommandEncoder(null);
     self.uniform_buffer_len = 0;
     self.vertex_buffer_len = 0;
     self.index_buffer_len = 0;
@@ -266,18 +266,18 @@ pub fn end(self: *MachBackend) void {
     //std.debug.print("  release encoder\n", .{});
     self.encoder.release();
 
-    var queue = self.engine.device.getQueue();
+    var queue = self.core.device.getQueue();
     queue.submit(&.{command});
     command.release();
 }
 
 pub fn pixelSize(self: *MachBackend) gui.Size {
-    const psize = self.engine.getFramebufferSize();
+    const psize = self.core.getFramebufferSize();
     return gui.Size{ .w = @intToFloat(f32, psize.width), .h = @intToFloat(f32, psize.height) };
 }
 
 pub fn windowSize(self: *MachBackend) gui.Size {
-    const size = self.engine.getWindowSize();
+    const size = self.core.getWindowSize();
     return gui.Size{ .w = @intToFloat(f32, size.width), .h = @intToFloat(f32, size.height) };
 }
 
@@ -330,7 +330,7 @@ pub fn flushRender(self: *MachBackend) void {
             self.uniform_buffer_size = self.uniform_buffer_len + 1;
 
             //std.debug.print("creating uniform buffer {d}\n", .{self.uniform_buffer_size});
-            self.uniform_buffer = self.engine.device.createBuffer(&.{
+            self.uniform_buffer = self.core.device.createBuffer(&.{
                 .usage = .{ .copy_dst = true, .uniform = true },
                 .size = UniformBufferObject.Size * self.uniform_buffer_size,
                 .mapped_at_creation = false,
@@ -345,7 +345,7 @@ pub fn flushRender(self: *MachBackend) void {
             self.vertex_buffer_size = self.vertex_buffer_len + @intCast(u32, self.vtx.items.len);
 
             //std.debug.print("creating vertex buffer {d}\n", .{self.vertex_buffer_size});
-            self.vertex_buffer = self.engine.device.createBuffer(&.{
+            self.vertex_buffer = self.core.device.createBuffer(&.{
                 .usage = .{ .vertex = true, .copy_dst = true },
                 .size = @sizeOf(Vertex) * self.vertex_buffer_size,
                 .mapped_at_creation = false,
@@ -360,7 +360,7 @@ pub fn flushRender(self: *MachBackend) void {
             self.index_buffer_size = self.index_buffer_len + @intCast(u32, self.idx.items.len);
 
             //std.debug.print("creating index buffer {d}\n", .{self.index_buffer_size});
-            self.index_buffer = self.engine.device.createBuffer(&.{
+            self.index_buffer = self.core.device.createBuffer(&.{
                 .usage = .{ .index = true, .copy_dst = true },
                 .size = @sizeOf(u32) * self.index_buffer_size,
                 .mapped_at_creation = false,
@@ -370,7 +370,7 @@ pub fn flushRender(self: *MachBackend) void {
         }
     }
 
-    const back_buffer_view = self.engine.swap_chain.?.getCurrentTextureView();
+    const back_buffer_view = self.core.swap_chain.?.getCurrentTextureView();
     defer back_buffer_view.release();
 
     const color_attachment = gpu.RenderPassColorAttachment{
@@ -405,7 +405,7 @@ pub fn flushRender(self: *MachBackend) void {
         self.encoder.writeBuffer(self.uniform_buffer, UniformBufferObject.Size * self.uniform_buffer_len, UniformBufferObject, &.{ubo});
     }
 
-    const bind_group = self.engine.device.createBindGroup(
+    const bind_group = self.core.device.createBindGroup(
         &gpu.BindGroup.Descriptor{
             .layout = self.pipeline.getBindGroupLayout(0),
             .entries = &.{
@@ -457,7 +457,7 @@ pub fn flushRender(self: *MachBackend) void {
 pub fn textureCreate(self: *MachBackend, pixels: []const u8, width: u32, height: u32) *anyopaque {
     const img_size = gpu.Extent3D{ .width = width, .height = height };
     var texture = self.gpa.create(gpu.Texture) catch unreachable;
-    texture.* = self.engine.device.createTexture(&.{
+    texture.* = self.core.device.createTexture(&.{
         .size = img_size,
         .format = .rgba8_unorm,
         .usage = .{
@@ -472,7 +472,7 @@ pub fn textureCreate(self: *MachBackend, pixels: []const u8, width: u32, height:
         .rows_per_image = @intCast(u32, height),
     };
 
-    var queue = self.engine.device.getQueue();
+    var queue = self.core.device.getQueue();
     queue.writeTexture(&.{ .texture = texture.* }, &data_layout, &img_size, u8, pixels);
 
     return texture;
