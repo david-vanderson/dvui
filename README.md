@@ -31,12 +31,9 @@ A [Zig](https://ziglang.org/) native GUI toolkit for whole applications or extra
 ### Standalone Mach App
 
 ```sh
-git clone https://github.com/david-vanderson/gui.git
+git clone --recurse-submodules https://github.com/david-vanderson/gui
 cd gui
-git submodule add https://github.com/hexops/mach libs/mach
-git submodule add https://github.com/hexops/mach-freetype libs/mach-freetype
-git submodule add https://github.com/PiergiorgioZagaria/zmath.git libs/zmath
-zig build run-mach-test
+zig build mach-test
 ```
 
 ### On Top of Existing Mach App
