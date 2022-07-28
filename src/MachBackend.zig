@@ -7,7 +7,7 @@ const zm = @import("zmath");
 const MachBackend = @This();
 
 gpa: std.mem.Allocator,
-engine: *mach.Engine,
+engine: *mach.Core,
 pipeline: gpu.RenderPipeline,
 
 uniform_buffer: gpu.Buffer,
@@ -31,7 +31,7 @@ index_buffer_size: u32,
 
 cursor_last: gui.CursorKind = .arrow,
 
-pub fn init(gpa: std.mem.Allocator, engine: *mach.Engine) !MachBackend {
+pub fn init(gpa: std.mem.Allocator, engine: *mach.Core) !MachBackend {
     var back: MachBackend = undefined;
 
     back.gpa = gpa;
@@ -196,7 +196,7 @@ pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) bool {
             return win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .up);
         },
         .mouse_motion => |mm| {
-            return win.addEventMouseMotion(@floatCast(f32, mm.x), @floatCast(f32, mm.y));
+            return win.addEventMouseMotion(@floatCast(f32, mm.pos.x), @floatCast(f32, mm.pos.y));
         },
         .mouse_press => |mb| {
             switch (mb.button) {
@@ -215,7 +215,7 @@ pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) bool {
         .mouse_scroll => |s| {
             return win.addEventMouseWheel(s.yoffset);
         },
-        //else => {},
+        else => {},
     }
 
     return false;
