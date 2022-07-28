@@ -31,12 +31,9 @@ A [Zig](https://ziglang.org/) native GUI toolkit for whole applications or extra
 ### Standalone Mach App
 
 ```sh
-git clone https://github.com/david-vanderson/gui.git
+git clone --recurse-submodules https://github.com/david-vanderson/gui
 cd gui
-git submodule add https://github.com/hexops/mach libs/mach
-git submodule add https://github.com/hexops/mach-freetype libs/mach-freetype
-git submodule add https://github.com/PiergiorgioZagaria/zmath.git libs/zmath
-zig build run-mach-test
+zig build mach-test
 ```
 
 ### On Top of Existing Mach App
@@ -88,20 +85,20 @@ index 1f17475..e1b6450 100755
 +win_backend: MachGuiBackend,
 +shown_instances: u32,
 +
- const App = @This();
+pub const App = @This();
 
- pub fn init(app: *App, engine: *mach.Engine) !void {
-@@ -131,16 +141,31 @@ pub fn init(app: *App, engine: *mach.Engine) !void {
+ pub fn init(app: *App, core: *mach.Core) !void {
+@@ -131,16 +141,31 @@ pub fn init(app: *App, core: *mach.Core) !void {
      fs_module.release();
      pipeline_layout.release();
      bgl.release();
 +
-+    app.win_backend = try MachGuiBackend.init(gpa, engine);
++    app.win_backend = try MachGuiBackend.init(gpa, core);
 +    app.win = gui.Window.init(gpa, app.win_backend.guiBackend());
 +    app.shown_instances = 12;  // start with 12 cubes
  }
 
- pub fn deinit(app: *App, _: *mach.Engine) void {
+ pub fn deinit(app: *App, _: *mach.Core) void {
      app.vertex_buffer.release();
      app.bind_group.release();
      app.uniform_buffer.release();
@@ -110,7 +107,7 @@ index 1f17475..e1b6450 100755
 +    app.win_backend.deinit();
  }
 
- pub fn update(app: *App, engine: *mach.Engine) !void {
+ pub fn update(app: *App, core: *mach.Core) !void {
 +
 +    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 +    const arena = arena_allocator.allocator();
@@ -118,12 +115,12 @@ index 1f17475..e1b6450 100755
 +
 +    app.win.begin(arena, std.time.nanoTimestamp());
 +
-     while (engine.pollEvent()) |event| {
+     while (core.pollEvent()) |event| {
 +        _ = app.win_backend.addEvent(&app.win, event);
          switch (event) {
              .key_press => |ev| {
                  if (ev.key == .space)
-@@ -150,6 +175,26 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
+@@ -150,6 +175,26 @@ pub fn update(app: *App, core: *mach.Core) !void {
          }
      }
 
@@ -147,10 +144,10 @@ index 1f17475..e1b6450 100755
 +        }
 +    }
 +
-     const back_buffer_view = engine.swap_chain.?.getCurrentTextureView();
+     const back_buffer_view = core.swap_chain.?.getCurrentTextureView();
      const color_attachment = gpu.RenderPassColorAttachment{
          .view = back_buffer_view,
-@@ -198,7 +243,7 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
+@@ -198,7 +243,7 @@ pub fn update(app: *App, core: *mach.Core) !void {
      pass.setPipeline(app.pipeline);
      pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(Vertex) * vertices.len);
      pass.setBindGroup(0, app.bind_group, &.{0});
@@ -159,14 +156,14 @@ index 1f17475..e1b6450 100755
      pass.end();
      pass.release();
 
-@@ -207,6 +252,9 @@ pub fn update(app: *App, engine: *mach.Engine) !void {
+@@ -207,6 +252,9 @@ pub fn update(app: *App, core: *mach.Core) !void {
 
      app.queue.submit(&.{command});
      command.release();
 +
 +    _ = app.win.end();
 +
-     engine.swap_chain.?.present();
+     core.swap_chain.?.present();
      back_buffer_view.release();
  }
 ```

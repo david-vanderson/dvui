@@ -11,19 +11,19 @@ const gpa = gpa_instance.allocator();
 win: gui.Window,
 win_backend: MachGuiBackend,
 
-const App = @This();
+pub const App = @This();
 
-pub fn init(app: *App, engine: *mach.Engine) !void {
+pub fn init(app: *App, engine: *mach.Core) !void {
     app.win_backend = try MachGuiBackend.init(gpa, engine);
     app.win = gui.Window.init(gpa, app.win_backend.guiBackend());
 }
 
-pub fn deinit(app: *App, _: *mach.Engine) void {
+pub fn deinit(app: *App, _: *mach.Core) void {
     app.win.deinit();
     app.win_backend.deinit();
 }
 
-pub fn update(app: *App, engine: *mach.Engine) !void {
+pub fn update(app: *App, engine: *mach.Core) !void {
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     const arena = arena_allocator.allocator();
     defer arena_allocator.deinit();
