@@ -540,7 +540,7 @@ pub fn fontCacheGet(font: Font) *FontCacheEntry {
 
     //std.debug.print("FontCacheGet creating font size {d} name \"{s}\"\n", .{font.size, font.name});
 
-    var face = cw.ft2lib.newFaceMemory(font.ttf_bytes, 0) catch unreachable;
+    var face = cw.ft2lib.createFaceMemory(font.ttf_bytes, 0) catch unreachable;
     face.setPixelSizes(0, @floatToInt(u32, font.size)) catch unreachable;
 
     const ascender = @intToFloat(f32, face.ascender()) / 64.0;
@@ -1750,7 +1750,7 @@ pub const Window = struct {
     backend: Backend,
 
     window_currentId: u32 = 0,
-    floating_data: std.ArrayList(FloatingData), 
+    floating_data: std.ArrayList(FloatingData),
 
     focused_windowId: u32 = 0,
     focused_widgetId: ?u32 = null, // this is specific to the base window
@@ -1821,6 +1821,7 @@ pub const Window = struct {
         gpa: std.mem.Allocator,
         backend: Backend,
     ) Self {
+        var fnv32 = fnv.init();
         var self = Self{
             .gpa = gpa,
             .floating_data = std.ArrayList(FloatingData).init(gpa),
@@ -1835,7 +1836,7 @@ pub const Window = struct {
             .tab_index = std.ArrayList(TabIndex).init(gpa),
             .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
             .icon_cache = std.AutoHashMap(u32, IconCacheEntry).init(gpa),
-            .wd = WidgetData{ .id = fnv.init().final() },
+            .wd = WidgetData{ .id = fnv32.final() },
             .backend = backend,
         };
 
@@ -1940,7 +1941,6 @@ pub const Window = struct {
                 focusWindow(self.wd.id, null);
             }
         }
-
 
         return (self.wd.id != winId);
     }
@@ -2168,7 +2168,7 @@ pub const Window = struct {
         self.wd.rect = self.backend.windowSize().rect();
         self.natural_scale = self.rect_pixels.w / self.wd.rect.w;
 
-        debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
+        // debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
         _ = windowCurrentSet(self.wd.id);
 
@@ -2276,7 +2276,7 @@ pub const Window = struct {
     fn positionMouseEventRemove(self: *Self) void {
         const e = self.events.pop();
         if (e.evt != .mouse or e.evt.mouse.state != .position) {
-            std.debug.print("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
+            // std.debug.print("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
         }
     }
 
@@ -2375,7 +2375,6 @@ pub const Window = struct {
 
             cueFrame();
         }
-
 
         // Check that the final event was our synthetic mouse position event.
         // If one of the addEvent* functions forgot to add the synthetic mouse
@@ -2517,7 +2516,7 @@ pub const PopupWidget = struct {
 
         if (minSizeGetPrevious(self.wd.id)) |_| {
             self.wd.rect = Rect.fromPoint(self.initialRect.topleft());
-            const ms = minSize(self.wd.id, self.options.min_size orelse .{});
+            const ms = minSize(self.wd.id, self.options.min_size orelse Size{});
             self.wd.rect.w = ms.w;
             self.wd.rect.h = ms.h;
             self.wd.rect = placeOnScreen(self.initialRect, self.wd.rect);
@@ -2530,7 +2529,7 @@ pub const PopupWidget = struct {
             cueFrame();
         }
 
-        debug("{x} Popup {}", .{ self.wd.id, self.wd.rect });
+        // debug("{x} Popup {}", .{ self.wd.id, self.wd.rect });
 
         // outside normal flow, so don't get rect from parent
         const rs = self.screenRectScale(self.wd.rect);
@@ -2597,7 +2596,7 @@ pub const PopupWidget = struct {
 
         if (self.wd.id == focusedWindowId()) {
             // we are focused
-            ret = true; 
+            ret = true;
         }
 
         if (self.parent_popup) |pp| {
@@ -2780,7 +2779,7 @@ pub const FloatingWindowWidget = struct {
             }
         }
 
-        debug("{x} FloatingWindow {}", .{ self.wd.id, self.wd.rect });
+        // debug("{x} FloatingWindow {}", .{ self.wd.id, self.wd.rect });
 
         const captured = captureMouseMaintain(self.wd.id);
 
@@ -3038,8 +3037,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
     const size = options.font().lineSkip();
     if (expanded) {
         icon(@src(), 0, size, "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity = .left });
-    }
-    else {
+    } else {
         icon(@src(), 0, size, "right_arrow", gui.icons.papirus.actions.pan_end_symbolic, .{ .gravity = .left });
     }
     labelNoFormat(@src(), 0, label_str, options.plain());
@@ -3048,7 +3046,6 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
 
     return expanded;
 }
-
 
 pub fn paned(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) *PanedWidget {
     var ret = gui.currentWindow().arena.create(PanedWidget) catch unreachable;
@@ -3086,7 +3083,7 @@ pub const PanedWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        gui.debug("{x} Paned {}", .{ self.wd.id, self.wd.rect });
+        // gui.debug("{x} Paned {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
         const rect = self.wd.contentRect();
         self.prevClip = clip(self.wd.parent.screenRectScale(rect).r);
@@ -3356,7 +3353,7 @@ pub const TextLayoutWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        debug("{x} TextLayout {}", .{ self.wd.id, self.wd.rect });
+        // debug("{x} TextLayout {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
 
         const rs = self.wd.contentRectScale();
@@ -3546,7 +3543,7 @@ pub const ContextWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        debug("{x} Context {}", .{ self.wd.id, self.wd.rect });
+        // debug("{x} Context {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
     }
 
@@ -3614,8 +3611,7 @@ pub const ContextWidget = struct {
 
                         // offset just enough so when Popup first appears nothing is highlighted
                         self.activePt.x += 1;
-                    }
-                    else if (e.evt.mouse.state == .focus) {
+                    } else if (e.evt.mouse.state == .focus) {
                         if (focused_this_frame) {
                             e.handled = true;
                         }
@@ -3655,7 +3651,7 @@ pub const OverlayWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        debug("{x} Overlay {}", .{ self.wd.id, self.wd.rect });
+        // debug("{x} Overlay {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
     }
 
@@ -3732,7 +3728,7 @@ pub const BoxWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        debug("{x} Box {}", .{ self.wd.id, self.wd.rect });
+        // debug("{x} Box {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
 
         // our rect for children has to start at 0,0
@@ -3851,7 +3847,7 @@ pub const ScrollBar = struct {
         const captured = captureMouseMaintain(self.id);
 
         self.rect = rect_in;
-        debug("{x} ScrollBar {}", .{ self.id, self.rect });
+        // debug("{x} ScrollBar {}", .{ self.id, self.rect });
         {
             const si = area.scrollInfo();
             self.grabRect = self.rect;
@@ -3898,7 +3894,7 @@ pub const ScrollBar = struct {
                     if (grabrs.contains(e.evt.mouse.p)) {
                         // capture and start drag
                         captureMouse(self.id);
-                        dragPreStart(e.evt.mouse.p, .arrow, .{.x = 0, .y = e.evt.mouse.p.y - (grabrs.y + grabrs.h / 2)});
+                        dragPreStart(e.evt.mouse.p, .arrow, .{ .x = 0, .y = e.evt.mouse.p.y - (grabrs.y + grabrs.h / 2) });
                     } else {
                         const si = self.area.scrollInfo();
                         var fi = si.fraction_visible;
@@ -4002,7 +3998,7 @@ pub const ScrollAreaWidget = struct {
     }
 
     pub fn install(self: *Self) void {
-        debug("{x} ScrollArea {}", .{ self.wd.id, self.wd.rect });
+        // debug("{x} ScrollArea {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
 
         bubbleEvents(self.widget());
@@ -4182,7 +4178,7 @@ pub var separator_defaults: Options = .{
 
 pub fn separator(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
     var wd = WidgetData.init(src, id_extra, separator_defaults.override(opts));
-    debug("{x} Separator {}", .{ wd.id, wd.rect });
+    // debug("{x} Separator {}", .{ wd.id, wd.rect });
     wd.borderAndBackground();
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
@@ -4194,7 +4190,7 @@ pub fn spacer(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) v
 
 pub fn spacerRect(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Rect {
     var wd = WidgetData.init(src, id_extra, opts);
-    debug("{x} Spacer {}", .{ wd.id, wd.rect });
+    // debug("{x} Spacer {}", .{ wd.id, wd.rect });
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
     return wd.rect;
@@ -4206,7 +4202,7 @@ pub fn spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
     };
     const options = defaults.override(opts);
     var wd = WidgetData.init(src, id_extra, options);
-    debug("{x} Spinner {}", .{ wd.id, wd.rect });
+    // debug("{x} Spinner {}", .{ wd.id, wd.rect });
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
 
@@ -4264,7 +4260,7 @@ pub const ScaleWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        debug("{x} Scale {d} {}", .{ self.wd.id, self.scale_in, self.wd.rect });
+        // debug("{x} Scale {d} {}", .{ self.wd.id, self.scale_in, self.wd.rect });
         self.wd.borderAndBackground();
     }
 
@@ -4345,7 +4341,7 @@ pub const MenuWidget = struct {
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
         self.parentMenu = menuSet(self);
-        debug("{x} Menu {}", .{ self.wd.id, self.wd.rect });
+        // debug("{x} Menu {}", .{ self.wd.id, self.wd.rect });
 
         self.wd.borderAndBackground();
 
@@ -4484,7 +4480,7 @@ pub const MenuItemWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        debug("{x} MenuItem {}", .{ self.wd.id, self.wd.rect });
+        // debug("{x} MenuItem {}", .{ self.wd.id, self.wd.rect });
 
         self.processEvents();
 
@@ -4574,7 +4570,7 @@ pub const MenuItemWidget = struct {
                         if (mouseTotalMotion().nonZero()) {
                             // TODO don't do the rest here if the menu has an existing popup and the motion is towards the popup
                             if (menuGet().?.submenus_activated) {
-                                focusWindow(null, null);  // focuses the window we are in
+                                focusWindow(null, null); // focuses the window we are in
                                 focusWidget(self.wd.id, null);
                             }
                         }
@@ -4661,7 +4657,7 @@ pub const LabelWidget = struct {
     }
 
     pub fn install(self: *Self) void {
-        debug("{x} Label \"{s:<10}\" {}", .{ self.wd.id, self.label_str, self.wd.rect });
+        // debug("{x} Label \"{s:<10}\" {}", .{ self.wd.id, self.label_str, self.wd.rect });
         self.wd.borderAndBackground();
         const rs = self.wd.contentRectScale();
 
@@ -4690,7 +4686,7 @@ pub fn icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name:
     const size = Size{ .w = iconWidth(name, tvg_bytes, height), .h = height };
 
     var wd = WidgetData.init(src, id_extra, opts.overrideMinSizeContent(size));
-    debug("{x} Icon \"{s:<10}\" {}", .{ wd.id, name, wd.rect });
+    // debug("{x} Icon \"{s:<10}\" {}", .{ wd.id, name, wd.rect });
 
     wd.placeInsideNoExpand();
     wd.borderAndBackground();
@@ -4732,7 +4728,7 @@ pub const ButtonContainerWidget = struct {
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
 
-        debug("{x} ButtonContainer {}", .{ self.wd.id, self.wd.rect });
+        // debug("{x} ButtonContainer {}", .{ self.wd.id, self.wd.rect });
 
         self.captured = captureMouseMaintain(self.wd.id);
         self.clicked = self.processEvents();
@@ -4865,7 +4861,7 @@ pub const ButtonWidget = struct {
     }
 
     pub fn install(self: *ButtonWidget) bool {
-        debug("Button {s}", .{self.label_str});
+        // debug("Button {s}", .{self.label_str});
         self.bc.install();
         const clicked = self.bc.clicked;
 
@@ -4892,7 +4888,7 @@ pub var buttonIcon_defaults: Options = .{
 
 pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) bool {
     const options = buttonIcon_defaults.override(opts);
-    debug("ButtonIcon \"{s}\" {}", .{ name, options });
+    // debug("ButtonIcon \"{s}\" {}", .{ name, options });
     var bc = buttonContainer(src, id_extra, true, options);
     defer bc.deinit();
 
@@ -4910,7 +4906,7 @@ pub var checkbox_defaults: Options = .{
 
 pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label_str: []const u8, opts: Options) void {
     const options = checkbox_defaults.override(opts);
-    debug("Checkbox {s}", .{label_str});
+    // debug("Checkbox {s}", .{label_str});
     var bc = buttonContainer(src, id_extra, false, options.override(.{ .background = false }));
     defer bc.deinit();
 
@@ -5020,7 +5016,7 @@ pub const TextEntryWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        debug("{x} Text {}", .{ self.wd.id, self.wd.rect });
+        // debug("{x} Text {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
 
         self.captured = captureMouseMaintain(self.wd.id);
@@ -5810,11 +5806,11 @@ pub const Widget = struct {
     vtable: *const VTable,
 
     const VTable = struct {
-        data: fn (ptr: *anyopaque) *const WidgetData,
-        rectFor: fn (ptr: *anyopaque, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
-        minSizeForChild: fn (ptr: *anyopaque, s: Size) void,
-        screenRectScale: fn (ptr: *anyopaque, r: Rect) RectScale,
-        bubbleEvent: fn (ptr: *anyopaque, e: *Event) void,
+        data: *const fn (ptr: *anyopaque) *const WidgetData,
+        rectFor: *const fn (ptr: *anyopaque, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
+        minSizeForChild: *const fn (ptr: *anyopaque, s: Size) void,
+        screenRectScale: *const fn (ptr: *anyopaque, r: Rect) RectScale,
+        bubbleEvent: *const fn (ptr: *anyopaque, e: *Event) void,
     };
 
     pub fn init(
@@ -5908,13 +5904,13 @@ pub const Backend = struct {
     vtable: *const VTable,
 
     const VTable = struct {
-        begin: fn (ptr: *anyopaque, arena: std.mem.Allocator) void,
-        end: fn (ptr: *anyopaque) void,
-        pixelSize: fn (ptr: *anyopaque) Size,
-        windowSize: fn (ptr: *anyopaque) Size,
-        renderGeometry: fn (ptr: *anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
-        textureCreate: fn (ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
-        textureDestroy: fn (ptr: *anyopaque, texture: *anyopaque) void,
+        begin: *const fn (ptr: *anyopaque, arena: std.mem.Allocator) void,
+        end: *const fn (ptr: *anyopaque) void,
+        pixelSize: *const fn (ptr: *anyopaque) Size,
+        windowSize: *const fn (ptr: *anyopaque) Size,
+        renderGeometry: *const fn (ptr: *anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
+        textureCreate: *const fn (ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
+        textureDestroy: *const fn (ptr: *anyopaque, texture: *anyopaque) void,
     };
 
     pub fn init(
@@ -6015,9 +6011,7 @@ pub const Backend = struct {
     }
 };
 
-
 pub const examples = struct {
-    
     pub var show_demo_window: bool = true;
     var checkbox_bool: bool = false;
     var show_dialog: bool = false;
@@ -6031,11 +6025,11 @@ pub const examples = struct {
 
     pub fn demo() void {
         if (show_demo_window) {
-            var float = gui.floatingWindow(@src(), 0, false, null, &show_demo_window, .{.min_size = .{ .w = 400, .h = 400 } });
+            var float = gui.floatingWindow(@src(), 0, false, null, &show_demo_window, .{ .min_size = .{ .w = 400, .h = 400 } });
             defer float.deinit();
 
             var buf: [100]u8 = undefined;
-            const fps_str = std.fmt.bufPrint(&buf, "{d:4.0} fps", .{ gui.FPS() }) catch unreachable;
+            const fps_str = std.fmt.bufPrint(&buf, "{d:4.0} fps", .{gui.FPS()}) catch unreachable;
             gui.windowHeader("GUI Demo", fps_str, &show_demo_window);
 
             var scroll = gui.scrollArea(@src(), 0, null, .{ .expand = .both, .color_style = .content, .background = false });
@@ -6098,7 +6092,7 @@ pub const examples = struct {
     }
 
     pub fn basicWidgets() void {
-        var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 }});
+        var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
 
         {
@@ -6115,7 +6109,7 @@ pub const examples = struct {
     }
 
     pub fn layout() void {
-        const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .min_size = .{ .w = 200, .h = 120 }};
+        const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .min_size = .{ .w = 200, .h = 120 } };
         {
             gui.label(@src(), 0, "gravity options:", .{}, .{});
             var o = gui.overlay(@src(), 0, opts);
@@ -6148,7 +6142,7 @@ pub const examples = struct {
     }
 
     pub fn textDemo() void {
-        var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 }});
+        var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
         gui.label(@src(), 0, "Title", .{}, .{ .font_style = .title });
         gui.label(@src(), 0, "Title-1", .{}, .{ .font_style = .title_1 });
@@ -6249,7 +6243,7 @@ pub const examples = struct {
     }
 
     pub fn animations() void {
-        var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 }});
+        var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
         if (gui.expander(@src(), 0, "Spinner", .{ .expand = .horizontal })) {
             gui.label(@src(), 0, "Spinner maxes out frame rate", .{}, .{});
@@ -6262,7 +6256,7 @@ pub const examples = struct {
             const millis = @divFloor(gui.frameTimeNS(), 1_000_000);
             const left = @intCast(i32, @rem(millis, 1000));
 
-            var mslabel = gui.LabelWidget.init(@src(), 0, "{d} ms into second", .{ @intCast(u32, left) }, .{});
+            var mslabel = gui.LabelWidget.init(@src(), 0, "{d} ms into second", .{@intCast(u32, left)}, .{});
             mslabel.install();
 
             if (gui.timerDone(mslabel.wd.id) or !gui.timerExists(mslabel.wd.id)) {
@@ -6327,4 +6321,3 @@ pub const examples = struct {
         }
     }
 };
-
