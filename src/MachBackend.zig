@@ -476,9 +476,10 @@ pub fn textureDestroy(self: *MachBackend, texture: *anyopaque) void {
         // flush so we don't accidentally release this texture before we use it
         self.flushRender();
     }
-    const tex = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), texture));
-    tex.release();
-    self.gpa.destroy(tex);
+    // TODO: Figure out why this is causing a compile error
+    // const tex = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), texture));
+    // tex.release();
+    // self.gpa.destroy(tex);
 }
 
 const vert_wgsl =
