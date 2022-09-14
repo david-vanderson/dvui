@@ -376,7 +376,7 @@ pub fn flushRender(self: *MachBackend) void {
         .store_op = .store,
     };
 
-    const default_texture_ptr = gui.iconTexture("default_texture", gui.icons.papirus.actions.media_playback_start_symbolic, 1.0).texture;
+    const default_texture_ptr = @ptrCast(*gpu.Texture, gui.iconTexture("default_texture", gui.icons.papirus.actions.media_playback_start_symbolic, 1.0).texture);
 
     var texture: ?*gpu.Texture = null;
     if (self.texture) |t| {
@@ -396,13 +396,13 @@ pub fn flushRender(self: *MachBackend) void {
             .mat = mvp,
             .use_tex = if (texture != null) 1 else 0,
         };
-        self.encoder.writeBuffer(self.uniform_buffer, UniformBufferObject.Size * self.uniform_buffer_len, &.{ubo});
+        self.encoder.writeBuffer(self.uniform_buffer, UniformBufferObject.Size * self.uniform_buffer_len, &[_]UniformBufferObject{ubo});
     }
 
     const bind_group = self.core.device.createBindGroup(
         &gpu.BindGroup.Descriptor{
             .layout = self.pipeline.getBindGroupLayout(0),
-            .entries = &.{
+            .entries = &[_]gpu.BindGroup.Entry{
                 gpu.BindGroup.Entry.buffer(0, self.uniform_buffer, UniformBufferObject.Size * self.uniform_buffer_len, @sizeOf(UniformBufferObject)),
                 gpu.BindGroup.Entry.sampler(1, self.sampler),
                 gpu.BindGroup.Entry.textureView(2, (texture orelse default_texture_ptr).createView(&gpu.TextureView.Descriptor{})),
@@ -421,13 +421,13 @@ pub fn flushRender(self: *MachBackend) void {
         vertices[i] = Vertex{ .pos = vin.pos, .col = .{ @intToFloat(f32, vin.col.r) / 255.0, @intToFloat(f32, vin.col.g) / 255.0, @intToFloat(f32, vin.col.b) / 255.0, @intToFloat(f32, vin.col.a) / 255.0 }, .uv = vin.uv };
     }
     //std.debug.print("vertexes {d} + {d} indexes {d} + {d}\n", .{self.vertex_buffer_len, self.vtx.items.len, self.index_buffer_len, self.idx.items.len});
-    self.encoder.writeBuffer(self.vertex_buffer, self.vertex_buffer_len * @sizeOf(Vertex), Vertex, vertices);
-    self.encoder.writeBuffer(self.index_buffer, self.index_buffer_len * @sizeOf(u32), u32, self.idx.items);
+    self.encoder.writeBuffer(self.vertex_buffer, self.vertex_buffer_len * @sizeOf(Vertex), vertices);
+    self.encoder.writeBuffer(self.index_buffer, self.index_buffer_len * @sizeOf(u32), self.idx.items);
 
-    const render_pass_info = gpu.RenderPassEncoder.Descriptor{
+    const render_pass_info = gpu.RenderPassDescriptor.init(.{
         .color_attachments = &.{color_attachment},
         .depth_stencil_attachment = null,
-    };
+    });
     const pass = self.encoder.beginRenderPass(&render_pass_info);
     pass.setPipeline(self.pipeline);
     pass.setVertexBuffer(0, self.vertex_buffer, @sizeOf(Vertex) * self.vertex_buffer_len, @sizeOf(Vertex) * @intCast(u32, self.vtx.items.len));
