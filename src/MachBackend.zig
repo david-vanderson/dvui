@@ -8,22 +8,22 @@ const MachBackend = @This();
 
 gpa: std.mem.Allocator,
 core: *mach.Core,
-pipeline: gpu.RenderPipeline,
+pipeline: *gpu.RenderPipeline,
 
-uniform_buffer: gpu.Buffer,
+uniform_buffer: *gpu.Buffer,
 uniform_buffer_size: u32,
 uniform_buffer_len: u32,
-sampler: gpu.Sampler,
+sampler: *gpu.Sampler,
 
 texture: ?*anyopaque,
 clipr: gui.Rect,
 vtx: std.ArrayList(gui.Vertex),
 idx: std.ArrayList(u32),
 
-encoder: gpu.CommandEncoder,
+encoder: *gpu.CommandEncoder,
 
-vertex_buffer: gpu.Buffer,
-index_buffer: gpu.Buffer,
+vertex_buffer: *gpu.Buffer,
+index_buffer: *gpu.Buffer,
 vertex_buffer_len: u32,
 index_buffer_len: u32,
 vertex_buffer_size: u32,
@@ -66,10 +66,7 @@ pub fn init(gpa: std.mem.Allocator, core: *mach.Core) !MachBackend {
         .mapped_at_creation = false,
     });
 
-    const vs_module = core.device.createShaderModule(&.{
-        .label = "my vertex shader",
-        .code = .{ .wgsl = vert_wgsl },
-    });
+    const vs_module = core.device.createShaderModuleWGSL("my vertex shader", vert_wgsl);
 
     const vertex_attributes = [_]gpu.VertexAttribute{
         .{ .format = .float32x2, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
@@ -83,10 +80,7 @@ pub fn init(gpa: std.mem.Allocator, core: *mach.Core) !MachBackend {
         .attributes = &vertex_attributes,
     };
 
-    const fs_module = core.device.createShaderModule(&.{
-        .label = "my fragment shader",
-        .code = .{ .wgsl = frag_wgsl },
-    });
+    const fs_module = core.device.createShaderModuleWGSL("my fragment shader", frag_wgsl);
 
     // Fragment state
     const blend = gpu.BlendState{
@@ -104,12 +98,13 @@ pub fn init(gpa: std.mem.Allocator, core: *mach.Core) !MachBackend {
     const color_target = gpu.ColorTargetState{
         .format = core.swap_chain_format,
         .blend = &blend,
-        .write_mask = gpu.ColorWriteMask.all,
+        .write_mask = gpu.ColorWriteMaskFlags.all,
     };
     const fragment = gpu.FragmentState{
         .module = fs_module,
         .entry_point = "main",
-        .targets = &.{color_target},
+        .targets = &[_]gpu.ColorTargetState{color_target},
+        .target_count = 1,
         .constants = null,
     };
     const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
@@ -117,7 +112,7 @@ pub fn init(gpa: std.mem.Allocator, core: *mach.Core) !MachBackend {
         .vertex = .{
             .module = vs_module,
             .entry_point = "main",
-            .buffers = &.{vertex_buffer_layout},
+            .buffers = &[_]gpu.VertexBufferLayout{vertex_buffer_layout},
         },
         .primitive = .{
             .cull_mode = .none,
@@ -382,11 +377,10 @@ pub fn flushRender(self: *MachBackend) void {
     };
 
     const default_texture_ptr = gui.iconTexture("default_texture", gui.icons.papirus.actions.media_playback_start_symbolic, 1.0).texture;
-    const default_texture = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), default_texture_ptr)).*;
 
-    var texture: ?gpu.Texture = null;
+    var texture: ?*gpu.Texture = null;
     if (self.texture) |t| {
-        texture = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), t)).*;
+        texture = @ptrCast(*gpu.Texture, t);
     }
 
     {
@@ -402,7 +396,7 @@ pub fn flushRender(self: *MachBackend) void {
             .mat = mvp,
             .use_tex = if (texture != null) 1 else 0,
         };
-        self.encoder.writeBuffer(self.uniform_buffer, UniformBufferObject.Size * self.uniform_buffer_len, UniformBufferObject, &.{ubo});
+        self.encoder.writeBuffer(self.uniform_buffer, UniformBufferObject.Size * self.uniform_buffer_len, &.{ubo});
     }
 
     const bind_group = self.core.device.createBindGroup(
@@ -411,7 +405,7 @@ pub fn flushRender(self: *MachBackend) void {
             .entries = &.{
                 gpu.BindGroup.Entry.buffer(0, self.uniform_buffer, UniformBufferObject.Size * self.uniform_buffer_len, @sizeOf(UniformBufferObject)),
                 gpu.BindGroup.Entry.sampler(1, self.sampler),
-                gpu.BindGroup.Entry.textureView(2, (texture orelse default_texture).createView(&gpu.TextureView.Descriptor{})),
+                gpu.BindGroup.Entry.textureView(2, (texture orelse default_texture_ptr).createView(&gpu.TextureView.Descriptor{})),
             },
         },
     );
@@ -456,8 +450,7 @@ pub fn flushRender(self: *MachBackend) void {
 
 pub fn textureCreate(self: *MachBackend, pixels: []const u8, width: u32, height: u32) *anyopaque {
     const img_size = gpu.Extent3D{ .width = width, .height = height };
-    var texture = self.gpa.create(gpu.Texture) catch unreachable;
-    texture.* = self.core.device.createTexture(&.{
+    var texture = self.core.device.createTexture(&.{
         .size = img_size,
         .format = .rgba8_unorm,
         .usage = .{
@@ -473,7 +466,7 @@ pub fn textureCreate(self: *MachBackend, pixels: []const u8, width: u32, height:
     };
 
     var queue = self.core.device.getQueue();
-    queue.writeTexture(&.{ .texture = texture.* }, &data_layout, &img_size, u8, pixels);
+    queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, pixels);
 
     return texture;
 }
