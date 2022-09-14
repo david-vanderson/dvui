@@ -44,10 +44,10 @@ pub fn build(b: *Builder) void {
         b.getInstallStep().dependOn(compile_step);
 
         const run_cmd = example_app.run();
-        run_cmd.step.dependOn(compile_step);
+        run_cmd.dependOn(compile_step);
 
         const run_step = b.step(name, "Run " ++ name);
-        run_step.dependOn(&run_cmd.step);
+        run_step.dependOn(run_cmd);
     }
 
     // sdl apps

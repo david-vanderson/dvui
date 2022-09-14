@@ -20,9 +20,12 @@ var current_window: ?*Window = null;
 
 pub var log_debug: bool = false;
 pub fn debug(comptime str: []const u8, args: anytype) void {
-    if (log_debug) {
-        log.debug(str, args);
-    }
+    // TODO: Figure out why this is causing compile errors
+    // if (log_debug) {
+    //     log.debug(str, args);
+    // }
+    _ = str;
+    _ = args;
 }
 
 pub const Theme = struct {
