@@ -216,11 +216,7 @@ pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) bool {
 }
 
 pub fn waitEventTimeout(self: *MachBackend, timeout_micros: u32) void {
-    if (timeout_micros == std.math.maxInt(u32)) {
-        self.core.setWaitEvent(std.math.floatMax(f64));
-    } else {
-        self.core.setWaitEvent(@intToFloat(f64, timeout_micros) / 1_000_000);
-    }
+    self.core.setWaitEvent(@intToFloat(f64, timeout_micros) / 1_000_000);
 }
 
 pub fn addAllEvents(self: *MachBackend, win: *gui.Window) bool {
