@@ -40,11 +40,11 @@ pub fn update(app: *App, engine: *mach.Core) !void {
 
     const end_micros = app.win.end();
 
-    // if (app.win.cursorRequestedFloating()) |cursor| {
-    //     app.win_backend.setCursor(cursor);
-    // } else {
-    //     app.win_backend.setCursor(.bad);
-    // }
+    if (app.win.cursorRequestedFloating()) |cursor| {
+        app.win_backend.setCursor(cursor);
+    } else {
+        app.win_backend.setCursor(.bad);
+    }
 
     engine.swap_chain.?.present();
 
