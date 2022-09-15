@@ -8,22 +8,22 @@ const MachBackend = @This();
 
 gpa: std.mem.Allocator,
 core: *mach.Core,
-pipeline: gpu.RenderPipeline,
+pipeline: *gpu.RenderPipeline,
 
-uniform_buffer: gpu.Buffer,
+uniform_buffer: *gpu.Buffer,
 uniform_buffer_size: u32,
 uniform_buffer_len: u32,
-sampler: gpu.Sampler,
+sampler: *gpu.Sampler,
 
 texture: ?*anyopaque,
 clipr: gui.Rect,
 vtx: std.ArrayList(gui.Vertex),
 idx: std.ArrayList(u32),
 
-encoder: gpu.CommandEncoder,
+encoder: *gpu.CommandEncoder,
 
-vertex_buffer: gpu.Buffer,
-index_buffer: gpu.Buffer,
+vertex_buffer: *gpu.Buffer,
+index_buffer: *gpu.Buffer,
 vertex_buffer_len: u32,
 index_buffer_len: u32,
 vertex_buffer_size: u32,
@@ -66,27 +66,20 @@ pub fn init(gpa: std.mem.Allocator, core: *mach.Core) !MachBackend {
         .mapped_at_creation = false,
     });
 
-    const vs_module = core.device.createShaderModule(&.{
-        .label = "my vertex shader",
-        .code = .{ .wgsl = vert_wgsl },
-    });
+    const vs_module = core.device.createShaderModuleWGSL("my vertex shader", vert_wgsl);
 
-    const vertex_attributes = [_]gpu.VertexAttribute{
-        .{ .format = .float32x2, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
-        .{ .format = .float32x4, .offset = @offsetOf(Vertex, "col"), .shader_location = 1 },
-        .{ .format = .float32x2, .offset = @offsetOf(Vertex, "uv"), .shader_location = 2 },
-    };
-    const vertex_buffer_layout = gpu.VertexBufferLayout{
+    const vertex_buffer_layout = gpu.VertexBufferLayout.init(.{
         .array_stride = @sizeOf(Vertex),
         .step_mode = .vertex,
-        .attribute_count = vertex_attributes.len,
-        .attributes = &vertex_attributes,
-    };
-
-    const fs_module = core.device.createShaderModule(&.{
-        .label = "my fragment shader",
-        .code = .{ .wgsl = frag_wgsl },
+        // .attribute_count = vertex_attributes.len,
+        .attributes = &[_]gpu.VertexAttribute{
+            .{ .format = .float32x2, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
+            .{ .format = .float32x4, .offset = @offsetOf(Vertex, "col"), .shader_location = 1 },
+            .{ .format = .float32x2, .offset = @offsetOf(Vertex, "uv"), .shader_location = 2 },
+        },
     });
+
+    const fs_module = core.device.createShaderModuleWGSL("my fragment shader", frag_wgsl);
 
     // Fragment state
     const blend = gpu.BlendState{
@@ -104,21 +97,22 @@ pub fn init(gpa: std.mem.Allocator, core: *mach.Core) !MachBackend {
     const color_target = gpu.ColorTargetState{
         .format = core.swap_chain_format,
         .blend = &blend,
-        .write_mask = gpu.ColorWriteMask.all,
+        .write_mask = gpu.ColorWriteMaskFlags.all,
     };
     const fragment = gpu.FragmentState{
         .module = fs_module,
-        .entry_point = "main",
-        .targets = &.{color_target},
+        .entry_point = "fragment_main",
+        .targets = &[_]gpu.ColorTargetState{color_target},
+        .target_count = 1,
         .constants = null,
     };
     const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
         .fragment = &fragment,
-        .vertex = .{
+        .vertex = gpu.VertexState.init(.{
             .module = vs_module,
-            .entry_point = "main",
-            .buffers = &.{vertex_buffer_layout},
-        },
+            .entry_point = "vertex_main",
+            .buffers = &[_]gpu.VertexBufferLayout{vertex_buffer_layout},
+        }),
         .primitive = .{
             .cull_mode = .none,
             .topology = .triangle_list,
@@ -222,11 +216,7 @@ pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) bool {
 }
 
 pub fn waitEventTimeout(self: *MachBackend, timeout_micros: u32) void {
-    if (timeout_micros == std.math.maxInt(u32)) {
-        self.core.setWaitEvent(std.math.floatMax(f64));
-    } else {
-        self.core.setWaitEvent(@intToFloat(f64, timeout_micros) / 1_000_000);
-    }
+    self.core.setWaitEvent(@intToFloat(f64, timeout_micros) / 1_000_000);
 }
 
 pub fn addAllEvents(self: *MachBackend, win: *gui.Window) bool {
@@ -381,12 +371,11 @@ pub fn flushRender(self: *MachBackend) void {
         .store_op = .store,
     };
 
-    const default_texture_ptr = gui.iconTexture("default_texture", gui.icons.papirus.actions.media_playback_start_symbolic, 1.0).texture;
-    const default_texture = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), default_texture_ptr)).*;
+    const default_texture_ptr = @ptrCast(*gpu.Texture, gui.iconTexture("default_texture", gui.icons.papirus.actions.media_playback_start_symbolic, 1.0).texture);
 
-    var texture: ?gpu.Texture = null;
+    var texture: ?*gpu.Texture = null;
     if (self.texture) |t| {
-        texture = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), t)).*;
+        texture = @ptrCast(*gpu.Texture, t);
     }
 
     {
@@ -402,18 +391,18 @@ pub fn flushRender(self: *MachBackend) void {
             .mat = mvp,
             .use_tex = if (texture != null) 1 else 0,
         };
-        self.encoder.writeBuffer(self.uniform_buffer, UniformBufferObject.Size * self.uniform_buffer_len, UniformBufferObject, &.{ubo});
+        self.encoder.writeBuffer(self.uniform_buffer, UniformBufferObject.Size * self.uniform_buffer_len, &[_]UniformBufferObject{ubo});
     }
 
     const bind_group = self.core.device.createBindGroup(
-        &gpu.BindGroup.Descriptor{
+        &gpu.BindGroup.Descriptor.init(.{
             .layout = self.pipeline.getBindGroupLayout(0),
-            .entries = &.{
+            .entries = &[_]gpu.BindGroup.Entry{
                 gpu.BindGroup.Entry.buffer(0, self.uniform_buffer, UniformBufferObject.Size * self.uniform_buffer_len, @sizeOf(UniformBufferObject)),
                 gpu.BindGroup.Entry.sampler(1, self.sampler),
-                gpu.BindGroup.Entry.textureView(2, (texture orelse default_texture).createView(&gpu.TextureView.Descriptor{})),
+                gpu.BindGroup.Entry.textureView(2, (texture orelse default_texture_ptr).createView(&gpu.TextureView.Descriptor{})),
             },
-        },
+        }),
     );
 
     self.uniform_buffer_len += 1;
@@ -427,13 +416,13 @@ pub fn flushRender(self: *MachBackend) void {
         vertices[i] = Vertex{ .pos = vin.pos, .col = .{ @intToFloat(f32, vin.col.r) / 255.0, @intToFloat(f32, vin.col.g) / 255.0, @intToFloat(f32, vin.col.b) / 255.0, @intToFloat(f32, vin.col.a) / 255.0 }, .uv = vin.uv };
     }
     //std.debug.print("vertexes {d} + {d} indexes {d} + {d}\n", .{self.vertex_buffer_len, self.vtx.items.len, self.index_buffer_len, self.idx.items.len});
-    self.encoder.writeBuffer(self.vertex_buffer, self.vertex_buffer_len * @sizeOf(Vertex), Vertex, vertices);
-    self.encoder.writeBuffer(self.index_buffer, self.index_buffer_len * @sizeOf(u32), u32, self.idx.items);
+    self.encoder.writeBuffer(self.vertex_buffer, self.vertex_buffer_len * @sizeOf(Vertex), vertices);
+    self.encoder.writeBuffer(self.index_buffer, self.index_buffer_len * @sizeOf(u32), self.idx.items);
 
-    const render_pass_info = gpu.RenderPassEncoder.Descriptor{
+    const render_pass_info = gpu.RenderPassDescriptor.init(.{
         .color_attachments = &.{color_attachment},
         .depth_stencil_attachment = null,
-    };
+    });
     const pass = self.encoder.beginRenderPass(&render_pass_info);
     pass.setPipeline(self.pipeline);
     pass.setVertexBuffer(0, self.vertex_buffer, @sizeOf(Vertex) * self.vertex_buffer_len, @sizeOf(Vertex) * @intCast(u32, self.vtx.items.len));
@@ -456,8 +445,7 @@ pub fn flushRender(self: *MachBackend) void {
 
 pub fn textureCreate(self: *MachBackend, pixels: []const u8, width: u32, height: u32) *anyopaque {
     const img_size = gpu.Extent3D{ .width = width, .height = height };
-    var texture = self.gpa.create(gpu.Texture) catch unreachable;
-    texture.* = self.core.device.createTexture(&.{
+    var texture = self.core.device.createTexture(&.{
         .size = img_size,
         .format = .rgba8_unorm,
         .usage = .{
@@ -473,7 +461,7 @@ pub fn textureCreate(self: *MachBackend, pixels: []const u8, width: u32, height:
     };
 
     var queue = self.core.device.getQueue();
-    queue.writeTexture(&.{ .texture = texture.* }, &data_layout, &img_size, u8, pixels);
+    queue.writeTexture(&.{ .texture = texture }, &data_layout, &img_size, pixels);
 
     return texture;
 }
@@ -483,9 +471,10 @@ pub fn textureDestroy(self: *MachBackend, texture: *anyopaque) void {
         // flush so we don't accidentally release this texture before we use it
         self.flushRender();
     }
-    const tex = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), texture));
-    tex.release();
-    self.gpa.destroy(tex);
+    // TODO: Figure out why this is causing a compile error
+    // const tex = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), texture));
+    // tex.release();
+    // self.gpa.destroy(tex);
 }
 
 const vert_wgsl =
@@ -502,7 +491,7 @@ const vert_wgsl =
     \\  @location(1) uv: vec2<f32>,
     \\};
     \\
-    \\@stage(vertex) fn main(
+    \\@stage(vertex) fn vertex_main(
     \\  @location(0) position : vec2<f32>,
     \\  @location(1) color : vec4<f32>,
     \\  @location(2) uv: vec2<f32>,
@@ -529,7 +518,7 @@ const frag_wgsl =
     \\@group(0) @binding(1) var mySampler : sampler;
     \\@group(0) @binding(2) var myTexture : texture_2d<f32>;
     \\
-    \\@stage(fragment) fn main(
+    \\@stage(fragment) fn fragment_main(
     \\  @location(0) color : vec4<f32>,
     \\  @location(1) uv : vec2<f32>,
     \\) -> @location(0) vec4<f32> {

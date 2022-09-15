@@ -1,7 +1,7 @@
 const std = @import("std");
 const Pkg = std.build.Pkg;
 const Builder = @import("std").build.Builder;
-const freetype = @import("libs/mach-freetype/build.zig");
+const freetype = @import("libs/mach/libs/freetype/build.zig");
 
 const Packages = struct {
     // Declared here because submodule may not be cloned at the time build.zig runs.
@@ -44,14 +44,14 @@ pub fn build(b: *Builder) void {
         b.getInstallStep().dependOn(compile_step);
 
         const run_cmd = example_app.run();
-        run_cmd.step.dependOn(compile_step);
+        run_cmd.dependOn(compile_step);
 
         const run_step = b.step(name, "Run " ++ name);
-        run_step.dependOn(&run_cmd.step);
+        run_step.dependOn(run_cmd);
     }
 
     // sdl apps
-    inline for ([2][]const u8{"sdl-test", "podcast"}) |name| {
+    inline for ([2][]const u8{ "sdl-test", "podcast" }) |name| {
         const exe = b.addExecutable(name, name ++ ".zig");
         exe.addIncludeDir("/usr/local/include");
         exe.defineCMacro("_THREAD_SAFE", "1");
