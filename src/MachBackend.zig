@@ -68,17 +68,16 @@ pub fn init(gpa: std.mem.Allocator, core: *mach.Core) !MachBackend {
 
     const vs_module = core.device.createShaderModuleWGSL("my vertex shader", vert_wgsl);
 
-    const vertex_attributes = [_]gpu.VertexAttribute{
-        .{ .format = .float32x2, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
-        .{ .format = .float32x4, .offset = @offsetOf(Vertex, "col"), .shader_location = 1 },
-        .{ .format = .float32x2, .offset = @offsetOf(Vertex, "uv"), .shader_location = 2 },
-    };
-    const vertex_buffer_layout = gpu.VertexBufferLayout{
+    const vertex_buffer_layout = gpu.VertexBufferLayout.init(.{
         .array_stride = @sizeOf(Vertex),
         .step_mode = .vertex,
-        .attribute_count = vertex_attributes.len,
-        .attributes = &vertex_attributes,
-    };
+        // .attribute_count = vertex_attributes.len,
+        .attributes = &[_]gpu.VertexAttribute{
+            .{ .format = .float32x2, .offset = @offsetOf(Vertex, "pos"), .shader_location = 0 },
+            .{ .format = .float32x4, .offset = @offsetOf(Vertex, "col"), .shader_location = 1 },
+            .{ .format = .float32x2, .offset = @offsetOf(Vertex, "uv"), .shader_location = 2 },
+        },
+    });
 
     const fs_module = core.device.createShaderModuleWGSL("my fragment shader", frag_wgsl);
 
@@ -102,18 +101,18 @@ pub fn init(gpa: std.mem.Allocator, core: *mach.Core) !MachBackend {
     };
     const fragment = gpu.FragmentState{
         .module = fs_module,
-        .entry_point = "main",
+        .entry_point = "fragment_main",
         .targets = &[_]gpu.ColorTargetState{color_target},
         .target_count = 1,
         .constants = null,
     };
     const pipeline_descriptor = gpu.RenderPipeline.Descriptor{
         .fragment = &fragment,
-        .vertex = .{
+        .vertex = gpu.VertexState.init(.{
             .module = vs_module,
-            .entry_point = "main",
+            .entry_point = "vertex_main",
             .buffers = &[_]gpu.VertexBufferLayout{vertex_buffer_layout},
-        },
+        }),
         .primitive = .{
             .cull_mode = .none,
             .topology = .triangle_list,
@@ -400,14 +399,14 @@ pub fn flushRender(self: *MachBackend) void {
     }
 
     const bind_group = self.core.device.createBindGroup(
-        &gpu.BindGroup.Descriptor{
+        &gpu.BindGroup.Descriptor.init(.{
             .layout = self.pipeline.getBindGroupLayout(0),
             .entries = &[_]gpu.BindGroup.Entry{
                 gpu.BindGroup.Entry.buffer(0, self.uniform_buffer, UniformBufferObject.Size * self.uniform_buffer_len, @sizeOf(UniformBufferObject)),
                 gpu.BindGroup.Entry.sampler(1, self.sampler),
                 gpu.BindGroup.Entry.textureView(2, (texture orelse default_texture_ptr).createView(&gpu.TextureView.Descriptor{})),
             },
-        },
+        }),
     );
 
     self.uniform_buffer_len += 1;
@@ -496,7 +495,7 @@ const vert_wgsl =
     \\  @location(1) uv: vec2<f32>,
     \\};
     \\
-    \\@stage(vertex) fn main(
+    \\@stage(vertex) fn vertex_main(
     \\  @location(0) position : vec2<f32>,
     \\  @location(1) color : vec4<f32>,
     \\  @location(2) uv: vec2<f32>,
@@ -523,7 +522,7 @@ const frag_wgsl =
     \\@group(0) @binding(1) var mySampler : sampler;
     \\@group(0) @binding(2) var myTexture : texture_2d<f32>;
     \\
-    \\@stage(fragment) fn main(
+    \\@stage(fragment) fn fragment_main(
     \\  @location(0) color : vec4<f32>,
     \\  @location(1) uv : vec2<f32>,
     \\) -> @location(0) vec4<f32> {
