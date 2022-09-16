@@ -4145,7 +4145,7 @@ pub const ScrollAreaWidget = struct {
                         focusWidget(self.wd.id, &iter);
                     } else if (e.evt.mouse.state == .wheel_y) {
                         e.handled = true;
-                        self.scrollAfter += e.evt.mouse.wheel * 3;
+                        self.scrollAfter -= e.evt.mouse.wheel * 3;
                     }
                 },
                 else => {},
@@ -5141,6 +5141,24 @@ pub const Color = struct {
         };
     }
 
+    pub fn darken(x: Color, y: f32) Color {
+        return Color{
+            .r = @floatToInt(u8, math.max(@intToFloat(f32, x.r) * (1 - y), 0)),
+            .g = @floatToInt(u8, math.max(@intToFloat(f32, x.g) * (1 - y), 0)),
+            .b = @floatToInt(u8, math.max(@intToFloat(f32, x.b) * (1 - y), 0)),
+            .a = x.a,
+        };
+    }
+
+    pub fn lighten(x: Color, y: f32) Color {
+        return Color{
+            .r = @floatToInt(u8, math.min(@intToFloat(f32, x.r) * (1 + y), 255)),
+            .g = @floatToInt(u8, math.min(@intToFloat(f32, x.g) * (1 + y), 255)),
+            .b = @floatToInt(u8, math.min(@intToFloat(f32, x.b) * (1 + y), 255)),
+            .a = x.a,
+        };
+    }
+
     pub fn lerp(x: Color, y: f32, z: Color) Color {
         return Color{
             .r = @floatToInt(u8, @intToFloat(f32, x.r) * (1 - y) + @intToFloat(f32, z.r) * y),
@@ -5726,13 +5744,12 @@ pub const WidgetData = struct {
     }
 
     pub fn focusBorder(self: *const WidgetData) void {
-        const thick_px = 4;
         const rs = self.borderRectScale();
-        pathAddRect(rs.r.insetAll(thick_px / 2 - 1), self.options.corner_radiusGet().scale(rs.s));
-        if ((self.options.color_style orelse .custom) == .accent) {
-            pathStroke(true, thick_px, .none, themeGet().color_control);
-        } else {
-            pathStroke(true, thick_px, .none, themeGet().color_accent_bg);
+        const thick = 3 * rs.s;
+        pathAddRect(rs.r.outsetAll(thick / 2 - 1), self.options.corner_radiusGet().scale(rs.s));
+        switch (self.options.color_style orelse .custom) {
+            .err, .success, .accent => pathStroke(true, thick, .none, self.options.color_bg().darken(0.2)),
+            else => pathStroke(true, thick, .none, themeGet().color_accent_bg),
         }
     }
 
