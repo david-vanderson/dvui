@@ -4145,7 +4145,7 @@ pub const ScrollAreaWidget = struct {
                         focusWidget(self.wd.id, &iter);
                     } else if (e.evt.mouse.state == .wheel_y) {
                         e.handled = true;
-                        self.scrollAfter += e.evt.mouse.wheel * 3;
+                        self.scrollAfter -= e.evt.mouse.wheel * 3;
                     }
                 },
                 else => {},
