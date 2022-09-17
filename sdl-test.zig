@@ -18,7 +18,6 @@ pub fn main() !void {
     }
 
     var maxz: usize = 20;
-    _ = maxz;
     var floats: [6]bool = [_]bool{false} ** 6;
     var scale_val: f32 = 1.0;
 
