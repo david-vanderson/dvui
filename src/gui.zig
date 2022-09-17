@@ -924,28 +924,49 @@ pub const EndCapStyle = enum {
 };
 
 pub fn pathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) void {
+    pathStrokeAfter(false, closed_in, thickness, endcap_style, col);
+}
+
+pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) void {
     const cw = current_window orelse unreachable;
+
     if (cw.path.items.len == 0) {
         return;
     }
 
-    if (cw.window_currentId != cw.wd.id) {
+    if (after or cw.window_currentId != cw.wd.id) {
         var path_copy = std.ArrayList(Point).init(cw.arena);
         path_copy.appendSlice(cw.path.items) catch unreachable;
         var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
 
-        var i = cw.floating_data.items.len;
-        while (i > 0) : (i -= 1) {
-            const fw = &cw.floating_data.items[i - 1];
-            if (fw.id == cw.window_currentId) {
-                fw.render_cmds.append(cmd) catch unreachable;
-                break;
+        if (cw.window_currentId == cw.wd.id) {
+            cw.render_cmds_after.append(cmd) catch unreachable;
+        }
+        else {
+            var i = cw.floating_data.items.len;
+            while (i > 0) : (i -= 1) {
+                const fw = &cw.floating_data.items[i - 1];
+                if (fw.id == cw.window_currentId) {
+                    if (after) {
+                        fw.render_cmds_after.append(cmd) catch unreachable;
+                    }
+                    else {
+                        fw.render_cmds.append(cmd) catch unreachable;
+                    }
+                    break;
+                }
             }
         }
 
         cw.path.clearAndFree();
-        return;
     }
+    else {
+        pathStrokeRaw(closed_in, thickness, endcap_style, col);
+    }
+}
+
+pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) void {
+    const cw = current_window orelse unreachable;
 
     if (cw.path.items.len == 1) {
         // draw a circle with radius thickness at that point
@@ -1196,12 +1217,13 @@ pub fn floatingWindowAdd(id: u32, rect: Rect, modal: bool) void {
             fd.rect = rect;
             fd.modal = modal;
             fd.render_cmds = std.ArrayList(RenderCmd).init(cw.arena);
+            fd.render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena);
             return;
         }
     }
 
     // haven't seen this window before, it goes on top
-    const fd = Window.FloatingData{ .id = id, .rect = rect, .modal = modal, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena) };
+    const fd = Window.FloatingData{ .id = id, .rect = rect, .modal = modal, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena), .render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena) };
     cw.floating_data.append(fd) catch unreachable;
 }
 
@@ -1748,12 +1770,16 @@ pub const Window = struct {
         modal: bool = false,
         focused_widgetId: ?u32 = null,
         render_cmds: std.ArrayList(RenderCmd),
+        render_cmds_after: std.ArrayList(RenderCmd),
     };
 
     backend: Backend,
 
     window_currentId: u32 = 0,
     floating_data: std.ArrayList(FloatingData),
+
+    // used to delay some rendering until after (like selection outlines)
+    render_cmds_after: std.ArrayList(RenderCmd) = undefined,
 
     focused_windowId: u32 = 0,
     focused_widgetId: ?u32 = null, // this is specific to the base window
@@ -2122,6 +2148,7 @@ pub const Window = struct {
         self.cursor_requested = .arrow;
 
         self.arena = arena;
+        self.render_cmds_after = std.ArrayList(RenderCmd).init(arena);
         self.path = std.ArrayList(Point).init(arena);
 
         {
@@ -2307,40 +2334,40 @@ pub const Window = struct {
         }
     }
 
-    pub fn renderFloatingWindows(self: *Self) void {
-        const oldclip = clipGet();
-
-        for (self.floating_data.items) |*fw| {
-            for (fw.render_cmds.items) |*drc| {
-                clipSet(drc.clip);
-                switch (drc.cmd) {
-                    .text => |t| {
-                        renderText(t.font, t.text, t.rs, t.color);
-                    },
-                    .icon => |i| {
-                        renderIcon(i.name, i.tvg_bytes, i.rs, i.colormod);
-                    },
-                    .pathFillConvex => |pf| {
-                        self.path.appendSlice(pf.path.items) catch unreachable;
-                        pathFillConvex(pf.color);
-                        pf.path.deinit();
-                    },
-                    .pathStroke => |ps| {
-                        self.path.appendSlice(ps.path.items) catch unreachable;
-                        pathStroke(ps.closed, ps.thickness, ps.endcap_style, ps.color);
-                        ps.path.deinit();
-                    },
-                }
+    pub fn renderCommands(self: *Self, queue: *std.ArrayList(RenderCmd)) void {
+        for (queue.items) |*drc| {
+            clipSet(drc.clip);
+            switch (drc.cmd) {
+                .text => |t| {
+                    renderText(t.font, t.text, t.rs, t.color);
+                },
+                .icon => |i| {
+                    renderIcon(i.name, i.tvg_bytes, i.rs, i.colormod);
+                },
+                .pathFillConvex => |pf| {
+                    self.path.appendSlice(pf.path.items) catch unreachable;
+                    pathFillConvex(pf.color);
+                    pf.path.deinit();
+                },
+                .pathStroke => |ps| {
+                    self.path.appendSlice(ps.path.items) catch unreachable;
+                    pathStrokeRaw(ps.closed, ps.thickness, ps.endcap_style, ps.color);
+                    ps.path.deinit();
+                },
             }
-
-            fw.render_cmds.clearAndFree();
         }
 
-        clipSet(oldclip);
+        queue.clearAndFree();
     }
 
     pub fn end(self: *Self) ?u32 {
-        self.renderFloatingWindows();
+        const oldclip = clipGet();
+        self.renderCommands(&self.render_cmds_after);
+        for (self.floating_data.items) |*fw| {
+            self.renderCommands(&fw.render_cmds);
+            self.renderCommands(&fw.render_cmds_after);
+        }
+        clipSet(oldclip);
 
         // events may have been tagged with a focus widget that never showed up, so
         // we wouldn't even get them bubbled
@@ -5746,11 +5773,11 @@ pub const WidgetData = struct {
 
     pub fn focusBorder(self: *const WidgetData) void {
         const rs = self.borderRectScale();
-        const thick = 3 * rs.s;
-        pathAddRect(rs.r.outsetAll(thick / 2 - 1), self.options.corner_radiusGet().scale(rs.s));
+        const thick = 2 * rs.s;
+        pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
         switch (self.options.color_style orelse .custom) {
-            .err, .success, .accent => pathStroke(true, thick, .none, self.options.color_bg().darken(0.2)),
-            else => pathStroke(true, thick, .none, themeGet().color_accent_bg),
+            .err, .success, .accent => pathStrokeAfter(true, true, thick, .none, self.options.color_bg().darken(0.2)),
+            else => pathStrokeAfter(true, true, thick, .none, themeGet().color_accent_bg),
         }
     }
 
