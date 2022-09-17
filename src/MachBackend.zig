@@ -34,6 +34,8 @@ cursor_last: gui.CursorKind = .arrow,
 pub fn init(gpa: std.mem.Allocator, core: *mach.Core) !MachBackend {
     var back: MachBackend = undefined;
 
+    //try core.setOptions(.{ .vsync = .none });
+
     back.gpa = gpa;
     back.core = core;
     back.uniform_buffer_size = 1;

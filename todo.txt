@@ -1,9 +1,24 @@
 
 -Dtarget=wasm32-freestanding-none
 
-submit to:
-- https://allyourcodebase.com/gamedev/#help-improve-this-page
-- tell mach dude it's ready for broader consumption
+button highlight outline changed from inset to outset
+- can we straddle the outline with a deferred render of the outline?
+- highlight color also darkens even in dark mode
+
+linux mach-test: pulling corner of GUI Demo window around lags
+
+crash on clicking the top-left corner x to exit
+
+mach: top-left corner X icon is bad?
+mach: no tab key?
+
+go through changes in https://github.com/david-vanderson/gui/pull/3
+
+clicking on podcast in middle from separate application (to focus it), leaves the mouse pointer in the wrong state (it thinks it's not on top of the floating window)
+
+try splitting into 2 files - widgets.zig and gui.zig (which re-exports widgets)
+
+zig build how do I not build mach stuff when only doing sdl stuff?
 
 do all of the suggestions from Mike
 - screenshots in README
@@ -73,10 +88,6 @@ premultiplied alpha for all textures (and vertices from PathStroke/Fill?)
 - also font glyphs
 
 when we have a widget that has captured the mouse, need to capture the mouse in the underlying window system so click-dragging works even when the mouse pointer goes outside the window
-
-convert:
-- ScrollBar
-- ScaleWidget
 
 try animating a fade
 - does Options need a separate alpha?

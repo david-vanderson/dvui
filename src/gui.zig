@@ -4145,7 +4145,7 @@ pub const ScrollAreaWidget = struct {
                         focusWidget(self.wd.id, &iter);
                     } else if (e.evt.mouse.state == .wheel_y) {
                         e.handled = true;
-                        self.scrollAfter -= e.evt.mouse.wheel * 3;
+                        self.scrollAfter -= e.evt.mouse.wheel * rs.s;
                     }
                 },
                 else => {},
@@ -4159,6 +4159,7 @@ pub const ScrollAreaWidget = struct {
         clipSet(self.prevClip);
 
         var scroll = self.scroll;
+        //std.debug.print("scroll {d} scrollAfter {d}\n", .{scroll, self.scrollAfter});
         if (self.scrollAfter != 0) {
             scroll += self.scrollAfter;
             cueFrame();
