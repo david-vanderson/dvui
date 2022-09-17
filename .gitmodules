@@ -4,3 +4,6 @@
 [submodule "libs/tinyvg"]
 	path = libs/tinyvg
 	url = https://github.com/TinyVG/sdk
+[submodule "libs/mach"]
+	path = libs/mach
+	url = https://github.com/hexops/mach
