@@ -30,6 +30,7 @@ pub fn debug(comptime str: []const u8, args: anytype) void {
 
 pub const Theme = struct {
     name: []const u8,
+    dark: bool,
 
     color_accent: Color,
     color_accent_bg: Color,
@@ -57,6 +58,7 @@ pub const Theme = struct {
 
 pub const theme_Adwaita = Theme{
     .name = "Adwaita",
+    .dark = false,
     .font_body = Font{ .size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
     .font_heading = Font{ .size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
     .font_caption = Font{ .size = 9, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
@@ -82,6 +84,7 @@ pub const theme_Adwaita = Theme{
 
 pub const theme_Adwaita_Dark = Theme{
     .name = "Adwaita Dark",
+    .dark = true,
     .font_body = Font{ .size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
     .font_heading = Font{ .size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
     .font_caption = Font{ .size = 9, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
@@ -5775,10 +5778,19 @@ pub const WidgetData = struct {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
         pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
+        var color = themeGet().color_accent_bg;
         switch (self.options.color_style orelse .custom) {
-            .err, .success, .accent => pathStrokeAfter(true, true, thick, .none, self.options.color_bg().darken(0.2)),
-            else => pathStrokeAfter(true, true, thick, .none, themeGet().color_accent_bg),
+            .err, .success, .accent => {
+                if (themeGet().dark) {
+                    color = self.options.color_bg().lighten(0.3);
+                }
+                else {
+                    color = self.options.color_bg().darken(0.2);
+                }
+            },
+            else => {}
         }
+        pathStrokeAfter(true, true, thick, .none, color);
     }
 
     pub fn placeInsideNoExpand(self: *WidgetData) void {

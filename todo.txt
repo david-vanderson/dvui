@@ -1,16 +1,14 @@
 
 -Dtarget=wasm32-freestanding-none
 
-button highlight outline changed from inset to outset
-- can we straddle the outline with a deferred render of the outline?
-- highlight color also darkens even in dark mode
-
 linux mach-test: pulling corner of GUI Demo window around lags
 
 crash on clicking the top-left corner x to exit
 
-mach: top-left corner X icon is bad?
-mach: no tab key?
+mach-test: top-left corner X icon is bad?
+podcast: missing icon in episode description? 
+
+mach-test: no tab key?
 
 go through changes in https://github.com/david-vanderson/gui/pull/3
 
