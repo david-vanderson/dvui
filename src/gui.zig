@@ -6083,7 +6083,7 @@ pub const examples = struct {
         var row_height: f32 = 0;
     };
 
-    pub fn demo() void {
+    pub fn demo() bool {
         if (show_demo_window) {
             var float = gui.floatingWindow(@src(), 0, false, null, &show_demo_window, .{ .min_size = .{ .w = 400, .h = 400 } });
             defer float.deinit();
@@ -6148,7 +6148,11 @@ pub const examples = struct {
             if (IconBrowser.show) {
                 icon_browser();
             }
+
+            return true;
         }
+
+        return false;
     }
 
     pub fn basicWidgets() void {
