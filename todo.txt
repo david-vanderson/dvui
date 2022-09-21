@@ -1,8 +1,6 @@
 
 -Dtarget=wasm32-freestanding-none
 
-go through changes in https://github.com/david-vanderson/gui/pull/3
-
 mach-test: top-left corner X icon is bad?
 podcast: missing icon in episode description? 
 
