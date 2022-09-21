@@ -20,12 +20,9 @@ var current_window: ?*Window = null;
 
 pub var log_debug: bool = false;
 pub fn debug(comptime str: []const u8, args: anytype) void {
-    // TODO: Figure out why this is causing compile errors
-    // if (log_debug) {
-    //     log.debug(str, args);
-    // }
-    _ = str;
-    _ = args;
+    if (log_debug) {
+        log.debug(str, args);
+    }
 }
 
 pub const Theme = struct {
@@ -320,9 +317,9 @@ pub const Options = struct {
         return ret;
     }
 
-    pub fn format(self: *const Options, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try std.fmt.format(writer, "Options{{ .background = {}, .color_style = {} }}", .{ self.background, self.color_style });
-    }
+    //pub fn format(self: *const Options, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+    //    try std.fmt.format(writer, "Options{{ .background = {?}, .color_style = {?} }}", .{ self.background, self.color_style });
+    //}
 };
 
 pub fn themeGet() *const Theme {
@@ -1419,7 +1416,7 @@ pub fn windowNaturalScale() f32 {
 pub fn minSizeGetPrevious(id: u32) ?Size {
     var cw = current_window orelse unreachable;
     const ret = cw.widgets_min_size_prev.get(id);
-    debug("{x} minSizeGetPrevious {}", .{ id, ret });
+    debug("{x} minSizeGetPrevious {?}", .{ id, ret });
     return ret;
 }
 
@@ -2201,7 +2198,7 @@ pub const Window = struct {
         self.wd.rect = self.backend.windowSize().rect();
         self.natural_scale = self.rect_pixels.w / self.wd.rect.w;
 
-        // debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
+        debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
         _ = windowCurrentSet(self.wd.id);
 
@@ -2562,7 +2559,7 @@ pub const PopupWidget = struct {
             cueFrame();
         }
 
-        // debug("{x} Popup {}", .{ self.wd.id, self.wd.rect });
+        debug("{x} Popup {}", .{ self.wd.id, self.wd.rect });
 
         // outside normal flow, so don't get rect from parent
         const rs = self.screenRectScale(self.wd.rect);
@@ -2812,7 +2809,7 @@ pub const FloatingWindowWidget = struct {
             }
         }
 
-        // debug("{x} FloatingWindow {}", .{ self.wd.id, self.wd.rect });
+        debug("{x} FloatingWindow {}", .{ self.wd.id, self.wd.rect });
 
         const captured = captureMouseMaintain(self.wd.id);
 
@@ -3116,7 +3113,7 @@ pub const PanedWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        // gui.debug("{x} Paned {}", .{ self.wd.id, self.wd.rect });
+        debug("{x} Paned {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
         const rect = self.wd.contentRect();
         self.prevClip = clip(self.wd.parent.screenRectScale(rect).r);
@@ -3386,7 +3383,7 @@ pub const TextLayoutWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        // debug("{x} TextLayout {}", .{ self.wd.id, self.wd.rect });
+        debug("{x} TextLayout {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
 
         const rs = self.wd.contentRectScale();
@@ -3478,7 +3475,7 @@ pub const TextLayoutWidget = struct {
             // We want to render text, but no sense in doing it if we are off the end
             if (self.insert_pt.y < rect.y + rect.h) {
                 const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.y + rect.h - self.insert_pt.y) });
-                //log.debug("renderText: {} {s} {}", .{rs.r, txt[0..end], options.color()});
+                log.debug("renderText: {} {s} {}", .{rs.r, txt[0..end], options.color()});
                 renderText(options.font(), txt[0..end], rs, options.color());
             }
 
@@ -3576,7 +3573,7 @@ pub const ContextWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        // debug("{x} Context {}", .{ self.wd.id, self.wd.rect });
+        debug("{x} Context {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
     }
 
@@ -3684,7 +3681,7 @@ pub const OverlayWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        // debug("{x} Overlay {}", .{ self.wd.id, self.wd.rect });
+        debug("{x} Overlay {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
     }
 
@@ -3761,7 +3758,7 @@ pub const BoxWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        // debug("{x} Box {}", .{ self.wd.id, self.wd.rect });
+        debug("{x} Box {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
 
         // our rect for children has to start at 0,0
@@ -3880,7 +3877,7 @@ pub const ScrollBar = struct {
         const captured = captureMouseMaintain(self.id);
 
         self.rect = rect_in;
-        // debug("{x} ScrollBar {}", .{ self.id, self.rect });
+        debug("{x} ScrollBar {}", .{ self.id, self.rect });
         {
             const si = area.scrollInfo();
             self.grabRect = self.rect;
@@ -4031,7 +4028,7 @@ pub const ScrollAreaWidget = struct {
     }
 
     pub fn install(self: *Self) void {
-        // debug("{x} ScrollArea {}", .{ self.wd.id, self.wd.rect });
+        debug("{x} ScrollArea {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
 
         bubbleEvents(self.widget());
@@ -4212,7 +4209,7 @@ pub var separator_defaults: Options = .{
 
 pub fn separator(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
     var wd = WidgetData.init(src, id_extra, separator_defaults.override(opts));
-    // debug("{x} Separator {}", .{ wd.id, wd.rect });
+    debug("{x} Separator {}", .{ wd.id, wd.rect });
     wd.borderAndBackground();
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
@@ -4224,7 +4221,7 @@ pub fn spacer(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) v
 
 pub fn spacerRect(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Rect {
     var wd = WidgetData.init(src, id_extra, opts);
-    // debug("{x} Spacer {}", .{ wd.id, wd.rect });
+    debug("{x} Spacer {}", .{ wd.id, wd.rect });
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
     return wd.rect;
@@ -4236,7 +4233,7 @@ pub fn spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
     };
     const options = defaults.override(opts);
     var wd = WidgetData.init(src, id_extra, options);
-    // debug("{x} Spinner {}", .{ wd.id, wd.rect });
+    debug("{x} Spinner {}", .{ wd.id, wd.rect });
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
 
@@ -4294,7 +4291,7 @@ pub const ScaleWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        // debug("{x} Scale {d} {}", .{ self.wd.id, self.scale_in, self.wd.rect });
+        debug("{x} Scale {d} {}", .{ self.wd.id, self.scale_in, self.wd.rect });
         self.wd.borderAndBackground();
     }
 
@@ -4375,7 +4372,7 @@ pub const MenuWidget = struct {
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
         self.parentMenu = menuSet(self);
-        // debug("{x} Menu {}", .{ self.wd.id, self.wd.rect });
+        debug("{x} Menu {}", .{ self.wd.id, self.wd.rect });
 
         self.wd.borderAndBackground();
 
@@ -4514,7 +4511,7 @@ pub const MenuItemWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        // debug("{x} MenuItem {}", .{ self.wd.id, self.wd.rect });
+        debug("{x} MenuItem {}", .{ self.wd.id, self.wd.rect });
 
         self.processEvents();
 
@@ -4691,7 +4688,7 @@ pub const LabelWidget = struct {
     }
 
     pub fn install(self: *Self) void {
-        // debug("{x} Label \"{s:<10}\" {}", .{ self.wd.id, self.label_str, self.wd.rect });
+        debug("{x} Label \"{s:<10}\" {}", .{ self.wd.id, self.label_str, self.wd.rect });
         self.wd.borderAndBackground();
         const rs = self.wd.contentRectScale();
 
@@ -4720,7 +4717,7 @@ pub fn icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name:
     const size = Size{ .w = iconWidth(name, tvg_bytes, height), .h = height };
 
     var wd = WidgetData.init(src, id_extra, opts.overrideMinSizeContent(size));
-    // debug("{x} Icon \"{s:<10}\" {}", .{ wd.id, name, wd.rect });
+    debug("{x} Icon \"{s:<10}\" {}", .{ wd.id, name, wd.rect });
 
     wd.placeInsideNoExpand();
     wd.borderAndBackground();
@@ -4762,7 +4759,7 @@ pub const ButtonContainerWidget = struct {
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
 
-        // debug("{x} ButtonContainer {}", .{ self.wd.id, self.wd.rect });
+        debug("{x} ButtonContainer {}", .{ self.wd.id, self.wd.rect });
 
         self.captured = captureMouseMaintain(self.wd.id);
         self.clicked = self.processEvents();
@@ -4895,7 +4892,7 @@ pub const ButtonWidget = struct {
     }
 
     pub fn install(self: *ButtonWidget) bool {
-        // debug("Button {s}", .{self.label_str});
+        debug("Button {s}", .{self.label_str});
         self.bc.install();
         const clicked = self.bc.clicked;
 
@@ -4922,7 +4919,7 @@ pub var buttonIcon_defaults: Options = .{
 
 pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) bool {
     const options = buttonIcon_defaults.override(opts);
-    // debug("ButtonIcon \"{s}\" {}", .{ name, options });
+    debug("ButtonIcon \"{s}\" {}", .{ name, options });
     var bc = buttonContainer(src, id_extra, true, options);
     defer bc.deinit();
 
@@ -4940,7 +4937,7 @@ pub var checkbox_defaults: Options = .{
 
 pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label_str: []const u8, opts: Options) void {
     const options = checkbox_defaults.override(opts);
-    // debug("Checkbox {s}", .{label_str});
+    debug("Checkbox {s}", .{label_str});
     var bc = buttonContainer(src, id_extra, false, options.override(.{ .background = false }));
     defer bc.deinit();
 
@@ -5050,7 +5047,7 @@ pub const TextEntryWidget = struct {
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        // debug("{x} Text {}", .{ self.wd.id, self.wd.rect });
+        debug("{x} Text {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
 
         self.captured = captureMouseMaintain(self.wd.id);
