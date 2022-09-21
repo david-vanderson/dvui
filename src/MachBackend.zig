@@ -6,7 +6,6 @@ const zm = @import("zmath");
 
 const MachBackend = @This();
 
-gpa: std.mem.Allocator,
 core: *mach.Core,
 pipeline: *gpu.RenderPipeline,
 
@@ -31,12 +30,11 @@ index_buffer_size: u32,
 
 cursor_last: gui.CursorKind = .arrow,
 
-pub fn init(gpa: std.mem.Allocator, core: *mach.Core) !MachBackend {
+pub fn init(core: *mach.Core) !MachBackend {
     var back: MachBackend = undefined;
 
     //try core.setOptions(.{ .vsync = .none });
 
-    back.gpa = gpa;
     back.core = core;
     back.uniform_buffer_size = 1;
     back.uniform_buffer_len = 0;
@@ -473,10 +471,9 @@ pub fn textureDestroy(self: *MachBackend, texture: *anyopaque) void {
         // flush so we don't accidentally release this texture before we use it
         self.flushRender();
     }
-    // TODO: Figure out why this is causing a compile error
-    // const tex = @ptrCast(*gpu.Texture, @alignCast(@alignOf(gpu.Texture), texture));
-    // tex.release();
-    // self.gpa.destroy(tex);
+
+    const tex = @ptrCast(*gpu.Texture, texture);
+    tex.destroy();
 }
 
 const vert_wgsl =
