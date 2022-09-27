@@ -154,7 +154,7 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []gui.Vertex
 
     const tex = @ptrCast(?*c.SDL_Texture, texture);
 
-    _ = c.SDL_RenderGeometryRaw(self.renderer, tex, @ptrCast(*f32, &vtx[0].pos), @sizeOf(gui.Vertex), @ptrCast(*c_int, @alignCast(4, &vtx[0].col)), @sizeOf(gui.Vertex), @ptrCast(*f32, &vtx[0].uv), @sizeOf(gui.Vertex), @intCast(c_int, vtx.len), idx.ptr, @intCast(c_int, idx.len), @sizeOf(u32));
+    _ = c.SDL_RenderGeometryRaw(self.renderer, tex, @ptrCast(*f32, &vtx[0].pos), @sizeOf(gui.Vertex), @ptrCast(*c.SDL_Color, @alignCast(4, &vtx[0].col)), @sizeOf(gui.Vertex), @ptrCast(*f32, &vtx[0].uv), @sizeOf(gui.Vertex), @intCast(c_int, vtx.len), idx.ptr, @intCast(c_int, idx.len), @sizeOf(u32));
 }
 
 pub fn textureCreate(self: *SDLBackend, pixels: []u8, width: u32, height: u32) *anyopaque {
