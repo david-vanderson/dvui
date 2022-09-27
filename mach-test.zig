@@ -33,12 +33,12 @@ pub fn update(app: *App, engine: *mach.Core) !void {
 
     const quit = app.win_backend.addAllEvents(&app.win);
     if (quit) {
-        return engine.setShouldClose(true);
+        return engine.close();
     }
 
     const shown = gui.examples.demo();
     if (!shown) {
-        return engine.setShouldClose(true);
+        return engine.close();
     }
 
     const end_micros = app.win.end();

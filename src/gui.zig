@@ -3475,7 +3475,7 @@ pub const TextLayoutWidget = struct {
             // We want to render text, but no sense in doing it if we are off the end
             if (self.insert_pt.y < rect.y + rect.h) {
                 const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.y + rect.h - self.insert_pt.y) });
-                log.debug("renderText: {} {s} {}", .{rs.r, txt[0..end], options.color()});
+                //log.debug("renderText: {} {s} {}", .{rs.r, txt[0..end], options.color()});
                 renderText(options.font(), txt[0..end], rs, options.color());
             }
 

@@ -11,7 +11,7 @@ const Packages = struct {
     };
 };
 
-pub fn build(b: *Builder) void {
+pub fn build(b: *Builder) !void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -26,7 +26,7 @@ pub fn build(b: *Builder) void {
     {
         const name = "mach-test";
         const mach = @import("libs/mach/build.zig");
-        const example_app = mach.App.init(
+        const example_app = try mach.App.init(
             b,
             .{
                 .name = "mach-test",
@@ -37,13 +37,13 @@ pub fn build(b: *Builder) void {
         );
         example_app.setBuildMode(mode);
         freetype.link(example_app.b, example_app.step, .{});
-        example_app.link(.{});
+        try example_app.link(.{});
 
         const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
         compile_step.dependOn(&b.addInstallArtifact(example_app.step).step);
         b.getInstallStep().dependOn(compile_step);
 
-        const run_cmd = example_app.run();
+        const run_cmd = try example_app.run();
         run_cmd.dependOn(compile_step);
 
         const run_step = b.step(name, "Run " ++ name);
@@ -53,9 +53,9 @@ pub fn build(b: *Builder) void {
     // sdl apps
     inline for ([2][]const u8{ "sdl-test", "podcast" }) |name| {
         const exe = b.addExecutable(name, name ++ ".zig");
-        exe.addIncludeDir("/usr/local/include");
+        exe.addIncludePath("/usr/local/include");
         exe.defineCMacro("_THREAD_SAFE", "1");
-        exe.addLibPath("/usr/local/lib");
+        exe.addLibraryPath("/usr/local/lib");
         exe.linkSystemLibrary("SDL2");
 
         exe.addPackage(freetype.pkg);
