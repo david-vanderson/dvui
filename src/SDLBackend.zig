@@ -10,7 +10,7 @@ cursor_last: gui.CursorKind = .arrow,
 cursor_backing: [@typeInfo(gui.CursorKind).Enum.fields.len]*c.SDL_Cursor = undefined,
 
 pub fn init(width: u32, height: u32) !SDLBackend {
-    if (c.SDL_Init(c.SDL_INIT_EVERYTHING) < 0) {
+    if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
         std.debug.print("Couldn't initialize SDL: {s}\n", .{c.SDL_GetError()});
         return error.BackendError;
     }
@@ -149,7 +149,14 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []gui.Vertex
     //  std.debug.print("  {d} index {d}\n", .{i, id});
     //}
 
-    const clip = c.SDL_Rect{ .x = @floatToInt(c_int, clipr.x), .y = @floatToInt(c_int, clipr.y), .w = std.math.max(0, @floatToInt(c_int, @ceil(clipr.w))), .h = std.math.max(0, @floatToInt(c_int, @ceil(clipr.h))) };
+
+    // figure out how much we are losing by truncating x and y, need to add that back to w and h
+    const clip = c.SDL_Rect{
+        .x = @floatToInt(c_int, clipr.x),
+        .y = @floatToInt(c_int, clipr.y),
+        .w = std.math.max(0, @floatToInt(c_int, @ceil(clipr.w + clipr.x - @floor(clipr.x)))),
+        .h = std.math.max(0, @floatToInt(c_int, @ceil(clipr.h + clipr.y - @floor(clipr.y)))) };
+
     _ = c.SDL_RenderSetClipRect(self.renderer, &clip);
 
     const tex = @ptrCast(?*c.SDL_Texture, texture);

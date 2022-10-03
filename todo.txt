@@ -1,8 +1,17 @@
 
 -Dtarget=wasm32-freestanding-none
 
+linux: see fringes near edges of glyphs sometimes
+
+linux: text is blurry at non-1.0 zooms?
+
+
 mach-test: top-left corner X icon is bad?
+- is it just the first icon rasterized is bad?
+
 podcast: missing icon in episode description? 
+
+scroll managed vs. not should be via optionals passed (ypos and ymax)
 
 mach-test: no tab key?
 
