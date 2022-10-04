@@ -149,13 +149,8 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []gui.Vertex
     //  std.debug.print("  {d} index {d}\n", .{i, id});
     //}
 
-
     // figure out how much we are losing by truncating x and y, need to add that back to w and h
-    const clip = c.SDL_Rect{
-        .x = @floatToInt(c_int, clipr.x),
-        .y = @floatToInt(c_int, clipr.y),
-        .w = std.math.max(0, @floatToInt(c_int, @ceil(clipr.w + clipr.x - @floor(clipr.x)))),
-        .h = std.math.max(0, @floatToInt(c_int, @ceil(clipr.h + clipr.y - @floor(clipr.y)))) };
+    const clip = c.SDL_Rect{ .x = @floatToInt(c_int, clipr.x), .y = @floatToInt(c_int, clipr.y), .w = std.math.max(0, @floatToInt(c_int, @ceil(clipr.w + clipr.x - @floor(clipr.x)))), .h = std.math.max(0, @floatToInt(c_int, @ceil(clipr.h + clipr.y - @floor(clipr.y)))) };
 
     _ = c.SDL_RenderSetClipRect(self.renderer, &clip);
 
