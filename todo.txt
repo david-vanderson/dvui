@@ -1,13 +1,14 @@
 
 -Dtarget=wasm32-freestanding-none
 
-linux: see fringes near edges of glyphs sometimes
-
 linux: text is blurry at non-1.0 zooms?
+- snap to pixels?
+- make the zooming zoom to exact font sizes?
+
+sdl: spamming space while focused on a button crash
 
 
 mach-test: top-left corner X icon is bad?
-- is it just the first icon rasterized is bad?
 
 podcast: missing icon in episode description? 
 

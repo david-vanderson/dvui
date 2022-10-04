@@ -460,7 +460,7 @@ pub const Font = struct {
             endout.* = ei;
         }
 
-        //std.debug.print("textSizeRaw size {d} for \"{s}\" {d}x{d} -> {d}x{d}\n", .{self.size, text, tw, th, ftw, fth});
+        //std.debug.print("textSizeRaw size {d} for \"{s}\" {d}x{d}\n", .{ self.size, text, tw, th });
         return Size{ .w = tw, .h = th };
     }
 
@@ -628,6 +628,10 @@ pub const RenderCmd = struct {
         text: struct {
             font: Font,
             text: []const u8,
+            rs: RectScale,
+            color: Color,
+        },
+        debug_font_atlases: struct {
             rs: RectScale,
             color: Color,
         },
@@ -941,16 +945,14 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
 
         if (cw.window_currentId == cw.wd.id) {
             cw.render_cmds_after.append(cmd) catch unreachable;
-        }
-        else {
+        } else {
             var i = cw.floating_data.items.len;
             while (i > 0) : (i -= 1) {
                 const fw = &cw.floating_data.items[i - 1];
                 if (fw.id == cw.window_currentId) {
                     if (after) {
                         fw.render_cmds_after.append(cmd) catch unreachable;
-                    }
-                    else {
+                    } else {
                         fw.render_cmds.append(cmd) catch unreachable;
                     }
                     break;
@@ -959,8 +961,7 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
         }
 
         cw.path.clearAndFree();
-    }
-    else {
+    } else {
         pathStrokeRaw(closed_in, thickness, endcap_style, col);
     }
 }
@@ -2340,6 +2341,9 @@ pub const Window = struct {
             switch (drc.cmd) {
                 .text => |t| {
                     renderText(t.font, t.text, t.rs, t.color);
+                },
+                .debug_font_atlases => |t| {
+                    debugRenderFontAtlases(t.rs, t.color);
                 },
                 .icon => |i| {
                     renderIcon(i.name, i.tvg_bytes, i.rs, i.colormod);
@@ -4729,6 +4733,33 @@ pub fn icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name:
     wd.minSizeReportToParent();
 }
 
+pub fn debugFontAtlases(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
+    const cw = current_window orelse unreachable;
+
+    var size = Size{};
+    var it = cw.font_cache.iterator();
+    while (it.next()) |kv| {
+        size.w = math.max(size.w, kv.value_ptr.texture_atlas_size.w);
+        size.h += kv.value_ptr.texture_atlas_size.h;
+    }
+
+    // this size is a pixel size, so inverse scale to get natural pixels
+    const ss = parentGet().screenRectScale(Rect{}).s;
+    size = size.scale(1.0 / ss);
+
+    var wd = WidgetData.init(src, id_extra, opts.overrideMinSizeContent(size));
+    debug("{x} debugFontAtlases {} {}", .{ wd.id, wd.rect, opts.color() });
+
+    wd.placeInsideNoExpand();
+    wd.borderAndBackground();
+
+    const rs = wd.contentRectScale();
+    debugRenderFontAtlases(rs, opts.color());
+
+    wd.minSizeSetAndCue();
+    wd.minSizeReportToParent();
+}
+
 pub fn buttonContainer(src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) *ButtonContainerWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(ButtonContainerWidget) catch unreachable;
@@ -5436,35 +5467,27 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
         _ = fce.glyphInfoGet(@intCast(u32, codepoint));
     }
 
+    // number of extra pixels to add on each side of each glyph
+    const pad = 1;
+
     if (fce.texture_atlas_regen) {
         fce.texture_atlas_regen = false;
         cw.backend.textureDestroy(fce.texture_atlas);
 
-        const num_glyphs = fce.glyph_info.count();
         var size = Size{};
         {
             var it = fce.glyph_info.valueIterator();
             while (it.next()) |gi| {
-                size.w = math.max(size.w, gi.maxx - gi.minx);
-                size.h = math.max(size.h, gi.maxy - gi.miny);
+                size.w += (gi.maxx - gi.minx) + 2 * pad;
+                size.h = math.max(size.h, (gi.maxy - gi.miny) + 2 * pad);
             }
 
             size = size.ceil();
         }
 
-        // Add a 1 pixel edge to our texture to eliminate edge effects
-        // 1 extra pixel at the start of each glyph
-        // 1 extra pixel above each
-        size.w += 1;
-        size.h += 1;
-
-        const glyph_width = @floatToInt(i32, size.w);
-        // change size to be size of texture
-        size.w *= @intToFloat(f32, num_glyphs);
-
-        // 1 extra pixel at the very right and bottom edge
-        size.w += 1;
-        size.h += 1;
+        // also add an extra padding around whole texture
+        size.w += 2 * pad;
+        size.h += 2 * pad;
 
         var pixels = cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * 4) catch unreachable;
         // set all pixels as white but with zero alpha
@@ -5476,18 +5499,19 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
             }
         }
 
-        //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{sized_font.size, num_glyphs, size});
+        //const num_glyphs = fce.glyph_info.count();
+        //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{ sized_font.size, num_glyphs, size });
 
         {
-            var x: i32 = 0;
+            var x: i32 = pad;
             var it = fce.glyph_info.iterator();
             while (it.next()) |e| {
                 e.value_ptr.uv[0] = @intToFloat(f32, x) / size.w;
-                e.value_ptr.uv[1] = 0.0 / size.h;
+                e.value_ptr.uv[1] = pad / size.h;
 
                 fce.face.loadChar(@intCast(u32, e.key_ptr.*), .{ .render = true }) catch unreachable;
                 const bitmap = fce.face.glyph().bitmap();
-                //std.debug.print("codepoint {d} gi height {d} bitmap rows {d}\n", .{e.key_ptr.*, e.value_ptr.maxy - e.value_ptr.miny, bitmap.rows()});
+                //std.debug.print("codepoint {d} gi {d}x{d} bitmap {d}x{d}\n", .{ e.key_ptr.*, e.value_ptr.maxx - e.value_ptr.minx, e.value_ptr.maxy - e.value_ptr.miny, bitmap.width(), bitmap.rows() });
                 var row: i32 = 0;
                 while (row < bitmap.rows()) : (row += 1) {
                     var col: i32 = 0;
@@ -5495,7 +5519,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
                         const src = bitmap.buffer().?[@intCast(usize, row * bitmap.pitch() + col)];
 
                         // because of the extra edge, offset by 1 row and 1 col
-                        const di = @intCast(usize, (row + 1) * @floatToInt(i32, size.w) * 4 + (x + col + 1) * 4);
+                        const di = @intCast(usize, (row + 2 * pad) * @floatToInt(i32, size.w) * 4 + (x + col + pad) * 4);
 
                         // not doing premultiplied alpha (yet), so keep the white color but adjust the alpha
                         //pixels[di] = src;
@@ -5505,7 +5529,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
                     }
                 }
 
-                x += glyph_width;
+                x += @intCast(i32, bitmap.width()) + 2 * pad;
             }
         }
 
@@ -5519,35 +5543,6 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
     var idx = std.ArrayList(u32).init(cw.arena);
     defer idx.deinit();
 
-    //{
-    //  const len = @intCast(u32, vtx.items.len);
-    //  var v: Vertex = undefined;
-    //  v.pos.x = 0;
-    //  v.pos.y = 0;
-    //  v.col = color;
-    //  v.uv = .{ 0, 0 };
-    //  vtx.append(v) catch unreachable;
-
-    //  v.pos.x = 0 + fce.texture_atlas_size.w;
-    //  v.uv[0] = 1;
-    //  vtx.append(v) catch unreachable;
-
-    //  v.pos.y = 0 + fce.texture_atlas_size.h;
-    //  v.uv[1] = 1;
-    //  vtx.append(v) catch unreachable;
-
-    //  v.pos.x = 0;
-    //  v.uv[0] = 0;
-    //  vtx.append(v) catch unreachable;
-
-    //  idx.append(len + 0) catch unreachable;
-    //  idx.append(len + 1) catch unreachable;
-    //  idx.append(len + 2) catch unreachable;
-    //  idx.append(len + 0) catch unreachable;
-    //  idx.append(len + 2) catch unreachable;
-    //  idx.append(len + 3) catch unreachable;
-    //}
-
     var x: f32 = rs.r.x;
     var y: f32 = rs.r.y;
 
@@ -5559,22 +5554,22 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
 
         const len = @intCast(u32, vtx.items.len);
         var v: Vertex = undefined;
-        // account for 1 pixel fringe around glyph
-        v.pos.x = x + (gi.minx - 1) * target_fraction;
-        v.pos.y = y + (gi.miny - 1) * target_fraction;
+
+        v.pos.x = x + (gi.minx - pad) * target_fraction;
+        v.pos.y = y + (gi.miny - pad) * target_fraction;
         v.col = color;
         v.uv = gi.uv;
         vtx.append(v) catch unreachable;
 
-        v.pos.x = x + (gi.maxx + 1) * target_fraction;
-        v.uv[0] = gi.uv[0] + (gi.maxx - gi.minx + 2) / fce.texture_atlas_size.w;
+        v.pos.x = x + (gi.maxx + pad) * target_fraction;
+        v.uv[0] = gi.uv[0] + (gi.maxx - gi.minx + 2 * pad) / fce.texture_atlas_size.w;
         vtx.append(v) catch unreachable;
 
-        v.pos.y = y + (gi.maxy + 1) * target_fraction;
-        v.uv[1] = gi.uv[1] + (gi.maxy - gi.miny + 2) / fce.texture_atlas_size.h;
+        v.pos.y = y + (gi.maxy + pad) * target_fraction;
+        v.uv[1] = gi.uv[1] + (gi.maxy - gi.miny + 2 * pad) / fce.texture_atlas_size.h;
         vtx.append(v) catch unreachable;
 
-        v.pos.x = x + (gi.minx - 1) * target_fraction;
+        v.pos.x = x + (gi.minx - pad) * target_fraction;
         v.uv[0] = gi.uv[0];
         vtx.append(v) catch unreachable;
 
@@ -5589,6 +5584,69 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
     }
 
     cw.backend.renderGeometry(fce.texture_atlas, vtx.items, idx.items);
+}
+
+pub fn debugRenderFontAtlases(rs: RectScale, color: Color) void {
+    if (clipGet().intersect(rs.r).empty()) {
+        return;
+    }
+
+    var cw = current_window orelse unreachable;
+
+    if (cw.window_currentId != cw.wd.id) {
+        var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .debug_font_atlases = .{ .rs = rs, .color = color } } };
+
+        var i = cw.floating_data.items.len;
+        while (i > 0) : (i -= 1) {
+            const fw = &cw.floating_data.items[i - 1];
+            if (fw.id == cw.window_currentId) {
+                fw.render_cmds.append(cmd) catch unreachable;
+                break;
+            }
+        }
+
+        return;
+    }
+
+    var offset: f32 = 0;
+    var it = cw.font_cache.iterator();
+    while (it.next()) |kv| {
+        var vtx = std.ArrayList(Vertex).init(cw.arena);
+        defer vtx.deinit();
+        var idx = std.ArrayList(u32).init(cw.arena);
+        defer idx.deinit();
+
+        const len = @intCast(u32, vtx.items.len);
+        var v: Vertex = undefined;
+        v.pos.x = rs.r.x;
+        v.pos.y = rs.r.y + offset;
+        v.col = color;
+        v.uv = .{ 0, 0 };
+        vtx.append(v) catch unreachable;
+
+        v.pos.x = rs.r.x + kv.value_ptr.texture_atlas_size.w;
+        v.uv[0] = 1;
+        vtx.append(v) catch unreachable;
+
+        v.pos.y = rs.r.y + offset + kv.value_ptr.texture_atlas_size.h;
+        v.uv[1] = 1;
+        vtx.append(v) catch unreachable;
+
+        v.pos.x = rs.r.x;
+        v.uv[0] = 0;
+        vtx.append(v) catch unreachable;
+
+        idx.append(len + 0) catch unreachable;
+        idx.append(len + 1) catch unreachable;
+        idx.append(len + 2) catch unreachable;
+        idx.append(len + 0) catch unreachable;
+        idx.append(len + 2) catch unreachable;
+        idx.append(len + 3) catch unreachable;
+
+        cw.backend.renderGeometry(kv.value_ptr.texture_atlas, vtx.items, idx.items);
+
+        offset += kv.value_ptr.texture_atlas_size.h;
+    }
 }
 
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colormod: Color) void {
@@ -5780,12 +5838,11 @@ pub const WidgetData = struct {
             .err, .success, .accent => {
                 if (themeGet().dark) {
                     color = self.options.color_bg().lighten(0.3);
-                }
-                else {
+                } else {
                     color = self.options.color_bg().darken(0.2);
                 }
             },
-            else => {}
+            else => {},
         }
         pathStrokeAfter(true, true, thick, .none, color);
     }
@@ -6104,6 +6161,10 @@ pub const examples = struct {
 
             if (gui.expander(@src(), 0, "Layout", .{ .expand = .horizontal })) {
                 layout();
+            }
+
+            if (gui.expander(@src(), 0, "Show Font Atlases", .{ .expand = .horizontal })) {
+                debugFontAtlases(@src(), 0, .{});
             }
 
             if (gui.expander(@src(), 0, "Text Layout", .{ .expand = .horizontal })) {
