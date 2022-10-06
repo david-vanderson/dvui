@@ -34,7 +34,7 @@ pub fn main() !void {
         const quit = win_backend.addAllEvents(&win);
         if (quit) break :main_loop;
 
-        gui.examples.demo();
+        _ = gui.examples.demo();
 
         var window_box = gui.box(@src(), 0, .vertical, .{ .expand = .both, .color_style = .window, .background = true });
 
