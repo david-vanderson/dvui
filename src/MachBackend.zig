@@ -478,7 +478,7 @@ pub fn textureDestroy(self: *MachBackend, texture: *anyopaque) void {
     }
 
     const tex = @ptrCast(*gpu.Texture, texture);
-    tex.destroy();
+    tex.release();
 }
 
 const vert_wgsl =
