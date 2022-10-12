@@ -410,6 +410,7 @@ pub const Font = struct {
         const target_fraction = self.size / ask_size;
         const sized_font = self.resize(ask_size);
         const s = sized_font.textSizeRaw(text, max_width_sized, end_idx);
+        //std.debug.print("textSize size {d} for \"{s}\" {d} {}\n", .{ self.size, text, target_fraction, s.scale(target_fraction) });
         return s.scale(target_fraction);
     }
 
@@ -5474,12 +5475,24 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
         fce.texture_atlas_regen = false;
         cw.backend.textureDestroy(fce.texture_atlas);
 
+        const row_glyphs = @floatToInt(u32, @ceil(@sqrt(@intToFloat(f32, fce.glyph_info.count()))));
+
         var size = Size{};
         {
             var it = fce.glyph_info.valueIterator();
+            var i: u32 = 0;
+            var rowlen: f32 = 0;
             while (it.next()) |gi| {
-                size.w += (gi.maxx - gi.minx) + 2 * pad;
-                size.h = math.max(size.h, (gi.maxy - gi.miny) + 2 * pad);
+                if (i % row_glyphs == 0) {
+                    size.w = math.max(size.w, rowlen);
+                    size.h += fce.height + 2 * pad;
+                    rowlen = 0;
+                }
+
+                rowlen += (gi.maxx - gi.minx) + 2 * pad;
+                i += 1;
+            } else {
+                size.w = math.max(size.w, rowlen);
             }
 
             size = size.ceil();
@@ -5504,10 +5517,12 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
 
         {
             var x: i32 = pad;
+            var y: i32 = pad;
             var it = fce.glyph_info.iterator();
+            var i: u32 = 0;
             while (it.next()) |e| {
                 e.value_ptr.uv[0] = @intToFloat(f32, x) / size.w;
-                e.value_ptr.uv[1] = pad / size.h;
+                e.value_ptr.uv[1] = @intToFloat(f32, y) / size.h;
 
                 fce.face.loadChar(@intCast(u32, e.key_ptr.*), .{ .render = true }) catch unreachable;
                 const bitmap = fce.face.glyph().bitmap();
@@ -5519,7 +5534,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
                         const src = bitmap.buffer().?[@intCast(usize, row * bitmap.pitch() + col)];
 
                         // because of the extra edge, offset by 1 row and 1 col
-                        const di = @intCast(usize, (row + 2 * pad) * @floatToInt(i32, size.w) * 4 + (x + col + pad) * 4);
+                        const di = @intCast(usize, (y + row + pad) * @floatToInt(i32, size.w) * 4 + (x + col + pad) * 4);
 
                         // not doing premultiplied alpha (yet), so keep the white color but adjust the alpha
                         //pixels[di] = src;
@@ -5530,6 +5545,12 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
                 }
 
                 x += @intCast(i32, bitmap.width()) + 2 * pad;
+
+                i += 1;
+                if (i % row_glyphs == 0) {
+                    x = pad;
+                    y += @floatToInt(i32, fce.height) + 2 * pad;
+                }
             }
         }
 
