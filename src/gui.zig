@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const math = std.math;
 const tvg = @import("../libs/tinyvg/src/lib/tinyvg.zig");
@@ -1985,10 +1986,16 @@ pub const Window = struct {
 
         const winId = windowFor(self.mouse_pt);
 
+        var ticks_adj = ticks;
+        if (builtin.target.os.tag == .linux) {
+            ticks_adj = ticks * 20;
+        }
+        //std.debug.print("mouse wheel {d}\n", .{ticks_adj});
+
         self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
             .p = self.mouse_pt,
             .dp = Point{},
-            .wheel = ticks,
+            .wheel = ticks_adj,
             .floating_win = winId,
             .state = .wheel_y,
         } } }) catch unreachable;
