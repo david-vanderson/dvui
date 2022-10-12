@@ -1,14 +1,11 @@
 
 -Dtarget=wasm32-freestanding-none
 
-linux: text is blurry at non-1.0 zooms?
-- snap to pixels?
-- make the zooming zoom to exact font sizes?
-
 sdl: spamming space while focused on a button crash
 
 
 mach-test: top-left corner X icon is bad?
+- update to latest mach
 
 podcast: missing icon in episode description? 
 

@@ -18,6 +18,8 @@ const gui = @This();
 
 var current_window: ?*Window = null;
 
+pub var snap_to_pixels: bool = true;
+
 pub var log_debug: bool = false;
 pub fn debug(comptime str: []const u8, args: anytype) void {
     if (log_debug) {
@@ -625,6 +627,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) Ico
 
 pub const RenderCmd = struct {
     clip: Rect,
+    snap: bool,
     cmd: union(enum) {
         text: struct {
             font: Font,
@@ -852,7 +855,7 @@ pub fn pathFillConvex(col: Color) void {
     if (cw.window_currentId != cw.wd.id) {
         var path_copy = std.ArrayList(Point).init(cw.arena);
         path_copy.appendSlice(cw.path.items) catch unreachable;
-        var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
+        var cmd = RenderCmd{ .snap = snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
 
         var i = cw.floating_data.items.len;
         while (i > 0) : (i -= 1) {
@@ -942,7 +945,7 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
     if (after or cw.window_currentId != cw.wd.id) {
         var path_copy = std.ArrayList(Point).init(cw.arena);
         path_copy.appendSlice(cw.path.items) catch unreachable;
-        var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
+        var cmd = RenderCmd{ .snap = snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
 
         if (cw.window_currentId == cw.wd.id) {
             cw.render_cmds_after.append(cmd) catch unreachable;
@@ -2338,6 +2341,7 @@ pub const Window = struct {
 
     pub fn renderCommands(self: *Self, queue: *std.ArrayList(RenderCmd)) void {
         for (queue.items) |*drc| {
+            snap_to_pixels = drc.snap;
             clipSet(drc.clip);
             switch (drc.cmd) {
                 .text => |t| {
@@ -5440,7 +5444,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
     if (cw.window_currentId != cw.wd.id) {
         var txt = cw.arena.alloc(u8, text.len) catch unreachable;
         std.mem.copy(u8, txt, text);
-        var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .text = .{ .font = font, .text = txt, .rs = rs, .color = color } } };
+        var cmd = RenderCmd{ .snap = snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = .{ .font = font, .text = txt, .rs = rs, .color = color } } };
 
         var i = cw.floating_data.items.len;
         while (i > 0) : (i -= 1) {
@@ -5564,8 +5568,8 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
     var idx = std.ArrayList(u32).init(cw.arena);
     defer idx.deinit();
 
-    var x: f32 = rs.r.x;
-    var y: f32 = rs.r.y;
+    var x: f32 = if (snap_to_pixels) @round(rs.r.x) else rs.r.x;
+    var y: f32 = if (snap_to_pixels) @round(rs.r.y) else rs.r.y;
 
     var utf8 = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
     while (utf8.nextCodepoint()) |codepoint| {
@@ -5615,7 +5619,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) void {
     var cw = current_window orelse unreachable;
 
     if (cw.window_currentId != cw.wd.id) {
-        var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .debug_font_atlases = .{ .rs = rs, .color = color } } };
+        var cmd = RenderCmd{ .snap = snap_to_pixels, .clip = clipGet(), .cmd = .{ .debug_font_atlases = .{ .rs = rs, .color = color } } };
 
         var i = cw.floating_data.items.len;
         while (i > 0) : (i -= 1) {
@@ -5629,6 +5633,9 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) void {
         return;
     }
 
+    var x: f32 = if (snap_to_pixels) @round(rs.r.x) else rs.r.x;
+    var y: f32 = if (snap_to_pixels) @round(rs.r.y) else rs.r.y;
+
     var offset: f32 = 0;
     var it = cw.font_cache.iterator();
     while (it.next()) |kv| {
@@ -5639,21 +5646,21 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) void {
 
         const len = @intCast(u32, vtx.items.len);
         var v: Vertex = undefined;
-        v.pos.x = rs.r.x;
-        v.pos.y = rs.r.y + offset;
+        v.pos.x = x;
+        v.pos.y = y + offset;
         v.col = color;
         v.uv = .{ 0, 0 };
         vtx.append(v) catch unreachable;
 
-        v.pos.x = rs.r.x + kv.value_ptr.texture_atlas_size.w;
+        v.pos.x = x + kv.value_ptr.texture_atlas_size.w;
         v.uv[0] = 1;
         vtx.append(v) catch unreachable;
 
-        v.pos.y = rs.r.y + offset + kv.value_ptr.texture_atlas_size.h;
+        v.pos.y = y + offset + kv.value_ptr.texture_atlas_size.h;
         v.uv[1] = 1;
         vtx.append(v) catch unreachable;
 
-        v.pos.x = rs.r.x;
+        v.pos.x = x;
         v.uv[0] = 0;
         vtx.append(v) catch unreachable;
 
@@ -5682,7 +5689,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
     if (cw.window_currentId != cw.wd.id) {
         var name_copy = cw.arena.alloc(u8, name.len) catch unreachable;
         std.mem.copy(u8, name_copy, name);
-        var cmd = RenderCmd{ .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .colormod = colormod } } };
+        var cmd = RenderCmd{ .snap = snap_to_pixels, .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .colormod = colormod } } };
 
         var i = cw.floating_data.items.len;
         while (i > 0) : (i -= 1) {
@@ -5708,23 +5715,26 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
     var idx = std.ArrayList(u32).initCapacity(cw.arena, 6) catch unreachable;
     defer idx.deinit();
 
+    var x: f32 = if (snap_to_pixels) @round(rs.r.x) else rs.r.x;
+    var y: f32 = if (snap_to_pixels) @round(rs.r.y) else rs.r.y;
+
     var v: Vertex = undefined;
-    v.pos.x = rs.r.x;
-    v.pos.y = rs.r.y;
+    v.pos.x = x;
+    v.pos.y = y;
     v.col = colormod;
     v.uv[0] = 0;
     v.uv[1] = 0;
     vtx.append(v) catch unreachable;
 
-    v.pos.x = rs.r.x + ice.size.w * target_fraction;
+    v.pos.x = x + ice.size.w * target_fraction;
     v.uv[0] = 1;
     vtx.append(v) catch unreachable;
 
-    v.pos.y = rs.r.y + ice.size.h * target_fraction;
+    v.pos.y = y + ice.size.h * target_fraction;
     v.uv[1] = 1;
     vtx.append(v) catch unreachable;
 
-    v.pos.x = rs.r.x;
+    v.pos.x = x;
     v.uv[0] = 0;
     vtx.append(v) catch unreachable;
 
@@ -6213,12 +6223,18 @@ pub const examples = struct {
             }
 
             if (gui.button(@src(), 0, "Zoom In", .{})) {
-                scale_val *= 1.1;
+                scale_val = (themeGet().font_body.size * scale_val + 1.0) / themeGet().font_body.size;
+
+                //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
             }
 
             if (gui.button(@src(), 0, "Zoom Out", .{})) {
-                scale_val /= 1.1;
+                scale_val = (themeGet().font_body.size * scale_val - 1.0) / themeGet().font_body.size;
+
+                //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
             }
+
+            gui.checkbox(@src(), 0, &snap_to_pixels, "Snap to Pixels", .{});
 
             if (show_dialog) {
                 dialog();
