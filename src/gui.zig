@@ -1513,9 +1513,9 @@ pub fn placeIn(id: ?u32, avail: Rect, min_size: Size, e: Options.Expand, g: Opti
     return r;
 }
 
-pub fn events() *[]Event {
+pub fn events() []Event {
     var cw = current_window orelse unreachable;
-    return &cw.events.items;
+    return cw.events.items;
 }
 
 pub const EventIterator = struct {
@@ -1532,7 +1532,7 @@ pub const EventIterator = struct {
         var k = self.i;
         var evts = events();
         while (k < evts.len) : (k += 1) {
-            var e: *Event = &evts.*[k];
+            var e: *Event = &evts[k];
             e.focus_windowId = focusWindowId;
             e.focus_widgetId = focusWidgetId;
         }
@@ -1545,7 +1545,7 @@ pub const EventIterator = struct {
     pub fn nextCleanup(self: *Self, cleanup: bool) ?*Event {
         var evts = events();
         while (self.i < evts.len) : (self.i += 1) {
-            var e: *Event = &evts.*[self.i];
+            var e: *Event = &evts[self.i];
             if (e.handled) {
                 continue;
             }
