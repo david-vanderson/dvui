@@ -181,7 +181,7 @@ pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) bool {
             );
         },
         c.SDL_TEXTINPUT => {
-            return win.addEventText(&event.text.text);
+            return win.addEventText(std.mem.sliceTo(&event.text.text, 0));
         },
         c.SDL_MOUSEMOTION => {
             return win.addEventMouseMotion(@intToFloat(f32, event.motion.x), @intToFloat(f32, event.motion.y));

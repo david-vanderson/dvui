@@ -1,11 +1,8 @@
 
 -Dtarget=wasm32-freestanding-none
 
-sdl: spamming space while focused on a button crash
-
-
-mach-test: top-left corner X icon is bad?
-- update to latest mach
+top-left corner X icon is bad?
+- update to latest tinyvg?
 
 podcast: missing icon in episode description? 
 
