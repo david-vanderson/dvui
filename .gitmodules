@@ -1,6 +1,6 @@
 [submodule "libs/zmath"]
 	path = libs/zmath
-	url = https://github.com/PiergiorgioZagaria/zmath.git
+	url = https://github.com/machlibs/zmath
 [submodule "libs/tinyvg"]
 	path = libs/tinyvg
 	url = https://github.com/TinyVG/sdk
