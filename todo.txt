@@ -1,11 +1,6 @@
 
 -Dtarget=wasm32-freestanding-none
 
-top-left corner X icon is bad?
-- update to latest tinyvg?
-
-podcast: missing icon in episode description? 
-
 scroll managed vs. not should be via optionals passed (ypos and ymax)
 
 mach-test: no tab key?

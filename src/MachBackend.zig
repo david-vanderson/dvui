@@ -257,7 +257,7 @@ pub fn end(self: *MachBackend) void {
     self.encoder.release();
 
     var queue = self.core.device.getQueue();
-    queue.submit(&.{command});
+    queue.submit(&[_]*gpu.CommandBuffer{command});
     command.release();
 }
 
@@ -430,11 +430,7 @@ pub fn flushRender(self: *MachBackend) void {
     pass.setBindGroup(0, bind_group, &.{});
 
     // figure out how much we are losing by truncating x and y, need to add that back to w and h
-    pass.setScissorRect(
-        @floatToInt(u32, self.clipr.x),
-        @floatToInt(u32, self.clipr.y),
-        @floatToInt(u32, @ceil(self.clipr.w + self.clipr.x - @floor(self.clipr.x))),
-        @floatToInt(u32, @ceil(self.clipr.h + self.clipr.y - @floor(self.clipr.y))));
+    pass.setScissorRect(@floatToInt(u32, self.clipr.x), @floatToInt(u32, self.clipr.y), @floatToInt(u32, @ceil(self.clipr.w + self.clipr.x - @floor(self.clipr.x))), @floatToInt(u32, @ceil(self.clipr.h + self.clipr.y - @floor(self.clipr.y))));
 
     pass.drawIndexed(@intCast(u32, self.idx.items.len), 1, 0, 0, 0);
     pass.end();
