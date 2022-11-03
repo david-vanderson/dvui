@@ -7,3 +7,6 @@
 [submodule "libs/mach"]
 	path = libs/mach
 	url = https://github.com/hexops/mach
+[submodule "libs/zig-sqlite"]
+	path = libs/zig-sqlite
+	url = https://github.com/vrischmann/zig-sqlite
