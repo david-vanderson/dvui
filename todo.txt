@@ -7,9 +7,7 @@ mach-test: no tab key?
 
 linux mach-test: pulling corner of GUI Demo window around lags
 
-clicking on podcast in middle from separate application (to focus it), leaves the mouse pointer in the wrong state (it thinks it's not on top of the floating window)
-
-try splitting into 2 files - widgets.zig and gui.zig (which re-exports widgets)
+try splitting into 2 files - gui.zig (has widgets and re-exports core stuff) and gui-core.zig (has stuff widgets depend on)
 
 zig build how do I not build mach stuff when only doing sdl stuff?
 
