@@ -162,8 +162,8 @@ pub const Options = struct {
     // null is normal, meaning parent picks a rect for the child widget.  If
     // non-null, child widget is choosing its own place, meaning its not being
     // placed normally.  w and h will still be expanded if expand is set.
-    // Example is ScrollAreaUnmanaged, where user code chooses widget placement.
-    // If non-null, should not call rectFor or minSizeForChild.
+    // Example is ScrollArea, where user code chooses widget placement. If
+    // non-null, should not call rectFor or minSizeForChild.
     rect: ?Rect = null,
 
     // default is .none
@@ -2802,13 +2802,17 @@ pub const FloatingWindowWidget = struct {
             if (self.autoPosSize.autosize) {
                 self.wd.rect.w = ms.w;
                 self.wd.rect.h = ms.h;
+                //std.debug.print("autosize to {}\n", .{self.wd.rect});
             }
 
             if (self.autoPosSize.autopos) {
                 // only position ourselves once
                 self.autoPosSize.autopos = false;
-                self.wd.rect.x = windowRect().w / 2 - self.wd.rect.w / 2;
-                self.wd.rect.y = windowRect().h / 2 - self.wd.rect.h / 2;
+
+                // make sure that we stay on the screen
+                self.wd.rect.x = math.max(0, windowRect().w / 2 - self.wd.rect.w / 2);
+                self.wd.rect.y = math.max(0, windowRect().h / 2 - self.wd.rect.h / 2);
+                //std.debug.print("autopos to {}\n", .{self.wd.rect});
             }
         } else {
             // first frame we are being shown
@@ -3370,6 +3374,10 @@ pub const PanedWidget = struct {
     }
 };
 
+// TextLayout doesn't have a natural width.  If it's min_size.w was 0, then it
+// would calculate a huge min_size.h assuming only 1 character per line can
+// fit.  To prevent starting in weird situations, TextLayout defaults to having
+// a min_size.w so at least you can see what is going on.
 pub fn textLayout(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *TextLayoutWidget {
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(TextLayoutWidget) catch unreachable;
@@ -3385,6 +3393,7 @@ pub const TextLayoutWidget = struct {
         .padding = Rect.all(4),
         .background = true,
         .color_style = .content,
+        .min_size = .{ .w = 25 },
     };
 
     wd: WidgetData = undefined,
@@ -3400,17 +3409,24 @@ pub const TextLayoutWidget = struct {
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
         debug("{x} TextLayout {}", .{ self.wd.id, self.wd.rect });
-        self.wd.borderAndBackground();
 
         const rs = self.wd.contentRectScale();
+
+        if (!rs.r.empty()) {
+            self.wd.borderAndBackground();
+        }
+
         self.prevClip = clip(rs.r);
         self.insert_pt = self.wd.contentRect().topleft();
     }
 
+    pub fn format(self: *Self, comptime fmt: []const u8, args: anytype, opts: Options) void {
+        var cw = current_window orelse unreachable;
+        const l = std.fmt.allocPrint(cw.arena, fmt, args) catch unreachable;
+        self.addText(l, opts);
+    }
+
     pub fn addText(self: *Self, text: []const u8, opts: Options) void {
-        if (self.wd.contentRectScale().r.empty()) {
-            return;
-        }
         const options = self.wd.options.override(opts);
         var iter = std.mem.split(u8, text, "\n");
         var first: bool = true;
@@ -3428,19 +3444,18 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn addTextNoNewlines(self: *Self, text: []const u8, opts: Options) void {
-        if (self.wd.contentRectScale().r.empty()) {
-            return;
-        }
         const options = self.wd.options.override(opts);
         const msize = options.font().textSize("m");
         const lineskip = options.font().lineSkip();
         var txt = text;
 
+        const rect = self.wd.contentRect();
+        const container_width = if (self.screenRectScale(rect).r.empty()) self.wd.min_size.w else rect.w;
+
         while (txt.len > 0) {
-            const rect = self.wd.contentRect();
             var linestart = rect.x;
-            var linewidth = rect.w;
-            var width = rect.w - self.insert_pt.x;
+            var linewidth = container_width;
+            var width = linewidth - self.insert_pt.x;
             for (self.corners) |corner| {
                 if (corner) |cor| {
                     if (math.max(cor.y, self.insert_pt.y) < math.min(cor.y + cor.h, self.insert_pt.y + lineskip)) {
