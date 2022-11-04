@@ -3541,7 +3541,10 @@ pub const TextLayoutWidget = struct {
             .upright => 1,
             .downleft => 2,
             .downright => 3,
-            else => unreachable,
+            else => blk: {
+                std.debug.print("adding child to TextLayout with unsupported gravity (must be .upleft, .upright, .downleft, or .downright)\n", .{});
+                break :blk 0;
+            },
         };
         self.corners[i] = ret;
         return ret;
