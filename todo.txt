@@ -99,6 +99,9 @@ debugging:
 
 textlayout:
 - minSizeForChild should recalc based on the four corners
+- height can be unstable with stuff in downleft or downright
+  - 1st frame the icon causes text to flow onto additional line
+  - 2nd frame the icon moves lower so the text doesn't go as far, repeat
 
 split gravity into 2 0-1 values plus a text baseline?
 

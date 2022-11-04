@@ -2,8 +2,96 @@ const std = @import("std");
 const gui = @import("src/gui.zig");
 const Backend = @import("src/SDLBackend.zig");
 
+const sqlite = @import("sqlite");
+
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
+var arena: std.mem.Allocator = undefined;
+
+const db_name = "podcast-db.sqlite3";
+var g_db: ?sqlite.Db = null;
+
+var g_fatal_error: ?[]u8 = null;
+
+const Episode = struct {
+    title: []const u8,
+};
+
+fn db_row(comptime query: []const u8, comptime return_type: type, values: anytype) !?return_type {
+    if (g_db) |*db| {
+        var stmt = db.prepare(query) catch {
+            g_fatal_error = try std.fmt.allocPrint(gpa, "DB Error:\n\n{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), query });
+            return error.DB_ERROR;
+        };
+        defer stmt.deinit();
+
+        const row = stmt.oneAlloc(return_type, arena, .{}, values) catch {
+            g_fatal_error = try std.fmt.allocPrint(gpa, "DB Error:\n\n{}\n\nexecuting statement:\n\n{s}", .{ db.getDetailedError(), query });
+            return error.DB_ERROR;
+        };
+
+        return row;
+    }
+
+    return null;
+}
+
+fn db_init() !void {
+    g_db = sqlite.Db.init(.{
+        .mode = sqlite.Db.Mode{ .File = db_name },
+        .open_flags = .{
+            .write = true,
+            .create = true,
+        },
+    }) catch |err| {
+        g_fatal_error = try std.fmt.allocPrint(gpa, "Can't open/create db:\n{s}\n{}", .{ db_name, err });
+        return error.DB_ERROR;
+    };
+
+    _ = try db_row("CREATE TABLE IF NOT EXISTS 'schema' (version INTEGER)", u8, .{});
+
+    if (try db_row("SELECT version FROM schema", u32, .{})) |version| {
+        if (version != 1) {
+            g_fatal_error = try std.fmt.allocPrint(gpa, "{s}\n\nbad schema version: {d}", .{ db_name, version });
+            return error.DB_ERROR;
+        }
+    } else {
+        // new database
+        _ = try db_row("INSERT INTO schema (version) VALUES (1)", u8, .{});
+        _ = try db_row("CREATE TABLE podcast (url TEXT, error TEXT, title TEXT, description TEXT, copyright TEXT, pubDate INTEGER, lastBuildDate TEXT, link TEXT, image_url TEXT, speed REAL)", u8, .{});
+        _ = try db_row("CREATE TABLE episode (podcast_id INTEGER, visible INTEGER DEFAULT 1, guid TEXT, title TEXT, description TEXT, pubDate INTEGER, enclosure_url TEXT, position INTEGER, duration INTEGER)", u8, .{});
+        _ = try db_row("CREATE TABLE player (episode_id INTEGER)", u8, .{});
+        _ = try db_row("INSERT INTO player (episode_id) values (0)", u8, .{});
+    }
+
+    _ = try db_row("UPDATE podcast SET error=NULL", u8, .{});
+}
+
+fn main_gui() !void {
+    //var float = gui.floatingWindow(@src(), 0, false, null, null, .{});
+    //defer float.deinit();
+
+    var window_box = gui.box(@src(), 0, .vertical, .{ .expand = .both, .color_style = .window, .background = true });
+    defer window_box.deinit();
+
+    var b = gui.box(@src(), 0, .vertical, .{ .expand = .both, .background = false });
+    defer b.deinit();
+
+    if (g_db) |db| {
+        _ = db;
+        var paned = gui.paned(@src(), 0, .horizontal, 400, .{ .expand = .both, .background = false });
+        const collapsed = paned.collapsed();
+
+        try podcastSide(paned);
+        episodeSide(paned);
+
+        paned.deinit();
+
+        if (collapsed) {
+            try player();
+        }
+    }
+}
 
 pub fn main() !void {
     var backend = try Backend.init(360, 600);
@@ -12,10 +100,15 @@ pub fn main() !void {
     var win = gui.Window.init(gpa, backend.guiBackend());
     defer win.deinit();
 
+    db_init() catch |err| switch (err) {
+        error.DB_ERROR => {},
+        else => return err,
+    };
+
     main_loop: while (true) {
         var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         defer arena_allocator.deinit();
-        const arena = arena_allocator.allocator();
+        arena = arena_allocator.allocator();
 
         var nstime = win.beginWait(backend.hasEvent());
         win.begin(arena, nstime);
@@ -25,36 +118,31 @@ pub fn main() !void {
 
         backend.clear();
 
-        {
-            var float = gui.floatingWindow(@src(), 0, false, null, null, .{});
-            defer float.deinit();
+        //_ = gui.examples.demo();
 
-            //var window_box = gui.box(@src(), 0, .vertical, .{.expand = .both, .color_style = .window, .background = true});
-            //defer window_box.deinit();
+        if (g_fatal_error) |msg| {
+            var dialog = gui.floatingWindow(@src(), 0, true, null, &show_dialog, .{});
+            defer dialog.deinit();
 
-            var b = gui.box(@src(), 0, .vertical, .{ .expand = .both, .background = false });
-            defer b.deinit();
+            gui.labelNoFormat(@src(), 0, "Fatal Error", .{ .gravity = .center });
 
-            var paned = gui.paned(@src(), 0, .horizontal, 400, .{ .expand = .both, .background = false });
-            const collapsed = paned.collapsed();
+            var tl = gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 } });
+            tl.addText(msg, .{});
+            tl.deinit();
 
-            podcastSide(paned);
-            episodeSide(paned);
-
-            paned.deinit();
-
-            if (collapsed) {
-                player();
+            if (gui.button(@src(), 0, "Quit", .{ .gravity = .center })) {
+                break :main_loop;
             }
+        } else {
+            main_gui() catch |err| switch (err) {
+                error.DB_ERROR => {},
+                else => return err,
+            };
         }
 
         const end_micros = win.end();
 
-        if (win.cursorRequestedFloating()) |cursor| {
-            backend.setCursor(cursor);
-        } else {
-            backend.setCursor(.bad);
-        }
+        backend.setCursor(win.cursorRequested());
 
         backend.renderPresent();
 
@@ -66,7 +154,7 @@ pub fn main() !void {
 
 var show_dialog: bool = false;
 
-fn podcastSide(paned: *gui.PanedWidget) void {
+fn podcastSide(paned: *gui.PanedWidget) !void {
     var b = gui.box(@src(), 0, .vertical, .{ .expand = .both });
     defer b.deinit();
 
@@ -167,7 +255,7 @@ fn podcastSide(paned: *gui.PanedWidget) void {
     scroll.deinit();
 
     if (!paned.collapsed()) {
-        player();
+        try player();
     }
 }
 
@@ -208,7 +296,7 @@ fn episodeSide(paned: *gui.PanedWidget) void {
     }
 }
 
-fn player() void {
+fn player() !void {
     const oo = gui.Options{
         .expand = .horizontal,
         .color_style = .content,
@@ -217,7 +305,14 @@ fn player() void {
     var box2 = gui.box(@src(), 0, .vertical, oo.override(.{ .background = true }));
     defer box2.deinit();
 
-    gui.label(@src(), 0, "Title of the playing episode", .{}, oo.override(.{
+    var episode = Episode{ .title = "Episode Title" };
+
+    const episode_id = try db_row("SELECT episode_id FROM player", i32, .{});
+    if (episode_id) |id| {
+        episode = try db_row("SELECT title FROM episode WHERE rowid = ?", Episode, .{id}) orelse episode;
+    }
+
+    gui.label(@src(), 0, "{s}", .{episode.title}, oo.override(.{
         .margin = gui.Rect{ .x = 8, .y = 4, .w = 8, .h = 4 },
         .font_style = .heading,
     }));
