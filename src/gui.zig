@@ -1206,10 +1206,10 @@ pub fn floatingWindowClosing(id: u32) void {
         if (fd.id == id) {
             _ = cw.floating_data.pop();
         } else {
-            debug("floatingWindowClosing: last added floating window id {x} doesn't match {x}\n", .{ fd.id, id });
+            std.debug.print("floatingWindowClosing: last added floating window id {x} doesn't match {x}\n", .{ fd.id, id });
         }
     } else {
-        debug("floatingWindowClosing: no floating windows\n", .{});
+        std.debug.print("floatingWindowClosing: no floating windows\n", .{});
     }
 }
 
@@ -1446,6 +1446,7 @@ const DataOffset = struct {
 
 pub fn dataSet(id: u32, key: []const u8, data: anytype) void {
     var cw = current_window orelse unreachable;
+    const hash = hashIdKey(id, key);
     var bytes: []const u8 = undefined;
     const dt = @typeInfo(@TypeOf(data));
     if (dt == .Pointer and dt.Pointer.size == .Slice) {
@@ -1453,19 +1454,36 @@ pub fn dataSet(id: u32, key: []const u8, data: anytype) void {
     } else {
         bytes = std.mem.asBytes(&data);
     }
-    const begin = @intCast(u32, cw.data.items.len);
-    cw.data.appendSlice(bytes) catch unreachable;
-    const end = @intCast(u32, cw.data.items.len);
-    cw.data_offset.put(hashIdKey(id, key), DataOffset{ .begin = begin, .end = end }) catch unreachable;
+    {
+        // save data for next frame
+        const begin = @intCast(u32, cw.data.items.len);
+        cw.data.appendSlice(bytes) catch unreachable;
+        const end = @intCast(u32, cw.data.items.len);
+        cw.data_offset.put(hash, DataOffset{ .begin = begin, .end = end }) catch unreachable;
+    }
+
+    if (!cw.data_offset_prev.contains(hash)) {
+        // also save data for this frame, necessary for dialogs where we store
+        // data and then access it at the end of the frame
+        const begin = @intCast(u32, cw.data_prev.items.len);
+        cw.data_prev.appendSlice(bytes) catch unreachable;
+        const end = @intCast(u32, cw.data_prev.items.len);
+        cw.data_offset_prev.put(hash, DataOffset{ .begin = begin, .end = end }) catch unreachable;
+    }
 }
 
 pub fn dataGet(id: u32, key: []const u8, comptime T: type) ?T {
     var cw = current_window orelse unreachable;
     const offset = cw.data_offset_prev.get(hashIdKey(id, key));
     if (offset) |o| {
-        var bytes: [@sizeOf(T)]u8 = undefined;
-        std.mem.copy(u8, &bytes, cw.data_prev.items[o.begin..o.end]);
-        return std.mem.bytesAsValue(T, &bytes).*;
+        const dt = @typeInfo(T);
+        if (dt == .Pointer and dt.Pointer.size == .Slice) {
+            return cw.data_prev.items[o.begin..o.end];
+        } else {
+            var bytes: [@sizeOf(T)]u8 = undefined;
+            std.mem.copy(u8, &bytes, cw.data_prev.items[o.begin..o.end]);
+            return std.mem.bytesAsValue(T, &bytes).*;
+        }
     } else {
         return null;
     }
@@ -1834,6 +1852,7 @@ pub const Window = struct {
     tab_index: std.ArrayList(TabIndex),
     font_cache: std.AutoHashMap(u32, FontCacheEntry),
     icon_cache: std.AutoHashMap(u32, IconCacheEntry),
+    dialogs: std.ArrayList(DialogEntry),
 
     ft2lib: freetype.Library = undefined,
 
@@ -1871,6 +1890,7 @@ pub const Window = struct {
             .tab_index = std.ArrayList(TabIndex).init(gpa),
             .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
             .icon_cache = std.AutoHashMap(u32, IconCacheEntry).init(gpa),
+            .dialogs = std.ArrayList(DialogEntry).init(gpa),
             .wd = WidgetData{ .id = fnv32.final() },
             .backend = backend,
         };
@@ -1896,6 +1916,7 @@ pub const Window = struct {
         self.tab_index.deinit();
         self.font_cache.deinit();
         self.icon_cache.deinit();
+        self.dialogs.deinit();
     }
 
     pub fn addEventKey(self: *Self, keysym: keys.Key, mod: keys.Mod, state: KeyEvent.Kind) bool {
@@ -2376,7 +2397,21 @@ pub const Window = struct {
         queue.clearAndFree();
     }
 
+    fn dialogsShow(self: *Self) void {
+        var i: usize = 0;
+        while (i < self.dialogs.items.len) {
+            const dialog = self.dialogs.items[i];
+            if (dialog.display(dialog.id)) {
+                _ = self.dialogs.orderedRemove(i);
+            } else {
+                i += 1;
+            }
+        }
+    }
+
     pub fn end(self: *Self) ?u32 {
+        self.dialogsShow();
+
         const oldclip = clipGet();
         self.renderCommands(&self.render_cmds_after);
         for (self.floating_data.items) |*fw| {
@@ -3057,6 +3092,94 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) vo
     over.deinit();
 
     gui.separator(@src(), 0, .{ .gravity = .down, .expand = .horizontal });
+}
+
+pub const DialogDisplay = *const fn (u32) bool;
+pub const DialogCallAfter = *const fn (u32, DialogResponse) void;
+pub const DialogEntry = struct {
+    id: u32,
+    display: DialogDisplay,
+};
+pub const DialogResponse = enum(u8) {
+    CLOSED = 0,
+    OK = 1,
+};
+
+pub fn dialogCustom(src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplay) u32 {
+    const cw = current_window orelse unreachable;
+    const parent = parentGet();
+    const id = parent.extendID(src, id_extra);
+    for (cw.dialogs.items) |*d| {
+        if (d.id == id) {
+            std.debug.print("found dialog {x}\n", .{id});
+            d.display = display;
+            break;
+        }
+    } else {
+        std.debug.print("appending dialog {x}\n", .{id});
+        cw.dialogs.append(DialogEntry{ .id = id, .display = display }) catch unreachable;
+    }
+
+    return id;
+}
+
+pub fn dialogOk(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) void {
+    const id = gui.dialogCustom(src, id_extra, dialogOkDisplay);
+    gui.dataSet(id, "_modal", modal);
+    gui.dataSet(id, "_title", title);
+    gui.dataSet(id, "_msg", msg);
+    if (callafter) |ca| {
+        gui.dataSet(id, "_callafter", ca);
+    }
+}
+
+pub fn dialogOkDisplay(id: u32) bool {
+    const modal = gui.dataGet(id, "_modal", bool) orelse {
+        std.debug.print("Error: lost data for dialog {x}\n", .{id});
+        return true;
+    };
+    gui.dataSet(id, "_modal", modal);
+
+    const title = gui.dataGet(id, "_title", []const u8) orelse {
+        std.debug.print("Error: lost data for dialog {x}\n", .{id});
+        return true;
+    };
+    gui.dataSet(id, "_title", title);
+
+    const message = gui.dataGet(id, "_msg", []const u8) orelse {
+        std.debug.print("Error: lost data for dialog {x}\n", .{id});
+        return true;
+    };
+    gui.dataSet(id, "_msg", message);
+
+    const callafter = gui.dataGet(id, "_callafter", DialogCallAfter);
+    if (callafter) |ca| {
+        gui.dataSet(id, "_callafter", ca);
+    }
+
+    var win = gui.floatingWindow(@src(), id, modal, null, null, .{ .min_size = .{ .w = 250 } });
+    defer win.deinit();
+
+    var header_openflag = true;
+    gui.windowHeader(title, "", &header_openflag);
+    if (!header_openflag) {
+        win.close();
+        if (callafter) |ca| {
+            ca(id, gui.DialogResponse.CLOSED);
+        }
+        return true;
+    }
+
+    gui.labelNoFormat(@src(), 0, message, .{});
+    if (gui.button(@src(), 0, "Ok", .{ .gravity = .center })) {
+        win.close();
+        if (callafter) |ca| {
+            ca(id, gui.DialogResponse.OK);
+        }
+        return true;
+    }
+
+    return false;
 }
 
 pub var expander_defaults: Options = .{
@@ -4504,6 +4627,33 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label_str
     }
 
     labelNoFormat(@src(), 0, label_str, labelopts);
+
+    mi.deinit();
+
+    return ret;
+}
+
+pub fn menuItemIcon(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) ?Rect {
+    const options = menuItemLabel_defaults.override(opts);
+    var mi = menuItem(src, id_extra, submenu, options);
+
+    var iconopts = options.plain();
+
+    var ret: ?Rect = null;
+    if (mi.activeRect()) |r| {
+        ret = r;
+    }
+
+    var focused: bool = false;
+    if (mi.wd.id == focusedWidgetId()) {
+        focused = true;
+    }
+
+    if (mi.show_active) {
+        iconopts = iconopts.override(.{ .color_style = .accent });
+    }
+
+    icon(@src(), 0, height, name, tvg_bytes, iconopts);
 
     mi.deinit();
 
@@ -6231,6 +6381,10 @@ pub const examples = struct {
                 menus();
             }
 
+            if (gui.expander(@src(), 0, "Dialogs", .{ .expand = .horizontal })) {
+                dialogs();
+            }
+
             if (gui.expander(@src(), 0, "Animations", .{ .expand = .horizontal })) {
                 animations();
             }
@@ -6262,7 +6416,7 @@ pub const examples = struct {
             gui.checkbox(@src(), 0, &snap_to_pixels, "Snap to Pixels", .{});
 
             if (show_dialog) {
-                dialog();
+                dialogDirect();
             }
 
             if (IconBrowser.show) {
@@ -6407,6 +6561,33 @@ pub const examples = struct {
         gui.label(@src(), 0, "Right click for a context menu", .{}, .{});
     }
 
+    pub fn dialogs() void {
+        var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
+        defer b.deinit();
+
+        {
+            var hbox = gui.box(@src(), 0, .horizontal, .{});
+            defer hbox.deinit();
+
+            if (gui.button(@src(), 0, "Ok Dialog", .{})) {
+                gui.dialogOk(@src(), 0, false, "Ok Dialog", "This is a non modal dialog with no callafter", null);
+            }
+
+            const dialogsFollowup = struct {
+                fn callafter(id: u32, response: gui.DialogResponse) void {
+                    _ = id;
+                    var buf: [100]u8 = undefined;
+                    const text = std.fmt.bufPrint(&buf, "You clicked {s}", .{@tagName(response)}) catch unreachable;
+                    gui.dialogOk(@src(), 0, true, "Ok Followup Response", text, null);
+                }
+            };
+
+            if (gui.button(@src(), 0, "Ok Followup", .{})) {
+                gui.dialogOk(@src(), 0, true, "Ok Followup", "This is a modal dialog with modal followup", dialogsFollowup.callafter);
+            }
+        }
+    }
+
     pub fn submenus() void {
         if (gui.menuItemLabel(@src(), 0, "Submenu...", true, .{})) |r| {
             var menu_rect = r;
@@ -6450,13 +6631,13 @@ pub const examples = struct {
         }
     }
 
-    pub fn dialog() void {
+    pub fn dialogDirect() void {
         var dialog_win = gui.floatingWindow(@src(), 0, true, null, &show_dialog, .{ .color_style = .window });
         defer dialog_win.deinit();
 
         gui.windowHeader("Modal Dialog", "", &show_dialog);
         gui.label(@src(), 0, "Asking a Question", .{}, .{ .font_style = .title_4 });
-        gui.label(@src(), 0, "Here's some more information", .{}, .{});
+        gui.label(@src(), 0, "This dialog is being shown in a direct style, controlled entirely in user code.", .{}, .{});
 
         {
             var hbox = gui.box(@src(), 0, .horizontal, .{ .gravity = .right });
