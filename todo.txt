@@ -1,7 +1,11 @@
 
 -Dtarget=wasm32-freestanding-none
 
-scroll managed vs. not should be via optionals passed (ypos and ymax)
+demo: menu dialog gives:
+floatingWindowClosing: last added floating window id 6908d43e doesn't match af8334c8
+
+dialogs:
+- default action
 
 mach-test: no tab key?
 
@@ -10,6 +14,8 @@ linux mach-test: pulling corner of GUI Demo window around lags
 try splitting into 2 files - gui.zig (has widgets and re-exports core stuff) and gui-core.zig (has stuff widgets depend on)
 
 zig build how do I not build mach stuff when only doing sdl stuff?
+
+scroll managed vs. not should be via optionals passed (ypos and ymax)
 
 do all of the suggestions from Mike
 - screenshots in README
