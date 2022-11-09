@@ -11,22 +11,32 @@ var arena: std.mem.Allocator = undefined;
 const db_name = "podcast-db.sqlite3";
 var g_db: ?sqlite.Db = null;
 
-var g_fatal_error: ?[]u8 = null;
+var g_quit = false;
 
 const Episode = struct {
     title: []const u8,
 };
 
+fn db_error_callafter(id: u32, response: gui.DialogResponse) void {
+    _ = id;
+    _ = response;
+    g_quit = true;
+}
+
+fn db_error(comptime fmt: []const u8, args: anytype) !void {
+    gui.dialogOk(@src(), 0, true, "Error", try std.fmt.allocPrint(gpa, fmt, args), db_error_callafter);
+}
+
 fn db_row(comptime query: []const u8, comptime return_type: type, values: anytype) !?return_type {
     if (g_db) |*db| {
         var stmt = db.prepare(query) catch {
-            g_fatal_error = try std.fmt.allocPrint(gpa, "DB Error:\n\n{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), query });
+            gui.dialogOk(@src(), 0, true, "Fatal Error", try std.fmt.allocPrint(gpa, "DB Error:\n\n{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), query }), null);
             return error.DB_ERROR;
         };
         defer stmt.deinit();
 
         const row = stmt.oneAlloc(return_type, arena, .{}, values) catch {
-            g_fatal_error = try std.fmt.allocPrint(gpa, "DB Error:\n\n{}\n\nexecuting statement:\n\n{s}", .{ db.getDetailedError(), query });
+            gui.dialogOk(@src(), 0, true, "Fatal Error", try std.fmt.allocPrint(gpa, "DB Error:\n\n{}\n\nexecuting statement:\n\n{s}", .{ db.getDetailedError(), query }), null);
             return error.DB_ERROR;
         };
 
@@ -44,7 +54,7 @@ fn db_init() !void {
             .create = true,
         },
     }) catch |err| {
-        g_fatal_error = try std.fmt.allocPrint(gpa, "Can't open/create db:\n{s}\n{}", .{ db_name, err });
+        gui.dialogOk(@src(), 0, true, "Fatal Error", try std.fmt.allocPrint(gpa, "Can't open/create db:\n{s}\n{}", .{ db_name, err }), null);
         return error.DB_ERROR;
     };
 
@@ -52,7 +62,7 @@ fn db_init() !void {
 
     if (try db_row("SELECT version FROM schema", u32, .{})) |version| {
         if (version != 1) {
-            g_fatal_error = try std.fmt.allocPrint(gpa, "{s}\n\nbad schema version: {d}", .{ db_name, version });
+            gui.dialogOk(@src(), 0, true, "Fatal Error", try std.fmt.allocPrint(gpa, "{s}\n\nbad schema version: {d}", .{ db_name, version }), null);
             return error.DB_ERROR;
         }
     } else {
@@ -115,30 +125,16 @@ pub fn main() !void {
 
         const quit = backend.addAllEvents(&win);
         if (quit) break :main_loop;
+        if (g_quit) break :main_loop;
 
         backend.clear();
 
         //_ = gui.examples.demo();
 
-        if (g_fatal_error) |msg| {
-            var dialog = gui.floatingWindow(@src(), 0, true, null, &show_dialog, .{});
-            defer dialog.deinit();
-
-            gui.labelNoFormat(@src(), 0, "Fatal Error", .{ .gravity = .center });
-
-            var tl = gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 } });
-            tl.addText(msg, .{});
-            tl.deinit();
-
-            if (gui.button(@src(), 0, "Quit", .{ .gravity = .center })) {
-                break :main_loop;
-            }
-        } else {
-            main_gui() catch |err| switch (err) {
-                error.DB_ERROR => {},
-                else => return err,
-            };
-        }
+        main_gui() catch |err| switch (err) {
+            error.DB_ERROR => {},
+            else => return err,
+        };
 
         const end_micros = win.end();
 
@@ -168,7 +164,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
 
             gui.spacer(@src(), 0, .{ .expand = .horizontal });
 
-            if (gui.menuItemLabel(@src(), 0, "Hello", true, .{})) |r| {
+            if (gui.menuItemIcon(@src(), 0, true, gui.themeGet().font_heading.lineSkip(), "toolbar dots", gui.icons.papirus.actions.xapp_prefs_toolbar_symbolic, .{})) |r| {
                 var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                 defer fw.deinit();
                 if (gui.menuItemLabel(@src(), 0, "Add RSS", false, .{})) |rr| {
@@ -189,21 +185,26 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
         gui.labelNoFormat(@src(), 0, "Add RSS Feed", .{ .gravity = .center });
 
         const TextEntryText = struct {
-            //var text = array(u8, 100, "abcdefghijklmnopqrstuvwxyz");
-            var text1 = array(u8, 100, "");
-            fn array(comptime T: type, comptime size: usize, items: ?[]const T) [size]T {
-                var output = std.mem.zeroes([size]T);
-                if (items) |slice| std.mem.copy(T, &output, slice);
-                return output;
-            }
+            var text = [_]u8{0} ** 100;
         };
 
-        gui.textEntry(@src(), 0, 26.0, &TextEntryText.text1, .{ .gravity = .center });
+        gui.textEntry(@src(), 0, 26.0, &TextEntryText.text, .{ .gravity = .center });
 
         var box2 = gui.box(@src(), 0, .horizontal, .{ .gravity = .right });
         defer box2.deinit();
         if (gui.button(@src(), 0, "Ok", .{})) {
             dialog.close();
+            const url = std.mem.trim(u8, &TextEntryText.text, " \x00");
+            const row = try db_row("SELECT rowid FROM podcast WHERE url = ?", i32, .{url});
+            if (row) |_| {
+                gui.dialogOk(@src(), 0, true, "Note", try std.fmt.allocPrint(arena, "url already in db:\n\n{s}", .{url}), null);
+            } else {
+                _ = try db_row("INSERT INTO podcast (url) VALUES (?)", i32, .{url});
+                if (g_db) |*db| {
+                    const rowid = db.getLastInsertRowID();
+                    _ = rowid;
+                }
+            }
         }
         if (gui.button(@src(), 0, "Cancel", .{})) {
             dialog.close();

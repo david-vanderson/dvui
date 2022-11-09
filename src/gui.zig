@@ -3122,12 +3122,10 @@ pub fn dialogCustom(src: std.builtin.SourceLocation, id_extra: usize, display: D
     const id = parent.extendID(src, id_extra);
     for (cw.dialogs.items) |*d| {
         if (d.id == id) {
-            std.debug.print("found dialog {x}\n", .{id});
             d.display = display;
             break;
         }
     } else {
-        std.debug.print("appending dialog {x}\n", .{id});
         cw.dialogs.append(DialogEntry{ .id = id, .display = display }) catch unreachable;
     }
 
@@ -3168,7 +3166,7 @@ pub fn dialogOkDisplay(id: u32) bool {
         gui.dataSet(id, "_callafter", ca);
     }
 
-    var win = gui.floatingWindow(@src(), id, modal, null, null, .{ .min_size = .{ .w = 250 } });
+    var win = gui.floatingWindow(@src(), id, modal, null, null, .{});
     defer win.deinit();
 
     var header_openflag = true;
@@ -3181,8 +3179,11 @@ pub fn dialogOkDisplay(id: u32) bool {
         return true;
     }
 
-    gui.labelNoFormat(@src(), 0, message, .{});
-    if (gui.button(@src(), 0, "Ok", .{ .gravity = .center })) {
+    var tl = gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 } });
+    tl.addText(message, .{});
+    tl.deinit();
+
+    if (gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
         win.close();
         if (callafter) |ca| {
             ca(id, gui.DialogResponse.OK);
