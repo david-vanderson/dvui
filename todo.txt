@@ -1,9 +1,6 @@
 
 -Dtarget=wasm32-freestanding-none
 
-demo: menu dialog gives:
-floatingWindowClosing: last added floating window id 6908d43e doesn't match af8334c8
-
 dialogs:
 - default action
 
