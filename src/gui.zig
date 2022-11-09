@@ -2652,9 +2652,15 @@ pub const PopupWidget = struct {
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
         switch (e.evt) {
-            .close_popup => {
+            .close_popup => |cp| {
                 // close and continue bubbling
-                self.close();
+                if (cp.intentional) {
+                    // if we call close() when not intentional (like from losing
+                    // focus because a dialog), then calling floatingWindowClosing
+                    // will show a warning because we wouldn't be the last floating
+                    // window on the stack
+                    self.close();
+                }
             },
             else => {},
         }
@@ -6545,6 +6551,7 @@ pub const examples = struct {
                 gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{ .min_size = .{ .w = 100, .h = 0 } });
 
                 if (gui.menuItemLabel(@src(), 0, "Dialog", false, .{}) != null) {
+                    gui.menuGet().?.close();
                     show_dialog = true;
                 }
             }
@@ -6559,6 +6566,26 @@ pub const examples = struct {
         }
 
         gui.label(@src(), 0, "Right click for a context menu", .{}, .{});
+    }
+
+    pub fn submenus() void {
+        if (gui.menuItemLabel(@src(), 0, "Submenu...", true, .{})) |r| {
+            var menu_rect = r;
+            menu_rect.x += menu_rect.w;
+            var fw2 = gui.popup(@src(), 0, menu_rect, .{});
+            defer fw2.deinit();
+
+            submenus();
+
+            if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
+                gui.menuGet().?.close();
+            }
+
+            if (gui.menuItemLabel(@src(), 0, "Dialog", false, .{}) != null) {
+                gui.menuGet().?.close();
+                show_dialog = true;
+            }
+        }
     }
 
     pub fn dialogs() void {
@@ -6584,25 +6611,6 @@ pub const examples = struct {
 
             if (gui.button(@src(), 0, "Ok Followup", .{})) {
                 gui.dialogOk(@src(), 0, true, "Ok Followup", "This is a modal dialog with modal followup", dialogsFollowup.callafter);
-            }
-        }
-    }
-
-    pub fn submenus() void {
-        if (gui.menuItemLabel(@src(), 0, "Submenu...", true, .{})) |r| {
-            var menu_rect = r;
-            menu_rect.x += menu_rect.w;
-            var fw2 = gui.popup(@src(), 0, menu_rect, .{});
-            defer fw2.deinit();
-
-            submenus();
-
-            if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
-                gui.menuGet().?.close();
-            }
-
-            if (gui.menuItemLabel(@src(), 0, "Dialog", false, .{}) != null) {
-                show_dialog = true;
             }
         }
     }
