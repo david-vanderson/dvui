@@ -2661,13 +2661,13 @@ pub const PopupWidget = struct {
                     // window on the stack
                     self.close();
                 }
+
+                self.wd.parent.bubbleEvent(e);
             },
             else => {},
         }
 
-        if (!e.handled) {
-            self.wd.parent.bubbleEvent(e);
-        }
+        // otherwise popups don't bubble events
     }
 
     pub fn chainFocused(self: *Self, self_call: bool) bool {
@@ -2719,7 +2719,12 @@ pub const PopupWidget = struct {
                     var closeE = Event{ .evt = AnyEvent{ .close_popup = ClosePopupEvent{} } };
                     self.bubbleEvent(&closeE);
                 } else if (e.evt.key.state == .down and e.evt.key.keysym == .tab) {
-                    self.layout.bubbleEvent(e);
+                    e.handled = true;
+                    if (e.evt.key.mod.shift()) {
+                        tabIndexPrev(null);
+                    } else {
+                        tabIndexNext(null);
+                    }
                 } else if (e.evt.key.state == .down and e.evt.key.keysym == .up) {
                     e.handled = true;
                     tabIndexPrev(&iter);
@@ -4575,19 +4580,6 @@ pub const MenuWidget = struct {
             .close_popup => {
                 self.submenus_activated = false;
             },
-            .key => {
-                if (e.evt.key.state == .down and e.evt.key.keysym == .tab) {
-                    if (self.parentMenu == null) {
-                        e.handled = true;
-                        focusWindow(self.winId, null);
-                        if (e.evt.key.mod.shift()) {
-                            tabIndexPrev(null);
-                        } else {
-                            tabIndexNext(null);
-                        }
-                    }
-                }
-            },
             else => {},
         }
 
@@ -4776,6 +4768,7 @@ pub const MenuItemWidget = struct {
                     } else if (e.evt.mouse.state == .leftdown) {
                         e.handled = true;
                         if (self.submenu) {
+                            focusWindow(null, null); // focuses the window we are in
                             focusWidget(self.wd.id, &iter);
                             menuGet().?.submenus_activated = !menuGet().?.submenus_activated;
                         }
@@ -4788,12 +4781,13 @@ pub const MenuItemWidget = struct {
                         e.handled = true;
                         self.highlight = true;
 
+                        // We get a .position mouse event every frame.  If we
+                        // focus the menu item under the mouse even if it's not
+                        // moving then it breaks keyboard navigation.
                         if (mouseTotalMotion().nonZero()) {
                             // TODO don't do the rest here if the menu has an existing popup and the motion is towards the popup
-                            if (menuGet().?.submenus_activated) {
-                                focusWindow(null, null); // focuses the window we are in
-                                focusWidget(self.wd.id, null);
-                            }
+                            focusWindow(null, null); // focuses the window we are in
+                            focusWidget(self.wd.id, null);
                         }
                     }
                 },
