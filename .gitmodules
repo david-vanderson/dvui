@@ -10,3 +10,6 @@
 [submodule "libs/zig-sqlite"]
 	path = libs/zig-sqlite
 	url = https://github.com/vrischmann/zig-sqlite
+[submodule "libs/zig-libcurl"]
+	path = libs/zig-libcurl
+	url = https://github.com/mattnite/zig-libcurl.git
