@@ -2789,6 +2789,7 @@ pub const FloatingWindowWidget = struct {
     io_rect: ?*Rect = null,
     layout: BoxWidget = undefined,
     openflag: ?*bool = null,
+    first_frame: bool = false,
     prevClip: Rect = Rect{},
     autoPosSize: struct {
         autopos: bool,
@@ -2862,6 +2863,7 @@ pub const FloatingWindowWidget = struct {
             }
         } else {
             // first frame we are being shown
+            self.first_frame = true; // for user code
             focusWindow(self.wd.id, null);
 
             if (self.autoPosSize.autopos or self.autoPosSize.autosize) {

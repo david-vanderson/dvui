@@ -148,7 +148,7 @@ pub fn main() !void {
     }
 }
 
-var show_dialog: bool = false;
+var add_rss_dialog: bool = false;
 
 fn podcastSide(paned: *gui.PanedWidget) !void {
     var b = gui.box(@src(), 0, .vertical, .{ .expand = .both });
@@ -169,7 +169,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
                 defer fw.deinit();
                 if (gui.menuItemLabel(@src(), 0, "Add RSS", false, .{})) |rr| {
                     _ = rr;
-                    show_dialog = true;
+                    add_rss_dialog = true;
                     gui.menuGet().?.close();
                 }
             }
@@ -178,8 +178,8 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
         gui.label(@src(), 0, "fps {d}", .{@round(gui.FPS())}, .{});
     }
 
-    if (show_dialog) {
-        var dialog = gui.floatingWindow(@src(), 0, true, null, &show_dialog, .{});
+    if (add_rss_dialog) {
+        var dialog = gui.floatingWindow(@src(), 0, true, null, &add_rss_dialog, .{});
         defer dialog.deinit();
 
         gui.labelNoFormat(@src(), 0, "Add RSS Feed", .{ .gravity = .center });
@@ -188,7 +188,13 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
             var text = [_]u8{0} ** 100;
         };
 
-        gui.textEntry(@src(), 0, 26.0, &TextEntryText.text, .{ .gravity = .center });
+        var te = gui.TextEntryWidget.init(@src(), 0, 26.0, &TextEntryText.text, .{ .gravity = .center });
+        if (dialog.first_frame) {
+            std.mem.set(u8, &TextEntryText.text, 0);
+            gui.focusWidget(te.wd.id, null);
+        }
+        te.install();
+        te.deinit();
 
         var box2 = gui.box(@src(), 0, .horizontal, .{ .gravity = .right });
         defer box2.deinit();

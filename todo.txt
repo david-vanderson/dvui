@@ -1,9 +1,6 @@
 
 -Dtarget=wasm32-freestanding-none
 
-dialogs:
-- default action
-
 mach-test: no tab key?
 
 linux mach-test: pulling corner of GUI Demo window around lags
@@ -11,6 +8,11 @@ linux mach-test: pulling corner of GUI Demo window around lags
 try splitting into 2 files - gui.zig (has widgets and re-exports core stuff) and gui-core.zig (has stuff widgets depend on)
 
 zig build how do I not build mach stuff when only doing sdl stuff?
+
+how to handle user code needed to override events for a widget
+- widget.installNoEvents()?
+- Options addition?
+- widget then has a separate .process(event) that user code can call
 
 scroll managed vs. not should be via optionals passed (ypos and ymax)
 
