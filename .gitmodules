@@ -13,3 +13,9 @@
 [submodule "libs/zig-libcurl"]
 	path = libs/zig-libcurl
 	url = https://github.com/mattnite/zig-libcurl.git
+[submodule "libs/zig-libssh2"]
+	path = libs/zig-libssh2
+	url = https://github.com/mattnite/zig-libssh2.git
+[submodule "libs/zig-mbedtls"]
+	path = libs/zig-mbedtls
+	url = https://github.com/mattnite/zig-mbedtls.git
