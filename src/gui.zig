@@ -2502,6 +2502,7 @@ pub const Window = struct {
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
+        // os window doesn't size itself based on children
         _ = self;
         _ = s;
     }
@@ -2512,6 +2513,7 @@ pub const Window = struct {
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        // window does cleanup events, but not normal events
         _ = self;
         _ = iter;
         _ = e;
@@ -2539,6 +2541,7 @@ pub fn popup(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(PopupWidget) catch unreachable;
     ret.* = PopupWidget.init(src, id_extra, initialRect, opts);
+    ret.widget().processEvents(); // not strictly needed
     ret.install();
     return ret;
 }
@@ -2574,6 +2577,8 @@ pub const PopupWidget = struct {
     }
 
     pub fn install(self: *Self) void {
+        debug("{x} Popup {}", .{ self.wd.id, self.wd.rect });
+
         // Popup is outside normal widget flow, a menu can pop up outside the
         // current clip
         self.prevClip = clipGet();
@@ -2598,8 +2603,6 @@ pub const PopupWidget = struct {
             // here for clarity)
             cueFrame();
         }
-
-        debug("{x} Popup {}", .{ self.wd.id, self.wd.rect });
 
         // outside normal flow, so don't get rect from parent
         const rs = self.screenRectScale(self.wd.rect);
@@ -2640,6 +2643,7 @@ pub const PopupWidget = struct {
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        // popup does cleanup events, but not normal events
         _ = self;
         _ = iter;
         _ = e;
@@ -2764,7 +2768,7 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: b
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(FloatingWindowWidget) catch unreachable;
     ret.* = FloatingWindowWidget.init(src, id_extra, modal, rect, openflag, opts);
-    ret.install();
+    ret.install(); // events processed here for floating window
     return ret;
 }
 
@@ -2780,6 +2784,7 @@ pub const FloatingWindowWidget = struct {
     wd: WidgetData = undefined,
     options: Options = undefined,
     modal: bool = false,
+    captured: bool = false,
     prev_windowId: u32 = 0,
     io_rect: ?*Rect = null,
     layout: BoxWidget = undefined,
@@ -2805,20 +2810,9 @@ pub const FloatingWindowWidget = struct {
         self.wd = WidgetData.init(src, id_extra, self.options.plain().override(.{ .rect = .{} }));
 
         self.modal = modal;
+        self.captured = captureMouseMaintain(self.wd.id);
         self.io_rect = io_rect;
         self.openflag = openflag;
-
-        return self;
-    }
-
-    pub fn install(self: *Self) void {
-        // FloatingWindow is outside normal widget flow, a dialog needs to paint on
-        // top of the whole screen
-        self.prevClip = clipGet();
-        clipSet(windowRectPixels());
-
-        _ = parentSet(self.widget());
-        self.prev_windowId = windowCurrentSet(self.wd.id);
 
         if (self.io_rect) |ior| {
             // user is storing the rect for us across open/close
@@ -2872,12 +2866,19 @@ pub const FloatingWindowWidget = struct {
             }
         }
 
+        return self;
+    }
+
+    pub fn install(self: *Self) void {
         debug("{x} FloatingWindow {}", .{ self.wd.id, self.wd.rect });
 
-        const captured = captureMouseMaintain(self.wd.id);
+        // FloatingWindow is outside normal widget flow, a dialog needs to paint on
+        // top of the whole screen
+        self.prevClip = clipGet();
+        clipSet(windowRectPixels());
 
         // processEventsBefore can change self.wd.rect
-        self.processEventsBefore(captured);
+        self.processEventsBefore();
 
         // outside normal flow, so don't get rect from parent
         const rs = self.screenRectScale(self.wd.rect);
@@ -2891,13 +2892,16 @@ pub const FloatingWindowWidget = struct {
             pathFillConvex(col);
         }
 
+        _ = parentSet(self.widget());
+        self.prev_windowId = windowCurrentSet(self.wd.id);
+
         // we are using BoxWidget to do border/background but floating windows
         // don't have margin, so turn that off
         self.layout = BoxWidget.init(@src(), 0, .vertical, self.options.override(.{ .margin = .{}, .expand = .both }));
         self.layout.install();
     }
 
-    pub fn processEventsBefore(self: *Self, captured: bool) void {
+    pub fn processEventsBefore(self: *Self) void {
         // outside normal flow, so don't get rect from parent
         const rs = self.screenRectScale(self.wd.rect);
         var iter = EventIterator.init(self.wd.id, rs.r);
@@ -2916,7 +2920,7 @@ pub const FloatingWindowWidget = struct {
                     focusWindow(self.wd.id, &iter);
                 }
 
-                if (captured or corner) {
+                if (self.captured or corner) {
                     if (e.evt.mouse.state == .leftdown) {
                         // capture and start drag
                         captureMouse(self.wd.id);
@@ -3037,6 +3041,7 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        // floating window doesn't process events normally
         _ = self;
         _ = iter;
         _ = e;
@@ -3238,6 +3243,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
 pub fn paned(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) *PanedWidget {
     var ret = gui.currentWindow().arena.create(PanedWidget) catch unreachable;
     ret.* = PanedWidget.init(src, id_extra, dir, collapse_size, opts);
+    ret.widget().processEvents();
     ret.install();
     return ret;
 }
@@ -3257,6 +3263,8 @@ pub const PanedWidget = struct {
     split_ratio: f32 = undefined,
     dir: gui.Direction = undefined,
     collapse_size: f32 = 0,
+    captured: bool = false,
+    hovered: bool = false,
     data: Data = undefined,
     first_side_id: ?u32 = null,
     prevClip: Rect = Rect{},
@@ -3266,15 +3274,9 @@ pub const PanedWidget = struct {
         self.wd = WidgetData.init(src, id_extra, opts);
         self.dir = dir;
         self.collapse_size = collapse_size;
-        return self;
-    }
+        self.captured = captureMouseMaintain(self.wd.id);
 
-    pub fn install(self: *Self) void {
-        _ = parentSet(self.widget());
-        debug("{x} Paned {}", .{ self.wd.id, self.wd.rect });
-        self.wd.borderAndBackground();
         const rect = self.wd.contentRect();
-        self.prevClip = clip(self.wd.parent.screenRectScale(rect).r);
 
         if (gui.dataGet(self.wd.id, "_data", Data)) |d| {
             self.split_ratio = d.split_ratio;
@@ -3322,8 +3324,16 @@ pub const PanedWidget = struct {
             self.split_ratio = a.lerp();
         }
 
+        return self;
+    }
+
+    pub fn install(self: *Self) void {
+        debug("{x} Paned {}", .{ self.wd.id, self.wd.rect });
+        self.wd.borderAndBackground();
+        self.prevClip = clip(self.wd.contentRectScale().r);
+
         if (!self.collapsed()) {
-            if (self.processEvents()) {
+            if (self.hovered) {
                 const rs = self.wd.contentRectScale();
                 var r = rs.r;
                 const thick = handle_size * rs.s;
@@ -3347,6 +3357,8 @@ pub const PanedWidget = struct {
                 pathFillConvex(self.wd.options.color().transparent(0.5));
             }
         }
+
+        _ = parentSet(self.widget());
     }
 
     pub fn collapsed(self: *Self) bool {
@@ -3367,65 +3379,6 @@ pub const PanedWidget = struct {
 
     fn animate(self: *Self, end_val: f32) void {
         gui.animate(self.wd.id, "_split_ratio", gui.Animation{ .start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000 });
-    }
-
-    pub fn processEvents(self: *Self) bool {
-        var ret = false;
-        const rs = self.wd.contentRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r);
-        const captured = captureMouseMaintain(self.wd.id);
-        while (iter.next()) |e| {
-            if (e.evt == .mouse) {
-                var target: f32 = undefined;
-                var mouse: f32 = undefined;
-                var cursor: CursorKind = undefined;
-                switch (self.dir) {
-                    .horizontal => {
-                        target = rs.r.x + rs.r.w * self.split_ratio;
-                        mouse = e.evt.mouse.p.x;
-                        cursor = .arrow_w_e;
-                    },
-                    .vertical => {
-                        target = rs.r.y + rs.r.h * self.split_ratio;
-                        mouse = e.evt.mouse.p.y;
-                        cursor = .arrow_n_s;
-                    },
-                }
-
-                if (captured or @fabs(mouse - target) < (5 * windowNaturalScale())) {
-                    ret = true;
-                    e.handled = true;
-                    if (e.evt.mouse.state == .leftdown) {
-                        // capture and start drag
-                        captureMouse(self.wd.id);
-                        dragPreStart(e.evt.mouse.p, cursor, Point{});
-                    } else if (e.evt.mouse.state == .leftup) {
-                        // stop possible drag and capture
-                        captureMouse(null);
-                        dragEnd();
-                    } else if (e.evt.mouse.state == .motion) {
-                        // move if dragging
-                        if (dragging(e.evt.mouse.p)) |dps| {
-                            _ = dps;
-                            switch (self.dir) {
-                                .horizontal => {
-                                    self.split_ratio = (e.evt.mouse.p.x - rs.r.x) / rs.r.w;
-                                },
-                                .vertical => {
-                                    self.split_ratio = (e.evt.mouse.p.y - rs.r.y) / rs.r.h;
-                                },
-                            }
-
-                            self.split_ratio = math.max(0.0, math.min(1.0, self.split_ratio));
-                        }
-                    } else if (e.evt.mouse.state == .position) {
-                        cursorSet(cursor);
-                    }
-                }
-            }
-        }
-
-        return ret;
     }
 
     fn widget(self: *Self) Widget {
@@ -3500,9 +3453,54 @@ pub const PanedWidget = struct {
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
-        _ = self;
-        _ = iter;
-        _ = e;
+        if (e.evt == .mouse) {
+            var target: f32 = undefined;
+            var mouse: f32 = undefined;
+            var cursor: CursorKind = undefined;
+            switch (self.dir) {
+                .horizontal => {
+                    target = iter.r.x + iter.r.w * self.split_ratio;
+                    mouse = e.evt.mouse.p.x;
+                    cursor = .arrow_w_e;
+                },
+                .vertical => {
+                    target = iter.r.y + iter.r.h * self.split_ratio;
+                    mouse = e.evt.mouse.p.y;
+                    cursor = .arrow_n_s;
+                },
+            }
+
+            if (self.captured or @fabs(mouse - target) < (5 * windowNaturalScale())) {
+                self.hovered = true;
+                e.handled = true;
+                if (e.evt.mouse.state == .leftdown) {
+                    // capture and start drag
+                    captureMouse(self.wd.id);
+                    dragPreStart(e.evt.mouse.p, cursor, Point{});
+                } else if (e.evt.mouse.state == .leftup) {
+                    // stop possible drag and capture
+                    captureMouse(null);
+                    dragEnd();
+                } else if (e.evt.mouse.state == .motion) {
+                    // move if dragging
+                    if (dragging(e.evt.mouse.p)) |dps| {
+                        _ = dps;
+                        switch (self.dir) {
+                            .horizontal => {
+                                self.split_ratio = (e.evt.mouse.p.x - iter.r.x) / iter.r.w;
+                            },
+                            .vertical => {
+                                self.split_ratio = (e.evt.mouse.p.y - iter.r.y) / iter.r.h;
+                            },
+                        }
+
+                        self.split_ratio = math.max(0.0, math.min(1.0, self.split_ratio));
+                    }
+                } else if (e.evt.mouse.state == .position) {
+                    cursorSet(cursor);
+                }
+            }
+        }
     }
 
     pub fn bubbleEvent(self: *Self, e: *gui.Event) void {
