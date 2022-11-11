@@ -2485,7 +2485,7 @@ pub const Window = struct {
         return true;
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
@@ -2619,7 +2619,7 @@ pub const PopupWidget = struct {
         cueFrame();
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
@@ -3018,7 +3018,7 @@ pub const FloatingWindowWidget = struct {
         cueFrame();
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
@@ -3382,7 +3382,7 @@ pub const PanedWidget = struct {
         gui.animate(self.wd.id, "_split_ratio", gui.Animation{ .start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000 });
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
@@ -3669,7 +3669,7 @@ pub const TextLayoutWidget = struct {
         }
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
@@ -3770,7 +3770,7 @@ pub const ContextWidget = struct {
         return null;
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
@@ -3876,7 +3876,7 @@ pub const OverlayWidget = struct {
         self.wd.borderAndBackground();
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
@@ -3972,7 +3972,7 @@ pub const BoxWidget = struct {
         }
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
@@ -4301,7 +4301,7 @@ pub const ScrollAreaWidget = struct {
         self.scroll = f * max_hard_scroll;
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
@@ -4507,7 +4507,7 @@ pub const ScaleWidget = struct {
         self.wd.borderAndBackground();
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
@@ -4605,7 +4605,7 @@ pub const MenuWidget = struct {
         cueFrame();
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
@@ -4813,7 +4813,7 @@ pub const MenuItemWidget = struct {
         }
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
@@ -5058,7 +5058,7 @@ pub const ButtonContainerWidget = struct {
         debug("{x} ButtonContainer {}", .{ self.wd.id, self.wd.rect });
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
@@ -5328,7 +5328,7 @@ pub const TextEntryWidget = struct {
         _ = parentSet(self.widget());
     }
 
-    fn widget(self: *Self) Widget {
+    pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 

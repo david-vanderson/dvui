@@ -193,6 +193,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
             std.mem.set(u8, &TextEntryText.text, 0);
             gui.focusWidget(te.wd.id, null);
         }
+        te.widget().processEvents();
         te.install();
         te.deinit();
 
