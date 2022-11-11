@@ -370,26 +370,6 @@ pub fn frameTimeNS() i128 {
 fn bubbleable(e: *Event) bool {
     return (!e.handled and (e.evt == .key or e.evt == .text));
 }
-fn bubbleEvents(w: Widget) void {
-    var iter = EventIterator.init(w.data().id, Rect{});
-    while (iter.next()) |e| {
-        if (e.handled) {
-            continue;
-        }
-
-        switch (e.evt) {
-            .key,
-            .text,
-            => {
-                w.bubbleEvent(e);
-            },
-
-            .close_popup,
-            .mouse,
-            => {},
-        }
-    }
-}
 
 pub const Font = struct {
     size: f32,
@@ -4195,6 +4175,7 @@ pub fn scrollArea(src: std.builtin.SourceLocation, id_extra: usize, virtual_size
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(ScrollAreaWidget) catch unreachable;
     ret.* = ScrollAreaWidget.init(src, id_extra, virtual_size, opts);
+    ret.widget().processEvents();
     ret.install();
     return ret;
 }
@@ -4245,15 +4226,6 @@ pub const ScrollAreaWidget = struct {
             }
             self.scroll = d.scroll;
         }
-        self.next_widget_ypos = 0;
-        return self;
-    }
-
-    pub fn install(self: *Self) void {
-        debug("{x} ScrollArea {}", .{ self.wd.id, self.wd.rect });
-        self.wd.borderAndBackground();
-
-        bubbleEvents(self.widget());
 
         const max_scroll = math.max(0, self.virtualSize.h - self.wd.contentRect().h);
         if (self.scroll < 0) {
@@ -4267,6 +4239,14 @@ pub const ScrollAreaWidget = struct {
                 cueFrame();
             }
         }
+
+        self.next_widget_ypos = 0;
+        return self;
+    }
+
+    pub fn install(self: *Self) void {
+        debug("{x} ScrollArea {}", .{ self.wd.id, self.wd.rect });
+        self.wd.borderAndBackground();
 
         self.prevClip = clip(self.wd.contentRectScale().r);
 
@@ -4353,9 +4333,12 @@ pub const ScrollAreaWidget = struct {
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
-        _ = self;
+        // scroll area does event processing after children
         _ = iter;
-        _ = e;
+
+        if (bubbleable(e)) {
+            self.bubbleEvent(e);
+        }
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -4734,6 +4717,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool,
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(MenuItemWidget) catch unreachable;
     ret.* = MenuItemWidget.init(src, id_extra, submenu, opts);
+    ret.widget().processEvents();
     ret.install();
     return ret;
 }
@@ -4764,10 +4748,7 @@ pub const MenuItemWidget = struct {
     }
 
     pub fn install(self: *Self) void {
-        _ = parentSet(self.widget());
         debug("{x} MenuItem {}", .{ self.wd.id, self.wd.rect });
-
-        self.processEvents();
 
         if (self.wd.id == focusedWidgetIdInCurrentWindow()) {
             self.focused_in_win = true;
@@ -4809,6 +4790,8 @@ pub const MenuItemWidget = struct {
             pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
             pathFillConvex(fill);
         }
+
+        _ = parentSet(self.widget());
     }
 
     pub fn activeRect(self: *const Self) ?Rect {
@@ -4827,62 +4810,6 @@ pub const MenuItemWidget = struct {
         } else {
             return null;
         }
-    }
-
-    pub fn processEvents(self: *Self) void {
-        const rs = self.wd.borderRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r);
-        while (iter.next()) |e| {
-            switch (e.evt) {
-                .mouse => {
-                    if (e.evt.mouse.state == .focus) {
-                        e.handled = true;
-                    } else if (e.evt.mouse.state == .leftdown) {
-                        e.handled = true;
-                        if (self.submenu) {
-                            focusWindow(null, null); // focuses the window we are in
-                            focusWidget(self.wd.id, &iter);
-                            menuGet().?.submenus_activated = !menuGet().?.submenus_activated;
-                        }
-                    } else if (e.evt.mouse.state == .leftup) {
-                        e.handled = true;
-                        if (!self.submenu) {
-                            self.activated = true;
-                        }
-                    } else if (e.evt.mouse.state == .position) {
-                        e.handled = true;
-                        self.highlight = true;
-
-                        // We get a .position mouse event every frame.  If we
-                        // focus the menu item under the mouse even if it's not
-                        // moving then it breaks keyboard navigation.
-                        if (mouseTotalMotion().nonZero()) {
-                            // TODO don't do the rest here if the menu has an existing popup and the motion is towards the popup
-                            focusWindow(null, null); // focuses the window we are in
-                            focusWidget(self.wd.id, null);
-                        }
-                    }
-                },
-                .key => {
-                    if (e.evt.key.state == .down and e.evt.key.keysym == .space) {
-                        e.handled = true;
-                        if (self.submenu) {
-                            menuGet().?.submenus_activated = true;
-                        } else {
-                            self.activated = true;
-                        }
-                    } else if (e.evt.key.state == .down and e.evt.key.keysym == .right) {
-                        e.handled = true;
-                        if (self.submenu) {
-                            menuGet().?.submenus_activated = true;
-                        }
-                    }
-                },
-                else => {},
-            }
-        }
-
-        bubbleEvents(self.widget());
     }
 
     fn widget(self: *Self) Widget {
@@ -4906,9 +4833,57 @@ pub const MenuItemWidget = struct {
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
-        _ = self;
-        _ = iter;
-        _ = e;
+        switch (e.evt) {
+            .mouse => {
+                if (e.evt.mouse.state == .focus) {
+                    e.handled = true;
+                } else if (e.evt.mouse.state == .leftdown) {
+                    e.handled = true;
+                    if (self.submenu) {
+                        focusWindow(null, null); // focuses the window we are in
+                        focusWidget(self.wd.id, iter);
+                        menuGet().?.submenus_activated = !menuGet().?.submenus_activated;
+                    }
+                } else if (e.evt.mouse.state == .leftup) {
+                    e.handled = true;
+                    if (!self.submenu) {
+                        self.activated = true;
+                    }
+                } else if (e.evt.mouse.state == .position) {
+                    e.handled = true;
+                    self.highlight = true;
+
+                    // We get a .position mouse event every frame.  If we
+                    // focus the menu item under the mouse even if it's not
+                    // moving then it breaks keyboard navigation.
+                    if (mouseTotalMotion().nonZero()) {
+                        // TODO don't do the rest here if the menu has an existing popup and the motion is towards the popup
+                        focusWindow(null, null); // focuses the window we are in
+                        focusWidget(self.wd.id, null);
+                    }
+                }
+            },
+            .key => {
+                if (e.evt.key.state == .down and e.evt.key.keysym == .space) {
+                    e.handled = true;
+                    if (self.submenu) {
+                        menuGet().?.submenus_activated = true;
+                    } else {
+                        self.activated = true;
+                    }
+                } else if (e.evt.key.state == .down and e.evt.key.keysym == .right) {
+                    e.handled = true;
+                    if (self.submenu) {
+                        menuGet().?.submenus_activated = true;
+                    }
+                }
+            },
+            else => {},
+        }
+
+        if (bubbleable(e)) {
+            self.bubbleEvent(e);
+        }
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -5290,6 +5265,7 @@ pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, t
     var ret = cw.arena.create(TextEntryWidget) catch unreachable;
     ret.* = TextEntryWidget.init(src, id_extra, width, text, opts);
     ret.allocator = cw.arena;
+    ret.widget().processEvents();
     ret.install();
     ret.deinit();
 }
@@ -5320,6 +5296,8 @@ pub const TextEntryWidget = struct {
         const size = Size{ .w = msize.w * width, .h = msize.h };
         self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
 
+        self.captured = captureMouseMaintain(self.wd.id);
+
         if (self.wd.visible()) {
             tabIndexSet(self.wd.id, options.tab_index);
         }
@@ -5329,13 +5307,9 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn install(self: *Self) void {
-        _ = parentSet(self.widget());
         debug("{x} Text {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
 
-        self.captured = captureMouseMaintain(self.wd.id);
-
-        self.processEvents();
         const focused = (self.wd.id == focusedWidgetId());
 
         const rs = self.wd.contentRectScale();
@@ -5349,57 +5323,8 @@ pub const TextEntryWidget = struct {
         if (focused) {
             self.wd.focusBorder();
         }
-    }
 
-    pub fn processEvents(self: *Self) void {
-        const rs = self.wd.borderRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r);
-        while (iter.next()) |e| {
-            switch (e.evt) {
-                .key => {
-                    if (e.evt.key.keysym == .backspace and
-                        (e.evt.key.state == .down or e.evt.key.state == .repeat))
-                    {
-                        e.handled = true;
-                        self.len -|= 1;
-                        self.text[self.len] = 0;
-                    } else if (e.evt.key.keysym == .v and e.evt.key.state == .down and e.evt.key.mod.gui()) {
-                        //const ct = c.SDL_GetClipboardText();
-                        //defer c.SDL_free(ct);
-
-                        //var i = self.len;
-                        //while (i < self.text.len and ct.* != 0) : (i += 1) {
-                        //  self.text[i] = ct[i - self.len];
-                        //}
-                        //self.len = i;
-                    }
-                },
-                .text => {
-                    e.handled = true;
-                    var new = std.mem.sliceTo(e.evt.text.text, 0);
-                    new.len = math.min(new.len, self.text.len - self.len);
-                    std.mem.copy(u8, self.text[self.len..], new);
-                    self.len += new.len;
-                },
-                .mouse => {
-                    if (e.evt.mouse.state == .focus) {
-                        e.handled = true;
-                        focusWidget(self.wd.id, &iter);
-                    } else if (e.evt.mouse.state == .leftdown) {
-                        e.handled = true;
-                        captureMouse(self.wd.id);
-                        self.captured = true;
-                    } else if (e.evt.mouse.state == .leftup) {
-                        e.handled = true;
-                        captureMouse(null);
-                        self.captured = false;
-                    } else if (e.evt.mouse.state == .motion) {}
-                },
-                else => {},
-            }
-        }
-
-        bubbleEvents(self.widget());
+        _ = parentSet(self.widget());
     }
 
     fn widget(self: *Self) Widget {
@@ -5423,9 +5348,53 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
-        _ = self;
-        _ = iter;
-        _ = e;
+        switch (e.evt) {
+            .key => {
+                if (e.evt.key.keysym == .backspace and
+                    (e.evt.key.state == .down or e.evt.key.state == .repeat))
+                {
+                    e.handled = true;
+                    self.len -|= 1;
+                    self.text[self.len] = 0;
+                } else if (e.evt.key.keysym == .v and e.evt.key.state == .down and e.evt.key.mod.gui()) {
+                    //e.handled = true;
+                    //const ct = c.SDL_GetClipboardText();
+                    //defer c.SDL_free(ct);
+
+                    //var i = self.len;
+                    //while (i < self.text.len and ct.* != 0) : (i += 1) {
+                    //  self.text[i] = ct[i - self.len];
+                    //}
+                    //self.len = i;
+                }
+            },
+            .text => {
+                e.handled = true;
+                var new = std.mem.sliceTo(e.evt.text.text, 0);
+                new.len = math.min(new.len, self.text.len - self.len);
+                std.mem.copy(u8, self.text[self.len..], new);
+                self.len += new.len;
+            },
+            .mouse => {
+                if (e.evt.mouse.state == .focus) {
+                    e.handled = true;
+                    focusWidget(self.wd.id, iter);
+                } else if (e.evt.mouse.state == .leftdown) {
+                    e.handled = true;
+                    captureMouse(self.wd.id);
+                    self.captured = true;
+                } else if (e.evt.mouse.state == .leftup) {
+                    e.handled = true;
+                    captureMouse(null);
+                    self.captured = false;
+                } else if (e.evt.mouse.state == .motion) {}
+            },
+            else => {},
+        }
+
+        if (bubbleable(e)) {
+            self.bubbleEvent(e);
+        }
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
