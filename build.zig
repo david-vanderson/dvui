@@ -3,6 +3,10 @@ const Pkg = std.build.Pkg;
 const Builder = @import("std").build.Builder;
 const freetype = @import("libs/mach/libs/freetype/build.zig");
 
+const mbedtls = @import("libs/zig-mbedtls/mbedtls.zig");
+const libssh2 = @import("libs/zig-libssh2/libssh2.zig");
+const libcurl = @import("libs/zig-libcurl/libcurl.zig");
+
 const Packages = struct {
     // Declared here because submodule may not be cloned at the time build.zig runs.
     const zmath = std.build.Pkg{
@@ -50,45 +54,105 @@ pub fn build(b: *Builder) !void {
         run_step.dependOn(run_cmd);
     }
 
-    // sdl apps
-    inline for ([2][]const u8{ "sdl-test", "podcast" }) |name| {
-        const exe = b.addExecutable(name, name ++ ".zig");
-        exe.addIncludePath("/usr/local/include");
-        exe.defineCMacro("_THREAD_SAFE", "1");
-        exe.addLibraryPath("/usr/local/lib");
+    // sdl test
+    {
+        const exe = b.addExecutable("sdl-test", "sdl-test" ++ ".zig");
         exe.linkSystemLibrary("SDL2");
 
         exe.addPackage(freetype.pkg);
         freetype.link(b, exe, .{});
 
-        exe.linkSystemLibrary("z");
-        exe.linkSystemLibrary("bz2");
-        exe.linkSystemLibrary("iconv");
-        exe.linkFramework("AppKit");
-        exe.linkFramework("AudioToolbox");
-        exe.linkFramework("Carbon");
-        exe.linkFramework("Cocoa");
-        exe.linkFramework("CoreAudio");
-        exe.linkFramework("CoreFoundation");
-        exe.linkFramework("CoreGraphics");
-        exe.linkFramework("CoreHaptics");
-        exe.linkFramework("CoreVideo");
-        exe.linkFramework("ForceFeedback");
-        exe.linkFramework("GameController");
-        exe.linkFramework("IOKit");
-        exe.linkFramework("Metal");
+        if (target.isDarwin()) {
+            exe.linkSystemLibrary("z");
+            exe.linkSystemLibrary("bz2");
+            exe.linkSystemLibrary("iconv");
+            exe.linkFramework("AppKit");
+            exe.linkFramework("AudioToolbox");
+            exe.linkFramework("Carbon");
+            exe.linkFramework("Cocoa");
+            exe.linkFramework("CoreAudio");
+            exe.linkFramework("CoreFoundation");
+            exe.linkFramework("CoreGraphics");
+            exe.linkFramework("CoreHaptics");
+            exe.linkFramework("CoreVideo");
+            exe.linkFramework("ForceFeedback");
+            exe.linkFramework("GameController");
+            exe.linkFramework("IOKit");
+            exe.linkFramework("Metal");
+        }
 
         exe.setTarget(target);
         exe.setBuildMode(mode);
 
-        const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
+        const compile_step = b.step("compile-" ++ "sdl-test", "Compile " ++ "sdl-test");
         compile_step.dependOn(&b.addInstallArtifact(exe).step);
         b.getInstallStep().dependOn(compile_step);
 
         const run_cmd = exe.run();
         run_cmd.step.dependOn(compile_step);
 
-        const run_step = b.step(name, "Run " ++ name);
+        const run_step = b.step("sdl-test", "Run " ++ "sdl-test");
+        run_step.dependOn(&run_cmd.step);
+    }
+
+    // podcast example application
+    {
+        const exe = b.addExecutable("podcast", "podcast" ++ ".zig");
+        exe.linkSystemLibrary("SDL2");
+
+        exe.addPackage(freetype.pkg);
+        freetype.link(b, exe, .{});
+
+        const sqlite = b.addStaticLibrary("sqlite", null);
+        sqlite.addCSourceFile("libs/zig-sqlite/c/sqlite3.c", &[_][]const u8{"-std=c99"});
+        sqlite.linkLibC();
+
+        exe.linkLibrary(sqlite);
+        exe.addPackagePath("sqlite", "libs/zig-sqlite/sqlite.zig");
+        exe.addIncludePath("libs/zig-sqlite/c");
+
+        const tls = mbedtls.create(b, target, mode);
+        tls.link(exe);
+
+        const ssh2 = libssh2.create(b, target, mode);
+        tls.link(ssh2.step);
+        ssh2.link(exe);
+
+        const curl = try libcurl.create(b, target, mode);
+        tls.link(curl.step);
+        ssh2.link(curl.step);
+        curl.link(exe, .{ .import_name = "curl" });
+
+        if (target.isDarwin()) {
+            exe.linkSystemLibrary("z");
+            exe.linkSystemLibrary("bz2");
+            exe.linkSystemLibrary("iconv");
+            exe.linkFramework("AppKit");
+            exe.linkFramework("AudioToolbox");
+            exe.linkFramework("Carbon");
+            exe.linkFramework("Cocoa");
+            exe.linkFramework("CoreAudio");
+            exe.linkFramework("CoreFoundation");
+            exe.linkFramework("CoreGraphics");
+            exe.linkFramework("CoreHaptics");
+            exe.linkFramework("CoreVideo");
+            exe.linkFramework("ForceFeedback");
+            exe.linkFramework("GameController");
+            exe.linkFramework("IOKit");
+            exe.linkFramework("Metal");
+        }
+
+        exe.setTarget(target);
+        exe.setBuildMode(mode);
+
+        const compile_step = b.step("compile-" ++ "podcast", "Compile " ++ "podcast");
+        compile_step.dependOn(&b.addInstallArtifact(exe).step);
+        b.getInstallStep().dependOn(compile_step);
+
+        const run_cmd = exe.run();
+        run_cmd.step.dependOn(compile_step);
+
+        const run_step = b.step("podcast", "Run " ++ "podcast");
         run_step.dependOn(&run_cmd.step);
     }
 }
