@@ -2810,7 +2810,6 @@ pub const FloatingWindowWidget = struct {
         self.wd = WidgetData.init(src, id_extra, self.options.plain().override(.{ .rect = .{} }));
 
         self.modal = modal;
-        self.captured = captureMouseMaintain(self.wd.id);
         self.io_rect = io_rect;
         self.openflag = openflag;
 
@@ -2872,10 +2871,15 @@ pub const FloatingWindowWidget = struct {
     pub fn install(self: *Self) void {
         debug("{x} FloatingWindow {}", .{ self.wd.id, self.wd.rect });
 
+        _ = parentSet(self.widget());
+        self.prev_windowId = windowCurrentSet(self.wd.id);
+
         // FloatingWindow is outside normal widget flow, a dialog needs to paint on
         // top of the whole screen
         self.prevClip = clipGet();
         clipSet(windowRectPixels());
+
+        self.captured = captureMouseMaintain(self.wd.id);
 
         // processEventsBefore can change self.wd.rect
         self.processEventsBefore();
@@ -2891,9 +2895,6 @@ pub const FloatingWindowWidget = struct {
             col.a = 100;
             pathFillConvex(col);
         }
-
-        _ = parentSet(self.widget());
-        self.prev_windowId = windowCurrentSet(self.wd.id);
 
         // we are using BoxWidget to do border/background but floating windows
         // don't have margin, so turn that off
@@ -3703,9 +3704,11 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
-        _ = self;
         _ = iter;
-        _ = e;
+
+        if (bubbleable(e)) {
+            self.bubbleEvent(e);
+        }
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
