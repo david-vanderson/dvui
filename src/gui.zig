@@ -367,6 +367,9 @@ pub fn frameTimeNS() i128 {
 // All widgets have to bubble keyboard events if they can have keyboard focus
 // so that pressing the up key in any child of a scrollarea will scroll.  Call
 // this helper at the end of processing normal events.
+fn bubbleable(e: *Event) bool {
+    return (!e.handled and (e.evt == .key or e.evt == .text));
+}
 fn bubbleEvents(w: Widget) void {
     var iter = EventIterator.init(w.data().id, Rect{});
     while (iter.next()) |e| {
@@ -2503,7 +2506,7 @@ pub const Window = struct {
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -2526,6 +2529,12 @@ pub const Window = struct {
     pub fn screenRectScale(self: *Self, r: Rect) RectScale {
         const scaled = r.scale(self.natural_scale);
         return RectScale{ .r = scaled.offset(self.rect_pixels), .s = self.natural_scale };
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -2628,7 +2637,7 @@ pub const PopupWidget = struct {
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -2648,6 +2657,12 @@ pub const PopupWidget = struct {
         const s = windowNaturalScale();
         const scaled = r.scale(s);
         return RectScale{ .r = scaled.offset(windowRectPixels()), .s = s };
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -3019,7 +3034,7 @@ pub const FloatingWindowWidget = struct {
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -3039,6 +3054,12 @@ pub const FloatingWindowWidget = struct {
         const s = windowNaturalScale();
         const scaled = r.scale(s);
         return RectScale{ .r = scaled.offset(windowRectPixels()), .s = s };
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -3205,14 +3226,14 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
     const options = expander_defaults.override(opts);
 
     var bc = ButtonContainerWidget.init(src, id_extra, true, options);
+    bc.widget().processEvents();
+    bc.install();
     defer bc.deinit();
 
     var expanded: bool = false;
     if (gui.dataGet(bc.wd.id, "_expand", bool)) |e| {
         expanded = e;
     }
-
-    bc.install();
 
     if (bc.clicked) {
         expanded = !expanded;
@@ -3428,7 +3449,7 @@ pub const PanedWidget = struct {
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -3496,6 +3517,12 @@ pub const PanedWidget = struct {
 
     pub fn screenRectScale(self: *Self, r: gui.Rect) gui.RectScale {
         return self.wd.parent.screenRectScale(r);
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
     }
 
     pub fn bubbleEvent(self: *Self, e: *gui.Event) void {
@@ -3664,7 +3691,7 @@ pub const TextLayoutWidget = struct {
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -3695,6 +3722,12 @@ pub const TextLayoutWidget = struct {
 
     pub fn screenRectScale(self: *Self, r: Rect) RectScale {
         return self.wd.parent.screenRectScale(r);
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -3757,7 +3790,7 @@ pub const ContextWidget = struct {
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -3774,6 +3807,12 @@ pub const ContextWidget = struct {
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
         return self.wd.parent.screenRectScale(rect);
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -3857,7 +3896,7 @@ pub const OverlayWidget = struct {
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -3874,6 +3913,12 @@ pub const OverlayWidget = struct {
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
         return self.wd.parent.screenRectScale(rect);
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -3947,7 +3992,7 @@ pub const BoxWidget = struct {
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -4005,6 +4050,12 @@ pub const BoxWidget = struct {
         const screenRS = self.wd.contentRectScale();
         const scaled = r.scale(screenRS.s);
         return RectScale{ .r = scaled.offset(screenRS.r), .s = screenRS.s };
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -4270,7 +4321,7 @@ pub const ScrollAreaWidget = struct {
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -4299,6 +4350,12 @@ pub const ScrollAreaWidget = struct {
         r.x += self.wd.contentRect().x;
         r.y += self.wd.contentRect().y - self.scroll;
         return self.wd.parent.screenRectScale(r);
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -4467,7 +4524,7 @@ pub const ScaleWidget = struct {
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -4487,6 +4544,12 @@ pub const ScaleWidget = struct {
         const s = screenRS.s * self.scale_in;
         const scaled = r.scale(s);
         return RectScale{ .r = scaled.offset(screenRS.r), .s = s };
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -4559,7 +4622,7 @@ pub const MenuWidget = struct {
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -4576,6 +4639,12 @@ pub const MenuWidget = struct {
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
         return self.wd.parent.screenRectScale(rect);
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -4817,7 +4886,7 @@ pub const MenuItemWidget = struct {
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -4834,6 +4903,12 @@ pub const MenuItemWidget = struct {
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
         return self.wd.parent.screenRectScale(rect);
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -4947,6 +5022,7 @@ pub fn buttonContainer(src: std.builtin.SourceLocation, id_extra: usize, show_fo
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(ButtonContainerWidget) catch unreachable;
     ret.* = ButtonContainerWidget.init(src, id_extra, show_focus, opts);
+    ret.widget().processEvents();
     ret.install();
     return ret;
 }
@@ -4963,6 +5039,7 @@ pub const ButtonContainerWidget = struct {
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) Self {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
+        self.captured = captureMouseMaintain(self.wd.id);
         if (self.wd.visible()) {
             tabIndexSet(self.wd.id, opts.tab_index);
         }
@@ -4971,15 +5048,6 @@ pub const ButtonContainerWidget = struct {
     }
 
     pub fn install(self: *Self) void {
-        _ = parentSet(self.widget());
-
-        debug("{x} ButtonContainer {}", .{ self.wd.id, self.wd.rect });
-
-        self.captured = captureMouseMaintain(self.wd.id);
-        self.clicked = self.processEvents();
-        if (self.clicked) {
-            cueFrame();
-        }
         self.focused = (self.wd.id == focusedWidgetId());
 
         if (self.wd.options.borderGet().nonZero()) {
@@ -5009,53 +5077,13 @@ pub const ButtonContainerWidget = struct {
         if (self.focused and self.show_focus) {
             self.wd.focusBorder();
         }
-    }
 
-    pub fn processEvents(self: *Self) bool {
-        var ret = false;
-        const rs = self.wd.borderRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r);
-        while (iter.next()) |e| {
-            switch (e.evt) {
-                .mouse => {
-                    if (e.evt.mouse.state == .focus) {
-                        e.handled = true;
-                        focusWidget(self.wd.id, &iter);
-                    } else if (e.evt.mouse.state == .leftdown) {
-                        e.handled = true;
-                        captureMouse(self.wd.id);
-                        self.captured = true;
-                    } else if (e.evt.mouse.state == .leftup) {
-                        e.handled = true;
-                        if (self.captured) {
-                            captureMouse(null);
-                            self.captured = false;
-                            if (rs.r.contains(e.evt.mouse.p)) {
-                                ret = true;
-                            }
-                        }
-                    } else if (e.evt.mouse.state == .position) {
-                        e.handled = true;
-                        self.highlight = true;
-                    }
-                },
-                .key => {
-                    if (e.evt.key.state == .down and e.evt.key.keysym == .space) {
-                        e.handled = true;
-                        ret = true;
-                    }
-                },
-                else => {},
-            }
-        }
-
-        bubbleEvents(self.widget());
-
-        return ret;
+        _ = parentSet(self.widget());
+        debug("{x} ButtonContainer {}", .{ self.wd.id, self.wd.rect });
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -5072,6 +5100,46 @@ pub const ButtonContainerWidget = struct {
 
     pub fn screenRectScale(self: *Self, r: Rect) RectScale {
         return self.wd.parent.screenRectScale(r);
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        switch (e.evt) {
+            .mouse => {
+                if (e.evt.mouse.state == .focus) {
+                    e.handled = true;
+                    focusWidget(self.wd.id, iter);
+                } else if (e.evt.mouse.state == .leftdown) {
+                    e.handled = true;
+                    captureMouse(self.wd.id);
+                    self.captured = true;
+                } else if (e.evt.mouse.state == .leftup) {
+                    e.handled = true;
+                    if (self.captured) {
+                        captureMouse(null);
+                        self.captured = false;
+                        if (iter.r.contains(e.evt.mouse.p)) {
+                            self.clicked = true;
+                            cueFrame();
+                        }
+                    }
+                } else if (e.evt.mouse.state == .position) {
+                    e.handled = true;
+                    self.highlight = true;
+                }
+            },
+            .key => {
+                if (e.evt.key.state == .down and e.evt.key.keysym == .space) {
+                    e.handled = true;
+                    self.clicked = true;
+                    cueFrame();
+                }
+            },
+            else => {},
+        }
+
+        if (bubbleable(e)) {
+            self.bubbleEvent(e);
+        }
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -5107,6 +5175,7 @@ pub const ButtonWidget = struct {
 
     pub fn install(self: *ButtonWidget) bool {
         debug("Button {s}", .{self.label_str});
+        self.bc.widget().processEvents();
         self.bc.install();
         const clicked = self.bc.clicked;
 
@@ -5334,7 +5403,7 @@ pub const TextEntryWidget = struct {
     }
 
     fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, bubbleEvent);
+        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -5351,6 +5420,12 @@ pub const TextEntryWidget = struct {
 
     pub fn screenRectScale(self: *Self, r: Rect) RectScale {
         return self.wd.parent.screenRectScale(r);
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
     }
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
@@ -6133,6 +6208,7 @@ pub const Widget = struct {
         rectFor: *const fn (ptr: *anyopaque, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
         minSizeForChild: *const fn (ptr: *anyopaque, s: Size) void,
         screenRectScale: *const fn (ptr: *anyopaque, r: Rect) RectScale,
+        processEvent: *const fn (ptr: *anyopaque, iter: *EventIterator, e: *Event) void,
         bubbleEvent: *const fn (ptr: *anyopaque, e: *Event) void,
     };
 
@@ -6142,6 +6218,7 @@ pub const Widget = struct {
         comptime rectForFn: fn (ptr: @TypeOf(pointer), id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
         comptime minSizeForChildFn: fn (ptr: @TypeOf(pointer), s: Size) void,
         comptime screenRectScaleFn: fn (ptr: @TypeOf(pointer), r: Rect) RectScale,
+        comptime processEventFn: fn (ptr: @TypeOf(pointer), iter: *EventIterator, e: *Event) void,
         comptime bubbleEventFn: fn (ptr: @TypeOf(pointer), e: *Event) void,
     ) Widget {
         const Ptr = @TypeOf(pointer);
@@ -6171,6 +6248,11 @@ pub const Widget = struct {
                 return @call(.{ .modifier = .always_inline }, screenRectScaleFn, .{ self, r });
             }
 
+            fn processEventImpl(ptr: *anyopaque, iter: *EventIterator, e: *Event) void {
+                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                return @call(.{ .modifier = .always_inline }, processEventFn, .{ self, iter, e });
+            }
+
             fn bubbleEventImpl(ptr: *anyopaque, e: *Event) void {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
                 return @call(.{ .modifier = .always_inline }, bubbleEventFn, .{ self, e });
@@ -6181,6 +6263,7 @@ pub const Widget = struct {
                 .rectFor = rectForImpl,
                 .minSizeForChild = minSizeForChildImpl,
                 .screenRectScale = screenRectScaleImpl,
+                .processEvent = processEventImpl,
                 .bubbleEvent = bubbleEventImpl,
             };
         };
@@ -6205,20 +6288,31 @@ pub const Widget = struct {
         return hash.final();
     }
 
+    pub fn processEvents(self: Widget) void {
+        var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
+        while (iter.next()) |e| {
+            self.processEvent(&iter, e);
+        }
+    }
+
     pub fn rectFor(self: Widget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         return self.vtable.rectFor(self.ptr, id, min_size, e, g);
     }
 
     pub fn minSizeForChild(self: Widget, s: Size) void {
-        return self.vtable.minSizeForChild(self.ptr, s);
+        self.vtable.minSizeForChild(self.ptr, s);
     }
 
     pub fn screenRectScale(self: Widget, r: Rect) RectScale {
         return self.vtable.screenRectScale(self.ptr, r);
     }
 
+    pub fn processEvent(self: Widget, iter: *EventIterator, e: *Event) void {
+        self.vtable.processEvent(self.ptr, iter, e);
+    }
+
     pub fn bubbleEvent(self: Widget, e: *Event) void {
-        return self.vtable.bubbleEvent(self.ptr, e);
+        self.vtable.bubbleEvent(self.ptr, e);
     }
 };
 
