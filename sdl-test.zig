@@ -433,4 +433,3 @@ pub const StrokeTest = struct {
         }
     }
 };
-
