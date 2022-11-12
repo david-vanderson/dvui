@@ -169,7 +169,7 @@ pub const Options = struct {
     // default is .none
     expand: ?Expand = null,
 
-    // default is .topleft
+    // default is .upleft
     gravity: ?Gravity = null,
 
     // widgets will be focusable only if this is set
@@ -270,12 +270,24 @@ pub const Options = struct {
         }
     }
 
+    pub fn expandGet(self: *const Options) Expand {
+        return self.expand orelse .none;
+    }
+
+    pub fn gravityGet(self: *const Options) Gravity {
+        return self.gravity orelse .upleft;
+    }
+
     pub fn marginGet(self: *const Options) Rect {
         return self.margin orelse Rect{};
     }
 
     pub fn borderGet(self: *const Options) Rect {
         return self.border orelse Rect{};
+    }
+
+    pub fn backgroundGet(self: *const Options) bool {
+        return self.background orelse false;
     }
 
     pub fn paddingGet(self: *const Options) Rect {
@@ -298,8 +310,50 @@ pub const Options = struct {
         return (self.expand orelse Expand.none) != Expand.none;
     }
 
-    pub fn plain(self: *const Options) Options {
-        return self.override(.{ .margin = .{}, .border = .{}, .background = false, .padding = .{} });
+    // Used in compound widgets to strip out the styling that should only apply
+    // to the outermost container widget.  For example, with a button
+    // (container with label) the container uses:
+    // - rect
+    // - min_size
+    // - margin
+    // - border
+    // - background
+    // - padding
+    // - corner_radius
+    // while the label uses:
+    // - fonts
+    // - colors
+    // and they both use:
+    // - expand
+    // - gravity
+    pub fn strip(self: *const Options) Options {
+        return Options{
+            // explicity set these to "strip" out the defaults of internal widgets
+            .margin = Rect{},
+            .border = Rect{},
+            .padding = Rect{},
+            .corner_radius = Rect{},
+
+            // keep the rest
+            .expand = self.expand,
+            .gravity = self.gravity,
+            .color_custom = self.color_custom,
+            .color_custom_bg = self.color_custom_bg,
+            .font_custom = self.font_custom,
+            .color_style = self.color_style,
+            .font_style = self.font_style,
+        };
+    }
+
+    // Use to keep only the font/color stuff and use defaults for the rest
+    pub fn styling(self: *const Options) Options {
+        return Options{
+            .color_custom = self.color_custom,
+            .color_custom_bg = self.color_custom_bg,
+            .font_custom = self.font_custom,
+            .color_style = self.color_style,
+            .font_style = self.font_style,
+        };
     }
 
     // converts a content min size to a min size including padding/border/margin
@@ -2570,7 +2624,7 @@ pub const PopupWidget = struct {
         // embedded MenuWidget
         // passing options.rect will stop WidgetData.init from calling
         // rectFor which is important because we are outside normal layout
-        self.wd = WidgetData.init(src, id_extra, self.options.plain().override(.{ .rect = .{} }));
+        self.wd = WidgetData.init(src, id_extra, .{ .rect = .{} });
 
         self.initialRect = initialRect;
         return self;
@@ -2807,7 +2861,7 @@ pub const FloatingWindowWidget = struct {
         // the embedded BoxWidget
         // passing options.rect will stop WidgetData.init from calling rectFor
         // which is important because we are outside normal layout
-        self.wd = WidgetData.init(src, id_extra, self.options.plain().override(.{ .rect = .{} }));
+        self.wd = WidgetData.init(src, id_extra, .{ .rect = .{} });
 
         self.modal = modal;
         self.io_rect = io_rect;
@@ -3225,7 +3279,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
         expanded = !expanded;
     }
 
-    var bcbox = BoxWidget.init(@src(), 0, .horizontal, options.plain());
+    var bcbox = BoxWidget.init(@src(), 0, .horizontal, options.strip());
     defer bcbox.deinit();
     bcbox.install();
     const size = options.font().lineSkip();
@@ -3234,7 +3288,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
     } else {
         icon(@src(), 0, size, "right_arrow", gui.icons.papirus.actions.pan_end_symbolic, .{ .gravity = .left });
     }
-    labelNoFormat(@src(), 0, label_str, options.plain());
+    labelNoFormat(@src(), 0, label_str, options.strip());
 
     gui.dataSet(bc.wd.id, "_expand", expanded);
 
@@ -4594,7 +4648,7 @@ pub const MenuWidget = struct {
 
         self.wd.borderAndBackground();
 
-        self.box = BoxWidget.init(@src(), 0, self.dir, self.wd.options.plain());
+        self.box = BoxWidget.init(@src(), 0, self.dir, self.wd.options.strip());
         self.box.install();
     }
 
@@ -4664,7 +4718,7 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label_str
     const options = menuItemLabel_defaults.override(opts);
     var mi = menuItem(src, id_extra, submenu, options);
 
-    var labelopts = options.plain();
+    var labelopts = options.strip();
 
     var ret: ?Rect = null;
     if (mi.activeRect()) |r| {
@@ -4691,7 +4745,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, id_extra: usize, submenu: b
     const options = menuItemLabel_defaults.override(opts);
     var mi = menuItem(src, id_extra, submenu, options);
 
-    var iconopts = options.plain();
+    var iconopts = options.strip();
 
     var ret: ?Rect = null;
     if (mi.activeRect()) |r| {
@@ -5149,13 +5203,13 @@ pub const ButtonWidget = struct {
         };
     }
 
-    pub fn install(self: *ButtonWidget) bool {
+    pub fn show(self: *ButtonWidget) bool {
         debug("Button {s}", .{self.label_str});
         self.bc.widget().processEvents();
         self.bc.install();
         const clicked = self.bc.clicked;
 
-        labelNoFormat(@src(), 0, self.label_str, self.bc.wd.options.plain().override(.{ .gravity = .center }));
+        labelNoFormat(@src(), 0, self.label_str, self.bc.wd.options.strip().override(.{ .gravity = .center }));
 
         self.bc.deinit();
         return clicked;
@@ -5164,7 +5218,7 @@ pub const ButtonWidget = struct {
 
 pub fn button(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) bool {
     var bw = ButtonWidget.init(src, id_extra, label_str, opts);
-    return bw.install();
+    return bw.show();
 }
 
 pub var buttonIcon_defaults: Options = .{
@@ -5182,7 +5236,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32,
     var bc = buttonContainer(src, id_extra, true, options);
     defer bc.deinit();
 
-    icon(@src(), 0, height, name, tvg_bytes, options.plain());
+    icon(@src(), 0, height, name, tvg_bytes, options.strip());
 
     return bc.clicked;
 }
@@ -5204,7 +5258,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
         target.* = !target.*;
     }
 
-    var b = box(@src(), 0, .horizontal, options.plain().override(.{ .expand = .both }));
+    var b = box(@src(), 0, .horizontal, options.strip().override(.{ .expand = .both }));
     defer b.deinit();
 
     var check_size = options.font().lineSkip();
@@ -5258,7 +5312,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
         pathStroke(false, thick, .square, themeGet().color_accent);
     }
 
-    labelNoFormat(@src(), 0, label_str, options);
+    labelNoFormat(@src(), 0, label_str, options.styling().override(.{ .background = true }));
 }
 
 pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) void {
@@ -6056,7 +6110,7 @@ pub const WidgetData = struct {
                 self.rect.h = self.parent.data().rect.h;
             }
         } else {
-            self.rect = self.parent.rectFor(self.id, self.min_size, self.options.expand orelse .none, self.options.gravity orelse .upleft);
+            self.rect = self.parent.rectFor(self.id, self.min_size, self.options.expandGet(), self.options.gravityGet());
         }
 
         return self;
@@ -6102,7 +6156,7 @@ pub const WidgetData = struct {
     }
 
     pub fn placeInsideNoExpand(self: *WidgetData) void {
-        self.rect = placeIn(null, self.rect, self.min_size, .none, self.options.gravity orelse .upleft);
+        self.rect = placeIn(null, self.rect, self.min_size, .none, self.options.gravityGet());
     }
 
     pub fn scale(self: *const WidgetData) f32 {
