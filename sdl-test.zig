@@ -169,7 +169,9 @@ pub fn main() !void {
                         button.bc.wd.rect.x += a.lerp();
                     }
 
-                    if (button.install()) {
+                    button.bc.widget().processEvents();
+
+                    if (button.show()) {
                         const a = gui.Animation{ .start_val = 0, .end_val = 200, .start_time = 0, .end_time = 10_000_000 };
                         gui.animate(button.bc.wd.id, "xoffset", a);
                     }
