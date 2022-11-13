@@ -1,8 +1,16 @@
 
-think how Options.plain() should work, which things should happen
-- how to reset rect back to null?
-  - how to have a floating button without the label being floating?
-- alter stroke test to show buttons where you click
+audit all widgets to switch to local coords
+- processEvent can't use iter.r to calculate mouse offset coords
+  - can use it to check if mouse is still "inside widget"
+- use local coords:
+    pub fn rectFor(self: *Self, id: u32, min_size: gui.Size, e: gui.Options.Expand, g: gui.Options.Gravity) gui.Rect {
+        return gui.placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+    }
+
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        const rs = self.wd.contentRectScale();
+        return gui.RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+    }
 
 make ButtonWidget a real wrapper so you don't have to do button.bc to access stuff
 - in sdl-test
