@@ -383,7 +383,7 @@ pub const StrokeTest = struct {
     }
 
     pub fn widget(self: *Self) gui.Widget {
-        return gui.Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return gui.Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const gui.WidgetData {
