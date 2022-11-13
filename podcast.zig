@@ -162,7 +162,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
             var menu = gui.menu(@src(), 0, .horizontal, .{ .expand = .horizontal });
             defer menu.deinit();
 
-            gui.spacer(@src(), 0, .{ .expand = .horizontal });
+            _ = gui.spacer(@src(), 0, .{ .expand = .horizontal });
 
             if (gui.menuItemIcon(@src(), 0, true, gui.themeGet().font_heading.lineSkip(), "toolbar dots", gui.icons.papirus.actions.xapp_prefs_toolbar_symbolic, .{})) |r| {
                 var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
