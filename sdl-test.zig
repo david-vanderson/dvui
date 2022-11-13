@@ -51,7 +51,7 @@ pub fn main() !void {
                         .mouse => |me| {
                             if (me.state == .wheel_y) {
                                 e.handled = true;
-                                var base: f32 = 1.05;
+                                var base: f32 = 1.01;
                                 const zs = @exp(@log(base) * e.evt.mouse.wheel);
                                 if (zs != 1.0) {
                                     scale_val *= zs;
@@ -325,7 +325,7 @@ pub fn main() !void {
 fn show_stroke_test_window() void {
     var win = gui.floatingWindow(@src(), 0, false, &StrokeTest.show_rect, &StrokeTest.show_dialog, .{});
     defer win.deinit();
-    gui.labelNoFormat(@src(), 0, "Stroke Test", .{ .gravity = .center });
+    gui.windowHeader("Stroke Test", "", &StrokeTest.show_dialog);
 
     //var scale = gui.scale(@src(), 0, 1, .{.expand = .both});
     //defer scale.deinit();
@@ -350,17 +350,21 @@ pub const StrokeTest = struct {
         gui.debug("{x} StrokeTest {}", .{ self.wd.id, self.wd.rect });
 
         _ = gui.captureMouseMaintain(self.wd.id);
-        self.processEvents();
 
         self.wd.borderAndBackground();
 
-        const rs = gui.parentGet().screenRectScale(self.wd.rect);
+        _ = gui.parentSet(self.widget());
+
+        const rs = self.wd.contentRectScale();
         const fill_color = gui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
-        for (points) |p| {
+        for (points) |p, i| {
             var rect = gui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
             const rsrect = rect.scale(rs.s).offset(rs.r);
             gui.pathAddRect(rsrect, gui.Rect.all(1));
             gui.pathFillConvex(fill_color);
+
+            _ = i;
+            //_ = gui.button(@src(), i, "Floating", .{ .rect = gui.Rect.fromPoint(p) });
         }
 
         for (points) |p| {
@@ -371,67 +375,99 @@ pub const StrokeTest = struct {
         const stroke_color = gui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
         gui.pathStroke(false, rs.s * thickness, .square, stroke_color);
 
+        self.widget().processEvents();
+
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
+        _ = gui.parentSet(self.wd.parent);
     }
 
-    pub fn processEvents(self: *Self) void {
-        const rs = gui.parentGet().screenRectScale(self.wd.rect);
-        var iter = gui.EventIterator.init(self.wd.id, rs.r);
-        while (iter.next()) |e| {
-            switch (e.evt) {
-                .mouse => |me| {
-                    const mp = me.p.inRectScale(rs);
-                    switch (me.state) {
-                        .leftdown => {
-                            e.handled = true;
-                            dragi = null;
+    pub fn widget(self: *Self) gui.Widget {
+        return gui.Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+    }
 
-                            for (points) |p, i| {
-                                const dp = gui.Point.diff(p, mp);
-                                if (@fabs(dp.x) < 5 and @fabs(dp.y) < 5) {
-                                    dragi = i;
-                                    break;
-                                }
-                            }
+    fn data(self: *const Self) *const gui.WidgetData {
+        return &self.wd;
+    }
 
-                            if (dragi == null and points.len < pointsArray.len) {
-                                dragi = points.len;
-                                points.len += 1;
-                                points[dragi.?] = mp;
-                            }
+    pub fn rectFor(self: *Self, id: u32, min_size: gui.Size, e: gui.Options.Expand, g: gui.Options.Gravity) gui.Rect {
+        return gui.placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+    }
 
-                            if (dragi != null) {
-                                gui.captureMouse(self.wd.id);
-                                gui.dragPreStart(me.p, .crosshair, .{});
+    pub fn screenRectScale(self: *Self, r: gui.Rect) gui.RectScale {
+        const rs = self.wd.contentRectScale();
+        return gui.RectScale{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };
+    }
+
+    pub fn minSizeForChild(self: *Self, s: gui.Size) void {
+        self.wd.minSizeMax(self.wd.padSize(s));
+    }
+
+    pub fn processEvent(self: *Self, iter: *gui.EventIterator, e: *gui.Event) void {
+        _ = iter;
+        switch (e.evt) {
+            .mouse => |me| {
+                const rs = self.wd.contentRectScale();
+                const mp = me.p.inRectScale(rs);
+                switch (me.state) {
+                    .leftdown => {
+                        e.handled = true;
+                        dragi = null;
+
+                        for (points) |p, i| {
+                            const dp = gui.Point.diff(p, mp);
+                            if (@fabs(dp.x) < 5 and @fabs(dp.y) < 5) {
+                                dragi = i;
+                                break;
                             }
-                        },
-                        .leftup => {
-                            e.handled = true;
-                            gui.captureMouse(null);
-                            gui.dragEnd();
-                        },
-                        .motion => {
-                            e.handled = true;
-                            if (gui.dragging(me.p)) |dps| {
-                                const dp = dps.scale(1 / rs.s);
-                                points[dragi.?].x += dp.x;
-                                points[dragi.?].y += dp.y;
-                            }
-                        },
-                        .wheel_y => {
-                            e.handled = true;
-                            var base: f32 = 1.05;
-                            const zs = @exp(@log(base) * me.wheel);
-                            if (zs != 1.0) {
-                                thickness *= zs;
-                            }
-                        },
-                        else => {},
-                    }
-                },
-                else => {},
-            }
+                        }
+
+                        if (dragi == null and points.len < pointsArray.len) {
+                            dragi = points.len;
+                            points.len += 1;
+                            points[dragi.?] = mp;
+                        }
+
+                        if (dragi != null) {
+                            gui.captureMouse(self.wd.id);
+                            gui.dragPreStart(me.p, .crosshair, .{});
+                        }
+                    },
+                    .leftup => {
+                        e.handled = true;
+                        gui.captureMouse(null);
+                        gui.dragEnd();
+                    },
+                    .motion => {
+                        e.handled = true;
+                        if (gui.dragging(me.p)) |dps| {
+                            const dp = dps.scale(1 / rs.s);
+                            points[dragi.?].x += dp.x;
+                            points[dragi.?].y += dp.y;
+                            gui.cueFrame();
+                        }
+                    },
+                    .wheel_y => {
+                        e.handled = true;
+                        var base: f32 = 1.05;
+                        const zs = @exp(@log(base) * me.wheel);
+                        if (zs != 1.0) {
+                            thickness *= zs;
+                            gui.cueFrame();
+                        }
+                    },
+                    else => {},
+                }
+            },
+            else => {},
         }
+
+        if (gui.bubbleable(e)) {
+            self.bubbleEvent(e);
+        }
+    }
+
+    pub fn bubbleEvent(self: *Self, e: *gui.Event) void {
+        self.wd.parent.bubbleEvent(e);
     }
 };

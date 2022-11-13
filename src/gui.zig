@@ -421,7 +421,7 @@ pub fn frameTimeNS() i128 {
 // All widgets have to bubble keyboard events if they can have keyboard focus
 // so that pressing the up key in any child of a scrollarea will scroll.  Call
 // this helper at the end of processing normal events.
-fn bubbleable(e: *Event) bool {
+pub fn bubbleable(e: *Event) bool {
     return (!e.handled and (e.evt == .key or e.evt == .text));
 }
 
@@ -4013,9 +4013,7 @@ pub const BoxWidget = struct {
         self.wd.borderAndBackground();
 
         // our rect for children has to start at 0,0
-        self.childRect = self.wd.contentRect();
-        self.childRect.x = 0;
-        self.childRect.y = 0;
+        self.childRect = self.wd.contentRect().justSize();
 
         if (self.data_prev.space_taken_prev) |taken_prev| {
             if (self.dir == .horizontal) {
@@ -4071,6 +4069,11 @@ pub const BoxWidget = struct {
         return placeIn(null, rect, child_size, e, g);
     }
 
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        const rs = self.wd.contentRectScale();
+        return gui.RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+    }
+
     pub fn minSizeForChild(self: *Self, s: Size) void {
         if (self.dir == .horizontal) {
             self.space_taken += s.w;
@@ -4079,12 +4082,6 @@ pub const BoxWidget = struct {
             self.space_taken += s.h;
             self.max_thick = math.max(self.max_thick, s.w);
         }
-    }
-
-    pub fn screenRectScale(self: *Self, r: Rect) RectScale {
-        const screenRS = self.wd.contentRectScale();
-        const scaled = r.scale(screenRS.s);
-        return RectScale{ .r = scaled.offset(screenRS.r), .s = screenRS.s };
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
@@ -6102,9 +6099,14 @@ pub const WidgetData = struct {
             self.rect = r;
             if (self.options.expandHorizontal()) {
                 self.rect.w = self.parent.data().rect.w;
+            } else if (self.rect.w == 0) {
+                self.rect.w = minSize(self.id, self.min_size).w;
             }
+
             if (self.options.expandVertical()) {
                 self.rect.h = self.parent.data().rect.h;
+            } else if (self.rect.h == 0) {
+                self.rect.h = minSize(self.id, self.min_size).h;
             }
         } else {
             self.rect = self.parent.rectFor(self.id, self.min_size, self.options.expandGet(), self.options.gravityGet());
