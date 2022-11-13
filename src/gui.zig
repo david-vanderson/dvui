@@ -3510,7 +3510,7 @@ pub const PanedWidget = struct {
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
         const rs = self.wd.contentRectScale();
-        return gui.RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
     }
 
     pub fn minSizeForChild(self: *Self, s: gui.Size) void {
@@ -3626,7 +3626,6 @@ pub const TextLayoutWidget = struct {
         }
 
         self.prevClip = clip(rs.r);
-        self.insert_pt = self.wd.contentRect().topleft();
     }
 
     pub fn format(self: *Self, comptime fmt: []const u8, args: anytype, opts: Options) void {
@@ -3639,14 +3638,13 @@ pub const TextLayoutWidget = struct {
         const options = self.wd.options.override(opts);
         var iter = std.mem.split(u8, text, "\n");
         var first: bool = true;
-        const startx = self.wd.contentRect().x;
         const lineskip = options.font().lineSkip();
         while (iter.next()) |line| {
             if (first) {
                 first = false;
             } else {
                 self.insert_pt.y += lineskip;
-                self.insert_pt.x = startx;
+                self.insert_pt.x = 0;
             }
             self.addTextNoNewlines(line, options);
         }
@@ -3662,7 +3660,7 @@ pub const TextLayoutWidget = struct {
         const container_width = if (self.screenRectScale(rect).r.empty()) self.wd.min_size.w else rect.w;
 
         while (txt.len > 0) {
-            var linestart = rect.x;
+            var linestart: f32 = 0;
             var linewidth = container_width;
             var width = linewidth - self.insert_pt.x;
             for (self.corners) |corner| {
@@ -3689,9 +3687,9 @@ pub const TextLayoutWidget = struct {
             //std.debug.print("1 txt to {d} \"{s}\"\n", .{end, txt[0..end]});
 
             // if we are boxed in too much by corner widgets drop to next line
-            if (s.w > width and linewidth < rect.w) {
+            if (s.w > width and linewidth < container_width) {
                 self.insert_pt.y += lineskip;
-                self.insert_pt.x = rect.x;
+                self.insert_pt.x = 0;
                 continue;
             }
 
@@ -3707,14 +3705,14 @@ pub const TextLayoutWidget = struct {
                     // can't fit breaking on space, but we aren't starting at the left edge
                     // so drop to next line
                     self.insert_pt.y += lineskip;
-                    self.insert_pt.x = rect.x;
+                    self.insert_pt.x = 0;
                     continue;
                 }
             }
 
             // We want to render text, but no sense in doing it if we are off the end
-            if (self.insert_pt.y < rect.y + rect.h) {
-                const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.y + rect.h - self.insert_pt.y) });
+            if (self.insert_pt.y < rect.h) {
+                const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.h - self.insert_pt.y) });
                 //log.debug("renderText: {} {s} {}", .{rs.r, txt[0..end], options.color()});
                 renderText(options.font(), txt[0..end], rs, options.color());
             }
@@ -3723,14 +3721,14 @@ pub const TextLayoutWidget = struct {
             // like we did because our parent might size based on that (might be in a
             // scroll area)
             self.insert_pt.x += s.w;
-            const size = Size{ .w = 0, .h = self.insert_pt.y - rect.y + s.h };
+            const size = Size{ .w = 0, .h = self.insert_pt.y + s.h };
             self.wd.min_size.h = math.max(self.wd.min_size.h, self.wd.padSize(size).h);
             txt = txt[end..];
 
             // move insert_pt to next line if we have more text
             if (txt.len > 0) {
                 self.insert_pt.y += lineskip;
-                self.insert_pt.x = rect.x;
+                self.insert_pt.x = 0;
             }
         }
     }
@@ -3744,7 +3742,7 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        const ret = placeIn(id, self.wd.contentRect(), min_size, e, g);
+        const ret = placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
         const i: usize = switch (g) {
             .upleft => 0,
             .upright => 1,
@@ -3759,14 +3757,15 @@ pub const TextLayoutWidget = struct {
         return ret;
     }
 
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        const rs = self.wd.contentRectScale();
+        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+    }
+
     pub fn minSizeForChild(self: *Self, s: Size) void {
         const padded = self.wd.padSize(s);
         self.wd.min_size.w = math.max(self.wd.min_size.w, padded.w);
         self.wd.min_size.h += padded.h;
-    }
-
-    pub fn screenRectScale(self: *Self, r: Rect) RectScale {
-        return self.wd.parent.screenRectScale(r);
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
@@ -3845,15 +3844,16 @@ pub const ContextWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect(), min_size, e, g);
+        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+    }
+
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        const rs = self.wd.contentRectScale();
+        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
         self.wd.minSizeMax(self.wd.padSize(s));
-    }
-
-    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        return self.wd.parent.screenRectScale(rect);
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
@@ -3950,16 +3950,17 @@ pub const OverlayWidget = struct {
         return &self.wd;
     }
 
-    pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect(), min_size, e, g);
+    pub fn rectFor(self: *Self, id: u32, min_size: gui.Size, e: gui.Options.Expand, g: gui.Options.Gravity) gui.Rect {
+        return gui.placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+    }
+
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        const rs = self.wd.contentRectScale();
+        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
         self.wd.minSizeMax(self.wd.padSize(s));
-    }
-
-    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        return self.wd.parent.screenRectScale(rect);
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
@@ -4083,7 +4084,7 @@ pub const BoxWidget = struct {
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
         const rs = self.wd.contentRectScale();
-        return gui.RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -4376,24 +4377,25 @@ pub const ScrollAreaWidget = struct {
         var child_size = minSize(id, min_size);
 
         const y = self.next_widget_ypos;
-        const h = self.virtualSize.h - self.next_widget_ypos;
+        const h = self.virtualSize.h - y;
         const rect = Rect{ .x = 0, .y = y, .w = math.max(0, self.wd.contentRect().w - grab_thick), .h = math.min(h, child_size.h) };
         const ret = placeIn(id, rect, child_size, e, g);
         self.next_widget_ypos = (ret.y + ret.h);
         return ret;
     }
 
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        var r = rect;
+        r.y -= self.scroll;
+
+        const rs = self.wd.contentRectScale();
+        return RectScale{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };
+    }
+
     pub fn minSizeForChild(self: *Self, s: Size) void {
         self.nextVirtualSize.h += s.h;
         const padded = self.wd.padSize(s);
         self.wd.min_size.w = math.max(self.wd.min_size.w, padded.w + grab_thick);
-    }
-
-    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        var r = rect;
-        r.x += self.wd.contentRect().x;
-        r.y += self.wd.contentRect().y - self.scroll;
-        return self.wd.parent.screenRectScale(r);
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
