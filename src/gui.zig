@@ -4254,7 +4254,7 @@ pub const ScrollAreaWidget = struct {
         // of a window)
         .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
         .color_style = .content,
-        .min_size = .{ .w = 0, .h = 100 },
+        .min_size = .{ .w = 0, .h = 25 },
     };
 
     const grab_thick = 10;
