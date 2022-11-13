@@ -1,9 +1,4 @@
 
-make ButtonWidget a real wrapper so you don't have to do button.bc to access stuff
-- in sdl-test
-
-sdl-test: floating window: bottom border of window is overdrawn unless scrolled to bottom
-
 how can I get mach to not build all it's stuff when I'm compiling an sdl example?
 
 -Dtarget=wasm32-freestanding-none

@@ -145,7 +145,7 @@ pub fn main() !void {
                 //}
 
                 {
-                    var scroll = gui.scrollArea(@src(), 0, null, .{});
+                    var scroll = gui.scrollArea(@src(), 0, null, .{ .min_size = .{ .h = 100 } });
                     defer scroll.deinit();
 
                     var buf: [100]u8 = undefined;
@@ -234,7 +234,7 @@ pub fn main() !void {
         {
             const FloatingWindowTest = struct {
                 var show: bool = false;
-                var rect = gui.Rect{ .x = 300.25, .y = 200.25, .w = 300, .h = 200 };
+                var rect = gui.Rect{ .x = 300, .y = 200, .w = 300, .h = 200 };
             };
 
             if (gui.button(@src(), 0, "Floating Window", .{})) {
@@ -249,7 +249,6 @@ pub fn main() !void {
                 gui.label(@src(), 0, "Pretty Cool", .{}, .{ .font_style = .custom, .font_custom = .{ .name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 20 } });
 
                 if (gui.button(@src(), 0, "button", .{})) {
-                    std.debug.print("floating button\n", .{});
                     floats[0] = true;
                 }
 
@@ -289,10 +288,10 @@ pub fn main() !void {
                 defer scroll.deinit();
                 var tl = gui.textLayout(@src(), 0, .{ .expand = .both });
                 {
-                    if (gui.button(@src(), 0, "Up .1", .{ .gravity = .upleft })) {
+                    if (gui.button(@src(), 0, "Win Up .1", .{ .gravity = .upleft })) {
                         fwin.wd.rect.y -= 0.1;
                     }
-                    if (gui.button(@src(), 0, "Down .1", .{ .gravity = .upright })) {
+                    if (gui.button(@src(), 0, "Win Down .1", .{ .gravity = .upright })) {
                         fwin.wd.rect.y += 0.1;
                     }
                 }
