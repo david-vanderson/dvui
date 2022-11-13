@@ -2540,7 +2540,7 @@ pub const Window = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -2555,15 +2555,15 @@ pub const Window = struct {
         return ret;
     }
 
+    pub fn screenRectScale(self: *Self, r: Rect) RectScale {
+        const scaled = r.scale(self.natural_scale);
+        return RectScale{ .r = scaled.offset(self.rect_pixels), .s = self.natural_scale };
+    }
+
     pub fn minSizeForChild(self: *Self, s: Size) void {
         // os window doesn't size itself based on children
         _ = self;
         _ = s;
-    }
-
-    pub fn screenRectScale(self: *Self, r: Rect) RectScale {
-        const scaled = r.scale(self.natural_scale);
-        return RectScale{ .r = scaled.offset(self.rect_pixels), .s = self.natural_scale };
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
@@ -2659,7 +2659,7 @@ pub const PopupWidget = struct {
         }
 
         // outside normal flow, so don't get rect from parent
-        const rs = self.screenRectScale(self.wd.rect);
+        const rs = self.ownScreenRectScale();
         floatingWindowAdd(self.wd.id, rs.r, false);
 
         // we are using MenuWidget to do border/background but floating windows
@@ -2674,7 +2674,7 @@ pub const PopupWidget = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -2682,18 +2682,23 @@ pub const PopupWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.rect, min_size, e, g);
+        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+    }
+
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        // outside normal flow, so don't get rect from parent
+        const rs = self.ownScreenRectScale();
+        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+    }
+
+    pub fn ownScreenRectScale(self: *const Self) RectScale {
+        const s = windowNaturalScale();
+        const scaled = self.wd.rect.scale(s);
+        return RectScale{ .r = scaled.offset(windowRectPixels()), .s = s };
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
         self.wd.minSizeMax(self.wd.padSize(s));
-    }
-
-    pub fn screenRectScale(self: *Self, r: Rect) RectScale {
-        _ = self;
-        const s = windowNaturalScale();
-        const scaled = r.scale(s);
-        return RectScale{ .r = scaled.offset(windowRectPixels()), .s = s };
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
@@ -2755,7 +2760,7 @@ pub const PopupWidget = struct {
     pub fn deinit(self: *Self) void {
         // outside normal flow, so don't get rect from parent
         var closing: bool = false;
-        const rs = self.screenRectScale(self.wd.rect);
+        const rs = self.ownScreenRectScale();
         var iter = EventIterator.init(self.wd.id, rs.r);
         while (iter.nextCleanup(true)) |e| {
             if (e.evt == .mouse) {
@@ -2939,7 +2944,7 @@ pub const FloatingWindowWidget = struct {
         self.processEventsBefore();
 
         // outside normal flow, so don't get rect from parent
-        const rs = self.screenRectScale(self.wd.rect);
+        const rs = self.ownScreenRectScale();
         floatingWindowAdd(self.wd.id, rs.r, self.modal);
 
         if (self.modal) {
@@ -2958,7 +2963,7 @@ pub const FloatingWindowWidget = struct {
 
     pub fn processEventsBefore(self: *Self) void {
         // outside normal flow, so don't get rect from parent
-        const rs = self.screenRectScale(self.wd.rect);
+        const rs = self.ownScreenRectScale();
         var iter = EventIterator.init(self.wd.id, rs.r);
         while (iter.next()) |e| {
             if (e.evt == .mouse) {
@@ -3015,7 +3020,7 @@ pub const FloatingWindowWidget = struct {
 
     pub fn processEventsAfter(self: *Self) void {
         // outside normal flow, so don't get rect from parent
-        const rs = self.screenRectScale(self.wd.rect);
+        const rs = self.ownScreenRectScale();
         var iter = EventIterator.init(self.wd.id, rs.r);
         // duplicate processEventsBefore (minus corner stuff) because you could
         // have a click down, motion, and up in same frame and you wouldn't know
@@ -3073,7 +3078,7 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -3081,18 +3086,23 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.rect, min_size, e, g);
+        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+    }
+
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        // outside normal flow, so don't get rect from parent
+        const rs = self.ownScreenRectScale();
+        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+    }
+
+    pub fn ownScreenRectScale(self: *const Self) RectScale {
+        const s = windowNaturalScale();
+        const scaled = self.wd.rect.scale(s);
+        return RectScale{ .r = scaled.offset(windowRectPixels()), .s = s };
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
         self.wd.minSizeMax(self.wd.padSize(s));
-    }
-
-    pub fn screenRectScale(self: *Self, r: Rect) RectScale {
-        _ = self;
-        const s = windowNaturalScale();
-        const scaled = r.scale(s);
-        return RectScale{ .r = scaled.offset(windowRectPixels()), .s = s };
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
@@ -3437,7 +3447,7 @@ pub const PanedWidget = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -3445,9 +3455,9 @@ pub const PanedWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) gui.Rect {
+        var r = self.wd.contentRect().justSize();
         if (self.first_side_id == null or self.first_side_id.? == id) {
             self.first_side_id = id;
-            var r = self.wd.contentRect();
             if (self.collapsed()) {
                 if (self.split_ratio == 0.0) {
                     r.w = 0;
@@ -3466,7 +3476,6 @@ pub const PanedWidget = struct {
             }
             return gui.placeIn(id, r, min_size, e, g);
         } else {
-            var r = self.wd.contentRect();
             if (self.collapsed()) {
                 if (self.split_ratio == 1.0) {
                     r.w = 0;
@@ -3499,33 +3508,36 @@ pub const PanedWidget = struct {
         }
     }
 
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        const rs = self.wd.contentRectScale();
+        return gui.RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+    }
+
     pub fn minSizeForChild(self: *Self, s: gui.Size) void {
         self.wd.minSizeMax(self.wd.padSize(s));
     }
 
-    pub fn screenRectScale(self: *Self, r: gui.Rect) gui.RectScale {
-        return self.wd.parent.screenRectScale(r);
-    }
-
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = iter;
         if (e.evt == .mouse) {
+            const rs = self.wd.contentRectScale();
             var target: f32 = undefined;
             var mouse: f32 = undefined;
             var cursor: CursorKind = undefined;
             switch (self.dir) {
                 .horizontal => {
-                    target = iter.r.x + iter.r.w * self.split_ratio;
+                    target = rs.r.x + rs.r.w * self.split_ratio;
                     mouse = e.evt.mouse.p.x;
                     cursor = .arrow_w_e;
                 },
                 .vertical => {
-                    target = iter.r.y + iter.r.h * self.split_ratio;
+                    target = rs.r.y + rs.r.h * self.split_ratio;
                     mouse = e.evt.mouse.p.y;
                     cursor = .arrow_n_s;
                 },
             }
 
-            if (self.captured or @fabs(mouse - target) < (5 * windowNaturalScale())) {
+            if (self.captured or @fabs(mouse - target) < (5 * rs.s)) {
                 self.hovered = true;
                 e.handled = true;
                 if (e.evt.mouse.state == .leftdown) {
@@ -3542,10 +3554,10 @@ pub const PanedWidget = struct {
                         _ = dps;
                         switch (self.dir) {
                             .horizontal => {
-                                self.split_ratio = (e.evt.mouse.p.x - iter.r.x) / iter.r.w;
+                                self.split_ratio = (e.evt.mouse.p.x - rs.r.x) / rs.r.w;
                             },
                             .vertical => {
-                                self.split_ratio = (e.evt.mouse.p.y - iter.r.y) / iter.r.h;
+                                self.split_ratio = (e.evt.mouse.p.y - rs.r.y) / rs.r.h;
                             },
                         }
 
@@ -3724,7 +3736,7 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -3825,7 +3837,7 @@ pub const ContextWidget = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -3931,7 +3943,7 @@ pub const OverlayWidget = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -4025,7 +4037,7 @@ pub const BoxWidget = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -4353,7 +4365,7 @@ pub const ScrollAreaWidget = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -4555,7 +4567,7 @@ pub const ScaleWidget = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -4653,7 +4665,7 @@ pub const MenuWidget = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -4861,7 +4873,7 @@ pub const MenuItemWidget = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -5106,7 +5118,7 @@ pub const ButtonContainerWidget = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -5377,7 +5389,7 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, minSizeForChild, screenRectScale, processEvent, bubbleEvent);
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
     fn data(self: *const Self) *const WidgetData {
@@ -6229,8 +6241,8 @@ pub const Widget = struct {
     const VTable = struct {
         data: *const fn (ptr: *anyopaque) *const WidgetData,
         rectFor: *const fn (ptr: *anyopaque, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
-        minSizeForChild: *const fn (ptr: *anyopaque, s: Size) void,
         screenRectScale: *const fn (ptr: *anyopaque, r: Rect) RectScale,
+        minSizeForChild: *const fn (ptr: *anyopaque, s: Size) void,
         processEvent: *const fn (ptr: *anyopaque, iter: *EventIterator, e: *Event) void,
         bubbleEvent: *const fn (ptr: *anyopaque, e: *Event) void,
     };
@@ -6239,8 +6251,8 @@ pub const Widget = struct {
         pointer: anytype,
         comptime dataFn: fn (ptr: @TypeOf(pointer)) *const WidgetData,
         comptime rectForFn: fn (ptr: @TypeOf(pointer), id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
-        comptime minSizeForChildFn: fn (ptr: @TypeOf(pointer), s: Size) void,
         comptime screenRectScaleFn: fn (ptr: @TypeOf(pointer), r: Rect) RectScale,
+        comptime minSizeForChildFn: fn (ptr: @TypeOf(pointer), s: Size) void,
         comptime processEventFn: fn (ptr: @TypeOf(pointer), iter: *EventIterator, e: *Event) void,
         comptime bubbleEventFn: fn (ptr: @TypeOf(pointer), e: *Event) void,
     ) Widget {
@@ -6261,14 +6273,14 @@ pub const Widget = struct {
                 return @call(.{ .modifier = .always_inline }, rectForFn, .{ self, id, min_size, e, g });
             }
 
-            fn minSizeForChildImpl(ptr: *anyopaque, s: Size) void {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, minSizeForChildFn, .{ self, s });
-            }
-
             fn screenRectScaleImpl(ptr: *anyopaque, r: Rect) RectScale {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
                 return @call(.{ .modifier = .always_inline }, screenRectScaleFn, .{ self, r });
+            }
+
+            fn minSizeForChildImpl(ptr: *anyopaque, s: Size) void {
+                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                return @call(.{ .modifier = .always_inline }, minSizeForChildFn, .{ self, s });
             }
 
             fn processEventImpl(ptr: *anyopaque, iter: *EventIterator, e: *Event) void {
@@ -6284,8 +6296,8 @@ pub const Widget = struct {
             const vtable = VTable{
                 .data = dataImpl,
                 .rectFor = rectForImpl,
-                .minSizeForChild = minSizeForChildImpl,
                 .screenRectScale = screenRectScaleImpl,
+                .minSizeForChild = minSizeForChildImpl,
                 .processEvent = processEventImpl,
                 .bubbleEvent = bubbleEventImpl,
             };
@@ -6322,12 +6334,12 @@ pub const Widget = struct {
         return self.vtable.rectFor(self.ptr, id, min_size, e, g);
     }
 
-    pub fn minSizeForChild(self: Widget, s: Size) void {
-        self.vtable.minSizeForChild(self.ptr, s);
-    }
-
     pub fn screenRectScale(self: Widget, r: Rect) RectScale {
         return self.vtable.screenRectScale(self.ptr, r);
+    }
+
+    pub fn minSizeForChild(self: Widget, s: Size) void {
+        self.vtable.minSizeForChild(self.ptr, s);
     }
 
     pub fn processEvent(self: Widget, iter: *EventIterator, e: *Event) void {
