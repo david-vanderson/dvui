@@ -4469,6 +4469,12 @@ pub const ScrollAreaWidget = struct {
             cueFrame();
         }
 
+        if (self.nextVirtualSize.w != self.virtualSize.w or
+            self.nextVirtualSize.h != self.virtualSize.h)
+        {
+            cueFrame();
+        }
+
         const d = Data{ .virtualSize = self.nextVirtualSize, .scroll = scroll };
         dataSet(self.wd.id, "_data", d);
 
