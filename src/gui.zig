@@ -4481,16 +4481,12 @@ pub fn separator(src: std.builtin.SourceLocation, id_extra: usize, opts: Options
     wd.minSizeReportToParent();
 }
 
-pub fn spacer(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-    _ = spacerRect(src, id_extra, opts);
-}
-
-pub fn spacerRect(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Rect {
+pub fn spacer(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) WidgetData {
     var wd = WidgetData.init(src, id_extra, opts);
     debug("{x} Spacer {}", .{ wd.id, wd.rect });
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
-    return wd.rect;
+    return wd;
 }
 
 pub fn spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
@@ -5262,11 +5258,10 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     defer b.deinit();
 
     var check_size = options.font().lineSkip();
-    const r = spacerRect(@src(), 0, .{ .min_size = Size.all(check_size), .gravity = .left });
+    const s = spacer(@src(), 0, .{ .min_size = Size.all(check_size), .gravity = .left });
 
-    var rs = parentGet().screenRectScale(r);
-    const thick_focus = 2;
-    rs.r = rs.r.insetAll(thick_focus / 2 * rs.s);
+    var rs = s.borderRectScale();
+    rs.r = rs.r.insetAll(0.5 * rs.s);
 
     pathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
     var col = Color.lerp(options.color_bg(), 0.3, options.color());
@@ -5274,15 +5269,15 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
 
     if (bc.focused) {
         pathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
-        pathStroke(true, thick_focus * rs.s, .none, themeGet().color_accent_bg);
+        pathStroke(true, 2 * rs.s, .none, themeGet().color_accent_bg);
     }
 
-    rs.r = rs.r.insetAll(0.5 * rs.s);
-
-    pathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
     var fill = options.color_bg();
     if (target.*) {
         fill = themeGet().color_accent_bg;
+        pathAddRect(rs.r.insetAll(0.5 * rs.s), options.corner_radiusGet().scale(rs.s));
+    } else {
+        pathAddRect(rs.r.insetAll(rs.s), options.corner_radiusGet().scale(rs.s));
     }
 
     if (bc.captured) {
@@ -5296,6 +5291,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     pathFillConvex(fill);
 
     if (target.*) {
+        rs.r = rs.r.insetAll(0.5 * rs.s);
         const pad = math.max(1.0, rs.r.w / 6);
 
         var thick = math.max(1.0, rs.r.w / 5);
@@ -5312,7 +5308,8 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
         pathStroke(false, thick, .square, themeGet().color_accent);
     }
 
-    labelNoFormat(@src(), 0, label_str, options.styling().override(.{ .background = true }));
+    _ = spacer(@src(), 0, .{ .min_size = Size.all(1), .gravity = .left });
+    labelNoFormat(@src(), 0, label_str, options.styling());
 }
 
 pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) void {
