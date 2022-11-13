@@ -3950,8 +3950,8 @@ pub const OverlayWidget = struct {
         return &self.wd;
     }
 
-    pub fn rectFor(self: *Self, id: u32, min_size: gui.Size, e: gui.Options.Expand, g: gui.Options.Gravity) gui.Rect {
-        return gui.placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+    pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
@@ -4559,18 +4559,18 @@ pub fn scale(src: std.builtin.SourceLocation, id_extra: usize, scale_in: f32, op
 pub const ScaleWidget = struct {
     const Self = @This();
     wd: WidgetData = undefined,
-    scale_in: f32 = undefined,
+    scale: f32 = undefined,
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, scale_in: f32, opts: Options) Self {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
-        self.scale_in = scale_in;
+        self.scale = scale_in;
         return self;
     }
 
     pub fn install(self: *Self) void {
         _ = parentSet(self.widget());
-        debug("{x} Scale {d} {}", .{ self.wd.id, self.scale_in, self.wd.rect });
+        debug("{x} Scale {d} {}", .{ self.wd.id, self.scale, self.wd.rect });
         self.wd.borderAndBackground();
     }
 
@@ -4583,18 +4583,17 @@ pub const ScaleWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect().justSize().scale(1.0 / self.scale_in), min_size, e, g);
+        return placeIn(id, self.wd.contentRect().justSize().scale(1.0 / self.scale), min_size, e, g);
+    }
+
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        var rs = self.wd.contentRectScale();
+        rs.s *= self.scale;
+        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
-        self.wd.minSizeMax(self.wd.padSize(s.scale(self.scale_in)));
-    }
-
-    pub fn screenRectScale(self: *Self, r: Rect) RectScale {
-        const screenRS = self.wd.contentRectScale();
-        const s = screenRS.s * self.scale_in;
-        const scaled = r.scale(s);
-        return RectScale{ .r = scaled.offset(screenRS.r), .s = s };
+        self.wd.minSizeMax(self.wd.padSize(s.scale(self.scale)));
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
@@ -4681,15 +4680,16 @@ pub const MenuWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect(), min_size, e, g);
+        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+    }
+
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        const rs = self.wd.contentRectScale();
+        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
         self.wd.minSizeMax(self.wd.padSize(s));
-    }
-
-    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        return self.wd.parent.screenRectScale(rect);
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
@@ -4889,15 +4889,16 @@ pub const MenuItemWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect(), min_size, e, g);
+        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+    }
+
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        const rs = self.wd.contentRectScale();
+        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
         self.wd.minSizeMax(self.wd.padSize(s));
-    }
-
-    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        return self.wd.parent.screenRectScale(rect);
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
@@ -5134,15 +5135,16 @@ pub const ButtonContainerWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect(), min_size, e, g);
+        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+    }
+
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        const rs = self.wd.contentRectScale();
+        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
         self.wd.minSizeMax(self.wd.padSize(s));
-    }
-
-    pub fn screenRectScale(self: *Self, r: Rect) RectScale {
-        return self.wd.parent.screenRectScale(r);
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
@@ -5405,15 +5407,16 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect(), min_size, e, g);
+        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+    }
+
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        const rs = self.wd.contentRectScale();
+        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
         self.wd.minSizeMax(self.wd.padSize(s));
-    }
-
-    pub fn screenRectScale(self: *Self, r: Rect) RectScale {
-        return self.wd.parent.screenRectScale(r);
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
