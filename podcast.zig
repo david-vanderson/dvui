@@ -4,6 +4,10 @@ const Backend = @import("src/SDLBackend.zig");
 
 const sqlite = @import("sqlite");
 
+// when set to true, looks for feed-{rowid}.xml and episode-{rowid}.mp3 instead
+// of fetching from network
+const DEBUG = true;
+
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 var arena: std.mem.Allocator = undefined;
@@ -17,26 +21,26 @@ const Episode = struct {
     title: []const u8,
 };
 
-fn db_error_callafter(id: u32, response: gui.DialogResponse) void {
+fn dbErrorCallafter(id: u32, response: gui.DialogResponse) void {
     _ = id;
     _ = response;
     g_quit = true;
 }
 
-fn db_error(comptime fmt: []const u8, args: anytype) !void {
-    gui.dialogOk(@src(), 0, true, "Error", try std.fmt.allocPrint(gpa, fmt, args), db_error_callafter);
+fn dbError(comptime fmt: []const u8, args: anytype) !void {
+    gui.dialogOk(@src(), 0, true, "DB Error", try std.fmt.allocPrint(gpa, fmt, args), dbErrorCallafter);
 }
 
-fn db_row(comptime query: []const u8, comptime return_type: type, values: anytype) !?return_type {
+fn dbRow(comptime query: []const u8, comptime return_type: type, values: anytype) !?return_type {
     if (g_db) |*db| {
         var stmt = db.prepare(query) catch {
-            gui.dialogOk(@src(), 0, true, "Fatal Error", try std.fmt.allocPrint(gpa, "DB Error:\n\n{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), query }), null);
+            try dbError("{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), query });
             return error.DB_ERROR;
         };
         defer stmt.deinit();
 
         const row = stmt.oneAlloc(return_type, arena, .{}, values) catch {
-            gui.dialogOk(@src(), 0, true, "Fatal Error", try std.fmt.allocPrint(gpa, "DB Error:\n\n{}\n\nexecuting statement:\n\n{s}", .{ db.getDetailedError(), query }), null);
+            try dbError("{}\n\nexecuting statement:\n\n{s}", .{ db.getDetailedError(), query });
             return error.DB_ERROR;
         };
 
@@ -46,7 +50,7 @@ fn db_row(comptime query: []const u8, comptime return_type: type, values: anytyp
     return null;
 }
 
-fn db_init() !void {
+fn dbInit() !void {
     g_db = sqlite.Db.init(.{
         .mode = sqlite.Db.Mode{ .File = db_name },
         .open_flags = .{
@@ -54,30 +58,60 @@ fn db_init() !void {
             .create = true,
         },
     }) catch |err| {
-        gui.dialogOk(@src(), 0, true, "Fatal Error", try std.fmt.allocPrint(gpa, "Can't open/create db:\n{s}\n{}", .{ db_name, err }), null);
+        try dbError("Can't open/create db:\n{s}\n{}", .{ db_name, err });
         return error.DB_ERROR;
     };
 
-    _ = try db_row("CREATE TABLE IF NOT EXISTS 'schema' (version INTEGER)", u8, .{});
+    _ = try dbRow("CREATE TABLE IF NOT EXISTS 'schema' (version INTEGER)", u8, .{});
 
-    if (try db_row("SELECT version FROM schema", u32, .{})) |version| {
+    if (try dbRow("SELECT version FROM schema", u32, .{})) |version| {
         if (version != 1) {
-            gui.dialogOk(@src(), 0, true, "Fatal Error", try std.fmt.allocPrint(gpa, "{s}\n\nbad schema version: {d}", .{ db_name, version }), null);
+            try dbError("{s}\n\nbad schema version: {d}", .{ db_name, version });
             return error.DB_ERROR;
         }
     } else {
         // new database
-        _ = try db_row("INSERT INTO schema (version) VALUES (1)", u8, .{});
-        _ = try db_row("CREATE TABLE podcast (url TEXT, error TEXT, title TEXT, description TEXT, copyright TEXT, pubDate INTEGER, lastBuildDate TEXT, link TEXT, image_url TEXT, speed REAL)", u8, .{});
-        _ = try db_row("CREATE TABLE episode (podcast_id INTEGER, visible INTEGER DEFAULT 1, guid TEXT, title TEXT, description TEXT, pubDate INTEGER, enclosure_url TEXT, position INTEGER, duration INTEGER)", u8, .{});
-        _ = try db_row("CREATE TABLE player (episode_id INTEGER)", u8, .{});
-        _ = try db_row("INSERT INTO player (episode_id) values (0)", u8, .{});
+        _ = try dbRow("INSERT INTO schema (version) VALUES (1)", u8, .{});
+        _ = try dbRow("CREATE TABLE podcast (url TEXT, error TEXT, title TEXT, description TEXT, copyright TEXT, pubDate INTEGER, lastBuildDate TEXT, link TEXT, image_url TEXT, speed REAL)", u8, .{});
+        _ = try dbRow("CREATE TABLE episode (podcast_id INTEGER, visible INTEGER DEFAULT 1, guid TEXT, title TEXT, description TEXT, pubDate INTEGER, enclosure_url TEXT, position INTEGER, duration INTEGER)", u8, .{});
+        _ = try dbRow("CREATE TABLE player (episode_id INTEGER)", u8, .{});
+        _ = try dbRow("INSERT INTO player (episode_id) values (0)", u8, .{});
     }
 
-    _ = try db_row("UPDATE podcast SET error=NULL", u8, .{});
+    _ = try dbRow("UPDATE podcast SET error=NULL", u8, .{});
 }
 
-fn main_gui() !void {
+fn bgFetchFeed(rowid: u32, url: []const u8) !void {
+    if (DEBUG) {
+        var buf = std.mem.zeroes([256:0]u8);
+        const filename = try std.fmt.bufPrint(&buf, "feed-{d}.xml", .{rowid});
+        std.debug.print("  bgFetchFeed fetching {s}\n", .{filename});
+
+        const file = std.fs.cwd().openFile(filename, .{}) catch |err| switch (err) {
+            error.FileNotFound => return,
+            else => |e| return e,
+        };
+        defer file.close();
+
+        const contents = try file.readToEndAlloc(arena, 1024 * 1024 * 20);
+        _ = contents;
+    } else {
+        _ = url;
+    }
+}
+
+fn bgUpdateFeed(rowid: u32) !void {
+    std.debug.print("bgUpdateFeed {d}\n", .{rowid});
+    if (try dbRow("SELECT url FROM podcast WHERE rowid = ?", []const u8, .{rowid})) |url| {
+        std.debug.print("  updating url {s}\n", .{url});
+        var timer = try std.time.Timer.start();
+        try bgFetchFeed(rowid, url);
+        const timens = timer.read();
+        std.debug.print("  fetch took {d}ms\n", .{timens / 1000000});
+    }
+}
+
+fn mainGui() !void {
     //var float = gui.floatingWindow(@src(), 0, false, null, null, .{});
     //defer float.deinit();
 
@@ -110,7 +144,7 @@ pub fn main() !void {
     var win = gui.Window.init(gpa, backend.guiBackend());
     defer win.deinit();
 
-    db_init() catch |err| switch (err) {
+    dbInit() catch |err| switch (err) {
         error.DB_ERROR => {},
         else => return err,
     };
@@ -131,7 +165,7 @@ pub fn main() !void {
 
         //_ = gui.examples.demo();
 
-        main_gui() catch |err| switch (err) {
+        mainGui() catch |err| switch (err) {
             error.DB_ERROR => {},
             else => return err,
         };
@@ -169,8 +203,26 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
                 defer fw.deinit();
                 if (gui.menuItemLabel(@src(), 0, "Add RSS", false, .{})) |rr| {
                     _ = rr;
-                    add_rss_dialog = true;
                     gui.menuGet().?.close();
+                    add_rss_dialog = true;
+                }
+
+                if (gui.menuItemLabel(@src(), 0, "Update All", false, .{})) |rr| {
+                    _ = rr;
+                    gui.menuGet().?.close();
+                    if (g_db) |*db| {
+                        const query = "SELECT rowid FROM podcast";
+                        var stmt = db.prepare(query) catch {
+                            try dbError("{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), query });
+                            return error.DB_ERROR;
+                        };
+                        defer stmt.deinit();
+
+                        var iter = try stmt.iterator(u32, .{});
+                        while (try iter.nextAlloc(arena, .{})) |rowid| {
+                            try bgUpdateFeed(rowid);
+                        }
+                    }
                 }
             }
         }
@@ -202,11 +254,11 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
         if (gui.button(@src(), 0, "Ok", .{})) {
             dialog.close();
             const url = std.mem.trim(u8, &TextEntryText.text, " \x00");
-            const row = try db_row("SELECT rowid FROM podcast WHERE url = ?", i32, .{url});
+            const row = try dbRow("SELECT rowid FROM podcast WHERE url = ?", i32, .{url});
             if (row) |_| {
                 gui.dialogOk(@src(), 0, true, "Note", try std.fmt.allocPrint(arena, "url already in db:\n\n{s}", .{url}), null);
             } else {
-                _ = try db_row("INSERT INTO podcast (url) VALUES (?)", i32, .{url});
+                _ = try dbRow("INSERT INTO podcast (url) VALUES (?)", i32, .{url});
                 if (g_db) |*db| {
                     const rowid = db.getLastInsertRowID();
                     _ = rowid;
@@ -315,9 +367,9 @@ fn player() !void {
 
     var episode = Episode{ .title = "Episode Title" };
 
-    const episode_id = try db_row("SELECT episode_id FROM player", i32, .{});
+    const episode_id = try dbRow("SELECT episode_id FROM player", i32, .{});
     if (episode_id) |id| {
-        episode = try db_row("SELECT title FROM episode WHERE rowid = ?", Episode, .{id}) orelse episode;
+        episode = try dbRow("SELECT title FROM episode WHERE rowid = ?", Episode, .{id}) orelse episode;
     }
 
     gui.label(@src(), 0, "{s}", .{episode.title}, oo.override(.{
