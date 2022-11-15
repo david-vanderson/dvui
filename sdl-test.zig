@@ -237,12 +237,21 @@ pub fn main() !void {
                 var rect = gui.Rect{ .x = 300, .y = 200, .w = 300, .h = 200 };
             };
 
+            var start_closing: bool = false;
+
             if (gui.button(@src(), 0, "Floating Window", .{})) {
-                FloatingWindowTest.show = !FloatingWindowTest.show;
+                if (FloatingWindowTest.show) {
+                    start_closing = true;
+                } else {
+                    FloatingWindowTest.show = true;
+                }
             }
 
             if (FloatingWindowTest.show) {
-                var fwin = gui.floatingWindow(@src(), 0, false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
+                var fwin = animatingWindow(@src(), 0, false, &FloatingWindowTest.rect, &FloatingWindowTest.show, start_closing, .{});
+                //var fwin = gui.FloatingWindowWidget.init(@src(), 0, false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
+
+                fwin.install();
                 defer fwin.deinit();
                 gui.labelNoFormat(@src(), 0, "Floating Window", .{ .gravity = .center });
 
@@ -321,6 +330,40 @@ pub fn main() !void {
     }
 }
 
+fn animatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, rect: ?*gui.Rect, openflag: ?*bool, start_closing: bool, opts: gui.Options) gui.FloatingWindowWidget {
+    var fwin = gui.FloatingWindowWidget.init(src, id_extra, modal, rect, openflag, opts);
+
+    if (gui.firstFrame(fwin.data().id)) {
+        gui.animate(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
+    }
+
+    if (start_closing) {
+        gui.animate(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 100_000 });
+    }
+
+    if (gui.animationGet(fwin.wd.id, "rect_percent")) |a| {
+        // tell fwin we are about to animate its rect
+        fwin.saveRect();
+
+        var r = fwin.data().rect;
+        const dw = r.w * (1.0 - a.lerp());
+        const dh = r.h * (1.0 - a.lerp());
+        r.x += dw / 2;
+        r.w -= dw;
+        r.y += dh / 2;
+        r.h -= dh;
+
+        fwin.data().rect = r;
+
+        if (a.done() and r.empty()) {
+            // done with closing animation
+            fwin.close();
+        }
+    }
+
+    return fwin;
+}
+
 fn show_stroke_test_window() void {
     var win = gui.floatingWindow(@src(), 0, false, &StrokeTest.show_rect, &StrokeTest.show_dialog, .{});
     defer win.deinit();
@@ -385,7 +428,7 @@ pub const StrokeTest = struct {
         return gui.Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const gui.WidgetData {
+    pub fn data(self: *Self) *gui.WidgetData {
         return &self.wd;
     }
 
