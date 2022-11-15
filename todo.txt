@@ -1,6 +1,4 @@
 
-animating dialog's bottom bounces up because the text layout is calculating a min height based on an intermediate smaller width
-
 .install should take an options struct
 
 start handling all the unreachable stuff
