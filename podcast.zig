@@ -241,7 +241,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
         };
 
         var te = gui.TextEntryWidget.init(@src(), 0, 26.0, &TextEntryText.text, .{ .gravity = .center });
-        if (dialog.first_frame) {
+        if (gui.firstFrame(te.data().id)) {
             std.mem.set(u8, &TextEntryText.text, 0);
             gui.focusWidget(te.wd.id, null);
         }

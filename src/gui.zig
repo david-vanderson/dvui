@@ -1456,6 +1456,10 @@ pub fn windowNaturalScale() f32 {
     return cw.natural_scale;
 }
 
+pub fn firstFrame(id: u32) bool {
+    return minSizeGetPrevious(id) == null;
+}
+
 pub fn minSizeGetPrevious(id: u32) ?Size {
     var cw = current_window orelse unreachable;
     const ret = cw.widgets_min_size_prev.get(id);
@@ -1515,7 +1519,7 @@ pub fn dataGet(id: u32, key: []const u8, comptime T: type) ?T {
     if (offset) |o| {
         const dt = @typeInfo(T);
         if (dt == .Pointer and dt.Pointer.size == .Slice) {
-            return cw.data_prev.items[o.begin..o.end];
+            return cw.arena.dupe(u8, cw.data_prev.items[o.begin..o.end]) catch unreachable;
         } else {
             var bytes: [@sizeOf(T)]u8 = undefined;
             std.mem.copy(u8, &bytes, cw.data_prev.items[o.begin..o.end]);
@@ -1671,7 +1675,16 @@ pub const Animation = struct {
     pub fn lerp(a: *const Animation) f32 {
         var frac = @intToFloat(f32, -a.start_time) / @intToFloat(f32, a.end_time - a.start_time);
         frac = math.max(0, math.min(1, frac));
-        return a.start_val + frac * (a.end_val - a.start_val);
+        return (a.start_val * (1.0 - frac)) + (a.end_val * frac);
+    }
+
+    // return true on the last frame for this animation
+    pub fn done(a: *const Animation) bool {
+        if (a.end_time <= 0) {
+            return true;
+        }
+
+        return false;
     }
 };
 
@@ -2543,7 +2556,7 @@ pub const Window = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -2677,7 +2690,7 @@ pub const PopupWidget = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -2812,7 +2825,6 @@ pub const PopupWidget = struct {
         }
 
         self.layout.deinit();
-        dataSet(self.wd.id, "_rect", self.wd.rect);
         self.wd.minSizeSetAndCue();
         // outside normal layout, don't call minSizeForChild or
         // wd.minSizeReportToParent
@@ -2845,10 +2857,10 @@ pub const FloatingWindowWidget = struct {
     modal: bool = false,
     captured: bool = false,
     prev_windowId: u32 = 0,
+    save_rect: bool = true,
     io_rect: ?*Rect = null,
     layout: BoxWidget = undefined,
     openflag: ?*bool = null,
-    first_frame: bool = false,
     prevClip: Rect = Rect{},
     autoPosSize: struct {
         autopos: bool,
@@ -2877,7 +2889,7 @@ pub const FloatingWindowWidget = struct {
             self.wd.rect = ior.*;
         } else {
             // we store the rect (only while the window is open)
-            self.wd.rect = dataGet(self.wd.id, "_rect", Rect) orelse Rect{};
+            self.wd.rect = dataGet(self.wd.id, "_rect", Rect) orelse self.options.rect orelse Rect{};
         }
 
         if (dataGet(self.wd.id, "_autoPosSize", @TypeOf(self.autoPosSize))) |aps| {
@@ -2906,11 +2918,11 @@ pub const FloatingWindowWidget = struct {
                 // make sure that we stay on the screen
                 self.wd.rect.x = math.max(0, windowRect().w / 2 - self.wd.rect.w / 2);
                 self.wd.rect.y = math.max(0, windowRect().h / 2 - self.wd.rect.h / 2);
+
                 //std.debug.print("autopos to {}\n", .{self.wd.rect});
             }
         } else {
             // first frame we are being shown
-            self.first_frame = true; // for user code
             focusWindow(self.wd.id, null);
 
             if (self.autoPosSize.autopos or self.autoPosSize.autosize) {
@@ -2925,6 +2937,20 @@ pub const FloatingWindowWidget = struct {
         }
 
         return self;
+    }
+
+    // This is useful when doing animations.  Save our (target) rect now before
+    // the user changes it and don't save it in deinit().
+    pub fn saveRect(self: *Self) void {
+        // save our calculated rect in case the user is animating us,
+        // they will need this each frame
+        if (self.io_rect) |ior| {
+            // user is storing the rect for us across open/close
+            ior.* = self.wd.rect;
+        } else {
+            dataSet(self.wd.id, "_rect", self.wd.rect);
+        }
+        self.save_rect = false;
     }
 
     pub fn install(self: *Self) void {
@@ -3081,7 +3107,7 @@ pub const FloatingWindowWidget = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -3132,17 +3158,20 @@ pub const FloatingWindowWidget = struct {
     pub fn deinit(self: *Self) void {
         self.processEventsAfter();
         self.layout.deinit();
-        if (self.io_rect) |ior| {
-            // user is storing the rect for us across open/close
-            if (!self.autoPosSize.autopos) {
-                // if we are autopositioning, then this is the first frame and we set
-                // our rect to 0 so the user wouldn't see the jump, so don't store it
-                // back out this frame
-                ior.* = self.wd.rect;
+        if (self.save_rect) {
+            if (self.io_rect) |ior| {
+                // user is storing the rect for us across open/close
+                if (!self.autoPosSize.autopos) {
+                    // if we are autopositioning, then this is the first frame and we set
+                    // our rect to 0 so the user wouldn't see the jump, so don't store it
+                    // back out this frame
+                    ior.* = self.wd.rect;
+                    std.debug.print("stored rect {}\n", .{self.wd.rect});
+                }
+            } else {
+                // we store the rect
+                dataSet(self.wd.id, "_rect", self.wd.rect);
             }
-        } else {
-            // we store the rect
-            dataSet(self.wd.id, "_rect", self.wd.rect);
         }
         dataSet(self.wd.id, "_autoPosSize", self.autoPosSize);
         self.wd.minSizeSetAndCue();
@@ -3185,8 +3214,8 @@ pub const DialogEntry = struct {
     display: DialogDisplay,
 };
 pub const DialogResponse = enum(u8) {
-    CLOSED = 0,
-    OK = 1,
+    CLOSED,
+    OK,
 };
 
 pub fn dialogCustom(src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplay) u32 {
@@ -3239,17 +3268,56 @@ pub fn dialogOkDisplay(id: u32) bool {
         gui.dataSet(id, "_callafter", ca);
     }
 
-    var win = gui.floatingWindow(@src(), id, modal, null, null, .{});
+    // once we record a response, refresh it
+    if (gui.dataGet(id, "_response", DialogResponse)) |r| {
+        gui.dataSet(id, "_response", r);
+    }
+
+    var win = FloatingWindowWidget.init(@src(), id, modal, null, null, .{});
+
+    if (gui.firstFrame(win.data().id)) {
+        gui.animate(win.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
+    }
+
+    if (gui.animationGet(win.data().id, "rect_percent")) |a| {
+        // tell win we are about to animate its rect
+        win.saveRect();
+
+        var r = win.data().rect;
+        const dw = r.w * (1.0 - a.lerp());
+        const dh = r.h * (1.0 - a.lerp());
+        r.x += dw / 2;
+        r.w -= dw;
+        r.y += dh / 2;
+        r.h -= dh;
+
+        win.data().rect = r;
+
+        if (a.done() and a.end_val == 0) {
+            win.close();
+
+            const response = gui.dataGet(id, "_response", gui.DialogResponse) orelse {
+                std.debug.print("Error: no response for dialog {x}\n", .{id});
+                return true;
+            };
+
+            if (callafter) |ca| {
+                ca(id, response);
+            }
+            return true;
+        }
+    }
+
+    win.install();
     defer win.deinit();
+
+    var closing: bool = false;
 
     var header_openflag = true;
     gui.windowHeader(title, "", &header_openflag);
     if (!header_openflag) {
-        win.close();
-        if (callafter) |ca| {
-            ca(id, gui.DialogResponse.CLOSED);
-        }
-        return true;
+        closing = true;
+        gui.dataSet(id, "_response", gui.DialogResponse.CLOSED);
     }
 
     var tl = gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 } });
@@ -3257,11 +3325,12 @@ pub fn dialogOkDisplay(id: u32) bool {
     tl.deinit();
 
     if (gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
-        win.close();
-        if (callafter) |ca| {
-            ca(id, gui.DialogResponse.OK);
-        }
-        return true;
+        closing = true;
+        gui.dataSet(id, "_response", gui.DialogResponse.OK);
+    }
+
+    if (closing) {
+        gui.animate(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 100_000 });
     }
 
     return false;
@@ -3450,7 +3519,7 @@ pub const PanedWidget = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -3737,7 +3806,7 @@ pub const TextLayoutWidget = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -3839,7 +3908,7 @@ pub const ContextWidget = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -3946,7 +4015,7 @@ pub const OverlayWidget = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -4041,7 +4110,7 @@ pub const BoxWidget = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -4369,7 +4438,7 @@ pub const ScrollAreaWidget = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -4578,7 +4647,7 @@ pub const ScaleWidget = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -4675,7 +4744,7 @@ pub const MenuWidget = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -4884,7 +4953,7 @@ pub const MenuItemWidget = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -5130,7 +5199,7 @@ pub const ButtonContainerWidget = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -5402,7 +5471,7 @@ pub const TextEntryWidget = struct {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
 
-    fn data(self: *const Self) *const WidgetData {
+    pub fn data(self: *Self) *WidgetData {
         return &self.wd;
     }
 
@@ -6250,7 +6319,7 @@ pub const Widget = struct {
     vtable: *const VTable,
 
     const VTable = struct {
-        data: *const fn (ptr: *anyopaque) *const WidgetData,
+        data: *const fn (ptr: *anyopaque) *WidgetData,
         rectFor: *const fn (ptr: *anyopaque, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
         screenRectScale: *const fn (ptr: *anyopaque, r: Rect) RectScale,
         minSizeForChild: *const fn (ptr: *anyopaque, s: Size) void,
@@ -6260,7 +6329,7 @@ pub const Widget = struct {
 
     pub fn init(
         pointer: anytype,
-        comptime dataFn: fn (ptr: @TypeOf(pointer)) *const WidgetData,
+        comptime dataFn: fn (ptr: @TypeOf(pointer)) *WidgetData,
         comptime rectForFn: fn (ptr: @TypeOf(pointer), id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
         comptime screenRectScaleFn: fn (ptr: @TypeOf(pointer), r: Rect) RectScale,
         comptime minSizeForChildFn: fn (ptr: @TypeOf(pointer), s: Size) void,
@@ -6274,7 +6343,7 @@ pub const Widget = struct {
         const alignment = ptr_info.Pointer.alignment;
 
         const gen = struct {
-            fn dataImpl(ptr: *anyopaque) *const WidgetData {
+            fn dataImpl(ptr: *anyopaque) *WidgetData {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
                 return @call(.{ .modifier = .always_inline }, dataFn, .{self});
             }
@@ -6320,7 +6389,7 @@ pub const Widget = struct {
         };
     }
 
-    pub fn data(self: Widget) *const WidgetData {
+    pub fn data(self: Widget) *WidgetData {
         return self.vtable.data(self.ptr);
     }
 
@@ -6484,6 +6553,112 @@ pub const examples = struct {
         var show: bool = false;
         var rect = gui.Rect{ .x = 0, .y = 0, .w = 300, .h = 400 };
         var row_height: f32 = 0;
+    };
+
+    const AnimatingDialog = struct {
+        pub fn dialog(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) void {
+            const id = gui.dialogCustom(src, id_extra, AnimatingDialog.dialogDisplay);
+            gui.dataSet(id, "_modal", modal);
+            gui.dataSet(id, "_title", title);
+            gui.dataSet(id, "_msg", msg);
+            if (callafter) |ca| {
+                gui.dataSet(id, "_callafter", ca);
+            }
+        }
+
+        pub fn dialogDisplay(id: u32) bool {
+            const modal = gui.dataGet(id, "_modal", bool) orelse {
+                std.debug.print("Error: lost data for dialog {x}\n", .{id});
+                return true;
+            };
+            gui.dataSet(id, "_modal", modal);
+
+            const title = gui.dataGet(id, "_title", []const u8) orelse {
+                std.debug.print("Error: lost data for dialog {x}\n", .{id});
+                return true;
+            };
+            gui.dataSet(id, "_title", title);
+
+            const message = gui.dataGet(id, "_msg", []const u8) orelse {
+                std.debug.print("Error: lost data for dialog {x}\n", .{id});
+                return true;
+            };
+            gui.dataSet(id, "_msg", message);
+
+            const callafter = gui.dataGet(id, "_callafter", DialogCallAfter);
+            if (callafter) |ca| {
+                gui.dataSet(id, "_callafter", ca);
+            }
+
+            // once we record a response, refresh it
+            if (gui.dataGet(id, "_response", DialogResponse)) |r| {
+                gui.dataSet(id, "_response", r);
+            }
+
+            var win = FloatingWindowWidget.init(@src(), id, modal, null, null, .{});
+
+            if (gui.firstFrame(win.data().id)) {
+                gui.animate(win.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
+            }
+
+            if (gui.animationGet(win.data().id, "rect_percent")) |a| {
+                // tell win we are about to animate its rect
+                win.saveRect();
+
+                var r = win.data().rect;
+                const dw = r.w * (1.0 - a.lerp());
+                const dh = r.h * (1.0 - a.lerp());
+                r.x += dw / 2;
+                r.w -= dw;
+                r.y += dh / 2;
+                r.h -= dh;
+
+                win.data().rect = r;
+
+                std.debug.print("a {} {}\n", .{ a.lerp(), r });
+
+                if (a.done() and a.end_val == 0) {
+                    win.close();
+
+                    const response = gui.dataGet(id, "_response", gui.DialogResponse) orelse {
+                        std.debug.print("Error: no response for dialog {x}\n", .{id});
+                        return true;
+                    };
+
+                    if (callafter) |ca| {
+                        ca(id, response);
+                    }
+                    return true;
+                }
+            }
+
+            win.install();
+            defer win.deinit();
+
+            var closing: bool = false;
+
+            var header_openflag = true;
+            gui.windowHeader(title, "", &header_openflag);
+            if (!header_openflag) {
+                closing = true;
+                gui.dataSet(id, "_response", gui.DialogResponse.CLOSED);
+            }
+
+            var tl = gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 } });
+            tl.addText(message, .{});
+            tl.deinit();
+
+            if (gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
+                closing = true;
+                gui.dataSet(id, "_response", gui.DialogResponse.OK);
+            }
+
+            if (closing) {
+                gui.animate(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 100_000 });
+            }
+
+            return false;
+        }
     };
 
     pub fn demo() bool {
@@ -6755,6 +6930,11 @@ pub const examples = struct {
     pub fn animations() void {
         var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
+
+        if (gui.button(@src(), 0, "Animating Dialog", .{})) {
+            AnimatingDialog.dialog(@src(), 0, false, "Animating Dialog", "This shows how to animate dialogs and other floating windows", null);
+        }
+
         if (gui.expander(@src(), 0, "Spinner", .{ .expand = .horizontal })) {
             gui.label(@src(), 0, "Spinner maxes out frame rate", .{}, .{});
             gui.spinner(@src(), 0, .{ .color_style = .custom, .color_custom = .{ .r = 100, .g = 200, .b = 100 } });
