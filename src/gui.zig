@@ -3268,69 +3268,27 @@ pub fn dialogOkDisplay(id: u32) bool {
         gui.dataSet(id, "_callafter", ca);
     }
 
-    // once we record a response, refresh it
-    if (gui.dataGet(id, "_response", DialogResponse)) |r| {
-        gui.dataSet(id, "_response", r);
-    }
-
-    var win = FloatingWindowWidget.init(@src(), id, modal, null, null, .{});
-
-    if (gui.firstFrame(win.data().id)) {
-        gui.animate(win.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
-    }
-
-    if (gui.animationGet(win.data().id, "rect_percent")) |a| {
-        // tell win we are about to animate its rect
-        win.saveRect();
-
-        var r = win.data().rect;
-        const dw = r.w * (1.0 - a.lerp());
-        const dh = r.h * (1.0 - a.lerp());
-        r.x += dw / 2;
-        r.w -= dw;
-        r.y += dh / 2;
-        r.h -= dh;
-
-        win.data().rect = r;
-
-        if (a.done() and a.end_val == 0) {
-            win.close();
-
-            const response = gui.dataGet(id, "_response", gui.DialogResponse) orelse {
-                std.debug.print("Error: no response for dialog {x}\n", .{id});
-                return true;
-            };
-
-            if (callafter) |ca| {
-                ca(id, response);
-            }
-            return true;
-        }
-    }
-
-    win.install();
+    var win = floatingWindow(@src(), id, modal, null, null, .{});
     defer win.deinit();
-
-    var closing: bool = false;
 
     var header_openflag = true;
     gui.windowHeader(title, "", &header_openflag);
     if (!header_openflag) {
-        closing = true;
-        gui.dataSet(id, "_response", gui.DialogResponse.CLOSED);
+        if (callafter) |ca| {
+            ca(id, gui.DialogResponse.CLOSED);
+        }
+        return true;
     }
 
-    var tl = gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 } });
+    var tl = gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 }, .background = false });
     tl.addText(message, .{});
     tl.deinit();
 
     if (gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
-        closing = true;
-        gui.dataSet(id, "_response", gui.DialogResponse.OK);
-    }
-
-    if (closing) {
-        gui.animate(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 100_000 });
+        if (callafter) |ca| {
+            ca(id, gui.DialogResponse.OK);
+        }
+        return true;
     }
 
     return false;
@@ -6615,8 +6573,6 @@ pub const examples = struct {
 
                 win.data().rect = r;
 
-                std.debug.print("a {} {}\n", .{ a.lerp(), r });
-
                 if (a.done() and a.end_val == 0) {
                     win.close();
 
@@ -6644,7 +6600,7 @@ pub const examples = struct {
                 gui.dataSet(id, "_response", gui.DialogResponse.CLOSED);
             }
 
-            var tl = gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 } });
+            var tl = gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 }, .background = false });
             tl.addText(message, .{});
             tl.deinit();
 
