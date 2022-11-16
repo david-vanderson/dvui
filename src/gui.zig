@@ -471,7 +471,7 @@ pub const Font = struct {
 
         var utf8 = (try std.unicode.Utf8View.init(text)).iterator();
         while (utf8.nextCodepoint()) |codepoint| {
-            const gi = fce.glyphInfoGet(@intCast(u32, codepoint));
+            const gi = try fce.glyphInfoGet(@intCast(u32, codepoint));
 
             minx = math.min(minx, x + gi.minx);
             maxx = math.max(maxx, x + gi.maxx);
@@ -545,12 +545,12 @@ const FontCacheEntry = struct {
         return h.final();
     }
 
-    pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32) GlyphInfo {
+    pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32) !GlyphInfo {
         if (self.glyph_info.get(codepoint)) |gi| {
             return gi;
         }
 
-        self.face.loadChar(@intCast(u32, codepoint), .{ .render = false }) catch unreachable;
+        try self.face.loadChar(@intCast(u32, codepoint), .{ .render = false });
         const m = self.face.glyph().metrics();
         const minx = @intToFloat(f32, m.horiBearingX) / 64.0;
         const miny = self.ascent - @intToFloat(f32, m.horiBearingY) / 64.0;
@@ -568,7 +568,7 @@ const FontCacheEntry = struct {
         //std.debug.print("new glyph {}\n", .{codepoint});
         self.texture_atlas_regen = true;
 
-        self.glyph_info.put(codepoint, gi) catch unreachable;
+        try self.glyph_info.put(codepoint, gi);
         return gi;
     }
 };
@@ -2414,7 +2414,7 @@ pub const Window = struct {
             clipSet(drc.clip);
             switch (drc.cmd) {
                 .text => |t| {
-                    renderText(t.font, t.text, t.rs, t.color);
+                    try renderText(t.font, t.text, t.rs, t.color);
                 },
                 .debug_font_atlases => |t| {
                     debugRenderFontAtlases(t.rs, t.color);
@@ -3205,7 +3205,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     gui.separator(@src(), 0, .{ .gravity = .down, .expand = .horizontal });
 }
 
-pub const DialogDisplay = *const fn (u32) error{ InvalidUtf8, CodepointTooLarge }!bool;
+pub const DialogDisplay = *const fn (u32) (error{ InvalidUtf8, CodepointTooLarge } || freetype.Error)!bool;
 pub const DialogCallAfter = *const fn (u32, DialogResponse) void;
 pub const DialogEntry = struct {
     id: u32,
@@ -3746,7 +3746,7 @@ pub const TextLayoutWidget = struct {
             if (self.insert_pt.y < rect.h) {
                 const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.h - self.insert_pt.y) });
                 //log.debug("renderText: {} {s} {}", .{rs.r, txt[0..end], options.color()});
-                renderText(options.font(), txt[0..end], rs, options.color());
+                try renderText(options.font(), txt[0..end], rs, options.color());
             }
 
             // even if we don't actually render, need to update insert_pt and minSize
@@ -5035,7 +5035,7 @@ pub const LabelWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) void {
+    pub fn show(self: *Self, opts: InstallOptions) !void {
         _ = opts;
         debug("{x} Label \"{s:<10}\" {}", .{ self.wd.id, self.label_str, self.wd.rect });
         self.wd.borderAndBackground();
@@ -5043,7 +5043,7 @@ pub const LabelWidget = struct {
 
         const oldclip = clip(rs.r);
         if (!clipGet().empty()) {
-            renderText(self.wd.options.font(), self.label_str, rs, self.wd.options.color());
+            try renderText(self.wd.options.font(), self.label_str, rs, self.wd.options.color());
         }
         clipSet(oldclip);
 
@@ -5054,12 +5054,12 @@ pub const LabelWidget = struct {
 
 pub fn label(src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) !void {
     var lw = try LabelWidget.init(src, id_extra, fmt, args, opts);
-    lw.install(.{});
+    try lw.show(.{});
 }
 
 pub fn labelNoFmt(src: std.builtin.SourceLocation, id_extra: usize, str: []const u8, opts: Options) !void {
     var lw = try LabelWidget.initNoFmt(src, id_extra, str, opts);
-    lw.install(.{});
+    try lw.show(.{});
 }
 
 pub fn icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) void {
@@ -5394,12 +5394,12 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     try labelNoFmt(@src(), 0, label_str, options.styling());
 }
 
-pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) void {
+pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) !void {
     const cw = currentWindow();
     var ret = cw.arena.create(TextEntryWidget) catch unreachable;
     ret.* = TextEntryWidget.init(src, id_extra, width, text, opts);
     ret.allocator = cw.arena;
-    ret.install(.{});
+    try ret.install(.{});
     ret.deinit();
 }
 
@@ -5439,7 +5439,7 @@ pub const TextEntryWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) void {
+    pub fn install(self: *Self, opts: InstallOptions) !void {
         debug("{x} Text {}", .{ self.wd.id, self.wd.rect });
 
         if (opts.process_events) {
@@ -5457,7 +5457,7 @@ pub const TextEntryWidget = struct {
 
         const oldclip = clip(rs.r);
         if (!clipGet().empty()) {
-            renderText(self.wd.options.font(), self.text[0..self.len], rs, self.wd.options.color());
+            try renderText(self.wd.options.font(), self.text[0..self.len], rs, self.wd.options.color());
         }
         clipSet(oldclip);
 
@@ -5796,7 +5796,7 @@ pub const RectScale = struct {
     }
 };
 
-pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) void {
+pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !void {
     if (text.len == 0 or clipGet().intersect(rs.r).empty()) {
         return;
     }
@@ -5833,7 +5833,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
     // make sure the cache has all the glyphs we need
     var utf8it = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
     while (utf8it.nextCodepoint()) |codepoint| {
-        _ = fce.glyphInfoGet(@intCast(u32, codepoint));
+        _ = try fce.glyphInfoGet(@intCast(u32, codepoint));
     }
 
     // number of extra pixels to add on each side of each glyph
@@ -5937,7 +5937,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
 
     var utf8 = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
     while (utf8.nextCodepoint()) |codepoint| {
-        const gi = fce.glyphInfoGet(@intCast(u32, codepoint));
+        const gi = try fce.glyphInfoGet(@intCast(u32, codepoint));
 
         // TODO: kerning
 
@@ -6747,8 +6747,10 @@ pub const examples = struct {
             var hbox = gui.box(@src(), 0, .horizontal, .{});
             defer hbox.deinit();
 
-            // The errors we are ignoring here are error.InvalidUtf8 and
-            // error.CodepointTooLarge but we are passing known strings.
+            // The errors we are ignoring here are all text/font related but we
+            // are passing known strings.  Would want to handle errors if the
+            // user was able to change the font we were using to one that we
+            // didn't test with.
             _ = gui.button(@src(), 0, "Normal", .{}) catch unreachable;
             _ = gui.button(@src(), 0, "Accent", .{ .color_style = .accent }) catch unreachable;
             _ = gui.button(@src(), 0, "Success", .{ .color_style = .success }) catch unreachable;
@@ -6942,7 +6944,7 @@ pub const examples = struct {
             const left = @intCast(i32, @rem(millis, 1000));
 
             var mslabel = try gui.LabelWidget.init(@src(), 0, "{d} ms into second", .{@intCast(u32, left)}, .{});
-            mslabel.install(.{});
+            try mslabel.show(.{});
 
             if (gui.timerDone(mslabel.wd.id) or !gui.timerExists(mslabel.wd.id)) {
                 const wait = 1000 * (1000 - left);
