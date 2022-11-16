@@ -123,7 +123,7 @@ fn mainGui() !void {
 
     if (g_db) |db| {
         _ = db;
-        var paned = gui.paned(@src(), 0, .horizontal, 400, .{ .expand = .both, .background = false });
+        var paned = try gui.paned(@src(), 0, .horizontal, 400, .{ .expand = .both, .background = false });
         const collapsed = paned.collapsed();
 
         try podcastSide(paned);
@@ -170,7 +170,7 @@ pub fn main() !void {
             else => return err,
         };
 
-        const end_micros = win.end();
+        const end_micros = try win.end();
 
         backend.setCursor(win.cursorRequested());
 
