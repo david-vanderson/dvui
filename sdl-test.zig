@@ -164,14 +164,17 @@ pub fn main() !void {
 
                 {
                     var button = gui.ButtonWidget.init(@src(), 0, "Wiggle", .{ .tab_index = 10 });
+                    defer button.deinit();
 
-                    if (gui.animationGet(button.bc.wd.id, "xoffset")) |a| {
-                        button.bc.wd.rect.x += a.lerp();
+                    if (gui.animationGet(button.data().id, "xoffset")) |a| {
+                        button.data().rect.x += a.lerp();
                     }
 
-                    if (button.show()) {
+                    button.install(.{});
+
+                    if (button.clicked()) {
                         const a = gui.Animation{ .start_val = 0, .end_val = 200, .start_time = 0, .end_time = 10_000_000 };
-                        gui.animate(button.bc.wd.id, "xoffset", a);
+                        gui.animate(button.data().id, "xoffset", a);
                     }
                 }
 

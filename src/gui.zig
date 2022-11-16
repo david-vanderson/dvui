@@ -3322,7 +3322,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
         expanded = e;
     }
 
-    if (bc.clicked) {
+    if (bc.clicked()) {
         expanded = !expanded;
     }
 
@@ -5141,7 +5141,7 @@ pub const ButtonContainerWidget = struct {
     captured: bool = false,
     focused: bool = false,
     show_focus: bool = false,
-    clicked: bool = false,
+    click: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) Self {
         var self = Self{};
@@ -5197,6 +5197,10 @@ pub const ButtonContainerWidget = struct {
         _ = parentSet(self.widget());
     }
 
+    pub fn clicked(self: *Self) bool {
+        return self.click;
+    }
+
     pub fn widget(self: *Self) Widget {
         return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
     }
@@ -5234,7 +5238,7 @@ pub const ButtonContainerWidget = struct {
                         captureMouse(null);
                         self.captured = false;
                         if (iter.r.contains(e.evt.mouse.p)) {
-                            self.clicked = true;
+                            self.click = true;
                             cueFrame();
                         }
                     }
@@ -5246,7 +5250,7 @@ pub const ButtonContainerWidget = struct {
             .key => {
                 if (e.evt.key.state == .down and e.evt.key.keysym == .space) {
                     e.handled = true;
-                    self.clicked = true;
+                    self.click = true;
                     cueFrame();
                 }
             },
@@ -5289,21 +5293,31 @@ pub const ButtonWidget = struct {
         };
     }
 
-    pub fn show(self: *ButtonWidget) bool {
+    pub fn install(self: *ButtonWidget, opts: InstallOptions) void {
         debug("Button {s}", .{self.label_str});
-        self.bc.install(.{});
-        const clicked = self.bc.clicked;
+        self.bc.install(opts);
 
         labelNoFormat(@src(), 0, self.label_str, self.bc.wd.options.strip().override(.{ .gravity = .center }));
+    }
 
+    pub fn data(self: *ButtonWidget) *WidgetData {
+        return self.bc.data();
+    }
+
+    pub fn clicked(self: *ButtonWidget) bool {
+        return self.bc.clicked();
+    }
+
+    pub fn deinit(self: *ButtonWidget) void {
         self.bc.deinit();
-        return clicked;
     }
 };
 
 pub fn button(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) bool {
     var bw = ButtonWidget.init(src, id_extra, label_str, opts);
-    return bw.show();
+    bw.install(.{});
+    defer bw.deinit();
+    return bw.clicked();
 }
 
 pub var buttonIcon_defaults: Options = .{
@@ -5323,7 +5337,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32,
 
     icon(@src(), 0, height, name, tvg_bytes, options.strip());
 
-    return bc.clicked;
+    return bc.clicked();
 }
 
 pub var checkbox_defaults: Options = .{
@@ -5339,7 +5353,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     var bc = buttonContainer(src, id_extra, false, options.override(.{ .background = false }));
     defer bc.deinit();
 
-    if (bc.clicked) {
+    if (bc.clicked()) {
         target.* = !target.*;
     }
 
