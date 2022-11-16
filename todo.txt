@@ -1,6 +1,4 @@
 
-ButtonWidget needs to be a proper wrapper
-
 start handling all the unreachable stuff
 
 how can I get mach to not build all it's stuff when I'm compiling an sdl example?
