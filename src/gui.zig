@@ -3330,7 +3330,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
 }
 
 pub fn paned(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) !*PanedWidget {
-    var ret = (try gui.currentWindow()).arena.create(PanedWidget) catch unreachable;
+    var ret = currentWindow().arena.create(PanedWidget) catch unreachable;
     ret.* = PanedWidget.init(src, id_extra, dir, collapse_size, opts);
     ret.install(.{});
     return ret;
