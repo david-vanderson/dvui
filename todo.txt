@@ -1,5 +1,5 @@
 
-.install should take an options struct
+ButtonWidget needs to be a proper wrapper
 
 start handling all the unreachable stuff
 
@@ -12,13 +12,6 @@ mach-test: no tab key?
 linux mach-test: pulling corner of GUI Demo window around lags
 
 try splitting into 2 files - gui.zig (has widgets and re-exports core stuff) and gui-core.zig (has stuff widgets depend on)
-
-each Widget should have a function to do everything, or else you do:
-- w = Widget.init() (now it has id, rect, capture maintain, etc.)
-- w.widget().processEvents() (or do it manually for customization)
-- w.install() (draw and set parent)
-  - children can do stuff now
-- w.deinit() (calc min size and reset parent)
 
 how to handle user code needed to override events for a widget
 - widget.installNoEvents()?
