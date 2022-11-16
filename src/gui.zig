@@ -455,7 +455,7 @@ pub const Font = struct {
 
     // doesn't scale the font or max_width
     pub fn textSizeRaw(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize) !Size {
-        const fce = fontCacheGet(self.*);
+        const fce = try fontCacheGet(self.*);
 
         const mwidth = max_width orelse 1000000.0;
 
@@ -504,7 +504,7 @@ pub const Font = struct {
         return Size{ .w = tw, .h = th };
     }
 
-    pub fn lineSkip(self: *const Font) f32 {
+    pub fn lineSkip(self: *const Font) !f32 {
         // do the same sized thing as textSizeEx so they will cache the same font
         const ss = parentGet().screenRectScale(Rect{}).s;
 
@@ -512,7 +512,7 @@ pub const Font = struct {
         const target_fraction = self.size / ask_size;
         const sized_font = self.resize(ask_size);
 
-        const fce = fontCacheGet(sized_font);
+        const fce = try fontCacheGet(sized_font);
         const skip = fce.height;
         //std.debug.print("lineSkip fontsize {d} is {d}\n", .{sized_font.size, skip});
         return skip * target_fraction * self.line_skip_factor;
@@ -550,7 +550,10 @@ const FontCacheEntry = struct {
             return gi;
         }
 
-        try self.face.loadChar(@intCast(u32, codepoint), .{ .render = false });
+        self.face.loadChar(@intCast(u32, codepoint), .{ .render = false }) catch |err| {
+            std.debug.print("glyphInfoGet: freetype error {!} trying to loadChar codepoint {x}\n", .{ err, codepoint });
+            return error.freetypeError;
+        };
         const m = self.face.glyph().metrics();
         const minx = @intToFloat(f32, m.horiBearingX) / 64.0;
         const miny = self.ascent - @intToFloat(f32, m.horiBearingY) / 64.0;
@@ -573,7 +576,7 @@ const FontCacheEntry = struct {
     }
 };
 
-pub fn fontCacheGet(font: Font) *FontCacheEntry {
+pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     var cw = currentWindow();
     const fontHash = FontCacheEntry.hash(font);
     if (cw.font_cache.getPtr(fontHash)) |fce| {
@@ -583,8 +586,14 @@ pub fn fontCacheGet(font: Font) *FontCacheEntry {
 
     //std.debug.print("FontCacheGet creating font size {d} name \"{s}\"\n", .{font.size, font.name});
 
-    var face = cw.ft2lib.createFaceMemory(font.ttf_bytes, 0) catch unreachable;
-    face.setPixelSizes(0, @floatToInt(u32, font.size)) catch unreachable;
+    var face = cw.ft2lib.createFaceMemory(font.ttf_bytes, 0) catch |err| {
+        std.debug.print("fontCacheGet: freetype error {!} trying to createFaceMemory font {s}\n", .{ err, font.name });
+        return error.freetypeError;
+    };
+    face.setPixelSizes(0, @floatToInt(u32, font.size)) catch |err| {
+        std.debug.print("fontCacheGet: freetype error {!} trying to createFaceMemory font {s}\n", .{ err, font.name });
+        return error.freetypeError;
+    };
 
     const ascender = @intToFloat(f32, face.ascender()) / 64.0;
     const ss = @intToFloat(f32, face.size().metrics().y_scale) / 0x10000;
@@ -593,7 +602,7 @@ pub fn fontCacheGet(font: Font) *FontCacheEntry {
 
     // make debug texture atlas so we can see if something later goes wrong
     const size = .{ .w = 10, .h = 10 };
-    var pixels = cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * 4) catch unreachable;
+    var pixels = try cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * 4);
     std.mem.set(u8, pixels, 255);
 
     const entry = FontCacheEntry{
@@ -605,7 +614,7 @@ pub fn fontCacheGet(font: Font) *FontCacheEntry {
         .texture_atlas_size = size,
         .texture_atlas_regen = true,
     };
-    cw.font_cache.put(fontHash, entry) catch unreachable;
+    try cw.font_cache.put(fontHash, entry);
 
     return cw.font_cache.getPtr(fontHash).?;
 }
@@ -625,11 +634,11 @@ const IconCacheEntry = struct {
 
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height_natural: f32) f32 {
     const height = height_natural * windowNaturalScale();
-    const ice = iconTexture(name, tvg_bytes, height);
+    const ice = iconTexture(name, tvg_bytes, height) catch return 1.0;
     return ice.size.w / windowNaturalScale();
 }
 
-pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) IconCacheEntry {
+pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) !IconCacheEntry {
     var cw = currentWindow();
     const icon_hash = IconCacheEntry.hash(tvg_bytes, ask_height);
 
@@ -644,7 +653,10 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) Ico
         tvg.rendering.SizeHint{ .height = @floatToInt(u32, ask_height) },
         @intToEnum(tvg.rendering.AntiAliasing, 2),
         tvg_bytes,
-    ) catch unreachable;
+    ) catch |err| {
+        std.debug.print("iconTexture: Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, ask_height });
+        return error.tvgError;
+    };
     defer image.deinit(cw.arena);
 
     var pixels: []u8 = undefined;
@@ -653,11 +665,10 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) Ico
 
     const texture = cw.backend.textureCreate(pixels, image.width, image.height);
 
-    _ = name;
     //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{name, ask_height, image.width, image.height});
 
     const entry = IconCacheEntry{ .texture = texture, .size = .{ .w = @intToFloat(f32, image.width), .h = @intToFloat(f32, image.height) } };
-    cw.icon_cache.put(icon_hash, entry) catch unreachable;
+    try cw.icon_cache.put(icon_hash, entry);
 
     return entry;
 }
@@ -3205,7 +3216,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     gui.separator(@src(), 0, .{ .gravity = .down, .expand = .horizontal });
 }
 
-pub const DialogDisplay = *const fn (u32) (error{ InvalidUtf8, CodepointTooLarge } || freetype.Error)!bool;
+pub const DialogDisplay = *const fn (u32) error{ OutOfMemory, InvalidUtf8, CodepointTooLarge, freetypeError, tvgError }!bool;
 pub const DialogCallAfter = *const fn (u32, DialogResponse) void;
 pub const DialogEntry = struct {
     id: u32,
@@ -3316,7 +3327,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
     var bcbox = BoxWidget.init(@src(), 0, .horizontal, options.strip());
     defer bcbox.deinit();
     bcbox.install(.{});
-    const size = options.font().lineSkip();
+    const size = try options.font().lineSkip();
     if (expanded) {
         icon(@src(), 0, size, "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity = .left });
     } else {
@@ -3670,7 +3681,7 @@ pub const TextLayoutWidget = struct {
         const options = self.wd.options.override(opts);
         var iter = std.mem.split(u8, text, "\n");
         var first: bool = true;
-        const lineskip = options.font().lineSkip();
+        const lineskip = try options.font().lineSkip();
         while (iter.next()) |line| {
             if (first) {
                 first = false;
@@ -3684,8 +3695,8 @@ pub const TextLayoutWidget = struct {
 
     pub fn addTextNoNewlines(self: *Self, text: []const u8, opts: Options) !void {
         const options = self.wd.options.override(opts);
-        const msize = options.font().textSize("m") catch unreachable;
-        const lineskip = options.font().lineSkip();
+        const msize = try options.font().textSize("m");
+        const lineskip = try options.font().lineSkip();
         var txt = text;
 
         const rect = self.wd.contentRect();
@@ -5339,7 +5350,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     var b = box(@src(), 0, .horizontal, options.strip().override(.{ .expand = .both }));
     defer b.deinit();
 
-    var check_size = options.font().lineSkip();
+    var check_size = try options.font().lineSkip();
     const s = spacer(@src(), 0, .{ .min_size = Size.all(check_size), .gravity = .left });
 
     var rs = s.borderRectScale();
@@ -5828,7 +5839,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
     const target_fraction = target_size / ask_size;
 
     const sized_font = font.resize(ask_size);
-    var fce = fontCacheGet(sized_font);
+    var fce = try fontCacheGet(sized_font);
 
     // make sure the cache has all the glyphs we need
     var utf8it = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
@@ -6072,7 +6083,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
     const ask_height = @ceil(target_size);
     const target_fraction = target_size / ask_height;
 
-    const ice = iconTexture(name, tvg_bytes, ask_height);
+    const ice = iconTexture(name, tvg_bytes, ask_height) catch return;
 
     var vtx = std.ArrayList(Vertex).initCapacity(cw.arena, 4) catch unreachable;
     defer vtx.deinit();
