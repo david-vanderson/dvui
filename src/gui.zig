@@ -434,11 +434,11 @@ pub const Font = struct {
         return Font{ .size = s, .name = self.name, .ttf_bytes = self.ttf_bytes };
     }
 
-    pub fn textSize(self: *const Font, text: []const u8) Size {
-        return self.textSizeEx(text, null, null);
+    pub fn textSize(self: *const Font, text: []const u8) !Size {
+        return try self.textSizeEx(text, null, null);
     }
 
-    pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize) Size {
+    pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize) !Size {
         // ask for a font that matches the natural display pixels so we get a more
         // accurate size
 
@@ -448,13 +448,13 @@ pub const Font = struct {
         const max_width_sized = (max_width orelse 1000000.0) * ss;
         const target_fraction = self.size / ask_size;
         const sized_font = self.resize(ask_size);
-        const s = sized_font.textSizeRaw(text, max_width_sized, end_idx);
+        const s = try sized_font.textSizeRaw(text, max_width_sized, end_idx);
         //std.debug.print("textSize size {d} for \"{s}\" {d} {}\n", .{ self.size, text, target_fraction, s.scale(target_fraction) });
         return s.scale(target_fraction);
     }
 
     // doesn't scale the font or max_width
-    pub fn textSizeRaw(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize) Size {
+    pub fn textSizeRaw(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize) !Size {
         const fce = fontCacheGet(self.*);
 
         const mwidth = max_width orelse 1000000.0;
@@ -469,7 +469,7 @@ pub const Font = struct {
 
         var ei: usize = 0;
 
-        var utf8 = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
+        var utf8 = (try std.unicode.Utf8View.init(text)).iterator();
         while (utf8.nextCodepoint()) |codepoint| {
             const gi = fce.glyphInfoGet(@intCast(u32, codepoint));
 
@@ -490,7 +490,7 @@ pub const Font = struct {
 
             tw = maxx - minx;
             th = maxy - miny;
-            ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+            ei += try std.unicode.utf8CodepointSequenceLength(codepoint);
             x += gi.advance;
         }
 
@@ -2438,11 +2438,11 @@ pub const Window = struct {
         queue.clearAndFree();
     }
 
-    fn dialogsShow(self: *Self) void {
+    fn dialogsShow(self: *Self) !void {
         var i: usize = 0;
         while (i < self.dialogs.items.len) {
             const dialog = self.dialogs.items[i];
-            if (dialog.display(dialog.id)) {
+            if (try dialog.display(dialog.id)) {
                 _ = self.dialogs.orderedRemove(i);
             } else {
                 i += 1;
@@ -2451,7 +2451,7 @@ pub const Window = struct {
     }
 
     pub fn end(self: *Self) !?u32 {
-        self.dialogsShow();
+        try self.dialogsShow();
 
         const oldclip = clipGet();
         try self.renderCommands(&self.render_cmds_after);
@@ -3181,7 +3181,7 @@ pub const FloatingWindowWidget = struct {
     }
 };
 
-pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) void {
+pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !void {
     var over = gui.overlay(@src(), 0, .{ .expand = .horizontal });
 
     if (gui.buttonIcon(@src(), 0, 14, "close", gui.icons.papirus.actions.window_close_symbolic, .{ .gravity = .left, .corner_radius = Rect.all(14), .padding = Rect.all(2), .margin = Rect.all(2) })) {
@@ -3190,8 +3190,8 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) vo
         }
     }
 
-    gui.labelNoFormat(@src(), 0, str, .{ .gravity = .center, .expand = .horizontal, .font_style = .heading });
-    gui.labelNoFormat(@src(), 0, right_str, .{ .gravity = .right });
+    try gui.labelNoFmt(@src(), 0, str, .{ .gravity = .center, .expand = .horizontal, .font_style = .heading });
+    try gui.labelNoFmt(@src(), 0, right_str, .{ .gravity = .right });
 
     var iter = EventIterator.init(over.wd.id, over.wd.contentRectScale().r);
     while (iter.next()) |e| {
@@ -3205,7 +3205,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) vo
     gui.separator(@src(), 0, .{ .gravity = .down, .expand = .horizontal });
 }
 
-pub const DialogDisplay = *const fn (u32) bool;
+pub const DialogDisplay = *const fn (u32) error{ InvalidUtf8, CodepointTooLarge }!bool;
 pub const DialogCallAfter = *const fn (u32, DialogResponse) void;
 pub const DialogEntry = struct {
     id: u32,
@@ -3242,7 +3242,7 @@ pub fn dialogOk(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, t
     }
 }
 
-pub fn dialogOkDisplay(id: u32) bool {
+pub fn dialogOkDisplay(id: u32) !bool {
     const modal = gui.dataGet(id, "_modal", bool) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
         return true;
@@ -3270,7 +3270,7 @@ pub fn dialogOkDisplay(id: u32) bool {
     defer win.deinit();
 
     var header_openflag = true;
-    gui.windowHeader(title, "", &header_openflag);
+    try gui.windowHeader(title, "", &header_openflag);
     if (!header_openflag) {
         if (callafter) |ca| {
             ca(id, gui.DialogResponse.CLOSED);
@@ -3279,10 +3279,10 @@ pub fn dialogOkDisplay(id: u32) bool {
     }
 
     var tl = gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 }, .background = false });
-    tl.addText(message, .{});
+    try tl.addText(message, .{});
     tl.deinit();
 
-    if (gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
+    if (try gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
         if (callafter) |ca| {
             ca(id, gui.DialogResponse.OK);
         }
@@ -3297,7 +3297,7 @@ pub var expander_defaults: Options = .{
     .font_style = .heading,
 };
 
-pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) bool {
+pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) !bool {
     const options = expander_defaults.override(opts);
 
     var bc = ButtonContainerWidget.init(src, id_extra, true, options);
@@ -3322,7 +3322,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
     } else {
         icon(@src(), 0, size, "right_arrow", gui.icons.papirus.actions.pan_end_symbolic, .{ .gravity = .left });
     }
-    labelNoFormat(@src(), 0, label_str, options.strip());
+    try labelNoFmt(@src(), 0, label_str, options.strip());
 
     gui.dataSet(bc.wd.id, "_expand", expanded);
 
@@ -3666,7 +3666,7 @@ pub const TextLayoutWidget = struct {
         self.addText(l, opts);
     }
 
-    pub fn addText(self: *Self, text: []const u8, opts: Options) void {
+    pub fn addText(self: *Self, text: []const u8, opts: Options) !void {
         const options = self.wd.options.override(opts);
         var iter = std.mem.split(u8, text, "\n");
         var first: bool = true;
@@ -3678,13 +3678,13 @@ pub const TextLayoutWidget = struct {
                 self.insert_pt.y += lineskip;
                 self.insert_pt.x = 0;
             }
-            self.addTextNoNewlines(line, options);
+            try self.addTextNoNewlines(line, options);
         }
     }
 
-    pub fn addTextNoNewlines(self: *Self, text: []const u8, opts: Options) void {
+    pub fn addTextNoNewlines(self: *Self, text: []const u8, opts: Options) !void {
         const options = self.wd.options.override(opts);
-        const msize = options.font().textSize("m");
+        const msize = options.font().textSize("m") catch unreachable;
         const lineskip = options.font().lineSkip();
         var txt = text;
 
@@ -3714,7 +3714,7 @@ pub const TextLayoutWidget = struct {
             }
 
             var end: usize = undefined;
-            var s = options.font().textSizeEx(txt, width, &end);
+            var s = try options.font().textSizeEx(txt, width, &end);
 
             //std.debug.print("1 txt to {d} \"{s}\"\n", .{end, txt[0..end]});
 
@@ -3732,7 +3732,7 @@ pub const TextLayoutWidget = struct {
                 const spaceIdx = std.mem.lastIndexOfLinear(u8, txt[0 .. end + 1], space);
                 if (spaceIdx) |si| {
                     end = si + 1;
-                    s = options.font().textSize(txt[0..end]);
+                    s = try options.font().textSize(txt[0..end]);
                 } else if (self.insert_pt.x > linestart) {
                     // can't fit breaking on space, but we aren't starting at the left edge
                     // so drop to next line
@@ -4765,7 +4765,7 @@ pub var menuItemLabel_defaults: Options = .{
     .color_style = .content,
 };
 
-pub fn menuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, submenu: bool, opts: Options) ?Rect {
+pub fn menuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, submenu: bool, opts: Options) !?Rect {
     const options = menuItemLabel_defaults.override(opts);
     var mi = menuItem(src, id_extra, submenu, options);
 
@@ -4785,7 +4785,7 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label_str
         labelopts = labelopts.override(.{ .color_style = .accent });
     }
 
-    labelNoFormat(@src(), 0, label_str, labelopts);
+    try labelNoFmt(@src(), 0, label_str, labelopts);
 
     mi.deinit();
 
@@ -5020,17 +5020,16 @@ pub const LabelWidget = struct {
     wd: WidgetData = undefined,
     label_str: []const u8 = undefined,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) Self {
-        var cw = currentWindow();
-        const l = std.fmt.allocPrint(cw.arena, fmt, args) catch unreachable;
-        return Self.initNoFormat(src, id_extra, l, opts);
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) !Self {
+        const l = try std.fmt.allocPrint(currentWindow().arena, fmt, args);
+        return try Self.initNoFmt(src, id_extra, l, opts);
     }
 
-    pub fn initNoFormat(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) Self {
+    pub fn initNoFmt(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) !Self {
         var self = Self{};
         const options = defaults.override(opts);
         self.label_str = label_str;
-        const size = options.font().textSize(self.label_str);
+        const size = try options.font().textSize(self.label_str);
         self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
         self.wd.placeInsideNoExpand();
         return self;
@@ -5053,13 +5052,13 @@ pub const LabelWidget = struct {
     }
 };
 
-pub fn label(src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) void {
-    var lw = LabelWidget.init(src, id_extra, fmt, args, opts);
+pub fn label(src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) !void {
+    var lw = try LabelWidget.init(src, id_extra, fmt, args, opts);
     lw.install(.{});
 }
 
-pub fn labelNoFormat(src: std.builtin.SourceLocation, id_extra: usize, str: []const u8, opts: Options) void {
-    var lw = LabelWidget.initNoFormat(src, id_extra, str, opts);
+pub fn labelNoFmt(src: std.builtin.SourceLocation, id_extra: usize, str: []const u8, opts: Options) !void {
+    var lw = try LabelWidget.initNoFmt(src, id_extra, str, opts);
     lw.install(.{});
 }
 
@@ -5272,11 +5271,11 @@ pub const ButtonWidget = struct {
         };
     }
 
-    pub fn install(self: *ButtonWidget, opts: InstallOptions) void {
+    pub fn install(self: *ButtonWidget, opts: InstallOptions) !void {
         debug("Button {s}", .{self.label_str});
         self.bc.install(opts);
 
-        labelNoFormat(@src(), 0, self.label_str, self.bc.wd.options.strip().override(.{ .gravity = .center }));
+        try labelNoFmt(@src(), 0, self.label_str, self.bc.wd.options.strip().override(.{ .gravity = .center }));
     }
 
     pub fn data(self: *ButtonWidget) *WidgetData {
@@ -5292,11 +5291,12 @@ pub const ButtonWidget = struct {
     }
 };
 
-pub fn button(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) bool {
+pub fn button(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) !bool {
     var bw = ButtonWidget.init(src, id_extra, label_str, opts);
-    bw.install(.{});
-    defer bw.deinit();
-    return bw.clicked();
+    try bw.install(.{});
+    var click = bw.clicked();
+    bw.deinit();
+    return click;
 }
 
 pub var buttonIcon_defaults: Options = .{
@@ -5326,7 +5326,7 @@ pub var checkbox_defaults: Options = .{
     .color_style = .content,
 };
 
-pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label_str: []const u8, opts: Options) void {
+pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label_str: []const u8, opts: Options) !void {
     const options = checkbox_defaults.override(opts);
     debug("Checkbox {s}", .{label_str});
     var bc = buttonContainer(src, id_extra, false, options.override(.{ .background = false }));
@@ -5391,7 +5391,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     }
 
     _ = spacer(@src(), 0, .{ .min_size = Size.all(1), .gravity = .left });
-    labelNoFormat(@src(), 0, label_str, options.styling());
+    try labelNoFmt(@src(), 0, label_str, options.styling());
 }
 
 pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) void {
@@ -5425,7 +5425,7 @@ pub const TextEntryWidget = struct {
         var self = Self{};
         const options = defaults.override(opts);
 
-        const msize = options.font().textSize("M");
+        const msize = options.font().textSize("M") catch unreachable;
         const size = Size{ .w = msize.w * width, .h = msize.h };
         self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
 
@@ -6560,7 +6560,7 @@ pub const examples = struct {
             }
         }
 
-        pub fn dialogDisplay(id: u32) bool {
+        pub fn dialogDisplay(id: u32) !bool {
             const modal = gui.dataGet(id, "_modal", bool) orelse {
                 std.debug.print("Error: lost data for dialog {x}\n", .{id});
                 return true;
@@ -6630,17 +6630,17 @@ pub const examples = struct {
             var closing: bool = false;
 
             var header_openflag = true;
-            gui.windowHeader(title, "", &header_openflag);
+            try gui.windowHeader(title, "", &header_openflag);
             if (!header_openflag) {
                 closing = true;
                 gui.dataSet(id, "_response", gui.DialogResponse.CLOSED);
             }
 
             var tl = gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 }, .background = false });
-            tl.addText(message, .{});
+            try tl.addText(message, .{});
             tl.deinit();
 
-            if (gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
+            if (try gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
                 closing = true;
                 gui.dataSet(id, "_response", gui.DialogResponse.OK);
             }
@@ -6660,7 +6660,7 @@ pub const examples = struct {
 
             var buf: [100]u8 = undefined;
             const fps_str = std.fmt.bufPrint(&buf, "{d:4.0} fps", .{gui.FPS()}) catch unreachable;
-            gui.windowHeader("GUI Demo", fps_str, &show_demo_window);
+            try gui.windowHeader("GUI Demo", fps_str, &show_demo_window);
 
             var scroll = gui.scrollArea(@src(), 0, null, .{ .expand = .both, .color_style = .content, .background = false });
             defer scroll.deinit();
@@ -6671,39 +6671,39 @@ pub const examples = struct {
             var vbox = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal });
             defer vbox.deinit();
 
-            if (gui.expander(@src(), 0, "Basic Widgets", .{ .expand = .horizontal })) {
+            if (try gui.expander(@src(), 0, "Basic Widgets", .{ .expand = .horizontal })) {
                 basicWidgets();
             }
 
-            if (gui.expander(@src(), 0, "Layout", .{ .expand = .horizontal })) {
-                layout();
+            if (try gui.expander(@src(), 0, "Layout", .{ .expand = .horizontal })) {
+                try layout();
             }
 
-            if (gui.expander(@src(), 0, "Show Font Atlases", .{ .expand = .horizontal })) {
+            if (try gui.expander(@src(), 0, "Show Font Atlases", .{ .expand = .horizontal })) {
                 debugFontAtlases(@src(), 0, .{});
             }
 
-            if (gui.expander(@src(), 0, "Text Layout", .{ .expand = .horizontal })) {
-                textDemo();
+            if (try gui.expander(@src(), 0, "Text Layout", .{ .expand = .horizontal })) {
+                try textDemo();
             }
 
-            if (gui.expander(@src(), 0, "Menus", .{ .expand = .horizontal })) {
-                menus();
+            if (try gui.expander(@src(), 0, "Menus", .{ .expand = .horizontal })) {
+                try menus();
             }
 
-            if (gui.expander(@src(), 0, "Dialogs", .{ .expand = .horizontal })) {
-                dialogs();
+            if (try gui.expander(@src(), 0, "Dialogs", .{ .expand = .horizontal })) {
+                try dialogs();
             }
 
-            if (gui.expander(@src(), 0, "Animations", .{ .expand = .horizontal })) {
-                animations();
+            if (try gui.expander(@src(), 0, "Animations", .{ .expand = .horizontal })) {
+                try animations();
             }
 
-            if (gui.button(@src(), 0, "Icon Browser", .{})) {
+            if (try gui.button(@src(), 0, "Icon Browser", .{})) {
                 IconBrowser.show = true;
             }
 
-            if (gui.button(@src(), 0, "Toggle Theme", .{})) {
+            if (try gui.button(@src(), 0, "Toggle Theme", .{})) {
                 if (gui.themeGet() == &gui.theme_Adwaita) {
                     gui.themeSet(&gui.theme_Adwaita_Dark);
                 } else {
@@ -6711,26 +6711,26 @@ pub const examples = struct {
                 }
             }
 
-            if (gui.button(@src(), 0, "Zoom In", .{})) {
+            if (try gui.button(@src(), 0, "Zoom In", .{})) {
                 scale_val = (themeGet().font_body.size * scale_val + 1.0) / themeGet().font_body.size;
 
                 //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
             }
 
-            if (gui.button(@src(), 0, "Zoom Out", .{})) {
+            if (try gui.button(@src(), 0, "Zoom Out", .{})) {
                 scale_val = (themeGet().font_body.size * scale_val - 1.0) / themeGet().font_body.size;
 
                 //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
             }
 
-            gui.checkbox(@src(), 0, &gui.currentWindow().snap_to_pixels, "Snap to Pixels", .{});
+            try gui.checkbox(@src(), 0, &gui.currentWindow().snap_to_pixels, "Snap to Pixels", .{});
 
             if (show_dialog) {
-                dialogDirect();
+                try dialogDirect();
             }
 
             if (IconBrowser.show) {
-                icon_browser();
+                try icon_browser();
             }
 
             return true;
@@ -6747,59 +6747,62 @@ pub const examples = struct {
             var hbox = gui.box(@src(), 0, .horizontal, .{});
             defer hbox.deinit();
 
-            _ = gui.button(@src(), 0, "Normal", .{});
-            _ = gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
-            _ = gui.button(@src(), 0, "Success", .{ .color_style = .success });
-            _ = gui.button(@src(), 0, "Error", .{ .color_style = .err });
+            // The errors we are ignoring here are error.InvalidUtf8 and
+            // error.CodepointTooLarge but we are passing known strings.
+            _ = gui.button(@src(), 0, "Normal", .{}) catch unreachable;
+            _ = gui.button(@src(), 0, "Accent", .{ .color_style = .accent }) catch unreachable;
+            _ = gui.button(@src(), 0, "Success", .{ .color_style = .success }) catch unreachable;
+            _ = gui.button(@src(), 0, "Error", .{ .color_style = .err }) catch unreachable;
         }
 
-        gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{});
+        gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{}) catch unreachable;
     }
 
-    pub fn layout() void {
+    pub fn layout() !void {
         const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .min_size = .{ .w = 200, .h = 120 } };
         {
-            gui.label(@src(), 0, "gravity options:", .{}, .{});
+            try gui.label(@src(), 0, "gravity options:", .{}, .{});
             var o = gui.overlay(@src(), 0, opts);
             defer o.deinit();
 
             inline for (@typeInfo(Options.Gravity).Enum.fields) |f, i| {
-                _ = gui.button(@src(), i, f.name, .{ .gravity = @intToEnum(Options.Gravity, f.value) });
+                _ = try gui.button(@src(), i, f.name, .{ .gravity = @intToEnum(Options.Gravity, f.value) });
             }
         }
 
         {
-            gui.label(@src(), 0, "expand options:", .{}, .{});
+            try gui.label(@src(), 0, "expand options:", .{}, .{});
             var hbox = gui.box(@src(), 0, .horizontal, .{});
             defer hbox.deinit();
             {
                 var vbox = gui.box(@src(), 0, .vertical, opts);
                 defer vbox.deinit();
 
-                _ = gui.button(@src(), 0, "none", .{ .expand = .none });
-                _ = gui.button(@src(), 0, "horizontal", .{ .expand = .horizontal });
-                _ = gui.button(@src(), 0, "vertical", .{ .expand = .vertical });
+                _ = gui.button(@src(), 0, "none", .{ .expand = .none }) catch unreachable;
+                _ = gui.button(@src(), 0, "horizontal", .{ .expand = .horizontal }) catch unreachable;
+                _ = gui.button(@src(), 0, "vertical", .{ .expand = .vertical }) catch unreachable;
             }
             {
                 var vbox = gui.box(@src(), 0, .vertical, opts);
                 defer vbox.deinit();
 
-                _ = gui.button(@src(), 0, "both", .{ .expand = .both });
+                _ = gui.button(@src(), 0, "both", .{ .expand = .both }) catch unreachable;
             }
         }
     }
 
-    pub fn textDemo() void {
+    pub fn textDemo() !void {
         var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
-        gui.label(@src(), 0, "Title", .{}, .{ .font_style = .title });
-        gui.label(@src(), 0, "Title-1", .{}, .{ .font_style = .title_1 });
-        gui.label(@src(), 0, "Title-2", .{}, .{ .font_style = .title_2 });
-        gui.label(@src(), 0, "Title-3", .{}, .{ .font_style = .title_3 });
-        gui.label(@src(), 0, "Title-4", .{}, .{ .font_style = .title_4 });
-        gui.label(@src(), 0, "Heading", .{}, .{ .font_style = .heading });
-        gui.label(@src(), 0, "Caption-Heading", .{}, .{ .font_style = .caption_heading });
-        gui.label(@src(), 0, "Caption", .{}, .{ .font_style = .caption });
+        try gui.label(@src(), 0, "Title", .{}, .{ .font_style = .title });
+        try gui.label(@src(), 0, "Title-1", .{}, .{ .font_style = .title_1 });
+        try gui.label(@src(), 0, "Title-2", .{}, .{ .font_style = .title_2 });
+        try gui.label(@src(), 0, "Title-3", .{}, .{ .font_style = .title_3 });
+        try gui.label(@src(), 0, "Title-4", .{}, .{ .font_style = .title_4 });
+        try gui.label(@src(), 0, "Heading", .{}, .{ .font_style = .heading });
+        try gui.label(@src(), 0, "Caption-Heading", .{}, .{ .font_style = .caption_heading });
+        try gui.label(@src(), 0, "Caption", .{}, .{ .font_style = .caption });
+        try gui.label(@src(), 0, "Body", .{}, .{});
 
         {
             var tl = gui.textLayout(@src(), 0, .{ .expand = .horizontal });
@@ -6811,16 +6814,16 @@ pub const examples = struct {
             cbox.deinit();
 
             const start = "Notice that the text in this box is wrapping around the buttons in the corners.";
-            tl.addText(start, .{ .font_style = .title_4 });
+            try tl.addText(start, .{ .font_style = .title_4 });
 
-            tl.addText("\n\n", .{});
+            try tl.addText("\n\n", .{});
 
             const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-            tl.addText(lorem, .{});
+            try tl.addText(lorem, .{});
         }
     }
 
-    pub fn menus() void {
+    pub fn menus() !void {
         const ctext = gui.context(@src(), 0, .{ .expand = .horizontal });
         defer ctext.deinit();
 
@@ -6828,11 +6831,11 @@ pub const examples = struct {
             var fw2 = gui.popup(@src(), 0, gui.Rect.fromPoint(cp), .{});
             defer fw2.deinit();
 
-            _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
-            if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
+            _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{}) catch unreachable;
+            if ((gui.menuItemLabel(@src(), 0, "Close", false, .{}) catch unreachable) != null) {
                 gui.menuGet().?.close();
             }
-            _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{});
+            _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{}) catch unreachable;
         }
 
         var vbox = gui.box(@src(), 0, .vertical, .{});
@@ -6842,57 +6845,57 @@ pub const examples = struct {
             var m = gui.menu(@src(), 0, .horizontal, .{});
             defer m.deinit();
 
-            if (gui.menuItemLabel(@src(), 0, "File", true, .{})) |r| {
+            if (try gui.menuItemLabel(@src(), 0, "File", true, .{})) |r| {
                 var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                 defer fw.deinit();
 
-                submenus();
+                try submenus();
 
-                if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
+                if (try gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
                     gui.menuGet().?.close();
                 }
 
-                gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{ .min_size = .{ .w = 100, .h = 0 } });
+                try gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{ .min_size = .{ .w = 100, .h = 0 } });
 
-                if (gui.menuItemLabel(@src(), 0, "Dialog", false, .{}) != null) {
+                if (try gui.menuItemLabel(@src(), 0, "Dialog", false, .{}) != null) {
                     gui.menuGet().?.close();
                     show_dialog = true;
                 }
             }
 
-            if (gui.menuItemLabel(@src(), 0, "Edit", true, .{})) |r| {
+            if (try gui.menuItemLabel(@src(), 0, "Edit", true, .{})) |r| {
                 var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                 defer fw.deinit();
-                _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
-                _ = gui.menuItemLabel(@src(), 0, "Copy", false, .{});
-                _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{});
+                _ = try gui.menuItemLabel(@src(), 0, "Cut", false, .{});
+                _ = try gui.menuItemLabel(@src(), 0, "Copy", false, .{});
+                _ = try gui.menuItemLabel(@src(), 0, "Paste", false, .{});
             }
         }
 
-        gui.label(@src(), 0, "Right click for a context menu", .{}, .{});
+        gui.labelNoFmt(@src(), 0, "Right click for a context menu", .{}) catch unreachable;
     }
 
-    pub fn submenus() void {
-        if (gui.menuItemLabel(@src(), 0, "Submenu...", true, .{})) |r| {
+    pub fn submenus() !void {
+        if (try gui.menuItemLabel(@src(), 0, "Submenu...", true, .{})) |r| {
             var menu_rect = r;
             menu_rect.x += menu_rect.w;
             var fw2 = gui.popup(@src(), 0, menu_rect, .{});
             defer fw2.deinit();
 
-            submenus();
+            try submenus();
 
-            if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
+            if (try gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
                 gui.menuGet().?.close();
             }
 
-            if (gui.menuItemLabel(@src(), 0, "Dialog", false, .{}) != null) {
+            if (try gui.menuItemLabel(@src(), 0, "Dialog", false, .{}) != null) {
                 gui.menuGet().?.close();
                 show_dialog = true;
             }
         }
     }
 
-    pub fn dialogs() void {
+    pub fn dialogs() !void {
         var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
 
@@ -6900,7 +6903,7 @@ pub const examples = struct {
             var hbox = gui.box(@src(), 0, .horizontal, .{});
             defer hbox.deinit();
 
-            if (gui.button(@src(), 0, "Ok Dialog", .{})) {
+            if (try gui.button(@src(), 0, "Ok Dialog", .{})) {
                 gui.dialogOk(@src(), 0, false, "Ok Dialog", "This is a non modal dialog with no callafter", null);
             }
 
@@ -6913,32 +6916,32 @@ pub const examples = struct {
                 }
             };
 
-            if (gui.button(@src(), 0, "Ok Followup", .{})) {
+            if (try gui.button(@src(), 0, "Ok Followup", .{})) {
                 gui.dialogOk(@src(), 0, true, "Ok Followup", "This is a modal dialog with modal followup", dialogsFollowup.callafter);
             }
         }
     }
 
-    pub fn animations() void {
+    pub fn animations() !void {
         var b = gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
 
-        if (gui.button(@src(), 0, "Animating Dialog", .{})) {
+        if (try gui.button(@src(), 0, "Animating Dialog", .{})) {
             AnimatingDialog.dialog(@src(), 0, false, "Animating Dialog", "This shows how to animate dialogs and other floating windows", null);
         }
 
-        if (gui.expander(@src(), 0, "Spinner", .{ .expand = .horizontal })) {
-            gui.label(@src(), 0, "Spinner maxes out frame rate", .{}, .{});
+        if (try gui.expander(@src(), 0, "Spinner", .{ .expand = .horizontal })) {
+            try gui.labelNoFmt(@src(), 0, "Spinner maxes out frame rate", .{});
             gui.spinner(@src(), 0, .{ .color_style = .custom, .color_custom = .{ .r = 100, .g = 200, .b = 100 } });
         }
 
-        if (gui.expander(@src(), 0, "Clock", .{ .expand = .horizontal })) {
-            gui.label(@src(), 0, "Schedules a frame at the beginning of each second", .{}, .{});
+        if (try gui.expander(@src(), 0, "Clock", .{ .expand = .horizontal })) {
+            try gui.labelNoFmt(@src(), 0, "Schedules a frame at the beginning of each second", .{});
 
             const millis = @divFloor(gui.frameTimeNS(), 1_000_000);
             const left = @intCast(i32, @rem(millis, 1000));
 
-            var mslabel = gui.LabelWidget.init(@src(), 0, "{d} ms into second", .{@intCast(u32, left)}, .{});
+            var mslabel = try gui.LabelWidget.init(@src(), 0, "{d} ms into second", .{@intCast(u32, left)}, .{});
             mslabel.install(.{});
 
             if (gui.timerDone(mslabel.wd.id) or !gui.timerExists(mslabel.wd.id)) {
@@ -6948,32 +6951,32 @@ pub const examples = struct {
         }
     }
 
-    pub fn dialogDirect() void {
+    pub fn dialogDirect() !void {
         var dialog_win = gui.floatingWindow(@src(), 0, true, null, &show_dialog, .{ .color_style = .window });
         defer dialog_win.deinit();
 
-        gui.windowHeader("Modal Dialog", "", &show_dialog);
-        gui.label(@src(), 0, "Asking a Question", .{}, .{ .font_style = .title_4 });
-        gui.label(@src(), 0, "This dialog is being shown in a direct style, controlled entirely in user code.", .{}, .{});
+        try gui.windowHeader("Modal Dialog", "", &show_dialog);
+        try gui.label(@src(), 0, "Asking a Question", .{}, .{ .font_style = .title_4 });
+        try gui.label(@src(), 0, "This dialog is being shown in a direct style, controlled entirely in user code.", .{}, .{});
 
         {
             var hbox = gui.box(@src(), 0, .horizontal, .{ .gravity = .right });
             defer hbox.deinit();
 
-            if (gui.button(@src(), 0, "Yes", .{})) {
+            if (try gui.button(@src(), 0, "Yes", .{})) {
                 dialog_win.close();
             }
 
-            if (gui.button(@src(), 0, "No", .{})) {
+            if (try gui.button(@src(), 0, "No", .{})) {
                 show_dialog = false;
             }
         }
     }
 
-    pub fn icon_browser() void {
+    pub fn icon_browser() !void {
         var fwin = gui.floatingWindow(@src(), 0, false, &IconBrowser.rect, &IconBrowser.show, .{});
         defer fwin.deinit();
-        gui.windowHeader("Icon Browser", "", &IconBrowser.show);
+        try gui.windowHeader("Icon Browser", "", &IconBrowser.show);
 
         const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len;
         const height = @intToFloat(f32, num_icons) * IconBrowser.row_height;
@@ -6990,7 +6993,7 @@ pub const examples = struct {
                 var iconbox = gui.box(@src(), i, .horizontal, .{ .expand = .horizontal, .rect = r });
                 //gui.icon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{.margin = gui.Rect.all(2)});
                 _ = gui.buttonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{ .min_size = gui.Size.all(r.h) });
-                gui.label(@src(), 0, d.name, .{}, .{ .gravity = .left });
+                try gui.label(@src(), 0, d.name, .{}, .{ .gravity = .left });
 
                 iconbox.deinit();
 

@@ -127,7 +127,7 @@ fn mainGui() !void {
         const collapsed = paned.collapsed();
 
         try podcastSide(paned);
-        episodeSide(paned);
+        try episodeSide(paned);
 
         paned.deinit();
 
@@ -201,13 +201,13 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
             if (gui.menuItemIcon(@src(), 0, true, gui.themeGet().font_heading.lineSkip(), "toolbar dots", gui.icons.papirus.actions.xapp_prefs_toolbar_symbolic, .{})) |r| {
                 var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                 defer fw.deinit();
-                if (gui.menuItemLabel(@src(), 0, "Add RSS", false, .{})) |rr| {
+                if (try gui.menuItemLabel(@src(), 0, "Add RSS", false, .{})) |rr| {
                     _ = rr;
                     gui.menuGet().?.close();
                     add_rss_dialog = true;
                 }
 
-                if (gui.menuItemLabel(@src(), 0, "Update All", false, .{})) |rr| {
+                if (try gui.menuItemLabel(@src(), 0, "Update All", false, .{})) |rr| {
                     _ = rr;
                     gui.menuGet().?.close();
                     if (g_db) |*db| {
@@ -227,14 +227,14 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
             }
         }
 
-        gui.label(@src(), 0, "fps {d}", .{@round(gui.FPS())}, .{});
+        try gui.label(@src(), 0, "fps {d}", .{@round(gui.FPS())}, .{});
     }
 
     if (add_rss_dialog) {
         var dialog = gui.floatingWindow(@src(), 0, true, null, &add_rss_dialog, .{});
         defer dialog.deinit();
 
-        gui.labelNoFormat(@src(), 0, "Add RSS Feed", .{ .gravity = .center });
+        try gui.labelNoFmt(@src(), 0, "Add RSS Feed", .{ .gravity = .center });
 
         const TextEntryText = struct {
             var text = [_]u8{0} ** 100;
@@ -250,7 +250,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
 
         var box2 = gui.box(@src(), 0, .horizontal, .{ .gravity = .right });
         defer box2.deinit();
-        if (gui.button(@src(), 0, "Ok", .{})) {
+        if (try gui.button(@src(), 0, "Ok", .{})) {
             dialog.close();
             const url = std.mem.trim(u8, &TextEntryText.text, " \x00");
             const row = try dbRow("SELECT rowid FROM podcast WHERE url = ?", i32, .{url});
@@ -264,7 +264,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
                 }
             }
         }
-        if (gui.button(@src(), 0, "Cancel", .{})) {
+        if (try gui.button(@src(), 0, "Cancel", .{})) {
             dialog.close();
         }
     }
@@ -301,7 +301,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
             corner.h = 9;
         }
 
-        if (gui.button(@src(), i, title, oo3.override(.{
+        if (try gui.button(@src(), i, title, oo3.override(.{
             .margin = margin,
             .border = border,
             .corner_radius = corner,
@@ -318,7 +318,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
     }
 }
 
-fn episodeSide(paned: *gui.PanedWidget) void {
+fn episodeSide(paned: *gui.PanedWidget) !void {
     var b = gui.box(@src(), 0, .vertical, .{ .expand = .both });
     defer b.deinit();
 
@@ -326,7 +326,7 @@ fn episodeSide(paned: *gui.PanedWidget) void {
         var menu = gui.menu(@src(), 0, .horizontal, .{ .expand = .horizontal });
         defer menu.deinit();
 
-        if (gui.menuItemLabel(@src(), 0, "Back", false, .{})) |rr| {
+        if (try gui.menuItemLabel(@src(), 0, "Back", false, .{})) |rr| {
             _ = rr;
             paned.showOther();
         }
@@ -348,9 +348,9 @@ fn episodeSide(paned: *gui.PanedWidget) void {
 
         var f = gui.themeGet().font_heading;
         f.line_skip_factor = 1.3;
-        tl.addText("Episode Title\n", .{ .font_style = .custom, .font_custom = f });
+        try tl.addText("Episode Title\n", .{ .font_style = .custom, .font_custom = f });
         const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-        tl.addText(lorem, .{});
+        try tl.addText(lorem, .{});
         tl.deinit();
     }
 }
@@ -371,7 +371,7 @@ fn player() !void {
         episode = try dbRow("SELECT title FROM episode WHERE rowid = ?", Episode, .{id}) orelse episode;
     }
 
-    gui.label(@src(), 0, "{s}", .{episode.title}, oo.override(.{
+    try gui.label(@src(), 0, "{s}", .{episode.title}, oo.override(.{
         .margin = gui.Rect{ .x = 8, .y = 4, .w = 8, .h = 4 },
         .font_style = .heading,
     }));
@@ -383,7 +383,7 @@ fn player() !void {
 
     _ = gui.buttonIcon(@src(), 0, 20, "back", gui.icons.papirus.actions.media_seek_backward_symbolic, oo2);
 
-    gui.label(@src(), 0, "0.00%", .{}, oo2.override(.{ .color_style = .content }));
+    try gui.label(@src(), 0, "0.00%", .{}, oo2.override(.{ .color_style = .content }));
 
     _ = gui.buttonIcon(@src(), 0, 20, "forward", gui.icons.papirus.actions.media_seek_forward_symbolic, oo2);
 

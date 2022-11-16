@@ -74,11 +74,11 @@ pub fn main() !void {
                 var fw2 = gui.popup(@src(), 0, gui.Rect.fromPoint(cp), .{});
                 defer fw2.deinit();
 
-                _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{});
-                if (gui.menuItemLabel(@src(), 0, "Close", false, .{}) != null) {
+                _ = try gui.menuItemLabel(@src(), 0, "Cut", false, .{});
+                if ((gui.menuItemLabel(@src(), 0, "Close", false, .{}) catch unreachable) != null) {
                     gui.menuGet().?.close();
                 }
-                _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{});
+                _ = try gui.menuItemLabel(@src(), 0, "Paste", false, .{});
             }
 
             {
@@ -152,7 +152,7 @@ pub fn main() !void {
                     var z: usize = 0;
                     while (z < maxz) : (z += 1) {
                         const buf_slice = std.fmt.bufPrint(&buf, "Button {d}", .{z}) catch unreachable;
-                        if (gui.button(@src(), z, buf_slice, .{})) {
+                        if (try gui.button(@src(), z, buf_slice, .{})) {
                             if (z % 2 == 0) {
                                 maxz += 1;
                             } else {
@@ -170,7 +170,7 @@ pub fn main() !void {
                         button.data().rect.x += a.lerp();
                     }
 
-                    button.install(.{});
+                    try button.install(.{});
 
                     if (button.clicked()) {
                         const a = gui.Animation{ .start_val = 0, .end_val = 200, .start_time = 0, .end_time = 10_000_000 };
@@ -179,7 +179,7 @@ pub fn main() !void {
                 }
 
                 {
-                    if (gui.button(@src(), 0, "Stroke Test", .{})) {
+                    if (try gui.button(@src(), 0, "Stroke Test", .{})) {
                         StrokeTest.show_dialog = !StrokeTest.show_dialog;
                     }
 
@@ -207,15 +207,15 @@ pub fn main() !void {
                 {
                     var box = gui.box(@src(), 0, .horizontal, .{});
 
-                    _ = gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
-                    _ = gui.button(@src(), 0, "Success", .{ .color_style = .success });
-                    _ = gui.button(@src(), 0, "Error", .{ .color_style = .err });
+                    _ = try gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
+                    _ = try gui.button(@src(), 0, "Success", .{ .color_style = .success });
+                    _ = try gui.button(@src(), 0, "Error", .{ .color_style = .err });
 
                     box.deinit();
 
-                    gui.label(@src(), 0, "Theme: {s}", .{gui.themeGet().name}, .{});
+                    try gui.label(@src(), 0, "Theme: {s}", .{gui.themeGet().name}, .{});
 
-                    if (gui.button(@src(), 0, "Toggle Theme", .{})) {
+                    if (try gui.button(@src(), 0, "Toggle Theme", .{})) {
                         if (gui.themeGet() == &gui.theme_Adwaita) {
                             gui.themeSet(&gui.theme_Adwaita_Dark);
                         } else {
@@ -228,7 +228,7 @@ pub fn main() !void {
             const fps = gui.FPS();
             //std.debug.print("fps {d}\n", .{@round(fps)});
             //gui.render_text = true;
-            gui.label(@src(), 0, "fps {d:4.2}", .{fps}, .{ .gravity = .upright });
+            try gui.label(@src(), 0, "fps {d:4.2}", .{fps}, .{ .gravity = .upright });
             //gui.render_text = false;
         }
 
@@ -240,7 +240,7 @@ pub fn main() !void {
 
             var start_closing: bool = false;
 
-            if (gui.button(@src(), 0, "Floating Window", .{})) {
+            if (try gui.button(@src(), 0, "Floating Window", .{})) {
                 if (FloatingWindowTest.show) {
                     start_closing = true;
                 } else {
@@ -254,11 +254,11 @@ pub fn main() !void {
 
                 fwin.install(.{});
                 defer fwin.deinit();
-                gui.labelNoFormat(@src(), 0, "Floating Window", .{ .gravity = .center });
+                try gui.labelNoFmt(@src(), 0, "Floating Window", .{ .gravity = .center });
 
-                gui.label(@src(), 0, "Pretty Cool", .{}, .{ .font_style = .custom, .font_custom = .{ .name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 20 } });
+                try gui.label(@src(), 0, "Pretty Cool", .{}, .{ .font_style = .custom, .font_custom = .{ .name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 20 } });
 
-                if (gui.button(@src(), 0, "button", .{})) {
+                if (try gui.button(@src(), 0, "button", .{})) {
                     floats[0] = true;
                 }
 
@@ -273,19 +273,19 @@ pub fn main() !void {
                         var buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{ fi, name }) catch unreachable;
                         var fw2 = gui.floatingWindow(@src(), fi, modal, null, f, .{ .color_style = .window, .min_size = .{ .w = 150, .h = 100 } });
                         defer fw2.deinit();
-                        gui.labelNoFormat(@src(), 0, buf_slice, .{ .gravity = .center });
+                        try gui.labelNoFmt(@src(), 0, buf_slice, .{ .gravity = .center });
 
-                        gui.label(@src(), 0, "Asking a Question", .{}, .{});
+                        try gui.label(@src(), 0, "Asking a Question", .{}, .{});
 
                         const oo = gui.Options{ .margin = gui.Rect.all(4), .expand = .horizontal };
                         var box = gui.box(@src(), 0, .horizontal, oo);
 
-                        if (gui.button(@src(), 0, "Yes", oo)) {
+                        if (try gui.button(@src(), 0, "Yes", oo)) {
                             std.debug.print("Yes {d}\n", .{fi});
                             floats[fi + 1] = true;
                         }
 
-                        if (gui.button(@src(), 0, "No", oo)) {
+                        if (try gui.button(@src(), 0, "No", oo)) {
                             std.debug.print("No {d}\n", .{fi});
                             fw2.close();
                         }
@@ -298,16 +298,16 @@ pub fn main() !void {
                 defer scroll.deinit();
                 var tl = gui.textLayout(@src(), 0, .{ .expand = .both });
                 {
-                    if (gui.button(@src(), 0, "Win Up .1", .{ .gravity = .upleft })) {
+                    if (try gui.button(@src(), 0, "Win Up .1", .{ .gravity = .upleft })) {
                         fwin.wd.rect.y -= 0.1;
                     }
-                    if (gui.button(@src(), 0, "Win Down .1", .{ .gravity = .upright })) {
+                    if (try gui.button(@src(), 0, "Win Down .1", .{ .gravity = .upright })) {
                         fwin.wd.rect.y += 0.1;
                     }
                 }
                 const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
                 //const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore";
-                tl.addText(lorem, .{});
+                try tl.addText(lorem, .{});
                 //var it = std.mem.split(u8, lorem, " ");
                 //while (it.next()) |word| {
                 //  tl.addText(word);
@@ -368,7 +368,7 @@ fn animatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool
 fn show_stroke_test_window() void {
     var win = gui.floatingWindow(@src(), 0, false, &StrokeTest.show_rect, &StrokeTest.show_dialog, .{});
     defer win.deinit();
-    gui.windowHeader("Stroke Test", "", &StrokeTest.show_dialog);
+    gui.windowHeader("Stroke Test", "", &StrokeTest.show_dialog) catch unreachable;
 
     //var scale = gui.scale(@src(), 0, 1, .{.expand = .both});
     //defer scale.deinit();
@@ -412,7 +412,7 @@ pub const StrokeTest = struct {
             gui.pathFillConvex(fill_color);
 
             _ = i;
-            //_ = gui.button(@src(), i, "Floating", .{ .rect = gui.Rect.fromPoint(p) });
+            //_ = try gui.button(@src(), i, "Floating", .{ .rect = gui.Rect.fromPoint(p) });
         }
 
         for (points) |p| {
