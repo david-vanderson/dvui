@@ -169,8 +169,6 @@ pub fn main() !void {
                         button.bc.wd.rect.x += a.lerp();
                     }
 
-                    button.bc.widget().processEvents();
-
                     if (button.show()) {
                         const a = gui.Animation{ .start_val = 0, .end_val = 200, .start_time = 0, .end_time = 10_000_000 };
                         gui.animate(button.bc.wd.id, "xoffset", a);
@@ -251,7 +249,7 @@ pub fn main() !void {
                 var fwin = animatingWindow(@src(), 0, false, &FloatingWindowTest.rect, &FloatingWindowTest.show, start_closing, .{});
                 //var fwin = gui.FloatingWindowWidget.init(@src(), 0, false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
 
-                fwin.install();
+                fwin.install(.{});
                 defer fwin.deinit();
                 gui.labelNoFormat(@src(), 0, "Floating Window", .{ .gravity = .center });
 
@@ -393,6 +391,11 @@ pub const StrokeTest = struct {
 
         _ = gui.captureMouseMaintain(self.wd.id);
 
+        var iter = gui.EventIterator.init(self.data().id, self.data().borderRectScale().r);
+        while (iter.next()) |e| {
+            self.processEvent(&iter, e);
+        }
+
         self.wd.borderAndBackground();
 
         _ = gui.parentSet(self.widget());
@@ -416,8 +419,6 @@ pub const StrokeTest = struct {
 
         const stroke_color = gui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
         gui.pathStroke(false, rs.s * thickness, .square, stroke_color);
-
-        self.widget().processEvents();
 
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();

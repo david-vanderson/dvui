@@ -245,8 +245,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
             std.mem.set(u8, &TextEntryText.text, 0);
             gui.focusWidget(te.wd.id, null);
         }
-        te.widget().processEvents();
-        te.install();
+        te.install(.{});
         te.deinit();
 
         var box2 = gui.box(@src(), 0, .horizontal, .{ .gravity = .right });

@@ -389,6 +389,10 @@ pub fn themeSet(theme: *const Theme) void {
     cw.theme = theme;
 }
 
+pub const InstallOptions = struct {
+    process_events: bool = true,
+};
+
 pub fn placeOnScreen(spawner: Rect, start: Rect) Rect {
     var r = start;
     const wr = windowRect();
@@ -2608,8 +2612,7 @@ pub fn popup(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(PopupWidget) catch unreachable;
     ret.* = PopupWidget.init(src, id_extra, initialRect, opts);
-    ret.widget().processEvents(); // not strictly needed
-    ret.install();
+    ret.install(.{});
     return ret;
 }
 
@@ -2643,7 +2646,8 @@ pub const PopupWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
+        _ = opts; // popup only processes events after the fact in deinit
         debug("{x} Popup {}", .{ self.wd.id, self.wd.rect });
 
         // Popup is outside normal widget flow, a menu can pop up outside the
@@ -2678,7 +2682,7 @@ pub const PopupWidget = struct {
         // we are using MenuWidget to do border/background but floating windows
         // don't have margin, so turn that off
         self.layout = MenuWidget.init(@src(), 0, .vertical, self.options.override(.{ .margin = .{} }));
-        self.layout.install();
+        self.layout.install(.{});
     }
 
     pub fn close(self: *Self) void {
@@ -2839,7 +2843,7 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: b
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(FloatingWindowWidget) catch unreachable;
     ret.* = FloatingWindowWidget.init(src, id_extra, modal, rect, openflag, opts);
-    ret.install(); // events processed here for floating window
+    ret.install(.{});
     return ret;
 }
 
@@ -2854,6 +2858,7 @@ pub const FloatingWindowWidget = struct {
 
     wd: WidgetData = undefined,
     options: Options = undefined,
+    process_events: bool = true,
     modal: bool = false,
     captured: bool = false,
     prev_windowId: u32 = 0,
@@ -2953,7 +2958,8 @@ pub const FloatingWindowWidget = struct {
         self.save_rect = false;
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
+        self.process_events = opts.process_events;
         debug("{x} FloatingWindow {}", .{ self.wd.id, self.wd.rect });
 
         _ = parentSet(self.widget());
@@ -2966,8 +2972,10 @@ pub const FloatingWindowWidget = struct {
 
         self.captured = captureMouseMaintain(self.wd.id);
 
-        // processEventsBefore can change self.wd.rect
-        self.processEventsBefore();
+        if (self.process_events) {
+            // processEventsBefore can change self.wd.rect
+            self.processEventsBefore();
+        }
 
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
@@ -2984,7 +2992,7 @@ pub const FloatingWindowWidget = struct {
         // we are using BoxWidget to do border/background but floating windows
         // don't have margin, so turn that off
         self.layout = BoxWidget.init(@src(), 0, .vertical, self.options.override(.{ .margin = .{}, .expand = .both }));
-        self.layout.install();
+        self.layout.install(.{});
     }
 
     pub fn processEventsBefore(self: *Self) void {
@@ -3156,8 +3164,12 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.processEventsAfter();
+        if (self.process_events) {
+            self.processEventsAfter();
+        }
+
         self.layout.deinit();
+
         if (self.save_rect) {
             if (self.io_rect) |ior| {
                 // user is storing the rect for us across open/close
@@ -3166,7 +3178,6 @@ pub const FloatingWindowWidget = struct {
                     // our rect to 0 so the user wouldn't see the jump, so don't store it
                     // back out this frame
                     ior.* = self.wd.rect;
-                    std.debug.print("stored rect {}\n", .{self.wd.rect});
                 }
             } else {
                 // we store the rect
@@ -3303,8 +3314,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
     const options = expander_defaults.override(opts);
 
     var bc = ButtonContainerWidget.init(src, id_extra, true, options);
-    bc.widget().processEvents();
-    bc.install();
+    bc.install(.{});
     defer bc.deinit();
 
     var expanded: bool = false;
@@ -3318,7 +3328,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
 
     var bcbox = BoxWidget.init(@src(), 0, .horizontal, options.strip());
     defer bcbox.deinit();
-    bcbox.install();
+    bcbox.install(.{});
     const size = options.font().lineSkip();
     if (expanded) {
         icon(@src(), 0, size, "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity = .left });
@@ -3335,15 +3345,14 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
 pub fn paned(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) *PanedWidget {
     var ret = gui.currentWindow().arena.create(PanedWidget) catch unreachable;
     ret.* = PanedWidget.init(src, id_extra, dir, collapse_size, opts);
-    ret.widget().processEvents();
-    ret.install();
+    ret.install(.{});
     return ret;
 }
 
 pub const PanedWidget = struct {
     const Self = @This();
 
-    const Data = struct {
+    const SavedData = struct {
         split_ratio: f32,
         rect: Rect,
     };
@@ -3357,7 +3366,7 @@ pub const PanedWidget = struct {
     collapse_size: f32 = 0,
     captured: bool = false,
     hovered: bool = false,
-    data: Data = undefined,
+    saved_data: SavedData = undefined,
     first_side_id: ?u32 = null,
     prevClip: Rect = Rect{},
 
@@ -3370,7 +3379,7 @@ pub const PanedWidget = struct {
 
         const rect = self.wd.contentRect();
 
-        if (gui.dataGet(self.wd.id, "_data", Data)) |d| {
+        if (gui.dataGet(self.wd.id, "_data", SavedData)) |d| {
             self.split_ratio = d.split_ratio;
             switch (self.dir) {
                 .horizontal => {
@@ -3419,8 +3428,16 @@ pub const PanedWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
         debug("{x} Paned {}", .{ self.wd.id, self.wd.rect });
+
+        if (opts.process_events) {
+            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
+            while (iter.next()) |e| {
+                self.processEvent(&iter, e);
+            }
+        }
+
         self.wd.borderAndBackground();
         self.prevClip = clip(self.wd.contentRectScale().r);
 
@@ -3603,7 +3620,7 @@ pub const PanedWidget = struct {
 
     pub fn deinit(self: *Self) void {
         clipSet(self.prevClip);
-        gui.dataSet(self.wd.id, "_data", Data{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
+        gui.dataSet(self.wd.id, "_data", SavedData{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
         _ = gui.parentSet(self.wd.parent);
@@ -3618,7 +3635,7 @@ pub fn textLayout(src: std.builtin.SourceLocation, id_extra: usize, opts: Option
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(TextLayoutWidget) catch unreachable;
     ret.* = TextLayoutWidget.init(src, id_extra, opts);
-    ret.install();
+    ret.install(.{});
     return ret;
 }
 
@@ -3642,7 +3659,8 @@ pub const TextLayoutWidget = struct {
         return Self{ .wd = WidgetData.init(src, id_extra, options) };
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
+        _ = opts;
         _ = parentSet(self.widget());
         debug("{x} TextLayout {}", .{ self.wd.id, self.wd.rect });
 
@@ -3819,7 +3837,7 @@ pub fn context(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(ContextWidget) catch unreachable;
     ret.* = ContextWidget.init(src, id_extra, opts);
-    ret.install();
+    ret.install(.{});
     return ret;
 }
 
@@ -3828,6 +3846,7 @@ pub const ContextWidget = struct {
     wd: WidgetData = undefined,
 
     winId: u32 = undefined,
+    process_events: bool = true,
     focused: bool = false,
     activePt: Point = Point{},
 
@@ -3848,7 +3867,8 @@ pub const ContextWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
+        self.process_events = opts.process_events;
         _ = parentSet(self.widget());
         debug("{x} Context {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
@@ -3937,7 +3957,9 @@ pub const ContextWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.processMouseEventsAfter();
+        if (self.process_events) {
+            self.processMouseEventsAfter();
+        }
         if (self.focused) {
             dataSet(self.wd.id, "_activePt", self.activePt);
         }
@@ -3951,7 +3973,7 @@ pub fn overlay(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(OverlayWidget) catch unreachable;
     ret.* = OverlayWidget.init(src, id_extra, opts);
-    ret.install();
+    ret.install(.{});
     return ret;
 }
 
@@ -3963,7 +3985,8 @@ pub const OverlayWidget = struct {
         return Self{ .wd = WidgetData.init(src, id_extra, opts) };
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
+        _ = opts;
         _ = parentSet(self.widget());
         debug("{x} Overlay {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
@@ -4016,7 +4039,7 @@ pub fn box(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opt
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(BoxWidget) catch unreachable;
     ret.* = BoxWidget.init(src, id_extra, dir, opts);
-    ret.install();
+    ret.install(.{});
     return ret;
 }
 
@@ -4047,7 +4070,8 @@ pub const BoxWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
+        _ = opts;
         _ = parentSet(self.widget());
         debug("{x} Box {}", .{ self.wd.id, self.wd.rect });
         self.wd.borderAndBackground();
@@ -4267,8 +4291,7 @@ pub fn scrollArea(src: std.builtin.SourceLocation, id_extra: usize, virtual_size
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(ScrollAreaWidget) catch unreachable;
     ret.* = ScrollAreaWidget.init(src, id_extra, virtual_size, opts);
-    ret.widget().processEvents();
-    ret.install();
+    ret.install(.{});
     return ret;
 }
 
@@ -4297,6 +4320,7 @@ pub const ScrollAreaWidget = struct {
 
     wd: WidgetData = undefined,
 
+    process_events: bool = true,
     prevClip: Rect = Rect{},
     virtualSize: Size = Size{},
     nextVirtualSize: Size = Size{},
@@ -4336,8 +4360,10 @@ pub const ScrollAreaWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
+        self.process_events = opts.process_events;
         debug("{x} ScrollArea {}", .{ self.wd.id, self.wd.rect });
+
         self.wd.borderAndBackground();
 
         self.prevClip = clip(self.wd.contentRectScale().r);
@@ -4485,7 +4511,9 @@ pub const ScrollAreaWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.processEventsAfter();
+        if (self.process_events) {
+            self.processEventsAfter();
+        }
 
         clipSet(self.prevClip);
 
@@ -4579,7 +4607,7 @@ pub fn scale(src: std.builtin.SourceLocation, id_extra: usize, scale_in: f32, op
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(ScaleWidget) catch unreachable;
     ret.* = ScaleWidget.init(src, id_extra, scale_in, opts);
-    ret.install();
+    ret.install(.{});
     return ret;
 }
 
@@ -4595,7 +4623,8 @@ pub const ScaleWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
+        _ = opts;
         _ = parentSet(self.widget());
         debug("{x} Scale {d} {}", .{ self.wd.id, self.scale, self.wd.rect });
         self.wd.borderAndBackground();
@@ -4644,7 +4673,7 @@ pub fn menu(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, op
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(MenuWidget) catch unreachable;
     ret.* = MenuWidget.init(src, id_extra, dir, opts);
-    ret.install();
+    ret.install(.{});
     return ret;
 }
 
@@ -4680,7 +4709,8 @@ pub const MenuWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
+        _ = opts;
         _ = parentSet(self.widget());
         self.parentMenu = menuSet(self);
         debug("{x} Menu {}", .{ self.wd.id, self.wd.rect });
@@ -4688,7 +4718,7 @@ pub const MenuWidget = struct {
         self.wd.borderAndBackground();
 
         self.box = BoxWidget.init(@src(), 0, self.dir, self.wd.options.strip());
-        self.box.install();
+        self.box.install(.{});
     }
 
     pub fn close(self: *Self) void {
@@ -4812,8 +4842,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool,
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(MenuItemWidget) catch unreachable;
     ret.* = MenuItemWidget.init(src, id_extra, submenu, opts);
-    ret.widget().processEvents();
-    ret.install();
+    ret.install(.{});
     return ret;
 }
 
@@ -4842,8 +4871,15 @@ pub const MenuItemWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
         debug("{x} MenuItem {}", .{ self.wd.id, self.wd.rect });
+
+        if (opts.process_events) {
+            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
+            while (iter.next()) |e| {
+                self.processEvent(&iter, e);
+            }
+        }
 
         if (self.wd.id == focusedWidgetIdInCurrentWindow()) {
             self.focused_in_win = true;
@@ -5020,7 +5056,8 @@ pub const LabelWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
+        _ = opts;
         debug("{x} Label \"{s:<10}\" {}", .{ self.wd.id, self.label_str, self.wd.rect });
         self.wd.borderAndBackground();
         const rs = self.wd.contentRectScale();
@@ -5038,12 +5075,12 @@ pub const LabelWidget = struct {
 
 pub fn label(src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) void {
     var lw = LabelWidget.init(src, id_extra, fmt, args, opts);
-    lw.install();
+    lw.install(.{});
 }
 
 pub fn labelNoFormat(src: std.builtin.SourceLocation, id_extra: usize, str: []const u8, opts: Options) void {
     var lw = LabelWidget.initNoFormat(src, id_extra, str, opts);
-    lw.install();
+    lw.install(.{});
 }
 
 pub fn icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) void {
@@ -5093,8 +5130,7 @@ pub fn buttonContainer(src: std.builtin.SourceLocation, id_extra: usize, show_fo
     const cw = current_window orelse unreachable;
     var ret = cw.arena.create(ButtonContainerWidget) catch unreachable;
     ret.* = ButtonContainerWidget.init(src, id_extra, show_focus, opts);
-    ret.widget().processEvents();
-    ret.install();
+    ret.install(.{});
     return ret;
 }
 
@@ -5118,7 +5154,16 @@ pub const ButtonContainerWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
+        debug("{x} ButtonContainer {}", .{ self.wd.id, self.wd.rect });
+
+        if (opts.process_events) {
+            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
+            while (iter.next()) |e| {
+                self.processEvent(&iter, e);
+            }
+        }
+
         self.focused = (self.wd.id == focusedWidgetId());
 
         if (self.wd.options.borderGet().nonZero()) {
@@ -5150,7 +5195,6 @@ pub const ButtonContainerWidget = struct {
         }
 
         _ = parentSet(self.widget());
-        debug("{x} ButtonContainer {}", .{ self.wd.id, self.wd.rect });
     }
 
     pub fn widget(self: *Self) Widget {
@@ -5247,8 +5291,7 @@ pub const ButtonWidget = struct {
 
     pub fn show(self: *ButtonWidget) bool {
         debug("Button {s}", .{self.label_str});
-        self.bc.widget().processEvents();
-        self.bc.install();
+        self.bc.install(.{});
         const clicked = self.bc.clicked;
 
         labelNoFormat(@src(), 0, self.label_str, self.bc.wd.options.strip().override(.{ .gravity = .center }));
@@ -5363,8 +5406,7 @@ pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, t
     var ret = cw.arena.create(TextEntryWidget) catch unreachable;
     ret.* = TextEntryWidget.init(src, id_extra, width, text, opts);
     ret.allocator = cw.arena;
-    ret.widget().processEvents();
-    ret.install();
+    ret.install(.{});
     ret.deinit();
 }
 
@@ -5404,8 +5446,16 @@ pub const TextEntryWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self) void {
+    pub fn install(self: *Self, opts: InstallOptions) void {
         debug("{x} Text {}", .{ self.wd.id, self.wd.rect });
+
+        if (opts.process_events) {
+            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
+            while (iter.next()) |e| {
+                self.processEvent(&iter, e);
+            }
+        }
+
         self.wd.borderAndBackground();
 
         const focused = (self.wd.id == focusedWidgetId());
@@ -6361,13 +6411,6 @@ pub const Widget = struct {
         return hash.final();
     }
 
-    pub fn processEvents(self: Widget) void {
-        var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
-        while (iter.next()) |e| {
-            self.processEvent(&iter, e);
-        }
-    }
-
     pub fn rectFor(self: Widget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         return self.vtable.rectFor(self.ptr, id, min_size, e, g);
     }
@@ -6588,7 +6631,7 @@ pub const examples = struct {
                 }
             }
 
-            win.install();
+            win.install(.{});
             defer win.deinit();
 
             var closing: bool = false;
@@ -6903,7 +6946,7 @@ pub const examples = struct {
             const left = @intCast(i32, @rem(millis, 1000));
 
             var mslabel = gui.LabelWidget.init(@src(), 0, "{d} ms into second", .{@intCast(u32, left)}, .{});
-            mslabel.install();
+            mslabel.install(.{});
 
             if (gui.timerDone(mslabel.wd.id) or !gui.timerExists(mslabel.wd.id)) {
                 const wait = 1000 * (1000 - left);
