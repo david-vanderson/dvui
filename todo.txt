@@ -1,6 +1,8 @@
 
 start handling all the unreachable stuff
 
+audit docs
+
 how can I get mach to not build all it's stuff when I'm compiling an sdl example?
 
 -Dtarget=wasm32-freestanding-none
