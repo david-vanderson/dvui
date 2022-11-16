@@ -34,7 +34,7 @@ pub fn main() !void {
         const quit = win_backend.addAllEvents(&win);
         if (quit) break :main_loop;
 
-        _ = gui.examples.demo();
+        _ = try gui.examples.demo();
 
         var window_box = gui.box(@src(), 0, .vertical, .{ .expand = .both, .color_style = .window, .background = true });
 
@@ -319,7 +319,7 @@ pub fn main() !void {
 
         window_box.deinit();
 
-        const end_micros = win.end();
+        const end_micros = try win.end();
 
         win_backend.setCursor(win.cursorRequested());
 

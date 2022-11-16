@@ -19,8 +19,8 @@ const gui = @This();
 
 var current_window: ?*Window = null;
 
-pub fn currentWindow() *Window {
-    return current_window orelse unreachable;
+pub fn currentWindow() !*Window {
+    return current_window orelse return error.NoCurrentWindow;
 }
 
 pub var log_debug: bool = false;
@@ -1850,6 +1850,7 @@ pub const Window = struct {
     };
 
     backend: Backend,
+    previous_window: ?*Window = null,
 
     window_currentId: u32 = 0,
     floating_data: std.ArrayList(FloatingData),
@@ -2230,6 +2231,7 @@ pub const Window = struct {
 
         //std.debug.print(" frame_time_ns {d}\n", .{self.frame_time_ns});
 
+        self.previous_window = current_window;
         current_window = self;
 
         self.cursor_requested = .arrow;
@@ -2421,9 +2423,9 @@ pub const Window = struct {
         }
     }
 
-    pub fn renderCommands(self: *Self, queue: *std.ArrayList(RenderCmd)) void {
+    pub fn renderCommands(self: *Self, queue: *std.ArrayList(RenderCmd)) !void {
         for (queue.items) |*drc| {
-            currentWindow().snap_to_pixels = drc.snap;
+            (try currentWindow()).snap_to_pixels = drc.snap;
             clipSet(drc.clip);
             switch (drc.cmd) {
                 .text => |t| {
@@ -2463,14 +2465,14 @@ pub const Window = struct {
         }
     }
 
-    pub fn end(self: *Self) ?u32 {
+    pub fn end(self: *Self) !?u32 {
         self.dialogsShow();
 
         const oldclip = clipGet();
-        self.renderCommands(&self.render_cmds_after);
+        try self.renderCommands(&self.render_cmds_after);
         for (self.floating_data.items) |*fw| {
-            self.renderCommands(&fw.render_cmds);
-            self.renderCommands(&fw.render_cmds_after);
+            try self.renderCommands(&fw.render_cmds);
+            try self.renderCommands(&fw.render_cmds_after);
         }
         clipSet(oldclip);
 
@@ -2538,6 +2540,8 @@ pub const Window = struct {
                 }
             }
         }
+
+        current_window = self.previous_window;
 
         return ret;
     }
@@ -3342,8 +3346,8 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
     return expanded;
 }
 
-pub fn paned(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) *PanedWidget {
-    var ret = gui.currentWindow().arena.create(PanedWidget) catch unreachable;
+pub fn paned(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, collapse_size: f32, opts: Options) !*PanedWidget {
+    var ret = (try gui.currentWindow()).arena.create(PanedWidget) catch unreachable;
     ret.* = PanedWidget.init(src, id_extra, dir, collapse_size, opts);
     ret.install(.{});
     return ret;
@@ -6674,7 +6678,7 @@ pub const examples = struct {
         }
     };
 
-    pub fn demo() bool {
+    pub fn demo() !bool {
         if (show_demo_window) {
             var float = gui.floatingWindow(@src(), 0, false, null, &show_demo_window, .{ .min_size = .{ .w = 400, .h = 400 } });
             defer float.deinit();
@@ -6744,7 +6748,7 @@ pub const examples = struct {
                 //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
             }
 
-            gui.checkbox(@src(), 0, &gui.currentWindow().snap_to_pixels, "Snap to Pixels", .{});
+            gui.checkbox(@src(), 0, &(try gui.currentWindow()).snap_to_pixels, "Snap to Pixels", .{});
 
             if (show_dialog) {
                 dialogDirect();
