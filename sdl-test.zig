@@ -200,8 +200,8 @@ pub fn main() !void {
                         }
                     };
 
-                    gui.textEntry(@src(), 0, 26.0, &TextEntryText.text1, .{});
-                    gui.textEntry(@src(), 0, 26.0, &TextEntryText.text2, .{});
+                    try gui.textEntry(@src(), 0, 26.0, &TextEntryText.text1, .{});
+                    try gui.textEntry(@src(), 0, 26.0, &TextEntryText.text2, .{});
                 }
 
                 {
