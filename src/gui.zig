@@ -19,8 +19,8 @@ const gui = @This();
 
 var current_window: ?*Window = null;
 
-pub fn currentWindow() !*Window {
-    return current_window orelse return error.NoCurrentWindow;
+pub fn currentWindow() *Window {
+    return current_window orelse unreachable;
 }
 
 pub var log_debug: bool = false;
@@ -382,13 +382,11 @@ pub const Options = struct {
 };
 
 pub fn themeGet() *const Theme {
-    var cw = current_window orelse unreachable;
-    return cw.theme;
+    return currentWindow().theme;
 }
 
 pub fn themeSet(theme: *const Theme) void {
-    var cw = current_window orelse unreachable;
-    cw.theme = theme;
+    currentWindow().theme = theme;
 }
 
 pub const InstallOptions = struct {
@@ -416,8 +414,7 @@ pub fn placeOnScreen(spawner: Rect, start: Rect) Rect {
 }
 
 pub fn frameTimeNS() i128 {
-    var cw = current_window orelse unreachable;
-    return cw.frame_time_ns;
+    return currentWindow().frame_time_ns;
 }
 
 // All widgets have to bubble keyboard events if they can have keyboard focus
@@ -577,7 +574,7 @@ const FontCacheEntry = struct {
 };
 
 pub fn fontCacheGet(font: Font) *FontCacheEntry {
-    var cw = current_window orelse unreachable;
+    var cw = currentWindow();
     const fontHash = FontCacheEntry.hash(font);
     if (cw.font_cache.getPtr(fontHash)) |fce| {
         fce.used = true;
@@ -633,7 +630,7 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height_natural: f32) f
 }
 
 pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) IconCacheEntry {
-    var cw = current_window orelse unreachable;
+    var cw = currentWindow();
     const icon_hash = IconCacheEntry.hash(tvg_bytes, ask_height);
 
     if (cw.icon_cache.getPtr(icon_hash)) |ice| {
@@ -700,7 +697,7 @@ pub const RenderCmd = struct {
 };
 
 pub fn focusedWindow() bool {
-    const cw = current_window orelse unreachable;
+    var cw = currentWindow();
     if (cw.window_currentId == cw.focused_windowId) {
         return true;
     }
@@ -709,12 +706,12 @@ pub fn focusedWindow() bool {
 }
 
 pub fn focusedWindowId() u32 {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     return cw.focused_windowId;
 }
 
 pub fn focusWindow(window_id: ?u32, iter: ?*EventIterator) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     const winId = window_id orelse cw.window_currentId;
     if (cw.focused_windowId != winId) {
         cw.focused_windowId = winId;
@@ -735,7 +732,7 @@ pub fn focusWindow(window_id: ?u32, iter: ?*EventIterator) void {
 }
 
 pub fn raiseWindow(window_id: u32) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     for (cw.floating_data.items) |fd, i| {
         if (fd.id == window_id) {
             _ = cw.floating_data.orderedRemove(i);
@@ -756,7 +753,7 @@ fn optionalEqual(comptime T: type, a: ?T, b: ?T) bool {
 }
 
 pub fn focusWidget(id: ?u32, iter: ?*EventIterator) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     if (cw.focused_windowId == cw.wd.id) {
         if (!optionalEqual(u32, cw.focused_widgetId, id)) {
             cw.focused_widgetId = id;
@@ -782,7 +779,7 @@ pub fn focusWidget(id: ?u32, iter: ?*EventIterator) void {
 }
 
 pub fn focusedWidgetId() ?u32 {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     if (cw.focused_windowId == cw.wd.id) {
         return cw.focused_widgetId;
     } else {
@@ -797,7 +794,7 @@ pub fn focusedWidgetId() ?u32 {
 }
 
 pub fn focusedWidgetIdInCurrentWindow() ?u32 {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     if (cw.window_currentId == cw.wd.id) {
         return cw.focused_widgetId;
     } else {
@@ -827,17 +824,17 @@ pub const CursorKind = enum(u8) {
 };
 
 pub fn cursorGetDragging() ?CursorKind {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     return cw.cursor_dragging;
 }
 
 pub fn cursorSet(cursor: CursorKind) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     cw.cursor_requested = cursor;
 }
 
 pub fn pathAddPoint(p: Point) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     cw.path.append(p) catch unreachable;
 }
 
@@ -886,7 +883,7 @@ pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool)
 }
 
 pub fn pathFillConvex(col: Color) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     if (cw.path.items.len < 3) {
         cw.path.clearAndFree();
         return;
@@ -976,7 +973,7 @@ pub fn pathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, co
 }
 
 pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
 
     if (cw.path.items.len == 0) {
         return;
@@ -1011,7 +1008,7 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
 }
 
 pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
 
     if (cw.path.items.len == 1) {
         // draw a circle with radius thickness at that point
@@ -1226,7 +1223,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
 }
 
 pub fn windowFor(p: Point) u32 {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     var i = cw.floating_data.items.len;
     while (i > 0) : (i -= 1) {
         const fw = &cw.floating_data.items[i - 1];
@@ -1239,7 +1236,7 @@ pub fn windowFor(p: Point) u32 {
 }
 
 pub fn floatingWindowClosing(id: u32) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     if (cw.floating_data.items.len > 0) {
         const fd = cw.floating_data.items[cw.floating_data.items.len - 1];
         if (fd.id == id) {
@@ -1253,7 +1250,7 @@ pub fn floatingWindowClosing(id: u32) void {
 }
 
 pub fn floatingWindowAdd(id: u32, rect: Rect, modal: bool) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
 
     for (cw.floating_data.items) |*fd| {
         if (id == fd.id) {
@@ -1273,19 +1270,19 @@ pub fn floatingWindowAdd(id: u32, rect: Rect, modal: bool) void {
 }
 
 pub fn windowCurrentSet(id: u32) u32 {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     const ret = cw.window_currentId;
     cw.window_currentId = id;
     return ret;
 }
 
 pub fn windowCurrentId() u32 {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     return cw.window_currentId;
 }
 
 pub fn dragPreStart(p: Point, cursor: CursorKind, offset: Point) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     cw.drag_state = .prestart;
     cw.drag_pt = p;
     cw.drag_offset = offset;
@@ -1293,7 +1290,7 @@ pub fn dragPreStart(p: Point, cursor: CursorKind, offset: Point) void {
 }
 
 pub fn dragStart(p: Point, cursor: CursorKind, offset: Point) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     cw.drag_state = .dragging;
     cw.drag_pt = p;
     cw.drag_offset = offset;
@@ -1301,12 +1298,12 @@ pub fn dragStart(p: Point, cursor: CursorKind, offset: Point) void {
 }
 
 pub fn dragOffset() Point {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     return cw.drag_offset;
 }
 
 pub fn dragging(p: Point) ?Point {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     switch (cw.drag_state) {
         .none => return null,
         .dragging => {
@@ -1329,17 +1326,17 @@ pub fn dragging(p: Point) ?Point {
 }
 
 pub fn dragEnd() void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     cw.drag_state = .none;
 }
 
 pub fn mouseTotalMotion() Point {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     return Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
 }
 
 pub fn captureMouse(id: ?u32) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     cw.captureID = id;
     if (id != null) {
         cw.captured_last_frame = true;
@@ -1347,7 +1344,7 @@ pub fn captureMouse(id: ?u32) void {
 }
 
 pub fn captureMouseMaintain(id: u32) bool {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     if (cw.captureID == id) {
         // to maintain capture, we must be on or above the
         // top modal window
@@ -1376,86 +1373,75 @@ pub fn captureMouseMaintain(id: u32) bool {
 }
 
 pub fn captureMouseGet() ?u32 {
-    const cw = current_window orelse unreachable;
-    return cw.captureID;
+    return currentWindow().captureID;
 }
 
 pub fn clipGet() Rect {
-    const cw = current_window orelse unreachable;
-    return cw.clipRect;
+    return currentWindow().clipRect;
 }
 
 pub fn clip(new: Rect) Rect {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     var ret = cw.clipRect;
     clipSet(cw.clipRect.intersect(new));
     return ret;
 }
 
 pub fn clipSet(r: Rect) void {
-    const cw = current_window orelse unreachable;
-    cw.clipRect = r;
+    currentWindow().clipRect = r;
 }
 
 pub fn cueFrame() void {
-    const cw = current_window orelse unreachable;
-    cw.extra_frames_needed = 1;
+    currentWindow().extra_frames_needed = 1;
 }
 
 pub fn animationRate() f32 {
-    const cw = current_window orelse unreachable;
-    return cw.rate;
+    return currentWindow().rate;
 }
 
 pub fn FPS() f32 {
-    const cw = current_window orelse unreachable;
-    return cw.FPS();
+    return currentWindow().FPS();
 }
 
 pub fn parentGet() Widget {
-    const cw = current_window orelse unreachable;
-    return cw.wd.parent;
+    return currentWindow().wd.parent;
 }
 
 pub fn parentSet(w: Widget) Widget {
-    var cw = current_window orelse unreachable;
+    const cw = currentWindow();
     const ret = cw.wd.parent;
     cw.wd.parent = w;
     return ret;
 }
 
 pub fn popupSet(p: ?*PopupWidget) ?*PopupWidget {
-    var cw = current_window orelse unreachable;
+    const cw = currentWindow();
     const ret = cw.popup_current;
     cw.popup_current = p;
     return ret;
 }
 
 pub fn menuGet() ?*MenuWidget {
-    const cw = current_window orelse unreachable;
-    return cw.menu_current;
+    return currentWindow().menu_current;
 }
 
 pub fn menuSet(m: ?*MenuWidget) ?*MenuWidget {
-    var cw = current_window orelse unreachable;
+    var cw = currentWindow();
     const ret = cw.menu_current;
     cw.menu_current = m;
     return ret;
 }
 
 pub fn windowRect() Rect {
-    var cw = current_window orelse unreachable;
-    return cw.wd.rect;
+    return currentWindow().wd.rect;
 }
 
 pub fn windowRectPixels() Rect {
-    var cw = current_window orelse unreachable;
-    return cw.rect_pixels;
+    return currentWindow().rect_pixels;
 }
 
 pub fn windowNaturalScale() f32 {
-    var cw = current_window orelse unreachable;
-    return cw.natural_scale;
+    return currentWindow().natural_scale;
 }
 
 pub fn firstFrame(id: u32) bool {
@@ -1463,7 +1449,7 @@ pub fn firstFrame(id: u32) bool {
 }
 
 pub fn minSizeGetPrevious(id: u32) ?Size {
-    var cw = current_window orelse unreachable;
+    var cw = currentWindow();
     const ret = cw.widgets_min_size_prev.get(id);
     debug("{x} minSizeGetPrevious {?}", .{ id, ret });
     return ret;
@@ -1471,7 +1457,7 @@ pub fn minSizeGetPrevious(id: u32) ?Size {
 
 pub fn minSizeSet(id: u32, s: Size) void {
     debug("{x} minSizeSet {}", .{ id, s });
-    var cw = current_window orelse unreachable;
+    var cw = currentWindow();
     return cw.widgets_min_size.put(id, s) catch unreachable;
 }
 
@@ -1488,7 +1474,7 @@ const DataOffset = struct {
 };
 
 pub fn dataSet(id: u32, key: []const u8, data: anytype) void {
-    var cw = current_window orelse unreachable;
+    var cw = currentWindow();
     const hash = hashIdKey(id, key);
     var bytes: []const u8 = undefined;
     const dt = @typeInfo(@TypeOf(data));
@@ -1516,7 +1502,7 @@ pub fn dataSet(id: u32, key: []const u8, data: anytype) void {
 }
 
 pub fn dataGet(id: u32, key: []const u8, comptime T: type) ?T {
-    var cw = current_window orelse unreachable;
+    var cw = currentWindow();
     const offset = cw.data_offset_prev.get(hashIdKey(id, key));
     if (offset) |o| {
         const dt = @typeInfo(T);
@@ -1575,8 +1561,7 @@ pub fn placeIn(id: ?u32, avail: Rect, min_size: Size, e: Options.Expand, g: Opti
 }
 
 pub fn events() []Event {
-    var cw = current_window orelse unreachable;
-    return cw.events.items;
+    return currentWindow().events.items;
 }
 
 pub const EventIterator = struct {
@@ -1691,13 +1676,13 @@ pub const Animation = struct {
 };
 
 pub fn animate(id: u32, key: []const u8, a: Animation) void {
-    var cw = current_window orelse unreachable;
+    var cw = currentWindow();
     const h = hashIdKey(id, key);
     cw.animations.put(h, a) catch unreachable;
 }
 
 pub fn animationGet(id: u32, key: []const u8) ?Animation {
-    var cw = current_window orelse unreachable;
+    var cw = currentWindow();
     const h = hashIdKey(id, key);
     const val = cw.animations.getPtr(h);
     if (val) |v| {
@@ -1743,13 +1728,13 @@ const TabIndex = struct {
 };
 
 pub fn tabIndexSet(widget_id: u32, tab_index: ?u16) void {
-    var cw = current_window orelse unreachable;
+    var cw = currentWindow();
     const ti = TabIndex{ .windowId = cw.window_currentId, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
     cw.tab_index.append(ti) catch unreachable;
 }
 
 pub fn tabIndexNext(iter: ?*EventIterator) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     const widgetId = focusedWidgetId();
     var oldtab: ?u16 = null;
     if (widgetId != null) {
@@ -1789,7 +1774,7 @@ pub fn tabIndexNext(iter: ?*EventIterator) void {
 }
 
 pub fn tabIndexPrev(iter: ?*EventIterator) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     const widgetId = focusedWidgetId();
     var oldtab: ?u16 = null;
     if (widgetId != null) {
@@ -2425,7 +2410,7 @@ pub const Window = struct {
 
     pub fn renderCommands(self: *Self, queue: *std.ArrayList(RenderCmd)) !void {
         for (queue.items) |*drc| {
-            (try currentWindow()).snap_to_pixels = drc.snap;
+            currentWindow().snap_to_pixels = drc.snap;
             clipSet(drc.clip);
             switch (drc.cmd) {
                 .text => |t| {
@@ -2613,8 +2598,7 @@ pub const Window = struct {
 };
 
 pub fn popup(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect, opts: Options) *PopupWidget {
-    const cw = current_window orelse unreachable;
-    var ret = cw.arena.create(PopupWidget) catch unreachable;
+    var ret = currentWindow().arena.create(PopupWidget) catch unreachable;
     ret.* = PopupWidget.init(src, id_extra, initialRect, opts);
     ret.install(.{});
     return ret;
@@ -2844,8 +2828,7 @@ pub const PopupWidget = struct {
 };
 
 pub fn floatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, rect: ?*Rect, openflag: ?*bool, opts: Options) *FloatingWindowWidget {
-    const cw = current_window orelse unreachable;
-    var ret = cw.arena.create(FloatingWindowWidget) catch unreachable;
+    var ret = currentWindow().arena.create(FloatingWindowWidget) catch unreachable;
     ret.* = FloatingWindowWidget.init(src, id_extra, modal, rect, openflag, opts);
     ret.install(.{});
     return ret;
@@ -3234,7 +3217,7 @@ pub const DialogResponse = enum(u8) {
 };
 
 pub fn dialogCustom(src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplay) u32 {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     const parent = parentGet();
     const id = parent.extendID(src, id_extra);
     for (cw.dialogs.items) |*d| {
@@ -3636,7 +3619,7 @@ pub const PanedWidget = struct {
 // fit.  To prevent starting in weird situations, TextLayout defaults to having
 // a min_size.w so at least you can see what is going on.
 pub fn textLayout(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *TextLayoutWidget {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     var ret = cw.arena.create(TextLayoutWidget) catch unreachable;
     ret.* = TextLayoutWidget.init(src, id_extra, opts);
     ret.install(.{});
@@ -3678,7 +3661,7 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn format(self: *Self, comptime fmt: []const u8, args: anytype, opts: Options) void {
-        var cw = current_window orelse unreachable;
+        var cw = currentWindow();
         const l = std.fmt.allocPrint(cw.arena, fmt, args) catch unreachable;
         self.addText(l, opts);
     }
@@ -3838,8 +3821,7 @@ pub const TextLayoutWidget = struct {
 };
 
 pub fn context(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *ContextWidget {
-    const cw = current_window orelse unreachable;
-    var ret = cw.arena.create(ContextWidget) catch unreachable;
+    var ret = currentWindow().arena.create(ContextWidget) catch unreachable;
     ret.* = ContextWidget.init(src, id_extra, opts);
     ret.install(.{});
     return ret;
@@ -3974,8 +3956,7 @@ pub const ContextWidget = struct {
 };
 
 pub fn overlay(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) *OverlayWidget {
-    const cw = current_window orelse unreachable;
-    var ret = cw.arena.create(OverlayWidget) catch unreachable;
+    var ret = currentWindow().arena.create(OverlayWidget) catch unreachable;
     ret.* = OverlayWidget.init(src, id_extra, opts);
     ret.install(.{});
     return ret;
@@ -4040,8 +4021,7 @@ pub const Direction = enum {
 };
 
 pub fn box(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) *BoxWidget {
-    const cw = current_window orelse unreachable;
-    var ret = cw.arena.create(BoxWidget) catch unreachable;
+    var ret = currentWindow().arena.create(BoxWidget) catch unreachable;
     ret.* = BoxWidget.init(src, id_extra, dir, opts);
     ret.install(.{});
     return ret;
@@ -4292,8 +4272,7 @@ pub const ScrollBar = struct {
 };
 
 pub fn scrollArea(src: std.builtin.SourceLocation, id_extra: usize, virtual_size: ?Size, opts: Options) *ScrollAreaWidget {
-    const cw = current_window orelse unreachable;
-    var ret = cw.arena.create(ScrollAreaWidget) catch unreachable;
+    var ret = currentWindow().arena.create(ScrollAreaWidget) catch unreachable;
     ret.* = ScrollAreaWidget.init(src, id_extra, virtual_size, opts);
     ret.install(.{});
     return ret;
@@ -4608,8 +4587,7 @@ pub fn spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
 }
 
 pub fn scale(src: std.builtin.SourceLocation, id_extra: usize, scale_in: f32, opts: Options) *ScaleWidget {
-    const cw = current_window orelse unreachable;
-    var ret = cw.arena.create(ScaleWidget) catch unreachable;
+    var ret = currentWindow().arena.create(ScaleWidget) catch unreachable;
     ret.* = ScaleWidget.init(src, id_extra, scale_in, opts);
     ret.install(.{});
     return ret;
@@ -4674,8 +4652,7 @@ pub const ScaleWidget = struct {
 };
 
 pub fn menu(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) *MenuWidget {
-    const cw = current_window orelse unreachable;
-    var ret = cw.arena.create(MenuWidget) catch unreachable;
+    var ret = currentWindow().arena.create(MenuWidget) catch unreachable;
     ret.* = MenuWidget.init(src, id_extra, dir, opts);
     ret.install(.{});
     return ret;
@@ -4843,8 +4820,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, id_extra: usize, submenu: b
 }
 
 pub fn menuItem(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, opts: Options) *MenuItemWidget {
-    const cw = current_window orelse unreachable;
-    var ret = cw.arena.create(MenuItemWidget) catch unreachable;
+    var ret = currentWindow().arena.create(MenuItemWidget) catch unreachable;
     ret.* = MenuItemWidget.init(src, id_extra, submenu, opts);
     ret.install(.{});
     return ret;
@@ -5045,7 +5021,7 @@ pub const LabelWidget = struct {
     label_str: []const u8 = undefined,
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) Self {
-        var cw = current_window orelse unreachable;
+        var cw = currentWindow();
         const l = std.fmt.allocPrint(cw.arena, fmt, args) catch unreachable;
         return Self.initNoFormat(src, id_extra, l, opts);
     }
@@ -5104,7 +5080,7 @@ pub fn icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name:
 }
 
 pub fn debugFontAtlases(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
 
     var size = Size{};
     var it = cw.font_cache.iterator();
@@ -5131,8 +5107,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, id_extra: usize, opts: 
 }
 
 pub fn buttonContainer(src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) *ButtonContainerWidget {
-    const cw = current_window orelse unreachable;
-    var ret = cw.arena.create(ButtonContainerWidget) catch unreachable;
+    var ret = currentWindow().arena.create(ButtonContainerWidget) catch unreachable;
     ret.* = ButtonContainerWidget.init(src, id_extra, show_focus, opts);
     ret.install(.{});
     return ret;
@@ -5420,7 +5395,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
 }
 
 pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) void {
-    const cw = current_window orelse unreachable;
+    const cw = currentWindow();
     var ret = cw.arena.create(TextEntryWidget) catch unreachable;
     ret.* = TextEntryWidget.init(src, id_extra, width, text, opts);
     ret.allocator = cw.arena;
@@ -5828,7 +5803,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) voi
 
     //if (true) return;
 
-    var cw = current_window orelse unreachable;
+    var cw = currentWindow();
 
     if (cw.window_currentId != cw.wd.id) {
         var txt = cw.arena.alloc(u8, text.len) catch unreachable;
@@ -6005,7 +5980,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) void {
         return;
     }
 
-    var cw = current_window orelse unreachable;
+    var cw = currentWindow();
 
     if (cw.window_currentId != cw.wd.id) {
         var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .debug_font_atlases = .{ .rs = rs, .color = color } } };
@@ -6073,7 +6048,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
 
     //if (true) return;
 
-    var cw = current_window orelse unreachable;
+    var cw = currentWindow();
 
     if (cw.window_currentId != cw.wd.id) {
         var name_copy = cw.arena.alloc(u8, name.len) catch unreachable;
@@ -6748,7 +6723,7 @@ pub const examples = struct {
                 //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
             }
 
-            gui.checkbox(@src(), 0, &(try gui.currentWindow()).snap_to_pixels, "Snap to Pixels", .{});
+            gui.checkbox(@src(), 0, &gui.currentWindow().snap_to_pixels, "Snap to Pixels", .{});
 
             if (show_dialog) {
                 dialogDirect();
