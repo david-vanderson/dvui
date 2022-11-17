@@ -1245,19 +1245,6 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     cw.path.clearAndFree();
 }
 
-pub fn windowFor(p: Point) u32 {
-    const cw = currentWindow();
-    var i = cw.floating_data.items.len;
-    while (i > 0) : (i -= 1) {
-        const fw = &cw.floating_data.items[i - 1];
-        if (fw.modal or fw.rect.contains(p)) {
-            return fw.id;
-        }
-    }
-
-    return cw.wd.id;
-}
-
 pub fn floatingWindowClosing(id: u32) void {
     const cw = currentWindow();
     if (cw.floating_data.items.len > 0) {
@@ -2046,7 +2033,7 @@ pub const Window = struct {
         const newpt = (Point{ .x = x, .y = y }).scale(self.natural_scale);
         const dp = newpt.diff(self.mouse_pt);
         self.mouse_pt = newpt;
-        const winId = windowFor(self.mouse_pt);
+        const winId = self.windowFor(self.mouse_pt);
 
         // focus follows mouse:
         //focusWindow(winId, null);
@@ -2067,7 +2054,7 @@ pub const Window = struct {
     pub fn addEventMouseButton(self: *Self, state: MouseEvent.Kind) !bool {
         self.positionMouseEventRemove();
 
-        const winId = windowFor(self.mouse_pt);
+        const winId = self.windowFor(self.mouse_pt);
 
         try self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
             .p = self.mouse_pt,
@@ -2103,7 +2090,7 @@ pub const Window = struct {
     pub fn addEventMouseWheel(self: *Self, ticks: f32) !bool {
         self.positionMouseEventRemove();
 
-        const winId = windowFor(self.mouse_pt);
+        const winId = self.windowFor(self.mouse_pt);
 
         var ticks_adj = ticks;
         if (builtin.target.os.tag == .linux) {
@@ -2432,7 +2419,7 @@ pub const Window = struct {
             .p = self.mouse_pt,
             .dp = Point{},
             .wheel = 0,
-            .floating_win = windowFor(self.mouse_pt),
+            .floating_win = self.windowFor(self.mouse_pt),
             .state = .position,
         } } });
     }
@@ -2442,6 +2429,18 @@ pub const Window = struct {
         if (e.evt != .mouse or e.evt.mouse.state != .position) {
             // std.debug.print("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
         }
+    }
+
+    fn windowFor(self: *const Self, p: Point) u32 {
+        var i = self.floating_data.items.len;
+        while (i > 0) : (i -= 1) {
+            const fw = &self.floating_data.items[i - 1];
+            if (fw.modal or fw.rect.contains(p)) {
+                return fw.id;
+            }
+        }
+
+        return self.wd.id;
     }
 
     // Return the cursor the gui wants.  Client code should cache this if
@@ -2458,7 +2457,7 @@ pub const Window = struct {
     // Client code should cache this if switching the platform's cursor is
     // expensive.
     pub fn cursorRequestedFloating(self: *const Self) ?CursorKind {
-        if (self.captureID != null or windowFor(self.mouse_pt) != self.wd.id) {
+        if (self.captureID != null or self.windowFor(self.mouse_pt) != self.wd.id) {
             // gui owns the cursor if we have mouse capture or if the mouse is above
             // a floating window
             return self.cursorRequested();
@@ -2565,6 +2564,8 @@ pub const Window = struct {
 
         self.backend.end();
 
+        defer current_window = self.previous_window;
+
         // This is what cueFrame affects
         if (self.extra_frames_needed > 0) {
             return 0;
@@ -2585,8 +2586,6 @@ pub const Window = struct {
                 }
             }
         }
-
-        current_window = self.previous_window;
 
         return ret;
     }
