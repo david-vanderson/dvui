@@ -181,33 +181,33 @@ fn toGUIKey(key: mach.Key) gui.keys.Key {
     };
 }
 
-pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) bool {
+pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) !bool {
     switch (event) {
         .key_press => |ev| {
-            return win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .down);
+            return try win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .down);
         },
         .key_release => |ev| {
-            return win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .up);
+            return try win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .up);
         },
         .mouse_motion => |mm| {
-            return win.addEventMouseMotion(@floatCast(f32, mm.pos.x), @floatCast(f32, mm.pos.y));
+            return try win.addEventMouseMotion(@floatCast(f32, mm.pos.x), @floatCast(f32, mm.pos.y));
         },
         .mouse_press => |mb| {
             switch (mb.button) {
-                .left => return win.addEventMouseButton(.leftdown),
-                .right => return win.addEventMouseButton(.rightdown),
+                .left => return try win.addEventMouseButton(.leftdown),
+                .right => return try win.addEventMouseButton(.rightdown),
                 else => {},
             }
         },
         .mouse_release => |mb| {
             switch (mb.button) {
-                .left => return win.addEventMouseButton(.leftup),
-                .right => return win.addEventMouseButton(.rightup),
+                .left => return try win.addEventMouseButton(.leftup),
+                .right => return try win.addEventMouseButton(.rightup),
                 else => {},
             }
         },
         .mouse_scroll => |s| {
-            return win.addEventMouseWheel(s.yoffset);
+            return try win.addEventMouseWheel(s.yoffset);
         },
         else => {},
     }
@@ -219,9 +219,9 @@ pub fn waitEventTimeout(self: *MachBackend, timeout_micros: u32) void {
     self.core.setWaitEvent(@intToFloat(f64, timeout_micros) / 1_000_000);
 }
 
-pub fn addAllEvents(self: *MachBackend, win: *gui.Window) bool {
+pub fn addAllEvents(self: *MachBackend, win: *gui.Window) !bool {
     while (self.core.pollEvent()) |event| {
-        _ = self.addEvent(win, event);
+        _ = try self.addEvent(win, event);
         switch (event) {
             .key_press => |ev| {
                 if (ev.key == .space)
@@ -371,7 +371,11 @@ pub fn flushRender(self: *MachBackend) void {
         .store_op = .store,
     };
 
-    const default_texture_ptr = @ptrCast(*gpu.Texture, gui.iconTexture("default_texture", gui.icons.papirus.actions.media_playback_start_symbolic, 1.0).texture);
+    const default_tex = gui.iconTexture("default_texture", gui.icons.papirus.actions.media_playback_start_symbolic, 1.0) catch |err| {
+        std.debug.print("MachBackend:flushRender: got {!} when doing iconTexture for default texture\n", .{err});
+        return;
+    };
+    const default_texture_ptr = @ptrCast(*gpu.Texture, default_tex.texture);
 
     var texture: ?*gpu.Texture = null;
     if (self.texture) |t| {

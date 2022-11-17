@@ -29,19 +29,19 @@ pub fn update(app: *App, engine: *mach.Core) !void {
     defer arena_allocator.deinit();
 
     var nstime = app.win.beginWait(engine.hasEvent());
-    app.win.begin(arena, nstime);
+    try app.win.begin(arena, nstime);
 
-    const quit = app.win_backend.addAllEvents(&app.win);
+    const quit = try app.win_backend.addAllEvents(&app.win);
     if (quit) {
         return engine.close();
     }
 
-    const shown = gui.examples.demo();
+    const shown = try gui.examples.demo();
     if (!shown) {
         return engine.close();
     }
 
-    const end_micros = app.win.end();
+    const end_micros = try app.win.end();
 
     if (app.win.cursorRequestedFloating()) |cursor| {
         app.win_backend.setCursor(cursor);
