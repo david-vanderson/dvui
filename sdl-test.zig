@@ -36,14 +36,14 @@ pub fn main() !void {
 
         _ = try gui.examples.demo();
 
-        var window_box = gui.box(@src(), 0, .vertical, .{ .expand = .both, .color_style = .window, .background = true });
+        var window_box = try gui.box(@src(), 0, .vertical, .{ .expand = .both, .color_style = .window, .background = true });
 
         {
             const oo = gui.Options{ .expand = .both };
-            var overlay = gui.overlay(@src(), 0, oo);
+            var overlay = try gui.overlay(@src(), 0, oo);
             defer overlay.deinit();
 
-            const scale = gui.scale(@src(), 0, scale_val, oo);
+            const scale = try gui.scale(@src(), 0, scale_val, oo);
             defer {
                 var iter = gui.EventIterator.init(scale.wd.id, scale.wd.borderRectScale().r);
                 while (iter.next()) |e| {
@@ -66,12 +66,12 @@ pub fn main() !void {
                 scale.deinit();
             }
 
-            const context = gui.context(@src(), 0, oo);
+            const context = try gui.context(@src(), 0, oo);
             defer context.deinit();
 
             if (context.activePoint()) |cp| {
                 //std.debug.print("context.rect {}\n", .{context.rect});
-                var fw2 = gui.popup(@src(), 0, gui.Rect.fromPoint(cp), .{});
+                var fw2 = try gui.popup(@src(), 0, gui.Rect.fromPoint(cp), .{});
                 defer fw2.deinit();
 
                 _ = try gui.menuItemLabel(@src(), 0, "Cut", false, .{});
@@ -82,7 +82,7 @@ pub fn main() !void {
             }
 
             {
-                var layout = gui.box(@src(), 0, .vertical, .{});
+                var layout = try gui.box(@src(), 0, .vertical, .{});
                 defer layout.deinit();
 
                 //{
@@ -145,7 +145,7 @@ pub fn main() !void {
                 //}
 
                 {
-                    var scroll = gui.scrollArea(@src(), 0, null, .{ .min_size = .{ .h = 100 } });
+                    var scroll = try gui.scrollArea(@src(), 0, null, .{ .min_size = .{ .h = 100 } });
                     defer scroll.deinit();
 
                     var buf: [100]u8 = undefined;
@@ -184,7 +184,7 @@ pub fn main() !void {
                     }
 
                     if (StrokeTest.show_dialog) {
-                        show_stroke_test_window();
+                        try show_stroke_test_window();
                     }
                 }
 
@@ -205,7 +205,7 @@ pub fn main() !void {
                 }
 
                 {
-                    var box = gui.box(@src(), 0, .horizontal, .{});
+                    var box = try gui.box(@src(), 0, .horizontal, .{});
 
                     _ = try gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
                     _ = try gui.button(@src(), 0, "Success", .{ .color_style = .success });
@@ -252,7 +252,7 @@ pub fn main() !void {
                 var fwin = animatingWindow(@src(), 0, false, &FloatingWindowTest.rect, &FloatingWindowTest.show, start_closing, .{});
                 //var fwin = gui.FloatingWindowWidget.init(@src(), 0, false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
 
-                fwin.install(.{});
+                try fwin.install(.{});
                 defer fwin.deinit();
                 try gui.labelNoFmt(@src(), 0, "Floating Window", .{ .gravity = .center });
 
@@ -271,14 +271,14 @@ pub fn main() !void {
                         }
                         var buf = std.mem.zeroes([100]u8);
                         var buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{ fi, name }) catch unreachable;
-                        var fw2 = gui.floatingWindow(@src(), fi, modal, null, f, .{ .color_style = .window, .min_size = .{ .w = 150, .h = 100 } });
+                        var fw2 = try gui.floatingWindow(@src(), fi, modal, null, f, .{ .color_style = .window, .min_size = .{ .w = 150, .h = 100 } });
                         defer fw2.deinit();
                         try gui.labelNoFmt(@src(), 0, buf_slice, .{ .gravity = .center });
 
                         try gui.label(@src(), 0, "Asking a Question", .{}, .{});
 
                         const oo = gui.Options{ .margin = gui.Rect.all(4), .expand = .horizontal };
-                        var box = gui.box(@src(), 0, .horizontal, oo);
+                        var box = try gui.box(@src(), 0, .horizontal, oo);
 
                         if (try gui.button(@src(), 0, "Yes", oo)) {
                             std.debug.print("Yes {d}\n", .{fi});
@@ -294,9 +294,9 @@ pub fn main() !void {
                     }
                 }
 
-                var scroll = gui.scrollArea(@src(), 0, null, .{ .expand = .both });
+                var scroll = try gui.scrollArea(@src(), 0, null, .{ .expand = .both });
                 defer scroll.deinit();
-                var tl = gui.textLayout(@src(), 0, .{ .expand = .both });
+                var tl = try gui.textLayout(@src(), 0, .{ .expand = .both });
                 {
                     if (try gui.button(@src(), 0, "Win Up .1", .{ .gravity = .upleft })) {
                         fwin.wd.rect.y -= 0.1;
@@ -365,16 +365,16 @@ fn animatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool
     return fwin;
 }
 
-fn show_stroke_test_window() void {
-    var win = gui.floatingWindow(@src(), 0, false, &StrokeTest.show_rect, &StrokeTest.show_dialog, .{});
+fn show_stroke_test_window() !void {
+    var win = try gui.floatingWindow(@src(), 0, false, &StrokeTest.show_rect, &StrokeTest.show_dialog, .{});
     defer win.deinit();
-    gui.windowHeader("Stroke Test", "", &StrokeTest.show_dialog) catch unreachable;
+    try gui.windowHeader("Stroke Test", "", &StrokeTest.show_dialog);
 
     //var scale = gui.scale(@src(), 0, 1, .{.expand = .both});
     //defer scale.deinit();
 
     var st = StrokeTest{};
-    st.install(@src(), 0, .{ .min_size = .{ .w = 400, .h = 400 }, .expand = .both });
+    try st.install(@src(), 0, .{ .min_size = .{ .w = 400, .h = 400 }, .expand = .both });
 }
 
 pub const StrokeTest = struct {
@@ -388,7 +388,7 @@ pub const StrokeTest = struct {
 
     wd: gui.WidgetData = undefined,
 
-    pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, options: gui.Options) void {
+    pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, options: gui.Options) !void {
         self.wd = gui.WidgetData.init(src, id_extra, options);
         gui.debug("{x} StrokeTest {}", .{ self.wd.id, self.wd.rect });
 
@@ -399,7 +399,7 @@ pub const StrokeTest = struct {
             self.processEvent(&iter, e);
         }
 
-        self.wd.borderAndBackground();
+        try self.wd.borderAndBackground();
 
         _ = gui.parentSet(self.widget());
 
@@ -408,7 +408,7 @@ pub const StrokeTest = struct {
         for (points) |p, i| {
             var rect = gui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
             const rsrect = rect.scale(rs.s).offset(rs.r);
-            gui.pathAddRect(rsrect, gui.Rect.all(1));
+            try gui.pathAddRect(rsrect, gui.Rect.all(1));
             gui.pathFillConvex(fill_color);
 
             _ = i;
@@ -417,11 +417,11 @@ pub const StrokeTest = struct {
 
         for (points) |p| {
             const rsp = rs.childPoint(p);
-            gui.pathAddPoint(rsp);
+            try gui.pathAddPoint(rsp);
         }
 
         const stroke_color = gui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
-        gui.pathStroke(false, rs.s * thickness, .square, stroke_color);
+        try gui.pathStroke(false, rs.s * thickness, .square, stroke_color);
 
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
