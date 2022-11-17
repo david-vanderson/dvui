@@ -115,10 +115,10 @@ fn mainGui() !void {
     //var float = gui.floatingWindow(@src(), 0, false, null, null, .{});
     //defer float.deinit();
 
-    var window_box = gui.box(@src(), 0, .vertical, .{ .expand = .both, .color_style = .window, .background = true });
+    var window_box = try gui.box(@src(), 0, .vertical, .{ .expand = .both, .color_style = .window, .background = true });
     defer window_box.deinit();
 
-    var b = gui.box(@src(), 0, .vertical, .{ .expand = .both, .background = false });
+    var b = try gui.box(@src(), 0, .vertical, .{ .expand = .both, .background = false });
     defer b.deinit();
 
     if (g_db) |db| {
@@ -185,21 +185,21 @@ pub fn main() !void {
 var add_rss_dialog: bool = false;
 
 fn podcastSide(paned: *gui.PanedWidget) !void {
-    var b = gui.box(@src(), 0, .vertical, .{ .expand = .both });
+    var b = try gui.box(@src(), 0, .vertical, .{ .expand = .both });
     defer b.deinit();
 
     {
-        var overlay = gui.overlay(@src(), 0, .{ .expand = .horizontal });
+        var overlay = try gui.overlay(@src(), 0, .{ .expand = .horizontal });
         defer overlay.deinit();
 
         {
-            var menu = gui.menu(@src(), 0, .horizontal, .{ .expand = .horizontal });
+            var menu = try gui.menu(@src(), 0, .horizontal, .{ .expand = .horizontal });
             defer menu.deinit();
 
             _ = gui.spacer(@src(), 0, .{ .expand = .horizontal });
 
-            if (gui.menuItemIcon(@src(), 0, true, try gui.themeGet().font_heading.lineSkip(), "toolbar dots", gui.icons.papirus.actions.xapp_prefs_toolbar_symbolic, .{})) |r| {
-                var fw = gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
+            if (try gui.menuItemIcon(@src(), 0, true, try gui.themeGet().font_heading.lineSkip(), "toolbar dots", gui.icons.papirus.actions.xapp_prefs_toolbar_symbolic, .{})) |r| {
+                var fw = try gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                 defer fw.deinit();
                 if (try gui.menuItemLabel(@src(), 0, "Add RSS", false, .{})) |rr| {
                     _ = rr;
@@ -231,7 +231,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
     }
 
     if (add_rss_dialog) {
-        var dialog = gui.floatingWindow(@src(), 0, true, null, &add_rss_dialog, .{});
+        var dialog = try gui.floatingWindow(@src(), 0, true, null, &add_rss_dialog, .{});
         defer dialog.deinit();
 
         try gui.labelNoFmt(@src(), 0, "Add RSS Feed", .{ .gravity = .center });
@@ -248,7 +248,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
         try te.install(.{});
         te.deinit();
 
-        var box2 = gui.box(@src(), 0, .horizontal, .{ .gravity = .right });
+        var box2 = try gui.box(@src(), 0, .horizontal, .{ .gravity = .right });
         defer box2.deinit();
         if (try gui.button(@src(), 0, "Ok", .{})) {
             dialog.close();
@@ -269,7 +269,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
         }
     }
 
-    var scroll = gui.scrollArea(@src(), 0, null, .{ .expand = .both, .color_style = .window, .background = false });
+    var scroll = try gui.scrollArea(@src(), 0, null, .{ .expand = .both, .color_style = .window, .background = false });
 
     const oo3 = gui.Options{
         .expand = .horizontal,
@@ -286,7 +286,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
         var corner = gui.Rect.all(0);
 
         if (i != 1) {
-            gui.separator(@src(), i, oo3.override(.{ .margin = margin }));
+            try gui.separator(@src(), i, oo3.override(.{ .margin = margin }));
         }
 
         if (i == 1) {
@@ -319,11 +319,11 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
 }
 
 fn episodeSide(paned: *gui.PanedWidget) !void {
-    var b = gui.box(@src(), 0, .vertical, .{ .expand = .both });
+    var b = try gui.box(@src(), 0, .vertical, .{ .expand = .both });
     defer b.deinit();
 
     if (paned.collapsed()) {
-        var menu = gui.menu(@src(), 0, .horizontal, .{ .expand = .horizontal });
+        var menu = try gui.menu(@src(), 0, .horizontal, .{ .expand = .horizontal });
         defer menu.deinit();
 
         if (try gui.menuItemLabel(@src(), 0, "Back", false, .{})) |rr| {
@@ -332,17 +332,17 @@ fn episodeSide(paned: *gui.PanedWidget) !void {
         }
     }
 
-    var scroll = gui.scrollArea(@src(), 0, null, .{ .expand = .both, .background = false });
+    var scroll = try gui.scrollArea(@src(), 0, null, .{ .expand = .both, .background = false });
     defer scroll.deinit();
 
     var i: usize = 0;
     while (i < 10) : (i += 1) {
-        var tl = gui.textLayout(@src(), i, .{ .expand = .horizontal });
+        var tl = try gui.textLayout(@src(), i, .{ .expand = .horizontal });
 
-        var cbox = gui.box(@src(), 0, .vertical, gui.Options{ .gravity = .upright });
+        var cbox = try gui.box(@src(), 0, .vertical, gui.Options{ .gravity = .upright });
 
-        _ = gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) });
-        _ = gui.buttonIcon(@src(), 0, 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) });
+        _ = try gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) });
+        _ = try gui.buttonIcon(@src(), 0, 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) });
 
         cbox.deinit();
 
@@ -361,7 +361,7 @@ fn player() !void {
         .color_style = .content,
     };
 
-    var box2 = gui.box(@src(), 0, .vertical, oo.override(.{ .background = true }));
+    var box2 = try gui.box(@src(), 0, .vertical, oo.override(.{ .background = true }));
     defer box2.deinit();
 
     var episode = Episode{ .title = "Episode Title" };
@@ -376,16 +376,16 @@ fn player() !void {
         .font_style = .heading,
     }));
 
-    var box3 = gui.box(@src(), 0, .horizontal, oo.override(.{ .padding = .{ .x = 4, .y = 0, .w = 4, .h = 4 } }));
+    var box3 = try gui.box(@src(), 0, .horizontal, oo.override(.{ .padding = .{ .x = 4, .y = 0, .w = 4, .h = 4 } }));
     defer box3.deinit();
 
     const oo2 = gui.Options{ .expand = .horizontal, .gravity = .center };
 
-    _ = gui.buttonIcon(@src(), 0, 20, "back", gui.icons.papirus.actions.media_seek_backward_symbolic, oo2);
+    _ = try gui.buttonIcon(@src(), 0, 20, "back", gui.icons.papirus.actions.media_seek_backward_symbolic, oo2);
 
     try gui.label(@src(), 0, "0.00%", .{}, oo2.override(.{ .color_style = .content }));
 
-    _ = gui.buttonIcon(@src(), 0, 20, "forward", gui.icons.papirus.actions.media_seek_forward_symbolic, oo2);
+    _ = try gui.buttonIcon(@src(), 0, 20, "forward", gui.icons.papirus.actions.media_seek_forward_symbolic, oo2);
 
-    _ = gui.buttonIcon(@src(), 0, 20, "play", gui.icons.papirus.actions.media_playback_start_symbolic, oo2);
+    _ = try gui.buttonIcon(@src(), 0, 20, "play", gui.icons.papirus.actions.media_playback_start_symbolic, oo2);
 }
