@@ -14,6 +14,8 @@ pub const keys = @import("keys.zig");
 //    @cInclude("stb_truetype.h");
 //});
 
+pub const Error = error{ OutOfMemory, InvalidUtf8, CodepointTooLarge, freetypeError, tvgError };
+
 const log = std.log.scoped(.gui);
 const gui = @This();
 
@@ -903,7 +905,7 @@ pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool)
     }
 }
 
-pub fn pathFillConvex(col: Color) void {
+pub fn pathFillConvex(col: Color) !void {
     const cw = currentWindow();
     if (cw.path.items.len < 3) {
         cw.path.clearAndFree();
@@ -912,14 +914,14 @@ pub fn pathFillConvex(col: Color) void {
 
     if (cw.window_currentId != cw.wd.id) {
         var path_copy = std.ArrayList(Point).init(cw.arena);
-        path_copy.appendSlice(cw.path.items) catch unreachable;
+        try path_copy.appendSlice(cw.path.items);
         var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
 
         var i = cw.floating_data.items.len;
         while (i > 0) : (i -= 1) {
             const fw = &cw.floating_data.items[i - 1];
             if (fw.id == cw.window_currentId) {
-                fw.render_cmds.append(cmd) catch unreachable;
+                try fw.render_cmds.append(cmd);
                 break;
             }
         }
@@ -928,10 +930,10 @@ pub fn pathFillConvex(col: Color) void {
         return;
     }
 
-    var vtx = std.ArrayList(Vertex).initCapacity(cw.arena, cw.path.items.len * 2) catch unreachable;
+    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, cw.path.items.len * 2);
     defer vtx.deinit();
     const idx_count = (cw.path.items.len - 2) * 3 + cw.path.items.len * 6;
-    var idx = std.ArrayList(u32).initCapacity(cw.arena, idx_count) catch unreachable;
+    var idx = try std.ArrayList(u32).initCapacity(cw.arena, idx_count);
     defer idx.deinit();
     var col_trans = col;
     col_trans.a = 0;
@@ -955,28 +957,28 @@ pub fn pathFillConvex(col: Color) void {
         v.pos.x = bb.x - halfnorm.x;
         v.pos.y = bb.y - halfnorm.y;
         v.col = col;
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
         // outer vertex
         v.pos.x = bb.x + halfnorm.x;
         v.pos.y = bb.y + halfnorm.y;
         v.col = col_trans;
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
         // indexes for fill
         if (i > 1) {
-            idx.append(@intCast(u32, 0)) catch unreachable;
-            idx.append(@intCast(u32, ai * 2)) catch unreachable;
-            idx.append(@intCast(u32, bi * 2)) catch unreachable;
+            try idx.append(@intCast(u32, 0));
+            try idx.append(@intCast(u32, ai * 2));
+            try idx.append(@intCast(u32, bi * 2));
         }
 
         // indexes for aa fade from inner to outer
-        idx.append(@intCast(u32, ai * 2)) catch unreachable;
-        idx.append(@intCast(u32, ai * 2 + 1)) catch unreachable;
-        idx.append(@intCast(u32, bi * 2)) catch unreachable;
-        idx.append(@intCast(u32, ai * 2 + 1)) catch unreachable;
-        idx.append(@intCast(u32, bi * 2 + 1)) catch unreachable;
-        idx.append(@intCast(u32, bi * 2)) catch unreachable;
+        try idx.append(@intCast(u32, ai * 2));
+        try idx.append(@intCast(u32, ai * 2 + 1));
+        try idx.append(@intCast(u32, bi * 2));
+        try idx.append(@intCast(u32, ai * 2 + 1));
+        try idx.append(@intCast(u32, bi * 2 + 1));
+        try idx.append(@intCast(u32, bi * 2));
     }
 
     cw.backend.renderGeometry(null, vtx.items, idx.items);
@@ -1002,20 +1004,20 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
 
     if (after or cw.window_currentId != cw.wd.id) {
         var path_copy = std.ArrayList(Point).init(cw.arena);
-        path_copy.appendSlice(cw.path.items) catch unreachable;
+        try path_copy.appendSlice(cw.path.items);
         var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
 
         if (cw.window_currentId == cw.wd.id) {
-            cw.render_cmds_after.append(cmd) catch unreachable;
+            try cw.render_cmds_after.append(cmd);
         } else {
             var i = cw.floating_data.items.len;
             while (i > 0) : (i -= 1) {
                 const fw = &cw.floating_data.items[i - 1];
                 if (fw.id == cw.window_currentId) {
                     if (after) {
-                        fw.render_cmds_after.append(cmd) catch unreachable;
+                        try fw.render_cmds_after.append(cmd);
                     } else {
-                        fw.render_cmds.append(cmd) catch unreachable;
+                        try fw.render_cmds.append(cmd);
                     }
                     break;
                 }
@@ -1039,7 +1041,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         cw.path.clearAndFree();
 
         try pathAddArc(center, thickness, math.pi * 2.0, 0, true);
-        pathFillConvex(col);
+        try pathFillConvex(col);
         cw.path.clearAndFree();
         return;
     }
@@ -1054,7 +1056,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     if (!closed) {
         vtx_count += 4;
     }
-    var vtx = std.ArrayList(Vertex).initCapacity(cw.arena, vtx_count) catch unreachable;
+    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, vtx_count);
     defer vtx.deinit();
     var idx_count = (cw.path.items.len - 1) * 18;
     if (closed) {
@@ -1062,7 +1064,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     } else {
         idx_count += 8 * 3;
     }
-    var idx = std.ArrayList(u32).initCapacity(cw.arena, idx_count) catch unreachable;
+    var idx = try std.ArrayList(u32).initCapacity(cw.arena, idx_count);
     defer idx.deinit();
     var col_trans = col;
     col_trans.a = 0;
@@ -1101,29 +1103,29 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
                 v.pos.x = bb.x - halfnorm.x * (thickness + 1.0) + diffbc.x;
                 v.pos.y = bb.y - halfnorm.y * (thickness + 1.0) + diffbc.y;
                 v.col = col_trans;
-                vtx.append(v) catch unreachable;
+                try vtx.append(v);
 
                 v.pos.x = bb.x + halfnorm.x * (thickness + 1.0) + diffbc.x;
                 v.pos.y = bb.y + halfnorm.y * (thickness + 1.0) + diffbc.y;
                 v.col = col_trans;
-                vtx.append(v) catch unreachable;
+                try vtx.append(v);
 
                 // add indexes for endcap fringe
-                idx.append(@intCast(u32, 0)) catch unreachable;
-                idx.append(@intCast(u32, vtx_start)) catch unreachable;
-                idx.append(@intCast(u32, vtx_start + 1)) catch unreachable;
+                try idx.append(@intCast(u32, 0));
+                try idx.append(@intCast(u32, vtx_start));
+                try idx.append(@intCast(u32, vtx_start + 1));
 
-                idx.append(@intCast(u32, 0)) catch unreachable;
-                idx.append(@intCast(u32, 1)) catch unreachable;
-                idx.append(@intCast(u32, vtx_start)) catch unreachable;
+                try idx.append(@intCast(u32, 0));
+                try idx.append(@intCast(u32, 1));
+                try idx.append(@intCast(u32, vtx_start));
 
-                idx.append(@intCast(u32, 1)) catch unreachable;
-                idx.append(@intCast(u32, vtx_start)) catch unreachable;
-                idx.append(@intCast(u32, vtx_start + 2)) catch unreachable;
+                try idx.append(@intCast(u32, 1));
+                try idx.append(@intCast(u32, vtx_start));
+                try idx.append(@intCast(u32, vtx_start + 2));
 
-                idx.append(@intCast(u32, 1)) catch unreachable;
-                idx.append(@intCast(u32, vtx_start + 2)) catch unreachable;
-                idx.append(@intCast(u32, vtx_start + 2 + 1)) catch unreachable;
+                try idx.append(@intCast(u32, 1));
+                try idx.append(@intCast(u32, vtx_start + 2));
+                try idx.append(@intCast(u32, vtx_start + 2 + 1));
             } else if ((i + 1) == cw.path.items.len) {
                 diffab = Point.diff(aa, bb).normalize();
                 // rotate by 90 to get normal
@@ -1160,81 +1162,81 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         v.pos.x = bb.x - halfnorm.x * thickness;
         v.pos.y = bb.y - halfnorm.y * thickness;
         v.col = col;
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
         // side 1 AA vertex
         v.pos.x = bb.x - halfnorm.x * (thickness + 1.0);
         v.pos.y = bb.y - halfnorm.y * (thickness + 1.0);
         v.col = col_trans;
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
         // side 2 inner vertex
         v.pos.x = bb.x + halfnorm.x * thickness;
         v.pos.y = bb.y + halfnorm.y * thickness;
         v.col = col;
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
         // side 2 AA vertex
         v.pos.x = bb.x + halfnorm.x * (thickness + 1.0);
         v.pos.y = bb.y + halfnorm.y * (thickness + 1.0);
         v.col = col_trans;
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
         if (closed or ((i + 1) != cw.path.items.len)) {
             // indexes for fill
-            idx.append(@intCast(u32, vtx_start + bi * 4)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + ci * 4)) catch unreachable;
+            try idx.append(@intCast(u32, vtx_start + bi * 4));
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
+            try idx.append(@intCast(u32, vtx_start + ci * 4));
 
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + ci * 4 + 2)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + ci * 4)) catch unreachable;
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
+            try idx.append(@intCast(u32, vtx_start + ci * 4 + 2));
+            try idx.append(@intCast(u32, vtx_start + ci * 4));
 
             // indexes for aa fade from inner to outer side 1
-            idx.append(@intCast(u32, vtx_start + bi * 4)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 1)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + ci * 4 + 1)) catch unreachable;
+            try idx.append(@intCast(u32, vtx_start + bi * 4));
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 1));
+            try idx.append(@intCast(u32, vtx_start + ci * 4 + 1));
 
-            idx.append(@intCast(u32, vtx_start + bi * 4)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + ci * 4 + 1)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + ci * 4)) catch unreachable;
+            try idx.append(@intCast(u32, vtx_start + bi * 4));
+            try idx.append(@intCast(u32, vtx_start + ci * 4 + 1));
+            try idx.append(@intCast(u32, vtx_start + ci * 4));
 
             // indexes for aa fade from inner to outer side 2
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 3)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + ci * 4 + 3)) catch unreachable;
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 3));
+            try idx.append(@intCast(u32, vtx_start + ci * 4 + 3));
 
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + ci * 4 + 2)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + ci * 4 + 3)) catch unreachable;
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
+            try idx.append(@intCast(u32, vtx_start + ci * 4 + 2));
+            try idx.append(@intCast(u32, vtx_start + ci * 4 + 3));
         } else if (!closed and (i + 1) == cw.path.items.len) {
             // add 2 extra vertexes for endcap fringe
             v.pos.x = bb.x - halfnorm.x * (thickness + 1.0) - diffab.x;
             v.pos.y = bb.y - halfnorm.y * (thickness + 1.0) - diffab.y;
             v.col = col_trans;
-            vtx.append(v) catch unreachable;
+            try vtx.append(v);
 
             v.pos.x = bb.x + halfnorm.x * (thickness + 1.0) - diffab.x;
             v.pos.y = bb.y + halfnorm.y * (thickness + 1.0) - diffab.y;
             v.col = col_trans;
-            vtx.append(v) catch unreachable;
+            try vtx.append(v);
 
             // add indexes for endcap fringe
-            idx.append(@intCast(u32, vtx_start + bi * 4)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 1)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 4)) catch unreachable;
+            try idx.append(@intCast(u32, vtx_start + bi * 4));
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 1));
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 4));
 
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 4)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + bi * 4)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 4));
+            try idx.append(@intCast(u32, vtx_start + bi * 4));
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
 
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 4)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 5)) catch unreachable;
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 4));
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 5));
 
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 2)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 3)) catch unreachable;
-            idx.append(@intCast(u32, vtx_start + bi * 4 + 5)) catch unreachable;
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 3));
+            try idx.append(@intCast(u32, vtx_start + bi * 4 + 5));
         }
     }
 
@@ -1270,7 +1272,7 @@ pub fn floatingWindowClosing(id: u32) void {
     }
 }
 
-pub fn floatingWindowAdd(id: u32, rect: Rect, modal: bool) void {
+pub fn floatingWindowAdd(id: u32, rect: Rect, modal: bool) !void {
     const cw = currentWindow();
 
     for (cw.floating_data.items) |*fd| {
@@ -1287,7 +1289,7 @@ pub fn floatingWindowAdd(id: u32, rect: Rect, modal: bool) void {
 
     // haven't seen this window before, it goes on top
     const fd = Window.FloatingData{ .id = id, .rect = rect, .modal = modal, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena), .render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena) };
-    cw.floating_data.append(fd) catch unreachable;
+    try cw.floating_data.append(fd);
 }
 
 pub fn windowCurrentSet(id: u32) u32 {
@@ -1476,10 +1478,10 @@ pub fn minSizeGetPrevious(id: u32) ?Size {
     return ret;
 }
 
-pub fn minSizeSet(id: u32, s: Size) void {
+pub fn minSizeSet(id: u32, s: Size) !void {
     debug("{x} minSizeSet {}", .{ id, s });
     var cw = currentWindow();
-    return cw.widgets_min_size.put(id, s) catch unreachable;
+    try cw.widgets_min_size.put(id, s);
 }
 
 pub fn hashIdKey(id: u32, key: []const u8) u32 {
@@ -1507,18 +1509,38 @@ pub fn dataSet(id: u32, key: []const u8, data: anytype) void {
     {
         // save data for next frame
         const begin = @intCast(u32, cw.data.items.len);
-        cw.data.appendSlice(bytes) catch unreachable;
+        cw.data.appendSlice(bytes) catch |err| switch (err) {
+            error.OutOfMemory => {
+                std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
+                return;
+            },
+        };
         const end = @intCast(u32, cw.data.items.len);
-        cw.data_offset.put(hash, DataOffset{ .begin = begin, .end = end }) catch unreachable;
+        cw.data_offset.put(hash, DataOffset{ .begin = begin, .end = end }) catch |err| switch (err) {
+            error.OutOfMemory => {
+                std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
+                return;
+            },
+        };
     }
 
     if (!cw.data_offset_prev.contains(hash)) {
         // also save data for this frame, necessary for dialogs where we store
         // data and then access it at the end of the frame
         const begin = @intCast(u32, cw.data_prev.items.len);
-        cw.data_prev.appendSlice(bytes) catch unreachable;
+        cw.data_prev.appendSlice(bytes) catch |err| switch (err) {
+            error.OutOfMemory => {
+                std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
+                return;
+            },
+        };
         const end = @intCast(u32, cw.data_prev.items.len);
-        cw.data_offset_prev.put(hash, DataOffset{ .begin = begin, .end = end }) catch unreachable;
+        cw.data_offset_prev.put(hash, DataOffset{ .begin = begin, .end = end }) catch |err| switch (err) {
+            error.OutOfMemory => {
+                std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
+                return;
+            },
+        };
     }
 }
 
@@ -1528,7 +1550,13 @@ pub fn dataGet(id: u32, key: []const u8, comptime T: type) ?T {
     if (offset) |o| {
         const dt = @typeInfo(T);
         if (dt == .Pointer and dt.Pointer.size == .Slice) {
-            return cw.arena.dupe(u8, cw.data_prev.items[o.begin..o.end]) catch unreachable;
+            var ret = cw.arena.dupe(u8, cw.data_prev.items[o.begin..o.end]) catch |err| switch (err) {
+                error.OutOfMemory => {
+                    std.debug.print("dataGet: got {!} for id {x} key {s}, returning direct slice (could cause memory corruption)\n", .{ err, id, key });
+                    return cw.data_prev.items[o.begin..o.end];
+                },
+            };
+            return ret;
         } else {
             var bytes: [@sizeOf(T)]u8 = undefined;
             std.mem.copy(u8, &bytes, cw.data_prev.items[o.begin..o.end]);
@@ -1699,7 +1727,11 @@ pub const Animation = struct {
 pub fn animate(id: u32, key: []const u8, a: Animation) void {
     var cw = currentWindow();
     const h = hashIdKey(id, key);
-    cw.animations.put(h, a) catch unreachable;
+    cw.animations.put(h, a) catch |err| switch (err) {
+        error.OutOfMemory => {
+            std.debug.print("animate: got {!} for id {x} key {s}\n", .{ err, id, key });
+        },
+    };
 }
 
 pub fn animationGet(id: u32, key: []const u8) ?Animation {
@@ -1714,9 +1746,11 @@ pub fn animationGet(id: u32, key: []const u8) ?Animation {
     return null;
 }
 
-pub fn timerSet(id: u32, micros: i32) void {
+pub fn timerSet(id: u32, micros: i32) !void {
     const a = Animation{ .start_val = 0, .end_val = 0, .start_time = micros, .end_time = micros };
-    animate(id, "_timer", a);
+    var cw = currentWindow();
+    const h = hashIdKey(id, "_timer");
+    try cw.animations.put(h, a);
 }
 
 pub fn timerGet(id: u32) ?i32 {
@@ -1748,10 +1782,10 @@ const TabIndex = struct {
     tabIndex: u16,
 };
 
-pub fn tabIndexSet(widget_id: u32, tab_index: ?u16) void {
+pub fn tabIndexSet(widget_id: u32, tab_index: ?u16) !void {
     var cw = currentWindow();
     const ti = TabIndex{ .windowId = cw.window_currentId, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
-    cw.tab_index.append(ti) catch unreachable;
+    try cw.tab_index.append(ti);
 }
 
 pub fn tabIndexNext(iter: ?*EventIterator) void {
@@ -1980,33 +2014,34 @@ pub const Window = struct {
         self.dialogs.deinit();
     }
 
-    pub fn addEventKey(self: *Self, keysym: keys.Key, mod: keys.Mod, state: KeyEvent.Kind) bool {
+    pub fn addEventKey(self: *Self, keysym: keys.Key, mod: keys.Mod, state: KeyEvent.Kind) !bool {
         self.positionMouseEventRemove();
-        defer self.positionMouseEventAdd();
 
-        self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .key = KeyEvent{
+        try self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .key = KeyEvent{
             .keysym = keysym,
             .mod = mod,
             .state = state,
-        } } }) catch unreachable;
+        } } });
 
-        return (self.wd.id != self.focused_windowId);
+        const ret = (self.wd.id != self.focused_windowId);
+        try self.positionMouseEventAdd();
+        return ret;
     }
 
-    pub fn addEventText(self: *Self, text: []const u8) bool {
+    pub fn addEventText(self: *Self, text: []const u8) !bool {
         self.positionMouseEventRemove();
-        defer self.positionMouseEventAdd();
 
-        self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .text = TextEvent{
-            .text = self.arena.dupe(u8, text) catch unreachable,
-        } } }) catch unreachable;
+        try self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .text = TextEvent{
+            .text = try self.arena.dupe(u8, text),
+        } } });
 
-        return (self.wd.id != self.focused_windowId);
+        const ret = (self.wd.id != self.focused_windowId);
+        try self.positionMouseEventAdd();
+        return ret;
     }
 
-    pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) bool {
+    pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) !bool {
         self.positionMouseEventRemove();
-        defer self.positionMouseEventAdd();
 
         const newpt = (Point{ .x = x, .y = y }).scale(self.natural_scale);
         const dp = newpt.diff(self.mouse_pt);
@@ -2016,40 +2051,41 @@ pub const Window = struct {
         // focus follows mouse:
         //focusWindow(winId, null);
 
-        self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
+        try self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
             .p = self.mouse_pt,
             .dp = dp,
             .wheel = 0,
             .floating_win = winId,
             .state = .motion,
-        } } }) catch unreachable;
+        } } });
 
-        return (self.wd.id != winId);
+        const ret = (self.wd.id != winId);
+        try self.positionMouseEventAdd();
+        return ret;
     }
 
-    pub fn addEventMouseButton(self: *Self, state: MouseEvent.Kind) bool {
+    pub fn addEventMouseButton(self: *Self, state: MouseEvent.Kind) !bool {
         self.positionMouseEventRemove();
-        defer self.positionMouseEventAdd();
 
         const winId = windowFor(self.mouse_pt);
 
-        self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
+        try self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
             .p = self.mouse_pt,
             .dp = Point{},
             .wheel = 0,
             .floating_win = winId,
             .state = state,
-        } } }) catch unreachable;
+        } } });
 
         if (state == .leftdown or state == .rightdown) {
             // add mouse focus event
-            self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
+            try self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
                 .p = self.mouse_pt,
                 .dp = Point{},
                 .wheel = 0,
                 .floating_win = winId,
                 .state = .focus,
-            } } }) catch unreachable;
+            } } });
 
             // have to check for the base window here because it doesn't have
             // an install() step
@@ -2059,12 +2095,13 @@ pub const Window = struct {
             }
         }
 
-        return (self.wd.id != winId);
+        const ret = (self.wd.id != winId);
+        try self.positionMouseEventAdd();
+        return ret;
     }
 
-    pub fn addEventMouseWheel(self: *Self, ticks: f32) bool {
+    pub fn addEventMouseWheel(self: *Self, ticks: f32) !bool {
         self.positionMouseEventRemove();
-        defer self.positionMouseEventAdd();
 
         const winId = windowFor(self.mouse_pt);
 
@@ -2074,15 +2111,17 @@ pub const Window = struct {
         }
         //std.debug.print("mouse wheel {d}\n", .{ticks_adj});
 
-        self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
+        try self.events.append(Event{ .focus_windowId = self.focused_windowId, .focus_widgetId = self.focused_widgetId_last_frame, .evt = AnyEvent{ .mouse = MouseEvent{
             .p = self.mouse_pt,
             .dp = Point{},
             .wheel = ticks_adj,
             .floating_win = winId,
             .state = .wheel_y,
-        } } }) catch unreachable;
+        } } });
 
-        return (self.wd.id != winId);
+        const ret = (self.wd.id != winId);
+        try self.positionMouseEventAdd();
+        return ret;
     }
 
     pub fn FPS(self: *const Self) f32 {
@@ -2226,7 +2265,7 @@ pub const Window = struct {
         self: *Self,
         arena: std.mem.Allocator,
         time_ns: i128,
-    ) void {
+    ) !void {
         var micros_since_last: u32 = 0;
         if (time_ns > self.frame_time_ns) {
             // enforce monotinicity
@@ -2311,7 +2350,7 @@ pub const Window = struct {
             var it = self.animations.iterator();
             while (it.next()) |kv| {
                 if (!kv.value_ptr.used or kv.value_ptr.end_time <= 0) {
-                    deadAnimations.append(kv.key_ptr.*) catch unreachable;
+                    try deadAnimations.append(kv.key_ptr.*);
                 } else {
                     kv.value_ptr.used = false;
                     kv.value_ptr.start_time -|= micros;
@@ -2335,7 +2374,7 @@ pub const Window = struct {
                 if (kv.value_ptr.used) {
                     kv.value_ptr.used = false;
                 } else {
-                    deadFonts.append(kv.key_ptr.*) catch unreachable;
+                    try deadFonts.append(kv.key_ptr.*);
                 }
             }
 
@@ -2356,7 +2395,7 @@ pub const Window = struct {
                 if (kv.value_ptr.used) {
                     kv.value_ptr.used = false;
                 } else {
-                    deadIcons.append(kv.key_ptr.*) catch unreachable;
+                    try deadIcons.append(kv.key_ptr.*);
                 }
             }
 
@@ -2383,19 +2422,19 @@ pub const Window = struct {
         // correctly.  We don't know when the client gives us the last event,
         // so make our position event now, and addEvent* functions will remove
         // and re-add to keep it as the final event.
-        self.positionMouseEventAdd();
+        try self.positionMouseEventAdd();
 
         self.backend.begin(arena);
     }
 
-    fn positionMouseEventAdd(self: *Self) void {
-        self.events.append(Event{ .evt = AnyEvent{ .mouse = MouseEvent{
+    fn positionMouseEventAdd(self: *Self) !void {
+        try self.events.append(Event{ .evt = AnyEvent{ .mouse = MouseEvent{
             .p = self.mouse_pt,
             .dp = Point{},
             .wheel = 0,
             .floating_win = windowFor(self.mouse_pt),
             .state = .position,
-        } } }) catch unreachable;
+        } } });
     }
 
     fn positionMouseEventRemove(self: *Self) void {
@@ -2438,18 +2477,18 @@ pub const Window = struct {
                     try renderText(t.font, t.text, t.rs, t.color);
                 },
                 .debug_font_atlases => |t| {
-                    debugRenderFontAtlases(t.rs, t.color);
+                    try debugRenderFontAtlases(t.rs, t.color);
                 },
                 .icon => |i| {
-                    renderIcon(i.name, i.tvg_bytes, i.rs, i.colormod);
+                    try renderIcon(i.name, i.tvg_bytes, i.rs, i.colormod);
                 },
                 .pathFillConvex => |pf| {
-                    self.path.appendSlice(pf.path.items) catch unreachable;
-                    pathFillConvex(pf.color);
+                    try self.path.appendSlice(pf.path.items);
+                    try pathFillConvex(pf.color);
                     pf.path.deinit();
                 },
                 .pathStroke => |ps| {
-                    self.path.appendSlice(ps.path.items) catch unreachable;
+                    try self.path.appendSlice(ps.path.items);
                     try pathStrokeRaw(ps.closed, ps.thickness, ps.endcap_style, ps.color);
                     ps.path.deinit();
                 },
@@ -2686,7 +2725,7 @@ pub const PopupWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        floatingWindowAdd(self.wd.id, rs.r, false);
+        try floatingWindowAdd(self.wd.id, rs.r, false);
 
         // we are using MenuWidget to do border/background but floating windows
         // don't have margin, so turn that off
@@ -2987,14 +3026,14 @@ pub const FloatingWindowWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        floatingWindowAdd(self.wd.id, rs.r, self.modal);
+        try floatingWindowAdd(self.wd.id, rs.r, self.modal);
 
         if (self.modal) {
             // paint over everything below
             try pathAddRect(windowRectPixels(), Rect.all(0));
             var col = self.options.color();
             col.a = 100;
-            pathFillConvex(col);
+            try pathFillConvex(col);
         }
 
         // we are using BoxWidget to do border/background but floating windows
@@ -3226,8 +3265,8 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     try gui.separator(@src(), 0, .{ .gravity = .down, .expand = .horizontal });
 }
 
-pub const DialogDisplay = *const fn (u32) error{ OutOfMemory, InvalidUtf8, CodepointTooLarge, freetypeError, tvgError }!bool;
-pub const DialogCallAfter = *const fn (u32, DialogResponse) void;
+pub const DialogDisplay = *const fn (u32) Error!bool;
+pub const DialogCallAfter = *const fn (u32, DialogResponse) Error!void;
 pub const DialogEntry = struct {
     id: u32,
     display: DialogDisplay,
@@ -3237,7 +3276,7 @@ pub const DialogResponse = enum(u8) {
     OK,
 };
 
-pub fn dialogCustom(src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplay) u32 {
+pub fn dialogCustom(src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplay) !u32 {
     const cw = currentWindow();
     const parent = parentGet();
     const id = parent.extendID(src, id_extra);
@@ -3247,14 +3286,14 @@ pub fn dialogCustom(src: std.builtin.SourceLocation, id_extra: usize, display: D
             break;
         }
     } else {
-        cw.dialogs.append(DialogEntry{ .id = id, .display = display }) catch unreachable;
+        try cw.dialogs.append(DialogEntry{ .id = id, .display = display });
     }
 
     return id;
 }
 
-pub fn dialogOk(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) void {
-    const id = gui.dialogCustom(src, id_extra, dialogOkDisplay);
+pub fn dialogOk(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
+    const id = try gui.dialogCustom(src, id_extra, dialogOkDisplay);
     gui.dataSet(id, "_modal", modal);
     gui.dataSet(id, "_title", title);
     gui.dataSet(id, "_msg", msg);
@@ -3294,7 +3333,7 @@ pub fn dialogOkDisplay(id: u32) !bool {
     try gui.windowHeader(title, "", &header_openflag);
     if (!header_openflag) {
         if (callafter) |ca| {
-            ca(id, gui.DialogResponse.CLOSED);
+            try ca(id, gui.DialogResponse.CLOSED);
         }
         return true;
     }
@@ -3305,7 +3344,7 @@ pub fn dialogOkDisplay(id: u32) !bool {
 
     if (try gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
         if (callafter) |ca| {
-            ca(id, gui.DialogResponse.OK);
+            try ca(id, gui.DialogResponse.OK);
         }
         return true;
     }
@@ -3471,7 +3510,7 @@ pub const PanedWidget = struct {
                     },
                 }
                 try pathAddRect(r, Rect.all(thick));
-                pathFillConvex(self.wd.options.color().transparent(0.5));
+                try pathFillConvex(self.wd.options.color().transparent(0.5));
             }
         }
 
@@ -3683,7 +3722,7 @@ pub const TextLayoutWidget = struct {
 
     pub fn format(self: *Self, comptime fmt: []const u8, args: anytype, opts: Options) void {
         var cw = currentWindow();
-        const l = std.fmt.allocPrint(cw.arena, fmt, args) catch unreachable;
+        const l = std.fmt.allocPrint(cw.arena, fmt, args);
         self.addText(l, opts);
     }
 
@@ -4042,7 +4081,7 @@ pub const Direction = enum {
 };
 
 pub fn box(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) !*BoxWidget {
-    var ret = currentWindow().arena.create(BoxWidget) catch unreachable;
+    var ret = try currentWindow().arena.create(BoxWidget);
     ret.* = BoxWidget.init(src, id_extra, dir, opts);
     try ret.install(.{});
     return ret;
@@ -4234,7 +4273,7 @@ pub const ScrollBar = struct {
         self.grabRect = self.grabRect.insetAll(2);
         const grabrs = self.parent.screenRectScale(self.grabRect);
         try pathAddRect(grabrs.r, Rect.all(grabrs.r.w));
-        pathFillConvex(fill);
+        try pathFillConvex(fill);
     }
 
     pub fn processEvents(self: *Self, grabrs: Rect) void {
@@ -4293,7 +4332,7 @@ pub const ScrollBar = struct {
 };
 
 pub fn scrollArea(src: std.builtin.SourceLocation, id_extra: usize, virtual_size: ?Size, opts: Options) !*ScrollAreaWidget {
-    var ret = currentWindow().arena.create(ScrollAreaWidget) catch unreachable;
+    var ret = try currentWindow().arena.create(ScrollAreaWidget);
     ret.* = ScrollAreaWidget.init(src, id_extra, virtual_size, opts);
     try ret.install(.{});
     return ret;
@@ -4866,14 +4905,15 @@ pub const MenuItemWidget = struct {
         const options = defaults.override(opts);
         self.wd = WidgetData.init(src, id_extra, options);
         self.submenu = submenu;
-        if (self.wd.visible()) {
-            tabIndexSet(self.wd.id, options.tab_index);
-        }
         return self;
     }
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
         debug("{x} MenuItem {}", .{ self.wd.id, self.wd.rect });
+
+        if (self.wd.visible()) {
+            try tabIndexSet(self.wd.id, self.wd.options.tab_index);
+        }
 
         if (opts.process_events) {
             var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
@@ -4891,7 +4931,7 @@ pub const MenuItemWidget = struct {
             const rs = self.wd.borderRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
             var col = Color.lerp(self.wd.options.color_bg(), 0.3, self.wd.options.color());
-            pathFillConvex(col);
+            try pathFillConvex(col);
         }
 
         var focused: bool = false;
@@ -4909,18 +4949,18 @@ pub const MenuItemWidget = struct {
             const fill = themeGet().color_accent_bg;
             const rs = self.wd.backgroundRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            pathFillConvex(fill);
+            try pathFillConvex(fill);
         } else if (self.focused_in_win or self.highlight) {
             // hovered
             const fill = Color.lerp(self.wd.options.color_bg(), 0.1, self.wd.options.color());
             const rs = self.wd.backgroundRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            pathFillConvex(fill);
+            try pathFillConvex(fill);
         } else if (self.wd.options.background orelse false) {
             const fill = self.wd.options.color_bg();
             const rs = self.wd.backgroundRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            pathFillConvex(fill);
+            try pathFillConvex(fill);
         }
 
         _ = parentSet(self.widget());
@@ -5093,7 +5133,7 @@ pub fn icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name:
     try wd.borderAndBackground();
 
     const rs = wd.contentRectScale();
-    renderIcon(name, tvg_bytes, rs, opts.color());
+    try renderIcon(name, tvg_bytes, rs, opts.color());
 
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
@@ -5120,7 +5160,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, id_extra: usize, opts: 
     try wd.borderAndBackground();
 
     const rs = wd.contentRectScale();
-    debugRenderFontAtlases(rs, opts.color());
+    try debugRenderFontAtlases(rs, opts.color());
 
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
@@ -5146,15 +5186,16 @@ pub const ButtonContainerWidget = struct {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
         self.captured = captureMouseMaintain(self.wd.id);
-        if (self.wd.visible()) {
-            tabIndexSet(self.wd.id, opts.tab_index);
-        }
         self.show_focus = show_focus;
         return self;
     }
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
         debug("{x} ButtonContainer {}", .{ self.wd.id, self.wd.rect });
+
+        if (self.wd.visible()) {
+            try tabIndexSet(self.wd.id, self.wd.options.tab_index);
+        }
 
         if (opts.process_events) {
             var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
@@ -5169,7 +5210,7 @@ pub const ButtonContainerWidget = struct {
             const rs = self.wd.borderRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
             var col = Color.lerp(self.wd.options.color_bg(), 0.3, self.wd.options.color());
-            pathFillConvex(col);
+            try pathFillConvex(col);
         }
 
         if (self.wd.options.background orelse false) {
@@ -5186,7 +5227,7 @@ pub const ButtonContainerWidget = struct {
             }
 
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            pathFillConvex(fill);
+            try pathFillConvex(fill);
         }
 
         if (self.focused and self.show_focus) {
@@ -5368,7 +5409,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
 
     try pathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
     var col = Color.lerp(options.color_bg(), 0.3, options.color());
-    pathFillConvex(col);
+    try pathFillConvex(col);
 
     if (bc.focused) {
         try pathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
@@ -5391,7 +5432,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
         fill = Color.lerp(fill, 0.1, options.color());
     }
 
-    pathFillConvex(fill);
+    try pathFillConvex(fill);
 
     if (target.*) {
         rs.r = rs.r.insetAll(0.5 * rs.s);
@@ -5417,7 +5458,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
 
 pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) !void {
     const cw = currentWindow();
-    var ret = cw.arena.create(TextEntryWidget) catch unreachable;
+    var ret = try cw.arena.create(TextEntryWidget);
     ret.* = TextEntryWidget.init(src, id_extra, width, text, opts);
     ret.allocator = cw.arena;
     try ret.install(.{});
@@ -5452,9 +5493,6 @@ pub const TextEntryWidget = struct {
 
         self.captured = captureMouseMaintain(self.wd.id);
 
-        if (self.wd.visible()) {
-            tabIndexSet(self.wd.id, options.tab_index);
-        }
         self.text = text;
         self.len = std.mem.indexOfScalar(u8, self.text, 0) orelse self.text.len;
         return self;
@@ -5462,6 +5500,10 @@ pub const TextEntryWidget = struct {
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
         debug("{x} Text {}", .{ self.wd.id, self.wd.rect });
+
+        if (self.wd.visible()) {
+            try tabIndexSet(self.wd.id, self.wd.options.tab_index);
+        }
 
         if (opts.process_events) {
             var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
@@ -5827,7 +5869,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
     var cw = currentWindow();
 
     if (cw.window_currentId != cw.wd.id) {
-        var txt = cw.arena.alloc(u8, text.len) catch unreachable;
+        var txt = try cw.arena.alloc(u8, text.len);
         std.mem.copy(u8, txt, text);
         var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = .{ .font = font, .text = txt, .rs = rs, .color = color } } };
 
@@ -5835,7 +5877,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
         while (i > 0) : (i -= 1) {
             const fw = &cw.floating_data.items[i - 1];
             if (fw.id == cw.window_currentId) {
-                fw.render_cmds.append(cmd) catch unreachable;
+                try fw.render_cmds.append(cmd);
                 break;
             }
         }
@@ -5891,7 +5933,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
         size.w += 2 * pad;
         size.h += 2 * pad;
 
-        var pixels = cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * 4) catch unreachable;
+        var pixels = try cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * 4);
         // set all pixels as white but with zero alpha
         for (pixels) |*p, i| {
             if (i % 4 == 3) {
@@ -5969,26 +6011,26 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
         v.pos.y = y + (gi.miny - pad) * target_fraction;
         v.col = color;
         v.uv = gi.uv;
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
         v.pos.x = x + (gi.maxx + pad) * target_fraction;
         v.uv[0] = gi.uv[0] + (gi.maxx - gi.minx + 2 * pad) / fce.texture_atlas_size.w;
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
         v.pos.y = y + (gi.maxy + pad) * target_fraction;
         v.uv[1] = gi.uv[1] + (gi.maxy - gi.miny + 2 * pad) / fce.texture_atlas_size.h;
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
         v.pos.x = x + (gi.minx - pad) * target_fraction;
         v.uv[0] = gi.uv[0];
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
-        idx.append(len + 0) catch unreachable;
-        idx.append(len + 1) catch unreachable;
-        idx.append(len + 2) catch unreachable;
-        idx.append(len + 0) catch unreachable;
-        idx.append(len + 2) catch unreachable;
-        idx.append(len + 3) catch unreachable;
+        try idx.append(len + 0);
+        try idx.append(len + 1);
+        try idx.append(len + 2);
+        try idx.append(len + 0);
+        try idx.append(len + 2);
+        try idx.append(len + 3);
 
         x += gi.advance * target_fraction;
     }
@@ -5996,7 +6038,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
     cw.backend.renderGeometry(fce.texture_atlas, vtx.items, idx.items);
 }
 
-pub fn debugRenderFontAtlases(rs: RectScale, color: Color) void {
+pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
     if (clipGet().intersect(rs.r).empty()) {
         return;
     }
@@ -6010,7 +6052,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) void {
         while (i > 0) : (i -= 1) {
             const fw = &cw.floating_data.items[i - 1];
             if (fw.id == cw.window_currentId) {
-                fw.render_cmds.append(cmd) catch unreachable;
+                try fw.render_cmds.append(cmd);
                 break;
             }
         }
@@ -6035,26 +6077,26 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) void {
         v.pos.y = y + offset;
         v.col = color;
         v.uv = .{ 0, 0 };
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
         v.pos.x = x + kv.value_ptr.texture_atlas_size.w;
         v.uv[0] = 1;
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
         v.pos.y = y + offset + kv.value_ptr.texture_atlas_size.h;
         v.uv[1] = 1;
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
         v.pos.x = x;
         v.uv[0] = 0;
-        vtx.append(v) catch unreachable;
+        try vtx.append(v);
 
-        idx.append(len + 0) catch unreachable;
-        idx.append(len + 1) catch unreachable;
-        idx.append(len + 2) catch unreachable;
-        idx.append(len + 0) catch unreachable;
-        idx.append(len + 2) catch unreachable;
-        idx.append(len + 3) catch unreachable;
+        try idx.append(len + 0);
+        try idx.append(len + 1);
+        try idx.append(len + 2);
+        try idx.append(len + 0);
+        try idx.append(len + 2);
+        try idx.append(len + 3);
 
         cw.backend.renderGeometry(kv.value_ptr.texture_atlas, vtx.items, idx.items);
 
@@ -6062,7 +6104,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) void {
     }
 }
 
-pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colormod: Color) void {
+pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colormod: Color) !void {
     if (clipGet().intersect(rs.r).empty()) {
         return;
     }
@@ -6072,7 +6114,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
     var cw = currentWindow();
 
     if (cw.window_currentId != cw.wd.id) {
-        var name_copy = cw.arena.alloc(u8, name.len) catch unreachable;
+        var name_copy = try cw.arena.alloc(u8, name.len);
         std.mem.copy(u8, name_copy, name);
         var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .colormod = colormod } } };
 
@@ -6080,7 +6122,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
         while (i > 0) : (i -= 1) {
             const fw = &cw.floating_data.items[i - 1];
             if (fw.id == cw.window_currentId) {
-                fw.render_cmds.append(cmd) catch unreachable;
+                try fw.render_cmds.append(cmd);
                 break;
             }
         }
@@ -6095,9 +6137,9 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
 
     const ice = iconTexture(name, tvg_bytes, ask_height) catch return;
 
-    var vtx = std.ArrayList(Vertex).initCapacity(cw.arena, 4) catch unreachable;
+    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, 4);
     defer vtx.deinit();
-    var idx = std.ArrayList(u32).initCapacity(cw.arena, 6) catch unreachable;
+    var idx = try std.ArrayList(u32).initCapacity(cw.arena, 6);
     defer idx.deinit();
 
     var x: f32 = if (cw.snap_to_pixels) @round(rs.r.x) else rs.r.x;
@@ -6109,26 +6151,26 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
     v.col = colormod;
     v.uv[0] = 0;
     v.uv[1] = 0;
-    vtx.append(v) catch unreachable;
+    try vtx.append(v);
 
     v.pos.x = x + ice.size.w * target_fraction;
     v.uv[0] = 1;
-    vtx.append(v) catch unreachable;
+    try vtx.append(v);
 
     v.pos.y = y + ice.size.h * target_fraction;
     v.uv[1] = 1;
-    vtx.append(v) catch unreachable;
+    try vtx.append(v);
 
     v.pos.x = x;
     v.uv[0] = 0;
-    vtx.append(v) catch unreachable;
+    try vtx.append(v);
 
-    idx.append(0) catch unreachable;
-    idx.append(1) catch unreachable;
-    idx.append(2) catch unreachable;
-    idx.append(0) catch unreachable;
-    idx.append(2) catch unreachable;
-    idx.append(3) catch unreachable;
+    try idx.append(0);
+    try idx.append(1);
+    try idx.append(2);
+    try idx.append(0);
+    try idx.append(2);
+    try idx.append(3);
 
     cw.backend.renderGeometry(ice.texture, vtx.items, idx.items);
 }
@@ -6240,13 +6282,13 @@ pub const WidgetData = struct {
             const rs = self.borderRectScale();
             try pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
             var col = Color.lerp(self.options.color_bg(), 0.3, self.options.color());
-            pathFillConvex(col);
+            try pathFillConvex(col);
         }
 
         if (bg) {
             const rs = self.backgroundRectScale();
             try pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-            pathFillConvex(self.options.color_bg());
+            try pathFillConvex(self.options.color_bg());
         }
     }
 
@@ -6328,7 +6370,15 @@ pub const WidgetData = struct {
             // first frame.
             cueFrame();
         }
-        minSizeSet(self.id, self.min_size);
+        minSizeSet(self.id, self.min_size) catch |err| switch (err) {
+            error.OutOfMemory => {
+                // returning an error here means that all widgets deinit can return
+                // it, which is very annoying because you can't "defer try
+                // widget.deinit()".  Also if we are having memory issues then we
+                // have larger problems than here.
+                std.debug.print("minSizeSetAndCue: got {!} when trying to minSizeSet widget {x}\n", .{ err, self.id });
+            },
+        };
     }
 
     pub fn minSizeReportToParent(self: *const WidgetData) void {
@@ -6571,8 +6621,8 @@ pub const examples = struct {
     };
 
     const AnimatingDialog = struct {
-        pub fn dialog(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) void {
-            const id = gui.dialogCustom(src, id_extra, AnimatingDialog.dialogDisplay);
+        pub fn dialog(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
+            const id = try gui.dialogCustom(src, id_extra, AnimatingDialog.dialogDisplay);
             gui.dataSet(id, "_modal", modal);
             gui.dataSet(id, "_title", title);
             gui.dataSet(id, "_msg", msg);
@@ -6639,7 +6689,7 @@ pub const examples = struct {
                     };
 
                     if (callafter) |ca| {
-                        ca(id, response);
+                        try ca(id, response);
                     }
                     return true;
                 }
@@ -6768,17 +6818,13 @@ pub const examples = struct {
             var hbox = try gui.box(@src(), 0, .horizontal, .{});
             defer hbox.deinit();
 
-            // The errors we are ignoring here are all text/font related but we
-            // are passing known strings.  Would want to handle errors if the
-            // user was able to change the font we were using to one that we
-            // didn't test with.
-            _ = gui.button(@src(), 0, "Normal", .{}) catch unreachable;
-            _ = gui.button(@src(), 0, "Accent", .{ .color_style = .accent }) catch unreachable;
-            _ = gui.button(@src(), 0, "Success", .{ .color_style = .success }) catch unreachable;
-            _ = gui.button(@src(), 0, "Error", .{ .color_style = .err }) catch unreachable;
+            _ = try gui.button(@src(), 0, "Normal", .{});
+            _ = try gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
+            _ = try gui.button(@src(), 0, "Success", .{ .color_style = .success });
+            _ = try gui.button(@src(), 0, "Error", .{ .color_style = .err });
         }
 
-        gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{}) catch unreachable;
+        try gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{});
     }
 
     pub fn layout() !void {
@@ -6801,15 +6847,15 @@ pub const examples = struct {
                 var vbox = try gui.box(@src(), 0, .vertical, opts);
                 defer vbox.deinit();
 
-                _ = gui.button(@src(), 0, "none", .{ .expand = .none }) catch unreachable;
-                _ = gui.button(@src(), 0, "horizontal", .{ .expand = .horizontal }) catch unreachable;
-                _ = gui.button(@src(), 0, "vertical", .{ .expand = .vertical }) catch unreachable;
+                _ = try gui.button(@src(), 0, "none", .{ .expand = .none });
+                _ = try gui.button(@src(), 0, "horizontal", .{ .expand = .horizontal });
+                _ = try gui.button(@src(), 0, "vertical", .{ .expand = .vertical });
             }
             {
                 var vbox = try gui.box(@src(), 0, .vertical, opts);
                 defer vbox.deinit();
 
-                _ = gui.button(@src(), 0, "both", .{ .expand = .both }) catch unreachable;
+                _ = try gui.button(@src(), 0, "both", .{ .expand = .both });
             }
         }
     }
@@ -6854,11 +6900,11 @@ pub const examples = struct {
             var fw2 = try gui.popup(@src(), 0, gui.Rect.fromPoint(cp), .{});
             defer fw2.deinit();
 
-            _ = gui.menuItemLabel(@src(), 0, "Cut", false, .{}) catch unreachable;
-            if ((gui.menuItemLabel(@src(), 0, "Close", false, .{}) catch unreachable) != null) {
+            _ = try gui.menuItemLabel(@src(), 0, "Cut", false, .{});
+            if ((try gui.menuItemLabel(@src(), 0, "Close", false, .{})) != null) {
                 gui.menuGet().?.close();
             }
-            _ = gui.menuItemLabel(@src(), 0, "Paste", false, .{}) catch unreachable;
+            _ = try gui.menuItemLabel(@src(), 0, "Paste", false, .{});
         }
 
         var vbox = try gui.box(@src(), 0, .vertical, .{});
@@ -6895,7 +6941,7 @@ pub const examples = struct {
             }
         }
 
-        gui.labelNoFmt(@src(), 0, "Right click for a context menu", .{}) catch unreachable;
+        try gui.labelNoFmt(@src(), 0, "Right click for a context menu", .{});
     }
 
     pub fn submenus() !void {
@@ -6927,20 +6973,20 @@ pub const examples = struct {
             defer hbox.deinit();
 
             if (try gui.button(@src(), 0, "Ok Dialog", .{})) {
-                gui.dialogOk(@src(), 0, false, "Ok Dialog", "This is a non modal dialog with no callafter", null);
+                try gui.dialogOk(@src(), 0, false, "Ok Dialog", "This is a non modal dialog with no callafter", null);
             }
 
             const dialogsFollowup = struct {
-                fn callafter(id: u32, response: gui.DialogResponse) void {
+                fn callafter(id: u32, response: gui.DialogResponse) gui.Error!void {
                     _ = id;
                     var buf: [100]u8 = undefined;
                     const text = std.fmt.bufPrint(&buf, "You clicked {s}", .{@tagName(response)}) catch unreachable;
-                    gui.dialogOk(@src(), 0, true, "Ok Followup Response", text, null);
+                    try gui.dialogOk(@src(), 0, true, "Ok Followup Response", text, null);
                 }
             };
 
             if (try gui.button(@src(), 0, "Ok Followup", .{})) {
-                gui.dialogOk(@src(), 0, true, "Ok Followup", "This is a modal dialog with modal followup", dialogsFollowup.callafter);
+                try gui.dialogOk(@src(), 0, true, "Ok Followup", "This is a modal dialog with modal followup", dialogsFollowup.callafter);
             }
         }
     }
@@ -6950,7 +6996,7 @@ pub const examples = struct {
         defer b.deinit();
 
         if (try gui.button(@src(), 0, "Animating Dialog", .{})) {
-            AnimatingDialog.dialog(@src(), 0, false, "Animating Dialog", "This shows how to animate dialogs and other floating windows", null);
+            try AnimatingDialog.dialog(@src(), 0, false, "Animating Dialog", "This shows how to animate dialogs and other floating windows", null);
         }
 
         if (try gui.expander(@src(), 0, "Spinner", .{ .expand = .horizontal })) {
@@ -6969,7 +7015,7 @@ pub const examples = struct {
 
             if (gui.timerDone(mslabel.wd.id) or !gui.timerExists(mslabel.wd.id)) {
                 const wait = 1000 * (1000 - left);
-                gui.timerSet(mslabel.wd.id, wait);
+                try gui.timerSet(mslabel.wd.id, wait);
             }
         }
     }

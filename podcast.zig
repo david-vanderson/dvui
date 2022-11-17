@@ -21,14 +21,14 @@ const Episode = struct {
     title: []const u8,
 };
 
-fn dbErrorCallafter(id: u32, response: gui.DialogResponse) void {
+fn dbErrorCallafter(id: u32, response: gui.DialogResponse) gui.Error!void {
     _ = id;
     _ = response;
     g_quit = true;
 }
 
 fn dbError(comptime fmt: []const u8, args: anytype) !void {
-    gui.dialogOk(@src(), 0, true, "DB Error", try std.fmt.allocPrint(gpa, fmt, args), dbErrorCallafter);
+    try gui.dialogOk(@src(), 0, true, "DB Error", try std.fmt.allocPrint(gpa, fmt, args), dbErrorCallafter);
 }
 
 fn dbRow(comptime query: []const u8, comptime return_type: type, values: anytype) !?return_type {
@@ -155,9 +155,9 @@ pub fn main() !void {
         arena = arena_allocator.allocator();
 
         var nstime = win.beginWait(backend.hasEvent());
-        win.begin(arena, nstime);
+        try win.begin(arena, nstime);
 
-        const quit = backend.addAllEvents(&win);
+        const quit = try backend.addAllEvents(&win);
         if (quit) break :main_loop;
         if (g_quit) break :main_loop;
 
@@ -255,7 +255,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
             const url = std.mem.trim(u8, &TextEntryText.text, " \x00");
             const row = try dbRow("SELECT rowid FROM podcast WHERE url = ?", i32, .{url});
             if (row) |_| {
-                gui.dialogOk(@src(), 0, true, "Note", try std.fmt.allocPrint(arena, "url already in db:\n\n{s}", .{url}), null);
+                try gui.dialogOk(@src(), 0, true, "Note", try std.fmt.allocPrint(arena, "url already in db:\n\n{s}", .{url}), null);
             } else {
                 _ = try dbRow("INSERT INTO podcast (url) VALUES (?)", i32, .{url});
                 if (g_db) |*db| {

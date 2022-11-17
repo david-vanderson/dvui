@@ -29,9 +29,9 @@ pub fn main() !void {
         const arena = arena_allocator.allocator();
 
         var nstime = win.beginWait(win_backend.hasEvent());
-        win.begin(arena, nstime);
+        try win.begin(arena, nstime);
 
-        const quit = win_backend.addAllEvents(&win);
+        const quit = try win_backend.addAllEvents(&win);
         if (quit) break :main_loop;
 
         _ = try gui.examples.demo();
@@ -409,7 +409,7 @@ pub const StrokeTest = struct {
             var rect = gui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
             const rsrect = rect.scale(rs.s).offset(rs.r);
             try gui.pathAddRect(rsrect, gui.Rect.all(1));
-            gui.pathFillConvex(fill_color);
+            try gui.pathFillConvex(fill_color);
 
             _ = i;
             //_ = try gui.button(@src(), i, "Floating", .{ .rect = gui.Rect.fromPoint(p) });
