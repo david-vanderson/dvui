@@ -325,7 +325,7 @@ pub fn main() !void {
 
         win_backend.renderPresent();
 
-        const wait_event_micros = win.wait(end_micros, null);
+        const wait_event_micros = win.waitTime(end_micros, null);
 
         win_backend.waitEventTimeout(wait_event_micros);
     }

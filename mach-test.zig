@@ -51,6 +51,6 @@ pub fn update(app: *App, engine: *mach.Core) !void {
 
     engine.swap_chain.?.present();
 
-    const wait_event_micros = app.win.wait(end_micros, null);
+    const wait_event_micros = app.win.waitTime(end_micros, null);
     app.win_backend.waitEventTimeout(wait_event_micros);
 }
