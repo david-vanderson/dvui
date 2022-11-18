@@ -1,28 +1,17 @@
 
-audit docs
-
 how can I get mach to not build all it's stuff when I'm compiling an sdl example?
 
 -Dtarget=wasm32-freestanding-none
 
 mach-test: no tab key?
 
-linux mach-test: pulling corner of GUI Demo window around lags
+linux mach-test: moving GUI Demo window around lags
 
 try splitting into 2 files - gui.zig (has widgets and re-exports core stuff) and gui-core.zig (has stuff widgets depend on)
 
-how to handle user code needed to override events for a widget
-- widget.installNoEvents()?
-- Options addition?
-- widget then has a separate .process(event) that user code can call
-
 scroll managed vs. not should be via optionals passed (ypos and ymax)
 
-do all of the suggestions from Mike
-- screenshots in README
-- links to example code in README for each section
-
-write up some design docs
+more docs
 - tabindex
 - seamless animations
 

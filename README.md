@@ -22,158 +22,119 @@ A [Zig](https://ziglang.org/) native GUI toolkit for whole applications or extra
 
 ## Contents
 
-- [Build Standalone Mach App](#standalone-mach-app)
-- [Build On Top of Existing Mach App](#on-top-of-existing-mach-app)
+- [Build Standalone App](#standalone-app)
+- [Build On Top of Existing App](#on-top-of-existing-app)
 - [Design](#Design)
 
 ## Building
 
-### Standalone Mach App
+### Standalone App
 
 ```sh
 git clone https://github.com/david-vanderson/gui
 cd gui
 git submodule update --init
 zig build mach-test
+zig build sdl-test 
 ```
 
-### On Top of Existing Mach App
+### On Top of Existing App
 
-As an example, we'll extend the mach example `instanced-cube` to control the number of cubes on screen.  We'll start with 12 (`shown_instances` in the code) and have a button to add a cube and a button to remove a cube.
+Example code here assumes a Mach app, but building on top of an SDL App works almost identically.  See sdl-test.zig for code.
 
-Link or copy this repo into the example:
+Link or copy this repo into the app:
 ```sh
-cd mach/examples/instanced-cube
+cd mach-examples/instanced-cube
 ln -s ~/gui gui
 ```
 
-Add the necessary packages to the example (need zmath and freetype):
+Add the necessary packages to the example (need freetype and zmath) (zmath only needed for mach backend):
 ```diff
-git diff ../../build.zig
--        .{ .name = "instanced-cube", .packages = &[_]Pkg{Packages.zmath} },
-+        .{ .name = "instanced-cube", .packages = &[_]Pkg{Packages.zmath, freetype.pkg } },
+git diff ../build.zig
+-        .{ .name = "instanced-cube", .deps = &.{Packages.zmath} },
++        .{ .name = "instanced-cube", .deps = &.{Packages.zmath}, .use_freetype = true },
 ```
 
-Add the following to the example:
-```diff
-git diff main.zig
-diff --git a/examples/instanced-cube/main.zig b/examples/instanced-cube/main.zig
-index 1f17475..e1b6450 100755
---- a/examples/instanced-cube/main.zig
-+++ b/examples/instanced-cube/main.zig
-@@ -6,10 +6,16 @@ const zm = @import("zmath");
- const Vertex = @import("cube_mesh.zig").Vertex;
- const vertices = @import("cube_mesh.zig").vertices;
+Add the imports:
+```zig
+const gui = @import("gui/src/gui.zig");
+const MachGuiBackend = @import("gui/src/MachBackend.zig");
+```
 
-+const gui = @import("gui/src/gui.zig");
-+const MachGuiBackend = @import("gui/src/MachBackend.zig");
-+
- const UniformBufferObject = struct {
-     mat: zm.Mat,
- };
+Add variables for gui (need to persist frame to frame):
+```zig
+win: gui.Window,
+win_backend: MachGuiBackend,
+shown_instances: u32,  // just for example
+```
 
-+var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-+const gpa = gpa_instance.allocator();
-+
- var timer: mach.Timer = undefined;
+During app initialization, init the backend and gui (will need a persistant allocator like general purpose):
+```zig
+    app.win_backend = try MachGuiBackend.init(gpa, core);
+    app.win = gui.Window.init(gpa, app.win_backend.guiBackend());
+    app.shown_instances = 12;  // start with 12 cubes
+```
 
- pipeline: gpu.RenderPipeline,
-@@ -18,6 +24,10 @@ vertex_buffer: gpu.Buffer,
- uniform_buffer: gpu.Buffer,
- bind_group: gpu.BindGroup,
+Add cleanup code:
+```zig
+    app.win.deinit();
+    app.win_backend.deinit();
+```
 
-+win: gui.Window,
-+win_backend: MachGuiBackend,
-+shown_instances: u32,
-+
-pub const App = @This();
+At the beginning of the render loop, make an arena allocator and call Window.begin():
+```zig
+    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const arena = arena_allocator.allocator();
+    defer arena_allocator.deinit();
 
- pub fn init(app: *App, core: *mach.Core) !void {
-@@ -131,16 +141,31 @@ pub fn init(app: *App, core: *mach.Core) !void {
-     fs_module.release();
-     pipeline_layout.release();
-     bgl.release();
-+
-+    app.win_backend = try MachGuiBackend.init(gpa, core);
-+    app.win = gui.Window.init(gpa, app.win_backend.guiBackend());
-+    app.shown_instances = 12;  // start with 12 cubes
- }
+    try app.win.begin(arena, std.time.nanoTimestamp());
+```
 
- pub fn deinit(app: *App, _: *mach.Core) void {
-     app.vertex_buffer.release();
-     app.bind_group.release();
-     app.uniform_buffer.release();
-+
-+    app.win.deinit();
-+    app.win_backend.deinit();
- }
+Add events for the gui:
+```zig
+    _ = try app.win_backend.addEvent(&app.win, event);
+```
 
- pub fn update(app: *App, core: *mach.Core) !void {
-+
-+    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-+    const arena = arena_allocator.allocator();
-+    defer arena_allocator.deinit();
-+
-+    app.win.begin(arena, std.time.nanoTimestamp());
-+
-     while (core.pollEvent()) |event| {
-+        _ = app.win_backend.addEvent(&app.win, event);
-         switch (event) {
-             .key_press => |ev| {
-                 if (ev.key == .space)
-@@ -150,6 +175,26 @@ pub fn update(app: *App, core: *mach.Core) !void {
-         }
-     }
+Call any gui functions you want:
+```zig
+    _ = try gui.examples.demo();
 
-+    {
-+        var fw = gui.floatingWindow(@src(), 0, false, null, null, .{});
-+        defer fw.deinit();
-+
-+        var box = gui.box(@src(), 0, .horizontal, .{});
-+        defer box.deinit();
-+
-+        if (gui.button(@src(), 0, "more", .{})) {
-+            if (app.shown_instances < 16) {
-+                app.shown_instances += 1;
-+            }
-+        }
-+
-+        if (gui.button(@src(), 0, "less", .{})) {
-+            if (app.shown_instances > 0) {
-+                app.shown_instances -= 1;
-+            }
-+        }
-+    }
-+
-     const back_buffer_view = core.swap_chain.?.getCurrentTextureView();
-     const color_attachment = gpu.RenderPassColorAttachment{
-         .view = back_buffer_view,
-@@ -198,7 +243,7 @@ pub fn update(app: *App, core: *mach.Core) !void {
-     pass.setPipeline(app.pipeline);
-     pass.setVertexBuffer(0, app.vertex_buffer, 0, @sizeOf(Vertex) * vertices.len);
-     pass.setBindGroup(0, app.bind_group, &.{0});
+    {
+        var fw = try gui.floatingWindow(@src(), 0, false, null, null, .{});
+        defer fw.deinit();
+
+        var box = try gui.box(@src(), 0, .horizontal, .{});
+        defer box.deinit();
+
+        if (try gui.button(@src(), 0, "more", .{})) {
+            if (app.shown_instances < 16) {
+                app.shown_instances += 1;
+            }
+        }
+
+        if (try gui.button(@src(), 0, "less", .{})) {
+            if (app.shown_instances > 0) {
+                app.shown_instances -= 1;
+            }
+        }
+    }
+```
+
+```
 -    pass.draw(vertices.len, 16, 0, 0);
 +    pass.draw(vertices.len, app.shown_instances, 0, 0);
-     pass.end();
-     pass.release();
+```
 
-@@ -207,6 +252,9 @@ pub fn update(app: *App, core: *mach.Core) !void {
-
-     app.queue.submit(&.{command});
-     command.release();
-+
-+    _ = app.win.end();
-+
-     core.swap_chain.?.present();
-     back_buffer_view.release();
- }
+At the end of the render loop, call Window.end() before the view is presented:
+```zig
+    _ = try app.win.end();
 ```
 
 ## Design
 
 ### Immediate Mode
 ```zig
-if (gui.button(@src(), 0, "Ok", .{})) {
+if (try gui.button(@src(), 0, "Ok", .{})) {
   dialog.close();
 }
 ```
@@ -235,21 +196,21 @@ Floating windows and popups are handled by deferring their rendering so that the
 ### FPS throttling
 If your app is running at a fixed framerate, use `window.begin()` and `window.end()` which handle bookkeeping and rendering.
 
-If you want to only render frames when needed, add `window.beginWait()` at the start and `window.wait()` at the end.  These cooperate to sleep the right amount and render frames when:
+If you want to only render frames when needed, add `window.beginWait()` at the start and `window.waitTime()` at the end.  These cooperate to sleep the right amount and render frames when:
 - an event comes in
 - an animation is ongoing
 - a timer has expired
 - user code calls `gui.cueFrame()` (if your code knows you need a frame after the current one)
 
-`window.wait()` also accepts a max fps parameter which will ensure the framerate stays below the given value.
+`window.waitTime()` also accepts a max fps parameter which will ensure the framerate stays below the given value.
 
-`window.beginWait()` and `window.wait()` maintain an internal estimate of how much time is spent outside of the rendering code.  This is used in the calculation for how long to sleep for the next frame.
+`window.beginWait()` and `window.waitTime()` maintain an internal estimate of how much time is spent outside of the rendering code.  This is used in the calculation for how long to sleep for the next frame.
 
 ### Widget init and deinit
 The easiest way to use widgets is through the functions that create and install them:
 ```zig
 {
-    var box = gui.box(@src(), 0, .vertical, .{.expand = .both});
+    var box = try gui.box(@src(), 0, .vertical, .{.expand = .both});
     defer box.deinit();
 }
 ```
@@ -260,11 +221,11 @@ Instead you can allocate the widget on the stack:
 {
     var box = BoxWidget.init(@src(), 0, .vertical, .{.expand = .both});
     // box now has an id, can look up animations/timers
-    box.install();
+    try box.install(.{});  // or try box.install(.{ .process_events = false});
     defer box.deinit();
 }
 ```
-This also shows how to get a widget's id before install() (processes events and draws).  This is primarily used for animations.
+This also shows how to get a widget's id before install() (processes events and draws).  This is useful for animations and specially handling events.
 
 ### Appearance
 Each widget has the following options that can be changed through the Options struct when creating the widget:
@@ -278,7 +239,7 @@ Each widget has the following options that can be changed through the Options st
 - font_style (use theme's fonts)
 - font_custom (used if font_style is .custom)
 ```zig
-if (gui.button(@src(), 0, "Wild", .{
+if (try gui.button(@src(), 0, "Wild", .{
     .margin = gui.Rect.All(2),
     .padding = gui.Rect.all(8),
     .color_style = .custom,
@@ -296,7 +257,7 @@ gui.ButtonWidget.Defaults.background = false;
 
 Colors come in foreground/background pairs.  Usually you want to use colors from the theme:
 ```zig
-if (gui.menuItemLabel(@src(), 0, "Cut", false, .{.color_style = .success, .background = true}) != null) {
+if (try gui.menuItemLabel(@src(), 0, "Cut", false, .{.color_style = .success, .background = true}) != null) {
     // selected
 }
 ```
