@@ -4364,6 +4364,8 @@ pub const ScrollAreaWidget = struct {
 
     process_events: bool = true,
     prevClip: Rect = Rect{},
+
+    virtual_size_given: bool = false,
     virtualSize: Size = Size{},
     nextVirtualSize: Size = Size{},
     next_widget_ypos: f32 = 0, // goes from 0 to viritualSize.h
@@ -4375,14 +4377,14 @@ pub const ScrollAreaWidget = struct {
         const options = defaults.override(opts);
         self.wd = WidgetData.init(src, id_extra, options);
         if (virtual_size) |vs| {
+            self.virtual_size_given = true;
             self.virtualSize = vs;
+        } else if (dataGet(self.wd.id, "_virtual_size", Size)) |s| {
+            self.virtualSize = s;
         }
 
-        if (dataGet(self.wd.id, "_data", Data)) |d| {
-            if (virtual_size == null) {
-                self.virtualSize = d.virtualSize;
-            }
-            self.scroll = d.scroll;
+        if (dataGet(self.wd.id, "_scroll", f32)) |s| {
+            self.scroll = s;
         }
 
         const max_scroll = math.max(0, self.virtualSize.h - self.wd.contentRect().h);
@@ -4566,14 +4568,17 @@ pub const ScrollAreaWidget = struct {
             cueFrame();
         }
 
-        if (self.nextVirtualSize.w != self.virtualSize.w or
-            self.nextVirtualSize.h != self.virtualSize.h)
-        {
-            cueFrame();
+        if (self.virtual_size_given) {
+            dataSet(self.wd.id, "_virtual_size", self.virtualSize);
+        } else {
+            if (self.nextVirtualSize.w != self.virtualSize.w or
+                self.nextVirtualSize.h != self.virtualSize.h)
+            {
+                cueFrame();
+            }
+            dataSet(self.wd.id, "_virtual_size", self.nextVirtualSize);
         }
-
-        const d = Data{ .virtualSize = self.nextVirtualSize, .scroll = scroll };
-        dataSet(self.wd.id, "_data", d);
+        dataSet(self.wd.id, "_scroll", scroll);
 
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();

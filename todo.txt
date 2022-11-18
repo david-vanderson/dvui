@@ -1,12 +1,4 @@
 
-start handling all the unreachable stuff
-- also in backends
-- mach-test
-
-sdl: when the clock timer is going, a click up on a button waits for the timer?
-
-icon browser causes constant refresh?
-
 audit docs
 
 how can I get mach to not build all it's stuff when I'm compiling an sdl example?
