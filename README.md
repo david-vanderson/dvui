@@ -70,15 +70,9 @@ shown_instances: u32,  // just for example
 
 During app initialization, init the backend and gui (will need a persistant allocator like general purpose):
 ```zig
-    app.win_backend = try MachGuiBackend.init(gpa, core);
+    app.win_backend = try MachGuiBackend.init(core);
     app.win = gui.Window.init(gpa, app.win_backend.guiBackend());
     app.shown_instances = 12;  // start with 12 cubes
-```
-
-Add cleanup code:
-```zig
-    app.win.deinit();
-    app.win_backend.deinit();
 ```
 
 At the beginning of the render loop, make an arena allocator and call Window.begin():
@@ -129,6 +123,13 @@ At the end of the render loop, call Window.end() before the view is presented:
 ```zig
     _ = try app.win.end();
 ```
+
+Add cleanup code:
+```zig
+    app.win.deinit();
+    app.win_backend.deinit();
+```
+
 
 ## Design
 
