@@ -28,9 +28,14 @@ pub fn update(app: *App, engine: *mach.Core) !void {
     const arena = arena_allocator.allocator();
     defer arena_allocator.deinit();
 
+    // beginWait is not necessary, but cooperates with waitTime to properly
+    // wait for timers/animations.
     var nstime = app.win.beginWait(engine.hasEvent());
+
+    // start gui, can call gui stuff after this
     try app.win.begin(arena, nstime);
 
+    // add all the events, could also add one by one
     const quit = try app.win_backend.addAllEvents(&app.win);
     if (quit) {
         return engine.close();
@@ -41,8 +46,10 @@ pub fn update(app: *App, engine: *mach.Core) !void {
         return engine.close();
     }
 
+    // end gui, render retained dialogs, deferred rendering (floating windows, focus highlights)
     const end_micros = try app.win.end();
 
+    // set cursor only if it is above our demo window
     if (app.win.cursorRequestedFloating()) |cursor| {
         app.win_backend.setCursor(cursor);
     } else {
@@ -51,6 +58,7 @@ pub fn update(app: *App, engine: *mach.Core) !void {
 
     engine.swap_chain.?.present();
 
+    // wait for events/timers/animations
     const wait_event_micros = app.win.waitTime(end_micros, null);
     app.win_backend.waitEventTimeout(wait_event_micros);
 }
