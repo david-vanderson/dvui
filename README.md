@@ -42,93 +42,93 @@ zig build sdl-test
 
 Example code here assumes a Mach app, but building on top of an SDL App works almost identically.  See sdl-test.zig for code.
 
-Link or copy this repo into the app:
-```sh
-cd mach-examples/instanced-cube
-ln -s ~/gui gui
-```
+1. Link or copy this repo into the app:
+    ```sh
+    cd mach-examples/instanced-cube
+    ln -s ~/gui gui
+    ```
 
-Add the necessary packages to the example (need freetype and zmath) (zmath only needed for mach backend):
-```diff
-git diff ../build.zig
--        .{ .name = "instanced-cube", .deps = &.{Packages.zmath} },
-+        .{ .name = "instanced-cube", .deps = &.{Packages.zmath}, .use_freetype = true },
-```
+1. Add the necessary packages to the example (need freetype and zmath) (zmath only needed for mach backend):
+    ```diff
+    git diff ../build.zig
+    -        .{ .name = "instanced-cube", .deps = &.{Packages.zmath} },
+    +        .{ .name = "instanced-cube", .deps = &.{Packages.zmath}, .use_freetype = true },
+    ```
 
-Add the imports:
-```zig
-const gui = @import("gui/src/gui.zig");
-const MachGuiBackend = @import("gui/src/MachBackend.zig");
-```
+1. Add the imports:
+    ```zig
+    const gui = @import("gui/src/gui.zig");
+    const MachGuiBackend = @import("gui/src/MachBackend.zig");
+    ```
 
-Add variables for gui (need to persist frame to frame):
-```zig
-win: gui.Window,
-win_backend: MachGuiBackend,
-shown_instances: u32,  // just for example
-```
+1. Add variables for gui (need to persist frame to frame):
+    ```zig
+    win: gui.Window,
+    win_backend: MachGuiBackend,
+    shown_instances: u32,  // just for example
+    ```
 
-During app initialization, init the backend and gui (will need a persistant allocator like general purpose):
-```zig
-    app.win_backend = try MachGuiBackend.init(core);
-    app.win = gui.Window.init(gpa, app.win_backend.guiBackend());
-    app.shown_instances = 12;  // start with 12 cubes
-```
+1. During app initialization, init the backend and gui (will need a persistant allocator like general purpose):
+    ```zig
+        app.win_backend = try MachGuiBackend.init(core);
+        app.win = gui.Window.init(gpa, app.win_backend.guiBackend());
+        app.shown_instances = 12;  // start with 12 cubes
+    ```
 
-At the beginning of the render loop, make an arena allocator and call Window.begin():
-```zig
-    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const arena = arena_allocator.allocator();
-    defer arena_allocator.deinit();
+1. At the beginning of the render loop, make an arena allocator and call Window.begin():
+    ```zig
+        var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        const arena = arena_allocator.allocator();
+        defer arena_allocator.deinit();
 
-    try app.win.begin(arena, std.time.nanoTimestamp());
-```
+        try app.win.begin(arena, std.time.nanoTimestamp());
+    ```
 
-Add events for the gui:
-```zig
-    _ = try app.win_backend.addEvent(&app.win, event);
-```
+1. Add events for the gui:
+    ```zig
+        _ = try app.win_backend.addEvent(&app.win, event);
+    ```
 
-Call any gui functions you want:
-```zig
-    _ = try gui.examples.demo();
+1. Call any gui functions you want:
+    ```zig
+        _ = try gui.examples.demo();
 
-    {
-        var fw = try gui.floatingWindow(@src(), 0, false, null, null, .{});
-        defer fw.deinit();
+        {
+            var fw = try gui.floatingWindow(@src(), 0, false, null, null, .{});
+            defer fw.deinit();
 
-        var box = try gui.box(@src(), 0, .horizontal, .{});
-        defer box.deinit();
+            var box = try gui.box(@src(), 0, .horizontal, .{});
+            defer box.deinit();
 
-        if (try gui.button(@src(), 0, "more", .{})) {
-            if (app.shown_instances < 16) {
-                app.shown_instances += 1;
+            if (try gui.button(@src(), 0, "more", .{})) {
+                if (app.shown_instances < 16) {
+                    app.shown_instances += 1;
+                }
+            }
+
+            if (try gui.button(@src(), 0, "less", .{})) {
+                if (app.shown_instances > 0) {
+                    app.shown_instances -= 1;
+                }
             }
         }
+    ```
 
-        if (try gui.button(@src(), 0, "less", .{})) {
-            if (app.shown_instances > 0) {
-                app.shown_instances -= 1;
-            }
-        }
-    }
-```
+    ```
+    -    pass.draw(vertices.len, 16, 0, 0);
+    +    pass.draw(vertices.len, app.shown_instances, 0, 0);
+    ```
 
-```
--    pass.draw(vertices.len, 16, 0, 0);
-+    pass.draw(vertices.len, app.shown_instances, 0, 0);
-```
+1. At the end of the render loop, call Window.end() before the view is presented:
+    ```zig
+        _ = try app.win.end();
+    ```
 
-At the end of the render loop, call Window.end() before the view is presented:
-```zig
-    _ = try app.win.end();
-```
-
-Add cleanup code:
-```zig
-    app.win.deinit();
-    app.win_backend.deinit();
-```
+1. Add cleanup code:
+    ```zig
+        app.win.deinit();
+        app.win_backend.deinit();
+    ```
 
 
 ## Design
