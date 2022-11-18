@@ -2164,7 +2164,12 @@ pub const Window = struct {
         return new_time;
     }
 
-    pub fn wait(self: *Self, end_micros: ?u32, maxFPS: ?f32) u32 {
+    // Takes output of end() and optionally a max fps.  Returns microseconds
+    // the app should wait (with event interruption) before running the render
+    // loop again.  Pass return value to backend.waitEventTimeout().
+    // Cooperates with beginWait() to estimate how much time is being spent
+    // outside the render loop and account for that.
+    pub fn waitTime(self: *Self, end_micros: ?u32, maxFPS: ?f32) u32 {
         // end_micros is the naive value we want to be between last begin and next begin
 
         // minimum time to wait to hit max fps target
@@ -2509,6 +2514,11 @@ pub const Window = struct {
         }
     }
 
+    // End of this window gui's rendering.  Renders retained dialogs and all
+    // deferred rendering (floating windows, focus highlights).  Returns micros
+    // we want between last call to begin() and next call to begin() (or null
+    // meaning wait for event).  If wanted, pass return value to waitTime() to
+    // get a useful time to wait between render loops.
     pub fn end(self: *Self) !?u32 {
         try self.dialogsShow();
 
