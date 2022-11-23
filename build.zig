@@ -6,6 +6,7 @@ const freetype = @import("libs/mach/libs/freetype/build.zig");
 const mbedtls = @import("libs/zig-mbedtls/mbedtls.zig");
 const libssh2 = @import("libs/zig-libssh2/libssh2.zig");
 const libcurl = @import("libs/zig-libcurl/libcurl.zig");
+const libzlib = @import("libs/zig-zlib/zlib.zig");
 
 const Packages = struct {
     // Declared here because submodule may not be cloned at the time build.zig runs.
@@ -57,10 +58,13 @@ pub fn build(b: *Builder) !void {
     // sdl test
     {
         const exe = b.addExecutable("sdl-test", "sdl-test" ++ ".zig");
-        exe.linkSystemLibrary("SDL2");
 
         exe.addPackage(freetype.pkg);
         freetype.link(b, exe, .{});
+
+        exe.linkSystemLibrary("SDL2");
+        //exe.addIncludePath("/home/dvanderson/SDL/build/include");
+        //exe.addObjectFile("/home/dvanderson/SDL/build/lib/libSDL2.a");
 
         if (target.isDarwin()) {
             exe.linkSystemLibrary("z");
@@ -101,7 +105,7 @@ pub fn build(b: *Builder) !void {
         exe.linkSystemLibrary("SDL2");
 
         exe.addPackage(freetype.pkg);
-        freetype.link(b, exe, .{});
+        freetype.link(b, exe, .{ .freetype = .{ .use_system_zlib = true } });
 
         const sqlite = b.addStaticLibrary("sqlite", null);
         sqlite.addCSourceFile("libs/zig-sqlite/c/sqlite3.c", &[_][]const u8{"-std=c99"});
@@ -117,6 +121,9 @@ pub fn build(b: *Builder) !void {
         const ssh2 = libssh2.create(b, target, mode);
         tls.link(ssh2.step);
         ssh2.link(exe);
+
+        const zlib = libzlib.create(b, target, mode);
+        zlib.link(exe, .{});
 
         const curl = try libcurl.create(b, target, mode);
         tls.link(curl.step);

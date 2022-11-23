@@ -3,14 +3,14 @@ const gui = @import("src/gui.zig");
 const Backend = @import("src/SDLBackend.zig");
 
 const sqlite = @import("sqlite");
+const curl = @import("curl");
 
 // when set to true, looks for feed-{rowid}.xml and episode-{rowid}.mp3 instead
 // of fetching from network
-const DEBUG = true;
+const DEBUG = false;
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
-var arena: std.mem.Allocator = undefined;
 
 const db_name = "podcast-db.sqlite3";
 var g_db: ?sqlite.Db = null;
@@ -31,7 +31,7 @@ fn dbError(comptime fmt: []const u8, args: anytype) !void {
     try gui.dialogOk(@src(), 0, true, "DB Error", try std.fmt.allocPrint(gpa, fmt, args), dbErrorCallafter);
 }
 
-fn dbRow(comptime query: []const u8, comptime return_type: type, values: anytype) !?return_type {
+fn dbRow(arena: std.mem.Allocator, comptime query: []const u8, comptime return_type: type, values: anytype) !?return_type {
     if (g_db) |*db| {
         var stmt = db.prepare(query) catch {
             try dbError("{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), query });
@@ -50,7 +50,7 @@ fn dbRow(comptime query: []const u8, comptime return_type: type, values: anytype
     return null;
 }
 
-fn dbInit() !void {
+fn dbInit(arena: std.mem.Allocator) !void {
     g_db = sqlite.Db.init(.{
         .mode = sqlite.Db.Mode{ .File = db_name },
         .open_flags = .{
@@ -62,28 +62,29 @@ fn dbInit() !void {
         return error.DB_ERROR;
     };
 
-    _ = try dbRow("CREATE TABLE IF NOT EXISTS 'schema' (version INTEGER)", u8, .{});
+    _ = try dbRow(arena, "CREATE TABLE IF NOT EXISTS 'schema' (version INTEGER)", u8, .{});
 
-    if (try dbRow("SELECT version FROM schema", u32, .{})) |version| {
+    if (try dbRow(arena, "SELECT version FROM schema", u32, .{})) |version| {
         if (version != 1) {
             try dbError("{s}\n\nbad schema version: {d}", .{ db_name, version });
             return error.DB_ERROR;
         }
     } else {
         // new database
-        _ = try dbRow("INSERT INTO schema (version) VALUES (1)", u8, .{});
-        _ = try dbRow("CREATE TABLE podcast (url TEXT, error TEXT, title TEXT, description TEXT, copyright TEXT, pubDate INTEGER, lastBuildDate TEXT, link TEXT, image_url TEXT, speed REAL)", u8, .{});
-        _ = try dbRow("CREATE TABLE episode (podcast_id INTEGER, visible INTEGER DEFAULT 1, guid TEXT, title TEXT, description TEXT, pubDate INTEGER, enclosure_url TEXT, position INTEGER, duration INTEGER)", u8, .{});
-        _ = try dbRow("CREATE TABLE player (episode_id INTEGER)", u8, .{});
-        _ = try dbRow("INSERT INTO player (episode_id) values (0)", u8, .{});
+        _ = try dbRow(arena, "INSERT INTO schema (version) VALUES (1)", u8, .{});
+        _ = try dbRow(arena, "CREATE TABLE podcast (url TEXT, error TEXT, title TEXT, description TEXT, copyright TEXT, pubDate INTEGER, lastBuildDate TEXT, link TEXT, image_url TEXT, speed REAL)", u8, .{});
+        _ = try dbRow(arena, "CREATE TABLE episode (podcast_id INTEGER, visible INTEGER DEFAULT 1, guid TEXT, title TEXT, description TEXT, pubDate INTEGER, enclosure_url TEXT, position INTEGER, duration INTEGER)", u8, .{});
+        _ = try dbRow(arena, "CREATE TABLE player (episode_id INTEGER)", u8, .{});
+        _ = try dbRow(arena, "INSERT INTO player (episode_id) values (0)", u8, .{});
     }
 
-    _ = try dbRow("UPDATE podcast SET error=NULL", u8, .{});
+    _ = try dbRow(arena, "UPDATE podcast SET error=NULL", u8, .{});
 }
 
-fn bgFetchFeed(rowid: u32, url: []const u8) !void {
+fn bgFetchFeed(arena: std.mem.Allocator, rowid: u32, url: []const u8) !void {
+    var buf: [256]u8 = undefined;
+    var contents: []const u8 = undefined;
     if (DEBUG) {
-        var buf = std.mem.zeroes([256:0]u8);
         const filename = try std.fmt.bufPrint(&buf, "feed-{d}.xml", .{rowid});
         std.debug.print("  bgFetchFeed fetching {s}\n", .{filename});
 
@@ -93,25 +94,71 @@ fn bgFetchFeed(rowid: u32, url: []const u8) !void {
         };
         defer file.close();
 
-        const contents = try file.readToEndAlloc(arena, 1024 * 1024 * 20);
-        _ = contents;
+        contents = try file.readToEndAlloc(arena, 1024 * 1024 * 20);
     } else {
-        _ = url;
+        std.debug.print("  bgFetchFeed fetching {s}\n", .{url});
+
+        var easy = try curl.Easy.init();
+        defer easy.cleanup();
+
+        const urlZ = try std.fmt.bufPrintZ(&buf, "{s}", .{url});
+        try easy.setUrl(urlZ);
+        try easy.setSslVerifyPeer(false);
+        try easy.setAcceptEncodingGzip();
+
+        const Fifo = std.fifo.LinearFifo(u8, .{ .Dynamic = {} });
+        try easy.setWriteFn(struct {
+            fn writeFn(ptr: ?[*]u8, size: usize, nmemb: usize, data: ?*anyopaque) callconv(.C) usize {
+                _ = size;
+                var slice = (ptr orelse return 0)[0..nmemb];
+                const fifo = @ptrCast(
+                    *Fifo,
+                    @alignCast(
+                        @alignOf(*Fifo),
+                        data orelse return 0,
+                    ),
+                );
+
+                fifo.writer().writeAll(slice) catch return 0;
+                return nmemb;
+            }
+        }.writeFn);
+
+        var fifo = Fifo.init(arena);
+        defer fifo.deinit();
+        try easy.setWriteData(&fifo);
+        try easy.setVerbose(true);
+        easy.perform() catch |err| {
+            try gui.dialogOk(@src(), 0, true, "Network Error", try std.fmt.allocPrint(arena, "curl error {!}\ntrying to fetch url:\n{s}", .{ err, url }), null);
+        };
+        const code = try easy.getResponseCode();
+        std.debug.print("  bgFetchFeed curl code {d}\n", .{code});
+
+        contents = fifo.readableSlice(0);
+
+        const filename = try std.fmt.bufPrint(&buf, "feed-{d}.xml", .{rowid});
+        const file = std.fs.cwd().createFile(filename, .{}) catch |err| switch (err) {
+            error.FileNotFound => return,
+            else => |e| return e,
+        };
+        defer file.close();
+
+        try file.writeAll(contents);
     }
 }
 
-fn bgUpdateFeed(rowid: u32) !void {
+fn bgUpdateFeed(arena: std.mem.Allocator, rowid: u32) !void {
     std.debug.print("bgUpdateFeed {d}\n", .{rowid});
-    if (try dbRow("SELECT url FROM podcast WHERE rowid = ?", []const u8, .{rowid})) |url| {
+    if (try dbRow(arena, "SELECT url FROM podcast WHERE rowid = ?", []const u8, .{rowid})) |url| {
         std.debug.print("  updating url {s}\n", .{url});
         var timer = try std.time.Timer.start();
-        try bgFetchFeed(rowid, url);
+        try bgFetchFeed(arena, rowid, url);
         const timens = timer.read();
         std.debug.print("  fetch took {d}ms\n", .{timens / 1000000});
     }
 }
 
-fn mainGui() !void {
+fn mainGui(arena: std.mem.Allocator) !void {
     //var float = gui.floatingWindow(@src(), 0, false, null, null, .{});
     //defer float.deinit();
 
@@ -126,13 +173,13 @@ fn mainGui() !void {
         var paned = try gui.paned(@src(), 0, .horizontal, 400, .{ .expand = .both, .background = false });
         const collapsed = paned.collapsed();
 
-        try podcastSide(paned);
+        try podcastSide(arena, paned);
         try episodeSide(paned);
 
         paned.deinit();
 
         if (collapsed) {
-            try player();
+            try player(arena);
         }
     }
 }
@@ -144,15 +191,20 @@ pub fn main() !void {
     var win = gui.Window.init(gpa, backend.guiBackend());
     defer win.deinit();
 
-    dbInit() catch |err| switch (err) {
-        error.DB_ERROR => {},
-        else => return err,
-    };
+    {
+        var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        defer arena_allocator.deinit();
+        var arena = arena_allocator.allocator();
+        dbInit(arena) catch |err| switch (err) {
+            error.DB_ERROR => {},
+            else => return err,
+        };
+    }
 
     main_loop: while (true) {
         var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         defer arena_allocator.deinit();
-        arena = arena_allocator.allocator();
+        var arena = arena_allocator.allocator();
 
         var nstime = win.beginWait(backend.hasEvent());
         try win.begin(arena, nstime);
@@ -165,7 +217,7 @@ pub fn main() !void {
 
         //_ = gui.examples.demo();
 
-        mainGui() catch |err| switch (err) {
+        mainGui(arena) catch |err| switch (err) {
             error.DB_ERROR => {},
             else => return err,
         };
@@ -184,7 +236,7 @@ pub fn main() !void {
 
 var add_rss_dialog: bool = false;
 
-fn podcastSide(paned: *gui.PanedWidget) !void {
+fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
     var b = try gui.box(@src(), 0, .vertical, .{ .expand = .both });
     defer b.deinit();
 
@@ -220,7 +272,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
 
                         var iter = try stmt.iterator(u32, .{});
                         while (try iter.nextAlloc(arena, .{})) |rowid| {
-                            try bgUpdateFeed(rowid);
+                            try bgUpdateFeed(arena, rowid);
                         }
                     }
                 }
@@ -253,11 +305,11 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
         if (try gui.button(@src(), 0, "Ok", .{})) {
             dialog.close();
             const url = std.mem.trim(u8, &TextEntryText.text, " \x00");
-            const row = try dbRow("SELECT rowid FROM podcast WHERE url = ?", i32, .{url});
+            const row = try dbRow(arena, "SELECT rowid FROM podcast WHERE url = ?", i32, .{url});
             if (row) |_| {
                 try gui.dialogOk(@src(), 0, true, "Note", try std.fmt.allocPrint(arena, "url already in db:\n\n{s}", .{url}), null);
             } else {
-                _ = try dbRow("INSERT INTO podcast (url) VALUES (?)", i32, .{url});
+                _ = try dbRow(arena, "INSERT INTO podcast (url) VALUES (?)", i32, .{url});
                 if (g_db) |*db| {
                     const rowid = db.getLastInsertRowID();
                     _ = rowid;
@@ -314,7 +366,7 @@ fn podcastSide(paned: *gui.PanedWidget) !void {
     scroll.deinit();
 
     if (!paned.collapsed()) {
-        try player();
+        try player(arena);
     }
 }
 
@@ -355,7 +407,7 @@ fn episodeSide(paned: *gui.PanedWidget) !void {
     }
 }
 
-fn player() !void {
+fn player(arena: std.mem.Allocator) !void {
     const oo = gui.Options{
         .expand = .horizontal,
         .color_style = .content,
@@ -366,9 +418,9 @@ fn player() !void {
 
     var episode = Episode{ .title = "Episode Title" };
 
-    const episode_id = try dbRow("SELECT episode_id FROM player", i32, .{});
+    const episode_id = try dbRow(arena, "SELECT episode_id FROM player", i32, .{});
     if (episode_id) |id| {
-        episode = try dbRow("SELECT title FROM episode WHERE rowid = ?", Episode, .{id}) orelse episode;
+        episode = try dbRow(arena, "SELECT title FROM episode WHERE rowid = ?", Episode, .{id}) orelse episode;
     }
 
     try gui.label(@src(), 0, "{s}", .{episode.title}, oo.override(.{
