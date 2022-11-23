@@ -19,3 +19,6 @@
 [submodule "libs/zig-mbedtls"]
 	path = libs/zig-mbedtls
 	url = https://github.com/mattnite/zig-mbedtls.git
+[submodule "libs/zig-zlib"]
+	path = libs/zig-zlib
+	url = https://github.com/mattnite/zig-zlib.git
