@@ -22,3 +22,6 @@
 [submodule "libs/zig-zlib"]
 	path = libs/zig-zlib
 	url = https://github.com/mattnite/zig-zlib.git
+[submodule "libs/zig-libxml2"]
+	path = libs/zig-libxml2
+	url = https://github.com/mitchellh/zig-libxml2.git
