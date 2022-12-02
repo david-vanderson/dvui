@@ -1,5 +1,15 @@
 
+ask mach people about the cDefine from compile issue
+- in build.zig you select what the value for a #define thing will be for compilation
+- you want to @cDefine the same thing when you @cInclude the header files
+
+look into logging, how to use it in general and how to use it for gui stuff?
+- const scope_name = std.log.scoped(.whatever);
+- Then define a log function with the appropriate signature in your root file?
+- maybe can use WidgetData.init to help with logging or debug mode?
+
 how can I get mach to not build all it's stuff when I'm compiling an sdl example?
+- need for it to do the work in a build step rather than when the build step is being made
 
 -Dtarget=wasm32-freestanding-none
 
@@ -27,6 +37,30 @@ start making real demo() contents
 - mouse cursors
 - gravity
 - themes
+
+Tooltips:
+- wrapper around thing you want the tooltip for
+- floating windows similar to popup
+- popup has 3-4 states:
+  - ready (on first frame where the mouse pointer is above the rect, go to 
+  showing)
+  - timer (could go here and wait for timer)
+  - showing (tooltip popup shows, go to off if the mouse pointer is not 
+  above rect)
+  - off (go to ready on a frame where the mouse pointer is off our rect)
+  var ttw = ToolTipWidget.init...
+- if (ttw.active()) |p| {
+    // p is the point of the mouse when the tooltip was activated
+    var ttp = TooltipPopupWidget.init... (pass in TooltipWidget's screenrect, optionally previous ttp if nested)
+    // ttp
+    ttp.install();
+    // tooltip contents
+    ttp.deinit();
+    // ttp.deinit() checks:
+      - if we have a live nested ttp, we stay alive
+      - if the current mouse pointer is not above ttp OR the passed in ttw screenrect, we stay alive
+      - if staying alive and we have a ttp parent, tell that parent we are live
+  }
 
 problem of mousing off a menuItem and onto the theme change checkbox, and the menuItem stays highlighted
 - when a mouse motion event in a Menu happens:

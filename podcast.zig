@@ -5,9 +5,21 @@ const Backend = @import("src/SDLBackend.zig");
 const sqlite = @import("sqlite");
 const curl = @import("curl");
 
+pub const c = @cImport({
+    @cDefine("_XOPEN_SOURCE", "1");
+    @cInclude("time.h");
+
+    @cInclude("locale.h");
+
+    @cInclude("libxml/parser.h");
+
+    @cDefine("LIBXML_XPATH_ENABLED", "1");
+    @cInclude("libxml/xpath.h");
+});
+
 // when set to true, looks for feed-{rowid}.xml and episode-{rowid}.mp3 instead
 // of fetching from network
-const DEBUG = false;
+const DEBUG = true;
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
@@ -81,9 +93,24 @@ fn dbInit(arena: std.mem.Allocator) !void {
     _ = try dbRow(arena, "UPDATE podcast SET error=NULL", u8, .{});
 }
 
+pub fn getContent(xpathCtx: *c.xmlXPathContext, node_name: [:0]const u8, attr_name: ?[:0]const u8) ?[]u8 {
+    var xpathObj = c.xmlXPathEval(node_name.ptr, xpathCtx);
+    defer c.xmlXPathFreeObject(xpathObj);
+    if (xpathObj.*.nodesetval.*.nodeNr >= 1) {
+        if (attr_name) |attr| {
+            var data = c.xmlGetProp(xpathObj.*.nodesetval.*.nodeTab[0], attr.ptr);
+            return std.mem.sliceTo(data, 0);
+        } else {
+            return std.mem.sliceTo(xpathObj.*.nodesetval.*.nodeTab[0].*.children.*.content, 0);
+        }
+    }
+
+    return null;
+}
+
 fn bgFetchFeed(arena: std.mem.Allocator, rowid: u32, url: []const u8) !void {
     var buf: [256]u8 = undefined;
-    var contents: []const u8 = undefined;
+    var contents: [:0]const u8 = undefined;
     if (DEBUG) {
         const filename = try std.fmt.bufPrint(&buf, "feed-{d}.xml", .{rowid});
         std.debug.print("  bgFetchFeed fetching {s}\n", .{filename});
@@ -94,7 +121,7 @@ fn bgFetchFeed(arena: std.mem.Allocator, rowid: u32, url: []const u8) !void {
         };
         defer file.close();
 
-        contents = try file.readToEndAlloc(arena, 1024 * 1024 * 20);
+        contents = try file.readToEndAllocOptions(arena, 1024 * 1024 * 20, null, @alignOf(u8), 0);
     } else {
         std.debug.print("  bgFetchFeed fetching {s}\n", .{url});
 
@@ -134,7 +161,11 @@ fn bgFetchFeed(arena: std.mem.Allocator, rowid: u32, url: []const u8) !void {
         const code = try easy.getResponseCode();
         std.debug.print("  bgFetchFeed curl code {d}\n", .{code});
 
-        contents = fifo.readableSlice(0);
+        // add null byte
+        fifo.writeItem(0);
+
+        const tempslice = fifo.readableSlice(0);
+        contents = tempslice[0 .. tempslice.len - 1 :0];
 
         const filename = try std.fmt.bufPrint(&buf, "feed-{d}.xml", .{rowid});
         const file = std.fs.cwd().createFile(filename, .{}) catch |err| switch (err) {
@@ -144,6 +175,133 @@ fn bgFetchFeed(arena: std.mem.Allocator, rowid: u32, url: []const u8) !void {
         defer file.close();
 
         try file.writeAll(contents);
+    }
+
+    const doc = c.xmlReadDoc(contents.ptr, null, null, 0);
+    defer c.xmlFreeDoc(doc);
+
+    var xpathCtx = c.xmlXPathNewContext(doc);
+    defer c.xmlXPathFreeContext(xpathCtx);
+
+    {
+        var xpathObj = c.xmlXPathEval("/rss/channel", xpathCtx);
+        defer c.xmlXPathFreeObject(xpathObj);
+
+        if (xpathObj.*.nodesetval.*.nodeNr > 0) {
+            const node = xpathObj.*.nodesetval.*.nodeTab[0];
+            _ = c.xmlXPathSetContextNode(node, xpathCtx);
+
+            if (getContent(xpathCtx, "title", null)) |str| {
+                _ = try dbRow(arena, "UPDATE podcast SET title=? WHERE rowid=?", i32, .{ str, rowid });
+            }
+
+            if (getContent(xpathCtx, "description", null)) |str| {
+                _ = try dbRow(arena, "UPDATE podcast SET description=? WHERE rowid=?", i32, .{ str, rowid });
+            }
+
+            if (getContent(xpathCtx, "copyright", null)) |str| {
+                _ = try dbRow(arena, "UPDATE podcast SET copyright=? WHERE rowid=?", i32, .{ str, rowid });
+            }
+
+            if (getContent(xpathCtx, "pubDate", null)) |str| {
+                _ = c.setlocale(c.LC_ALL, "C");
+                var tm: c.struct_tm = undefined;
+                _ = c.strptime(str.ptr, "%a, %e %h %Y %H:%M:%S %z", &tm);
+                _ = c.strftime(&buf, buf.len, "%s", &tm);
+                _ = c.setlocale(c.LC_ALL, "");
+
+                _ = try dbRow(arena, "UPDATE podcast SET pubDate=? WHERE rowid=?", i32, .{ std.mem.sliceTo(&buf, 0), rowid });
+            }
+
+            if (getContent(xpathCtx, "lastBuildDate", null)) |str| {
+                _ = try dbRow(arena, "UPDATE podcast SET lastBuildDate=? WHERE rowid=?", i32, .{ str, rowid });
+            }
+
+            if (getContent(xpathCtx, "link", null)) |str| {
+                _ = try dbRow(arena, "UPDATE podcast SET link=? WHERE rowid=?", i32, .{ str, rowid });
+            }
+
+            if (getContent(xpathCtx, "image/url", null)) |str| {
+                _ = try dbRow(arena, "UPDATE podcast SET image_url=? WHERE rowid=?", i32, .{ str, rowid });
+            }
+        }
+    }
+
+    {
+        var xpathObj = c.xmlXPathEval("//item", xpathCtx);
+        defer c.xmlXPathFreeObject(xpathObj);
+
+        var i: usize = 0;
+        while (i < xpathObj.*.nodesetval.*.nodeNr) : (i += 1) {
+            std.debug.print("node {d}\n", .{i});
+
+            const node = xpathObj.*.nodesetval.*.nodeTab[i];
+            _ = c.xmlXPathSetContextNode(node, xpathCtx);
+
+            var episodeRow: ?i64 = null;
+            if (getContent(xpathCtx, "guid", null)) |str| {
+                if (try dbRow(arena, "SELECT rowid FROM episode WHERE podcast_id=? AND guid=?", i64, .{ rowid, str })) |erow| {
+                    std.debug.print("podcast {d} existing episode {d} guid {s}\n", .{ rowid, erow, str });
+                    episodeRow = erow;
+                } else {
+                    std.debug.print("podcast {d} new episode guid {s}\n", .{ rowid, str });
+                    _ = try dbRow(arena, "INSERT INTO episode (podcast_id, guid) VALUES (?, ?)", i64, .{ rowid, str });
+                    if (g_db) |*db| {
+                        episodeRow = db.getLastInsertRowID();
+                    }
+                }
+            } else if (getContent(xpathCtx, "title", null)) |str| {
+                if (try dbRow(arena, "SELECT rowid FROM episode WHERE podcast_id=? AND title=?", i64, .{ rowid, str })) |erow| {
+                    std.debug.print("podcast {d} existing episode {d} title {s}\n", .{ rowid, erow, str });
+                    episodeRow = erow;
+                } else {
+                    std.debug.print("podcast {d} new episode title {s}\n", .{ rowid, str });
+                    _ = try dbRow(arena, "INSERT INTO episode (podcast_id, title) VALUES (?, ?)", i64, .{ rowid, str });
+                    if (g_db) |*db| {
+                        episodeRow = db.getLastInsertRowID();
+                    }
+                }
+            } else if (getContent(xpathCtx, "description", null)) |str| {
+                if (try dbRow(arena, "SELECT rowid FROM episode WHERE podcast_id=? AND description=?", i64, .{ rowid, str })) |erow| {
+                    std.debug.print("podcast {d} existing episode {d} description {s}\n", .{ rowid, erow, str });
+                    episodeRow = erow;
+                } else {
+                    std.debug.print("podcast {d} new episode description {s}\n", .{ rowid, str });
+                    _ = try dbRow(arena, "INSERT INTO episode (podcast_id, description) VALUES (?, ?)", i64, .{ rowid, str });
+                    if (g_db) |*db| {
+                        episodeRow = db.getLastInsertRowID();
+                    }
+                }
+            }
+
+            if (episodeRow) |erow| {
+                if (getContent(xpathCtx, "guid", null)) |str| {
+                    _ = try dbRow(arena, "UPDATE episode SET guid=? WHERE rowid=?", i32, .{ str, erow });
+                }
+
+                if (getContent(xpathCtx, "title", null)) |str| {
+                    _ = try dbRow(arena, "UPDATE episode SET title=? WHERE rowid=?", i32, .{ str, erow });
+                }
+
+                if (getContent(xpathCtx, "description", null)) |str| {
+                    _ = try dbRow(arena, "UPDATE episode SET description=? WHERE rowid=?", i32, .{ str, erow });
+                }
+
+                if (getContent(xpathCtx, "pubDate", null)) |str| {
+                    _ = c.setlocale(c.LC_ALL, "C");
+                    var tm: c.struct_tm = undefined;
+                    _ = c.strptime(str.ptr, "%a, %e %h %Y %H:%M:%S %z", &tm);
+                    _ = c.strftime(&buf, buf.len, "%s", &tm);
+                    _ = c.setlocale(c.LC_ALL, "");
+
+                    _ = try dbRow(arena, "UPDATE episode SET pubDate=? WHERE rowid=?", i32, .{ std.mem.sliceTo(&buf, 0), erow });
+                }
+
+                if (getContent(xpathCtx, "enclosure", "url")) |str| {
+                    _ = try dbRow(arena, "UPDATE episode SET enclosure_url=? WHERE rowid=?", i32, .{ str, erow });
+                }
+            }
+        }
     }
 }
 
