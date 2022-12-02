@@ -7,6 +7,7 @@ const mbedtls = @import("libs/zig-mbedtls/mbedtls.zig");
 const libssh2 = @import("libs/zig-libssh2/libssh2.zig");
 const libcurl = @import("libs/zig-libcurl/libcurl.zig");
 const libzlib = @import("libs/zig-zlib/zlib.zig");
+const libxml2 = @import("libs/zig-libxml2/libxml2.zig");
 
 const Packages = struct {
     // Declared here because submodule may not be cloned at the time build.zig runs.
@@ -129,6 +130,14 @@ pub fn build(b: *Builder) !void {
         tls.link(curl.step);
         ssh2.link(curl.step);
         curl.link(exe, .{ .import_name = "curl" });
+
+        const libxml = try libxml2.create(b, target, mode, .{
+            .iconv = false,
+            .lzma = false,
+            .zlib = true,
+        });
+
+        libxml.link(exe);
 
         if (target.isDarwin()) {
             exe.linkSystemLibrary("z");
