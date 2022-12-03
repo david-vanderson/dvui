@@ -25,3 +25,6 @@
 [submodule "libs/zig-libxml2"]
 	path = libs/zig-libxml2
 	url = https://github.com/mitchellh/zig-libxml2.git
+[submodule "libs/ffmpeg"]
+	path = libs/ffmpeg
+	url = https://git.ffmpeg.org/ffmpeg.git
