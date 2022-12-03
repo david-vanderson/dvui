@@ -448,9 +448,13 @@ pub const Font = struct {
 
         const ask_size = @ceil(self.size * ss);
         const max_width_sized = (max_width orelse 1000000.0) * ss;
-        const target_fraction = self.size / ask_size;
         const sized_font = self.resize(ask_size);
         const s = try sized_font.textSizeRaw(text, max_width_sized, end_idx);
+
+        // do this check after calling textSizeRaw so that end_idx is set
+        if (ss == 0) return Size{};
+
+        const target_fraction = self.size / ask_size;
         //std.debug.print("textSize size {d} for \"{s}\" {d} {}\n", .{ self.size, text, target_fraction, s.scale(target_fraction) });
         return s.scale(target_fraction);
     }
@@ -502,13 +506,14 @@ pub const Font = struct {
             endout.* = ei;
         }
 
-        //std.debug.print("textSizeRaw size {d} for \"{s}\" {d}x{d}\n", .{ self.size, text, tw, th });
+        //std.debug.print("textSizeRaw size {d} for \"{s}\" {d}x{d} {d}\n", .{ self.size, text, tw, th, ei });
         return Size{ .w = tw, .h = th };
     }
 
     pub fn lineSkip(self: *const Font) !f32 {
         // do the same sized thing as textSizeEx so they will cache the same font
         const ss = parentGet().screenRectScale(Rect{}).s;
+        if (ss == 0) return 0;
 
         const ask_size = @ceil(self.size * ss);
         const target_fraction = self.size / ask_size;
@@ -636,7 +641,8 @@ const IconCacheEntry = struct {
 
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height_natural: f32) f32 {
     const height = height_natural * windowNaturalScale();
-    const ice = iconTexture(name, tvg_bytes, height) catch return 1.0;
+    if (height == 0) return 0.0;
+    const ice = iconTexture(name, tvg_bytes, height) catch return 0.0;
     return ice.size.w / windowNaturalScale();
 }
 
@@ -2506,7 +2512,7 @@ pub const Window = struct {
         var i: usize = 0;
         while (i < self.dialogs.items.len) {
             const dialog = self.dialogs.items[i];
-            if (try dialog.display(dialog.id)) {
+            if (try dialog.display(dialog.id) == .close) {
                 _ = self.dialogs.orderedRemove(i);
             } else {
                 i += 1;
@@ -3274,15 +3280,21 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     try gui.separator(@src(), 0, .{ .gravity = .down, .expand = .horizontal });
 }
 
-pub const DialogDisplay = *const fn (u32) Error!bool;
+pub const DialogDisplay = *const fn (u32) Error!DialogDisplayReturn;
+pub const DialogDisplayReturn = enum(u8) {
+    keep,
+    close,
+};
+
 pub const DialogCallAfter = *const fn (u32, DialogResponse) Error!void;
+pub const DialogResponse = enum(u8) {
+    closed,
+    ok,
+};
+
 pub const DialogEntry = struct {
     id: u32,
     display: DialogDisplay,
-};
-pub const DialogResponse = enum(u8) {
-    CLOSED,
-    OK,
 };
 
 pub fn dialogCustom(src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplay) !u32 {
@@ -3311,22 +3323,22 @@ pub fn dialogOk(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, t
     }
 }
 
-pub fn dialogOkDisplay(id: u32) !bool {
+pub fn dialogOkDisplay(id: u32) !DialogDisplayReturn {
     const modal = gui.dataGet(id, "_modal", bool) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
-        return true;
+        return .close;
     };
     gui.dataSet(id, "_modal", modal);
 
     const title = gui.dataGet(id, "_title", []const u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
-        return true;
+        return .close;
     };
     gui.dataSet(id, "_title", title);
 
     const message = gui.dataGet(id, "_msg", []const u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
-        return true;
+        return .close;
     };
     gui.dataSet(id, "_msg", message);
 
@@ -3342,9 +3354,9 @@ pub fn dialogOkDisplay(id: u32) !bool {
     try gui.windowHeader(title, "", &header_openflag);
     if (!header_openflag) {
         if (callafter) |ca| {
-            try ca(id, gui.DialogResponse.CLOSED);
+            try ca(id, .closed);
         }
-        return true;
+        return .close;
     }
 
     var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 }, .background = false });
@@ -3353,12 +3365,12 @@ pub fn dialogOkDisplay(id: u32) !bool {
 
     if (try gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
         if (callafter) |ca| {
-            try ca(id, gui.DialogResponse.OK);
+            try ca(id, .ok);
         }
-        return true;
+        return .close;
     }
 
-    return false;
+    return .keep;
 }
 
 pub var expander_defaults: Options = .{
@@ -3785,7 +3797,7 @@ pub const TextLayoutWidget = struct {
             var end: usize = undefined;
             var s = try options.font().textSizeEx(txt, width, &end);
 
-            //std.debug.print("1 txt to {d} \"{s}\"\n", .{end, txt[0..end]});
+            //std.debug.print("1 txt to {d} \"{s}\"\n", .{ end, txt[0..end] });
 
             // if we are boxed in too much by corner widgets drop to next line
             if (s.w > width and linewidth < container_width) {
@@ -3814,7 +3826,7 @@ pub const TextLayoutWidget = struct {
             // We want to render text, but no sense in doing it if we are off the end
             if (self.insert_pt.y < rect.h) {
                 const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.h - self.insert_pt.y) });
-                //log.debug("renderText: {} {s} {}", .{rs.r, txt[0..end], options.color()});
+                //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
                 try renderText(options.font(), txt[0..end], rs, options.color());
             }
 
@@ -4695,7 +4707,15 @@ pub const ScaleWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect().justSize().scale(1.0 / self.scale), min_size, e, g);
+        var s: f32 = undefined;
+        if (self.scale > 0) {
+            s = 1.0 / self.scale;
+        } else {
+            // prevent divide by zero
+            s = 1_000_000.0;
+        }
+
+        return placeIn(id, self.wd.contentRect().justSize().scale(s), min_size, e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
@@ -5874,9 +5894,9 @@ pub const RectScale = struct {
 };
 
 pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !void {
-    if (text.len == 0 or clipGet().intersect(rs.r).empty()) {
-        return;
-    }
+    if (rs.s == 0) return;
+    if (clipGet().intersect(rs.r).empty()) return;
+    if (text.len == 0) return;
 
     //if (true) return;
 
@@ -6053,9 +6073,8 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
 }
 
 pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
-    if (clipGet().intersect(rs.r).empty()) {
-        return;
-    }
+    if (rs.s == 0) return;
+    if (clipGet().intersect(rs.r).empty()) return;
 
     var cw = currentWindow();
 
@@ -6119,9 +6138,8 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 }
 
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colormod: Color) !void {
-    if (clipGet().intersect(rs.r).empty()) {
-        return;
-    }
+    if (rs.s == 0) return;
+    if (clipGet().intersect(rs.r).empty()) return;
 
     //if (true) return;
 
@@ -6637,80 +6655,82 @@ pub const examples = struct {
     const AnimatingDialog = struct {
         pub fn dialog(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
             const id = try gui.dialogCustom(src, id_extra, AnimatingDialog.dialogDisplay);
-            gui.dataSet(id, "_modal", modal);
-            gui.dataSet(id, "_title", title);
-            gui.dataSet(id, "_msg", msg);
+            gui.dataSet(id, "modal", modal);
+            gui.dataSet(id, "title", title);
+            gui.dataSet(id, "msg", msg);
             if (callafter) |ca| {
-                gui.dataSet(id, "_callafter", ca);
+                gui.dataSet(id, "callafter", ca);
             }
         }
 
-        pub fn dialogDisplay(id: u32) !bool {
-            const modal = gui.dataGet(id, "_modal", bool) orelse {
-                std.debug.print("Error: lost data for dialog {x}\n", .{id});
-                return true;
-            };
-            gui.dataSet(id, "_modal", modal);
+        pub fn dialogDisplay(id: u32) !DialogDisplayReturn {
+            const modal = gui.dataGet(id, "modal", bool) orelse unreachable;
+            gui.dataSet(id, "modal", modal);
 
-            const title = gui.dataGet(id, "_title", []const u8) orelse {
-                std.debug.print("Error: lost data for dialog {x}\n", .{id});
-                return true;
-            };
-            gui.dataSet(id, "_title", title);
+            const title = gui.dataGet(id, "title", []const u8) orelse unreachable;
+            gui.dataSet(id, "title", title);
 
-            const message = gui.dataGet(id, "_msg", []const u8) orelse {
-                std.debug.print("Error: lost data for dialog {x}\n", .{id});
-                return true;
-            };
-            gui.dataSet(id, "_msg", message);
+            const message = gui.dataGet(id, "msg", []const u8) orelse unreachable;
+            gui.dataSet(id, "msg", message);
 
-            const callafter = gui.dataGet(id, "_callafter", DialogCallAfter);
+            const callafter = gui.dataGet(id, "callafter", DialogCallAfter);
             if (callafter) |ca| {
-                gui.dataSet(id, "_callafter", ca);
+                gui.dataSet(id, "callafter", ca);
             }
 
             // once we record a response, refresh it
-            if (gui.dataGet(id, "_response", DialogResponse)) |r| {
-                gui.dataSet(id, "_response", r);
+            if (gui.dataGet(id, "response", gui.DialogResponse)) |r| {
+                gui.dataSet(id, "response", r);
             }
 
             var win = FloatingWindowWidget.init(@src(), id, modal, null, null, .{});
 
-            if (gui.firstFrame(win.data().id)) {
-                gui.animate(win.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
-            }
+            // On the first frame the window size will be 0 so you won't see
+            // anything, but we need the scaleval to be 1 so the window will
+            // calculate its min_size correctly.
+            var scaleval: f32 = 1.0;
 
+            // To animate a window, we need both a percent and a target window
+            // size (see calls to animate below).
             if (gui.animationGet(win.data().id, "rect_percent")) |a| {
-                // tell win we are about to animate its rect
-                win.saveRect();
+                if (gui.dataGet(win.data().id, "window_size", Size)) |min_size| {
+                    gui.dataSet(win.data().id, "window_size", min_size);
 
-                var r = win.data().rect;
-                const dw = r.w * (1.0 - a.lerp());
-                const dh = r.h * (1.0 - a.lerp());
-                r.x += dw / 2;
-                r.w -= dw;
-                r.y += dh / 2;
-                r.h -= dh;
+                    // tell win we are about to animate its rect
+                    win.saveRect();
 
-                win.data().rect = r;
+                    scaleval = a.lerp();
+                    var r = win.data().rect.toSize(min_size);
 
-                if (a.done() and a.end_val == 0) {
-                    win.close();
+                    const dw = r.w * (1.0 - scaleval);
+                    const dh = r.h * (1.0 - scaleval);
+                    r.x += dw / 2;
+                    r.w -= dw;
+                    r.y += dh / 2;
+                    r.h -= dh;
 
-                    const response = gui.dataGet(id, "_response", gui.DialogResponse) orelse {
-                        std.debug.print("Error: no response for dialog {x}\n", .{id});
-                        return true;
-                    };
+                    win.data().rect = r;
 
-                    if (callafter) |ca| {
-                        try ca(id, response);
+                    if (a.done() and a.end_val == 0) {
+                        win.close();
+
+                        if (callafter) |ca| {
+                            const response = gui.dataGet(id, "response", gui.DialogResponse) orelse {
+                                std.debug.print("Error: no response for dialog {x}\n", .{id});
+                                return .close;
+                            };
+                            try ca(id, response);
+                        }
+                        return .close;
                     }
-                    return true;
                 }
             }
 
             try win.install(.{});
-            defer win.deinit();
+
+            var scaler = try gui.scale(@src(), 0, scaleval, .{ .expand = .horizontal });
+
+            var vbox = try gui.box(@src(), 0, .vertical, .{ .expand = .horizontal });
 
             var closing: bool = false;
 
@@ -6718,7 +6738,7 @@ pub const examples = struct {
             try gui.windowHeader(title, "", &header_openflag);
             if (!header_openflag) {
                 closing = true;
-                gui.dataSet(id, "_response", gui.DialogResponse.CLOSED);
+                gui.dataSet(id, "response", gui.DialogResponse.closed);
             }
 
             var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 }, .background = false });
@@ -6727,14 +6747,35 @@ pub const examples = struct {
 
             if (try gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
                 closing = true;
-                gui.dataSet(id, "_response", gui.DialogResponse.OK);
+                gui.dataSet(id, "response", gui.DialogResponse.ok);
+            }
+
+            vbox.deinit();
+            scaler.deinit();
+            win.deinit();
+
+            if (gui.firstFrame(win.data().id)) {
+                // On the first frame, scaler will have a scale value of 1 so
+                // the min size of the window is our target, which is why we do
+                // this after win.deinit so the min size will be available
+                gui.animate(win.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 150_000 });
+                gui.dataSet(win.data().id, "window_size", win.data().min_size);
             }
 
             if (closing) {
-                gui.animate(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 100_000 });
+                // If we are closing, start from our current size
+                gui.animate(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 150_000 });
+                gui.dataSet(win.data().id, "window_size", win.data().rect.size());
             }
 
-            return false;
+            return .keep;
+        }
+
+        pub fn after(id: u32, response: gui.DialogResponse) gui.Error!void {
+            _ = id;
+            var buf: [100]u8 = undefined;
+            const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\"", .{@tagName(response)}) catch unreachable;
+            try gui.dialogOk(@src(), 0, true, "AnimatingDialog.after", text, null);
         }
     };
 
@@ -6994,7 +7035,7 @@ pub const examples = struct {
                 fn callafter(id: u32, response: gui.DialogResponse) gui.Error!void {
                     _ = id;
                     var buf: [100]u8 = undefined;
-                    const text = std.fmt.bufPrint(&buf, "You clicked {s}", .{@tagName(response)}) catch unreachable;
+                    const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\"", .{@tagName(response)}) catch unreachable;
                     try gui.dialogOk(@src(), 0, true, "Ok Followup Response", text, null);
                 }
             };
@@ -7010,7 +7051,7 @@ pub const examples = struct {
         defer b.deinit();
 
         if (try gui.button(@src(), 0, "Animating Dialog", .{})) {
-            try AnimatingDialog.dialog(@src(), 0, false, "Animating Dialog", "This shows how to animate dialogs and other floating windows", null);
+            try AnimatingDialog.dialog(@src(), 0, false, "Animating Dialog", "This shows how to animate dialogs and other floating windows", AnimatingDialog.after);
         }
 
         if (try gui.expander(@src(), 0, "Spinner", .{ .expand = .horizontal })) {
