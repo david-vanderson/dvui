@@ -331,34 +331,38 @@ pub fn main() !void {
     }
 }
 
-fn animatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, rect: ?*gui.Rect, openflag: ?*bool, start_closing: bool, opts: gui.Options) gui.FloatingWindowWidget {
+fn animatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, rect: *gui.Rect, openflag: *bool, start_closing: bool, opts: gui.Options) gui.FloatingWindowWidget {
     var fwin = gui.FloatingWindowWidget.init(src, id_extra, modal, rect, openflag, opts);
 
     if (gui.firstFrame(fwin.data().id)) {
         gui.animate(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
+        gui.dataSet(fwin.wd.id, "size", rect.*.size());
     }
 
     if (start_closing) {
         gui.animate(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 100_000 });
+        gui.dataSet(fwin.wd.id, "size", rect.*.size());
     }
 
     if (gui.animationGet(fwin.wd.id, "rect_percent")) |a| {
-        // tell fwin we are about to animate its rect
-        fwin.saveRect();
+        if (gui.dataGet(fwin.wd.id, "size", gui.Size)) |ss| {
+            gui.dataSet(fwin.wd.id, "size", ss);
 
-        var r = fwin.data().rect;
-        const dw = r.w * (1.0 - a.lerp());
-        const dh = r.h * (1.0 - a.lerp());
-        r.x += dw / 2;
-        r.w -= dw;
-        r.y += dh / 2;
-        r.h -= dh;
+            var r = fwin.data().rect;
+            const dw = ss.w * a.lerp();
+            const dh = ss.h * a.lerp();
+            r.x = r.x + (r.w / 2) - (dw / 2);
+            r.w = dw;
+            r.y = r.y + (r.h / 2) - (dh / 2);
+            r.h = dh;
 
-        fwin.data().rect = r;
+            // pass null so our animating rect doesn't get saved back
+            fwin = gui.FloatingWindowWidget.init(src, id_extra, modal, null, openflag, opts.override(.{ .rect = r }));
 
-        if (a.done() and r.empty()) {
-            // done with closing animation
-            fwin.close();
+            if (a.done() and r.empty()) {
+                // done with closing animation
+                fwin.close();
+            }
         }
     }
 

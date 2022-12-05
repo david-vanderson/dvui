@@ -2924,15 +2924,12 @@ pub const FloatingWindowWidget = struct {
     modal: bool = false,
     captured: bool = false,
     prev_windowId: u32 = 0,
-    save_rect: bool = true,
     io_rect: ?*Rect = null,
     layout: BoxWidget = undefined,
     openflag: ?*bool = null,
     prevClip: Rect = Rect{},
-    autoPosSize: struct {
-        autopos: bool,
-        autosize: bool,
-    } = undefined,
+    auto_pos: bool = false,
+    auto_size: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, io_rect: ?*Rect, openflag: ?*bool, opts: Options) Self {
         var self = Self{};
@@ -2940,6 +2937,7 @@ pub const FloatingWindowWidget = struct {
         // options is really for our embedded BoxWidget, so save them for the
         // end of install()
         self.options = defaults.override(opts);
+        self.options.rect = null; // if the user passes in a rect, don't pass it to the BoxWidget
 
         // the floating window itself doesn't have any styling, it comes from
         // the embedded BoxWidget
@@ -2948,39 +2946,48 @@ pub const FloatingWindowWidget = struct {
         self.wd = WidgetData.init(src, id_extra, .{ .rect = .{} });
 
         self.modal = modal;
-        self.io_rect = io_rect;
         self.openflag = openflag;
 
-        if (self.io_rect) |ior| {
+        if (opts.rect) |r| {
+            // we were given a rect, just use that
+            self.wd.rect = r;
+        } else if (io_rect) |ior| {
             // user is storing the rect for us across open/close
+            self.io_rect = io_rect;
             self.wd.rect = ior.*;
         } else {
             // we store the rect (only while the window is open)
-            self.wd.rect = dataGet(self.wd.id, "_rect", Rect) orelse self.options.rect orelse Rect{};
+            self.wd.rect = dataGet(self.wd.id, "_rect", Rect) orelse Rect{};
         }
 
-        if (dataGet(self.wd.id, "_autoPosSize", @TypeOf(self.autoPosSize))) |aps| {
-            self.autoPosSize = aps;
+        if (dataGet(self.wd.id, "_auto_size", @TypeOf(self.auto_size))) |as| {
+            self.auto_size = as;
         } else {
-            self.autoPosSize = .{
-                .autopos = (self.wd.rect.x == 0 and self.wd.rect.y == 0),
-                .autosize = (self.wd.rect.w == 0 and self.wd.rect.h == 0),
-            };
+            self.auto_size = (self.wd.rect.w == 0 and self.wd.rect.h == 0);
+        }
+
+        if (dataGet(self.wd.id, "_auto_pos", @TypeOf(self.auto_pos))) |ap| {
+            self.auto_pos = ap;
+        } else {
+            self.auto_pos = (self.wd.rect.x == 0 and self.wd.rect.y == 0);
         }
 
         var ms = self.options.min_size orelse Size{};
         if (minSizeGetPrevious(self.wd.id)) |min_size| {
-            ms = Size.max(ms, min_size);
+            if (self.auto_size) {
+                // only size ourselves once by default
+                self.auto_size = false;
 
-            if (self.autoPosSize.autosize) {
+                ms = Size.max(ms, min_size);
                 self.wd.rect.w = ms.w;
                 self.wd.rect.h = ms.h;
+
                 //std.debug.print("autosize to {}\n", .{self.wd.rect});
             }
 
-            if (self.autoPosSize.autopos) {
-                // only position ourselves once
-                self.autoPosSize.autopos = false;
+            if (self.auto_pos) {
+                // only position ourselves once by default
+                self.auto_pos = false;
 
                 // make sure that we stay on the screen
                 self.wd.rect.x = math.max(0, windowRect().w / 2 - self.wd.rect.w / 2);
@@ -2992,32 +2999,19 @@ pub const FloatingWindowWidget = struct {
             // first frame we are being shown
             focusWindow(self.wd.id, null);
 
-            if (self.autoPosSize.autopos or self.autoPosSize.autosize) {
+            if (self.auto_pos or self.auto_size) {
                 // need a second frame to position or fit contents (FocusWindow calls
                 // cueFrame but here for clarity)
                 cueFrame();
 
                 // hide our first frame so the user doesn't see a jump when we
                 // autopos/autosize
-                self.wd.rect = .{};
+                self.wd.rect.w = 0;
+                self.wd.rect.h = 0;
             }
         }
 
         return self;
-    }
-
-    // This is useful when doing animations.  Save our (target) rect now before
-    // the user changes it and don't save it in deinit().
-    pub fn saveRect(self: *Self) void {
-        // save our calculated rect in case the user is animating us,
-        // they will need this each frame
-        if (self.io_rect) |ior| {
-            // user is storing the rect for us across open/close
-            ior.* = self.wd.rect;
-        } else {
-            dataSet(self.wd.id, "_rect", self.wd.rect);
-        }
-        self.save_rect = false;
     }
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
@@ -3067,7 +3061,7 @@ pub const FloatingWindowWidget = struct {
                 if (e.evt.mouse.p.x > rs.r.x + rs.r.w - 15 * rs.s and
                     e.evt.mouse.p.y > rs.r.y + rs.r.h - 15 * rs.s)
                 {
-                    // we are over the bottom-left resize corner
+                    // we are over the bottom-right resize corner
                     corner = true;
                 }
 
@@ -3098,7 +3092,6 @@ pub const FloatingWindowWidget = struct {
                                 const p = e.evt.mouse.p.plus(dragOffset()).scale(1 / rs.s);
                                 self.wd.rect.w = math.max(40, p.x - self.wd.rect.x);
                                 self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
-                                self.autoPosSize.autosize = false;
                             }
                             // don't need cueFrame() because we're before drawing
                             e.handled = true;
@@ -3143,11 +3136,6 @@ pub const FloatingWindowWidget = struct {
                             const dp = dps.scale(1 / rs.s);
                             self.wd.rect.x += dp.x;
                             self.wd.rect.y += dp.y;
-                        } else if (cursorGetDragging() == CursorKind.arrow_nw_se) {
-                            const p = e.evt.mouse.p.plus(dragOffset()).scale(1 / rs.s);
-                            self.wd.rect.w = math.max(40, p.x - self.wd.rect.x);
-                            self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
-                            self.autoPosSize.autosize = false;
                         }
                         cueFrame();
                     }
@@ -3232,21 +3220,15 @@ pub const FloatingWindowWidget = struct {
 
         self.layout.deinit();
 
-        if (self.save_rect) {
-            if (self.io_rect) |ior| {
-                // user is storing the rect for us across open/close
-                if (!self.autoPosSize.autopos) {
-                    // if we are autopositioning, then this is the first frame and we set
-                    // our rect to 0 so the user wouldn't see the jump, so don't store it
-                    // back out this frame
-                    ior.* = self.wd.rect;
-                }
-            } else {
-                // we store the rect
-                dataSet(self.wd.id, "_rect", self.wd.rect);
-            }
+        if (self.io_rect) |ior| {
+            // user is storing the rect for us across open/close
+            ior.* = self.wd.rect;
+        } else {
+            // we store the rect
+            dataSet(self.wd.id, "_rect", self.wd.rect);
         }
-        dataSet(self.wd.id, "_autoPosSize", self.autoPosSize);
+        dataSet(self.wd.id, "_auto_pos", self.auto_pos);
+        dataSet(self.wd.id, "_auto_size", self.auto_size);
         self.wd.minSizeSetAndCue();
         // outside normal layout, don't call minSizeForChild or
         // wd.minSizeReportToParent
@@ -3770,7 +3752,18 @@ pub const TextLayoutWidget = struct {
         var txt = text;
 
         const rect = self.wd.contentRect();
-        const container_width = if (self.screenRectScale(rect).r.empty()) self.wd.min_size.w else rect.w;
+        var container_width = rect.w;
+        if (self.screenRectScale(rect).r.empty()) {
+            // if we are not being shown at all, probably this is the first
+            // frame for us and we should calculate our min size assuming we
+            // get our min size
+
+            // do this dance so we aren't repeating the contentRect
+            // calculations here
+            self.wd.rect.w = self.wd.min_size.w;
+            container_width = self.wd.contentRect().w;
+            self.wd.rect = rect;
+        }
 
         while (txt.len > 0) {
             var linestart: f32 = 0;
@@ -3797,7 +3790,7 @@ pub const TextLayoutWidget = struct {
             var end: usize = undefined;
             var s = try options.font().textSizeEx(txt, width, &end);
 
-            //std.debug.print("1 txt to {d} \"{s}\"\n", .{ end, txt[0..end] });
+            //std.debug.print("{d} 1 txt to {d} \"{s}\"\n", .{ container_width, end, txt[0..end] });
 
             // if we are boxed in too much by corner widgets drop to next line
             if (s.w > width and linewidth < container_width) {
@@ -6693,21 +6686,23 @@ pub const examples = struct {
             // To animate a window, we need both a percent and a target window
             // size (see calls to animate below).
             if (gui.animationGet(win.data().id, "rect_percent")) |a| {
-                if (gui.dataGet(win.data().id, "window_size", Size)) |min_size| {
-                    gui.dataSet(win.data().id, "window_size", min_size);
-
-                    // tell win we are about to animate its rect
-                    win.saveRect();
+                if (gui.dataGet(win.data().id, "window_size", Size)) |target_size| {
+                    gui.dataSet(win.data().id, "window_size", target_size);
 
                     scaleval = a.lerp();
-                    var r = win.data().rect.toSize(min_size);
 
-                    const dw = r.w * (1.0 - scaleval);
-                    const dh = r.h * (1.0 - scaleval);
-                    r.x += dw / 2;
-                    r.w -= dw;
-                    r.y += dh / 2;
-                    r.h -= dh;
+                    // since the window is animating, calculate the center to
+                    // animate around that
+                    var r = win.data().rect;
+                    r.x += r.w / 2;
+                    r.y += r.h / 2;
+
+                    const dw = target_size.w * scaleval;
+                    const dh = target_size.h * scaleval;
+                    r.x -= dw / 2;
+                    r.w = dw;
+                    r.y -= dh / 2;
+                    r.h = dh;
 
                     win.data().rect = r;
 
