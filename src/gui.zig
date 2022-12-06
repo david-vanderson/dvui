@@ -3539,6 +3539,9 @@ pub const PanedWidget = struct {
             self.animate(1.0);
         } else if (self.split_ratio == 1.0) {
             self.animate(0.0);
+        } else {
+            // if we are expanded, then the user means for something to happen
+            cueFrame();
         }
     }
 
@@ -3729,10 +3732,10 @@ pub const TextLayoutWidget = struct {
         self.prevClip = clip(rs.r);
     }
 
-    pub fn format(self: *Self, comptime fmt: []const u8, args: anytype, opts: Options) void {
+    pub fn format(self: *Self, comptime fmt: []const u8, args: anytype, opts: Options) !void {
         var cw = currentWindow();
-        const l = std.fmt.allocPrint(cw.arena, fmt, args);
-        self.addText(l, opts);
+        const l = try std.fmt.allocPrint(cw.arena, fmt, args);
+        try self.addText(l, opts);
     }
 
     pub fn addText(self: *Self, text: []const u8, opts: Options) !void {
@@ -6303,13 +6306,13 @@ pub const WidgetData = struct {
         if (self.options.rect) |r| {
             self.rect = r;
             if (self.options.expandHorizontal()) {
-                self.rect.w = self.parent.data().rect.w;
+                self.rect.w = self.parent.data().contentRect().w;
             } else if (self.rect.w == 0) {
                 self.rect.w = minSize(self.id, self.min_size).w;
             }
 
             if (self.options.expandVertical()) {
-                self.rect.h = self.parent.data().rect.h;
+                self.rect.h = self.parent.data().contentRect().h;
             } else if (self.rect.h == 0) {
                 self.rect.h = minSize(self.id, self.min_size).h;
             }
