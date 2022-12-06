@@ -29,8 +29,12 @@ var g_db: ?sqlite.Db = null;
 
 var g_quit = false;
 
+var g_podcast_id_on_right: usize = 0;
+
 const Episode = struct {
+    rowid: usize,
     title: []const u8,
+    description: []const u8,
 };
 
 fn dbErrorCallafter(id: u32, response: gui.DialogResponse) gui.Error!void {
@@ -332,7 +336,7 @@ fn mainGui(arena: std.mem.Allocator) !void {
         const collapsed = paned.collapsed();
 
         try podcastSide(arena, paned);
-        try episodeSide(paned);
+        try episodeSide(arena, paned);
 
         paned.deinit();
 
@@ -487,37 +491,53 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
         .color_style = .content,
     };
 
-    var i: usize = 1;
-    var buf: [256]u8 = undefined;
-    while (i < 8) : (i += 1) {
-        const title = std.fmt.bufPrint(&buf, "Podcast {d}", .{i}) catch unreachable;
-        var margin: gui.Rect = .{ .x = 8, .y = 0, .w = 8, .h = 0 };
-        var border: gui.Rect = .{ .x = 1, .y = 0, .w = 1, .h = 0 };
-        var corner = gui.Rect.all(0);
+    if (g_db) |*db| {
+        const num_podcasts = try dbRow(arena, "SELECT count(*) FROM podcast", usize, .{});
 
-        if (i != 1) {
-            try gui.separator(@src(), i, oo3.override(.{ .margin = margin }));
-        }
+        const query = "SELECT rowid FROM podcast";
+        var stmt = db.prepare(query) catch {
+            try dbError("{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), query });
+            return error.DB_ERROR;
+        };
+        defer stmt.deinit();
 
-        if (i == 1) {
-            margin.y = 8;
-            border.y = 1;
-            corner.x = 9;
-            corner.y = 9;
-        } else if (i == 7) {
-            margin.h = 8;
-            border.h = 1;
-            corner.w = 9;
-            corner.h = 9;
-        }
+        var iter = try stmt.iterator(u32, .{});
+        var i: usize = 1;
+        while (try iter.nextAlloc(arena, .{})) |rowid| {
+            defer i += 1;
 
-        if (try gui.button(@src(), i, title, oo3.override(.{
-            .margin = margin,
-            .border = border,
-            .corner_radius = corner,
-            .padding = gui.Rect.all(8),
-        }))) {
-            paned.showOther();
+            const title = try dbRow(arena, "SELECT title FROM podcast WHERE rowid=?", []const u8, .{rowid}) orelse "Error: No Title";
+            var margin: gui.Rect = .{ .x = 8, .y = 0, .w = 8, .h = 0 };
+            var border: gui.Rect = .{ .x = 1, .y = 0, .w = 1, .h = 0 };
+            var corner = gui.Rect.all(0);
+
+            if (i != 1) {
+                try gui.separator(@src(), i, oo3.override(.{ .margin = margin }));
+            }
+
+            if (i == 1) {
+                margin.y = 8;
+                border.y = 1;
+                corner.x = 9;
+                corner.y = 9;
+            }
+
+            if (i == num_podcasts) {
+                margin.h = 8;
+                border.h = 1;
+                corner.w = 9;
+                corner.h = 9;
+            }
+
+            if (try gui.button(@src(), i, title, oo3.override(.{
+                .margin = margin,
+                .border = border,
+                .corner_radius = corner,
+                .padding = gui.Rect.all(8),
+            }))) {
+                g_podcast_id_on_right = rowid;
+                paned.showOther();
+            }
         }
     }
 
@@ -528,7 +548,7 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
     }
 }
 
-fn episodeSide(paned: *gui.PanedWidget) !void {
+fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
     var b = try gui.box(@src(), 0, .vertical, .{ .expand = .both });
     defer b.deinit();
 
@@ -542,26 +562,46 @@ fn episodeSide(paned: *gui.PanedWidget) !void {
         }
     }
 
-    var scroll = try gui.scrollArea(@src(), 0, null, .{ .expand = .both, .background = false });
-    defer scroll.deinit();
+    if (g_db) |*db| {
+        const num_episodes = try dbRow(arena, "SELECT count(*) FROM episode WHERE podcast_id = ?", usize, .{g_podcast_id_on_right}) orelse 0;
+        const height: f32 = 200;
 
-    var i: usize = 0;
-    while (i < 10) : (i += 1) {
-        var tl = try gui.textLayout(@src(), i, .{ .expand = .horizontal });
+        var scroll = try gui.scrollArea(@src(), 0, gui.Size{ .w = 0, .h = height * @intToFloat(f32, num_episodes) }, .{ .expand = .both, .background = false });
+        defer scroll.deinit();
 
-        var cbox = try gui.box(@src(), 0, .vertical, gui.Options{ .gravity = .upright });
+        const query = "SELECT rowid, title, description FROM episode WHERE podcast_id = ?";
+        var stmt = db.prepare(query) catch {
+            try dbError("{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), query });
+            return error.DB_ERROR;
+        };
+        defer stmt.deinit();
 
-        _ = try gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) });
-        _ = try gui.buttonIcon(@src(), 0, 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) });
+        const visibleRect = scroll.visibleRect();
+        var cursor: f32 = 0;
 
-        cbox.deinit();
+        var iter = try stmt.iterator(Episode, .{g_podcast_id_on_right});
+        while (try iter.nextAlloc(arena, .{})) |episode| {
+            defer cursor += height;
+            const r = gui.Rect{ .x = 0, .y = cursor, .w = 0, .h = height };
+            if (visibleRect.intersect(r).h > 0) {
+                var tl = try gui.textLayout(@src(), episode.rowid, .{ .expand = .horizontal, .rect = r });
+                defer tl.deinit();
 
-        var f = gui.themeGet().font_heading;
-        f.line_skip_factor = 1.3;
-        try tl.addText("Episode Title\n", .{ .font_style = .custom, .font_custom = f });
-        const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-        try tl.addText(lorem, .{});
-        tl.deinit();
+                var cbox = try gui.box(@src(), 0, .vertical, gui.Options{ .gravity = .upright });
+
+                _ = try gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) });
+                _ = try gui.buttonIcon(@src(), 0, 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) });
+
+                cbox.deinit();
+
+                var f = gui.themeGet().font_heading;
+                f.line_skip_factor = 1.3;
+                try tl.format("{s}\n", .{episode.title}, .{ .font_style = .custom, .font_custom = f });
+                //const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+                //try tl.addText(lorem, .{});
+                try tl.addText(episode.description, .{});
+            }
+        }
     }
 }
 
@@ -574,11 +614,11 @@ fn player(arena: std.mem.Allocator) !void {
     var box2 = try gui.box(@src(), 0, .vertical, oo.override(.{ .background = true }));
     defer box2.deinit();
 
-    var episode = Episode{ .title = "Episode Title" };
+    var episode = Episode{ .rowid = 0, .title = "Episode Title", .description = "" };
 
     const episode_id = try dbRow(arena, "SELECT episode_id FROM player", i32, .{});
     if (episode_id) |id| {
-        episode = try dbRow(arena, "SELECT title FROM episode WHERE rowid = ?", Episode, .{id}) orelse episode;
+        episode = try dbRow(arena, "SELECT rowid, title FROM episode WHERE rowid = ?", Episode, .{id}) orelse episode;
     }
 
     try gui.label(@src(), 0, "{s}", .{episode.title}, oo.override(.{
