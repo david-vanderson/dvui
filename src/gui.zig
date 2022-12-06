@@ -2948,13 +2948,13 @@ pub const FloatingWindowWidget = struct {
         self.modal = modal;
         self.openflag = openflag;
 
-        if (opts.rect) |r| {
-            // we were given a rect, just use that
-            self.wd.rect = r;
-        } else if (io_rect) |ior| {
+        if (io_rect) |ior| {
             // user is storing the rect for us across open/close
             self.io_rect = io_rect;
             self.wd.rect = ior.*;
+        } else if (opts.rect) |r| {
+            // we were given a rect, just use that
+            self.wd.rect = r;
         } else {
             // we store the rect (only while the window is open)
             self.wd.rect = dataGet(self.wd.id, "_rect", Rect) orelse Rect{};
@@ -3153,6 +3153,13 @@ pub const FloatingWindowWidget = struct {
         }
     }
 
+    // Call this to indicate that you want the window to resize to fit
+    // contents.  The window's size next frame will fit the min size of the
+    // contents from this frame.
+    pub fn autoSize(self: *Self) void {
+        self.auto_size = true;
+    }
+
     pub fn close(self: *Self) void {
         floatingWindowClosing(self.wd.id);
         if (self.openflag) |of| {
@@ -3220,13 +3227,12 @@ pub const FloatingWindowWidget = struct {
 
         self.layout.deinit();
 
+        dataSet(self.wd.id, "_rect", self.wd.rect);
         if (self.io_rect) |ior| {
-            // user is storing the rect for us across open/close
+            // send rect back to user
             ior.* = self.wd.rect;
-        } else {
-            // we store the rect
-            dataSet(self.wd.id, "_rect", self.wd.rect);
         }
+
         dataSet(self.wd.id, "_auto_pos", self.auto_pos);
         dataSet(self.wd.id, "_auto_size", self.auto_size);
         self.wd.minSizeSetAndCue();
@@ -5117,7 +5123,21 @@ pub const LabelWidget = struct {
         var self = Self{};
         const options = defaults.override(opts);
         self.label_str = label_str;
-        const size = try options.font().textSize(self.label_str);
+
+        var iter = std.mem.split(u8, self.label_str, "\n");
+        var first: bool = true;
+        var size = Size{};
+        while (iter.next()) |line| {
+            const s = try options.font().textSize(line);
+            if (first) {
+                first = false;
+                size = s;
+            } else {
+                size.h += try options.font().lineSkip();
+                size.w = math.max(size.w, s.w);
+            }
+        }
+
         self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
         self.wd.placeInsideNoExpand();
         return self;
@@ -5127,11 +5147,15 @@ pub const LabelWidget = struct {
         _ = opts;
         debug("{x} Label \"{s:<10}\" {}", .{ self.wd.id, self.label_str, self.wd.rect });
         try self.wd.borderAndBackground();
-        const rs = self.wd.contentRectScale();
+        var rs = self.wd.contentRectScale();
 
         const oldclip = clip(rs.r);
         if (!clipGet().empty()) {
-            try renderText(self.wd.options.font(), self.label_str, rs, self.wd.options.color());
+            var iter = std.mem.split(u8, self.label_str, "\n");
+            while (iter.next()) |line| {
+                try renderText(self.wd.options.font(), line, rs, self.wd.options.color());
+                rs.r.y += rs.s * try self.wd.options.font().lineSkip();
+            }
         }
         clipSet(oldclip);
 
@@ -7018,6 +7042,10 @@ pub const examples = struct {
         var b = try gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
 
+        if (try gui.button(@src(), 0, "Direct Dialog", .{})) {
+            show_dialog = true;
+        }
+
         {
             var hbox = try gui.box(@src(), 0, .horizontal, .{});
             defer hbox.deinit();
@@ -7071,6 +7099,9 @@ pub const examples = struct {
     }
 
     pub fn dialogDirect() !void {
+        const data = struct {
+            var extra_stuff: bool = false;
+        };
         var dialog_win = try gui.floatingWindow(@src(), 0, true, null, &show_dialog, .{ .color_style = .window });
         defer dialog_win.deinit();
 
@@ -7078,16 +7109,26 @@ pub const examples = struct {
         try gui.label(@src(), 0, "Asking a Question", .{}, .{ .font_style = .title_4 });
         try gui.label(@src(), 0, "This dialog is being shown in a direct style, controlled entirely in user code.", .{}, .{});
 
+        if (try gui.button(@src(), 0, "Toggle extra stuff and fit window", .{})) {
+            data.extra_stuff = !data.extra_stuff;
+            dialog_win.autoSize();
+        }
+
+        if (data.extra_stuff) {
+            try gui.label(@src(), 0, "This is some extra stuff\nwith a multi-line label\nthat has 3 lines", .{}, .{ .background = true });
+        }
+
         {
+            _ = gui.spacer(@src(), 0, .{ .expand = .vertical });
             var hbox = try gui.box(@src(), 0, .horizontal, .{ .gravity = .right });
             defer hbox.deinit();
 
             if (try gui.button(@src(), 0, "Yes", .{})) {
-                dialog_win.close();
+                dialog_win.close(); // can close the dialog this way
             }
 
             if (try gui.button(@src(), 0, "No", .{})) {
-                show_dialog = false;
+                show_dialog = false; // can close by not running this code anymore
             }
         }
     }
