@@ -4489,6 +4489,13 @@ pub const ScrollContainerWidget = struct {
             }
         }
 
+        if (opts.process_events) {
+            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
+            while (iter.next()) |e| {
+                self.processEvent(&iter, e);
+            }
+        }
+
         try self.wd.borderAndBackground();
 
         self.prevClip = clip(self.wd.contentRectScale().r);
