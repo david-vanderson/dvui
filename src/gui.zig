@@ -3279,7 +3279,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
 
     over.deinit();
 
-    try gui.separator(@src(), 0, .{ .gravity = .down, .expand = .horizontal });
+    try gui.separator(@src(), 0, .{ .expand = .horizontal });
 }
 
 pub const DialogDisplay = *const fn (u32) Error!DialogDisplayReturn;
@@ -4204,14 +4204,30 @@ pub const BoxWidget = struct {
             rect.h = self.childRect.h;
             rect.w += pixels_per_w * current_weight;
 
-            self.childRect.w = math.max(0, self.childRect.w - rect.w);
-            self.childRect.x += rect.w;
+            switch (g) {
+                .upleft, .left, .downleft, .up, .center, .down => {
+                    self.childRect.w = math.max(0, self.childRect.w - rect.w);
+                    self.childRect.x += rect.w;
+                },
+                .upright, .right, .downright => {
+                    rect.x += math.max(0, self.childRect.w - rect.w);
+                    self.childRect.w = math.max(0, self.childRect.w - rect.w);
+                },
+            }
         } else if (self.dir == .vertical) {
             rect.w = self.childRect.w;
             rect.h += pixels_per_w * current_weight;
 
-            self.childRect.h = math.max(0, self.childRect.h - rect.h);
-            self.childRect.y += rect.h;
+            switch (g) {
+                .upleft, .up, .upright, .left, .center, .right => {
+                    self.childRect.h = math.max(0, self.childRect.h - rect.h);
+                    self.childRect.y += rect.h;
+                },
+                .downleft, .down, .downright => {
+                    rect.y += math.max(0, self.childRect.h - rect.h);
+                    self.childRect.h = math.max(0, self.childRect.h - rect.h);
+                },
+            }
         }
 
         return placeIn(null, rect, child_size, e, g);
@@ -4319,7 +4335,7 @@ pub const ScrollAreaWidget = struct {
             si = &self.scroll_info;
         }
 
-        var vbar = ScrollBarWidget.init(@src(), 0, si, .{});
+        var vbar = ScrollBarWidget.init(@src(), 0, si, .{ .gravity = .right });
         try vbar.install(.{});
         vbar.deinit();
 

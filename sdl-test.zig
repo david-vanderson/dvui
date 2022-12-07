@@ -148,11 +148,14 @@ pub fn main() !void {
                     var scroll = try gui.scrollArea(@src(), 0, .{ .min_size = .{ .h = 100 } });
                     defer scroll.deinit();
 
+                    var vbox = try gui.box(@src(), 0, .vertical, .{ .expand = .both });
+                    defer vbox.deinit();
+
                     var buf: [100]u8 = undefined;
                     var z: usize = 0;
                     while (z < maxz) : (z += 1) {
                         const buf_slice = std.fmt.bufPrint(&buf, "Button {d:0>2}", .{z}) catch unreachable;
-                        if (try gui.button(@src(), z, buf_slice, .{})) {
+                        if (try gui.button(@src(), z, buf_slice, .{ .gravity = .down })) {
                             if (z % 2 == 0) {
                                 maxz += 1;
                             } else {
