@@ -2702,7 +2702,8 @@ pub const PopupWidget = struct {
         // the popup itself doesn't have any styling, it comes from the
         // embedded MenuWidget
         // passing options.rect will stop WidgetData.init from calling
-        // rectFor which is important because we are outside normal layout
+        // rectFor/minSizeForChild which is important because we are outside
+        // normal layout
         self.wd = WidgetData.init(src, id_extra, .{ .rect = .{} });
 
         self.initialRect = initialRect;
@@ -2893,8 +2894,10 @@ pub const PopupWidget = struct {
 
         self.layout.deinit();
         self.wd.minSizeSetAndCue();
+
         // outside normal layout, don't call minSizeForChild or
-        // wd.minSizeReportToParent
+        // self.wd.minSizeReportToParent();
+
         _ = popupSet(self.parent_popup);
         _ = parentSet(self.wd.parent);
         _ = windowCurrentSet(self.prev_windowId);
@@ -2970,6 +2973,10 @@ pub const FloatingWindowWidget = struct {
             self.auto_pos = ap;
         } else {
             self.auto_pos = (self.wd.rect.x == 0 and self.wd.rect.y == 0);
+            if (self.auto_pos and !self.auto_size) {
+                self.auto_pos = false;
+                self.wd.centerOnScreen();
+            }
         }
 
         var ms = self.options.min_size orelse Size{};
@@ -2989,9 +2996,7 @@ pub const FloatingWindowWidget = struct {
                 // only position ourselves once by default
                 self.auto_pos = false;
 
-                // make sure that we stay on the screen
-                self.wd.rect.x = math.max(0, windowRect().w / 2 - self.wd.rect.w / 2);
-                self.wd.rect.y = math.max(0, windowRect().h / 2 - self.wd.rect.h / 2);
+                self.wd.centerOnScreen();
 
                 //std.debug.print("autopos to {}\n", .{self.wd.rect});
             }
@@ -2999,8 +3004,8 @@ pub const FloatingWindowWidget = struct {
             // first frame we are being shown
             focusWindow(self.wd.id, null);
 
-            if (self.auto_pos or self.auto_size) {
-                // need a second frame to position or fit contents (FocusWindow calls
+            if (self.auto_size) {
+                // need a second frame to fit contents (FocusWindow calls
                 // cueFrame but here for clarity)
                 cueFrame();
 
@@ -3236,8 +3241,10 @@ pub const FloatingWindowWidget = struct {
         dataSet(self.wd.id, "_auto_pos", self.auto_pos);
         dataSet(self.wd.id, "_auto_size", self.auto_size);
         self.wd.minSizeSetAndCue();
+
         // outside normal layout, don't call minSizeForChild or
-        // wd.minSizeReportToParent
+        // self.wd.minSizeReportToParent();
+
         _ = parentSet(self.wd.parent);
         _ = windowCurrentSet(self.prev_windowId);
         clipSet(self.prevClip);
@@ -4348,6 +4355,10 @@ pub const ScrollBar = struct {
                 } else if (e.evt.mouse.state == .position) {
                     e.handled = true;
                     self.highlight = true;
+                } else if (e.evt.mouse.state == .wheel_y) {
+                    e.handled = true;
+                    self.area.scroll -= e.evt.mouse.wheel * rs.s;
+                    cueFrame();
                 }
             }
         }
@@ -6327,6 +6338,12 @@ pub const WidgetData = struct {
         return !clipGet().intersect(self.borderRectScale().r).empty();
     }
 
+    pub fn centerOnScreen(self: *WidgetData) void {
+        // make sure that we stay on the screen
+        self.rect.x = math.max(0, windowRect().w / 2 - self.rect.w / 2);
+        self.rect.y = math.max(0, windowRect().h / 2 - self.rect.h / 2);
+    }
+
     pub fn borderAndBackground(self: *const WidgetData) !void {
         var bg = self.options.background orelse false;
         if (self.options.borderGet().nonZero()) {
@@ -6434,7 +6451,9 @@ pub const WidgetData = struct {
     }
 
     pub fn minSizeReportToParent(self: *const WidgetData) void {
-        self.parent.minSizeForChild(self.min_size);
+        if (self.options.rect == null) {
+            self.parent.minSizeForChild(self.min_size);
+        }
     }
 };
 
