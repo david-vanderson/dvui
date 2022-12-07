@@ -337,6 +337,7 @@ pub const Options = struct {
             .border = Rect{},
             .padding = Rect{},
             .corner_radius = Rect{},
+            .background = false,
 
             // keep the rest
             .expand = self.expand,
@@ -2681,7 +2682,13 @@ pub fn popup(src: std.builtin.SourceLocation, id_extra: usize, initialRect: Rect
 
 pub const PopupWidget = struct {
     const Self = @This();
-    pub var defaults: Options = .{ .corner_radius = Rect.all(5), .border = Rect.all(1), .padding = Rect.all(4), .background = true, .color_style = .window };
+    pub var defaults: Options = .{
+        .corner_radius = Rect.all(5),
+        .border = Rect.all(1),
+        .padding = Rect.all(4),
+        .background = true,
+        .color_style = .window,
+    };
 
     wd: WidgetData = undefined,
     options: Options = undefined,
@@ -4318,7 +4325,9 @@ pub const ScrollAreaWidget = struct {
 
         const oldview = si.viewport;
 
-        self.scroll = ScrollContainerWidget.init(@src(), 0, si, self.hbox.data().options.strip().override(.{ .expand = .both }));
+        var container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
+        container_opts.corner_radius.?.w = self.hbox.data().options.corner_radiusGet().w;
+        self.scroll = ScrollContainerWidget.init(@src(), 0, si, container_opts);
 
         try self.scroll.install(opts);
 
@@ -5085,7 +5094,7 @@ pub const MenuItemWidget = struct {
             const rs = self.wd.backgroundRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
             try pathFillConvex(fill);
-        } else if (self.wd.options.background orelse false) {
+        } else if (self.wd.options.backgroundGet()) {
             const fill = self.wd.options.color_bg();
             const rs = self.wd.backgroundRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
@@ -5360,7 +5369,7 @@ pub const ButtonContainerWidget = struct {
             try pathFillConvex(col);
         }
 
-        if (self.wd.options.background orelse false) {
+        if (self.wd.options.backgroundGet()) {
             const rs = self.wd.backgroundRectScale();
             var fill: Color = undefined;
             if (self.captured) {
@@ -6427,7 +6436,7 @@ pub const WidgetData = struct {
     }
 
     pub fn borderAndBackground(self: *const WidgetData) !void {
-        var bg = self.options.background orelse false;
+        var bg = self.options.backgroundGet();
         if (self.options.borderGet().nonZero()) {
             bg = true;
             const rs = self.borderRectScale();
@@ -6910,7 +6919,7 @@ pub const examples = struct {
             var hbox = try gui.box(@src(), 0, .horizontal, .{ .expand = .both });
             defer hbox.deinit();
 
-            var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both, .color_style = .content, .background = false });
+            var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both, .background = false });
             defer scroll.deinit();
 
             var scaler = try gui.scale(@src(), 0, scale_val, .{ .expand = .horizontal });
