@@ -4646,12 +4646,12 @@ pub const ScrollBarWidget = struct {
 
         const captured = captureMouseMaintain(self.wd.id);
 
-        {
-            self.grabRect = self.wd.contentRect();
-            self.grabRect.h = math.max(20, self.grabRect.h * self.si.fraction_visible());
-            const insideH = self.wd.contentRect().h - self.grabRect.h;
-            self.grabRect.y += insideH * self.si.scroll_fraction();
+        self.grabRect = self.wd.contentRect();
+        self.grabRect.h = math.max(20, self.grabRect.h * self.si.fraction_visible());
+        const insideH = self.wd.contentRect().h - self.grabRect.h;
+        self.grabRect.y += insideH * self.si.scroll_fraction();
 
+        if (opts.process_events) {
             const grabrs = self.wd.parent.screenRectScale(self.grabRect);
             self.processEvents(grabrs.r);
         }
@@ -4675,7 +4675,11 @@ pub const ScrollBarWidget = struct {
         var iter = EventIterator.init(self.data().id, rs.r);
         while (iter.next()) |e| {
             if (e.evt == .mouse) {
-                if (e.evt.mouse.state == .leftdown) {
+                if (e.evt.mouse.state == .focus) {
+                    e.handled = true;
+                    // focus so that we can receive keyboard input
+                    focusWidget(self.wd.id, &iter);
+                } else if (e.evt.mouse.state == .leftdown) {
                     e.handled = true;
                     if (grabrs.contains(e.evt.mouse.p)) {
                         // capture and start drag
@@ -4726,6 +4730,35 @@ pub const ScrollBarWidget = struct {
                     cueFrame();
                 }
             }
+
+            if (bubbleable(e)) {
+                self.bubbleEvent(e);
+            }
+        }
+    }
+
+    pub fn bubbleEvent(self: *Self, e: *Event) void {
+        switch (e.evt) {
+            .key => {
+                if (e.evt.key.keysym == .up and
+                    (e.evt.key.state == .down or e.evt.key.state == .repeat))
+                {
+                    e.handled = true;
+                    self.si.viewport.y -= 10;
+                    cueFrame();
+                } else if (e.evt.key.keysym == .down and
+                    (e.evt.key.state == .down or e.evt.key.state == .repeat))
+                {
+                    e.handled = true;
+                    self.si.viewport.y += 10;
+                    cueFrame();
+                }
+            },
+            else => {},
+        }
+
+        if (!e.handled) {
+            self.wd.parent.bubbleEvent(e);
         }
     }
 
