@@ -4146,8 +4146,9 @@ pub const BoxWidget = struct {
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
         _ = opts;
-        _ = parentSet(self.widget());
+
         debug("{x} Box {}", .{ self.wd.id, self.wd.rect });
+
         try self.wd.borderAndBackground();
 
         // our rect for children has to start at 0,0
@@ -4160,6 +4161,8 @@ pub const BoxWidget = struct {
                 self.extra_pixels = math.max(0, self.childRect.h - taken_prev);
             }
         }
+
+        _ = parentSet(self.widget());
     }
 
     pub fn widget(self: *Self) Widget {
@@ -4252,122 +4255,9 @@ pub const BoxWidget = struct {
     }
 };
 
-pub const ScrollBar = struct {
-    const Self = @This();
-    const thick = 10;
-    id: u32,
-    parent: Widget,
-    rect: Rect = Rect{},
-    grabRect: Rect = Rect{},
-    area: *ScrollAreaWidget,
-    highlight: bool = false,
-
-    pub fn run(src: std.builtin.SourceLocation, id_extra: usize, area: *ScrollAreaWidget, rect_in: Rect, opts: Options) !void {
-        const parent = parentGet();
-        var self = Self{ .id = parent.extendID(src, id_extra), .parent = parent, .area = area };
-
-        const captured = captureMouseMaintain(self.id);
-
-        self.rect = rect_in;
-        debug("{x} ScrollBar {}", .{ self.id, self.rect });
-        {
-            const si = area.scrollInfo();
-            self.grabRect = self.rect;
-            self.grabRect.h = math.max(20, self.rect.h * si.fraction_visible);
-            const insideH = self.rect.h - self.grabRect.h;
-            self.grabRect.y += insideH * si.scroll_fraction;
-
-            const grabrs = self.parent.screenRectScale(self.grabRect);
-            self.processEvents(grabrs.r);
-        }
-
-        // processEvents could have changed scroll so recalc before render
-        {
-            const si = area.scrollInfo();
-            self.grabRect = self.rect;
-            self.grabRect.h = math.max(20, self.rect.h * si.fraction_visible);
-            const insideH = self.rect.h - self.grabRect.h;
-            self.grabRect.y += insideH * si.scroll_fraction;
-        }
-
-        //const rs = self.parent.screenRectScale(self.rect);
-        //PathAddRect(rs.r, Rect.all(0));
-        //var fill_color = Color{.r = 0, .g = 0, .b = 0, .a = 50};
-        //PathFillConvex(fill_color);
-
-        //fill_color = Color{.r = 100, .g = 100, .b = 100, .a = 255};
-        var fill = opts.color().transparent(0.5);
-        if (captured or self.highlight) {
-            fill = opts.color().transparent(0.3);
-        }
-        self.grabRect = self.grabRect.insetAll(2);
-        const grabrs = self.parent.screenRectScale(self.grabRect);
-        try pathAddRect(grabrs.r, Rect.all(grabrs.r.w));
-        try pathFillConvex(fill);
-    }
-
-    pub fn processEvents(self: *Self, grabrs: Rect) void {
-        const rs = self.parent.screenRectScale(self.rect);
-        var iter = EventIterator.init(self.id, rs.r);
-        while (iter.next()) |e| {
-            if (e.evt == .mouse) {
-                if (e.evt.mouse.state == .leftdown) {
-                    e.handled = true;
-                    if (grabrs.contains(e.evt.mouse.p)) {
-                        // capture and start drag
-                        captureMouse(self.id);
-                        dragPreStart(e.evt.mouse.p, .arrow, .{ .x = 0, .y = e.evt.mouse.p.y - (grabrs.y + grabrs.h / 2) });
-                    } else {
-                        const si = self.area.scrollInfo();
-                        var fi = si.fraction_visible;
-                        // the last page is scroll fraction 1.0, so there is
-                        // one less scroll position between 0 and 1.0
-                        fi = 1.0 / ((1.0 / fi) - 1);
-                        var f: f32 = undefined;
-                        if (e.evt.mouse.p.y < grabrs.y) {
-                            // clicked above grab
-                            f = si.scroll_fraction - fi;
-                        } else {
-                            // clicked below grab
-                            f = si.scroll_fraction + fi;
-                        }
-                        self.area.scrollToFraction(f);
-                    }
-                } else if (e.evt.mouse.state == .leftup) {
-                    e.handled = true;
-                    // stop possible drag and capture
-                    captureMouse(null);
-                    dragEnd();
-                } else if (e.evt.mouse.state == .motion) {
-                    e.handled = true;
-                    // move if dragging
-                    if (dragging(e.evt.mouse.p)) |dps| {
-                        _ = dps;
-                        const min = rs.r.y + grabrs.h / 2;
-                        const max = rs.r.y + rs.r.h - grabrs.h / 2;
-                        var grabmid = e.evt.mouse.p.y - dragOffset().y;
-                        var f: f32 = 0;
-                        if (max > min) {
-                            f = (grabmid - min) / (max - min);
-                        }
-                        self.area.scrollToFraction(f);
-                    }
-                } else if (e.evt.mouse.state == .position) {
-                    e.handled = true;
-                    self.highlight = true;
-                } else if (e.evt.mouse.state == .wheel_y) {
-                    e.handled = true;
-                    self.area.scroll -= e.evt.mouse.wheel * rs.s;
-                    cueFrame();
-                }
-            }
-        }
-    }
-};
-
-pub fn scrollArea(src: std.builtin.SourceLocation, id_extra: usize, virtual_size: ?Size, opts: Options) !*ScrollAreaWidget {
+pub fn scrollArea(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) !*ScrollAreaWidget {
     var ret = try currentWindow().arena.create(ScrollAreaWidget);
-    ret.* = ScrollAreaWidget.init(src, id_extra, virtual_size, opts);
+    ret.* = ScrollAreaWidget.init(src, id_extra, null, opts);
     try ret.install(.{});
     return ret;
 }
@@ -4381,59 +4271,165 @@ pub const ScrollAreaWidget = struct {
         // of a window)
         .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
         .color_style = .content,
-        .min_size = .{ .w = 0, .h = 25 },
+        .min_size = .{ .w = 25, .h = 25 },
     };
 
-    const grab_thick = 10;
-    const ScrollInfo = struct {
-        fraction_visible: f32,
-        scroll_fraction: f32,
+    hbox: BoxWidget = undefined,
+    io_scroll_info: ?*ScrollInfo = null,
+    scroll_info: ScrollInfo = undefined,
+    scroll: ScrollContainerWidget = undefined,
+
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, io_si: ?*ScrollInfo, opts: Options) Self {
+        var self = Self{};
+        const options = defaults.override(opts);
+
+        self.hbox = BoxWidget.init(src, id_extra, .horizontal, options);
+        self.io_scroll_info = io_si;
+        self.scroll_info = if (io_si) |iosi| iosi.* else (dataGet(self.hbox.data().id, "_scroll_info", ScrollInfo) orelse ScrollInfo{});
+        return self;
+    }
+
+    pub fn setVirtualSize(self: *Self, s: Size) void {
+        if (s.w != 0) {
+            self.scroll_info.virtual_size.w = s.w;
+            if (self.io_scroll_info) |iosi| iosi.* = self.scroll_info;
+        }
+
+        if (s.h != 0) {
+            self.scroll_info.virtual_size.h = s.h;
+            self.scroll_info.vertical = .given;
+            if (self.io_scroll_info) |iosi| iosi.* = self.scroll_info;
+        }
+    }
+
+    pub fn install(self: *Self, opts: InstallOptions) !void {
+        try self.hbox.install(.{});
+
+        var si: *ScrollInfo = undefined;
+        if (self.io_scroll_info) |iosi| {
+            si = iosi;
+        } else {
+            si = &self.scroll_info;
+        }
+
+        var vbar = ScrollBarWidget.init(@src(), 0, si, .{});
+        try vbar.install(.{});
+        vbar.deinit();
+
+        const oldview = si.viewport;
+
+        self.scroll = ScrollContainerWidget.init(@src(), 0, si, self.hbox.data().options.strip().override(.{ .expand = .both }));
+
+        try self.scroll.install(opts);
+
+        const newview = si.viewport;
+        if (oldview.x != newview.x or
+            oldview.y != newview.y or
+            oldview.w != newview.w or
+            oldview.h != newview.h)
+        {
+            // the viewport changed after scrollbar render
+            cueFrame();
+        }
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.scroll.deinit();
+
+        dataSet(self.hbox.data().id, "_scroll_info", if (self.io_scroll_info) |iosi| iosi.* else self.scroll_info);
+
+        self.hbox.deinit();
+    }
+};
+
+pub const ScrollInfo = struct {
+    pub const ScrollType = enum(u8) {
+        none, // no scrolling
+        auto, // virtual size calculated from children
+        given, // virtual size left as given
     };
 
-    const Data = struct {
-        scroll: f32,
-        virtualSize: Size,
+    vertical: ScrollType = .auto,
+    virtual_size: Size = Size{},
+    viewport: Rect = Rect{},
+
+    pub fn fraction_visible(self: ScrollInfo) f32 {
+        if (self.viewport.h == 0) return 0;
+
+        const max_hard_scroll = math.max(0, self.virtual_size.h - self.viewport.h);
+        var length = math.max(self.viewport.h, self.virtual_size.h);
+        if (self.viewport.y < 0) {
+            // temporarily adding the dead space we are showing
+            length += -self.viewport.y;
+        } else if (self.viewport.y > max_hard_scroll) {
+            length += (self.viewport.y - max_hard_scroll);
+        }
+
+        return self.viewport.h / length; // <= 1
+    }
+
+    pub fn scroll_fraction(self: ScrollInfo) f32 {
+        if (self.viewport.h == 0) return 0;
+
+        const max_hard_scroll = math.max(0, self.virtual_size.h - self.viewport.h);
+        var length = math.max(self.viewport.h, self.virtual_size.h);
+        if (self.viewport.y < 0) {
+            // temporarily adding the dead space we are showing
+            length += -self.viewport.y;
+        } else if (self.viewport.y > max_hard_scroll) {
+            length += (self.viewport.y - max_hard_scroll);
+        }
+
+        const max_scroll = math.max(0, length - self.viewport.h);
+        if (max_scroll == 0) return 0;
+
+        return math.max(0, math.min(1.0, self.viewport.y / max_scroll));
+    }
+
+    pub fn scrollToFraction(self: *ScrollInfo, fin: f32) void {
+        const f = math.max(0, math.min(1, fin));
+        const max_hard_scroll = math.max(0, self.virtual_size.h - self.viewport.h);
+        self.viewport.y = f * max_hard_scroll;
+    }
+};
+
+pub const ScrollContainerWidget = struct {
+    const Self = @This();
+    pub var defaults: Options = .{
+        .background = true,
+        // generally the top of a scroll area is against something flat (like
+        // window header), and the bottom is against something curved (bottom
+        // of a window)
+        .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
+        .color_style = .content,
+        .min_size = .{ .w = 25, .h = 25 },
     };
 
     wd: WidgetData = undefined,
 
+    si: *ScrollInfo = undefined,
+
+    // si.viewport.x/y might be updated in the middle of a frame, this prevents
+    // those visual artifacts
+    frame_viewport: Point = Point{},
+
     process_events: bool = true,
     prevClip: Rect = Rect{},
 
-    virtual_size_given: bool = false,
-    virtualSize: Size = Size{},
     nextVirtualSize: Size = Size{},
     next_widget_ypos: f32 = 0, // goes from 0 to viritualSize.h
-    scroll: f32 = 0, // how far down we are scrolled (natural scale pixels)
-    scrollAfter: f32 = 0, // how far we need to scroll after this frame
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, virtual_size: ?Size, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, io_scroll_info: *ScrollInfo, opts: Options) Self {
         var self = Self{};
         const options = defaults.override(opts);
+
         self.wd = WidgetData.init(src, id_extra, options);
-        if (virtual_size) |vs| {
-            self.virtual_size_given = true;
-            self.virtualSize = vs;
-        } else if (dataGet(self.wd.id, "_virtual_size", Size)) |s| {
-            self.virtualSize = s;
-        }
 
-        if (dataGet(self.wd.id, "_scroll", f32)) |s| {
-            self.scroll = s;
-        }
+        self.si = io_scroll_info;
 
-        const max_scroll = math.max(0, self.virtualSize.h - self.wd.contentRect().h);
-        if (self.scroll < 0) {
-            self.scroll = math.min(0, math.max(-20 * self.wd.scale(), self.scroll + 250 * animationRate()));
-            if (self.scroll < 0) {
-                cueFrame();
-            }
-        } else if (self.scroll > max_scroll) {
-            self.scroll = math.max(max_scroll, math.min(max_scroll + 20 * self.wd.scale(), self.scroll - 250 * animationRate()));
-            if (self.scroll > max_scroll) {
-                cueFrame();
-            }
-        }
+        const crect = self.wd.contentRect();
+        self.si.viewport.w = crect.w;
+        self.si.viewport.h = crect.h;
 
         self.next_widget_ypos = 0;
         return self;
@@ -4443,58 +4439,38 @@ pub const ScrollAreaWidget = struct {
         self.process_events = opts.process_events;
         debug("{x} ScrollArea {}", .{ self.wd.id, self.wd.rect });
 
+        // user code might have changed our rect
+        const crect = self.wd.contentRect();
+        self.si.viewport.w = crect.w;
+        self.si.viewport.h = crect.h;
+
+        self.si.virtual_size.w = crect.w;
+        switch (self.si.vertical) {
+            .none => self.si.virtual_size.h = crect.h,
+            .auto => {},
+            .given => {},
+        }
+
+        const max_scroll = math.max(0, self.si.virtual_size.h - self.si.viewport.h);
+        if (self.si.viewport.y < 0) {
+            self.si.viewport.y = math.min(0, math.max(-20, self.si.viewport.y + 250 * animationRate()));
+            if (self.si.viewport.y < 0) {
+                cueFrame();
+            }
+        } else if (self.si.viewport.y > max_scroll) {
+            self.si.viewport.y = math.max(max_scroll, math.min(max_scroll + 20, self.si.viewport.y - 250 * animationRate()));
+            if (self.si.viewport.y > max_scroll) {
+                cueFrame();
+            }
+        }
+
         try self.wd.borderAndBackground();
 
         self.prevClip = clip(self.wd.contentRectScale().r);
 
-        var rect = self.wd.contentRect();
-        if (rect.w >= grab_thick) {
-            rect.x += rect.w - grab_thick;
-            rect.w = grab_thick;
-        }
-        try ScrollBar.run(@src(), 0, self, rect, self.wd.options);
+        self.frame_viewport = self.si.viewport.topleft();
 
         _ = parentSet(self.widget());
-    }
-
-    pub fn scrollInfo(self: *Self) ScrollInfo {
-        const rect = self.wd.contentRect();
-        if (rect.h == 0) {
-            return ScrollInfo{ .fraction_visible = 0, .scroll_fraction = 0 };
-        }
-        const max_hard_scroll = math.max(0, self.virtualSize.h - rect.h);
-        var length = math.max(rect.h, self.virtualSize.h);
-        if (self.scroll < 0) {
-            // temporarily adding the dead space we are showing
-            length += -self.scroll;
-        } else if (self.scroll > max_hard_scroll) {
-            length += (self.scroll - max_hard_scroll);
-        }
-        const fraction_visible = rect.h / length; // <= 1
-
-        const max_scroll = math.max(0, length - rect.h);
-        var scroll_fraction: f32 = 0;
-        if (max_scroll != 0) {
-            scroll_fraction = math.max(0, self.scroll / max_scroll);
-        }
-
-        return ScrollInfo{ .fraction_visible = fraction_visible, .scroll_fraction = scroll_fraction };
-    }
-
-    // rect in virtual coords that is being shown
-    pub fn visibleRect(self: *const Self) Rect {
-        var ret = Rect{};
-        ret.x = 0;
-        ret.w = math.max(0, self.wd.contentRect().w - grab_thick);
-        ret.y = self.scroll;
-        ret.h = self.wd.contentRect().h;
-        return ret;
-    }
-
-    pub fn scrollToFraction(self: *Self, fin: f32) void {
-        const f = math.max(0, math.min(1, fin));
-        const max_hard_scroll = math.max(0, self.virtualSize.h - self.wd.contentRect().h);
-        self.scroll = f * max_hard_scroll;
     }
 
     pub fn widget(self: *Self) Widget {
@@ -4509,8 +4485,8 @@ pub const ScrollAreaWidget = struct {
         var child_size = minSize(id, min_size);
 
         const y = self.next_widget_ypos;
-        const h = self.virtualSize.h - y;
-        const rect = Rect{ .x = 0, .y = y, .w = math.max(0, self.wd.contentRect().w - grab_thick), .h = math.min(h, child_size.h) };
+        const h = self.si.virtual_size.h - y;
+        const rect = Rect{ .x = 0, .y = y, .w = self.wd.contentRect().w, .h = math.min(h, child_size.h) };
         const ret = placeIn(id, rect, child_size, e, g);
         self.next_widget_ypos = (ret.y + ret.h);
         return ret;
@@ -4518,7 +4494,7 @@ pub const ScrollAreaWidget = struct {
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
         var r = rect;
-        r.y -= self.scroll;
+        r.y -= self.frame_viewport.y;
 
         const rs = self.wd.contentRectScale();
         return RectScale{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };
@@ -4527,7 +4503,7 @@ pub const ScrollAreaWidget = struct {
     pub fn minSizeForChild(self: *Self, s: Size) void {
         self.nextVirtualSize.h += s.h;
         const padded = self.wd.padSize(s);
-        self.wd.min_size.w = math.max(self.wd.min_size.w, padded.w + grab_thick);
+        self.wd.min_size.w = math.max(self.wd.min_size.w, padded.w);
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
@@ -4546,19 +4522,14 @@ pub const ScrollAreaWidget = struct {
                     (e.evt.key.state == .down or e.evt.key.state == .repeat))
                 {
                     e.handled = true;
-                    self.scrollAfter -= 10;
-                    if (self.scroll + self.scrollAfter < 0) {
-                        self.scrollAfter = math.min(0, -self.scroll);
-                    }
+                    self.si.viewport.y -= 10;
+                    cueFrame();
                 } else if (e.evt.key.keysym == .down and
                     (e.evt.key.state == .down or e.evt.key.state == .repeat))
                 {
                     e.handled = true;
-                    self.scrollAfter += 10;
-                    const max_scroll = math.max(0, self.virtualSize.h - self.wd.contentRect().h);
-                    if (self.scroll + self.scrollAfter > max_scroll) {
-                        self.scrollAfter = math.max(0, max_scroll - self.scroll);
-                    }
+                    self.si.viewport.y += 10;
+                    cueFrame();
                 }
             },
             else => {},
@@ -4581,7 +4552,8 @@ pub const ScrollAreaWidget = struct {
                         focusWidget(self.wd.id, &iter);
                     } else if (e.evt.mouse.state == .wheel_y) {
                         e.handled = true;
-                        self.scrollAfter -= e.evt.mouse.wheel * rs.s;
+                        self.si.viewport.y -= e.evt.mouse.wheel;
+                        cueFrame();
                     }
                 },
                 else => {},
@@ -4596,28 +4568,138 @@ pub const ScrollAreaWidget = struct {
 
         clipSet(self.prevClip);
 
-        var scroll = self.scroll;
-        //std.debug.print("scroll {d} scrollAfter {d}\n", .{scroll, self.scrollAfter});
-        if (self.scrollAfter != 0) {
-            scroll += self.scrollAfter;
-            cueFrame();
-        }
-
-        if (self.virtual_size_given) {
-            dataSet(self.wd.id, "_virtual_size", self.virtualSize);
-        } else {
-            if (self.nextVirtualSize.w != self.virtualSize.w or
-                self.nextVirtualSize.h != self.virtualSize.h)
-            {
+        switch (self.si.vertical) {
+            .none => {},
+            .auto => if (self.nextVirtualSize.h != self.si.virtual_size.h) {
+                self.si.virtual_size.h = self.nextVirtualSize.h;
                 cueFrame();
-            }
-            dataSet(self.wd.id, "_virtual_size", self.nextVirtualSize);
+            },
+            .given => {},
         }
-        dataSet(self.wd.id, "_scroll", scroll);
 
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
+    }
+};
+
+pub const ScrollBarWidget = struct {
+    const Self = @This();
+    pub var defaults: Options = .{
+        .expand = .vertical,
+        .color_style = .content,
+        .min_size = .{ .w = 10, .h = 10 },
+    };
+
+    wd: WidgetData = undefined,
+    process_events: bool = true,
+    grabRect: Rect = Rect{},
+    si: *ScrollInfo = undefined,
+    highlight: bool = false,
+
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, scroll_info: *ScrollInfo, opts: Options) Self {
+        var self = Self{};
+        const options = defaults.override(opts);
+        self.wd = WidgetData.init(src, id_extra, options);
+
+        self.si = scroll_info;
+        return self;
+    }
+
+    pub fn install(self: *Self, opts: InstallOptions) !void {
+        self.process_events = opts.process_events;
+        debug("{x} ScrollBar {}", .{ self.wd.id, self.wd.rect });
+
+        try self.wd.borderAndBackground();
+
+        const captured = captureMouseMaintain(self.wd.id);
+
+        {
+            self.grabRect = self.wd.contentRect();
+            self.grabRect.h = math.max(20, self.grabRect.h * self.si.fraction_visible());
+            const insideH = self.wd.contentRect().h - self.grabRect.h;
+            self.grabRect.y += insideH * self.si.scroll_fraction();
+
+            const grabrs = self.wd.parent.screenRectScale(self.grabRect);
+            self.processEvents(grabrs.r);
+        }
+
+        var fill = self.wd.options.color().transparent(0.5);
+        if (captured or self.highlight) {
+            fill = self.wd.options.color().transparent(0.3);
+        }
+        self.grabRect = self.grabRect.insetAll(2);
+        const grabrs = self.wd.parent.screenRectScale(self.grabRect);
+        try pathAddRect(grabrs.r, Rect.all(grabrs.r.w));
+        try pathFillConvex(fill);
+    }
+
+    pub fn data(self: *Self) *WidgetData {
+        return &self.wd;
+    }
+
+    pub fn processEvents(self: *Self, grabrs: Rect) void {
+        const rs = self.wd.borderRectScale();
+        var iter = EventIterator.init(self.data().id, rs.r);
+        while (iter.next()) |e| {
+            if (e.evt == .mouse) {
+                if (e.evt.mouse.state == .leftdown) {
+                    e.handled = true;
+                    if (grabrs.contains(e.evt.mouse.p)) {
+                        // capture and start drag
+                        captureMouse(self.data().id);
+                        dragPreStart(e.evt.mouse.p, .arrow, .{ .x = 0, .y = e.evt.mouse.p.y - (grabrs.y + grabrs.h / 2) });
+                    } else {
+                        var fi = self.si.fraction_visible();
+                        // the last page is scroll fraction 1.0, so there is
+                        // one less scroll position between 0 and 1.0
+                        fi = 1.0 / ((1.0 / fi) - 1);
+                        var f: f32 = undefined;
+                        if (e.evt.mouse.p.y < grabrs.y) {
+                            // clicked above grab
+                            f = self.si.scroll_fraction() - fi;
+                        } else {
+                            // clicked below grab
+                            f = self.si.scroll_fraction() + fi;
+                        }
+                        self.si.scrollToFraction(f);
+                        cueFrame();
+                    }
+                } else if (e.evt.mouse.state == .leftup) {
+                    e.handled = true;
+                    // stop possible drag and capture
+                    captureMouse(null);
+                    dragEnd();
+                } else if (e.evt.mouse.state == .motion) {
+                    e.handled = true;
+                    // move if dragging
+                    if (dragging(e.evt.mouse.p)) |dps| {
+                        _ = dps;
+                        const min = rs.r.y + grabrs.h / 2;
+                        const max = rs.r.y + rs.r.h - grabrs.h / 2;
+                        var grabmid = e.evt.mouse.p.y - dragOffset().y;
+                        var f: f32 = 0;
+                        if (max > min) {
+                            f = (grabmid - min) / (max - min);
+                        }
+                        self.si.scrollToFraction(f);
+                        cueFrame();
+                    }
+                } else if (e.evt.mouse.state == .position) {
+                    e.handled = true;
+                    self.highlight = true;
+                } else if (e.evt.mouse.state == .wheel_y) {
+                    e.handled = true;
+                    self.si.viewport.y -= e.evt.mouse.wheel;
+                    cueFrame();
+                }
+            }
+        }
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.wd.minSizeSetAndCue();
+        self.wd.minSizeReportToParent();
     }
 };
 
@@ -6383,10 +6465,6 @@ pub const WidgetData = struct {
         self.rect = placeIn(null, self.rect, self.min_size, .none, self.options.gravityGet());
     }
 
-    pub fn scale(self: *const WidgetData) f32 {
-        return self.parent.screenRectScale(self.rect).s;
-    }
-
     pub fn borderRect(self: *const WidgetData) Rect {
         return self.rect.inset(self.options.marginGet());
     }
@@ -6829,7 +6907,10 @@ pub const examples = struct {
             const fps_str = std.fmt.bufPrint(&buf, "{d:4.0} fps", .{gui.FPS()}) catch unreachable;
             try gui.windowHeader("GUI Demo", fps_str, &show_demo_window);
 
-            var scroll = try gui.scrollArea(@src(), 0, null, .{ .expand = .both, .color_style = .content, .background = false });
+            var hbox = try gui.box(@src(), 0, .horizontal, .{ .expand = .both });
+            defer hbox.deinit();
+
+            var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both, .color_style = .content, .background = false });
             defer scroll.deinit();
 
             var scaler = try gui.scale(@src(), 0, scale_val, .{ .expand = .horizontal });
@@ -7163,10 +7244,11 @@ pub const examples = struct {
         const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len;
         const height = @intToFloat(f32, num_icons) * IconBrowser.row_height;
 
-        var scroll = try gui.scrollArea(@src(), 0, gui.Size{ .w = 0, .h = height }, .{ .expand = .both });
+        var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both });
+        scroll.setVirtualSize(.{ .w = 0, .h = height });
         defer scroll.deinit();
 
-        const visibleRect = scroll.visibleRect();
+        const visibleRect = scroll.scroll_info.viewport;
         var cursor: f32 = 0;
 
         inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls) |d, i| {

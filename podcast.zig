@@ -483,7 +483,7 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
         }
     }
 
-    var scroll = try gui.scrollArea(@src(), 0, null, .{ .expand = .both, .color_style = .window, .background = false });
+    var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both, .color_style = .window, .background = false });
 
     const oo3 = gui.Options{
         .expand = .horizontal,
@@ -566,7 +566,8 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
         const num_episodes = try dbRow(arena, "SELECT count(*) FROM episode WHERE podcast_id = ?", usize, .{g_podcast_id_on_right}) orelse 0;
         const height: f32 = 200;
 
-        var scroll = try gui.scrollArea(@src(), 0, gui.Size{ .w = 0, .h = height * @intToFloat(f32, num_episodes) }, .{ .expand = .both, .background = false });
+        var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both, .background = false });
+        scroll.setVirtualSize(.{ .w = 0, .h = height * @intToFloat(f32, num_episodes) });
         defer scroll.deinit();
 
         const query = "SELECT rowid, title, description FROM episode WHERE podcast_id = ?";
@@ -576,7 +577,7 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
         };
         defer stmt.deinit();
 
-        const visibleRect = scroll.visibleRect();
+        const visibleRect = scroll.scroll_info.viewport;
         var cursor: f32 = 0;
 
         var iter = try stmt.iterator(Episode, .{g_podcast_id_on_right});
