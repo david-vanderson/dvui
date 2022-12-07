@@ -145,13 +145,13 @@ pub fn main() !void {
                 //}
 
                 {
-                    var scroll = try gui.scrollArea(@src(), 0, null, .{ .min_size = .{ .h = 100 } });
+                    var scroll = try gui.scrollArea(@src(), 0, .{ .min_size = .{ .h = 100 } });
                     defer scroll.deinit();
 
                     var buf: [100]u8 = undefined;
                     var z: usize = 0;
                     while (z < maxz) : (z += 1) {
-                        const buf_slice = std.fmt.bufPrint(&buf, "Button {d}", .{z}) catch unreachable;
+                        const buf_slice = std.fmt.bufPrint(&buf, "Button {d:0>2}", .{z}) catch unreachable;
                         if (try gui.button(@src(), z, buf_slice, .{})) {
                             if (z % 2 == 0) {
                                 maxz += 1;
@@ -294,7 +294,7 @@ pub fn main() !void {
                     }
                 }
 
-                var scroll = try gui.scrollArea(@src(), 0, null, .{ .expand = .both });
+                var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both });
                 defer scroll.deinit();
                 var tl = try gui.textLayout(@src(), 0, .{ .expand = .both });
                 {
