@@ -166,17 +166,21 @@ pub fn main() !void {
                 }
 
                 {
+                    var hbox = try gui.box(@src(), 0, .horizontal, .{});
+                    defer hbox.deinit();
+
+                    _ = gui.spacer(@src(), 0, .{ .w = 20 }, .{});
                     var button = gui.ButtonWidget.init(@src(), 0, "Wiggle", .{ .tab_index = 10 });
                     defer button.deinit();
 
                     if (gui.animationGet(button.data().id, "xoffset")) |a| {
-                        button.data().rect.x += a.lerp();
+                        button.data().rect.x += 20 * (1.0 - a.lerp()) * (1.0 - a.lerp()) * @sin(a.lerp() * std.math.pi * 50);
                     }
 
                     try button.install(.{});
 
                     if (button.clicked()) {
-                        const a = gui.Animation{ .start_val = 0, .end_val = 200, .start_time = 0, .end_time = 10_000_000 };
+                        const a = gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 500_000 };
                         gui.animate(button.data().id, "xoffset", a);
                     }
                 }
