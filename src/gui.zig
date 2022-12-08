@@ -4768,22 +4768,25 @@ pub const ScrollBarWidget = struct {
     }
 };
 
-pub var separator_defaults: Options = .{
-    .min_size = .{ .w = 1, .h = 1 },
-    .border = .{ .x = 1, .y = 1, .w = 0, .h = 0 },
-    .color_style = .content,
-};
-
 pub fn separator(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) !void {
-    var wd = WidgetData.init(src, id_extra, separator_defaults.override(opts));
+    const defaults: Options = .{
+        .min_size = .{ .w = 1, .h = 1 },
+        .border = .{ .x = 1, .y = 1, .w = 0, .h = 0 },
+        .color_style = .content,
+    };
+
+    var wd = WidgetData.init(src, id_extra, defaults.override(opts));
     debug("{x} Separator {}", .{ wd.id, wd.rect });
     try wd.borderAndBackground();
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
 }
 
-pub fn spacer(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) WidgetData {
-    var wd = WidgetData.init(src, id_extra, opts);
+pub fn spacer(src: std.builtin.SourceLocation, id_extra: usize, size: Size, opts: Options) WidgetData {
+    if (opts.min_size != null) {
+        std.debug.print("warning: spacer options had min_size but is being overwritten\n", .{});
+    }
+    var wd = WidgetData.init(src, id_extra, opts.override(.{ .min_size = size }));
     debug("{x} Spacer {}", .{ wd.id, wd.rect });
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
@@ -5614,7 +5617,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     defer b.deinit();
 
     var check_size = try options.font().lineSkip();
-    const s = spacer(@src(), 0, .{ .min_size = Size.all(check_size), .gravity = .left });
+    const s = spacer(@src(), 0, Size.all(check_size), .{});
 
     var rs = s.borderRectScale();
     rs.r = rs.r.insetAll(0.5 * rs.s);
@@ -5664,7 +5667,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
         try pathStroke(false, thick, .square, themeGet().color_accent);
     }
 
-    _ = spacer(@src(), 0, .{ .min_size = Size.all(1), .gravity = .left });
+    _ = spacer(@src(), 0, .{ .w = 1 }, .{});
     try labelNoFmt(@src(), 0, label_str, options.styling());
 }
 
@@ -7287,7 +7290,7 @@ pub const examples = struct {
         }
 
         {
-            _ = gui.spacer(@src(), 0, .{ .expand = .vertical });
+            _ = gui.spacer(@src(), 0, .{}, .{ .expand = .vertical });
             var hbox = try gui.box(@src(), 0, .horizontal, .{ .gravity = .right });
             defer hbox.deinit();
 
