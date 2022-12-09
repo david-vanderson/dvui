@@ -1,7 +1,35 @@
 
-ask mach people about the cDefine from compile issue
-- in build.zig you select what the value for a #define thing will be for compilation
-- you want to @cDefine the same thing when you @cInclude the header files
+
+can't format {d:02} needs {d:0>2}?
+
+
+add backend function to allow screensaver
+
+how can a separate thread cause a wakeup in the gui thread when it is waiting for events?
+- directly wake it up?
+- inject dummy event?
+
+
+for normal animations should be able to do a wrapper widget
+- can animate from 0 to min_size (gotten from deinit)
+- can deanimate from current size to 0
+- floating windows are different since they aren't in the normal flow
+ - need a special wrapper for them which doesn't insert itself into the heirarchy just adjusts values
+
+
+scroll test vertical .none
+
+in episode view, the scrollbar thumb is being overdrawn by the episode stuff because it's being drawn as part of the ScrollArea's contentRect
+- scrollbar should separate install and events like normal, so you could put it on top of the scroll area contents:
+  - create it but with a given rect (which should always disable rectFor and minSizeForChild)
+  - run events
+  - do all the rest of the scroll area children
+  - then do the drawing
+
+ffmpeg:
+- everything in libs/ffmpeg_include needs to be done at zig build time
+- for files that just do #define stuff, can do that in build.zig
+- for c files, the contents should be everything that ffmpeg could put there but conditioned on cDefine stuff we make up
 
 look into logging, how to use it in general and how to use it for gui stuff?
 - const scope_name = std.log.scoped(.whatever);

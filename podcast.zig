@@ -15,6 +15,9 @@ pub const c = @cImport({
 
     @cDefine("LIBXML_XPATH_ENABLED", "1");
     @cInclude("libxml/xpath.h");
+
+    @cInclude("libavformat/avformat.h");
+    @cInclude("libavcodec/avcodec.h");
 });
 
 // when set to true, looks for feed-{rowid}.xml and episode-{rowid}.mp3 instead
@@ -347,6 +350,9 @@ fn mainGui(arena: std.mem.Allocator) !void {
 }
 
 pub fn main() !void {
+    ffmpeg_test();
+    if (true) return;
+
     var backend = try Backend.init(360, 600);
     defer backend.deinit();
 
@@ -639,4 +645,61 @@ fn player(arena: std.mem.Allocator) !void {
     _ = try gui.buttonIcon(@src(), 0, 20, "forward", gui.icons.papirus.actions.media_seek_forward_symbolic, oo2);
 
     _ = try gui.buttonIcon(@src(), 0, 20, "play", gui.icons.papirus.actions.media_playback_start_symbolic, oo2);
+}
+
+fn ffmpeg_test() void {
+    var buf: [256]u8 = undefined;
+
+    //const filename = "test.mp3";
+    const filename = "episode-2.mp3";
+
+    var avfc: ?*c.AVFormatContext = null;
+    var err = c.avformat_open_input(&avfc, filename, null, null);
+    if (err != 0) {
+        _ = c.av_strerror(err, &buf, 256);
+        std.debug.print("err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+    }
+
+    // unsure if this is needed
+    //c.av_format_inject_global_side_data(avfc);
+
+    err = c.avformat_find_stream_info(avfc, null);
+    if (err != 0) {
+        _ = c.av_strerror(err, &buf, 256);
+        std.debug.print("err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+    }
+
+    c.av_dump_format(avfc, 0, filename, 0);
+
+    var audio_stream_idx = c.av_find_best_stream(avfc, c.AVMEDIA_TYPE_AUDIO, -1, -1, null, 0);
+    if (audio_stream_idx < 0) {
+        _ = c.av_strerror(audio_stream_idx, &buf, 256);
+        std.debug.print("err {d} : {s}\n", .{ audio_stream_idx, std.mem.sliceTo(&buf, 0) });
+    }
+
+    std.debug.print("AUDIO stream {d}\n", .{audio_stream_idx});
+
+    var i: usize = 0;
+    while (i < avfc.?.nb_streams) {
+        defer i += 1;
+
+        const avstream = avfc.?.streams[i];
+        var avctx: *c.AVCodecContext = c.avcodec_alloc_context3(null);
+        defer c.avcodec_free_context(@ptrCast([*c][*c]c.AVCodecContext, &avctx));
+
+        err = c.avcodec_parameters_to_context(avctx, avstream.*.codecpar);
+        if (err != 0) {
+            _ = c.av_strerror(err, &buf, 256);
+            std.debug.print("err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+        }
+
+        c.avcodec_string(&buf, buf.len, avctx, 0);
+
+        if (avctx.codec_type == c.AVMEDIA_TYPE_AUDIO) {
+            std.debug.print("AUDIO stream {d} codec {s}\n", .{ i, std.mem.sliceTo(&buf, 0) });
+            break;
+        }
+    }
+
+    c.avformat_close_input(&avfc);
 }
