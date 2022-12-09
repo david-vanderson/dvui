@@ -192,6 +192,8 @@ fn root() []const u8 {
 const root_path = root() ++ "/libs/ffmpeg/";
 const extra_include = root() ++ "/libs/ffmpeg_include/";
 
+// ffmpeg stuff configured like this: ../configure --disable-encoders --disable-decoders --disable-parsers --disable-demuxers --disable-muxers --disable-bsfs --disable-indevs --disable-outdevs --disable-filters --enable-decoder=mp3 --enable-demuxer=mp3,pcm* --enable-parser=mpegaudio --enable-muxer=pcm* --enable-filter=atempo --disable-v4l2_m2m --disable-iconv --disable-libxcb --disable-lzma --disable-sdl2 --disable-zlib --disable-x86asm
+
 const flags = &[_][]const u8{
     "-std=c11",
     "-D_XOPEN_SOURCE=600",
@@ -201,23 +203,6 @@ const flags = &[_][]const u8{
     "-DHAVE_AV_CONFIG_H",
     "-DHAVE_BIGENDIAN=0",
     "-DAV_HAVE_FAST_UNALIGNED=1",
-
-    //"-D_ISOC99_SOURCE",
-    //"-D_FILE_OFFSET_BITS=64",
-    //"-D_LARGEFILE_SOURCE",
-    //"-D_POSIX_C_SOURCE=200112",
-    //"-DZLIB_CONST",
-    //"-fno-math-errno",
-    //"-fno-signed-zeros",
-    //"-fno-tree-vectorize",
-    //"-Wno-pointer-to-int-cast",
-    //"-Wno-parentheses",
-    //"-Wno-switch",
-    //"-Wno-format-zero-length",
-    //"-Wno-pointer-sign",
-    //"-Wno-unused-const-variable",
-    //"-Wno-bool-operation",
-    //"-Wno-char-subscripts",
 };
 
 const srcs = &.{
