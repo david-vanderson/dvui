@@ -650,8 +650,8 @@ fn player(arena: std.mem.Allocator) !void {
 fn ffmpeg_test() void {
     var buf: [256]u8 = undefined;
 
-    //const filename = "test.mp3";
-    const filename = "episode-2.mp3";
+    const filename = "test.mp3";
+    //const filename = "episode-2.mp3";
 
     var avfc: ?*c.AVFormatContext = null;
     var err = c.avformat_open_input(&avfc, filename, null, null);
@@ -659,6 +659,8 @@ fn ffmpeg_test() void {
         _ = c.av_strerror(err, &buf, 256);
         std.debug.print("err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
     }
+
+    defer c.avformat_close_input(&avfc);
 
     // unsure if this is needed
     //c.av_format_inject_global_side_data(avfc);
@@ -675,31 +677,89 @@ fn ffmpeg_test() void {
     if (audio_stream_idx < 0) {
         _ = c.av_strerror(audio_stream_idx, &buf, 256);
         std.debug.print("err {d} : {s}\n", .{ audio_stream_idx, std.mem.sliceTo(&buf, 0) });
+        return;
     }
 
     std.debug.print("AUDIO stream {d}\n", .{audio_stream_idx});
 
-    var i: usize = 0;
-    while (i < avfc.?.nb_streams) {
-        defer i += 1;
+    const avstream = avfc.?.streams[@intCast(usize, audio_stream_idx)];
+    var avctx: *c.AVCodecContext = c.avcodec_alloc_context3(null);
+    defer c.avcodec_free_context(@ptrCast([*c][*c]c.AVCodecContext, &avctx));
 
-        const avstream = avfc.?.streams[i];
-        var avctx: *c.AVCodecContext = c.avcodec_alloc_context3(null);
-        defer c.avcodec_free_context(@ptrCast([*c][*c]c.AVCodecContext, &avctx));
-
-        err = c.avcodec_parameters_to_context(avctx, avstream.*.codecpar);
-        if (err != 0) {
-            _ = c.av_strerror(err, &buf, 256);
-            std.debug.print("err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
-        }
-
-        c.avcodec_string(&buf, buf.len, avctx, 0);
-
-        if (avctx.codec_type == c.AVMEDIA_TYPE_AUDIO) {
-            std.debug.print("AUDIO stream {d} codec {s}\n", .{ i, std.mem.sliceTo(&buf, 0) });
-            break;
-        }
+    err = c.avcodec_parameters_to_context(avctx, avstream.*.codecpar);
+    if (err != 0) {
+        _ = c.av_strerror(err, &buf, 256);
+        std.debug.print("err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
     }
 
-    c.avformat_close_input(&avfc);
+    avctx.pkt_timebase = avstream.*.time_base;
+
+    const codec = c.avcodec_find_decoder(avctx.codec_id);
+    if (codec == 0) {
+        std.debug.print("no decoder found for codec {s}\n", .{c.avcodec_get_name(avctx.codec_id)});
+        return;
+    }
+
+    err = c.avcodec_open2(avctx, codec, null);
+    if (err != 0) {
+        _ = c.av_strerror(err, &buf, 256);
+        std.debug.print("err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+    }
+
+    avstream.*.discard = c.AVDISCARD_DEFAULT;
+    std.debug.print("sample_rate {d}\n", .{avctx.*.sample_rate});
+
+    // initialization stuff
+    //memset(d, 0, sizeof(Decoder));
+    //d->pkt = av_packet_alloc();
+    //if (!d->pkt)
+    //    return AVERROR(ENOMEM);
+    //d->avctx = avctx;
+    //d->queue = queue;
+    //d->empty_queue_cond = empty_queue_cond;
+    //d->start_pts = AV_NOPTS_VALUE;
+    //d->pkt_serial = -1;
+
+    // audio thread
+    var frame: *c.AVFrame = c.av_frame_alloc();
+    var ret = c.AVERROR(c.EAGAIN);
+
+    while (true) {
+        //if (d->queue->serial == d->pkt_serial) {
+        var first = true;
+        while (first or ret != c.AVERROR(c.EAGAIN)) {
+            first = false;
+            //if (d->queue->abort_request)
+            //return -1;
+
+            std.debug.print("receive_frame ", .{});
+            ret = c.avcodec_receive_frame(avctx, frame);
+            //if (ret >= 0) {
+            //AVRational tb = (AVRational){1, frame->sample_rate};
+            //if (frame->pts != AV_NOPTS_VALUE)
+            //frame->pts = av_rescale_q(frame->pts, d->avctx->pkt_timebase, tb);
+            //else if (d->next_pts != AV_NOPTS_VALUE)
+            //frame->pts = av_rescale_q(d->next_pts, d->next_pts_tb, tb);
+            //if (frame->pts != AV_NOPTS_VALUE) {
+            //d->next_pts = frame->pts + frame->nb_samples;
+            //d->next_pts_tb = tb;
+            //}
+            //}
+
+            if (ret == c.AVERROR_EOF) {
+                c.avcodec_flush_buffers(avctx);
+                std.debug.print("eof\n", .{});
+                return;
+            } else if (ret == c.AVERROR(c.EAGAIN)) {
+                std.debug.print("eagain\n", .{});
+                return;
+            } else if (ret < 0) {
+                _ = c.av_strerror(ret, &buf, 256);
+                std.debug.print("err {d} : {s}\n", .{ ret, std.mem.sliceTo(&buf, 0) });
+                return;
+            } else if (ret >= 0) {
+                std.debug.print("{d}\n", .{ret});
+            }
+        }
+    }
 }
