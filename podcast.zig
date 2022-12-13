@@ -724,42 +724,40 @@ fn ffmpeg_test() void {
     var frame: *c.AVFrame = c.av_frame_alloc();
     var ret = c.AVERROR(c.EAGAIN);
 
+    var pkt: *c.AVPacket = c.av_packet_alloc();
+
     while (true) {
-        //if (d->queue->serial == d->pkt_serial) {
-        var first = true;
-        while (first or ret != c.AVERROR(c.EAGAIN)) {
-            first = false;
-            //if (d->queue->abort_request)
-            //return -1;
+        // checkout av_read_pause and av_read_play if doing a network stream
+        err = c.av_read_frame(avfc, pkt);
+        if (err == c.AVERROR_EOF) {
+            std.debug.print("read_frame eof\n", .{});
+            return;
+        } else if (err != 0) {
+            _ = c.av_strerror(err, &buf, 256);
+            std.debug.print("read_frame err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+        }
+        defer c.av_packet_unref(pkt);
 
-            std.debug.print("receive_frame ", .{});
-            ret = c.avcodec_receive_frame(avctx, frame);
-            //if (ret >= 0) {
-            //AVRational tb = (AVRational){1, frame->sample_rate};
-            //if (frame->pts != AV_NOPTS_VALUE)
-            //frame->pts = av_rescale_q(frame->pts, d->avctx->pkt_timebase, tb);
-            //else if (d->next_pts != AV_NOPTS_VALUE)
-            //frame->pts = av_rescale_q(d->next_pts, d->next_pts_tb, tb);
-            //if (frame->pts != AV_NOPTS_VALUE) {
-            //d->next_pts = frame->pts + frame->nb_samples;
-            //d->next_pts_tb = tb;
-            //}
-            //}
+        err = c.avcodec_send_packet(avctx, pkt);
+        if (err != 0) {
+            _ = c.av_strerror(err, &buf, 256);
+            std.debug.print("send_packet err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+        }
 
-            if (ret == c.AVERROR_EOF) {
-                c.avcodec_flush_buffers(avctx);
-                std.debug.print("eof\n", .{});
-                return;
-            } else if (ret == c.AVERROR(c.EAGAIN)) {
-                std.debug.print("eagain\n", .{});
-                return;
-            } else if (ret < 0) {
-                _ = c.av_strerror(ret, &buf, 256);
-                std.debug.print("err {d} : {s}\n", .{ ret, std.mem.sliceTo(&buf, 0) });
-                return;
-            } else if (ret >= 0) {
-                std.debug.print("{d}\n", .{ret});
-            }
+        ret = c.avcodec_receive_frame(avctx, frame);
+        if (ret == c.AVERROR_EOF) {
+            c.avcodec_flush_buffers(avctx);
+            std.debug.print("receive_frame eof\n", .{});
+            return;
+        } else if (ret == c.AVERROR(c.EAGAIN)) {
+            std.debug.print("receive_frame eagain\n", .{});
+            return;
+        } else if (ret < 0) {
+            _ = c.av_strerror(ret, &buf, 256);
+            std.debug.print("receive_frame err {d} : {s}\n", .{ ret, std.mem.sliceTo(&buf, 0) });
+            return;
+        } else if (ret >= 0) {
+            std.debug.print("receive_frame {d}\n", .{ret});
         }
     }
 }
