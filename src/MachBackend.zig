@@ -142,14 +142,14 @@ fn toMachCursor(cursor: gui.CursorKind) mach.MouseCursor {
 
         // not supported in mach glfw backend
         .wait => .not_allowed,
-        .small_wait => .not_allowed,
+        .wait_arrow => .not_allowed,
     };
 }
 
 pub fn setCursor(self: *MachBackend, cursor: gui.CursorKind) void {
     if (cursor != self.cursor_last) {
         self.cursor_last = cursor;
-        self.core.setMouseCursor(toMachCursor(cursor)) catch {};
+        self.core.setMouseCursor(toMachCursor(cursor)) catch unreachable;
     }
 }
 

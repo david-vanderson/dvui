@@ -7,7 +7,8 @@ const SDLBackend = @This();
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
 cursor_last: gui.CursorKind = .arrow,
-cursor_backing: [@typeInfo(gui.CursorKind).Enum.fields.len]*c.SDL_Cursor = undefined,
+cursor_backing: [@typeInfo(gui.CursorKind).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(gui.CursorKind).Enum.fields.len,
+cursor_backing_tried: [@typeInfo(gui.CursorKind).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(gui.CursorKind).Enum.fields.len,
 
 pub fn init(width: u32, height: u32) !SDLBackend {
     if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
@@ -31,8 +32,6 @@ pub fn init(width: u32, height: u32) !SDLBackend {
     _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_BLEND);
 
     var back = SDLBackend{ .window = window, .renderer = renderer };
-
-    back.CreateCursors();
 
     return back;
 }
@@ -77,13 +76,40 @@ pub fn addAllEvents(self: *SDLBackend, win: *gui.Window) !bool {
 pub fn setCursor(self: *SDLBackend, cursor: gui.CursorKind) void {
     if (cursor != self.cursor_last) {
         self.cursor_last = cursor;
-        c.SDL_SetCursor(self.cursor_backing[@enumToInt(cursor)]);
+
+        const enum_int = @enumToInt(cursor);
+        const tried = self.cursor_backing_tried[enum_int];
+        if (!tried) {
+            self.cursor_backing_tried[enum_int] = true;
+            self.cursor_backing[enum_int] = switch (cursor) {
+                .arrow => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_ARROW),
+                .ibeam => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_IBEAM),
+                .wait => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_WAIT),
+                .wait_arrow => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_WAITARROW),
+                .crosshair => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_CROSSHAIR),
+                .arrow_nw_se => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENWSE),
+                .arrow_ne_sw => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENESW),
+                .arrow_w_e => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZEWE),
+                .arrow_n_s => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENS),
+                .arrow_all => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZEALL),
+                .bad => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_NO),
+                .hand => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_HAND),
+            };
+        }
+
+        if (self.cursor_backing[enum_int]) |cur| {
+            c.SDL_SetCursor(cur);
+        } else {
+            std.log.warn("SDL_CreateSystemCursor \"{s}\" failed\n", .{@tagName(cursor)});
+        }
     }
 }
 
 pub fn deinit(self: *SDLBackend) void {
     for (self.cursor_backing) |cursor| {
-        c.SDL_FreeCursor(cursor);
+        if (cursor) |cur| {
+            c.SDL_FreeCursor(cur);
+        }
     }
     c.SDL_DestroyRenderer(self.renderer);
     c.SDL_DestroyWindow(self.window);
@@ -96,20 +122,6 @@ pub fn renderPresent(self: *SDLBackend) void {
 
 pub fn hasEvent(_: *SDLBackend) bool {
     return c.SDL_PollEvent(null) == 1;
-}
-
-pub fn CreateCursors(self: *SDLBackend) void {
-    self.cursor_backing[@enumToInt(gui.CursorKind.arrow)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_ARROW) orelse unreachable;
-    self.cursor_backing[@enumToInt(gui.CursorKind.ibeam)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_IBEAM) orelse unreachable;
-    self.cursor_backing[@enumToInt(gui.CursorKind.wait)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_WAIT) orelse unreachable;
-    self.cursor_backing[@enumToInt(gui.CursorKind.crosshair)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_CROSSHAIR) orelse unreachable;
-    self.cursor_backing[@enumToInt(gui.CursorKind.arrow_nw_se)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENWSE) orelse unreachable;
-    self.cursor_backing[@enumToInt(gui.CursorKind.arrow_ne_sw)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENESW) orelse unreachable;
-    self.cursor_backing[@enumToInt(gui.CursorKind.arrow_w_e)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZEWE) orelse unreachable;
-    self.cursor_backing[@enumToInt(gui.CursorKind.arrow_n_s)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENS) orelse unreachable;
-    self.cursor_backing[@enumToInt(gui.CursorKind.arrow_all)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZEALL) orelse unreachable;
-    self.cursor_backing[@enumToInt(gui.CursorKind.bad)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_NO) orelse unreachable;
-    self.cursor_backing[@enumToInt(gui.CursorKind.hand)] = c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_HAND) orelse unreachable;
 }
 
 pub fn clear(self: *SDLBackend) void {
