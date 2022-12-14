@@ -30,6 +30,7 @@ pub fn main() !void {
 
         var nstime = win.beginWait(win_backend.hasEvent());
         try win.begin(arena, nstime);
+        win_backend.clear();
 
         const quit = try win_backend.addAllEvents(&win);
         if (quit) break :main_loop;
