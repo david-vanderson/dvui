@@ -6480,6 +6480,10 @@ pub const WidgetData = struct {
         // make sure that we stay on the screen
         self.rect.x = math.max(0, windowRect().w / 2 - self.rect.w / 2);
         self.rect.y = math.max(0, windowRect().h / 2 - self.rect.h / 2);
+
+        // snap to logical pixels so at least things start non-blurry
+        self.rect.x = @floor(self.rect.x);
+        self.rect.y = @floor(self.rect.y);
     }
 
     pub fn borderAndBackground(self: *const WidgetData) !void {
