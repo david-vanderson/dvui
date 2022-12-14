@@ -350,17 +350,6 @@ pub const Options = struct {
         };
     }
 
-    // Use to keep only the font/color stuff and use defaults for the rest
-    pub fn styling(self: *const Options) Options {
-        return Options{
-            .color_custom = self.color_custom,
-            .color_custom_bg = self.color_custom_bg,
-            .font_custom = self.font_custom,
-            .color_style = self.color_style,
-            .font_style = self.font_style,
-        };
-    }
-
     // converts a content min size to a min size including padding/border/margin
     // make sure you've previously overridden padding/border/margin
     pub fn overrideMinSizeContent(self: *const Options, min_size_content: Size) Options {
@@ -5597,16 +5586,15 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32,
 }
 
 pub var checkbox_defaults: Options = .{
-    .margin = .{ .x = 2, .y = 0, .w = 2, .h = 0 },
     .corner_radius = gui.Rect.all(2),
-    .padding = Rect.all(2),
+    .padding = Rect.all(4),
     .color_style = .content,
 };
 
 pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label_str: []const u8, opts: Options) !void {
     const options = checkbox_defaults.override(opts);
     debug("Checkbox {s}", .{label_str});
-    var bc = try buttonContainer(src, id_extra, false, options.override(.{ .background = false }));
+    var bc = try buttonContainer(src, id_extra, false, options.override(.{ .background = options.backgroundGet() }));
     defer bc.deinit();
 
     if (bc.clicked()) {
@@ -5617,7 +5605,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     defer b.deinit();
 
     var check_size = try options.font().lineSkip();
-    const s = spacer(@src(), 0, Size.all(check_size), .{});
+    const s = spacer(@src(), 0, Size.all(check_size), .{ .gravity = .center });
 
     var rs = s.borderRectScale();
     rs.r = rs.r.insetAll(0.5 * rs.s);
@@ -5667,8 +5655,8 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
         try pathStroke(false, thick, .square, themeGet().color_accent);
     }
 
-    _ = spacer(@src(), 0, .{ .w = 1 }, .{});
-    try labelNoFmt(@src(), 0, label_str, options.styling());
+    _ = spacer(@src(), 0, .{ .w = checkbox_defaults.padding.?.w }, .{});
+    try labelNoFmt(@src(), 0, label_str, options.strip().override(.{ .gravity = .center }));
 }
 
 pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) !void {
