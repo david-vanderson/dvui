@@ -211,6 +211,9 @@ const srcs = &.{
     root_path ++ "libavcodec/x86/mpegaudiodsp.c",
     root_path ++ "libavcodec/x86/dct_init.c",
     root_path ++ "libavcodec/x86/fft_init.c",
+    root_path ++ "libswresample/x86/audio_convert_init.c",
+    root_path ++ "libswresample/x86/rematrix_init.c",
+    root_path ++ "libswresample/x86/resample_init.c",
 
     root_path ++ "libavutil/adler32.c",
     root_path ++ "libavutil/aes_ctr.c",
@@ -449,4 +452,14 @@ const srcs = &.{
     root_path ++ "libavcodec/vlc.c",
     root_path ++ "libavcodec/vorbis_parser.c",
     root_path ++ "libavcodec/xiph.c",
+
+    root_path ++ "libswresample/audioconvert.c",
+    root_path ++ "libswresample/dither.c",
+    root_path ++ "libswresample/options.c",
+    root_path ++ "libswresample/rematrix.c",
+    root_path ++ "libswresample/resample_dsp.c",
+    root_path ++ "libswresample/resample.c",
+    root_path ++ "libswresample/swresample_frame.c",
+    root_path ++ "libswresample/swresample.c",
+    root_path ++ "libswresample/version.c",
 };

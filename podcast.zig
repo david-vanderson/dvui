@@ -18,6 +18,7 @@ pub const c = @cImport({
 
     @cInclude("libavformat/avformat.h");
     @cInclude("libavcodec/avcodec.h");
+    @cInclude("libswresample/swresample.h");
 });
 
 // when set to true, looks for feed-{rowid}.xml and episode-{rowid}.mp3 instead
@@ -818,13 +819,37 @@ fn ffmpeg_test() !void {
             std.debug.print("receive_frame err {d} : {s}\n", .{ ret, std.mem.sliceTo(&buf, 0) });
             return;
         } else if (ret >= 0) {
-            var data_size = @intCast(usize, c.av_samples_get_buffer_size(null, frame.*.ch_layout.nb_channels, frame.*.nb_samples, frame.*.format, 1));
-            data_size *= 2;
+            var target_ch_layout: c.AVChannelLayout = undefined;
+            c.av_channel_layout_default(&target_ch_layout, 2);
 
-            //std.debug.print(".{d}|{d}|{d}|{d}.", .{ frame.*.nb_samples, frame.*.format, frame.*.ch_layout.nb_channels, data_size });
+            var swrctx: ?*c.SwrContext = null;
+            err = c.swr_alloc_set_opts2(&swrctx, &target_ch_layout, c.AV_SAMPLE_FMT_S16, 44100, &frame.*.ch_layout, frame.*.format, frame.*.sample_rate, 0, null);
+            if (err != 0) {
+                _ = c.av_strerror(err, &buf, 256);
+                std.debug.print("swr_alloc_set_opts2 err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+                return;
+            }
+            defer c.swr_free(&swrctx);
+
+            err = c.swr_init(swrctx);
+            if (err != 0) {
+                _ = c.av_strerror(err, &buf, 256);
+                std.debug.print("swr_init err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+                return;
+            }
+
+            err = c.swr_get_out_samples(swrctx, frame.*.nb_samples);
+            if (err < 0) {
+                _ = c.av_strerror(err, &buf, 256);
+                std.debug.print("swr_get_out_samples err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+                return;
+            }
+
+            const out_samples = err;
+            const data_size = @intCast(usize, out_samples * 2 * 2);
+
             std.debug.print(".", .{});
-            //std.time.sleep(1_000_000);
-            //std.debug.print("receive_frame {d}\n", .{ret});
+            //std.debug.print(".{d}|{d}|{d}|{d}.", .{ frame.*.nb_samples, frame.*.format, frame.*.ch_layout.nb_channels, data_size });
 
             mutex.lock();
             defer mutex.unlock();
@@ -842,14 +867,21 @@ fn ffmpeg_test() !void {
             }
 
             var slice = buffer.writableWithSize(data_size) catch unreachable;
-            var i: usize = 0;
-            while (i < frame.*.nb_samples) : (i += 1) {
-                slice[i * 4] = frame.*.data[0][i * 2];
-                slice[i * 4 + 1] = frame.*.data[0][i * 2 + 1];
-                slice[i * 4 + 2] = frame.*.data[0][i * 2];
-                slice[i * 4 + 3] = frame.*.data[0][i * 2 + 1];
+            err = c.swr_convert(
+                swrctx,
+                @ptrCast([*c][*c]u8, &slice.ptr),
+                out_samples,
+                &frame.*.data[0],
+                frame.*.nb_samples,
+            );
+            if (err < 0) {
+                _ = c.av_strerror(err, &buf, 256);
+                std.debug.print("swr_convert err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+                return;
             }
-            buffer.update(data_size);
+
+            const data_written = @intCast(usize, err * 2 * 2);
+            buffer.update(data_written);
         }
     }
 }
