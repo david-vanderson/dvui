@@ -647,22 +647,38 @@ fn player(arena: std.mem.Allocator) !void {
     _ = try gui.buttonIcon(@src(), 0, 20, "play", gui.icons.papirus.actions.media_playback_start_symbolic, oo2);
 }
 
+var mutex = std.Thread.Mutex{};
+var condition = std.Thread.Condition{};
 var secs: f32 = 0;
+var buffer = std.fifo.LinearFifo(u8, .{ .Static = std.math.pow(usize, 2, 20) }).init();
 
-export fn audio_callback(user_data: ?*anyopaque, stream: [*c]u8, len: c_int) void {
+export fn audio_callback(user_data: ?*anyopaque, stream: [*c]u8, length: c_int) void {
     _ = user_data;
-    std.debug.print("audio_callback\n", .{});
+    std.debug.print("|ac|\n", .{});
+    const len = @intCast(usize, length);
 
-    var i: usize = 0;
-    const n: usize = @intCast(usize, len) / 4; // 2 channels, 2 bytes per channel
-    var ptr = @ptrCast([*]i16, @alignCast(2, stream));
-    while (i < n) : (i += 1) {
-        const sample = 3000 * @sin(secs * 440 * std.math.pi * 2.0);
-        const s = @floatToInt(i16, sample);
-        ptr[i * 2] = s;
-        ptr[i * 2 + 1] = s;
-        secs += 1.0 / 44100.0;
+    mutex.lock();
+    defer mutex.unlock();
+
+    if (buffer.readableLength() >= len) {
+        for (buffer.readableSlice(0)[0..len]) |s, i| {
+            stream[i] = s;
+        }
+        buffer.discard(len);
+    } else {
+        std.debug.print("a\n", .{});
     }
+
+    //var i: usize = 0;
+    //const n: usize = @intCast(usize, len) / 4; // 2 channels, 2 bytes per channel
+    //var ptr = @ptrCast([*]i16, @alignCast(2, stream));
+    //while (i < n) : (i += 1) {
+    //    const sample = 3000 * @sin(secs * 440 * std.math.pi * 2.0);
+    //    const s = @floatToInt(i16, sample);
+    //    ptr[i * 2] = s;
+    //    ptr[i * 2 + 1] = s;
+    //    secs += 1.0 / 44100.0;
+    //}
 }
 
 fn ffmpeg_test() !void {
@@ -767,6 +783,10 @@ fn ffmpeg_test() !void {
 
     while (true) {
         // checkout av_read_pause and av_read_play if doing a network stream
+
+        // av_read_frame/avcodec_send_packet/avcodec_receive_frame should
+        // happen in background thread and output stereo samples to a buffer
+        // that's like 10s big?
         err = c.av_read_frame(avfc, pkt);
         if (err == c.AVERROR_EOF) {
             std.debug.print("read_frame eof\n", .{});
@@ -778,12 +798,14 @@ fn ffmpeg_test() !void {
         defer c.av_packet_unref(pkt);
 
         err = c.avcodec_send_packet(avctx, pkt);
+        // could return eagain if codec is full, have to call receive_frame to proceed
         if (err != 0) {
             _ = c.av_strerror(err, &buf, 256);
             std.debug.print("send_packet err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
         }
 
         ret = c.avcodec_receive_frame(avctx, frame);
+        // could return eagain if codec is empty, have to call send_packet to proceed
         if (ret == c.AVERROR_EOF) {
             c.avcodec_flush_buffers(avctx);
             std.debug.print("receive_frame eof\n", .{});
@@ -796,9 +818,38 @@ fn ffmpeg_test() !void {
             std.debug.print("receive_frame err {d} : {s}\n", .{ ret, std.mem.sliceTo(&buf, 0) });
             return;
         } else if (ret >= 0) {
+            var data_size = @intCast(usize, c.av_samples_get_buffer_size(null, frame.*.ch_layout.nb_channels, frame.*.nb_samples, frame.*.format, 1));
+            data_size *= 2;
+
+            //std.debug.print(".{d}|{d}|{d}|{d}.", .{ frame.*.nb_samples, frame.*.format, frame.*.ch_layout.nb_channels, data_size });
             std.debug.print(".", .{});
-            std.time.sleep(1_000_000);
+            //std.time.sleep(1_000_000);
             //std.debug.print("receive_frame {d}\n", .{ret});
+
+            mutex.lock();
+            defer mutex.unlock();
+
+            while (true) {
+                //std.debug.print("wl|{d}", .{buffer.writableLength()});
+                if (buffer.writableLength() < data_size) {
+                    mutex.unlock();
+                    std.debug.print("s", .{});
+                    std.time.sleep(1_000_000);
+                    mutex.lock();
+                } else {
+                    break;
+                }
+            }
+
+            var slice = buffer.writableWithSize(data_size) catch unreachable;
+            var i: usize = 0;
+            while (i < frame.*.nb_samples) : (i += 1) {
+                slice[i * 4] = frame.*.data[0][i * 2];
+                slice[i * 4 + 1] = frame.*.data[0][i * 2 + 1];
+                slice[i * 4 + 2] = frame.*.data[0][i * 2];
+                slice[i * 4 + 3] = frame.*.data[0][i * 2 + 1];
+            }
+            buffer.update(data_size);
         }
     }
 }
