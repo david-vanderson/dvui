@@ -350,7 +350,7 @@ fn mainGui(arena: std.mem.Allocator) !void {
 }
 
 pub fn main() !void {
-    ffmpeg_test();
+    try ffmpeg_test();
     if (true) return;
 
     var backend = try Backend.init(360, 600);
@@ -647,7 +647,46 @@ fn player(arena: std.mem.Allocator) !void {
     _ = try gui.buttonIcon(@src(), 0, 20, "play", gui.icons.papirus.actions.media_playback_start_symbolic, oo2);
 }
 
-fn ffmpeg_test() void {
+var secs: f32 = 0;
+
+export fn audio_callback(user_data: ?*anyopaque, stream: [*c]u8, len: c_int) void {
+    _ = user_data;
+    std.debug.print("audio_callback\n", .{});
+
+    var i: usize = 0;
+    const n: usize = @intCast(usize, len) / 4; // 2 channels, 2 bytes per channel
+    var ptr = @ptrCast([*]i16, @alignCast(2, stream));
+    while (i < n) : (i += 1) {
+        const sample = 3000 * @sin(secs * 440 * std.math.pi * 2.0);
+        const s = @floatToInt(i16, sample);
+        ptr[i * 2] = s;
+        ptr[i * 2 + 1] = s;
+        secs += 1.0 / 44100.0;
+    }
+}
+
+fn ffmpeg_test() !void {
+    if (Backend.c.SDL_InitSubSystem(Backend.c.SDL_INIT_AUDIO) < 0) {
+        std.debug.print("Couldn't initialize SDL audio: {s}\n", .{Backend.c.SDL_GetError()});
+        return error.BackendError;
+    }
+
+    var wanted_spec = std.mem.zeroes(Backend.c.SDL_AudioSpec);
+    wanted_spec.freq = 44100;
+    wanted_spec.format = Backend.c.AUDIO_S16SYS;
+    wanted_spec.channels = 2;
+    wanted_spec.callback = audio_callback;
+    var spec: Backend.c.SDL_AudioSpec = undefined;
+
+    var audio_device = Backend.c.SDL_OpenAudioDevice(null, 0, &wanted_spec, &spec, 0);
+    if (audio_device <= 1) {
+        std.debug.print("SDL_OpenAudioDevice error: {s}\n", .{Backend.c.SDL_GetError()});
+        return error.BackendError;
+    }
+
+    std.debug.print("audio device {d} spec: {}\n", .{ audio_device, spec });
+    Backend.c.SDL_PauseAudioDevice(audio_device, 0);
+
     var buf: [256]u8 = undefined;
 
     const filename = "test.mp3";
@@ -757,7 +796,9 @@ fn ffmpeg_test() void {
             std.debug.print("receive_frame err {d} : {s}\n", .{ ret, std.mem.sliceTo(&buf, 0) });
             return;
         } else if (ret >= 0) {
-            std.debug.print("receive_frame {d}\n", .{ret});
+            std.debug.print(".", .{});
+            std.time.sleep(1_000_000);
+            //std.debug.print("receive_frame {d}\n", .{ret});
         }
     }
 }
