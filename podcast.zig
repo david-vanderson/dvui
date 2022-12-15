@@ -35,6 +35,8 @@ var g_quit = false;
 
 var g_podcast_id_on_right: usize = 0;
 
+var g_audio_device: u32 = undefined;
+
 const Episode = struct {
     rowid: usize,
     title: []const u8,
@@ -351,9 +353,6 @@ fn mainGui(arena: std.mem.Allocator) !void {
 }
 
 pub fn main() !void {
-    try ffmpeg_test();
-    if (true) return;
-
     var backend = try Backend.init(360, 600);
     defer backend.deinit();
 
@@ -369,6 +368,29 @@ pub fn main() !void {
             else => return err,
         };
     }
+
+    if (Backend.c.SDL_InitSubSystem(Backend.c.SDL_INIT_AUDIO) < 0) {
+        std.debug.print("Couldn't initialize SDL audio: {s}\n", .{Backend.c.SDL_GetError()});
+        return error.BackendError;
+    }
+
+    var wanted_spec = std.mem.zeroes(Backend.c.SDL_AudioSpec);
+    wanted_spec.freq = 44100;
+    wanted_spec.format = Backend.c.AUDIO_S16SYS;
+    wanted_spec.channels = 2;
+    wanted_spec.callback = audio_callback;
+    var spec: Backend.c.SDL_AudioSpec = undefined;
+
+    g_audio_device = Backend.c.SDL_OpenAudioDevice(null, 0, &wanted_spec, &spec, 0);
+    if (g_audio_device <= 1) {
+        std.debug.print("SDL_OpenAudioDevice error: {s}\n", .{Backend.c.SDL_GetError()});
+        return error.BackendError;
+    }
+
+    std.debug.print("audio device {d} spec: {}\n", .{ g_audio_device, spec });
+
+    const pt = try std.Thread.spawn(.{}, playback_thread, .{});
+    pt.detach();
 
     main_loop: while (true) {
         var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -645,7 +667,9 @@ fn player(arena: std.mem.Allocator) !void {
 
     _ = try gui.buttonIcon(@src(), 0, 20, "forward", gui.icons.papirus.actions.media_seek_forward_symbolic, oo2);
 
-    _ = try gui.buttonIcon(@src(), 0, 20, "play", gui.icons.papirus.actions.media_playback_start_symbolic, oo2);
+    if (try gui.buttonIcon(@src(), 0, 20, "play", gui.icons.papirus.actions.media_playback_start_symbolic, oo2)) {
+        std.debug.print("play\n", .{});
+    }
 }
 
 var mutex = std.Thread.Mutex{};
@@ -682,32 +706,13 @@ export fn audio_callback(user_data: ?*anyopaque, stream: [*c]u8, length: c_int) 
     //}
 }
 
-fn ffmpeg_test() !void {
-    if (Backend.c.SDL_InitSubSystem(Backend.c.SDL_INIT_AUDIO) < 0) {
-        std.debug.print("Couldn't initialize SDL audio: {s}\n", .{Backend.c.SDL_GetError()});
-        return error.BackendError;
-    }
-
-    var wanted_spec = std.mem.zeroes(Backend.c.SDL_AudioSpec);
-    wanted_spec.freq = 44100;
-    wanted_spec.format = Backend.c.AUDIO_S16SYS;
-    wanted_spec.channels = 2;
-    wanted_spec.callback = audio_callback;
-    var spec: Backend.c.SDL_AudioSpec = undefined;
-
-    var audio_device = Backend.c.SDL_OpenAudioDevice(null, 0, &wanted_spec, &spec, 0);
-    if (audio_device <= 1) {
-        std.debug.print("SDL_OpenAudioDevice error: {s}\n", .{Backend.c.SDL_GetError()});
-        return error.BackendError;
-    }
-
-    std.debug.print("audio device {d} spec: {}\n", .{ audio_device, spec });
-    Backend.c.SDL_PauseAudioDevice(audio_device, 0);
+fn playback_thread() !void {
+    Backend.c.SDL_PauseAudioDevice(g_audio_device, 0);
 
     var buf: [256]u8 = undefined;
 
-    const filename = "test.mp3";
-    //const filename = "episode-2.mp3";
+    //const filename = "test.mp3";
+    const filename = "episode-2.mp3";
 
     var avfc: ?*c.AVFormatContext = null;
     var err = c.avformat_open_input(&avfc, filename, null, null);
@@ -781,6 +786,13 @@ fn ffmpeg_test() !void {
     var ret = c.AVERROR(c.EAGAIN);
 
     var pkt: *c.AVPacket = c.av_packet_alloc();
+    var swrctx: ?*c.SwrContext = null;
+
+    // do this when starting a new stream
+    if (swrctx != null) {
+        c.swr_free(&swrctx);
+        swrctx = null;
+    }
 
     while (true) {
         // checkout av_read_pause and av_read_play if doing a network stream
@@ -813,7 +825,6 @@ fn ffmpeg_test() !void {
             return;
         } else if (ret == c.AVERROR(c.EAGAIN)) {
             std.debug.print("receive_frame eagain\n", .{});
-            return;
         } else if (ret < 0) {
             _ = c.av_strerror(ret, &buf, 256);
             std.debug.print("receive_frame err {d} : {s}\n", .{ ret, std.mem.sliceTo(&buf, 0) });
@@ -822,34 +833,27 @@ fn ffmpeg_test() !void {
             var target_ch_layout: c.AVChannelLayout = undefined;
             c.av_channel_layout_default(&target_ch_layout, 2);
 
-            var swrctx: ?*c.SwrContext = null;
-            err = c.swr_alloc_set_opts2(&swrctx, &target_ch_layout, c.AV_SAMPLE_FMT_S16, 44100, &frame.*.ch_layout, frame.*.format, frame.*.sample_rate, 0, null);
-            if (err != 0) {
-                _ = c.av_strerror(err, &buf, 256);
-                std.debug.print("swr_alloc_set_opts2 err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
-                return;
-            }
-            defer c.swr_free(&swrctx);
+            if (swrctx == null) {
+                err = c.swr_alloc_set_opts2(&swrctx, &target_ch_layout, c.AV_SAMPLE_FMT_S16, 44100, &frame.*.ch_layout, frame.*.format, frame.*.sample_rate, 0, null);
+                if (err != 0) {
+                    _ = c.av_strerror(err, &buf, 256);
+                    std.debug.print("swr_alloc_set_opts2 err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+                    return;
+                }
 
-            err = c.swr_init(swrctx);
-            if (err != 0) {
-                _ = c.av_strerror(err, &buf, 256);
-                std.debug.print("swr_init err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
-                return;
-            }
-
-            err = c.swr_get_out_samples(swrctx, frame.*.nb_samples);
-            if (err < 0) {
-                _ = c.av_strerror(err, &buf, 256);
-                std.debug.print("swr_get_out_samples err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
-                return;
+                err = c.swr_init(swrctx);
+                if (err != 0) {
+                    _ = c.av_strerror(err, &buf, 256);
+                    std.debug.print("swr_init err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+                    return;
+                }
             }
 
-            const out_samples = err;
+            const out_samples = @divTrunc(frame.*.nb_samples * 44100, frame.*.sample_rate) + 256;
             const data_size = @intCast(usize, out_samples * 2 * 2);
 
-            std.debug.print(".", .{});
-            //std.debug.print(".{d}|{d}|{d}|{d}.", .{ frame.*.nb_samples, frame.*.format, frame.*.ch_layout.nb_channels, data_size });
+            //std.debug.print(".", .{});
+            std.debug.print(".{d}|{d}", .{ frame.*.nb_samples, out_samples });
 
             mutex.lock();
             defer mutex.unlock();
@@ -882,6 +886,7 @@ fn ffmpeg_test() !void {
 
             const data_written = @intCast(usize, err * 2 * 2);
             buffer.update(data_written);
+            std.debug.print("|{d}", .{err});
         }
     }
 }
