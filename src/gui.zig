@@ -3600,13 +3600,13 @@ pub const PanedWidget = struct {
                 switch (self.dir) {
                     .horizontal => {
                         const first = r.w * self.split_ratio - handle_size / 2;
-                        r.w -= first;
-                        r.x += first + handle_size / 2;
+                        r.w -= first + handle_size;
+                        r.x += first + handle_size;
                     },
                     .vertical => {
                         const first = r.h * self.split_ratio - handle_size / 2;
-                        r.h -= first;
-                        r.y += first + handle_size / 2;
+                        r.h -= first + handle_size;
+                        r.y += first + handle_size;
                     },
                 }
             }
