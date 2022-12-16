@@ -36,6 +36,7 @@ var g_quit = false;
 var g_podcast_id_on_right: usize = 0;
 
 var g_audio_device: u32 = undefined;
+var g_audio_spec: Backend.c.SDL_AudioSpec = undefined;
 
 const Episode = struct {
     rowid: usize,
@@ -379,15 +380,14 @@ pub fn main() !void {
     wanted_spec.format = Backend.c.AUDIO_S16SYS;
     wanted_spec.channels = 2;
     wanted_spec.callback = audio_callback;
-    var spec: Backend.c.SDL_AudioSpec = undefined;
 
-    g_audio_device = Backend.c.SDL_OpenAudioDevice(null, 0, &wanted_spec, &spec, 0);
+    g_audio_device = Backend.c.SDL_OpenAudioDevice(null, 0, &wanted_spec, &g_audio_spec, 0);
     if (g_audio_device <= 1) {
         std.debug.print("SDL_OpenAudioDevice error: {s}\n", .{Backend.c.SDL_GetError()});
         return error.BackendError;
     }
 
-    std.debug.print("audio device {d} spec: {}\n", .{ g_audio_device, spec });
+    std.debug.print("audio device {d} spec: {}\n", .{ g_audio_device, g_audio_spec });
 
     const pt = try std.Thread.spawn(.{}, playback_thread, .{});
     pt.detach();
@@ -679,19 +679,33 @@ var buffer = std.fifo.LinearFifo(u8, .{ .Static = std.math.pow(usize, 2, 20) }).
 
 export fn audio_callback(user_data: ?*anyopaque, stream: [*c]u8, length: c_int) void {
     _ = user_data;
-    std.debug.print("|ac|\n", .{});
-    const len = @intCast(usize, length);
+    var len = @intCast(usize, length);
+    var i: usize = 0;
 
     mutex.lock();
     defer mutex.unlock();
 
-    if (buffer.readableLength() >= len) {
-        for (buffer.readableSlice(0)[0..len]) |s, i| {
+    while (i < len and buffer.readableLength() > 0) {
+        const size = std.math.min(len - i, buffer.readableLength());
+        //std.debug.print("|b{d}", .{size});
+        for (buffer.readableSlice(0)[0..size]) |s| {
             stream[i] = s;
+            i += 1;
         }
-        buffer.discard(len);
-    } else {
-        std.debug.print("a\n", .{});
+        buffer.discard(size);
+
+        if (buffer.readableLength() < buffer.writableLength()) {
+            // buffer is less than half full
+            condition.signal();
+        }
+    }
+
+    if (i < len) {
+        //std.debug.print("|s{d}", .{len - i});
+        while (i < len) {
+            stream[i] = g_audio_spec.silence;
+            i += 1;
+        }
     }
 
     //var i: usize = 0;
@@ -702,7 +716,7 @@ export fn audio_callback(user_data: ?*anyopaque, stream: [*c]u8, length: c_int) 
     //    const s = @floatToInt(i16, sample);
     //    ptr[i * 2] = s;
     //    ptr[i * 2 + 1] = s;
-    //    secs += 1.0 / 44100.0;
+    //    secs += 1.0 / g_audio_spec.freq;
     //}
 }
 
@@ -711,14 +725,15 @@ fn playback_thread() !void {
 
     var buf: [256]u8 = undefined;
 
-    //const filename = "test.mp3";
-    const filename = "episode-2.mp3";
+    const filename = "test.mp3";
+    //const filename = "episode-2.mp3";
 
     var avfc: ?*c.AVFormatContext = null;
     var err = c.avformat_open_input(&avfc, filename, null, null);
     if (err != 0) {
         _ = c.av_strerror(err, &buf, 256);
-        std.debug.print("err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+        std.debug.print("avformat_open_input err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+        return;
     }
 
     defer c.avformat_close_input(&avfc);
@@ -729,7 +744,8 @@ fn playback_thread() !void {
     err = c.avformat_find_stream_info(avfc, null);
     if (err != 0) {
         _ = c.av_strerror(err, &buf, 256);
-        std.debug.print("err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+        std.debug.print("avformat_find_stream_info err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+        return;
     }
 
     c.av_dump_format(avfc, 0, filename, 0);
@@ -737,11 +753,9 @@ fn playback_thread() !void {
     var audio_stream_idx = c.av_find_best_stream(avfc, c.AVMEDIA_TYPE_AUDIO, -1, -1, null, 0);
     if (audio_stream_idx < 0) {
         _ = c.av_strerror(audio_stream_idx, &buf, 256);
-        std.debug.print("err {d} : {s}\n", .{ audio_stream_idx, std.mem.sliceTo(&buf, 0) });
+        std.debug.print("av_find_best_stream err {d} : {s}\n", .{ audio_stream_idx, std.mem.sliceTo(&buf, 0) });
         return;
     }
-
-    std.debug.print("AUDIO stream {d}\n", .{audio_stream_idx});
 
     const avstream = avfc.?.streams[@intCast(usize, audio_stream_idx)];
     var avctx: *c.AVCodecContext = c.avcodec_alloc_context3(null);
@@ -750,7 +764,8 @@ fn playback_thread() !void {
     err = c.avcodec_parameters_to_context(avctx, avstream.*.codecpar);
     if (err != 0) {
         _ = c.av_strerror(err, &buf, 256);
-        std.debug.print("err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+        std.debug.print("avcodec_parameters_to_context err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+        return;
     }
 
     avctx.pkt_timebase = avstream.*.time_base;
@@ -764,31 +779,24 @@ fn playback_thread() !void {
     err = c.avcodec_open2(avctx, codec, null);
     if (err != 0) {
         _ = c.av_strerror(err, &buf, 256);
-        std.debug.print("err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+        std.debug.print("avcodec_open2 err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+        return;
     }
 
     avstream.*.discard = c.AVDISCARD_DEFAULT;
-    std.debug.print("sample_rate {d}\n", .{avctx.*.sample_rate});
-
-    // initialization stuff
-    //memset(d, 0, sizeof(Decoder));
-    //d->pkt = av_packet_alloc();
-    //if (!d->pkt)
-    //    return AVERROR(ENOMEM);
-    //d->avctx = avctx;
-    //d->queue = queue;
-    //d->empty_queue_cond = empty_queue_cond;
-    //d->start_pts = AV_NOPTS_VALUE;
-    //d->pkt_serial = -1;
 
     // audio thread
-    var frame: *c.AVFrame = c.av_frame_alloc();
-    var ret = c.AVERROR(c.EAGAIN);
+    var target_ch_layout: c.AVChannelLayout = undefined;
+    c.av_channel_layout_default(&target_ch_layout, 2);
 
+    var frame: *c.AVFrame = c.av_frame_alloc();
     var pkt: *c.AVPacket = c.av_packet_alloc();
     var swrctx: ?*c.SwrContext = null;
 
-    // do this when starting a new stream
+    // do this when starting a new stream or seeking
+
+    buffer.discard(buffer.readableLength());
+    c.avcodec_flush_buffers(avctx);
     if (swrctx != null) {
         c.swr_free(&swrctx);
         swrctx = null;
@@ -797,77 +805,74 @@ fn playback_thread() !void {
     while (true) {
         // checkout av_read_pause and av_read_play if doing a network stream
 
-        // av_read_frame/avcodec_send_packet/avcodec_receive_frame should
-        // happen in background thread and output stereo samples to a buffer
-        // that's like 10s big?
+        var eof = false;
         err = c.av_read_frame(avfc, pkt);
         if (err == c.AVERROR_EOF) {
-            std.debug.print("read_frame eof\n", .{});
-            return;
+            //std.debug.print("read_frame eof\n", .{});
+            eof = true;
         } else if (err != 0) {
             _ = c.av_strerror(err, &buf, 256);
             std.debug.print("read_frame err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
-        }
-        defer c.av_packet_unref(pkt);
-
-        err = c.avcodec_send_packet(avctx, pkt);
-        // could return eagain if codec is full, have to call receive_frame to proceed
-        if (err != 0) {
-            _ = c.av_strerror(err, &buf, 256);
-            std.debug.print("send_packet err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+            return;
         }
 
-        ret = c.avcodec_receive_frame(avctx, frame);
+        if (!eof) {
+            err = c.avcodec_send_packet(avctx, pkt);
+            // could return eagain if codec is full, have to call receive_frame to proceed
+            if (err != 0) {
+                _ = c.av_strerror(err, &buf, 256);
+                std.debug.print("send_packet err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+                return;
+            }
+            c.av_packet_unref(pkt);
+        }
+
+        var ret = c.avcodec_receive_frame(avctx, frame);
         // could return eagain if codec is empty, have to call send_packet to proceed
         if (ret == c.AVERROR_EOF) {
-            c.avcodec_flush_buffers(avctx);
-            std.debug.print("receive_frame eof\n", .{});
-            return;
+            //std.debug.print("receive_frame eof\n", .{});
+            eof = true;
         } else if (ret == c.AVERROR(c.EAGAIN)) {
-            std.debug.print("receive_frame eagain\n", .{});
+            //std.debug.print("receive_frame eagain\n", .{});
         } else if (ret < 0) {
             _ = c.av_strerror(ret, &buf, 256);
             std.debug.print("receive_frame err {d} : {s}\n", .{ ret, std.mem.sliceTo(&buf, 0) });
             return;
-        } else if (ret >= 0) {
-            var target_ch_layout: c.AVChannelLayout = undefined;
-            c.av_channel_layout_default(&target_ch_layout, 2);
+        }
 
-            if (swrctx == null) {
-                err = c.swr_alloc_set_opts2(&swrctx, &target_ch_layout, c.AV_SAMPLE_FMT_S16, 44100, &frame.*.ch_layout, frame.*.format, frame.*.sample_rate, 0, null);
-                if (err != 0) {
-                    _ = c.av_strerror(err, &buf, 256);
-                    std.debug.print("swr_alloc_set_opts2 err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
-                    return;
-                }
+        // only used if we are in eof and flushing the last samples out of swr_convert
+        var out_samples: c_int = 256;
 
-                err = c.swr_init(swrctx);
-                if (err != 0) {
-                    _ = c.av_strerror(err, &buf, 256);
-                    std.debug.print("swr_init err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
-                    return;
-                }
+        if (!eof and swrctx == null) {
+            err = c.swr_alloc_set_opts2(&swrctx, &target_ch_layout, c.AV_SAMPLE_FMT_S16, g_audio_spec.freq, &frame.*.ch_layout, frame.*.format, frame.*.sample_rate, 0, null);
+            if (err != 0) {
+                _ = c.av_strerror(err, &buf, 256);
+                std.debug.print("swr_alloc_set_opts2 err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+                return;
             }
 
-            const out_samples = @divTrunc(frame.*.nb_samples * 44100, frame.*.sample_rate) + 256;
-            const data_size = @intCast(usize, out_samples * 2 * 2);
+            err = c.swr_init(swrctx);
+            if (err != 0) {
+                _ = c.av_strerror(err, &buf, 256);
+                std.debug.print("swr_init err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
+                return;
+            }
+        }
 
-            //std.debug.print(".", .{});
-            std.debug.print(".{d}|{d}", .{ frame.*.nb_samples, out_samples });
+        if (!eof) {
+            out_samples = @divTrunc(frame.*.nb_samples * g_audio_spec.freq, frame.*.sample_rate) + 256;
+        }
 
+        const data_size = @intCast(usize, out_samples * 2 * 2); // 2 bytes per sample per channel
+
+        if (swrctx != null) {
             mutex.lock();
             defer mutex.unlock();
 
-            while (true) {
-                //std.debug.print("wl|{d}", .{buffer.writableLength()});
-                if (buffer.writableLength() < data_size) {
-                    mutex.unlock();
-                    std.debug.print("s", .{});
-                    std.time.sleep(1_000_000);
-                    mutex.lock();
-                } else {
-                    break;
-                }
+            while (buffer.writableLength() < data_size) {
+                //std.debug.print("wait", .{});
+                condition.wait(&mutex);
+                //std.debug.print("done", .{});
             }
 
             var slice = buffer.writableWithSize(data_size) catch unreachable;
@@ -875,8 +880,8 @@ fn playback_thread() !void {
                 swrctx,
                 @ptrCast([*c][*c]u8, &slice.ptr),
                 out_samples,
-                &frame.*.data[0],
-                frame.*.nb_samples,
+                if (eof) null else &frame.*.data[0],
+                if (eof) 0 else frame.*.nb_samples,
             );
             if (err < 0) {
                 _ = c.av_strerror(err, &buf, 256);
@@ -884,9 +889,14 @@ fn playback_thread() !void {
                 return;
             }
 
-            const data_written = @intCast(usize, err * 2 * 2);
+            const data_written = @intCast(usize, err * 2 * 2); // 2 bytes per sample per channel
             buffer.update(data_written);
-            std.debug.print("|{d}", .{err});
+            //std.debug.print(".", .{});
+            //std.debug.print("|{d}", .{err});
+        }
+
+        if (eof) {
+            break;
         }
     }
 }
