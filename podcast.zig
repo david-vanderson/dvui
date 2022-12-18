@@ -483,7 +483,8 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
             var text = [_]u8{0} ** 100;
         };
 
-        var te = gui.TextEntryWidget.init(@src(), 0, 26.0, &TextEntryText.text, .{ .gravity = .center });
+        const msize = gui.TextEntryWidget.defaults.font().textSize("M") catch unreachable;
+        var te = gui.TextEntryWidget.init(@src(), 0, &TextEntryText.text, .{ .gravity = .center, .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
         if (gui.firstFrame(te.data().id)) {
             std.mem.set(u8, &TextEntryText.text, 0);
             gui.focusWidget(te.wd.id, null);
@@ -659,20 +660,34 @@ fn player(arena: std.mem.Allocator) !void {
     var box3 = try gui.box(@src(), 0, .horizontal, oo.override(.{ .padding = .{ .x = 4, .y = 0, .w = 4, .h = 4 } }));
     defer box3.deinit();
 
-    const oo2 = gui.Options{ .expand = .horizontal, .gravity = .center };
-
-    _ = try gui.buttonIcon(@src(), 0, 20, "back", gui.icons.papirus.actions.media_seek_backward_symbolic, oo2);
-
-    try gui.label(@src(), 0, "0.00%", .{}, oo2.override(.{ .color_style = .content }));
-
-    _ = try gui.buttonIcon(@src(), 0, 20, "forward", gui.icons.papirus.actions.media_seek_forward_symbolic, oo2);
+    const oo2 = gui.Options{ .expand = .both, .gravity = .center };
 
     mutex.lock();
+    if (try gui.buttonIcon(@src(), 0, 20, "back", gui.icons.papirus.actions.media_seek_backward_symbolic, oo2)) {
+        //blah
+    }
+
+    const time_max_size = oo2.font().textSize("0:00:00") catch unreachable;
+    try gui.label(@src(), 0, "0:00:{d:0>2.0}", .{current_time}, oo2.override(.{ .min_size_content = time_max_size }));
+
     if (try gui.buttonIcon(@src(), 0, 20, if (playing) "pause" else "play", if (playing) gui.icons.papirus.actions.media_playback_pause_symbolic else gui.icons.papirus.actions.media_playback_start_symbolic, oo2)) {
         if (playing) {
             pause();
         } else {
             play();
+        }
+    }
+
+    _ = try gui.buttonIcon(@src(), 0, 20, "forward", gui.icons.papirus.actions.media_seek_forward_symbolic, oo2);
+
+    if (playing) {
+        const timerId = gui.parentGet().extendID(@src(), 0);
+        const millis = @divFloor(gui.frameTimeNS(), 1_000_000);
+        const left = @intCast(i32, @rem(millis, 1000));
+
+        if (gui.timerDone(timerId) or !gui.timerExists(timerId)) {
+            const wait = 1000 * (1000 - left);
+            try gui.timerSet(timerId, wait);
         }
     }
     mutex.unlock();
@@ -684,6 +699,9 @@ var playing = false;
 var stream_new = false;
 var buffer = std.fifo.LinearFifo(u8, .{ .Static = std.math.pow(usize, 2, 20) }).init();
 var buffer_eof = false;
+var stream_timebase: f64 = 1.0;
+var buffer_last_time: f64 = 0;
+var current_time: f64 = 0;
 
 // must hold mutex when calling this
 fn play() void {
@@ -725,6 +743,7 @@ export fn audio_callback(user_data: ?*anyopaque, stream: [*c]u8, length: c_int) 
             i += 1;
         }
         buffer.discard(size);
+        current_time = buffer_last_time - (@intToFloat(f64, buffer.readableLength()) / @intToFloat(f64, g_audio_spec.freq * 2 * 2));
 
         if (!buffer_eof and buffer.readableLength() < buffer.writableLength()) {
             // buffer is less than half full
@@ -803,7 +822,10 @@ fn playback_thread() !void {
             return;
         }
 
-        avctx.pkt_timebase = avstream.*.time_base;
+        mutex.lock();
+        stream_timebase = @intToFloat(f64, avstream.*.time_base.num) / @intToFloat(f64, avstream.*.time_base.den);
+        std.debug.print("timebase {d}\n", .{stream_timebase});
+        mutex.unlock();
 
         const codec = c.avcodec_find_decoder(avctx.codec_id);
         if (codec == 0) {
@@ -938,6 +960,16 @@ fn playback_thread() !void {
 
                 const data_written = @intCast(usize, err * 2 * 2); // 2 bytes per sample per channel
                 buffer.update(data_written);
+                const seconds_written = @intToFloat(f64, err) / @intToFloat(f64, g_audio_spec.freq);
+
+                if (!eof) {
+                    buffer_last_time = @intToFloat(f64, frame.*.best_effort_timestamp) * stream_timebase + seconds_written;
+                } else {
+                    buffer_last_time += seconds_written;
+                }
+
+                std.debug.print("ts: {d}\n", .{buffer_last_time});
+
                 //std.debug.print(".", .{});
                 //std.debug.print("|{d}", .{err});
                 if (eof) {

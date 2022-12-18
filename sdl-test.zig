@@ -146,7 +146,7 @@ pub fn main() !void {
                 //}
 
                 {
-                    var scroll = try gui.scrollArea(@src(), 0, .{ .min_size = .{ .h = 100 } });
+                    var scroll = try gui.scrollArea(@src(), 0, .{ .min_size_content = .{ .h = 100 } });
                     defer scroll.deinit();
 
                     var vbox = try gui.box(@src(), 0, .vertical, .{ .expand = .both });
@@ -208,8 +208,9 @@ pub fn main() !void {
                         }
                     };
 
-                    try gui.textEntry(@src(), 0, 26.0, &TextEntryText.text1, .{});
-                    try gui.textEntry(@src(), 0, 26.0, &TextEntryText.text2, .{});
+                    const msize = gui.TextEntryWidget.defaults.font().textSize("M") catch unreachable;
+                    try gui.textEntry(@src(), 0, &TextEntryText.text1, .{ .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
+                    try gui.textEntry(@src(), 0, &TextEntryText.text2, .{ .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
                 }
 
                 {
@@ -279,7 +280,7 @@ pub fn main() !void {
                         }
                         var buf = std.mem.zeroes([100]u8);
                         var buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{ fi, name }) catch unreachable;
-                        var fw2 = try gui.floatingWindow(@src(), fi, modal, null, f, .{ .color_style = .window, .min_size = .{ .w = 150, .h = 100 } });
+                        var fw2 = try gui.floatingWindow(@src(), fi, modal, null, f, .{ .color_style = .window, .min_size_content = .{ .w = 150, .h = 100 } });
                         defer fw2.deinit();
                         try gui.labelNoFmt(@src(), 0, buf_slice, .{ .gravity = .center });
 
@@ -386,7 +387,7 @@ fn show_stroke_test_window() !void {
     //defer scale.deinit();
 
     var st = StrokeTest{};
-    try st.install(@src(), 0, .{ .min_size = .{ .w = 400, .h = 400 }, .expand = .both });
+    try st.install(@src(), 0, .{ .min_size_content = .{ .w = 400, .h = 400 }, .expand = .both });
 }
 
 pub const StrokeTest = struct {
