@@ -1633,10 +1633,12 @@ pub const EventIterator = struct {
                         // window is catching all focus-routed events that didn't get
                         // processed (maybe the focus widget never showed up)
                         if (e.focus_windowId != self.id) {
+                            // not the focused window
                             continue;
                         }
                     } else {
                         if (e.focus_widgetId != self.id) {
+                            // not the focused widget
                             continue;
                         }
                     }
@@ -1645,18 +1647,25 @@ pub const EventIterator = struct {
                 .mouse => {
                     if (captureMouseGet()) |id| {
                         if (id != self.id) {
+                            // mouse is captured by a different widget
                             continue;
                         }
                     } else {
                         if (e.evt.mouse.floating_win != windowCurrentId()) {
+                            // floating window is above us
                             continue;
                         }
 
                         if (!self.r.contains(e.evt.mouse.p)) {
+                            // mouse not in our rect
                             continue;
                         }
 
                         if (!clipGet().contains(e.evt.mouse.p)) {
+                            // mouse not in clip region
+
+                            // prevents widgets that are scrolled off a
+                            // scroll area from processing events
                             continue;
                         }
                     }
@@ -3035,8 +3044,9 @@ pub const FloatingWindowWidget = struct {
         _ = parentSet(self.widget());
         self.prev_windowId = windowCurrentSet(self.wd.id);
 
-        // FloatingWindow is outside normal widget flow, a dialog needs to paint on
-        // top of the whole screen
+        // reset clip to whole OS window
+        // - if modal fade everything below us
+        // - gives us all mouse events
         self.prevClip = clipGet();
         clipSet(windowRectPixels());
 
@@ -3058,6 +3068,9 @@ pub const FloatingWindowWidget = struct {
             col.a = 100;
             try pathFillConvex(col);
         }
+
+        // clip to just our window
+        clipSet(rs.r);
 
         // we are using BoxWidget to do border/background but floating windows
         // don't have margin, so turn that off
