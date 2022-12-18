@@ -1,4 +1,24 @@
 
+floating windows should clip
+
+figure out why IconBrowser's second frame doesn't show the icons?
+
+redo checkbox
+- separate checkmark from label
+
+menuItems should be expanded horizontally so you don't have to hit that exactly
+- but gravity stay .left
+
+
+seeking:
+- need to flush buffers
+
+
+add disabled to options so the seek forward/backward icons can be grayed out
+- need to add ability to gray out things too (alpha to options?)
+- when disabled, can't tab to that thing
+  - if focused and disabled, call tabIndexNext
+
 
 can't format {d:02} needs {d:0>2}?
 
