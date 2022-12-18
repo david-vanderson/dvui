@@ -196,9 +196,8 @@ pub const Options = struct {
     // x topleft, y topright, w botright, h botleft
     corner_radius: ?Rect = null,
 
-    // includes padding/border/margin
-    // see overrideMinSizeContent()
-    min_size: ?Size = null,
+    // padding/border/margin will be added to this
+    min_size_content: ?Size = null,
 
     color_style: ?ColorStyle = null,
     background: ?bool = null,
@@ -247,11 +246,7 @@ pub const Options = struct {
     }
 
     pub fn font(self: *const Options) Font {
-        return self.fontWithDefault(.body);
-    }
-
-    pub fn fontWithDefault(self: *const Options, style_default: FontStyle) Font {
-        const style = self.font_style orelse style_default;
+        const style = self.font_style orelse .body;
         const f =
             switch (style) {
             .custom => self.font_custom,
@@ -302,6 +297,14 @@ pub const Options = struct {
         return self.corner_radius orelse Rect{};
     }
 
+    pub fn min_sizeGet(self: *const Options) Size {
+        return self.min_size_contentGet().pad(self.paddingGet()).pad(self.borderGet()).pad(self.marginGet());
+    }
+
+    pub fn min_size_contentGet(self: *const Options) Size {
+        return self.min_size_content orelse Size{};
+    }
+
     pub fn expandHorizontal(self: *const Options) bool {
         return (self.expand orelse Expand.none).horizontal();
     }
@@ -348,12 +351,6 @@ pub const Options = struct {
             .color_style = self.color_style,
             .font_style = self.font_style,
         };
-    }
-
-    // converts a content min size to a min size including padding/border/margin
-    // make sure you've previously overridden padding/border/margin
-    pub fn overrideMinSizeContent(self: *const Options, min_size_content: Size) Options {
-        return self.override(.{ .min_size = min_size_content.pad(self.paddingGet()).pad(self.borderGet()).pad(self.marginGet()) });
     }
 
     pub fn override(self: *const Options, over: Options) Options {
@@ -2722,7 +2719,7 @@ pub const PopupWidget = struct {
 
         if (minSizeGetPrevious(self.wd.id)) |_| {
             self.wd.rect = Rect.fromPoint(self.initialRect.topleft());
-            const ms = minSize(self.wd.id, self.options.min_size orelse Size{});
+            const ms = minSize(self.wd.id, self.options.min_sizeGet());
             self.wd.rect.w = ms.w;
             self.wd.rect.h = ms.h;
             self.wd.rect = placeOnScreen(self.initialRect, self.wd.rect);
@@ -2975,13 +2972,12 @@ pub const FloatingWindowWidget = struct {
             }
         }
 
-        var ms = self.options.min_size orelse Size{};
         if (minSizeGetPrevious(self.wd.id)) |min_size| {
             if (self.auto_size) {
                 // only size ourselves once by default
                 self.auto_size = false;
 
-                ms = Size.max(ms, min_size);
+                var ms = Size.max(min_size, self.options.min_sizeGet());
                 self.wd.rect.w = ms.w;
                 self.wd.rect.h = ms.h;
 
@@ -3350,7 +3346,7 @@ pub fn dialogOkDisplay(id: u32) !DialogDisplayReturn {
         return .close;
     }
 
-    var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 }, .background = false });
+    var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
     try tl.addText(message, .{});
     tl.deinit();
 
@@ -3708,7 +3704,7 @@ pub const TextLayoutWidget = struct {
         .padding = Rect.all(4),
         .background = true,
         .color_style = .content,
-        .min_size = .{ .w = 25 },
+        .min_size_content = .{ .w = 25 },
     };
 
     wd: WidgetData = undefined,
@@ -4283,7 +4279,7 @@ pub const ScrollAreaWidget = struct {
         // of a window)
         .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
         .color_style = .content,
-        .min_size = .{ .w = 25, .h = 25 },
+        .min_size_content = .{ .w = 25, .h = 25 },
     };
 
     hbox: BoxWidget = undefined,
@@ -4416,7 +4412,7 @@ pub const ScrollContainerWidget = struct {
         // of a window)
         .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
         .color_style = .content,
-        .min_size = .{ .w = 25, .h = 25 },
+        .min_size_content = .{ .w = 25, .h = 25 },
     };
 
     wd: WidgetData = undefined,
@@ -4609,7 +4605,7 @@ pub const ScrollBarWidget = struct {
     pub var defaults: Options = .{
         .expand = .vertical,
         .color_style = .content,
-        .min_size = .{ .w = 10, .h = 10 },
+        .min_size_content = .{ .w = 10, .h = 10 },
     };
 
     wd: WidgetData = undefined,
@@ -4759,7 +4755,6 @@ pub const ScrollBarWidget = struct {
 
 pub fn separator(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) !void {
     const defaults: Options = .{
-        .min_size = .{ .w = 1, .h = 1 },
         .border = .{ .x = 1, .y = 1, .w = 0, .h = 0 },
         .color_style = .content,
     };
@@ -4772,10 +4767,10 @@ pub fn separator(src: std.builtin.SourceLocation, id_extra: usize, opts: Options
 }
 
 pub fn spacer(src: std.builtin.SourceLocation, id_extra: usize, size: Size, opts: Options) WidgetData {
-    if (opts.min_size != null) {
+    if (opts.min_size_content != null) {
         std.debug.print("warning: spacer options had min_size but is being overwritten\n", .{});
     }
-    var wd = WidgetData.init(src, id_extra, opts.override(.{ .min_size = size }));
+    var wd = WidgetData.init(src, id_extra, opts.override(.{ .min_size_content = size }));
     debug("{x} Spacer {}", .{ wd.id, wd.rect });
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
@@ -4784,7 +4779,7 @@ pub fn spacer(src: std.builtin.SourceLocation, id_extra: usize, size: Size, opts
 
 pub fn spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) !void {
     var defaults: Options = .{
-        .min_size = .{ .w = 50, .h = 50 },
+        .min_size_content = .{ .w = 50, .h = 50 },
     };
     const options = defaults.override(opts);
     var wd = WidgetData.init(src, id_extra, options);
@@ -5291,8 +5286,10 @@ pub const LabelWidget = struct {
             }
         }
 
-        self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
-        self.wd.placeInsideNoExpand();
+        size = Size.max(size, options.min_size_contentGet());
+
+        self.wd = WidgetData.init(src, id_extra, options.override(.{ .min_size_content = size }));
+
         return self;
     }
 
@@ -5300,9 +5297,11 @@ pub const LabelWidget = struct {
         _ = opts;
         debug("{x} Label \"{s:<10}\" {}", .{ self.wd.id, self.label_str, self.wd.rect });
         try self.wd.borderAndBackground();
-        var rs = self.wd.contentRectScale();
+        const rsclip = self.wd.contentRectScale().r;
+        const oldclip = clip(rsclip);
 
-        const oldclip = clip(rs.r);
+        var rect = placeIn(null, self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
+        var rs = self.wd.parent.screenRectScale(rect);
         if (!clipGet().empty()) {
             var iter = std.mem.split(u8, self.label_str, "\n");
             while (iter.next()) |line| {
@@ -5330,13 +5329,14 @@ pub fn labelNoFmt(src: std.builtin.SourceLocation, id_extra: usize, str: []const
 pub fn icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) !void {
     const size = Size{ .w = iconWidth(name, tvg_bytes, height), .h = height };
 
-    var wd = WidgetData.init(src, id_extra, opts.overrideMinSizeContent(size));
+    var wd = WidgetData.init(src, id_extra, opts.override(.{ .min_size_content = size }));
+
     debug("{x} Icon \"{s:<10}\" {}", .{ wd.id, name, wd.rect });
 
-    wd.placeInsideNoExpand();
     try wd.borderAndBackground();
 
-    const rs = wd.contentRectScale();
+    const rs = wd.parent.screenRectScale(placeIn(null, wd.contentRect(), size, .none, opts.gravityGet()));
+
     try renderIcon(name, tvg_bytes, rs, opts.color());
 
     wd.minSizeSetAndCue();
@@ -5357,13 +5357,13 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, id_extra: usize, opts: 
     const ss = parentGet().screenRectScale(Rect{}).s;
     size = size.scale(1.0 / ss);
 
-    var wd = WidgetData.init(src, id_extra, opts.overrideMinSizeContent(size));
+    var wd = WidgetData.init(src, id_extra, opts.override(.{ .min_size_content = size }));
+
     debug("{x} debugFontAtlases {} {}", .{ wd.id, wd.rect, opts.color() });
 
-    wd.placeInsideNoExpand();
     try wd.borderAndBackground();
 
-    const rs = wd.contentRectScale();
+    const rs = wd.parent.screenRectScale(placeIn(null, wd.contentRect(), size, .none, opts.gravityGet()));
     try debugRenderFontAtlases(rs, opts.color());
 
     wd.minSizeSetAndCue();
@@ -5659,10 +5659,10 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     try labelNoFmt(@src(), 0, label_str, options.strip().override(.{ .gravity = .center }));
 }
 
-pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) !void {
+pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, text: []u8, opts: Options) !void {
     const cw = currentWindow();
     var ret = try cw.arena.create(TextEntryWidget);
-    ret.* = TextEntryWidget.init(src, id_extra, width, text, opts);
+    ret.* = TextEntryWidget.init(src, id_extra, text, opts);
     ret.allocator = cw.arena;
     try ret.install(.{});
     ret.deinit();
@@ -5686,13 +5686,11 @@ pub const TextEntryWidget = struct {
     text: []u8 = undefined,
     len: usize = undefined,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, width: f32, text: []u8, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, text: []u8, opts: Options) Self {
         var self = Self{};
         const options = defaults.override(opts);
 
-        const msize = options.font().textSize("M") catch unreachable;
-        const size = Size{ .w = msize.w * width, .h = msize.h };
-        self.wd = WidgetData.init(src, id_extra, options.overrideMinSizeContent(size));
+        self.wd = WidgetData.init(src, id_extra, options);
 
         self.captured = captureMouseMaintain(self.wd.id);
 
@@ -6451,7 +6449,9 @@ pub const WidgetData = struct {
 
         self.parent = parentGet();
         self.id = self.parent.extendID(src, id_extra);
-        self.min_size = self.options.min_size orelse Size{};
+
+        self.min_size = self.options.min_sizeGet();
+
         if (self.options.rect) |r| {
             self.rect = r;
             if (self.options.expandHorizontal()) {
@@ -6519,10 +6519,6 @@ pub const WidgetData = struct {
             else => {},
         }
         try pathStrokeAfter(true, true, thick, .none, color);
-    }
-
-    pub fn placeInsideNoExpand(self: *WidgetData) void {
-        self.rect = placeIn(null, self.rect, self.min_size, .none, self.options.gravityGet());
     }
 
     pub fn borderRect(self: *const WidgetData) Rect {
@@ -6920,7 +6916,7 @@ pub const examples = struct {
                 gui.dataSet(id, "response", gui.DialogResponse.closed);
             }
 
-            var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size = .{ .w = 250 }, .background = false });
+            var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
             try tl.addText(message, .{});
             tl.deinit();
 
@@ -6960,7 +6956,7 @@ pub const examples = struct {
 
     pub fn demo() !bool {
         if (show_demo_window) {
-            var float = try gui.floatingWindow(@src(), 0, false, null, &show_demo_window, .{ .min_size = .{ .w = 400, .h = 400 } });
+            var float = try gui.floatingWindow(@src(), 0, false, null, &show_demo_window, .{ .min_size_content = .{ .w = 400, .h = 400 } });
             defer float.deinit();
 
             var buf: [100]u8 = undefined;
@@ -7065,7 +7061,7 @@ pub const examples = struct {
     }
 
     pub fn layout() !void {
-        const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .min_size = .{ .w = 200, .h = 120 } };
+        const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .min_size_content = .{ .w = 200, .h = 120 } };
         {
             try gui.label(@src(), 0, "gravity options:", .{}, .{});
             var o = try gui.overlay(@src(), 0, opts);
@@ -7161,7 +7157,7 @@ pub const examples = struct {
                     gui.menuGet().?.close();
                 }
 
-                try gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{ .min_size = .{ .w = 100, .h = 0 } });
+                try gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{ .min_size_content = .{ .w = 100, .h = 0 } });
 
                 if (try gui.menuItemLabel(@src(), 0, "Dialog", false, .{}) != null) {
                     gui.menuGet().?.close();
@@ -7316,7 +7312,7 @@ pub const examples = struct {
                 const r = gui.Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
                 var iconbox = try gui.box(@src(), i, .horizontal, .{ .expand = .horizontal, .rect = r });
                 //gui.icon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{.margin = gui.Rect.all(2)});
-                _ = try gui.buttonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{ .min_size = gui.Size.all(r.h) });
+                _ = try gui.buttonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{ .min_size_content = gui.Size.all(r.h) });
                 try gui.label(@src(), 0, d.name, .{}, .{ .gravity = .left });
 
                 iconbox.deinit();
