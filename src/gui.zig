@@ -8,12 +8,6 @@ pub const icons = @import("icons.zig");
 pub const fonts = @import("fonts.zig");
 pub const keys = @import("keys.zig");
 
-//const stb = @cImport({
-//    @cInclude("stb_rect_pack.h");
-//    @cDefine("STB_TRUETYPE_IMPLEMENTATION", "1");
-//    @cInclude("stb_truetype.h");
-//});
-
 pub const Error = error{ OutOfMemory, InvalidUtf8, CodepointTooLarge, freetypeError, tvgError };
 
 const log = std.log.scoped(.gui);
@@ -176,7 +170,7 @@ pub const Options = struct {
     // default is .upleft
     gravity: ?Gravity = null,
 
-    // widgets will be focusable only if this is set
+    // widgets will be focusable by keyboard only if this is set
     tab_index: ?u16 = null,
 
     // only used if .color_style == .custom
@@ -321,7 +315,7 @@ pub const Options = struct {
     // to the outermost container widget.  For example, with a button
     // (container with label) the container uses:
     // - rect
-    // - min_size
+    // - min_size_content
     // - margin
     // - border
     // - background
@@ -335,7 +329,12 @@ pub const Options = struct {
     // - gravity
     pub fn strip(self: *const Options) Options {
         return Options{
-            // explicity set these to "strip" out the defaults of internal widgets
+            // reset to defaults of internal widgets
+            .rect = null,
+            .min_size_content = null,
+
+            // ignore defaults of internal widgets
+            .tab_index = null,
             .margin = Rect{},
             .border = Rect{},
             .padding = Rect{},
@@ -380,6 +379,7 @@ pub fn themeSet(theme: *const Theme) void {
 
 pub const InstallOptions = struct {
     process_events: bool = true,
+    show_focus: bool = true,
 };
 
 pub fn placeOnScreen(spawner: Rect, start: Rect) Rect {
@@ -626,10 +626,10 @@ const IconCacheEntry = struct {
     }
 };
 
-pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height_natural: f32) f32 {
+pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height_natural: f32) !f32 {
     const height = height_natural * windowNaturalScale();
     if (height == 0) return 0.0;
-    const ice = iconTexture(name, tvg_bytes, height) catch return 0.0;
+    const ice = try iconTexture(name, tvg_bytes, height);
     return ice.size.w / windowNaturalScale();
 }
 
@@ -2467,6 +2467,8 @@ pub const Window = struct {
 
     pub fn renderCommands(self: *Self, queue: *std.ArrayList(RenderCmd)) !void {
         for (queue.items) |*drc| {
+            // don't need to reset these after because we reset them after
+            // calling renderCommands
             currentWindow().snap_to_pixels = drc.snap;
             clipSet(drc.clip);
             switch (drc.cmd) {
@@ -2515,6 +2517,7 @@ pub const Window = struct {
     pub fn end(self: *Self) !?u32 {
         try self.dialogsShow();
 
+        const oldsnap = self.snap_to_pixels;
         const oldclip = clipGet();
         try self.renderCommands(&self.render_cmds_after);
         for (self.floating_data.items) |*fw| {
@@ -2522,6 +2525,7 @@ pub const Window = struct {
             try self.renderCommands(&fw.render_cmds_after);
         }
         clipSet(oldclip);
+        self.snap_to_pixels = oldsnap;
 
         // events may have been tagged with a focus widget that never showed up, so
         // we wouldn't even get them bubbled
@@ -2944,6 +2948,7 @@ pub const FloatingWindowWidget = struct {
         self.modal = modal;
         self.openflag = openflag;
 
+        var autopossize = true;
         if (io_rect) |ior| {
             // user is storing the rect for us across open/close
             self.io_rect = io_rect;
@@ -2951,24 +2956,27 @@ pub const FloatingWindowWidget = struct {
         } else if (opts.rect) |r| {
             // we were given a rect, just use that
             self.wd.rect = r;
+            autopossize = false;
         } else {
             // we store the rect (only while the window is open)
             self.wd.rect = dataGet(self.wd.id, "_rect", Rect) orelse Rect{};
         }
 
-        if (dataGet(self.wd.id, "_auto_size", @TypeOf(self.auto_size))) |as| {
-            self.auto_size = as;
-        } else {
-            self.auto_size = (self.wd.rect.w == 0 and self.wd.rect.h == 0);
-        }
+        if (autopossize) {
+            if (dataGet(self.wd.id, "_auto_size", @TypeOf(self.auto_size))) |as| {
+                self.auto_size = as;
+            } else {
+                self.auto_size = (self.wd.rect.w == 0 and self.wd.rect.h == 0);
+            }
 
-        if (dataGet(self.wd.id, "_auto_pos", @TypeOf(self.auto_pos))) |ap| {
-            self.auto_pos = ap;
-        } else {
-            self.auto_pos = (self.wd.rect.x == 0 and self.wd.rect.y == 0);
-            if (self.auto_pos and !self.auto_size) {
-                self.auto_pos = false;
-                self.wd.centerOnScreen();
+            if (dataGet(self.wd.id, "_auto_pos", @TypeOf(self.auto_pos))) |ap| {
+                self.auto_pos = ap;
+            } else {
+                self.auto_pos = (self.wd.rect.x == 0 and self.wd.rect.y == 0);
+                if (self.auto_pos and !self.auto_size) {
+                    self.auto_pos = false;
+                    self.wd.centerOnScreen();
+                }
             }
         }
 
@@ -2992,20 +3000,6 @@ pub const FloatingWindowWidget = struct {
 
                 //std.debug.print("autopos to {}\n", .{self.wd.rect});
             }
-        } else {
-            // first frame we are being shown
-            focusWindow(self.wd.id, null);
-
-            if (self.auto_size) {
-                // need a second frame to fit contents (FocusWindow calls
-                // cueFrame but here for clarity)
-                cueFrame();
-
-                // hide our first frame so the user doesn't see a jump when we
-                // autopos/autosize
-                self.wd.rect.w = 0;
-                self.wd.rect.h = 0;
-            }
         }
 
         return self;
@@ -3013,6 +3007,29 @@ pub const FloatingWindowWidget = struct {
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
         self.process_events = opts.process_events;
+
+        if (minSizeGetPrevious(self.wd.id) == null) {
+            // write back before we hide ourselves for the first frame
+            dataSet(self.wd.id, "_rect", self.wd.rect);
+            if (self.io_rect) |ior| {
+                // send rect back to user
+                ior.* = self.wd.rect;
+            }
+
+            // first frame we are being shown
+            focusWindow(self.wd.id, null);
+
+            // need a second frame to fit contents (FocusWindow calls
+            // cueFrame but here for clarity)
+            cueFrame();
+
+            // hide our first frame so the user doesn't see an empty window or
+            // jump when we autopos/autosize - do this in install() because
+            // animation stuff might be messing with out rect after init()
+            self.wd.rect.w = 0;
+            self.wd.rect.h = 0;
+        }
+
         debug("{x} FloatingWindow {}", .{ self.wd.id, self.wd.rect });
 
         _ = parentSet(self.widget());
@@ -3224,10 +3241,13 @@ pub const FloatingWindowWidget = struct {
 
         self.layout.deinit();
 
-        dataSet(self.wd.id, "_rect", self.wd.rect);
-        if (self.io_rect) |ior| {
-            // send rect back to user
-            ior.* = self.wd.rect;
+        if (minSizeGetPrevious(self.wd.id) != null) {
+            // if this is the first frame, we already did this in init
+            dataSet(self.wd.id, "_rect", self.wd.rect);
+            if (self.io_rect) |ior| {
+                // send rect back to user
+                ior.* = self.wd.rect;
+            }
         }
 
         dataSet(self.wd.id, "_auto_pos", self.auto_pos);
@@ -3368,7 +3388,9 @@ pub var expander_defaults: Options = .{
 pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) !bool {
     const options = expander_defaults.override(opts);
 
-    var bc = ButtonContainerWidget.init(src, id_extra, true, options);
+    // Use the ButtonWidget to do margin/border/padding, but use strip so we
+    // don't get any of ButtonWidget's defaults
+    var bc = ButtonWidget.init(src, id_extra, options.strip().override(options));
     try bc.install(.{});
     defer bc.deinit();
 
@@ -3386,9 +3408,9 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
     try bcbox.install(.{});
     const size = try options.font().lineSkip();
     if (expanded) {
-        try icon(@src(), 0, size, "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity = .left });
+        try icon(@src(), 0, "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity = .left, .min_size_content = .{ .h = size } });
     } else {
-        try icon(@src(), 0, size, "right_arrow", gui.icons.papirus.actions.pan_end_symbolic, .{ .gravity = .left });
+        try icon(@src(), 0, "right_arrow", gui.icons.papirus.actions.pan_end_symbolic, .{ .gravity = .left, .min_size_content = .{ .h = size } });
     }
     try labelNoFmt(@src(), 0, label_str, options.strip());
 
@@ -4111,6 +4133,7 @@ pub fn box(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opt
 
 pub const BoxWidget = struct {
     const Self = @This();
+    pub var defaults: Options = .{};
 
     const Data = struct {
         total_weight_prev: ?f32 = null,
@@ -4128,7 +4151,7 @@ pub const BoxWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) BoxWidget {
         var self = Self{};
-        self.wd = WidgetData.init(src, id_extra, opts);
+        self.wd = WidgetData.init(src, id_extra, defaults.override(opts));
         self.dir = dir;
         if (dataGet(self.wd.id, "_data", Data)) |d| {
             self.data_prev = d;
@@ -5002,24 +5025,14 @@ pub const MenuWidget = struct {
     }
 };
 
-pub var menuItemLabel_defaults: Options = .{
-    .color_style = .content,
-};
-
 pub fn menuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, submenu: bool, opts: Options) !?Rect {
-    const options = menuItemLabel_defaults.override(opts);
-    var mi = try menuItem(src, id_extra, submenu, options);
+    var mi = try menuItem(src, id_extra, submenu, opts);
 
-    var labelopts = options.strip();
+    var labelopts = opts.strip();
 
     var ret: ?Rect = null;
     if (mi.activeRect()) |r| {
         ret = r;
-    }
-
-    var focused: bool = false;
-    if (mi.wd.id == focusedWidgetId()) {
-        focused = true;
     }
 
     if (mi.show_active) {
@@ -5033,27 +5046,21 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, id_extra: usize, label_str
     return ret;
 }
 
-pub fn menuItemIcon(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) !?Rect {
-    const options = menuItemLabel_defaults.override(opts);
-    var mi = try menuItem(src, id_extra, submenu, options);
+pub fn menuItemIcon(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool, name: []const u8, tvg_bytes: []const u8, opts: Options) !?Rect {
+    var mi = try menuItem(src, id_extra, submenu, opts);
 
-    var iconopts = options.strip();
+    var iconopts = opts.strip();
 
     var ret: ?Rect = null;
     if (mi.activeRect()) |r| {
         ret = r;
     }
 
-    var focused: bool = false;
-    if (mi.wd.id == focusedWidgetId()) {
-        focused = true;
-    }
-
     if (mi.show_active) {
         iconopts = iconopts.override(.{ .color_style = .accent });
     }
 
-    try icon(@src(), 0, height, name, tvg_bytes, iconopts);
+    try icon(@src(), 0, name, tvg_bytes, iconopts);
 
     mi.deinit();
 
@@ -5072,6 +5079,7 @@ pub const MenuItemWidget = struct {
     pub var defaults: Options = .{
         .corner_radius = Rect.all(5),
         .padding = Rect.all(4),
+        .color_style = .content,
     };
 
     wd: WidgetData = undefined,
@@ -5255,8 +5263,6 @@ pub const LabelWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
         .padding = Rect.all(4),
-        .color_style = .control,
-        .background = false,
     };
 
     wd: WidgetData = undefined,
@@ -5297,19 +5303,14 @@ pub const LabelWidget = struct {
         _ = opts;
         debug("{x} Label \"{s:<10}\" {}", .{ self.wd.id, self.label_str, self.wd.rect });
         try self.wd.borderAndBackground();
-        const rsclip = self.wd.contentRectScale().r;
-        const oldclip = clip(rsclip);
 
         var rect = placeIn(null, self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
         var rs = self.wd.parent.screenRectScale(rect);
-        if (!clipGet().empty()) {
-            var iter = std.mem.split(u8, self.label_str, "\n");
-            while (iter.next()) |line| {
-                try renderText(self.wd.options.font(), line, rs, self.wd.options.color());
-                rs.r.y += rs.s * try self.wd.options.font().lineSkip();
-            }
+        var iter = std.mem.split(u8, self.label_str, "\n");
+        while (iter.next()) |line| {
+            try renderText(self.wd.options.font(), line, rs, self.wd.options.color());
+            rs.r.y += rs.s * try self.wd.options.font().lineSkip();
         }
-        clipSet(oldclip);
 
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
@@ -5326,21 +5327,54 @@ pub fn labelNoFmt(src: std.builtin.SourceLocation, id_extra: usize, str: []const
     try lw.show(.{});
 }
 
-pub fn icon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) !void {
-    const size = Size{ .w = iconWidth(name, tvg_bytes, height), .h = height };
+pub const IconWidget = struct {
+    const Self = @This();
+    pub var defaults: Options = .{};
 
-    var wd = WidgetData.init(src, id_extra, opts.override(.{ .min_size_content = size }));
+    wd: WidgetData = undefined,
+    name: []const u8 = undefined,
+    tvg_bytes: []const u8 = undefined,
 
-    debug("{x} Icon \"{s:<10}\" {}", .{ wd.id, name, wd.rect });
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, name: []const u8, tvg_bytes: []const u8, opts: Options) !Self {
+        var self = Self{};
+        const options = defaults.override(opts);
+        self.name = name;
+        self.tvg_bytes = tvg_bytes;
 
-    try wd.borderAndBackground();
+        var size = Size{};
+        if (options.min_size_content) |msc| {
+            // user gave us a min size, use it
+            size = msc;
+            size.w = math.max(size.w, iconWidth(name, tvg_bytes, size.h) catch size.w);
+        } else {
+            // user didn't give us one, make it the height of text
+            const h = options.font().lineSkip() catch 10;
+            size = Size{ .w = iconWidth(name, tvg_bytes, h) catch 10, .h = h };
+        }
 
-    const rs = wd.parent.screenRectScale(placeIn(null, wd.contentRect(), size, .none, opts.gravityGet()));
+        self.wd = WidgetData.init(src, id_extra, options.override(.{ .min_size_content = size }));
 
-    try renderIcon(name, tvg_bytes, rs, opts.color());
+        return self;
+    }
 
-    wd.minSizeSetAndCue();
-    wd.minSizeReportToParent();
+    pub fn show(self: *Self, opts: InstallOptions) !void {
+        _ = opts;
+        debug("{x} Icon \"{s:<10}\" {}", .{ self.wd.id, self.name, self.wd.rect });
+
+        try self.wd.borderAndBackground();
+
+        var rect = placeIn(null, self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
+        var rs = self.wd.parent.screenRectScale(rect);
+        try renderIcon(self.name, self.tvg_bytes, rs, self.wd.options.color());
+
+        self.wd.minSizeSetAndCue();
+        self.wd.minSizeReportToParent();
+    }
+};
+
+pub fn icon(src: std.builtin.SourceLocation, id_extra: usize, name: []const u8, tvg_bytes: []const u8, opts: Options) !void {
+    var iw = try IconWidget.init(src, id_extra, name, tvg_bytes, opts);
+    try iw.show(.{});
 }
 
 pub fn debugFontAtlases(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) !void {
@@ -5370,32 +5404,29 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, id_extra: usize, opts: 
     wd.minSizeReportToParent();
 }
 
-pub fn buttonContainer(src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) !*ButtonContainerWidget {
-    var ret = try currentWindow().arena.create(ButtonContainerWidget);
-    ret.* = ButtonContainerWidget.init(src, id_extra, show_focus, opts);
-    try ret.install(.{});
-    return ret;
-}
-
-pub const ButtonContainerWidget = struct {
+pub const ButtonWidget = struct {
     const Self = @This();
+    pub var defaults: Options = .{
+        .margin = Rect.all(4),
+        .corner_radius = Rect.all(5),
+        .padding = Rect.all(4),
+        .background = true,
+    };
     wd: WidgetData = undefined,
     highlight: bool = false,
     captured: bool = false,
     focused: bool = false,
-    show_focus: bool = false,
     click: bool = false,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, show_focus: bool, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Self {
         var self = Self{};
-        self.wd = WidgetData.init(src, id_extra, opts);
+        self.wd = WidgetData.init(src, id_extra, defaults.override(opts));
         self.captured = captureMouseMaintain(self.wd.id);
-        self.show_focus = show_focus;
         return self;
     }
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
-        debug("{x} ButtonContainer {}", .{ self.wd.id, self.wd.rect });
+        debug("{x} Button {}", .{ self.wd.id, self.wd.rect });
 
         if (self.wd.visible()) {
             try tabIndexSet(self.wd.id, self.wd.options.tab_index);
@@ -5434,7 +5465,7 @@ pub const ButtonContainerWidget = struct {
             try pathFillConvex(fill);
         }
 
-        if (self.focused and self.show_focus) {
+        if (self.focused and opts.show_focus) {
             try self.wd.focusBorder();
         }
 
@@ -5517,72 +5548,26 @@ pub const ButtonContainerWidget = struct {
     }
 };
 
-pub const ButtonWidget = struct {
-    const Self = @This();
-    pub var defaults: Options = .{
-        .margin = Rect.all(4),
-        .corner_radius = Rect.all(5),
-        .padding = Rect.all(4),
-        .background = true,
-        .color_style = .control,
-    };
-
-    bc: ButtonContainerWidget = undefined,
-    label_str: []const u8 = undefined,
-
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, str: []const u8, opts: Options) Self {
-        return Self{
-            .bc = ButtonContainerWidget.init(src, id_extra, true, defaults.override(opts)),
-            .label_str = str,
-        };
-    }
-
-    pub fn install(self: *ButtonWidget, opts: InstallOptions) !void {
-        debug("Button {s}", .{self.label_str});
-        try self.bc.install(opts);
-
-        try labelNoFmt(@src(), 0, self.label_str, self.bc.wd.options.strip().override(.{ .gravity = .center }));
-    }
-
-    pub fn data(self: *ButtonWidget) *WidgetData {
-        return self.bc.data();
-    }
-
-    pub fn clicked(self: *ButtonWidget) bool {
-        return self.bc.clicked();
-    }
-
-    pub fn deinit(self: *ButtonWidget) void {
-        self.bc.deinit();
-    }
-};
-
 pub fn button(src: std.builtin.SourceLocation, id_extra: usize, label_str: []const u8, opts: Options) !bool {
-    var bw = ButtonWidget.init(src, id_extra, label_str, opts);
+    var bw = ButtonWidget.init(src, id_extra, opts);
     try bw.install(.{});
+
+    try labelNoFmt(@src(), 0, label_str, opts.strip().override(.{ .gravity = .center }));
+
     var click = bw.clicked();
     bw.deinit();
     return click;
 }
 
-pub var buttonIcon_defaults: Options = .{
-    .margin = gui.Rect.all(4),
-    .corner_radius = Rect.all(5),
-    .padding = Rect.all(4),
-    .background = true,
-    .color_style = .control,
-    .gravity = .center,
-};
-
 pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) !bool {
-    const options = buttonIcon_defaults.override(opts);
-    debug("ButtonIcon \"{s}\" {}", .{ name, options });
-    var bc = try buttonContainer(src, id_extra, true, options);
-    defer bc.deinit();
+    var bw = ButtonWidget.init(src, id_extra, opts);
+    try bw.install(.{});
 
-    try icon(@src(), 0, height, name, tvg_bytes, options.strip());
+    try icon(@src(), 0, name, tvg_bytes, opts.strip().override(.{ .gravity = .center, .min_size_content = .{ .h = height } }));
 
-    return bc.clicked();
+    var click = bw.clicked();
+    bw.deinit();
+    return click;
 }
 
 pub var checkbox_defaults: Options = .{
@@ -5593,11 +5578,16 @@ pub var checkbox_defaults: Options = .{
 
 pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label_str: []const u8, opts: Options) !void {
     const options = checkbox_defaults.override(opts);
-    debug("Checkbox {s}", .{label_str});
-    var bc = try buttonContainer(src, id_extra, false, options.override(.{ .background = options.backgroundGet() }));
-    defer bc.deinit();
 
-    if (bc.clicked()) {
+    var bw = ButtonWidget.init(src, id_extra, options.strip().override(options));
+
+    // don't want to show a focus ring around the label
+    try bw.install(.{ .show_focus = false });
+    defer bw.deinit();
+
+    debug("Checkbox {s}", .{label_str});
+
+    if (bw.clicked()) {
         target.* = !target.*;
     }
 
@@ -5614,7 +5604,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     var col = Color.lerp(options.color_bg(), 0.3, options.color());
     try pathFillConvex(col);
 
-    if (bc.focused) {
+    if (bw.focused) {
         try pathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
         try pathStroke(true, 2 * rs.s, .none, themeGet().color_accent_bg);
     }
@@ -5627,10 +5617,10 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
         try pathAddRect(rs.r.insetAll(rs.s), options.corner_radiusGet().scale(rs.s));
     }
 
-    if (bc.captured) {
+    if (bw.captured) {
         // pressed
         fill = Color.lerp(fill, 0.2, options.color());
-    } else if (bc.highlight) {
+    } else if (bw.highlight) {
         // hovered
         fill = Color.lerp(fill, 0.1, options.color());
     }
@@ -6821,7 +6811,7 @@ pub const examples = struct {
 
     const IconBrowser = struct {
         var show: bool = false;
-        var rect = gui.Rect{ .x = 0, .y = 0, .w = 300, .h = 400 };
+        var rect = gui.Rect{};
         var row_height: f32 = 0;
     };
 
@@ -6948,9 +6938,7 @@ pub const examples = struct {
 
         pub fn after(id: u32, response: gui.DialogResponse) gui.Error!void {
             _ = id;
-            var buf: [100]u8 = undefined;
-            const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\"", .{@tagName(response)}) catch unreachable;
-            try gui.dialogOk(@src(), 0, true, "AnimatingDialog.after", text, null);
+            std.debug.print("You clicked \"{s}\"\n", .{@tagName(response)});
         }
     };
 
@@ -7028,6 +7016,7 @@ pub const examples = struct {
             }
 
             try gui.checkbox(@src(), 0, &gui.currentWindow().snap_to_pixels, "Snap to Pixels", .{});
+            try gui.labelNoFmt(@src(), 0, "  - watch window title", .{});
 
             if (show_dialog) {
                 try dialogDirect();
@@ -7293,7 +7282,7 @@ pub const examples = struct {
     }
 
     pub fn icon_browser() !void {
-        var fwin = try gui.floatingWindow(@src(), 0, false, &IconBrowser.rect, &IconBrowser.show, .{});
+        var fwin = try gui.floatingWindow(@src(), 0, false, &IconBrowser.rect, &IconBrowser.show, .{ .min_size_content = .{ .w = 300, .h = 400 } });
         defer fwin.deinit();
         try gui.windowHeader("Icon Browser", "", &IconBrowser.show);
 
@@ -7311,8 +7300,7 @@ pub const examples = struct {
             if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
                 const r = gui.Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
                 var iconbox = try gui.box(@src(), i, .horizontal, .{ .expand = .horizontal, .rect = r });
-                //gui.icon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{.margin = gui.Rect.all(2)});
-                _ = try gui.buttonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{ .min_size_content = gui.Size.all(r.h) });
+                _ = try gui.buttonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
                 try gui.label(@src(), 0, d.name, .{}, .{ .gravity = .left });
 
                 iconbox.deinit();

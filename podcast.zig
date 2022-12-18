@@ -441,7 +441,7 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
 
             _ = gui.spacer(@src(), 0, .{}, .{ .expand = .horizontal });
 
-            if (try gui.menuItemIcon(@src(), 0, true, try gui.themeGet().font_heading.lineSkip(), "toolbar dots", gui.icons.papirus.actions.xapp_prefs_toolbar_symbolic, .{})) |r| {
+            if (try gui.menuItemIcon(@src(), 0, true, "toolbar dots", gui.icons.papirus.actions.xapp_prefs_toolbar_symbolic, .{})) |r| {
                 var fw = try gui.popup(@src(), 0, gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                 defer fw.deinit();
                 if (try gui.menuItemLabel(@src(), 0, "Add RSS", false, .{})) |rr| {

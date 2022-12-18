@@ -171,7 +171,7 @@ pub fn main() !void {
                     defer hbox.deinit();
 
                     _ = gui.spacer(@src(), 0, .{ .w = 20 }, .{});
-                    var button = gui.ButtonWidget.init(@src(), 0, "Wiggle", .{ .tab_index = 10 });
+                    var button = gui.ButtonWidget.init(@src(), 0, .{ .tab_index = 10 });
                     defer button.deinit();
 
                     if (gui.animationGet(button.data().id, "xoffset")) |a| {
@@ -179,6 +179,7 @@ pub fn main() !void {
                     }
 
                     try button.install(.{});
+                    try gui.labelNoFmt(@src(), 0, "Wiggle", button.data().options.strip().override(.{ .gravity = .center }));
 
                     if (button.clicked()) {
                         const a = gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 500_000 };
@@ -334,7 +335,7 @@ pub fn main() !void {
 
         win_backend.renderPresent();
 
-        const wait_event_micros = win.waitTime(end_micros, null);
+        const wait_event_micros = win.waitTime(end_micros, 10);
 
         win_backend.waitEventTimeout(wait_event_micros);
     }
