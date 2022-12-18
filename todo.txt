@@ -1,6 +1,4 @@
 
-floating windows should clip
-
 figure out why IconBrowser's second frame doesn't show the icons?
 
 redo checkbox
