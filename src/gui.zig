@@ -5591,7 +5591,7 @@ pub var checkbox_defaults: Options = .{
     .color_style = .content,
 };
 
-pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label_str: []const u8, opts: Options) !void {
+pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool, label_str: ?[]const u8, opts: Options) !void {
     const options = checkbox_defaults.override(opts);
 
     var bw = ButtonWidget.init(src, id_extra, options.strip().override(options));
@@ -5600,7 +5600,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     try bw.install(.{ .show_focus = false });
     defer bw.deinit();
 
-    debug("Checkbox {s}", .{label_str});
+    debug("Checkbox {?s}", .{label_str});
 
     if (bw.clicked()) {
         target.* = !target.*;
@@ -5615,42 +5615,49 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     var rs = s.borderRectScale();
     rs.r = rs.r.insetAll(0.5 * rs.s);
 
-    try pathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
-    var col = Color.lerp(options.color_bg(), 0.3, options.color());
+    try checkmark(target.*, bw.focused, rs, bw.captured, bw.highlight, options);
+
+    if (label_str) |str| {
+        _ = spacer(@src(), 0, .{ .w = checkbox_defaults.paddingGet().w }, .{});
+        try labelNoFmt(@src(), 0, str, options.strip().override(.{ .gravity = .center }));
+    }
+}
+
+pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
+    try pathAddRect(rs.r, opts.corner_radiusGet().scale(rs.s));
+    var col = Color.lerp(opts.color_bg(), 0.3, opts.color());
     try pathFillConvex(col);
 
-    if (bw.focused) {
-        try pathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
+    if (focused) {
+        try pathAddRect(rs.r, opts.corner_radiusGet().scale(rs.s));
         try pathStroke(true, 2 * rs.s, .none, themeGet().color_accent_bg);
     }
 
-    var fill = options.color_bg();
-    if (target.*) {
+    var fill = opts.color_bg();
+    if (checked) {
         fill = themeGet().color_accent_bg;
-        try pathAddRect(rs.r.insetAll(0.5 * rs.s), options.corner_radiusGet().scale(rs.s));
+        try pathAddRect(rs.r.insetAll(0.5 * rs.s), opts.corner_radiusGet().scale(rs.s));
     } else {
-        try pathAddRect(rs.r.insetAll(rs.s), options.corner_radiusGet().scale(rs.s));
+        try pathAddRect(rs.r.insetAll(rs.s), opts.corner_radiusGet().scale(rs.s));
     }
 
-    if (bw.captured) {
-        // pressed
-        fill = Color.lerp(fill, 0.2, options.color());
-    } else if (bw.highlight) {
-        // hovered
-        fill = Color.lerp(fill, 0.1, options.color());
+    if (pressed) {
+        fill = Color.lerp(fill, 0.2, opts.color());
+    } else if (hovered) {
+        fill = Color.lerp(fill, 0.1, opts.color());
     }
 
     try pathFillConvex(fill);
 
-    if (target.*) {
-        rs.r = rs.r.insetAll(0.5 * rs.s);
-        const pad = math.max(1.0, rs.r.w / 6);
+    if (checked) {
+        const r = rs.r.insetAll(0.5 * rs.s);
+        const pad = math.max(1.0, r.w / 6);
 
-        var thick = math.max(1.0, rs.r.w / 5);
-        const size = rs.r.w - (thick / 2) - pad * 2;
+        var thick = math.max(1.0, r.w / 5);
+        const size = r.w - (thick / 2) - pad * 2;
         const third = size / 3.0;
-        const x = rs.r.x + pad + (0.25 * thick) + third;
-        const y = rs.r.y + pad + (0.25 * thick) + size - (third * 0.5);
+        const x = r.x + pad + (0.25 * thick) + third;
+        const y = r.y + pad + (0.25 * thick) + size - (third * 0.5);
 
         thick /= 1.5;
 
@@ -5659,9 +5666,6 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
         try pathAddPoint(Point{ .x = x + third * 2, .y = y - third * 2 });
         try pathStroke(false, thick, .square, themeGet().color_accent);
     }
-
-    _ = spacer(@src(), 0, .{ .w = checkbox_defaults.padding.?.w }, .{});
-    try labelNoFmt(@src(), 0, label_str, options.strip().override(.{ .gravity = .center }));
 }
 
 pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, text: []u8, opts: Options) !void {
