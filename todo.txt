@@ -1,6 +1,4 @@
 
-scrollbar should draw at max height if it doesn't know what else to do?
-
 redo checkbox
 - separate checkmark from label
 
