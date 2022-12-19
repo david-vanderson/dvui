@@ -4399,7 +4399,7 @@ pub const ScrollInfo = struct {
     viewport: Rect = Rect{},
 
     pub fn fraction_visible(self: ScrollInfo) f32 {
-        if (self.viewport.h == 0) return 0;
+        if (self.viewport.h == 0) return 1.0;
 
         const max_hard_scroll = math.max(0, self.virtual_size.h - self.viewport.h);
         var length = math.max(self.viewport.h, self.virtual_size.h);
