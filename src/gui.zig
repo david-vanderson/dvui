@@ -5120,7 +5120,6 @@ pub const MenuItemWidget = struct {
 
         if (self.wd.id == focusedWidgetIdInCurrentWindow()) {
             self.focused_in_win = true;
-            menuGet().?.submenus_activated_next_frame = true;
         }
 
         if (self.wd.options.borderGet().nonZero()) {
