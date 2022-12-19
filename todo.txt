@@ -1,11 +1,16 @@
 
-figure out why IconBrowser's second frame doesn't show the icons?
+scrollbar should draw at max height if it doesn't know what else to do?
 
 redo checkbox
 - separate checkmark from label
 
 menuItems should be expanded horizontally so you don't have to hit that exactly
 - but gravity stay .left
+
+switch mouse button events to use separate button and action
+
+define events like mach does it
+- only key and text events need the window focus stuff
 
 
 seeking:
@@ -23,12 +28,14 @@ can't format {d:02} needs {d:0>2}?
 
 add backend function to allow screensaver
 
-how can a separate thread cause a wakeup in the gui thread when it is waiting for events?
-- for sdl, SDL_PushEvent
-- for mach glfw glfwPostEmptyEvent
-
 audit backends for how to use them on top of an existing app
 
+cross-widget dragging (for stuff like docking)
+- dragPreStart and dragStart take a ?[]const u8 ("_dock")
+- dragging also takes a ?[]const u8
+  - will return the point if either widget has mouse capture or string matches
+- widgets that only do mouse capture dragging can pass null
+- other widgets have to coordinate via the string
 
 for normal animations should be able to do a wrapper widget
 - can animate from 0 to min_size (gotten from deinit)
@@ -66,8 +73,6 @@ mach-test: no tab key?
 linux mach-test: moving GUI Demo window around lags
 
 try splitting into 2 files - gui.zig (has widgets and re-exports core stuff) and gui-core.zig (has stuff widgets depend on)
-
-scroll managed vs. not should be via optionals passed (ypos and ymax)
 
 more docs
 - tabindex
@@ -121,11 +126,6 @@ problem of mousing off a menuItem and onto the theme change checkbox, and the me
   - have to implement intention-motion MenuItem (de)activation to fix this
 
 
-switch mouse button events to use separate button and action
-
-define events like mach does it
-- only key and text events need the window focus stuff
-
 test what happens if std.time.nanoTimestamp() jumps backwards or forwards
 - if backwards just a tiny bit, stay on frame_time_ns?
 - if backwards more (or forwards a lot), reset frame_time_ns and also shift any animations?
@@ -134,8 +134,6 @@ test what happens if std.time.nanoTimestamp() jumps backwards or forwards
 
 text input support in mach
 clipboard support in mach
-
-maybe adjust renderText to snap text to pixel grid?
 
 xstart and ystart for textSize
 
@@ -148,10 +146,6 @@ popup needs to align it's text with the label that popped it
 switch to adwaita default font?
 
 mach: do clipping in the shader?
-
-should popups and floating windows inherit the scale of their parents?
-
-maybe parameterize gui based on given Vertex type?
 
 premultiplied alpha for all textures (and vertices from PathStroke/Fill?)
 - also font glyphs
@@ -180,8 +174,6 @@ textlayout:
 - height can be unstable with stuff in downleft or downright
   - 1st frame the icon causes text to flow onto additional line
   - 2nd frame the icon moves lower so the text doesn't go as far, repeat
-
-split gravity into 2 0-1 values plus a text baseline?
 
 hover and highlight properties need to propogate down to children so that icons can draw properly in buttons where the button is highlighted but not the icon directly?
   - maybe as part of the Options struct?
