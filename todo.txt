@@ -1,6 +1,8 @@
 
-menuItems should be expanded horizontally so you don't have to hit that exactly
-- but gravity stay .left
+panic when running sdl-test - expand menus, click zoom in
+thread 280439 panic: incorrect alignment
+libs/tinyvg/src/lib/parsing.zig:227:98: 0x411731 in setDualTempStorage__anon_26331 (sdl-test)
+                .first = @alignCast(@alignOf(T1), std.mem.bytesAsSlice(T1, self.temp_buffer.items[0..offset_second_buffer])),
 
 switch mouse button events to use separate button and action
 

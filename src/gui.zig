@@ -2720,11 +2720,6 @@ pub const PopupWidget = struct {
         _ = opts; // popup only processes events after the fact in deinit
         debug("{x} Popup {}", .{ self.wd.id, self.wd.rect });
 
-        // Popup is outside normal widget flow, a menu can pop up outside the
-        // current clip
-        self.prevClip = clipGet();
-        clipSet(windowRectPixels());
-
         _ = parentSet(self.widget());
 
         self.prev_windowId = windowCurrentSet(self.wd.id);
@@ -2748,6 +2743,10 @@ pub const PopupWidget = struct {
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
         try floatingWindowAdd(self.wd.id, rs.r, false);
+
+        // clip to just our window (using clipSet since we are not inside our parent)
+        self.prevClip = clipGet();
+        clipSet(rs.r);
 
         // we are using MenuWidget to do border/background but floating windows
         // don't have margin, so turn that off
@@ -4945,9 +4944,6 @@ pub const MenuWidget = struct {
     box: BoxWidget = undefined,
 
     submenus_activated: bool = false,
-    // each MenuItemWidget child will set this if it has focus, so that we will
-    // automatically turn it off if none of our children have focus
-    submenus_activated_next_frame: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) MenuWidget {
         var self = Self{};
@@ -5027,9 +5023,7 @@ pub const MenuWidget = struct {
 
     pub fn deinit(self: *Self) void {
         self.box.deinit();
-        if (self.submenus_activated_next_frame) {
-            dataSet(self.wd.id, "_sub_act", self.submenus_activated);
-        }
+        dataSet(self.wd.id, "_sub_act", self.submenus_activated);
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
         _ = menuSet(self.parentMenu);
@@ -5092,6 +5086,7 @@ pub const MenuItemWidget = struct {
         .corner_radius = Rect.all(5),
         .padding = Rect.all(4),
         .color_style = .content,
+        .expand = .horizontal,
     };
 
     wd: WidgetData = undefined,
@@ -7165,7 +7160,7 @@ pub const examples = struct {
                     gui.menuGet().?.close();
                 }
 
-                try gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{ .min_size_content = .{ .w = 100, .h = 0 } });
+                try gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{});
 
                 if (try gui.menuItemLabel(@src(), 0, "Dialog", false, .{}) != null) {
                     gui.menuGet().?.close();
