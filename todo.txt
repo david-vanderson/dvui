@@ -1,7 +1,4 @@
 
-redo checkbox
-- separate checkmark from label
-
 menuItems should be expanded horizontally so you don't have to hit that exactly
 - but gravity stay .left
 
