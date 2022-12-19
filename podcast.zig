@@ -687,7 +687,7 @@ fn player(arena: std.mem.Allocator) !void {
 
         if (gui.timerDone(timerId) or !gui.timerExists(timerId)) {
             const wait = 1000 * (1000 - left);
-            try gui.timerSet(timerId, wait);
+            try gui.timer(timerId, wait);
         }
     }
     mutex.unlock();

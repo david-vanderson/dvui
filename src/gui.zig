@@ -1713,12 +1713,12 @@ pub const Animation = struct {
     }
 };
 
-pub fn animate(id: u32, key: []const u8, a: Animation) void {
+pub fn animation(id: u32, key: []const u8, a: Animation) void {
     var cw = currentWindow();
     const h = hashIdKey(id, key);
     cw.animations.put(h, a) catch |err| switch (err) {
         error.OutOfMemory => {
-            std.debug.print("animate: got {!} for id {x} key {s}\n", .{ err, id, key });
+            std.debug.print("animation: got {!} for id {x} key {s}\n", .{ err, id, key });
         },
     };
 }
@@ -1735,7 +1735,7 @@ pub fn animationGet(id: u32, key: []const u8) ?Animation {
     return null;
 }
 
-pub fn timerSet(id: u32, micros: i32) !void {
+pub fn timer(id: u32, micros: i32) !void {
     const a = Animation{ .start_val = 0, .end_val = 0, .start_time = micros, .end_time = micros };
     var cw = currentWindow();
     const h = hashIdKey(id, "_timer");
@@ -3017,7 +3017,7 @@ pub const FloatingWindowWidget = struct {
     pub fn install(self: *Self, opts: InstallOptions) !void {
         self.process_events = opts.process_events;
 
-        if (minSizeGetPrevious(self.wd.id) == null) {
+        if (firstFrame(self.wd.id)) {
             // write back before we hide ourselves for the first frame
             dataSet(self.wd.id, "_rect", self.wd.rect);
             if (self.io_rect) |ior| {
@@ -3254,8 +3254,8 @@ pub const FloatingWindowWidget = struct {
 
         self.layout.deinit();
 
-        if (minSizeGetPrevious(self.wd.id) != null) {
-            // if this is the first frame, we already did this in init
+        if (!firstFrame(self.wd.id)) {
+            // if firstFrame, we already did this in init
             dataSet(self.wd.id, "_rect", self.wd.rect);
             if (self.io_rect) |ior| {
                 // send rect back to user
@@ -3580,7 +3580,7 @@ pub const PanedWidget = struct {
     }
 
     fn animate(self: *Self, end_val: f32) void {
-        gui.animate(self.wd.id, "_split_ratio", gui.Animation{ .start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000 });
+        gui.animation(self.wd.id, "_split_ratio", gui.Animation{ .start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000 });
     }
 
     pub fn widget(self: *Self) Widget {
@@ -4146,7 +4146,6 @@ pub fn box(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opt
 
 pub const BoxWidget = struct {
     const Self = @This();
-    pub var defaults: Options = .{};
 
     const Data = struct {
         total_weight_prev: ?f32 = null,
@@ -4164,7 +4163,7 @@ pub const BoxWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) BoxWidget {
         var self = Self{};
-        self.wd = WidgetData.init(src, id_extra, defaults.override(opts));
+        self.wd = WidgetData.init(src, id_extra, opts);
         self.dir = dir;
         if (dataGet(self.wd.id, "_data", Data)) |d| {
             self.data_prev = d;
@@ -4356,9 +4355,9 @@ pub const ScrollAreaWidget = struct {
             si = &self.scroll_info;
         }
 
-        var vbar = ScrollBarWidget.init(@src(), 0, si, .{ .gravity = .right });
-        try vbar.install(.{});
-        vbar.deinit();
+        var bar = ScrollBarWidget.init(@src(), 0, si, .{ .gravity = .right });
+        try bar.install(.{});
+        bar.deinit();
 
         const oldview = si.viewport;
 
@@ -4840,12 +4839,12 @@ pub fn spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
             aa = anim;
             aa.start_time = a.end_time;
             aa.end_time += a.end_time;
-            animate(wd.id, "_angle", aa);
+            animation(wd.id, "_angle", aa);
         }
         angle = aa.lerp();
     } else {
         // first frame we are seeing the spinner
-        animate(wd.id, "_angle", anim);
+        animation(wd.id, "_angle", anim);
     }
 
     const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
@@ -5342,7 +5341,6 @@ pub fn labelNoFmt(src: std.builtin.SourceLocation, id_extra: usize, str: []const
 
 pub const IconWidget = struct {
     const Self = @This();
-    pub var defaults: Options = .{};
 
     wd: WidgetData = undefined,
     name: []const u8 = undefined,
@@ -5350,7 +5348,7 @@ pub const IconWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, name: []const u8, tvg_bytes: []const u8, opts: Options) !Self {
         var self = Self{};
-        const options = defaults.override(opts);
+        const options = opts;
         self.name = name;
         self.tvg_bytes = tvg_bytes;
 
@@ -5362,7 +5360,7 @@ pub const IconWidget = struct {
         } else {
             // user didn't give us one, make it the height of text
             const h = options.font().lineSkip() catch 10;
-            size = Size{ .w = iconWidth(name, tvg_bytes, h) catch 10, .h = h };
+            size = Size{ .w = iconWidth(name, tvg_bytes, h) catch h, .h = h };
         }
 
         self.wd = WidgetData.init(src, id_extra, options.override(.{ .min_size_content = size }));
@@ -5573,10 +5571,14 @@ pub fn button(src: std.builtin.SourceLocation, id_extra: usize, label_str: []con
 }
 
 pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) !bool {
-    var bw = ButtonWidget.init(src, id_extra, opts);
+    // since we are given the icon height, we can precalculate our size, which can save a frame
+    const width = iconWidth(name, tvg_bytes, height) catch height;
+    const iconopts = opts.strip().override(.{ .gravity = .center, .min_size_content = .{ .w = width, .h = height } });
+
+    var bw = ButtonWidget.init(src, id_extra, opts.override(.{ .min_size_content = iconopts.min_sizeGet() }));
     try bw.install(.{});
 
-    try icon(@src(), 0, name, tvg_bytes, opts.strip().override(.{ .gravity = .center, .min_size_content = .{ .h = height } }));
+    try icon(@src(), 0, name, tvg_bytes, iconopts);
 
     var click = bw.clicked();
     bw.deinit();
@@ -6936,13 +6938,13 @@ pub const examples = struct {
                 // On the first frame, scaler will have a scale value of 1 so
                 // the min size of the window is our target, which is why we do
                 // this after win.deinit so the min size will be available
-                gui.animate(win.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 150_000 });
+                gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 150_000 });
                 gui.dataSet(win.data().id, "window_size", win.data().min_size);
             }
 
             if (closing) {
                 // If we are closing, start from our current size
-                gui.animate(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 150_000 });
+                gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 150_000 });
                 gui.dataSet(win.data().id, "window_size", win.data().rect.size());
             }
 
@@ -7254,7 +7256,7 @@ pub const examples = struct {
 
             if (gui.timerDone(mslabel.wd.id) or !gui.timerExists(mslabel.wd.id)) {
                 const wait = 1000 * (1000 - left);
-                try gui.timerSet(mslabel.wd.id, wait);
+                try gui.timer(mslabel.wd.id, wait);
             }
         }
     }
@@ -7313,14 +7315,13 @@ pub const examples = struct {
             if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
                 const r = gui.Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
                 var iconbox = try gui.box(@src(), i, .horizontal, .{ .expand = .horizontal, .rect = r });
+
                 _ = try gui.buttonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
-                try gui.label(@src(), 0, d.name, .{}, .{ .gravity = .left });
+                try gui.labelNoFmt(@src(), 0, d.name, .{ .gravity = .left });
 
                 iconbox.deinit();
 
-                if (IconBrowser.row_height == 0) {
-                    IconBrowser.row_height = iconbox.wd.min_size.h;
-                }
+                IconBrowser.row_height = iconbox.wd.min_size.h;
             }
 
             cursor += IconBrowser.row_height;

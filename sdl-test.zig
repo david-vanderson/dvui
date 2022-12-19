@@ -183,7 +183,7 @@ pub fn main() !void {
 
                     if (button.clicked()) {
                         const a = gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 500_000 };
-                        gui.animate(button.data().id, "xoffset", a);
+                        gui.animation(button.data().id, "xoffset", a);
                     }
                 }
 
@@ -335,7 +335,7 @@ pub fn main() !void {
 
         win_backend.renderPresent();
 
-        const wait_event_micros = win.waitTime(end_micros, 10);
+        const wait_event_micros = win.waitTime(end_micros, null);
 
         win_backend.waitEventTimeout(wait_event_micros);
     }
@@ -345,12 +345,12 @@ fn animatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool
     var fwin = gui.FloatingWindowWidget.init(src, id_extra, modal, rect, openflag, opts);
 
     if (gui.firstFrame(fwin.data().id)) {
-        gui.animate(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
+        gui.animation(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
         gui.dataSet(fwin.wd.id, "size", rect.*.size());
     }
 
     if (start_closing) {
-        gui.animate(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 100_000 });
+        gui.animation(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 100_000 });
         gui.dataSet(fwin.wd.id, "size", rect.*.size());
     }
 
