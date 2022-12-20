@@ -618,7 +618,7 @@ const IconCacheEntry = struct {
     size: Size,
     used: bool = true,
 
-    pub fn hash(tvg_bytes: []const u8, height: f32) u32 {
+    pub fn hash(tvg_bytes: []const u8, height: u32) u32 {
         var h = fnv.init();
         h.update(std.mem.asBytes(&tvg_bytes.ptr));
         h.update(std.mem.asBytes(&height));
@@ -626,30 +626,36 @@ const IconCacheEntry = struct {
     }
 };
 
-pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height_natural: f32) !f32 {
-    const height = height_natural * windowNaturalScale();
+pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
     if (height == 0) return 0.0;
-    const ice = try iconTexture(name, tvg_bytes, height);
-    return ice.size.w / windowNaturalScale();
+    var stream = std.io.fixedBufferStream(tvg_bytes);
+    var parser = tvg.parse(currentWindow().arena, stream.reader()) catch |err| {
+        std.debug.print("iconWidth: Tinyvg error {!} parsing icon {s}\n", .{ err, name });
+        return error.tvgError;
+    };
+    defer parser.deinit();
+
+    return height * @intToFloat(f32, parser.header.width) / @intToFloat(f32, parser.header.height);
 }
 
-pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) !IconCacheEntry {
+pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !IconCacheEntry {
     var cw = currentWindow();
-    const icon_hash = IconCacheEntry.hash(tvg_bytes, ask_height);
+    const icon_hash = IconCacheEntry.hash(tvg_bytes, height);
 
     if (cw.icon_cache.getPtr(icon_hash)) |ice| {
         ice.used = true;
         return ice.*;
     }
 
+    _ = try currentWindow().arena.create(u8);
     var image = tvg.rendering.renderBuffer(
         cw.arena,
         cw.arena,
-        tvg.rendering.SizeHint{ .height = @floatToInt(u32, ask_height) },
+        tvg.rendering.SizeHint{ .height = height },
         @intToEnum(tvg.rendering.AntiAliasing, 2),
         tvg_bytes,
     ) catch |err| {
-        std.debug.print("iconTexture: Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, ask_height });
+        std.debug.print("iconTexture: Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
         return error.tvgError;
     };
     defer image.deinit(cw.arena);
@@ -660,7 +666,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, ask_height: f32) !Ic
 
     const texture = cw.backend.textureCreate(pixels, image.width, image.height);
 
-    //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{name, ask_height, image.width, image.height});
+    //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, image.width, image.height });
 
     const entry = IconCacheEntry{ .texture = texture, .size = .{ .w = @intToFloat(f32, image.width), .h = @intToFloat(f32, image.height) } };
     try cw.icon_cache.put(icon_hash, entry);
@@ -6337,7 +6343,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
     const ask_height = @ceil(target_size);
     const target_fraction = target_size / ask_height;
 
-    const ice = iconTexture(name, tvg_bytes, ask_height) catch return;
+    const ice = iconTexture(name, tvg_bytes, @floatToInt(u32, ask_height)) catch return;
 
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, 4);
     defer vtx.deinit();
@@ -7017,13 +7023,13 @@ pub const examples = struct {
             }
 
             if (try gui.button(@src(), 0, "Zoom In", .{})) {
-                scale_val = (themeGet().font_body.size * scale_val + 1.0) / themeGet().font_body.size;
+                scale_val = @round(themeGet().font_body.size * scale_val + 1.0) / themeGet().font_body.size;
 
                 //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
             }
 
             if (try gui.button(@src(), 0, "Zoom Out", .{})) {
-                scale_val = (themeGet().font_body.size * scale_val - 1.0) / themeGet().font_body.size;
+                scale_val = @round(themeGet().font_body.size * scale_val - 1.0) / themeGet().font_body.size;
 
                 //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
             }
