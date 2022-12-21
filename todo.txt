@@ -1,12 +1,11 @@
 
+don't let you seek forward past duration
+
 switch mouse button events to use separate button and action
 
 define events like mach does it
 - only key and text events need the window focus stuff
 
-
-seeking:
-- need to flush buffers
 
 
 add disabled to options so the seek forward/backward icons can be grayed out
