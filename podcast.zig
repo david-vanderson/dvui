@@ -34,12 +34,14 @@ var g_db: ?sqlite.Db = null;
 
 var g_quit = false;
 
+var g_win: gui.Window = undefined;
 var g_podcast_id_on_right: usize = 0;
 
 var g_audio_device: u32 = undefined;
 var g_audio_spec: Backend.c.SDL_AudioSpec = undefined;
 
 const Episode = struct {
+    const query = "SELECT rowid, title, description, position, duration FROM episode WHERE podcast_id = ?";
     rowid: usize,
     title: []const u8,
     description: []const u8,
@@ -54,7 +56,16 @@ fn dbErrorCallafter(id: u32, response: gui.DialogResponse) gui.Error!void {
 }
 
 fn dbError(comptime fmt: []const u8, args: anytype) !void {
-    try gui.dialogOk(@src(), 0, true, "DB Error", try std.fmt.allocPrint(gpa, fmt, args), dbErrorCallafter);
+    var buf: [512]u8 = undefined;
+    const msg = std.fmt.bufPrint(&buf, fmt, args) catch "fmt.bufPrint error";
+
+    const id = g_win.widget().extendID(@src(), 0);
+    const dialog_mutex = try g_win.dialogAdd(id, gui.dialogOkDisplay);
+    defer dialog_mutex.unlock();
+    g_win.dataSet(id, "_modal", true);
+    g_win.dataSet(id, "_title", "DB Error");
+    g_win.dataSet(id, "_msg", msg);
+    g_win.dataSet(id, "_callafter", @as(gui.DialogCallAfter, dbErrorCallafter));
 }
 
 fn dbRow(arena: std.mem.Allocator, comptime query: []const u8, comptime return_type: type, values: anytype) !?return_type {
@@ -371,8 +382,8 @@ pub fn main() !void {
     var backend = try Backend.init(360, 600);
     defer backend.deinit();
 
-    var win = gui.Window.init(@src(), 0, gpa, backend.guiBackend());
-    defer win.deinit();
+    g_win = gui.Window.init(@src(), 0, gpa, backend.guiBackend());
+    defer g_win.deinit();
 
     {
         var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -411,10 +422,10 @@ pub fn main() !void {
         defer arena_allocator.deinit();
         var arena = arena_allocator.allocator();
 
-        var nstime = win.beginWait(backend.hasEvent());
-        try win.begin(arena, nstime);
+        var nstime = g_win.beginWait(backend.hasEvent());
+        try g_win.begin(arena, nstime);
 
-        const quit = try backend.addAllEvents(&win);
+        const quit = try backend.addAllEvents(&g_win);
         if (quit) break :main_loop;
         if (g_quit) break :main_loop;
 
@@ -427,13 +438,13 @@ pub fn main() !void {
             else => return err,
         };
 
-        const end_micros = try win.end();
+        const end_micros = try g_win.end();
 
-        backend.setCursor(win.cursorRequested());
+        backend.setCursor(g_win.cursorRequested());
 
         backend.renderPresent();
 
-        const wait_event_micros = win.waitTime(end_micros, null);
+        const wait_event_micros = g_win.waitTime(end_micros, null);
 
         backend.waitEventTimeout(wait_event_micros);
     }
@@ -614,9 +625,8 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
         scroll.setVirtualSize(.{ .w = 0, .h = height * @intToFloat(f32, num_episodes) });
         defer scroll.deinit();
 
-        const query = "SELECT rowid, title, description, position, duration FROM episode WHERE podcast_id = ?";
-        var stmt = db.prepare(query) catch {
-            try dbError("{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), query });
+        var stmt = db.prepare(Episode.query) catch {
+            try dbError("{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), Episode.query });
             return error.DB_ERROR;
         };
         defer stmt.deinit();
@@ -634,7 +644,12 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
 
                 var cbox = try gui.box(@src(), 0, .vertical, gui.Options{ .gravity = .upright });
 
-                _ = try gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) });
+                if (try gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) })) {
+                    _ = try dbRow(arena, "UPDATE player SET episode_id=?", u8, .{episode.rowid});
+                    mutex.lock();
+                    play();
+                    mutex.unlock();
+                }
                 _ = try gui.buttonIcon(@src(), 0, 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) });
 
                 cbox.deinit();
@@ -668,7 +683,7 @@ fn player(arena: std.mem.Allocator) !void {
 
     const episode_id = try dbRow(arena, "SELECT episode_id FROM player", i32, .{});
     if (episode_id) |id| {
-        episode = try dbRow(arena, "SELECT rowid, title FROM episode WHERE rowid = ?", Episode, .{id}) orelse episode;
+        episode = try dbRow(arena, Episode.query, Episode, .{id}) orelse episode;
     }
 
     try gui.label(@src(), 0, "{s}", .{episode.title}, oo.override(.{
@@ -805,6 +820,10 @@ export fn audio_callback(user_data: ?*anyopaque, stream: [*c]u8, length: c_int) 
 fn playback_thread() !void {
     var buf: [256]u8 = undefined;
 
+    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+    var arena = arena_allocator.allocator();
+
     stream: while (true) {
         // wait to play
         mutex.lock();
@@ -814,6 +833,14 @@ fn playback_thread() !void {
         mutex.unlock();
         stream_new = false;
         //std.debug.print("playback starting\n", .{});
+
+        const rowid = try dbRow(arena, "SELECT episode_id FROM player", i32, .{}) orelse 0;
+        if (rowid == 0) {
+            mutex.lock();
+            pause();
+            mutex.unlock();
+            continue :stream;
+        }
 
         //const filename = "test.mp3";
         const filename = "episode-2.mp3";
@@ -861,7 +888,18 @@ fn playback_thread() !void {
         mutex.lock();
         stream_timebase = @intToFloat(f64, avstream.*.time_base.num) / @intToFloat(f64, avstream.*.time_base.den);
         std.debug.print("timebase {d}\n", .{stream_timebase});
+        var duration: ?f64 = null;
+        if (avstream.*.duration != c.AV_NOPTS_VALUE) {
+            duration = @intToFloat(f64, avstream.*.duration) * stream_timebase;
+        }
         mutex.unlock();
+
+        if (duration) |d| {
+            std.debug.print("av duration: {d}\n", .{d});
+            _ = dbRow(arena, "UPDATE episode SET duration=? WHERE rowid=?", i32, .{ d, rowid }) catch {};
+        } else {
+            std.debug.print("av duration: N/A\n", .{});
+        }
 
         const codec = c.avcodec_find_decoder(avctx.codec_id);
         if (codec == 0) {
