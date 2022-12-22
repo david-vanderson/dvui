@@ -1454,20 +1454,26 @@ pub fn windowNaturalScale() f32 {
 }
 
 pub fn firstFrame(id: u32) bool {
-    return minSizeGetPrevious(id) == null;
+    return minSizeGet(id) == null;
 }
 
-pub fn minSizeGetPrevious(id: u32) ?Size {
+pub fn minSizeGet(id: u32) ?Size {
     var cw = currentWindow();
-    const ret = cw.widgets_min_size_prev.get(id);
-    debug("{x} minSizeGetPrevious {?}", .{ id, ret });
-    return ret;
+    const saved_size = cw.min_sizes.getPtr(id);
+    if (saved_size) |ss| {
+        ss.used = true;
+        debug("{x} minSizeGet {}", .{ id, ss.size });
+        return ss.size;
+    } else {
+        debug("{x} minSizeGet null", .{id});
+        return null;
+    }
 }
 
 pub fn minSizeSet(id: u32, s: Size) !void {
     debug("{x} minSizeSet {}", .{ id, s });
     var cw = currentWindow();
-    try cw.widgets_min_size.put(id, s);
+    try cw.min_sizes.put(id, .{ .size = s });
 }
 
 pub fn hashIdKey(id: u32, key: []const u8) u32 {
@@ -1499,7 +1505,7 @@ pub fn minSize(id: ?u32, min_size: Size) Size {
     // passed a min size Size{.w = 0, .h = 200} meaning to get the width from the
     // previous min size.
     if (id) |id2| {
-        if (minSizeGetPrevious(id2)) |ms| {
+        if (minSizeGet(id2)) |ms| {
             size = Size.max(size, ms);
         }
     }
@@ -1814,13 +1820,23 @@ pub const Window = struct {
     const Self = @This();
 
     pub const FloatingData = struct {
-        used: bool = true,
         id: u32 = 0,
         rect: Rect = Rect{},
-        modal: bool = false,
         focused_widgetId: ?u32 = null,
         render_cmds: std.ArrayList(RenderCmd),
         render_cmds_after: std.ArrayList(RenderCmd),
+        used: bool = true,
+        modal: bool = false,
+    };
+
+    const SavedSize = struct {
+        size: Size,
+        used: bool = true,
+    };
+
+    const SavedData = struct {
+        used: bool = true,
+        data: []u8,
     };
 
     backend: Backend,
@@ -1870,13 +1886,9 @@ pub const Window = struct {
     popup_current: ?*PopupWidget = null,
     theme: *const Theme = &theme_Adwaita,
 
-    widgets_min_size_prev: std.AutoHashMap(u32, Size),
-    widgets_min_size: std.AutoHashMap(u32, Size),
+    min_sizes: std.AutoHashMap(u32, SavedSize),
     data_mutex: std.Thread.Mutex,
-    datas_prev: std.ArrayList(u8),
-    datas: std.ArrayList(u8),
-    data_offset_prev: std.AutoHashMap(u32, DataOffset),
-    data_offset: std.AutoHashMap(u32, DataOffset),
+    datas: std.AutoHashMap(u32, SavedData),
     animations: std.AutoHashMap(u32, Animation),
     tab_index_prev: std.ArrayList(TabIndex),
     tab_index: std.ArrayList(TabIndex),
@@ -1916,13 +1928,9 @@ pub const Window = struct {
         var self = Self{
             .gpa = gpa,
             .floating_data = std.ArrayList(FloatingData).init(gpa),
-            .widgets_min_size = std.AutoHashMap(u32, Size).init(gpa),
-            .widgets_min_size_prev = std.AutoHashMap(u32, Size).init(gpa),
+            .min_sizes = std.AutoHashMap(u32, SavedSize).init(gpa),
             .data_mutex = std.Thread.Mutex{},
-            .datas_prev = std.ArrayList(u8).init(gpa),
-            .datas = std.ArrayList(u8).init(gpa),
-            .data_offset_prev = std.AutoHashMap(u32, DataOffset).init(gpa),
-            .data_offset = std.AutoHashMap(u32, DataOffset).init(gpa),
+            .datas = std.AutoHashMap(u32, SavedData).init(gpa),
             .animations = std.AutoHashMap(u32, Animation).init(gpa),
             .tab_index_prev = std.ArrayList(TabIndex).init(gpa),
             .tab_index = std.ArrayList(TabIndex).init(gpa),
@@ -1944,12 +1952,8 @@ pub const Window = struct {
 
     pub fn deinit(self: *Self) void {
         self.floating_data.deinit();
-        self.widgets_min_size.deinit();
-        self.widgets_min_size_prev.deinit();
-        self.datas_prev.deinit();
+        self.min_sizes.deinit();
         self.datas.deinit();
-        self.data_offset_prev.deinit();
-        self.data_offset.deinit();
         self.animations.deinit();
         self.tab_index_prev.deinit();
         self.tab_index.deinit();
@@ -2259,19 +2263,47 @@ pub const Window = struct {
 
         self.focused_widgetId_last_frame = focusedWidgetId();
 
-        self.widgets_min_size_prev.deinit();
-        self.widgets_min_size_prev = self.widgets_min_size;
-        self.widgets_min_size = @TypeOf(self.widgets_min_size).init(self.widgets_min_size.allocator);
+        {
+            var deadSizes = std.ArrayList(u32).init(arena);
+            defer deadSizes.deinit();
+            var it = self.min_sizes.iterator();
+            while (it.next()) |kv| {
+                if (kv.value_ptr.used) {
+                    kv.value_ptr.used = false;
+                } else {
+                    try deadSizes.append(kv.key_ptr.*);
+                }
+            }
 
-        self.data_mutex.lock();
-        self.datas_prev.deinit();
-        self.datas_prev = self.datas;
-        self.datas = @TypeOf(self.datas).init(self.datas.allocator);
+            for (deadSizes.items) |id| {
+                _ = self.min_sizes.remove(id);
+            }
 
-        self.data_offset_prev.deinit();
-        self.data_offset_prev = self.data_offset;
-        self.data_offset = @TypeOf(self.data_offset).init(self.data_offset.allocator);
-        self.data_mutex.unlock();
+            //std.debug.print("min_sizes {d}\n", .{self.min_sizes.count()});
+        }
+
+        {
+            self.data_mutex.lock();
+            defer self.data_mutex.unlock();
+
+            var deadDatas = std.ArrayList(u32).init(arena);
+            defer deadDatas.deinit();
+            var it = self.datas.iterator();
+            while (it.next()) |kv| {
+                if (kv.value_ptr.used) {
+                    kv.value_ptr.used = false;
+                } else {
+                    try deadDatas.append(kv.key_ptr.*);
+                }
+            }
+
+            for (deadDatas.items) |id| {
+                var dd = self.datas.fetchRemove(id) orelse unreachable;
+                self.gpa.free(dd.value.data);
+            }
+
+            //std.debug.print("datas {d}\n", .{self.datas.count()});
+        }
 
         self.tab_index_prev.deinit();
         self.tab_index_prev = self.tab_index;
@@ -2330,9 +2362,9 @@ pub const Window = struct {
             }
 
             for (deadFonts.items) |id| {
-                var tce = self.font_cache.fetchRemove(id);
-                tce.?.value.glyph_info.deinit();
-                tce.?.value.face.deinit();
+                var tce = self.font_cache.fetchRemove(id) orelse unreachable;
+                tce.value.glyph_info.deinit();
+                tce.value.face.deinit();
             }
 
             //std.debug.print("font_cache {d}\n", .{self.font_cache.count()});
@@ -2351,8 +2383,8 @@ pub const Window = struct {
             }
 
             for (deadIcons.items) |id| {
-                const ice = self.icon_cache.fetchRemove(id);
-                self.backend.textureDestroy(ice.?.value.texture);
+                const ice = self.icon_cache.fetchRemove(id) orelse unreachable;
+                self.backend.textureDestroy(ice.value.texture);
             }
 
             //std.debug.print("icon_cache {d}\n", .{self.icon_cache.count()});
@@ -2463,6 +2495,7 @@ pub const Window = struct {
         queue.clearAndFree();
     }
 
+    // data is copied into internal storage
     pub fn dataSet(self: *Self, id: u32, key: []const u8, data_in: anytype) void {
         const hash = hashIdKey(id, key);
         var bytes: []const u8 = undefined;
@@ -2477,65 +2510,38 @@ pub const Window = struct {
 
         self.data_mutex.lock();
         defer self.data_mutex.unlock();
-        {
-            // save data for next frame
-            const start = @intCast(u32, self.datas.items.len);
-            self.datas.appendSlice(bytes) catch |err| switch (err) {
-                error.OutOfMemory => {
-                    std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
-                    return;
-                },
-            };
-            const finish = @intCast(u32, self.datas.items.len);
-            self.data_offset.put(hash, DataOffset{ .begin = start, .end = finish }) catch |err| switch (err) {
-                error.OutOfMemory => {
-                    std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
-                    return;
-                },
-            };
-        }
 
-        if (!self.data_offset_prev.contains(hash)) {
-            // also save data for this frame, necessary for dialogs where we store
-            // data and then access it at the end of the frame
-            const start = @intCast(u32, self.datas_prev.items.len);
-            self.datas_prev.appendSlice(bytes) catch |err| switch (err) {
-                error.OutOfMemory => {
-                    std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
-                    return;
-                },
-            };
-            const finish = @intCast(u32, self.datas_prev.items.len);
-            self.data_offset_prev.put(hash, DataOffset{ .begin = start, .end = finish }) catch |err| switch (err) {
-                error.OutOfMemory => {
-                    std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
-                    return;
-                },
-            };
-        }
+        var sd = SavedData{ .data = self.gpa.alloc(u8, bytes.len) catch |err| switch (err) {
+            error.OutOfMemory => {
+                std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
+                return;
+            },
+        } };
+        std.mem.copy(u8, sd.data, bytes);
+        self.datas.put(hash, sd) catch |err| switch (err) {
+            error.OutOfMemory => {
+                self.gpa.free(sd.data);
+                std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
+                return;
+            },
+        };
     }
 
+    // if T is a slice, returns slice of internal storage, so need to copy if
+    // keeping the returned slice across frames
     pub fn dataGet(self: *Self, id: u32, key: []const u8, comptime T: type) ?T {
         const hash = hashIdKey(id, key);
 
         self.data_mutex.lock();
         defer self.data_mutex.unlock();
 
-        const offset = self.data_offset_prev.get(hash);
-        if (offset) |o| {
+        if (self.datas.getPtr(hash)) |sd| {
+            sd.used = true;
             const dt = @typeInfo(T);
             if (dt == .Pointer and dt.Pointer.size == .Slice) {
-                var ret = self.arena.dupe(u8, self.datas_prev.items[o.begin..o.end]) catch |err| switch (err) {
-                    error.OutOfMemory => {
-                        std.debug.print("dataGet: got {!} for id {x} key {s}, returning direct slice (could cause memory corruption)\n", .{ err, id, key });
-                        return self.datas_prev.items[o.begin..o.end];
-                    },
-                };
-                return ret;
+                return sd.data;
             } else {
-                var bytes: [@sizeOf(T)]u8 = undefined;
-                std.mem.copy(u8, &bytes, self.datas_prev.items[o.begin..o.end]);
-                return std.mem.bytesAsValue(T, &bytes).*;
+                return std.mem.bytesToValue(T, sd.data[0..@sizeOf(T)]);
             }
         } else {
             return null;
@@ -2793,7 +2799,7 @@ pub const PopupWidget = struct {
         self.prev_windowId = windowCurrentSet(self.wd.id);
         self.parent_popup = popupSet(self);
 
-        if (minSizeGetPrevious(self.wd.id)) |_| {
+        if (minSizeGet(self.wd.id)) |_| {
             self.wd.rect = Rect.fromPoint(self.initialRect.topleft());
             const ms = minSize(self.wd.id, self.options.min_sizeGet());
             self.wd.rect.w = ms.w;
@@ -3056,7 +3062,7 @@ pub const FloatingWindowWidget = struct {
             }
         }
 
-        if (minSizeGetPrevious(self.wd.id)) |min_size| {
+        if (minSizeGet(self.wd.id)) |min_size| {
             if (self.auto_size) {
                 // only size ourselves once by default
                 self.auto_size = false;
@@ -6618,7 +6624,7 @@ pub const WidgetData = struct {
     }
 
     pub fn minSizeSetAndCue(self: *const WidgetData) void {
-        if (minSizeGetPrevious(self.id)) |ms| {
+        if (minSizeGet(self.id)) |ms| {
             // If the size we got was exactly our previous min size then our min size
             // was a binding constraint.  So if our min size changed it might cause
             // layout changes.
@@ -6921,6 +6927,7 @@ pub const examples = struct {
             }
 
             var win = FloatingWindowWidget.init(@src(), id, modal, null, null, .{});
+            const first_frame = gui.firstFrame(win.data().id);
 
             // On the first frame the window size will be 0 so you won't see
             // anything, but we need the scaleval to be 1 so the window will
@@ -6993,7 +7000,7 @@ pub const examples = struct {
             scaler.deinit();
             win.deinit();
 
-            if (gui.firstFrame(win.data().id)) {
+            if (first_frame) {
                 // On the first frame, scaler will have a scale value of 1 so
                 // the min size of the window is our target, which is why we do
                 // this after win.deinit so the min size will be available
