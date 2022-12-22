@@ -371,7 +371,7 @@ pub fn main() !void {
     var backend = try Backend.init(360, 600);
     defer backend.deinit();
 
-    var win = gui.Window.init(gpa, backend.guiBackend());
+    var win = gui.Window.init(@src(), 0, gpa, backend.guiBackend());
     defer win.deinit();
 
     {

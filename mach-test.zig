@@ -15,7 +15,7 @@ pub const App = @This();
 
 pub fn init(app: *App, engine: *mach.Core) !void {
     app.win_backend = try MachGuiBackend.init(engine);
-    app.win = gui.Window.init(gpa, app.win_backend.guiBackend());
+    app.win = gui.Window.init(@src(), 0, gpa, app.win_backend.guiBackend());
 }
 
 pub fn deinit(app: *App, _: *mach.Core) void {

@@ -1962,10 +1962,16 @@ pub const Window = struct {
     path: std.ArrayList(Point) = undefined,
 
     pub fn init(
+        src: std.builtin.SourceLocation,
+        id_extra: usize,
         gpa: std.mem.Allocator,
         backend: Backend,
     ) Self {
-        var fnv32 = fnv.init();
+        var hash = fnv.init();
+        hash.update(src.file);
+        hash.update(std.mem.asBytes(&src.line));
+        hash.update(std.mem.asBytes(&src.column));
+        hash.update(std.mem.asBytes(&id_extra));
         var self = Self{
             .gpa = gpa,
             .floating_data = std.ArrayList(FloatingData).init(gpa),
@@ -1981,7 +1987,7 @@ pub const Window = struct {
             .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
             .icon_cache = std.AutoHashMap(u32, IconCacheEntry).init(gpa),
             .dialogs = std.ArrayList(DialogEntry).init(gpa),
-            .wd = WidgetData{ .id = fnv32.final() },
+            .wd = WidgetData{ .id = hash.final() },
             .backend = backend,
         };
 

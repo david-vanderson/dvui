@@ -71,7 +71,7 @@ Example code here assumes a Mach app, but building on top of an SDL App works al
 1. During app initialization, init the backend and gui (will need a persistant allocator like general purpose):
     ```zig
         app.win_backend = try MachGuiBackend.init(core);
-        app.win = gui.Window.init(gpa, app.win_backend.guiBackend());
+        app.win = gui.Window.init(@src(), 0, gpa, app.win_backend.guiBackend());
         app.shown_instances = 12;  // start with 12 cubes
     ```
 
