@@ -1484,73 +1484,12 @@ const DataOffset = struct {
 
 pub fn dataSet(id: u32, key: []const u8, data: anytype) void {
     var cw = currentWindow();
-    const hash = hashIdKey(id, key);
-    var bytes: []const u8 = undefined;
-    const dt = @typeInfo(@TypeOf(data));
-    if (dt == .Pointer and dt.Pointer.size == .Slice) {
-        bytes = std.mem.sliceAsBytes(data);
-    } else {
-        bytes = std.mem.asBytes(&data);
-    }
-    {
-        // save data for next frame
-        const begin = @intCast(u32, cw.data.items.len);
-        cw.data.appendSlice(bytes) catch |err| switch (err) {
-            error.OutOfMemory => {
-                std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
-                return;
-            },
-        };
-        const end = @intCast(u32, cw.data.items.len);
-        cw.data_offset.put(hash, DataOffset{ .begin = begin, .end = end }) catch |err| switch (err) {
-            error.OutOfMemory => {
-                std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
-                return;
-            },
-        };
-    }
-
-    if (!cw.data_offset_prev.contains(hash)) {
-        // also save data for this frame, necessary for dialogs where we store
-        // data and then access it at the end of the frame
-        const begin = @intCast(u32, cw.data_prev.items.len);
-        cw.data_prev.appendSlice(bytes) catch |err| switch (err) {
-            error.OutOfMemory => {
-                std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
-                return;
-            },
-        };
-        const end = @intCast(u32, cw.data_prev.items.len);
-        cw.data_offset_prev.put(hash, DataOffset{ .begin = begin, .end = end }) catch |err| switch (err) {
-            error.OutOfMemory => {
-                std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
-                return;
-            },
-        };
-    }
+    cw.dataSet(id, key, data);
 }
 
 pub fn dataGet(id: u32, key: []const u8, comptime T: type) ?T {
     var cw = currentWindow();
-    const offset = cw.data_offset_prev.get(hashIdKey(id, key));
-    if (offset) |o| {
-        const dt = @typeInfo(T);
-        if (dt == .Pointer and dt.Pointer.size == .Slice) {
-            var ret = cw.arena.dupe(u8, cw.data_prev.items[o.begin..o.end]) catch |err| switch (err) {
-                error.OutOfMemory => {
-                    std.debug.print("dataGet: got {!} for id {x} key {s}, returning direct slice (could cause memory corruption)\n", .{ err, id, key });
-                    return cw.data_prev.items[o.begin..o.end];
-                },
-            };
-            return ret;
-        } else {
-            var bytes: [@sizeOf(T)]u8 = undefined;
-            std.mem.copy(u8, &bytes, cw.data_prev.items[o.begin..o.end]);
-            return std.mem.bytesAsValue(T, &bytes).*;
-        }
-    } else {
-        return null;
-    }
+    return cw.dataGet(id, key, T);
 }
 
 pub fn minSize(id: ?u32, min_size: Size) Size {
@@ -1933,8 +1872,9 @@ pub const Window = struct {
 
     widgets_min_size_prev: std.AutoHashMap(u32, Size),
     widgets_min_size: std.AutoHashMap(u32, Size),
-    data_prev: std.ArrayList(u8),
-    data: std.ArrayList(u8),
+    data_mutex: std.Thread.Mutex,
+    datas_prev: std.ArrayList(u8),
+    datas: std.ArrayList(u8),
     data_offset_prev: std.AutoHashMap(u32, DataOffset),
     data_offset: std.AutoHashMap(u32, DataOffset),
     animations: std.AutoHashMap(u32, Animation),
@@ -1942,6 +1882,7 @@ pub const Window = struct {
     tab_index: std.ArrayList(TabIndex),
     font_cache: std.AutoHashMap(u32, FontCacheEntry),
     icon_cache: std.AutoHashMap(u32, IconCacheEntry),
+    dialog_mutex: std.Thread.Mutex,
     dialogs: std.ArrayList(DialogEntry),
 
     ft2lib: freetype.Library = undefined,
@@ -1977,8 +1918,9 @@ pub const Window = struct {
             .floating_data = std.ArrayList(FloatingData).init(gpa),
             .widgets_min_size = std.AutoHashMap(u32, Size).init(gpa),
             .widgets_min_size_prev = std.AutoHashMap(u32, Size).init(gpa),
-            .data_prev = std.ArrayList(u8).init(gpa),
-            .data = std.ArrayList(u8).init(gpa),
+            .data_mutex = std.Thread.Mutex{},
+            .datas_prev = std.ArrayList(u8).init(gpa),
+            .datas = std.ArrayList(u8).init(gpa),
             .data_offset_prev = std.AutoHashMap(u32, DataOffset).init(gpa),
             .data_offset = std.AutoHashMap(u32, DataOffset).init(gpa),
             .animations = std.AutoHashMap(u32, Animation).init(gpa),
@@ -1986,6 +1928,7 @@ pub const Window = struct {
             .tab_index = std.ArrayList(TabIndex).init(gpa),
             .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
             .icon_cache = std.AutoHashMap(u32, IconCacheEntry).init(gpa),
+            .dialog_mutex = std.Thread.Mutex{},
             .dialogs = std.ArrayList(DialogEntry).init(gpa),
             .wd = WidgetData{ .id = hash.final() },
             .backend = backend,
@@ -2003,8 +1946,8 @@ pub const Window = struct {
         self.floating_data.deinit();
         self.widgets_min_size.deinit();
         self.widgets_min_size_prev.deinit();
-        self.data_prev.deinit();
-        self.data.deinit();
+        self.datas_prev.deinit();
+        self.datas.deinit();
         self.data_offset_prev.deinit();
         self.data_offset.deinit();
         self.animations.deinit();
@@ -2320,13 +2263,15 @@ pub const Window = struct {
         self.widgets_min_size_prev = self.widgets_min_size;
         self.widgets_min_size = @TypeOf(self.widgets_min_size).init(self.widgets_min_size.allocator);
 
-        self.data_prev.deinit();
-        self.data_prev = self.data;
-        self.data = @TypeOf(self.data).init(self.data.allocator);
+        self.data_mutex.lock();
+        self.datas_prev.deinit();
+        self.datas_prev = self.datas;
+        self.datas = @TypeOf(self.datas).init(self.datas.allocator);
 
         self.data_offset_prev.deinit();
         self.data_offset_prev = self.data_offset;
         self.data_offset = @TypeOf(self.data_offset).init(self.data_offset.allocator);
+        self.data_mutex.unlock();
 
         self.tab_index_prev.deinit();
         self.tab_index_prev = self.tab_index;
@@ -2518,14 +2463,125 @@ pub const Window = struct {
         queue.clearAndFree();
     }
 
+    pub fn dataSet(self: *Self, id: u32, key: []const u8, data_in: anytype) void {
+        const hash = hashIdKey(id, key);
+        var bytes: []const u8 = undefined;
+        const dt = @typeInfo(@TypeOf(data_in));
+        if (dt == .Pointer and (dt.Pointer.size == .Slice or
+            (dt.Pointer.size == .One and @typeInfo(dt.Pointer.child) == .Array)))
+        {
+            bytes = std.mem.sliceAsBytes(data_in);
+        } else {
+            bytes = std.mem.asBytes(&data_in);
+        }
+
+        self.data_mutex.lock();
+        defer self.data_mutex.unlock();
+        {
+            // save data for next frame
+            const start = @intCast(u32, self.datas.items.len);
+            self.datas.appendSlice(bytes) catch |err| switch (err) {
+                error.OutOfMemory => {
+                    std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
+                    return;
+                },
+            };
+            const finish = @intCast(u32, self.datas.items.len);
+            self.data_offset.put(hash, DataOffset{ .begin = start, .end = finish }) catch |err| switch (err) {
+                error.OutOfMemory => {
+                    std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
+                    return;
+                },
+            };
+        }
+
+        if (!self.data_offset_prev.contains(hash)) {
+            // also save data for this frame, necessary for dialogs where we store
+            // data and then access it at the end of the frame
+            const start = @intCast(u32, self.datas_prev.items.len);
+            self.datas_prev.appendSlice(bytes) catch |err| switch (err) {
+                error.OutOfMemory => {
+                    std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
+                    return;
+                },
+            };
+            const finish = @intCast(u32, self.datas_prev.items.len);
+            self.data_offset_prev.put(hash, DataOffset{ .begin = start, .end = finish }) catch |err| switch (err) {
+                error.OutOfMemory => {
+                    std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
+                    return;
+                },
+            };
+        }
+    }
+
+    pub fn dataGet(self: *Self, id: u32, key: []const u8, comptime T: type) ?T {
+        const hash = hashIdKey(id, key);
+
+        self.data_mutex.lock();
+        defer self.data_mutex.unlock();
+
+        const offset = self.data_offset_prev.get(hash);
+        if (offset) |o| {
+            const dt = @typeInfo(T);
+            if (dt == .Pointer and dt.Pointer.size == .Slice) {
+                var ret = self.arena.dupe(u8, self.datas_prev.items[o.begin..o.end]) catch |err| switch (err) {
+                    error.OutOfMemory => {
+                        std.debug.print("dataGet: got {!} for id {x} key {s}, returning direct slice (could cause memory corruption)\n", .{ err, id, key });
+                        return self.datas_prev.items[o.begin..o.end];
+                    },
+                };
+                return ret;
+            } else {
+                var bytes: [@sizeOf(T)]u8 = undefined;
+                std.mem.copy(u8, &bytes, self.datas_prev.items[o.begin..o.end]);
+                return std.mem.bytesAsValue(T, &bytes).*;
+            }
+        } else {
+            return null;
+        }
+    }
+
+    // Add a dialog to be displayed on the GUI thread during Window.end(). Can
+    // be called from any thread. Returns a locked mutex that must be unlocked
+    // by the caller.  If calling from a non-GUI thread, do any
+    // Window.dataSet() calls before unlocking the mutex to ensure that data is
+    // available before the dialog is displayed.
+    pub fn dialogAdd(self: *Self, id: u32, display: DialogDisplay) !*std.Thread.Mutex {
+        self.dialog_mutex.lock();
+
+        for (self.dialogs.items) |*d| {
+            if (d.id == id) {
+                d.display = display;
+                break;
+            }
+        } else {
+            try self.dialogs.append(DialogEntry{ .id = id, .display = display });
+        }
+
+        return &self.dialog_mutex;
+    }
+
     fn dialogsShow(self: *Self) !void {
         var i: usize = 0;
-        while (i < self.dialogs.items.len) {
-            const dialog = self.dialogs.items[i];
-            if (try dialog.display(dialog.id) == .close) {
-                _ = self.dialogs.orderedRemove(i);
+        while (true) {
+            var dialog: ?DialogEntry = null;
+            self.dialog_mutex.lock();
+            if (i < self.dialogs.items.len) {
+                dialog = self.dialogs.items[i];
+            }
+            self.dialog_mutex.unlock();
+
+            if (dialog) |d| {
+                if (try d.display(d.id) == .close) {
+                    self.dialog_mutex.lock();
+                    _ = self.dialogs.orderedRemove(i);
+                    self.dialog_mutex.unlock();
+                } else {
+                    i += 1;
+                }
             } else {
-                i += 1;
+                break;
             }
         }
     }
@@ -3328,24 +3384,17 @@ pub const DialogEntry = struct {
     display: DialogDisplay,
 };
 
-pub fn dialogCustom(src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplay) !u32 {
+pub fn dialogAdd(src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplay) !u32 {
     const cw = currentWindow();
     const parent = parentGet();
     const id = parent.extendID(src, id_extra);
-    for (cw.dialogs.items) |*d| {
-        if (d.id == id) {
-            d.display = display;
-            break;
-        }
-    } else {
-        try cw.dialogs.append(DialogEntry{ .id = id, .display = display });
-    }
-
+    const mutex = try cw.dialogAdd(id, display);
+    mutex.unlock();
     return id;
 }
 
 pub fn dialogOk(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
-    const id = try gui.dialogCustom(src, id_extra, dialogOkDisplay);
+    const id = try gui.dialogAdd(src, id_extra, dialogOkDisplay);
     gui.dataSet(id, "_modal", modal);
     gui.dataSet(id, "_title", title);
     gui.dataSet(id, "_msg", msg);
@@ -6842,7 +6891,7 @@ pub const examples = struct {
 
     const AnimatingDialog = struct {
         pub fn dialog(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
-            const id = try gui.dialogCustom(src, id_extra, AnimatingDialog.dialogDisplay);
+            const id = try gui.dialogAdd(src, id_extra, AnimatingDialog.dialogDisplay);
             gui.dataSet(id, "modal", modal);
             gui.dataSet(id, "title", title);
             gui.dataSet(id, "msg", msg);
