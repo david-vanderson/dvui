@@ -9,7 +9,7 @@ pub fn main() !void {
     var win_backend = try SDLBackend.init(800, 600);
     defer win_backend.deinit();
 
-    var win = gui.Window.init(gpa, win_backend.guiBackend());
+    var win = gui.Window.init(@src(), 0, gpa, win_backend.guiBackend());
     defer win.deinit();
 
     var buttons: [3][6]bool = undefined;
