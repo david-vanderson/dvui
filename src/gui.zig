@@ -2511,6 +2511,17 @@ pub const Window = struct {
         self.data_mutex.lock();
         defer self.data_mutex.unlock();
 
+        if (self.datas.getPtr(hash)) |sd| {
+            if (sd.data.len == bytes.len) {
+                sd.used = true;
+                std.mem.copy(u8, sd.data, bytes);
+                return;
+            } else {
+                std.debug.print("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, key });
+                self.gpa.free(sd.data);
+            }
+        }
+
         var sd = SavedData{ .data = self.gpa.alloc(u8, bytes.len) catch |err| switch (err) {
             error.OutOfMemory => {
                 std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
@@ -3414,24 +3425,18 @@ pub fn dialogOkDisplay(id: u32) !DialogDisplayReturn {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
         return .close;
     };
-    gui.dataSet(id, "_modal", modal);
 
     const title = gui.dataGet(id, "_title", []const u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
         return .close;
     };
-    gui.dataSet(id, "_title", title);
 
     const message = gui.dataGet(id, "_msg", []const u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
         return .close;
     };
-    gui.dataSet(id, "_msg", message);
 
     const callafter = gui.dataGet(id, "_callafter", DialogCallAfter);
-    if (callafter) |ca| {
-        gui.dataSet(id, "_callafter", ca);
-    }
 
     var win = try floatingWindow(@src(), id, modal, null, null, .{});
     defer win.deinit();
@@ -6908,23 +6913,12 @@ pub const examples = struct {
 
         pub fn dialogDisplay(id: u32) !DialogDisplayReturn {
             const modal = gui.dataGet(id, "modal", bool) orelse unreachable;
-            gui.dataSet(id, "modal", modal);
-
             const title = gui.dataGet(id, "title", []const u8) orelse unreachable;
-            gui.dataSet(id, "title", title);
-
             const message = gui.dataGet(id, "msg", []const u8) orelse unreachable;
-            gui.dataSet(id, "msg", message);
-
             const callafter = gui.dataGet(id, "callafter", DialogCallAfter);
-            if (callafter) |ca| {
-                gui.dataSet(id, "callafter", ca);
-            }
 
-            // once we record a response, refresh it
-            if (gui.dataGet(id, "response", gui.DialogResponse)) |r| {
-                gui.dataSet(id, "response", r);
-            }
+            // once we record a response, refresh it until we close
+            _ = gui.dataGet(id, "response", gui.DialogResponse);
 
             var win = FloatingWindowWidget.init(@src(), id, modal, null, null, .{});
             const first_frame = gui.firstFrame(win.data().id);
@@ -6938,8 +6932,6 @@ pub const examples = struct {
             // size (see calls to animate below).
             if (gui.animationGet(win.data().id, "rect_percent")) |a| {
                 if (gui.dataGet(win.data().id, "window_size", Size)) |target_size| {
-                    gui.dataSet(win.data().id, "window_size", target_size);
-
                     scaleval = a.lerp();
 
                     // since the window is animating, calculate the center to

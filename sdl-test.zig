@@ -356,8 +356,6 @@ fn animatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool
 
     if (gui.animationGet(fwin.wd.id, "rect_percent")) |a| {
         if (gui.dataGet(fwin.wd.id, "size", gui.Size)) |ss| {
-            gui.dataSet(fwin.wd.id, "size", ss);
-
             var r = fwin.data().rect;
             const dw = ss.w * a.lerp();
             const dh = ss.h * a.lerp();
