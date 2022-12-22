@@ -15,6 +15,7 @@ pub const c = @cImport({
 
     @cDefine("LIBXML_XPATH_ENABLED", "1");
     @cInclude("libxml/xpath.h");
+    @cInclude("libxml/xpathInternals.h");
 
     @cInclude("libavformat/avformat.h");
     @cInclude("libavcodec/avcodec.h");
@@ -42,6 +43,8 @@ const Episode = struct {
     rowid: usize,
     title: []const u8,
     description: []const u8,
+    position: f64,
+    duration: f64,
 };
 
 fn dbErrorCallafter(id: u32, response: gui.DialogResponse) gui.Error!void {
@@ -95,13 +98,11 @@ fn dbInit(arena: std.mem.Allocator) !void {
     } else {
         // new database
         _ = try dbRow(arena, "INSERT INTO schema (version) VALUES (1)", u8, .{});
-        _ = try dbRow(arena, "CREATE TABLE podcast (url TEXT, error TEXT, title TEXT, description TEXT, copyright TEXT, pubDate INTEGER, lastBuildDate TEXT, link TEXT, image_url TEXT, speed REAL)", u8, .{});
-        _ = try dbRow(arena, "CREATE TABLE episode (podcast_id INTEGER, visible INTEGER DEFAULT 1, guid TEXT, title TEXT, description TEXT, pubDate INTEGER, enclosure_url TEXT, position INTEGER, duration INTEGER)", u8, .{});
+        _ = try dbRow(arena, "CREATE TABLE podcast (url TEXT, title TEXT, description TEXT, copyright TEXT, pubDate INTEGER, lastBuildDate TEXT, link TEXT, image_url TEXT, speed REAL)", u8, .{});
+        _ = try dbRow(arena, "CREATE TABLE episode (podcast_id INTEGER, visible INTEGER DEFAULT 1, guid TEXT, title TEXT, description TEXT, pubDate INTEGER, enclosure_url TEXT, position REAL, duration REAL)", u8, .{});
         _ = try dbRow(arena, "CREATE TABLE player (episode_id INTEGER)", u8, .{});
         _ = try dbRow(arena, "INSERT INTO player (episode_id) values (0)", u8, .{});
     }
-
-    _ = try dbRow(arena, "UPDATE podcast SET error=NULL", u8, .{});
 }
 
 pub fn getContent(xpathCtx: *c.xmlXPathContext, node_name: [:0]const u8, attr_name: ?[:0]const u8) ?[]u8 {
@@ -193,6 +194,7 @@ fn bgFetchFeed(arena: std.mem.Allocator, rowid: u32, url: []const u8) !void {
 
     var xpathCtx = c.xmlXPathNewContext(doc);
     defer c.xmlXPathFreeContext(xpathCtx);
+    _ = c.xmlXPathRegisterNs(xpathCtx, "itunes", "http://www.itunes.com/dtds/podcast-1.0.dtd");
 
     {
         var xpathObj = c.xmlXPathEval("/rss/channel", xpathCtx);
@@ -310,6 +312,18 @@ fn bgFetchFeed(arena: std.mem.Allocator, rowid: u32, url: []const u8) !void {
 
                 if (getContent(xpathCtx, "enclosure", "url")) |str| {
                     _ = try dbRow(arena, "UPDATE episode SET enclosure_url=? WHERE rowid=?", i32, .{ str, erow });
+                }
+
+                if (getContent(xpathCtx, "itunes:duration", null)) |str| {
+                    std.debug.print("duration: {s}\n", .{str});
+                    var it = std.mem.splitBackwards(u8, str, ":");
+                    const secs = std.fmt.parseInt(u32, it.first(), 10) catch 0;
+                    const mins = std.fmt.parseInt(u32, it.next() orelse "0", 10) catch 0;
+                    const hrs = std.fmt.parseInt(u32, it.next() orelse "0", 10) catch 0;
+
+                    const dur = @intToFloat(f64, secs) + 60.0 * @intToFloat(f64, mins) + 60.0 * 60.0 * @intToFloat(f64, hrs);
+
+                    _ = try dbRow(arena, "UPDATE episode SET duration=? WHERE rowid=?", i32, .{ dur, erow });
                 }
             }
         }
@@ -504,7 +518,7 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
                 _ = try dbRow(arena, "INSERT INTO podcast (url) VALUES (?)", i32, .{url});
                 if (g_db) |*db| {
                     const rowid = db.getLastInsertRowID();
-                    _ = rowid;
+                    try bgUpdateFeed(arena, @intCast(u32, rowid));
                 }
             }
         }
@@ -586,7 +600,7 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
         var menu = try gui.menu(@src(), 0, .horizontal, .{ .expand = .horizontal });
         defer menu.deinit();
 
-        if (try gui.menuItemLabel(@src(), 0, "Back", false, .{})) |rr| {
+        if (try gui.menuItemLabel(@src(), 0, "Back", false, .{ .expand = .none })) |rr| {
             _ = rr;
             paned.showOther();
         }
@@ -594,13 +608,13 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
 
     if (g_db) |*db| {
         const num_episodes = try dbRow(arena, "SELECT count(*) FROM episode WHERE podcast_id = ?", usize, .{g_podcast_id_on_right}) orelse 0;
-        const height: f32 = 200;
+        const height: f32 = 150;
 
         var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both, .background = false });
         scroll.setVirtualSize(.{ .w = 0, .h = height * @intToFloat(f32, num_episodes) });
         defer scroll.deinit();
 
-        const query = "SELECT rowid, title, description FROM episode WHERE podcast_id = ?";
+        const query = "SELECT rowid, title, description, position, duration FROM episode WHERE podcast_id = ?";
         var stmt = db.prepare(query) catch {
             try dbError("{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), query });
             return error.DB_ERROR;
@@ -625,6 +639,11 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
 
                 cbox.deinit();
 
+                const hrs = @floor(episode.duration / 60.0 / 60.0);
+                const mins = @floor((episode.duration - (hrs * 60.0 * 60.0)) / 60.0);
+                const secs = @floor(episode.duration - (hrs * 60.0 * 60.0) - (mins * 60.0));
+                try gui.label(@src(), 0, "{d:0>2}:{d:0>2}:{d:0>2}", .{ hrs, mins, secs }, .{ .font_style = .heading, .gravity = .downright });
+
                 var f = gui.themeGet().font_heading;
                 f.line_skip_factor = 1.3;
                 try tl.format("{s}\n", .{episode.title}, .{ .font_style = .custom, .font_custom = f });
@@ -645,7 +664,7 @@ fn player(arena: std.mem.Allocator) !void {
     var box2 = try gui.box(@src(), 0, .vertical, oo.override(.{ .background = true }));
     defer box2.deinit();
 
-    var episode = Episode{ .rowid = 0, .title = "Episode Title", .description = "" };
+    var episode = Episode{ .rowid = 0, .title = "Episode Title", .description = "", .position = 0, .duration = 0 };
 
     const episode_id = try dbRow(arena, "SELECT episode_id FROM player", i32, .{});
     if (episode_id) |id| {
