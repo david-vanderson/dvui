@@ -192,11 +192,17 @@ pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
 pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
     switch (event.type) {
         c.SDL_KEYDOWN => {
-            return try win.addEventKey(
-                SDL_keysym_to_gui(event.key.keysym.sym),
-                SDL_keymod_to_gui(event.key.keysym.mod),
-                if (event.key.repeat > 0) .repeat else .down,
-            );
+            if (event.key.repeat > 0) {
+                return try win.addEventKey(
+                    .{ .repeat = SDL_keysym_to_gui(event.key.keysym.sym) },
+                    SDL_keymod_to_gui(event.key.keysym.mod),
+                );
+            } else {
+                return try win.addEventKey(
+                    .{ .down = SDL_keysym_to_gui(event.key.keysym.sym) },
+                    SDL_keymod_to_gui(event.key.keysym.mod),
+                );
+            }
         },
         c.SDL_TEXTINPUT => {
             return try win.addEventText(std.mem.sliceTo(&event.text.text, 0));
@@ -204,23 +210,11 @@ pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
         c.SDL_MOUSEMOTION => {
             return try win.addEventMouseMotion(@intToFloat(f32, event.motion.x), @intToFloat(f32, event.motion.y));
         },
-        c.SDL_MOUSEBUTTONDOWN, c.SDL_MOUSEBUTTONUP => |updown| {
-            var state: gui.MouseEvent.Kind = undefined;
-            if (event.button.button == c.SDL_BUTTON_LEFT) {
-                if (updown == c.SDL_MOUSEBUTTONDOWN) {
-                    state = .leftdown;
-                } else {
-                    state = .leftup;
-                }
-            } else if (event.button.button == c.SDL_BUTTON_RIGHT) {
-                if (updown == c.SDL_MOUSEBUTTONDOWN) {
-                    state = .rightdown;
-                } else {
-                    state = .rightup;
-                }
-            }
-
-            return try win.addEventMouseButton(state);
+        c.SDL_MOUSEBUTTONDOWN => {
+            return try win.addEventMouseButton(.{ .press = SDL_mouse_button_to_gui(event.button.button) });
+        },
+        c.SDL_MOUSEBUTTONUP => {
+            return try win.addEventMouseButton(.{ .release = SDL_mouse_button_to_gui(event.button.button) });
         },
         c.SDL_MOUSEWHEEL => {
             const ticks = @intToFloat(f32, event.wheel.y);
@@ -233,23 +227,37 @@ pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
     }
 }
 
-pub fn SDL_keymod_to_gui(keymod: u16) gui.keys.Mod {
-    if (keymod == c.KMOD_NONE) return gui.keys.Mod.none;
-
-    var m: u16 = 0;
-    if (keymod & c.KMOD_LSHIFT > 0) m |= @enumToInt(gui.keys.Mod.lshift);
-    if (keymod & c.KMOD_RSHIFT > 0) m |= @enumToInt(gui.keys.Mod.rshift);
-    if (keymod & c.KMOD_LCTRL > 0) m |= @enumToInt(gui.keys.Mod.lctrl);
-    if (keymod & c.KMOD_RCTRL > 0) m |= @enumToInt(gui.keys.Mod.rctrl);
-    if (keymod & c.KMOD_LALT > 0) m |= @enumToInt(gui.keys.Mod.lalt);
-    if (keymod & c.KMOD_RALT > 0) m |= @enumToInt(gui.keys.Mod.ralt);
-    if (keymod & c.KMOD_LGUI > 0) m |= @enumToInt(gui.keys.Mod.lgui);
-    if (keymod & c.KMOD_RGUI > 0) m |= @enumToInt(gui.keys.Mod.rgui);
-
-    return @intToEnum(gui.keys.Mod, m);
+pub fn SDL_mouse_button_to_gui(button: u8) gui.enums.Button {
+    return switch (button) {
+        c.SDL_BUTTON_LEFT => .left,
+        c.SDL_BUTTON_MIDDLE => .middle,
+        c.SDL_BUTTON_RIGHT => .right,
+        c.SDL_BUTTON_X1 => .four,
+        c.SDL_BUTTON_X2 => .five,
+        else => blk: {
+            std.debug.print("SDL_mouse_button_to_gui unknown button {d}\n", .{button});
+            break :blk .six;
+        },
+    };
 }
 
-pub fn SDL_keysym_to_gui(keysym: i32) gui.keys.Key {
+pub fn SDL_keymod_to_gui(keymod: u16) gui.enums.Mod {
+    if (keymod == c.KMOD_NONE) return gui.enums.Mod.none;
+
+    var m: u16 = 0;
+    if (keymod & c.KMOD_LSHIFT > 0) m |= @enumToInt(gui.enums.Mod.lshift);
+    if (keymod & c.KMOD_RSHIFT > 0) m |= @enumToInt(gui.enums.Mod.rshift);
+    if (keymod & c.KMOD_LCTRL > 0) m |= @enumToInt(gui.enums.Mod.lctrl);
+    if (keymod & c.KMOD_RCTRL > 0) m |= @enumToInt(gui.enums.Mod.rctrl);
+    if (keymod & c.KMOD_LALT > 0) m |= @enumToInt(gui.enums.Mod.lalt);
+    if (keymod & c.KMOD_RALT > 0) m |= @enumToInt(gui.enums.Mod.ralt);
+    if (keymod & c.KMOD_LGUI > 0) m |= @enumToInt(gui.enums.Mod.lgui);
+    if (keymod & c.KMOD_RGUI > 0) m |= @enumToInt(gui.enums.Mod.rgui);
+
+    return @intToEnum(gui.enums.Mod, m);
+}
+
+pub fn SDL_keysym_to_gui(keysym: i32) gui.enums.Key {
     return switch (keysym) {
         c.SDLK_a => .a,
         c.SDLK_b => .b,

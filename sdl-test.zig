@@ -50,10 +50,10 @@ pub fn main() !void {
                 while (iter.next()) |e| {
                     switch (e.evt) {
                         .mouse => |me| {
-                            if (me.state == .wheel_y) {
+                            if (me.kind == .wheel_y) {
                                 e.handled = true;
                                 var base: f32 = 1.01;
-                                const zs = @exp(@log(base) * e.evt.mouse.wheel);
+                                const zs = @exp(@log(base) * me.kind.wheel_y);
                                 if (zs != 1.0) {
                                     scale_val *= zs;
                                     gui.cueFrame();
@@ -467,34 +467,38 @@ pub const StrokeTest = struct {
             .mouse => |me| {
                 const rs = self.wd.contentRectScale();
                 const mp = me.p.inRectScale(rs);
-                switch (me.state) {
-                    .leftdown => {
-                        e.handled = true;
-                        dragi = null;
+                switch (me.kind) {
+                    .press => |button| {
+                        if (button == .left) {
+                            e.handled = true;
+                            dragi = null;
 
-                        for (points) |p, i| {
-                            const dp = gui.Point.diff(p, mp);
-                            if (@fabs(dp.x) < 5 and @fabs(dp.y) < 5) {
-                                dragi = i;
-                                break;
+                            for (points) |p, i| {
+                                const dp = gui.Point.diff(p, mp);
+                                if (@fabs(dp.x) < 5 and @fabs(dp.y) < 5) {
+                                    dragi = i;
+                                    break;
+                                }
+                            }
+
+                            if (dragi == null and points.len < pointsArray.len) {
+                                dragi = points.len;
+                                points.len += 1;
+                                points[dragi.?] = mp;
+                            }
+
+                            if (dragi != null) {
+                                gui.captureMouse(self.wd.id);
+                                gui.dragPreStart(me.p, .crosshair, .{});
                             }
                         }
-
-                        if (dragi == null and points.len < pointsArray.len) {
-                            dragi = points.len;
-                            points.len += 1;
-                            points[dragi.?] = mp;
-                        }
-
-                        if (dragi != null) {
-                            gui.captureMouse(self.wd.id);
-                            gui.dragPreStart(me.p, .crosshair, .{});
-                        }
                     },
-                    .leftup => {
-                        e.handled = true;
-                        gui.captureMouse(null);
-                        gui.dragEnd();
+                    .release => |button| {
+                        if (button == .left) {
+                            e.handled = true;
+                            gui.captureMouse(null);
+                            gui.dragEnd();
+                        }
                     },
                     .motion => {
                         e.handled = true;
@@ -505,10 +509,10 @@ pub const StrokeTest = struct {
                             gui.cueFrame();
                         }
                     },
-                    .wheel_y => {
+                    .wheel_y => |ticks| {
                         e.handled = true;
                         var base: f32 = 1.05;
-                        const zs = @exp(@log(base) * me.wheel);
+                        const zs = @exp(@log(base) * ticks);
                         if (zs != 1.0) {
                             thickness *= zs;
                             gui.cueFrame();

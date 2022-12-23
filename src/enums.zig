@@ -1,3 +1,14 @@
+pub const Button = enum {
+    left,
+    right,
+    middle,
+    four,
+    five,
+    six,
+    seven,
+    eight,
+};
+
 pub const Mod = enum(u16) {
     none = 0,
 
