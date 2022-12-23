@@ -708,59 +708,47 @@ pub const RenderCmd = struct {
     },
 };
 
-pub fn focusedWindow() bool {
-    var cw = currentWindow();
-    if (cw.window_currentId == cw.focused_windowId) {
-        return true;
-    }
-
-    return false;
+pub fn focusedSubwindowId() u32 {
+    const cw = currentWindow();
+    const sw = cw.subwindowFocused();
+    return sw.id;
 }
 
-pub fn focusedWindowId() u32 {
+pub fn focusSubwindow(subwindow_id: ?u32, iter: ?*EventIterator) void {
     const cw = currentWindow();
-    return cw.focused_windowId;
-}
-
-pub fn focusWindow(window_id: ?u32, iter: ?*EventIterator) void {
-    const cw = currentWindow();
-    const winId = window_id orelse cw.window_currentId;
-    if (cw.focused_windowId != winId) {
-        cw.focused_windowId = winId;
+    const winId = subwindow_id orelse cw.subwindow_currentId;
+    if (cw.focused_subwindowId != winId) {
+        cw.focused_subwindowId = winId;
         cueFrame();
         if (iter) |it| {
-            if (cw.focused_windowId == cw.wd.id) {
-                it.focusRemainingEvents(cw.focused_windowId, cw.focused_widgetId);
-            } else {
-                for (cw.floating_data.items) |*fd| {
-                    if (cw.focused_windowId == fd.id) {
-                        it.focusRemainingEvents(fd.id, fd.focused_widgetId);
-                        break;
-                    }
+            for (cw.subwindows.items) |*sw| {
+                if (cw.focused_subwindowId == sw.id) {
+                    it.focusRemainingEvents(sw.id, sw.focused_widgetId);
+                    break;
                 }
             }
         }
     }
 }
 
-pub fn raiseWindow(window_id: u32) void {
+pub fn raiseSubwindow(subwindow_id: u32) void {
     const cw = currentWindow();
-    var items = cw.floating_data.items;
-    for (items) |fd, i| {
-        if (fd.id == window_id) {
+    var items = cw.subwindows.items;
+    for (items) |sw, i| {
+        if (sw.id == subwindow_id) {
             if (i == (items.len - 1)) {
                 return;
             } else {
                 for (items[i..(items.len - 1)]) |*b, k| {
                     b.* = items[i + 1 + k];
                 }
-                items[items.len - 1] = fd;
+                items[items.len - 1] = sw;
                 return;
             }
         }
     }
 
-    std.debug.print("raiseWindow: couldn't find window {x}\n", .{window_id});
+    std.debug.print("raiseSubwindow: couldn't find subwindow {x}\n", .{subwindow_id});
     return;
 }
 
@@ -774,60 +762,42 @@ fn optionalEqual(comptime T: type, a: ?T, b: ?T) bool {
     }
 }
 
+// Focus a widget in the focused subwindow.  If you need to focus a widget in
+// an arbitrary subwindow, focus the subwindow first.
 pub fn focusWidget(id: ?u32, iter: ?*EventIterator) void {
     const cw = currentWindow();
-    if (cw.focused_windowId == cw.wd.id) {
-        if (!optionalEqual(u32, cw.focused_widgetId, id)) {
-            cw.focused_widgetId = id;
-            if (iter) |it| {
-                it.focusRemainingEvents(cw.focused_windowId, cw.focused_widgetId);
-            }
-            cueFrame();
-        }
-    } else {
-        for (cw.floating_data.items) |*fd| {
-            if (cw.focused_windowId == fd.id) {
-                if (!optionalEqual(u32, fd.focused_widgetId, id)) {
-                    fd.focused_widgetId = id;
-                    if (iter) |it| {
-                        it.focusRemainingEvents(cw.focused_windowId, cw.focused_widgetId);
-                    }
-                    cueFrame();
-                    break;
+    for (cw.subwindows.items) |*sw| {
+        if (cw.focused_subwindowId == sw.id) {
+            if (!optionalEqual(u32, sw.focused_widgetId, id)) {
+                sw.focused_widgetId = id;
+                if (iter) |it| {
+                    it.focusRemainingEvents(sw.id, sw.focused_widgetId);
                 }
+                cueFrame();
             }
+            break;
         }
     }
 }
 
+// Return the id of the focused widget (if any) in the focused subwindow.
 pub fn focusedWidgetId() ?u32 {
     const cw = currentWindow();
-    if (cw.focused_windowId == cw.wd.id) {
-        return cw.focused_widgetId;
-    } else {
-        for (cw.floating_data.items) |*fd| {
-            if (cw.focused_windowId == fd.id) {
-                return fd.focused_widgetId;
-            }
+    for (cw.subwindows.items) |*sw| {
+        if (cw.focused_subwindowId == sw.id) {
+            return sw.focused_widgetId;
         }
     }
 
     return null;
 }
 
-pub fn focusedWidgetIdInCurrentWindow() ?u32 {
+// Return the id of the focused widget (if any) in the current subwindow (the
+// one that widgets are being added to).
+pub fn focusedWidgetIdInCurrentSubwindow() ?u32 {
     const cw = currentWindow();
-    if (cw.window_currentId == cw.wd.id) {
-        return cw.focused_widgetId;
-    } else {
-        for (cw.floating_data.items) |*fd| {
-            if (cw.window_currentId == fd.id) {
-                return fd.focused_widgetId;
-            }
-        }
-    }
-
-    return null;
+    const sw = cw.subwindowCurrent();
+    return sw.focused_widgetId;
 }
 
 pub const CursorKind = enum(u8) {
@@ -911,19 +881,13 @@ pub fn pathFillConvex(col: Color) !void {
         return;
     }
 
-    if (cw.window_currentId != cw.wd.id) {
+    if (!cw.rendering) {
         var path_copy = std.ArrayList(Point).init(cw.arena);
         try path_copy.appendSlice(cw.path.items);
         var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
 
-        var i = cw.floating_data.items.len;
-        while (i > 0) : (i -= 1) {
-            const fw = &cw.floating_data.items[i - 1];
-            if (fw.id == cw.window_currentId) {
-                try fw.render_cmds.append(cmd);
-                break;
-            }
-        }
+        var sw = cw.subwindowCurrent();
+        try sw.render_cmds.append(cmd);
 
         cw.path.clearAndFree();
         return;
@@ -1001,26 +965,16 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
         return;
     }
 
-    if (after or cw.window_currentId != cw.wd.id) {
+    if (after or !cw.rendering) {
         var path_copy = std.ArrayList(Point).init(cw.arena);
         try path_copy.appendSlice(cw.path.items);
         var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
 
-        if (cw.window_currentId == cw.wd.id) {
-            try cw.render_cmds_after.append(cmd);
+        var sw = cw.subwindowCurrent();
+        if (after) {
+            try sw.render_cmds_after.append(cmd);
         } else {
-            var i = cw.floating_data.items.len;
-            while (i > 0) : (i -= 1) {
-                const fw = &cw.floating_data.items[i - 1];
-                if (fw.id == cw.window_currentId) {
-                    if (after) {
-                        try fw.render_cmds_after.append(cmd);
-                    } else {
-                        try fw.render_cmds.append(cmd);
-                    }
-                    break;
-                }
-            }
+            try sw.render_cmds.append(cmd);
         }
 
         cw.path.clearAndFree();
@@ -1244,50 +1198,36 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     cw.path.clearAndFree();
 }
 
-pub fn floatingWindowClosing(id: u32) void {
-    const cw = currentWindow();
-    if (cw.floating_data.items.len > 0) {
-        const fd = cw.floating_data.items[cw.floating_data.items.len - 1];
-        if (fd.id == id) {
-            _ = cw.floating_data.pop();
-        } else {
-            std.debug.print("floatingWindowClosing: last added floating window id {x} doesn't match {x}\n", .{ fd.id, id });
-        }
-    } else {
-        std.debug.print("floatingWindowClosing: no floating windows\n", .{});
-    }
-}
-
-pub fn floatingWindowAdd(id: u32, rect: Rect, modal: bool) !void {
+pub fn subwindowAdd(id: u32, rect: Rect, modal: bool) !void {
     const cw = currentWindow();
 
-    for (cw.floating_data.items) |*fd| {
-        if (id == fd.id) {
+    for (cw.subwindows.items) |*sw| {
+        if (id == sw.id) {
             // this window was here previously, just update data
-            fd.used = true;
-            fd.rect = rect;
-            fd.modal = modal;
-            fd.render_cmds = std.ArrayList(RenderCmd).init(cw.arena);
-            fd.render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena);
+            sw.used = true;
+            sw.rect = rect;
+            sw.modal = modal;
+            sw.render_cmds = std.ArrayList(RenderCmd).init(cw.arena);
+            sw.render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena);
             return;
         }
     }
 
     // haven't seen this window before, it goes on top
-    const fd = Window.FloatingData{ .id = id, .rect = rect, .modal = modal, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena), .render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena) };
-    try cw.floating_data.append(fd);
+    const sw = Window.Subwindow{ .id = id, .rect = rect, .modal = modal, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena), .render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena) };
+    try cw.subwindows.append(sw);
 }
 
-pub fn windowCurrentSet(id: u32) u32 {
+pub fn subwindowCurrentSet(id: u32) u32 {
     const cw = currentWindow();
-    const ret = cw.window_currentId;
-    cw.window_currentId = id;
+    const ret = cw.subwindow_currentId;
+    cw.subwindow_currentId = id;
     return ret;
 }
 
-pub fn windowCurrentId() u32 {
+pub fn subwindowCurrentId() u32 {
     const cw = currentWindow();
-    return cw.window_currentId;
+    return cw.subwindow_currentId;
 }
 
 pub fn dragPreStart(p: Point, cursor: CursorKind, offset: Point) void {
@@ -1357,13 +1297,13 @@ pub fn captureMouseMaintain(id: u32) bool {
     if (cw.captureID == id) {
         // to maintain capture, we must be on or above the
         // top modal window
-        var i = cw.floating_data.items.len;
+        var i = cw.subwindows.items.len;
         while (i > 0) : (i -= 1) {
-            const fw = &cw.floating_data.items[i - 1];
-            if (fw.id == cw.window_currentId) {
+            const sw = &cw.subwindows.items[i - 1];
+            if (sw.id == cw.subwindow_currentId) {
                 // maintaining capture
                 break;
-            } else if (fw.modal) {
+            } else if (sw.modal) {
                 // found modal before we found current
                 // cancel the capture, and cancel
                 // any drag being done
@@ -1372,7 +1312,7 @@ pub fn captureMouseMaintain(id: u32) bool {
             }
         }
 
-        // either our floating window as above the top modal
+        // either our floating window is above the top modal
         // or there are no floating modal windows
         cw.captured_last_frame = true;
         return true;
@@ -1602,7 +1542,7 @@ pub const EventIterator = struct {
                             continue;
                         }
                     } else {
-                        if (me.floating_win != windowCurrentId()) {
+                        if (me.floating_win != subwindowCurrentId()) {
                             // floating window is above us
                             continue;
                         }
@@ -1724,7 +1664,7 @@ const TabIndex = struct {
 
 pub fn tabIndexSet(widget_id: u32, tab_index: ?u16) !void {
     var cw = currentWindow();
-    const ti = TabIndex{ .windowId = cw.window_currentId, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
+    const ti = TabIndex{ .windowId = cw.subwindow_currentId, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
     try cw.tab_index.append(ti);
 }
 
@@ -1734,7 +1674,7 @@ pub fn tabIndexNext(iter: ?*EventIterator) void {
     var oldtab: ?u16 = null;
     if (widgetId != null) {
         for (cw.tab_index_prev.items) |ti| {
-            if (ti.windowId == cw.focused_windowId and ti.widgetId == widgetId.?) {
+            if (ti.windowId == cw.focused_subwindowId and ti.widgetId == widgetId.?) {
                 oldtab = ti.tabIndex;
                 break;
             }
@@ -1748,7 +1688,7 @@ pub fn tabIndexNext(iter: ?*EventIterator) void {
     var foundFocus = false;
 
     for (cw.tab_index_prev.items) |ti| {
-        if (ti.windowId == cw.focused_windowId) {
+        if (ti.windowId == cw.focused_subwindowId) {
             if (ti.widgetId == widgetId) {
                 foundFocus = true;
             } else if (foundFocus == true and oldtab != null and ti.tabIndex == oldtab.?) {
@@ -1774,7 +1714,7 @@ pub fn tabIndexPrev(iter: ?*EventIterator) void {
     var oldtab: ?u16 = null;
     if (widgetId != null) {
         for (cw.tab_index_prev.items) |ti| {
-            if (ti.windowId == cw.focused_windowId and ti.widgetId == widgetId.?) {
+            if (ti.windowId == cw.focused_subwindowId and ti.widgetId == widgetId.?) {
                 oldtab = ti.tabIndex;
                 break;
             }
@@ -1788,7 +1728,7 @@ pub fn tabIndexPrev(iter: ?*EventIterator) void {
     var foundFocus = false;
 
     for (cw.tab_index_prev.items) |ti| {
-        if (ti.windowId == cw.focused_windowId) {
+        if (ti.windowId == cw.focused_subwindowId) {
             if (ti.widgetId == widgetId) {
                 foundFocus = true;
 
@@ -1819,7 +1759,7 @@ pub const Vertex = struct {
 pub const Window = struct {
     const Self = @This();
 
-    pub const FloatingData = struct {
+    pub const Subwindow = struct {
         id: u32 = 0,
         rect: Rect = Rect{},
         focused_widgetId: ?u32 = null,
@@ -1842,17 +1782,17 @@ pub const Window = struct {
     backend: Backend,
     previous_window: ?*Window = null,
 
-    window_currentId: u32 = 0,
-    floating_data: std.ArrayList(FloatingData),
+    // list of subwindows including base, later windows are on top of earlier
+    // windows
+    subwindows: std.ArrayList(Subwindow),
+
+    // id of the subwindow widgets are being added to
+    subwindow_currentId: u32 = 0,
+
+    // id of the subwindow that has focus
+    focused_subwindowId: u32 = 0,
 
     snap_to_pixels: bool = true,
-
-    // used to delay some rendering until after (like selection outlines)
-    render_cmds_after: std.ArrayList(RenderCmd) = undefined,
-
-    focused_windowId: u32 = 0,
-    focused_widgetId: ?u32 = null, // this is specific to the base window
-    focused_widgetId_last_frame: ?u32 = null, // only used to intially mark events
 
     events: std.ArrayList(Event) = undefined,
     // mouse_pt tracks the last position we got a mouse event for
@@ -1913,6 +1853,7 @@ pub const Window = struct {
     gpa: std.mem.Allocator = undefined,
     arena: std.mem.Allocator = undefined,
     path: std.ArrayList(Point) = undefined,
+    rendering: bool = false,
 
     pub fn init(
         src: std.builtin.SourceLocation,
@@ -1927,7 +1868,7 @@ pub const Window = struct {
         hash.update(std.mem.asBytes(&id_extra));
         var self = Self{
             .gpa = gpa,
-            .floating_data = std.ArrayList(FloatingData).init(gpa),
+            .subwindows = std.ArrayList(Subwindow).init(gpa),
             .min_sizes = std.AutoHashMap(u32, SavedSize).init(gpa),
             .data_mutex = std.Thread.Mutex{},
             .datas = std.AutoHashMap(u32, SavedData).init(gpa),
@@ -1942,7 +1883,7 @@ pub const Window = struct {
             .backend = backend,
         };
 
-        self.focused_windowId = self.wd.id;
+        self.focused_subwindowId = self.wd.id;
         self.frame_time_ns = std.time.nanoTimestamp();
 
         self.ft2lib = freetype.Library.init() catch unreachable;
@@ -1951,7 +1892,7 @@ pub const Window = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.floating_data.deinit();
+        self.subwindows.deinit();
         self.min_sizes.deinit();
         self.datas.deinit();
         self.animations.deinit();
@@ -1966,13 +1907,13 @@ pub const Window = struct {
         self.positionMouseEventRemove();
 
         try self.events.append(Event{ .evt = .{ .key = KeyEvent{
-            .focus_windowId = self.focused_windowId,
-            .focus_widgetId = self.focused_widgetId_last_frame,
+            .focus_windowId = self.focused_subwindowId,
+            .focus_widgetId = self.subwindowFocused().focused_widgetId,
             .kind = kind,
             .mod = mod,
         } } });
 
-        const ret = (self.wd.id != self.focused_windowId);
+        const ret = (self.wd.id != self.focused_subwindowId);
         try self.positionMouseEventAdd();
         return ret;
     }
@@ -1981,13 +1922,13 @@ pub const Window = struct {
         self.positionMouseEventRemove();
 
         try self.events.append(Event{ .evt = .{ .key = KeyEvent{
-            .focus_windowId = self.focused_windowId,
-            .focus_widgetId = self.focused_widgetId_last_frame,
+            .focus_windowId = self.focused_subwindowId,
+            .focus_widgetId = self.subwindowFocused().focused_widgetId,
             .kind = .{ .text = try self.arena.dupe(u8, text) },
             .mod = .none,
         } } });
 
-        const ret = (self.wd.id != self.focused_windowId);
+        const ret = (self.wd.id != self.focused_subwindowId);
         try self.positionMouseEventAdd();
         return ret;
     }
@@ -2025,7 +1966,7 @@ pub const Window = struct {
             if (winId == self.wd.id) {
                 // focus the window here so any more key events get routed
                 // properly
-                focusWindow(self.wd.id, null);
+                focusSubwindow(self.wd.id, null);
             }
 
             // add mouse focus event
@@ -2232,18 +2173,17 @@ pub const Window = struct {
         self.cursor_requested = .arrow;
 
         self.arena = arena;
-        self.render_cmds_after = std.ArrayList(RenderCmd).init(arena);
         self.path = std.ArrayList(Point).init(arena);
 
         {
             var i: usize = 0;
-            while (i < self.floating_data.items.len) {
-                var fd = &self.floating_data.items[i];
-                if (fd.used) {
-                    fd.used = false;
+            while (i < self.subwindows.items.len) {
+                var sw = &self.subwindows.items[i];
+                if (sw.used) {
+                    sw.used = false;
                     i += 1;
                 } else {
-                    _ = self.floating_data.orderedRemove(i);
+                    _ = self.subwindows.orderedRemove(i);
                 }
             }
         }
@@ -2257,8 +2197,6 @@ pub const Window = struct {
                 self.frame_times[i] = self.frame_times[i + 1] + micros_since_last;
             }
         }
-
-        self.focused_widgetId_last_frame = focusedWidgetId();
 
         {
             var deadSizes = std.ArrayList(u32).init(arena);
@@ -2314,7 +2252,9 @@ pub const Window = struct {
 
         debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
-        _ = windowCurrentSet(self.wd.id);
+        try subwindowAdd(self.wd.id, self.wd.rect, false);
+
+        _ = subwindowCurrentSet(self.wd.id);
 
         self.extra_frames_needed -|= 1;
         if (micros_since_last == 0) {
@@ -2423,15 +2363,41 @@ pub const Window = struct {
     }
 
     fn windowFor(self: *const Self, p: Point) u32 {
-        var i = self.floating_data.items.len;
+        var i = self.subwindows.items.len;
         while (i > 0) : (i -= 1) {
-            const fw = &self.floating_data.items[i - 1];
-            if (fw.modal or fw.rect.contains(p)) {
-                return fw.id;
+            const sw = &self.subwindows.items[i - 1];
+            if (sw.modal or sw.rect.contains(p)) {
+                return sw.id;
             }
         }
 
         return self.wd.id;
+    }
+
+    pub fn subwindowCurrent(self: *const Self) *Subwindow {
+        var i = self.subwindows.items.len;
+        while (i > 0) : (i -= 1) {
+            const sw = &self.subwindows.items[i - 1];
+            if (sw.id == self.subwindow_currentId) {
+                return sw;
+            }
+        }
+
+        std.debug.print("subwindowCurrent failed to find the current subwindow, returning base window\n", .{});
+        return &self.subwindows.items[0];
+    }
+
+    pub fn subwindowFocused(self: *const Self) *Subwindow {
+        var i = self.subwindows.items.len;
+        while (i > 0) : (i -= 1) {
+            const sw = &self.subwindows.items[i - 1];
+            if (sw.id == self.focused_subwindowId) {
+                return sw;
+            }
+        }
+
+        std.debug.print("subwindowFocused failed to find the current subwindow, returning base window\n", .{});
+        return &self.subwindows.items[0];
     }
 
     // Return the cursor the gui wants.  Client code should cache this if
@@ -2459,6 +2425,8 @@ pub const Window = struct {
     }
 
     pub fn renderCommands(self: *Self, queue: *std.ArrayList(RenderCmd)) !void {
+        self.rendering = true;
+        defer self.rendering = false;
         for (queue.items) |*drc| {
             // don't need to reset these after because we reset them after
             // calling renderCommands
@@ -2599,8 +2567,8 @@ pub const Window = struct {
     }
 
     // End of this window gui's rendering.  Renders retained dialogs and all
-    // deferred rendering (floating windows, focus highlights).  Returns micros
-    // we want between last call to begin() and next call to begin() (or null
+    // deferred rendering (subwindows, focus highlights).  Returns micros we
+    // want between last call to begin() and next call to begin() (or null
     // meaning wait for event).  If wanted, pass return value to waitTime() to
     // get a useful time to wait between render loops.
     pub fn end(self: *Self) !?u32 {
@@ -2608,10 +2576,9 @@ pub const Window = struct {
 
         const oldsnap = self.snap_to_pixels;
         const oldclip = clipGet();
-        try self.renderCommands(&self.render_cmds_after);
-        for (self.floating_data.items) |*fw| {
-            try self.renderCommands(&fw.render_cmds);
-            try self.renderCommands(&fw.render_cmds_after);
+        for (self.subwindows.items) |*sw| {
+            try self.renderCommands(&sw.render_cmds);
+            try self.renderCommands(&sw.render_cmds_after);
         }
         clipSet(oldclip);
         self.snap_to_pixels = oldsnap;
@@ -2640,15 +2607,11 @@ pub const Window = struct {
 
         self.mouse_pt_prev = self.mouse_pt;
 
-        if (self.focusedWindowLost()) {
-            // if the floating window that was focused went away, focus the highest
-            // remaining one
-            if (self.floating_data.items.len > 0) {
-                const fdata = self.floating_data.items[self.floating_data.items.len - 1];
-                focusWindow(fdata.id, null);
-            } else {
-                focusWindow(self.wd.id, null);
-            }
+        if (self.focusedSubwindowLost()) {
+            // if the subwindow that was focused went away, focus the highest
+            // one (there is always the base one)
+            const sw = self.subwindows.items[self.subwindows.items.len - 1];
+            focusSubwindow(sw.id, null);
 
             cueFrame();
         }
@@ -2686,14 +2649,10 @@ pub const Window = struct {
         return ret;
     }
 
-    pub fn focusedWindowLost(self: *Self) bool {
-        if (self.wd.id == self.focused_windowId) {
-            return false;
-        } else {
-            for (self.floating_data.items) |*fw| {
-                if (fw.id == self.focused_windowId) {
-                    return false;
-                }
+    pub fn focusedSubwindowLost(self: *Self) bool {
+        for (self.subwindows.items) |*sw| {
+            if (sw.id == self.focused_subwindowId) {
+                return false;
             }
         }
 
@@ -2742,7 +2701,7 @@ pub const Window = struct {
                     // when a popup is closed due to a menu item being chosen,
                     // the window that spawned it (which had focus previously)
                     // should become focused again
-                    focusWindow(self.wd.id, null);
+                    focusSubwindow(self.wd.id, null);
                 }
             },
             else => {},
@@ -2802,7 +2761,7 @@ pub const PopupWidget = struct {
 
         _ = parentSet(self.widget());
 
-        self.prev_windowId = windowCurrentSet(self.wd.id);
+        self.prev_windowId = subwindowCurrentSet(self.wd.id);
         self.parent_popup = popupSet(self);
 
         if (minSizeGet(self.wd.id)) |_| {
@@ -2813,7 +2772,7 @@ pub const PopupWidget = struct {
             self.wd.rect = placeOnScreen(self.initialRect, self.wd.rect);
         } else {
             self.wd.rect = placeOnScreen(self.initialRect, Rect.fromPoint(self.initialRect.topleft()));
-            focusWindow(self.wd.id, null);
+            focusSubwindow(self.wd.id, null);
 
             // need a second frame to fit contents (FocusWindow calls cueFrame but
             // here for clarity)
@@ -2822,7 +2781,7 @@ pub const PopupWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        try floatingWindowAdd(self.wd.id, rs.r, false);
+        try subwindowAdd(self.wd.id, rs.r, false);
 
         // clip to just our window (using clipSet since we are not inside our parent)
         self.prevClip = clipGet();
@@ -2832,11 +2791,6 @@ pub const PopupWidget = struct {
         // don't have margin, so turn that off
         self.layout = MenuWidget.init(@src(), 0, .vertical, self.options.override(.{ .margin = .{} }));
         try self.layout.install(.{});
-    }
-
-    pub fn close(self: *Self) void {
-        floatingWindowClosing(self.wd.id);
-        cueFrame();
     }
 
     pub fn widget(self: *Self) Widget {
@@ -2876,16 +2830,7 @@ pub const PopupWidget = struct {
 
     pub fn bubbleEvent(self: *Self, e: *Event) void {
         switch (e.evt) {
-            .close_popup => |cp| {
-                // close and continue bubbling
-                if (cp.intentional) {
-                    // if we call close() when not intentional (like from losing
-                    // focus because a dialog), then calling floatingWindowClosing
-                    // will show a warning because we wouldn't be the last floating
-                    // window on the stack
-                    self.close();
-                }
-
+            .close_popup => {
                 self.wd.parent.bubbleEvent(e);
             },
             else => {},
@@ -2905,7 +2850,7 @@ pub const PopupWidget = struct {
         // we have to call chainFocused on our parent if we have one so we
         // can't return early
 
-        if (self.wd.id == focusedWindowId()) {
+        if (self.wd.id == focusedSubwindowId()) {
             // we are focused
             ret = true;
         }
@@ -2915,7 +2860,7 @@ pub const PopupWidget = struct {
             if (pp.chainFocused(false)) {
                 ret = true;
             }
-        } else if (self.prev_windowId == focusedWindowId()) {
+        } else if (self.prev_windowId == focusedSubwindowId()) {
             // no parent popup, is our parent window focused
             ret = true;
         }
@@ -2925,7 +2870,6 @@ pub const PopupWidget = struct {
 
     pub fn deinit(self: *Self) void {
         // outside normal flow, so don't get rect from parent
-        var closing: bool = false;
         const rs = self.ownScreenRectScale();
         var iter = EventIterator.init(self.wd.id, rs.r);
         while (iter.nextCleanup(true)) |e| {
@@ -2957,17 +2901,15 @@ pub const PopupWidget = struct {
                     tabIndexNext(&iter);
                 } else if (e.evt.key.kind == .down and e.evt.key.kind.down == .left) {
                     e.handled = true;
-                    self.close();
-                    closing = true;
-                    focusWindow(self.prev_windowId, &iter);
                     if (self.layout.parentMenu) |pm| {
                         pm.submenus_activated = false;
+                        focusSubwindow(self.prev_windowId, &iter);
                     }
                 }
             }
         }
 
-        if (!closing and !self.have_popup_child and !self.chainFocused(true)) {
+        if (!self.have_popup_child and !self.chainFocused(true)) {
             // if a popup chain is open and the user focuses a different window
             // (not the parent of the popups), then we want to close the popups
 
@@ -2985,7 +2927,7 @@ pub const PopupWidget = struct {
 
         _ = popupSet(self.parent_popup);
         _ = parentSet(self.wd.parent);
-        _ = windowCurrentSet(self.prev_windowId);
+        _ = subwindowCurrentSet(self.prev_windowId);
         clipSet(self.prevClip);
     }
 };
@@ -3105,7 +3047,7 @@ pub const FloatingWindowWidget = struct {
             }
 
             // first frame we are being shown
-            focusWindow(self.wd.id, null);
+            focusSubwindow(self.wd.id, null);
 
             // need a second frame to fit contents (FocusWindow calls
             // cueFrame but here for clarity)
@@ -3121,7 +3063,7 @@ pub const FloatingWindowWidget = struct {
         debug("{x} FloatingWindow {}", .{ self.wd.id, self.wd.rect });
 
         _ = parentSet(self.widget());
-        self.prev_windowId = windowCurrentSet(self.wd.id);
+        self.prev_windowId = subwindowCurrentSet(self.wd.id);
 
         // reset clip to whole OS window
         // - if modal fade everything below us
@@ -3138,7 +3080,7 @@ pub const FloatingWindowWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        try floatingWindowAdd(self.wd.id, rs.r, self.modal);
+        try subwindowAdd(self.wd.id, rs.r, self.modal);
 
         if (self.modal) {
             // paint over everything below
@@ -3174,7 +3116,7 @@ pub const FloatingWindowWidget = struct {
 
                 if (me.kind == .focus) {
                     // focus but let the focus event propagate to widgets
-                    focusWindow(self.wd.id, &iter);
+                    focusSubwindow(self.wd.id, &iter);
                 }
 
                 if (self.captured or corner) {
@@ -3280,7 +3222,7 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn close(self: *Self) void {
-        floatingWindowClosing(self.wd.id);
+        //subwindowClosing(self.wd.id);
         if (self.openflag) |of| {
             of.* = false;
         }
@@ -3330,7 +3272,7 @@ pub const FloatingWindowWidget = struct {
                     // when a popup is closed because the user chose to, the
                     // window that spawned it (which had focus previously)
                     // should become focused again
-                    focusWindow(self.wd.id, null);
+                    focusSubwindow(self.wd.id, null);
                 }
             },
             else => {},
@@ -3363,7 +3305,7 @@ pub const FloatingWindowWidget = struct {
         // self.wd.minSizeReportToParent();
 
         _ = parentSet(self.wd.parent);
-        _ = windowCurrentSet(self.prev_windowId);
+        _ = subwindowCurrentSet(self.prev_windowId);
         clipSet(self.prevClip);
     }
 };
@@ -3383,7 +3325,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     var iter = EventIterator.init(over.wd.id, over.wd.contentRectScale().r);
     while (iter.next()) |e| {
         if (e.evt == .mouse and e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left) {
-            raiseWindow(windowCurrentId());
+            raiseSubwindow(subwindowCurrentId());
         }
     }
 
@@ -4035,8 +3977,8 @@ pub const ContextWidget = struct {
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Self {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
-        self.winId = windowCurrentId();
-        if (focusedWidgetIdInCurrentWindow()) |fid| {
+        self.winId = subwindowCurrentId();
+        if (focusedWidgetIdInCurrentSubwindow()) |fid| {
             if (fid == self.wd.id) {
                 self.focused = true;
             }
@@ -4095,10 +4037,10 @@ pub const ContextWidget = struct {
         switch (e.evt) {
             .close_popup => {
                 if (self.focused) {
-                    const focused_winId = focusedWindowId();
-                    focusWindow(self.winId, null);
+                    const focused_winId = focusedSubwindowId();
+                    focusSubwindow(self.winId, null);
                     focusWidget(null, null);
-                    focusWindow(focused_winId, null);
+                    focusSubwindow(focused_winId, null);
                 }
             },
             else => {},
@@ -5040,7 +4982,7 @@ pub const MenuWidget = struct {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
 
-        self.winId = windowCurrentId();
+        self.winId = subwindowCurrentId();
         self.dir = dir;
         if (dataGet(self.wd.id, "_sub_act", bool)) |a| {
             self.submenus_activated = a;
@@ -5209,7 +5151,7 @@ pub const MenuItemWidget = struct {
             }
         }
 
-        if (self.wd.id == focusedWidgetIdInCurrentWindow()) {
+        if (self.wd.id == focusedWidgetIdInCurrentSubwindow()) {
             self.focused_in_win = true;
         }
 
@@ -5299,7 +5241,7 @@ pub const MenuItemWidget = struct {
                 } else if (me.kind == .press and me.kind.press == .left) {
                     e.handled = true;
                     if (self.submenu) {
-                        focusWindow(null, null); // focuses the window we are in
+                        focusSubwindow(null, null); // focuses the window we are in
                         focusWidget(self.wd.id, iter);
                         menuGet().?.submenus_activated = !menuGet().?.submenus_activated;
                     }
@@ -5317,7 +5259,7 @@ pub const MenuItemWidget = struct {
                     // moving then it breaks keyboard navigation.
                     if (mouseTotalMotion().nonZero()) {
                         // TODO don't do the rest here if the menu has an existing popup and the motion is towards the popup
-                        focusWindow(null, null); // focuses the window we are in
+                        focusSubwindow(null, null); // focuses the window we are in
                         focusWidget(self.wd.id, null);
                     }
                 }
@@ -6162,19 +6104,13 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
 
     var cw = currentWindow();
 
-    if (cw.window_currentId != cw.wd.id) {
+    if (!cw.rendering) {
         var txt = try cw.arena.alloc(u8, text.len);
         std.mem.copy(u8, txt, text);
         var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = .{ .font = font, .text = txt, .rs = rs, .color = color } } };
 
-        var i = cw.floating_data.items.len;
-        while (i > 0) : (i -= 1) {
-            const fw = &cw.floating_data.items[i - 1];
-            if (fw.id == cw.window_currentId) {
-                try fw.render_cmds.append(cmd);
-                break;
-            }
-        }
+        var sw = cw.subwindowCurrent();
+        try sw.render_cmds.append(cmd);
 
         return;
     }
@@ -6338,17 +6274,11 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 
     var cw = currentWindow();
 
-    if (cw.window_currentId != cw.wd.id) {
+    if (!cw.rendering) {
         var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .debug_font_atlases = .{ .rs = rs, .color = color } } };
 
-        var i = cw.floating_data.items.len;
-        while (i > 0) : (i -= 1) {
-            const fw = &cw.floating_data.items[i - 1];
-            if (fw.id == cw.window_currentId) {
-                try fw.render_cmds.append(cmd);
-                break;
-            }
-        }
+        var sw = cw.subwindowCurrent();
+        try sw.render_cmds.append(cmd);
 
         return;
     }
@@ -6405,19 +6335,13 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
 
     var cw = currentWindow();
 
-    if (cw.window_currentId != cw.wd.id) {
+    if (!cw.rendering) {
         var name_copy = try cw.arena.alloc(u8, name.len);
         std.mem.copy(u8, name_copy, name);
         var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .colormod = colormod } } };
 
-        var i = cw.floating_data.items.len;
-        while (i > 0) : (i -= 1) {
-            const fw = &cw.floating_data.items[i - 1];
-            if (fw.id == cw.window_currentId) {
-                try fw.render_cmds.append(cmd);
-                break;
-            }
-        }
+        var sw = cw.subwindowCurrent();
+        try sw.render_cmds.append(cmd);
 
         return;
     }
