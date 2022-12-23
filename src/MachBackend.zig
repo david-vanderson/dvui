@@ -174,7 +174,7 @@ pub const Vertex = struct {
     uv: @Vector(2, f32),
 };
 
-fn toGUIKey(key: mach.Key) gui.keys.Key {
+fn toGUIKey(key: mach.Key) gui.enums.Key {
     return switch (key) {
         .a => .a,
         else => .z,
@@ -184,25 +184,25 @@ fn toGUIKey(key: mach.Key) gui.keys.Key {
 pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) !bool {
     switch (event) {
         .key_press => |ev| {
-            return try win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .down);
+            return try win.addEventKey(.{ .down = toGUIKey(ev.key) }, .none);
         },
         .key_release => |ev| {
-            return try win.addEventKey(toGUIKey(ev.key), gui.keys.Mod.none, .up);
+            return try win.addEventKey(.{ .up = toGUIKey(ev.key) }, .none);
         },
         .mouse_motion => |mm| {
             return try win.addEventMouseMotion(@floatCast(f32, mm.pos.x), @floatCast(f32, mm.pos.y));
         },
         .mouse_press => |mb| {
             switch (mb.button) {
-                .left => return try win.addEventMouseButton(.leftdown),
-                .right => return try win.addEventMouseButton(.rightdown),
+                .left => return try win.addEventMouseButton(.{ .press = .left }),
+                .right => return try win.addEventMouseButton(.{ .press = .right }),
                 else => {},
             }
         },
         .mouse_release => |mb| {
             switch (mb.button) {
-                .left => return try win.addEventMouseButton(.leftup),
-                .right => return try win.addEventMouseButton(.rightup),
+                .left => return try win.addEventMouseButton(.{ .release = .left }),
+                .right => return try win.addEventMouseButton(.{ .release = .right }),
                 else => {},
             }
         },
