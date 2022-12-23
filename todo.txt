@@ -1,11 +1,4 @@
 
-switch mouse button events to use separate button and action
-
-define events like mach does it
-- only key and text events need the window focus stuff
-
-when adding each key event, should tag with focused window and focused widget IN THAT WINDOW
-
 don't let you seek forward past duration
 
 add disabled to options so the seek forward/backward icons can be grayed out
