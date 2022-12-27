@@ -671,13 +671,8 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
 }
 
 fn player(arena: std.mem.Allocator) !void {
-    const oo = gui.Options{
-        .expand = .horizontal,
-        .color_style = .content,
-    };
-
-    var box2 = try gui.box(@src(), 0, .vertical, oo.override(.{ .background = true }));
-    defer box2.deinit();
+    var box = try gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .color_style = .content, .background = true });
+    defer box.deinit();
 
     var episode = Episode{ .rowid = 0, .title = "Episode Title", .description = "", .position = 0, .duration = 0 };
 
@@ -686,17 +681,51 @@ fn player(arena: std.mem.Allocator) !void {
         episode = try dbRow(arena, Episode.query, Episode, .{id}) orelse episode;
     }
 
-    try gui.label(@src(), 0, "{s}", .{episode.title}, oo.override(.{
+    try gui.label(@src(), 0, "{s}", .{episode.title}, .{
+        .expand = .horizontal,
         .margin = gui.Rect{ .x = 8, .y = 4, .w = 8, .h = 4 },
         .font_style = .heading,
-    }));
+    });
 
-    var box3 = try gui.box(@src(), 0, .horizontal, oo.override(.{ .padding = .{ .x = 4, .y = 0, .w = 4, .h = 4 } }));
-    defer box3.deinit();
+    mutex.lock();
+
+    if (current_time > episode.duration) {
+        //std.debug.print("updating episode {d} duration to {d}\n", .{ episode.rowid, current_time });
+        _ = dbRow(arena, "UPDATE episode SET duration=? WHERE rowid=?", i32, .{ current_time, episode.rowid }) catch {};
+    }
+
+    {
+        var box3 = try gui.box(@src(), 0, .horizontal, .{ .expand = .horizontal, .padding = .{ .x = 4, .y = 4, .w = 4, .h = 4 } });
+        defer box3.deinit();
+
+        const time_max_size = gui.themeGet().font_body.textSize("0:00:00") catch unreachable;
+
+        //std.debug.print("current_time {d}\n", .{current_time});
+        const hrs = @floor(current_time / 60.0 / 60.0);
+        const mins = @floor((current_time - (hrs * 60.0 * 60.0)) / 60.0);
+        const secs = @floor(current_time - (hrs * 60.0 * 60.0) - (mins * 60.0));
+        if (hrs > 0) {
+            try gui.label(@src(), 0, "{d}:{d:0>2}:{d:0>2}", .{ hrs, mins, secs }, .{ .min_size_content = time_max_size });
+        } else {
+            try gui.label(@src(), 0, "{d:0>2}:{d:0>2}", .{ mins, secs }, .{ .min_size_content = time_max_size });
+        }
+
+        const time_left = std.math.max(0, episode.duration - current_time);
+        const hrs_left = @floor(time_left / 60.0 / 60.0);
+        const mins_left = @floor((time_left - (hrs_left * 60.0 * 60.0)) / 60.0);
+        const secs_left = @floor(time_left - (hrs_left * 60.0 * 60.0) - (mins_left * 60.0));
+        if (hrs_left > 0) {
+            try gui.label(@src(), 0, "{d}:{d:0>2}:{d:0>2}", .{ hrs_left, mins_left, secs_left }, .{ .min_size_content = time_max_size, .gravity = .right });
+        } else {
+            try gui.label(@src(), 0, "{d:0>2}:{d:0>2}", .{ mins_left, secs_left }, .{ .min_size_content = time_max_size, .gravity = .right });
+        }
+    }
+
+    var button_box = try gui.box(@src(), 0, .horizontal, .{ .expand = .horizontal, .padding = .{ .x = 4, .y = 0, .w = 4, .h = 4 } });
+    defer button_box.deinit();
 
     const oo2 = gui.Options{ .expand = .both, .gravity = .center };
 
-    mutex.lock();
     if (try gui.buttonIcon(@src(), 0, 20, "back", gui.icons.papirus.actions.media_seek_backward_symbolic, oo2)) {
         stream_seek_time = std.math.max(0.0, current_time - 5.0);
         buffer.discard(buffer.readableLength());
@@ -704,9 +733,6 @@ fn player(arena: std.mem.Allocator) !void {
         current_time = stream_seek_time.?;
         condition.signal();
     }
-
-    const time_max_size = oo2.font().textSize("0:00:00") catch unreachable;
-    try gui.label(@src(), 0, "0:00:{d:0>2.0}", .{current_time}, oo2.override(.{ .min_size_content = time_max_size }));
 
     if (try gui.buttonIcon(@src(), 0, 20, if (playing) "pause" else "play", if (playing) gui.icons.papirus.actions.media_playback_pause_symbolic else gui.icons.papirus.actions.media_playback_start_symbolic, oo2)) {
         if (playing) {
@@ -718,6 +744,9 @@ fn player(arena: std.mem.Allocator) !void {
 
     if (try gui.buttonIcon(@src(), 0, 20, "forward", gui.icons.papirus.actions.media_seek_forward_symbolic, oo2)) {
         stream_seek_time = current_time + 5.0;
+        if (!playing) {
+            stream_seek_time = std.math.min(stream_seek_time.?, episode.duration);
+        }
         buffer.discard(buffer.readableLength());
         buffer_last_time = stream_seek_time.?;
         current_time = stream_seek_time.?;
@@ -842,8 +871,8 @@ fn playback_thread() !void {
             continue :stream;
         }
 
-        //const filename = "test.mp3";
-        const filename = "episode-2.mp3";
+        const filename = "test.mp3";
+        //const filename = "episode-2.mp3";
 
         var avfc: ?*c.AVFormatContext = null;
         var err = c.avformat_open_input(&avfc, filename, null, null);
@@ -887,7 +916,7 @@ fn playback_thread() !void {
 
         mutex.lock();
         stream_timebase = @intToFloat(f64, avstream.*.time_base.num) / @intToFloat(f64, avstream.*.time_base.den);
-        std.debug.print("timebase {d}\n", .{stream_timebase});
+        //std.debug.print("timebase {d}\n", .{stream_timebase});
         var duration: ?f64 = null;
         if (avstream.*.duration != c.AV_NOPTS_VALUE) {
             duration = @intToFloat(f64, avstream.*.duration) * stream_timebase;
@@ -895,10 +924,10 @@ fn playback_thread() !void {
         mutex.unlock();
 
         if (duration) |d| {
-            std.debug.print("av duration: {d}\n", .{d});
+            //std.debug.print("av duration: {d}\n", .{d});
             _ = dbRow(arena, "UPDATE episode SET duration=? WHERE rowid=?", i32, .{ d, rowid }) catch {};
         } else {
-            std.debug.print("av duration: N/A\n", .{});
+            //std.debug.print("av duration: N/A\n", .{});
         }
 
         const codec = c.avcodec_find_decoder(avctx.codec_id);
