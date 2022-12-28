@@ -4304,9 +4304,17 @@ pub const BoxWidget = struct {
         if (self.dir == .horizontal) {
             ms.w = self.space_taken;
             ms.h = self.max_thick;
+            if (self.total_weight > 0 and self.childRect.w > 0) {
+                // we have expanded children, but didn't use all the space, so something has changed
+                cueFrame();
+            }
         } else {
             ms.h = self.space_taken;
             ms.w = self.max_thick;
+            if (self.total_weight > 0 and self.childRect.h > 0) {
+                // we have expanded children, but didn't use all the space, so something has changed
+                cueFrame();
+            }
         }
 
         self.wd.minSizeMax(self.wd.padSize(ms));

@@ -1,9 +1,40 @@
 
-don't let you seek forward past duration
+add downloading of files
+- need a background thread for this
+
+need a better rotating spinner icon, with fps restriction
+- need to add rotation into options?
+
+toasts
+- short info messages, possibly with UI interactions ("undo"), then they fade or disappear
+- can be added from other threads
+- a toast is:
+  - id
+  - subwindow_id or null
+  - function to run
+  - flag to detect stale toasts
+- during Window.end(), go over all toasts, flip flag to stale, if already stale, print warning and delete
+- add gui.showToasts(subwindow_id: ?u32, ...)
+  - makes a nested subwindow that's anchored to the parent subwindow rect
+  - shows all toasts that match the subwindow_id and marks them non-stale
+  - nested subwindow needs a flag so that it stays just above parent in stacking order always
+  - subwindow needs a transparent background
+
+probably should remove OverlayWidget, subwindows are much better for things being on top of other things
+
+try wrapping toasts in an animating widget
+- animates min vertical size up and down
+- animates alpha up and down
+
+add draggable slider thing for podcast duration
+- drag starts in any location, don't have to hit the current location to start
+
 
 add disabled to options so the seek forward/backward icons can be grayed out
 - need to add ability to gray out things too (alpha to options?)
-- when disabled, can't tab to that thing
+- is disabled just a visual thing?
+  - can still tab/click on it?
+- when disabled, can't tab to that thing?
   - if focused and disabled, call tabIndexNext
 
 

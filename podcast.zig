@@ -37,8 +37,19 @@ var g_quit = false;
 var g_win: gui.Window = undefined;
 var g_podcast_id_on_right: usize = 0;
 
-var g_audio_device: u32 = undefined;
-var g_audio_spec: Backend.c.SDL_AudioSpec = undefined;
+// protected by bgtask_mutex
+var bgtask_mutex = std.Thread.Mutex{};
+var bgtask_condition = std.Thread.Condition{};
+var bgtasks: std.ArrayList(Task) = undefined;
+
+const Task = struct {
+    kind: enum {
+        update_feed,
+        download_episode,
+    },
+    rowid: u32,
+    cancel: bool = false,
+};
 
 const Episode = struct {
     const query = "SELECT rowid, title, description, position, duration FROM episode WHERE podcast_id = ?";
@@ -406,16 +417,21 @@ pub fn main() !void {
     wanted_spec.channels = 2;
     wanted_spec.callback = audio_callback;
 
-    g_audio_device = Backend.c.SDL_OpenAudioDevice(null, 0, &wanted_spec, &g_audio_spec, 0);
-    if (g_audio_device <= 1) {
+    audio_device = Backend.c.SDL_OpenAudioDevice(null, 0, &wanted_spec, &audio_spec, 0);
+    if (audio_device <= 1) {
         std.debug.print("SDL_OpenAudioDevice error: {s}\n", .{Backend.c.SDL_GetError()});
         return error.BackendError;
     }
 
-    std.debug.print("audio device {d} spec: {}\n", .{ g_audio_device, g_audio_spec });
+    std.debug.print("audio device {d} spec: {}\n", .{ audio_device, audio_spec });
 
     const pt = try std.Thread.spawn(.{}, playback_thread, .{});
     pt.detach();
+
+    bgtasks = std.ArrayList(Task).init(gpa);
+
+    const bgt = try std.Thread.spawn(.{}, bg_thread, .{});
+    bgt.detach();
 
     main_loop: while (true) {
         var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -488,7 +504,10 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
 
                         var iter = try stmt.iterator(u32, .{});
                         while (try iter.nextAlloc(arena, .{})) |rowid| {
-                            try bgUpdateFeed(arena, rowid);
+                            bgtask_mutex.lock();
+                            try bgtasks.append(.{ .kind = .update_feed, .rowid = @intCast(u32, rowid) });
+                            bgtask_condition.signal();
+                            bgtask_mutex.unlock();
                         }
                     }
                 }
@@ -529,7 +548,10 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
                 _ = try dbRow(arena, "INSERT INTO podcast (url) VALUES (?)", i32, .{url});
                 if (g_db) |*db| {
                     const rowid = db.getLastInsertRowID();
-                    try bgUpdateFeed(arena, @intCast(u32, rowid));
+                    bgtask_mutex.lock();
+                    try bgtasks.append(.{ .kind = .update_feed, .rowid = @intCast(u32, rowid) });
+                    bgtask_condition.signal();
+                    bgtask_mutex.unlock();
                 }
             }
         }
@@ -582,6 +604,19 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
                 border.h = 1;
                 corner.w = 9;
                 corner.h = 9;
+            }
+
+            var box = try gui.box(@src(), i, .horizontal, .{ .expand = .horizontal });
+            defer box.deinit();
+
+            bgtask_mutex.lock();
+            defer bgtask_mutex.unlock();
+            for (bgtasks.items) |*t| {
+                if (t.rowid == rowid) {
+                    if (try gui.buttonIcon(@src(), 0, 18, "cancel_refresh", gui.icons.papirus.actions.system_restart_symbolic, .{})) {}
+                    t.cancel = true;
+                    break;
+                }
             }
 
             if (try gui.button(@src(), i, title, oo3.override(.{
@@ -644,13 +679,47 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
 
                 var cbox = try gui.box(@src(), 0, .vertical, gui.Options{ .gravity = .upright });
 
+                const filename = try std.fmt.allocPrint(arena, "episode_{d}", .{episode.rowid});
+                const file = std.fs.cwd().openFile(filename, .{}) catch null;
+
                 if (try gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) })) {
-                    _ = try dbRow(arena, "UPDATE player SET episode_id=?", u8, .{episode.rowid});
-                    mutex.lock();
-                    play();
-                    mutex.unlock();
+                    if (file == null) {
+                        // TODO: make the play button disabled, and if you click it, it puts this out as a toast
+                        try gui.dialogOk(@src(), 0, true, "Error", try std.fmt.allocPrint(arena, "Must download first", .{}), null);
+                    } else {
+                        _ = try dbRow(arena, "UPDATE player SET episode_id=?", u8, .{episode.rowid});
+                        audio_mutex.lock();
+                        play();
+                        audio_mutex.unlock();
+                    }
                 }
-                _ = try gui.buttonIcon(@src(), 0, 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) });
+
+                if (file) |f| {
+                    f.close();
+
+                    _ = try gui.buttonIcon(@src(), 0, 18, "delete", gui.icons.papirus.actions.edit_delete_symbolic, .{ .padding = gui.Rect.all(6) });
+                    std.fs.cwd().deleteFile(filename) catch |err| {
+                        // TODO: make this a toast
+                        try gui.dialogOk(@src(), 0, true, "Delete Error", try std.fmt.allocPrint(arena, "error {!}\ntrying to delete file:\n{s}", .{ err, filename }), null);
+                    };
+                } else {
+                    bgtask_mutex.lock();
+                    defer bgtask_mutex.unlock();
+                    for (bgtasks.items) |*t| {
+                        if (t.rowid == episode.rowid) {
+                            // show progress, make download button into cancel button
+                            if (try gui.buttonIcon(@src(), 0, 18, "cancel", gui.icons.papirus.actions.edit_clear_all_symbolic, .{ .padding = gui.Rect.all(6) })) {
+                                t.cancel = true;
+                            }
+                            break;
+                        }
+                    } else {
+                        if (try gui.buttonIcon(@src(), 0, 18, "download", gui.icons.papirus.actions.browser_download_symbolic, .{ .padding = gui.Rect.all(6) })) {
+                            try bgtasks.append(.{ .kind = .download_episode, .rowid = @intCast(u32, episode.rowid) });
+                            bgtask_condition.signal();
+                        }
+                    }
+                }
 
                 cbox.deinit();
 
@@ -687,7 +756,7 @@ fn player(arena: std.mem.Allocator) !void {
         .font_style = .heading,
     });
 
-    mutex.lock();
+    audio_mutex.lock();
 
     if (current_time > episode.duration) {
         //std.debug.print("updating episode {d} duration to {d}\n", .{ episode.rowid, current_time });
@@ -731,7 +800,7 @@ fn player(arena: std.mem.Allocator) !void {
         buffer.discard(buffer.readableLength());
         buffer_last_time = stream_seek_time.?;
         current_time = stream_seek_time.?;
-        condition.signal();
+        audio_condition.signal();
     }
 
     if (try gui.buttonIcon(@src(), 0, 20, if (playing) "pause" else "play", if (playing) gui.icons.papirus.actions.media_playback_pause_symbolic else gui.icons.papirus.actions.media_playback_start_symbolic, oo2)) {
@@ -750,7 +819,7 @@ fn player(arena: std.mem.Allocator) !void {
         buffer.discard(buffer.readableLength());
         buffer_last_time = stream_seek_time.?;
         current_time = stream_seek_time.?;
-        condition.signal();
+        audio_condition.signal();
     }
 
     if (playing) {
@@ -763,11 +832,14 @@ fn player(arena: std.mem.Allocator) !void {
             try gui.timer(timerId, wait);
         }
     }
-    mutex.unlock();
+    audio_mutex.unlock();
 }
 
-var mutex = std.Thread.Mutex{};
-var condition = std.Thread.Condition{};
+// all of these variables are protected by audio_mutex
+var audio_mutex = std.Thread.Mutex{};
+var audio_condition = std.Thread.Condition{};
+var audio_device: u32 = undefined;
+var audio_spec: Backend.c.SDL_AudioSpec = undefined;
 var playing = false;
 var stream_new = true;
 var stream_seek_time: ?f64 = null;
@@ -777,28 +849,28 @@ var stream_timebase: f64 = 1.0;
 var buffer_last_time: f64 = 0;
 var current_time: f64 = 0;
 
-// must hold mutex when calling this
+// must hold audio_mutex when calling this
 fn play() void {
-    //std.debug.print("play\n", .{});
+    std.debug.print("play\n", .{});
     if (playing) {
         std.debug.print("already playing\n", .{});
         return;
     }
 
-    Backend.c.SDL_PauseAudioDevice(g_audio_device, 0);
+    Backend.c.SDL_PauseAudioDevice(audio_device, 0);
     playing = true;
-    condition.signal();
+    audio_condition.signal();
 }
 
-// must hold mutex when calling this
+// must hold audio_mutex when calling this
 fn pause() void {
-    //std.debug.print("pause\n", .{});
+    std.debug.print("pause\n", .{});
     if (!playing) {
         std.debug.print("already paused\n", .{});
         return;
     }
 
-    Backend.c.SDL_PauseAudioDevice(g_audio_device, 1);
+    Backend.c.SDL_PauseAudioDevice(audio_device, 1);
     playing = false;
 }
 
@@ -807,8 +879,8 @@ export fn audio_callback(user_data: ?*anyopaque, stream: [*c]u8, length: c_int) 
     var len = @intCast(usize, length);
     var i: usize = 0;
 
-    mutex.lock();
-    defer mutex.unlock();
+    audio_mutex.lock();
+    defer audio_mutex.unlock();
 
     while (i < len and buffer.readableLength() > 0) {
         const size = std.math.min(len - i, buffer.readableLength());
@@ -817,17 +889,17 @@ export fn audio_callback(user_data: ?*anyopaque, stream: [*c]u8, length: c_int) 
             i += 1;
         }
         buffer.discard(size);
-        current_time = buffer_last_time - (@intToFloat(f64, buffer.readableLength()) / @intToFloat(f64, g_audio_spec.freq * 2 * 2));
+        current_time = buffer_last_time - (@intToFloat(f64, buffer.readableLength()) / @intToFloat(f64, audio_spec.freq * 2 * 2));
 
         if (!buffer_eof and buffer.readableLength() < buffer.writableLength()) {
             // buffer is less than half full
-            condition.signal();
+            audio_condition.signal();
         }
     }
 
     if (i < len) {
         while (i < len) {
-            stream[i] = g_audio_spec.silence;
+            stream[i] = audio_spec.silence;
             i += 1;
         }
 
@@ -839,9 +911,7 @@ export fn audio_callback(user_data: ?*anyopaque, stream: [*c]u8, length: c_int) 
             pause();
 
             // refresh gui
-            var ue = std.mem.zeroes(Backend.c.SDL_Event);
-            ue.type = Backend.c.SDL_USEREVENT;
-            _ = Backend.c.SDL_PushEvent(&ue);
+            Backend.refresh();
         }
     }
 }
@@ -855,19 +925,19 @@ fn playback_thread() !void {
 
     stream: while (true) {
         // wait to play
-        mutex.lock();
+        audio_mutex.lock();
         while (!playing) {
-            condition.wait(&mutex);
+            audio_condition.wait(&audio_mutex);
         }
-        mutex.unlock();
+        audio_mutex.unlock();
         stream_new = false;
         //std.debug.print("playback starting\n", .{});
 
         const rowid = try dbRow(arena, "SELECT episode_id FROM player", i32, .{}) orelse 0;
         if (rowid == 0) {
-            mutex.lock();
+            audio_mutex.lock();
             pause();
-            mutex.unlock();
+            audio_mutex.unlock();
             continue :stream;
         }
 
@@ -914,14 +984,14 @@ fn playback_thread() !void {
             return;
         }
 
-        mutex.lock();
+        audio_mutex.lock();
         stream_timebase = @intToFloat(f64, avstream.*.time_base.num) / @intToFloat(f64, avstream.*.time_base.den);
         //std.debug.print("timebase {d}\n", .{stream_timebase});
         var duration: ?f64 = null;
         if (avstream.*.duration != c.AV_NOPTS_VALUE) {
             duration = @intToFloat(f64, avstream.*.duration) * stream_timebase;
         }
-        mutex.unlock();
+        audio_mutex.unlock();
 
         if (duration) |d| {
             //std.debug.print("av duration: {d}\n", .{d});
@@ -961,11 +1031,11 @@ fn playback_thread() !void {
                 }
             }
 
-            mutex.lock();
+            audio_mutex.lock();
             while (!playing) {
-                condition.wait(&mutex);
+                audio_condition.wait(&audio_mutex);
             }
-            mutex.unlock();
+            audio_mutex.unlock();
             //std.debug.print("seek starting\n", .{});
 
             if (stream_seek_time) |st| {
@@ -1030,7 +1100,7 @@ fn playback_thread() !void {
                 var out_samples: c_int = 256;
 
                 if (!eof and swrctx == null) {
-                    err = c.swr_alloc_set_opts2(&swrctx, &target_ch_layout, c.AV_SAMPLE_FMT_S16, g_audio_spec.freq, &frame.*.ch_layout, frame.*.format, frame.*.sample_rate, 0, null);
+                    err = c.swr_alloc_set_opts2(&swrctx, &target_ch_layout, c.AV_SAMPLE_FMT_S16, audio_spec.freq, &frame.*.ch_layout, frame.*.format, frame.*.sample_rate, 0, null);
                     if (err != 0) {
                         _ = c.av_strerror(err, &buf, 256);
                         std.debug.print("swr_alloc_set_opts2 err {d} : {s}\n", .{ err, std.mem.sliceTo(&buf, 0) });
@@ -1046,17 +1116,17 @@ fn playback_thread() !void {
                 }
 
                 if (!eof) {
-                    out_samples = @divTrunc(frame.*.nb_samples * g_audio_spec.freq, frame.*.sample_rate) + 256;
+                    out_samples = @divTrunc(frame.*.nb_samples * audio_spec.freq, frame.*.sample_rate) + 256;
                 }
 
                 const data_size = @intCast(usize, out_samples * 2 * 2); // 2 bytes per sample per channel
 
                 if (swrctx != null) {
-                    mutex.lock();
-                    defer mutex.unlock();
+                    audio_mutex.lock();
+                    defer audio_mutex.unlock();
 
                     while (buffer.writableLength() < data_size) {
-                        condition.wait(&mutex);
+                        audio_condition.wait(&audio_mutex);
                     }
 
                     if (stream_new) {
@@ -1083,7 +1153,7 @@ fn playback_thread() !void {
 
                     const data_written = @intCast(usize, err * 2 * 2); // 2 bytes per sample per channel
                     buffer.update(data_written);
-                    const seconds_written = @intToFloat(f64, err) / @intToFloat(f64, g_audio_spec.freq);
+                    const seconds_written = @intToFloat(f64, err) / @intToFloat(f64, audio_spec.freq);
 
                     if (!eof) {
                         buffer_last_time = @intToFloat(f64, frame.*.best_effort_timestamp) * stream_timebase + seconds_written;
@@ -1101,7 +1171,7 @@ fn playback_thread() !void {
                         buffer_eof = true;
 
                         while (true) {
-                            condition.wait(&mutex);
+                            audio_condition.wait(&audio_mutex);
 
                             if (stream_new) {
                                 continue :stream;
@@ -1115,5 +1185,50 @@ fn playback_thread() !void {
                 }
             }
         }
+    }
+}
+
+fn bg_thread() !void {
+    while (true) {
+        var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        defer arena_allocator.deinit();
+        var arena = arena_allocator.allocator();
+
+        bgtask_mutex.lock();
+        while (bgtasks.items.len == 0) {
+            bgtask_condition.wait(&bgtask_mutex);
+        }
+        var t = &bgtasks.items[0];
+        if (t.cancel) {
+            std.debug.print("bg cancelled before start {}\n", .{t});
+            _ = bgtasks.orderedRemove(0);
+            bgtask_mutex.unlock();
+            continue;
+        }
+        bgtask_mutex.unlock();
+
+        std.debug.print("bg starting {}\n", .{t});
+
+        // do task
+        switch (t.kind) {
+            .update_feed => {
+                try bgUpdateFeed(arena, t.rowid);
+            },
+            .download_episode => {
+                std.time.sleep(1_000_000_000);
+            },
+        }
+
+        bgtask_mutex.lock();
+        if (t.cancel) {
+            std.debug.print("bg cancel {}\n", .{t});
+        } else {
+            std.debug.print("bg done {}\n", .{t});
+        }
+        _ = bgtasks.orderedRemove(0);
+        bgtask_mutex.unlock();
+
+        // refresh gui
+        Backend.refresh();
     }
 }
