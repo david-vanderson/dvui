@@ -55,6 +55,12 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) void {
     }
 }
 
+pub fn refresh() void {
+    var ue = std.mem.zeroes(c.SDL_Event);
+    ue.type = c.SDL_USEREVENT;
+    _ = c.SDL_PushEvent(&ue);
+}
+
 pub fn addAllEvents(self: *SDLBackend, win: *gui.Window) !bool {
     var event: c.SDL_Event = undefined;
     while (c.SDL_PollEvent(&event) != 0) {
