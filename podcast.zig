@@ -52,10 +52,13 @@ const Task = struct {
 };
 
 const Episode = struct {
-    const query = "SELECT rowid, title, description, position, duration FROM episode WHERE podcast_id = ?";
+    const query_base = "SELECT rowid, title, description, enclosure_url, position, duration FROM episode";
+    const query_one = query_base ++ " WHERE rowid = ?";
+    const query_all = query_base ++ " WHERE podcast_id = ?";
     rowid: usize,
     title: []const u8,
     description: []const u8,
+    enclosure_url: []const u8,
     position: f64,
     duration: f64,
 };
@@ -209,6 +212,7 @@ fn bgFetchFeed(arena: std.mem.Allocator, rowid: u32, url: []const u8) !void {
         defer file.close();
 
         try file.writeAll(contents);
+        //try file.sync();
     }
 
     const doc = c.xmlReadDoc(contents.ptr, null, null, 0);
@@ -334,6 +338,7 @@ fn bgFetchFeed(arena: std.mem.Allocator, rowid: u32, url: []const u8) !void {
 
                 if (getContent(xpathCtx, "enclosure", "url")) |str| {
                     _ = try dbRow(arena, "UPDATE episode SET enclosure_url=? WHERE rowid=?", i32, .{ str, erow });
+                    //std.debug.print("enclosure_url: {s}\n", .{str});
                 }
 
                 if (getContent(xpathCtx, "itunes:duration", null)) |str| {
@@ -660,8 +665,8 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
         scroll.setVirtualSize(.{ .w = 0, .h = height * @intToFloat(f32, num_episodes) });
         defer scroll.deinit();
 
-        var stmt = db.prepare(Episode.query) catch {
-            try dbError("{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), Episode.query });
+        var stmt = db.prepare(Episode.query_all) catch {
+            try dbError("{}\n\npreparing statement:\n\n{s}", .{ db.getDetailedError(), Episode.query_all });
             return error.DB_ERROR;
         };
         defer stmt.deinit();
@@ -679,7 +684,7 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
 
                 var cbox = try gui.box(@src(), 0, .vertical, gui.Options{ .gravity = .upright });
 
-                const filename = try std.fmt.allocPrint(arena, "episode_{d}", .{episode.rowid});
+                const filename = try std.fmt.allocPrint(arena, "episode_{d}.aud", .{episode.rowid});
                 const file = std.fs.cwd().openFile(filename, .{}) catch null;
 
                 if (try gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) })) {
@@ -689,7 +694,15 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
                     } else {
                         _ = try dbRow(arena, "UPDATE player SET episode_id=?", u8, .{episode.rowid});
                         audio_mutex.lock();
-                        play();
+                        stream_new = true;
+                        stream_seek_time = 0;
+                        buffer.discard(buffer.readableLength());
+                        buffer_last_time = stream_seek_time.?;
+                        current_time = stream_seek_time.?;
+                        if (!playing) {
+                            play();
+                        }
+                        audio_condition.signal();
                         audio_mutex.unlock();
                     }
                 }
@@ -697,11 +710,12 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
                 if (file) |f| {
                     f.close();
 
-                    _ = try gui.buttonIcon(@src(), 0, 18, "delete", gui.icons.papirus.actions.edit_delete_symbolic, .{ .padding = gui.Rect.all(6) });
-                    std.fs.cwd().deleteFile(filename) catch |err| {
-                        // TODO: make this a toast
-                        try gui.dialogOk(@src(), 0, true, "Delete Error", try std.fmt.allocPrint(arena, "error {!}\ntrying to delete file:\n{s}", .{ err, filename }), null);
-                    };
+                    if (try gui.buttonIcon(@src(), 0, 18, "delete", gui.icons.papirus.actions.edit_delete_symbolic, .{ .padding = gui.Rect.all(6) })) {
+                        std.fs.cwd().deleteFile(filename) catch |err| {
+                            // TODO: make this a toast
+                            try gui.dialogOk(@src(), 0, true, "Delete Error", try std.fmt.allocPrint(arena, "error {!}\ntrying to delete file:\n{s}", .{ err, filename }), null);
+                        };
+                    }
                 } else {
                     bgtask_mutex.lock();
                     defer bgtask_mutex.unlock();
@@ -743,11 +757,11 @@ fn player(arena: std.mem.Allocator) !void {
     var box = try gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .color_style = .content, .background = true });
     defer box.deinit();
 
-    var episode = Episode{ .rowid = 0, .title = "Episode Title", .description = "", .position = 0, .duration = 0 };
+    var episode = Episode{ .rowid = 0, .title = "Episode Title", .description = "", .enclosure_url = "", .position = 0, .duration = 0 };
 
     const episode_id = try dbRow(arena, "SELECT episode_id FROM player", i32, .{});
     if (episode_id) |id| {
-        episode = try dbRow(arena, Episode.query, Episode, .{id}) orelse episode;
+        episode = try dbRow(arena, Episode.query_one, Episode, .{id}) orelse episode;
     }
 
     try gui.label(@src(), 0, "{s}", .{episode.title}, .{
@@ -941,8 +955,8 @@ fn playback_thread() !void {
             continue :stream;
         }
 
-        const filename = "test.mp3";
-        //const filename = "episode-2.mp3";
+        const name = try std.fmt.allocPrintZ(arena, "episode_{d}.aud", .{rowid});
+        const filename = @ptrCast([*c]u8, name);
 
         var avfc: ?*c.AVFormatContext = null;
         var err = c.avformat_open_input(&avfc, filename, null, null);
@@ -1198,7 +1212,7 @@ fn bg_thread() !void {
         while (bgtasks.items.len == 0) {
             bgtask_condition.wait(&bgtask_mutex);
         }
-        var t = &bgtasks.items[0];
+        const t = bgtasks.items[0];
         if (t.cancel) {
             std.debug.print("bg cancelled before start {}\n", .{t});
             _ = bgtasks.orderedRemove(0);
@@ -1215,7 +1229,58 @@ fn bg_thread() !void {
                 try bgUpdateFeed(arena, t.rowid);
             },
             .download_episode => {
-                std.time.sleep(1_000_000_000);
+                const episode = try dbRow(arena, Episode.query_one, Episode, .{t.rowid}) orelse break;
+                std.debug.print("downloading url {s}\n", .{episode.enclosure_url});
+                var easy = try curl.Easy.init();
+                defer easy.cleanup();
+
+                const urlZ = try std.fmt.allocPrintZ(arena, "{s}", .{episode.enclosure_url});
+                try easy.setUrl(urlZ);
+                try easy.setSslVerifyPeer(false);
+                try easy.setAcceptEncodingGzip();
+
+                const Fifo = std.fifo.LinearFifo(u8, .{ .Dynamic = {} });
+                try easy.setWriteFn(struct {
+                    fn writeFn(ptr: ?[*]u8, size: usize, nmemb: usize, data: ?*anyopaque) callconv(.C) usize {
+                        _ = size;
+                        var slice = (ptr orelse return 0)[0..nmemb];
+                        const fifo = @ptrCast(
+                            *Fifo,
+                            @alignCast(
+                                @alignOf(*Fifo),
+                                data orelse return 0,
+                            ),
+                        );
+
+                        fifo.writer().writeAll(slice) catch return 0;
+                        return nmemb;
+                    }
+                }.writeFn);
+
+                // don't deinit the fifo, it's using arena anyway and we need the contents later
+                var fifo = Fifo.init(arena);
+                try easy.setWriteData(&fifo);
+                try easy.setVerbose(true);
+                easy.perform() catch |err| {
+                    try gui.dialogOk(@src(), 0, true, "Network Error", try std.fmt.allocPrint(arena, "curl error {!}\ntrying to fetch url:\n{s}", .{ err, urlZ }), null);
+                };
+                const code = try easy.getResponseCode();
+                std.debug.print("  download_episode {d} curl code {d}\n", .{ t.rowid, code });
+
+                // add null byte
+                try fifo.writeItem(0);
+
+                const tempslice = fifo.readableSlice(0);
+
+                const filename = try std.fmt.allocPrint(arena, "episode_{d}.aud", .{t.rowid});
+                const file = std.fs.cwd().createFile(filename, .{}) catch |err| {
+                    try gui.dialogOk(@src(), 0, true, "File Error", try std.fmt.allocPrint(arena, "error {!}\ntrying to write to file:\n{s}", .{ err, filename }), null);
+                    break;
+                };
+
+                try file.writeAll(tempslice[0 .. tempslice.len - 1 :0]);
+                file.close();
+                std.debug.print("  downloaded episode {d} to file {s}\n", .{ t.rowid, try std.fs.cwd().realpathAlloc(arena, filename) });
             },
         }
 
