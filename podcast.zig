@@ -169,6 +169,7 @@ fn bgFetchFeed(arena: std.mem.Allocator, rowid: u32, url: []const u8) !void {
         try easy.setUrl(urlZ);
         try easy.setSslVerifyPeer(false);
         try easy.setAcceptEncodingGzip();
+        try easy.setFollowLocation(true);
 
         const Fifo = std.fifo.LinearFifo(u8, .{ .Dynamic = {} });
         try easy.setWriteFn(struct {
@@ -1238,6 +1239,7 @@ fn bg_thread() !void {
                 try easy.setUrl(urlZ);
                 try easy.setSslVerifyPeer(false);
                 try easy.setAcceptEncodingGzip();
+                try easy.setFollowLocation(true);
 
                 const Fifo = std.fifo.LinearFifo(u8, .{ .Dynamic = {} });
                 try easy.setWriteFn(struct {
