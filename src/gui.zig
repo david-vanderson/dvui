@@ -180,6 +180,9 @@ pub const Options = struct {
     // only used if .font_style == .custom
     font_custom: ?Font = null,
 
+    // only used for icons, rotates around center, only rotates drawing
+    rotation: ?f32 = null,
+
     // For the rest of these fields, if null, each widget uses its defaults
 
     // x left, y top, w right, h bottom
@@ -299,16 +302,8 @@ pub const Options = struct {
         return self.min_size_content orelse Size{};
     }
 
-    pub fn expandHorizontal(self: *const Options) bool {
-        return (self.expand orelse Expand.none).horizontal();
-    }
-
-    pub fn expandVertical(self: *const Options) bool {
-        return (self.expand orelse Expand.none).vertical();
-    }
-
-    pub fn expandAny(self: *const Options) bool {
-        return (self.expand orelse Expand.none) != Expand.none;
+    pub fn rotationGet(self: *const Options) f32 {
+        return self.rotation orelse 0.0;
     }
 
     // Used in compound widgets to strip out the styling that should only apply
@@ -349,6 +344,7 @@ pub const Options = struct {
             .font_custom = self.font_custom,
             .color_style = self.color_style,
             .font_style = self.font_style,
+            .rotation = self.rotation,
         };
     }
 
@@ -692,6 +688,7 @@ pub const RenderCmd = struct {
             name: []const u8,
             tvg_bytes: []const u8,
             rs: RectScale,
+            rotation: f32,
             colormod: Color,
         },
         pathFillConvex: struct {
@@ -2440,7 +2437,7 @@ pub const Window = struct {
                     try debugRenderFontAtlases(t.rs, t.color);
                 },
                 .icon => |i| {
-                    try renderIcon(i.name, i.tvg_bytes, i.rs, i.colormod);
+                    try renderIcon(i.name, i.tvg_bytes, i.rs, i.rotation, i.colormod);
                 },
                 .pathFillConvex => |pf| {
                     try self.path.appendSlice(pf.path.items);
@@ -5405,13 +5402,13 @@ pub const IconWidget = struct {
 
     pub fn show(self: *Self, opts: InstallOptions) !void {
         _ = opts;
-        debug("{x} Icon \"{s:<10}\" {}", .{ self.wd.id, self.name, self.wd.rect });
+        debug("{x} Icon \"{s:<10}\" {} {d}", .{ self.wd.id, self.name, self.wd.rect, self.wd.options.rotationGet() });
 
         try self.wd.borderAndBackground();
 
         var rect = placeIn(null, self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
         var rs = self.wd.parent.screenRectScale(rect);
-        try renderIcon(self.name, self.tvg_bytes, rs, self.wd.options.color());
+        try renderIcon(self.name, self.tvg_bytes, rs, self.wd.options.rotationGet(), self.wd.options.color());
 
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
@@ -6335,7 +6332,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
     }
 }
 
-pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colormod: Color) !void {
+pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotation: f32, colormod: Color) !void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
@@ -6346,7 +6343,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
     if (!cw.rendering) {
         var name_copy = try cw.arena.alloc(u8, name.len);
         std.mem.copy(u8, name_copy, name);
-        var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .colormod = colormod } } };
+        var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .rotation = rotation, .colormod = colormod } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
@@ -6369,24 +6366,46 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, colorm
     var x: f32 = if (cw.snap_to_pixels) @round(rs.r.x) else rs.r.x;
     var y: f32 = if (cw.snap_to_pixels) @round(rs.r.y) else rs.r.y;
 
+    var xw = x + ice.size.w * target_fraction;
+    var yh = y + ice.size.h * target_fraction;
+
+    var midx = (x + xw) / 2;
+    var midy = (y + yh) / 2;
+
     var v: Vertex = undefined;
     v.pos.x = x;
     v.pos.y = y;
     v.col = colormod;
     v.uv[0] = 0;
     v.uv[1] = 0;
+    if (rotation != 0) {
+        v.pos.x = midx + (x - midx) * @cos(rotation) - (y - midy) * @sin(rotation);
+        v.pos.y = midy + (x - midx) * @sin(rotation) + (y - midy) * @cos(rotation);
+    }
     try vtx.append(v);
 
-    v.pos.x = x + ice.size.w * target_fraction;
+    v.pos.x = xw;
     v.uv[0] = 1;
+    if (rotation != 0) {
+        v.pos.x = midx + (xw - midx) * @cos(rotation) - (y - midy) * @sin(rotation);
+        v.pos.y = midy + (xw - midx) * @sin(rotation) + (y - midy) * @cos(rotation);
+    }
     try vtx.append(v);
 
-    v.pos.y = y + ice.size.h * target_fraction;
+    v.pos.y = yh;
     v.uv[1] = 1;
+    if (rotation != 0) {
+        v.pos.x = midx + (xw - midx) * @cos(rotation) - (yh - midy) * @sin(rotation);
+        v.pos.y = midy + (xw - midx) * @sin(rotation) + (yh - midy) * @cos(rotation);
+    }
     try vtx.append(v);
 
     v.pos.x = x;
     v.uv[0] = 0;
+    if (rotation != 0) {
+        v.pos.x = midx + (x - midx) * @cos(rotation) - (yh - midy) * @sin(rotation);
+        v.pos.y = midy + (x - midx) * @sin(rotation) + (yh - midy) * @cos(rotation);
+    }
     try vtx.append(v);
 
     try idx.append(0);
@@ -6469,13 +6488,13 @@ pub const WidgetData = struct {
 
         if (self.options.rect) |r| {
             self.rect = r;
-            if (self.options.expandHorizontal()) {
+            if (self.options.expandGet().horizontal()) {
                 self.rect.w = self.parent.data().contentRect().w;
             } else if (self.rect.w == 0) {
                 self.rect.w = minSize(self.id, self.min_size).w;
             }
 
-            if (self.options.expandVertical()) {
+            if (self.options.expandGet().vertical()) {
                 self.rect.h = self.parent.data().contentRect().h;
             } else if (self.rect.h == 0) {
                 self.rect.h = minSize(self.id, self.min_size).h;

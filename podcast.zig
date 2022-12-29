@@ -619,8 +619,17 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
             defer bgtask_mutex.unlock();
             for (bgtasks.items) |*t| {
                 if (t.rowid == rowid) {
-                    if (try gui.buttonIcon(@src(), 0, 18, "cancel_refresh", gui.icons.papirus.actions.system_restart_symbolic, .{})) {}
-                    t.cancel = true;
+                    var m = margin;
+                    m.w = 0;
+                    margin.x = 0;
+                    if (try gui.buttonIcon(@src(), 0, 8 + (gui.themeGet().font_body.lineSkip() catch 12), "cancel_refresh", gui.icons.papirus.actions.system_restart_symbolic, .{
+                        .margin = m,
+                        .rotation = std.math.pi * @intToFloat(f32, @mod(@divFloor(gui.frameTimeNS(), 1_000_000), 1000)) / 1000,
+                    })) {
+                        // TODO: cancel task
+                    }
+
+                    try gui.timer(0, 250_000);
                     break;
                 }
             }

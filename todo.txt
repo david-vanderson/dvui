@@ -1,10 +1,4 @@
 
-add downloading of files
-- need a background thread for this
-
-need a better rotating spinner icon, with fps restriction
-- need to add rotation into options?
-
 toasts
 - short info messages, possibly with UI interactions ("undo"), then they fade or disappear
 - can be added from other threads
@@ -28,6 +22,8 @@ try wrapping toasts in an animating widget
 
 add draggable slider thing for podcast duration
 - drag starts in any location, don't have to hit the current location to start
+
+add progress bar for file downloading
 
 
 add disabled to options so the seek forward/backward icons can be grayed out
