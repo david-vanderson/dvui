@@ -2539,24 +2539,40 @@ pub const Window = struct {
         return &self.dialog_mutex;
     }
 
+    pub fn dialogRemove(self: *Self, id: u32) void {
+        self.dialog_mutex.lock();
+        defer self.dialog_mutex.unlock();
+
+        for (self.dialogs.items) |*d, i| {
+            if (d.id == id) {
+                _ = self.dialogs.orderedRemove(i);
+                return;
+            }
+        }
+    }
+
     fn dialogsShow(self: *Self) !void {
         var i: usize = 0;
+        var dialog: ?DialogEntry = null;
         while (true) {
-            var dialog: ?DialogEntry = null;
             self.dialog_mutex.lock();
+            if (i < self.dialogs.items.len and
+                dialog != null and
+                dialog.?.id == self.dialogs.items[i].id)
+            {
+                // we just did this one, move to the next
+                i += 1;
+            }
+
             if (i < self.dialogs.items.len) {
                 dialog = self.dialogs.items[i];
+            } else {
+                dialog = null;
             }
             self.dialog_mutex.unlock();
 
             if (dialog) |d| {
-                if (try d.display(d.id) == .close) {
-                    self.dialog_mutex.lock();
-                    _ = self.dialogs.orderedRemove(i);
-                    self.dialog_mutex.unlock();
-                } else {
-                    i += 1;
-                }
+                try d.display(d.id);
             } else {
                 break;
             }
@@ -3331,16 +3347,12 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     try gui.separator(@src(), 0, .{ .expand = .horizontal });
 }
 
-pub const DialogDisplay = *const fn (u32) Error!DialogDisplayReturn;
-pub const DialogDisplayReturn = enum(u8) {
-    keep,
-    close,
-};
-
+pub const DialogDisplay = *const fn (u32) Error!void;
 pub const DialogCallAfter = *const fn (u32, DialogResponse) Error!void;
 pub const DialogResponse = enum(u8) {
     closed,
     ok,
+    _,
 };
 
 pub const DialogEntry = struct {
@@ -3357,6 +3369,11 @@ pub fn dialogAdd(src: std.builtin.SourceLocation, id_extra: usize, display: Dial
     return id;
 }
 
+pub fn dialogRemove(id: u32) void {
+    const cw = currentWindow();
+    cw.dialogRemove(id);
+}
+
 pub fn dialogOk(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
     const id = try gui.dialogAdd(src, id_extra, dialogOkDisplay);
     gui.dataSet(id, "_modal", modal);
@@ -3367,20 +3384,23 @@ pub fn dialogOk(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, t
     }
 }
 
-pub fn dialogOkDisplay(id: u32) !DialogDisplayReturn {
+pub fn dialogOkDisplay(id: u32) !void {
     const modal = gui.dataGet(id, "_modal", bool) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
-        return .close;
+        gui.dialogRemove(id);
+        return;
     };
 
     const title = gui.dataGet(id, "_title", []const u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
-        return .close;
+        gui.dialogRemove(id);
+        return;
     };
 
     const message = gui.dataGet(id, "_msg", []const u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
-        return .close;
+        gui.dialogRemove(id);
+        return;
     };
 
     const callafter = gui.dataGet(id, "_callafter", DialogCallAfter);
@@ -3391,10 +3411,11 @@ pub fn dialogOkDisplay(id: u32) !DialogDisplayReturn {
     var header_openflag = true;
     try gui.windowHeader(title, "", &header_openflag);
     if (!header_openflag) {
+        gui.dialogRemove(id);
         if (callafter) |ca| {
             try ca(id, .closed);
         }
-        return .close;
+        return;
     }
 
     var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
@@ -3402,11 +3423,13 @@ pub fn dialogOkDisplay(id: u32) !DialogDisplayReturn {
     tl.deinit();
 
     if (try gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
+        gui.dialogRemove(id);
         if (callafter) |ca| {
             try ca(id, .ok);
         }
-        return .close;
+        return;
     }
+}
 
     return .keep;
 }
@@ -6870,7 +6893,7 @@ pub const examples = struct {
             }
         }
 
-        pub fn dialogDisplay(id: u32) !DialogDisplayReturn {
+        pub fn dialogDisplay(id: u32) !void {
             const modal = gui.dataGet(id, "modal", bool) orelse unreachable;
             const title = gui.dataGet(id, "title", []const u8) orelse unreachable;
             const message = gui.dataGet(id, "msg", []const u8) orelse unreachable;
@@ -6910,15 +6933,17 @@ pub const examples = struct {
 
                     if (a.done() and a.end_val == 0) {
                         win.close();
+                        gui.dialogRemove(id);
 
                         if (callafter) |ca| {
                             const response = gui.dataGet(id, "response", gui.DialogResponse) orelse {
                                 std.debug.print("Error: no response for dialog {x}\n", .{id});
-                                return .close;
+                                return;
                             };
                             try ca(id, response);
                         }
-                        return .close;
+
+                        return;
                     }
                 }
             }
@@ -6964,8 +6989,6 @@ pub const examples = struct {
                 gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 150_000 });
                 gui.dataSet(win.data().id, "window_size", win.data().rect.size());
             }
-
-            return .keep;
         }
 
         pub fn after(id: u32, response: gui.DialogResponse) gui.Error!void {
@@ -7015,8 +7038,8 @@ pub const examples = struct {
                 try menus();
             }
 
-            if (try gui.expander(@src(), 0, "Dialogs", .{ .expand = .horizontal })) {
-                try dialogs();
+            if (try gui.expander(@src(), 0, "Dialogs and Toasts", .{ .expand = .horizontal })) {
+                try dialogs(float.data().id);
             }
 
             if (try gui.expander(@src(), 0, "Animations", .{ .expand = .horizontal })) {
@@ -7218,7 +7241,7 @@ pub const examples = struct {
         }
     }
 
-    pub fn dialogs() !void {
+    pub fn dialogs(demo_win_id: u32) !void {
         var b = try gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
 

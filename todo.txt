@@ -1,4 +1,6 @@
 
+catch CodepointTooLarge and convert to InvalidUtf8
+
 toasts
 - short info messages, possibly with UI interactions ("undo"), then they fade or disappear
 - can be added from other threads
