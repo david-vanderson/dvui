@@ -763,23 +763,13 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
     return;
 }
 
-fn optionalEqual(comptime T: type, a: ?T, b: ?T) bool {
-    if (a == null and b == null) {
-        return true;
-    } else if (a == null or b == null) {
-        return false;
-    } else {
-        return (a.? == b.?);
-    }
-}
-
 // Focus a widget in the focused subwindow.  If you need to focus a widget in
 // an arbitrary subwindow, focus the subwindow first.
 pub fn focusWidget(id: ?u32, iter: ?*EventIterator) void {
     const cw = currentWindow();
     for (cw.subwindows.items) |*sw| {
         if (cw.focused_subwindowId == sw.id) {
-            if (!optionalEqual(u32, sw.focused_widgetId, id)) {
+            if (sw.focused_widgetId != id) {
                 sw.focused_widgetId = id;
                 if (iter) |it| {
                     it.focusRemainingEvents(sw.id, sw.focused_widgetId);
@@ -3310,6 +3300,10 @@ pub const FloatingWindowWidget = struct {
         self.auto_size = true;
     }
 
+    pub fn stayAboveParent(self: *Self) void {
+        self.stay_above_parent = true;
+    }
+
     pub fn close(self: *Self) void {
         //subwindowClosing(self.wd.id);
         if (self.openflag) |of| {
@@ -3546,6 +3540,7 @@ pub const ToastIterator = struct {
     cw: *Window,
     subwindow_id: ?u32,
     i: usize,
+    last_id: ?u32 = null,
 
     pub fn init(win: *Window, subwindow_id: ?u32, i: usize) Self {
         return Self{ .cw = win, .subwindow_id = subwindow_id, .i = i };
@@ -3555,13 +3550,22 @@ pub const ToastIterator = struct {
         self.cw.dialog_mutex.lock();
         defer self.cw.dialog_mutex.unlock();
 
-        while (self.i < self.cw.toasts.items.len) {
-            const t = self.cw.toasts.items[self.i];
-            self.i += 1;
+        // have to deal with toasts possibly removing themselves inbetween
+        // calls to next()
 
-            if (optionalEqual(u32, self.subwindow_id, t.subwindow_id)) {
-                return t;
-            }
+        var items = self.cw.toasts.items;
+        if (self.i < items.len and self.last_id != null and self.last_id.? == items[self.i].id) {
+            // we already did this one, move to the next
+            self.i += 1;
+        }
+
+        while (self.i < items.len and items[self.i].subwindow_id != self.subwindow_id) {
+            self.i += 1;
+        }
+
+        if (self.i < items.len) {
+            self.last_id = items[self.i].id;
+            return items[self.i];
         }
 
         return null;
@@ -3574,16 +3578,16 @@ pub fn toastInfo(src: std.builtin.SourceLocation, id_extra: usize, subwindow_id:
 }
 
 pub fn toastInfoDisplay(id: u32) !void {
+    if (gui.timerDone(id)) {
+        gui.toastRemove(id);
+    }
+
     const message = gui.dataGet(id, "_msg", []const u8) orelse {
-        std.debug.print("Error: lost data for dialog {x}\n", .{id});
+        std.debug.print("Error: lost message for toast {x}\n", .{id});
         return;
     };
 
     try gui.labelNoFmt(@src(), 0, message, .{});
-
-    if (gui.timerDone(id)) {
-        gui.toastRemove(id);
-    }
 }
 
 pub var expander_defaults: Options = .{
@@ -7160,12 +7164,16 @@ pub const examples = struct {
 
             var ti = gui.toastsFor(float.data().id);
             if (ti) |*it| {
-                var toast_win = FloatingWindowWidget.init(@src(), 0, false, null, null, .{});
+                var toast_win = FloatingWindowWidget.init(@src(), 0, false, null, null, .{ .background = false });
                 defer toast_win.deinit();
 
                 toast_win.data().centerOnRect(float.data().rect);
-                toast_win.stay_above_parent = true;
+                toast_win.stayAboveParent();
+                toast_win.autoSize();
                 try toast_win.install(.{ .process_events = false });
+
+                var vbox = try gui.box(@src(), 0, .vertical, .{});
+                defer vbox.deinit();
 
                 while (it.next()) |t| {
                     try t.display(t.id);
@@ -7441,8 +7449,16 @@ pub const examples = struct {
             var hbox = try gui.box(@src(), 0, .horizontal, .{});
             defer hbox.deinit();
 
-            if (try gui.button(@src(), 0, "Toast", .{})) {
-                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast to this demo window");
+            if (try gui.button(@src(), 0, "Toast 1", .{})) {
+                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast 1 to this demo window");
+            }
+
+            if (try gui.button(@src(), 0, "Toast 2", .{})) {
+                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast 2 to this demo window");
+            }
+
+            if (try gui.button(@src(), 0, "Toast 3", .{})) {
+                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast 3 to this demo window");
             }
         }
     }
