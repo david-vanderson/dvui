@@ -1,6 +1,4 @@
 
-catch CodepointTooLarge and convert to InvalidUtf8
-
 make the toasts have a good margin and use placeIn and gravity to position them inside parent
 - change centerOnRect to use placeIn instead?
 
