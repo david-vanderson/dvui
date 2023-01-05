@@ -8,7 +8,7 @@ pub const icons = @import("icons.zig");
 pub const fonts = @import("fonts.zig");
 pub const enums = @import("enums.zig");
 
-pub const Error = error{ OutOfMemory, InvalidUtf8, CodepointTooLarge, freetypeError, tvgError };
+pub const Error = error{ OutOfMemory, InvalidUtf8, freetypeError, tvgError };
 
 const log = std.log.scoped(.gui);
 const gui = @This();
@@ -479,7 +479,7 @@ pub const Font = struct {
 
             tw = maxx - minx;
             th = maxy - miny;
-            ei += try std.unicode.utf8CodepointSequenceLength(codepoint);
+            ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
             x += gi.advance;
         }
 
@@ -6294,7 +6294,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
     var fce = try fontCacheGet(sized_font);
 
     // make sure the cache has all the glyphs we need
-    var utf8it = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
+    var utf8it = (try std.unicode.Utf8View.init(text)).iterator();
     while (utf8it.nextCodepoint()) |codepoint| {
         _ = try fce.glyphInfoGet(@intCast(u32, codepoint));
     }
@@ -6398,7 +6398,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
     var x: f32 = if (cw.snap_to_pixels) @round(rs.r.x) else rs.r.x;
     var y: f32 = if (cw.snap_to_pixels) @round(rs.r.y) else rs.r.y;
 
-    var utf8 = (std.unicode.Utf8View.init(text) catch unreachable).iterator();
+    var utf8 = (try std.unicode.Utf8View.init(text)).iterator();
     while (utf8.nextCodepoint()) |codepoint| {
         const gi = try fce.glyphInfoGet(@intCast(u32, codepoint));
 
