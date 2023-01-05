@@ -1639,10 +1639,7 @@ pub fn animationGet(id: u32, key: []const u8) ?Animation {
 }
 
 pub fn timer(id: u32, micros: i32) !void {
-    const a = Animation{ .start_val = 0, .end_val = 0, .start_time = micros, .end_time = micros };
-    var cw = currentWindow();
-    const h = hashIdKey(id, "_timer");
-    try cw.animations.put(h, a);
+    try currentWindow().timer(id, micros);
 }
 
 pub fn timerGet(id: u32) ?i32 {
@@ -2604,12 +2601,23 @@ pub const Window = struct {
         }
     }
 
+    pub fn timer(self: *Self, id: u32, micros: i32) !void {
+        const a = Animation{ .start_val = 0, .end_val = 0, .start_time = micros, .end_time = micros };
+        const h = hashIdKey(id, "_timer");
+        try self.animations.put(h, a);
+    }
+
+    pub fn timerRemove(self: *Self, id: u32) void {
+        const h = hashIdKey(id, "_timer");
+        _ = self.animations.remove(h);
+    }
+
     // Add a toast to be displayed on the GUI thread. Can be called from any
     // thread. Returns a locked mutex that must be unlocked by the caller.  If
     // calling from a non-GUI thread, do any Window.dataSet() calls before
     // unlocking the mutex to ensure that data is available before the dialog
     // is displayed.
-    pub fn toastAdd(self: *Self, id: u32, subwindow_id: ?u32, display: DialogDisplay) !*std.Thread.Mutex {
+    pub fn toastAdd(self: *Self, id: u32, subwindow_id: ?u32, display: DialogDisplay, timeout: ?i32) !*std.Thread.Mutex {
         self.dialog_mutex.lock();
 
         for (self.toasts.items) |*t| {
@@ -2620,6 +2628,12 @@ pub const Window = struct {
             }
         } else {
             try self.toasts.append(Toast{ .id = id, .subwindow_id = subwindow_id, .display = display });
+        }
+
+        if (timeout) |tt| {
+            try self.timer(id, tt);
+        } else {
+            self.timerRemove(id);
         }
 
         self.cueFrame();
@@ -3499,11 +3513,11 @@ pub const Toast = struct {
     display: DialogDisplay,
 };
 
-pub fn toastAdd(src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, display: DialogDisplay) !u32 {
+pub fn toastAdd(src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, display: DialogDisplay, timeout: ?i32) !u32 {
     const cw = currentWindow();
     const parent = parentGet();
     const id = parent.extendID(src, id_extra);
-    const mutex = try cw.toastAdd(id, subwindow_id, display);
+    const mutex = try cw.toastAdd(id, subwindow_id, display, timeout);
     mutex.unlock();
     return id;
 }
@@ -3554,8 +3568,8 @@ pub const ToastIterator = struct {
     }
 };
 
-pub fn toastInfo(src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, msg: []const u8) !void {
-    const id = try gui.toastAdd(src, id_extra, subwindow_id, toastInfoDisplay);
+pub fn toastInfo(src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, timeout: ?i32, msg: []const u8) !void {
+    const id = try gui.toastAdd(src, id_extra, subwindow_id, toastInfoDisplay, timeout);
     gui.dataSet(id, "_msg", msg);
 }
 
@@ -3566,10 +3580,6 @@ pub fn toastInfoDisplay(id: u32) !void {
     };
 
     try gui.labelNoFmt(@src(), 0, message, .{});
-
-    if (!gui.timerExists(id)) {
-        try gui.timer(id, 5_000_000);
-    }
 
     if (gui.timerDone(id)) {
         gui.toastRemove(id);
@@ -7432,7 +7442,7 @@ pub const examples = struct {
             defer hbox.deinit();
 
             if (try gui.button(@src(), 0, "Toast", .{})) {
-                try gui.toastInfo(@src(), 0, demo_win_id, "Toast to this demo window");
+                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast to this demo window");
             }
         }
     }
