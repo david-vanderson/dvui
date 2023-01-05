@@ -1440,23 +1440,25 @@ pub fn dataGet(id: u32, key: []const u8, comptime T: type) ?T {
     return cw.dataGet(id, key, T);
 }
 
-pub fn minSize(id: ?u32, min_size: Size) Size {
+pub fn minSize(id: u32, min_size: Size) Size {
     var size = min_size;
 
     // Need to take the max of both given and previous.  ScrollArea could be
     // passed a min size Size{.w = 0, .h = 200} meaning to get the width from the
     // previous min size.
-    if (id) |id2| {
-        if (minSizeGet(id2)) |ms| {
-            size = Size.max(size, ms);
-        }
+    if (minSizeGet(id)) |ms| {
+        size = Size.max(size, ms);
     }
 
     return size;
 }
 
-pub fn placeIn(id: ?u32, avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    var size = minSize(id, min_size);
+pub fn placeIn(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    return placeInMargin(avail, min_size, e, g, .{});
+}
+
+pub fn placeInMargin(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravity, margin: Rect) Rect {
+    var size = min_size.pad(margin);
 
     if (e.horizontal()) {
         size.w = avail.w;
@@ -1479,7 +1481,7 @@ pub fn placeIn(id: ?u32, avail: Rect, min_size: Size, e: Options.Expand, g: Opti
         .downleft, .down, .downright => r.y = avail.y + (avail.h - r.h),
     }
 
-    return r;
+    return r.inset(margin);
 }
 
 pub fn events() []Event {
@@ -2748,7 +2750,7 @@ pub const Window = struct {
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         var r = self.wd.rect;
         r.y = self.next_widget_ypos;
-        const ret = placeIn(id, r, min_size, e, g);
+        const ret = placeIn(r, minSize(id, min_size), e, g);
         self.next_widget_ypos += ret.h;
         return ret;
     }
@@ -2880,7 +2882,7 @@ pub const PopupWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+        return placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
@@ -3084,7 +3086,7 @@ pub const FloatingWindowWidget = struct {
                 self.auto_pos = (self.wd.rect.x == 0 and self.wd.rect.y == 0);
                 if (self.auto_pos and !self.auto_size) {
                     self.auto_pos = false;
-                    self.wd.centerOnRect(windowRect());
+                    self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .center);
                 }
             }
         }
@@ -3105,7 +3107,7 @@ pub const FloatingWindowWidget = struct {
                 // only position ourselves once by default
                 self.auto_pos = false;
 
-                self.wd.centerOnRect(windowRect());
+                self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .center);
 
                 //std.debug.print("autopos to {}\n", .{self.wd.rect});
             }
@@ -3321,7 +3323,7 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+        return placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
@@ -3808,7 +3810,7 @@ pub const PanedWidget = struct {
                     .vertical => r.h = r.h * self.split_ratio - handle_size / 2,
                 }
             }
-            return gui.placeIn(id, r, min_size, e, g);
+            return gui.placeIn(r, minSize(id, min_size), e, g);
         } else {
             if (self.collapsed()) {
                 if (self.split_ratio == 1.0) {
@@ -3838,7 +3840,7 @@ pub const PanedWidget = struct {
                     },
                 }
             }
-            return gui.placeIn(id, r, min_size, e, g);
+            return gui.placeIn(r, minSize(id, min_size), e, g);
         }
     }
 
@@ -4088,7 +4090,7 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        const ret = placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+        const ret = placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
         const i: usize = switch (g) {
             .upleft => 0,
             .upright => 1,
@@ -4191,7 +4193,7 @@ pub const ContextWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+        return placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
@@ -4300,7 +4302,7 @@ pub const OverlayWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+        return placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
@@ -4447,7 +4449,7 @@ pub const BoxWidget = struct {
             }
         }
 
-        return placeIn(null, rect, child_size, e, g);
+        return placeIn(rect, child_size, e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
@@ -4744,7 +4746,7 @@ pub const ScrollContainerWidget = struct {
         const y = self.next_widget_ypos;
         const h = self.si.virtual_size.h - y;
         const rect = Rect{ .x = 0, .y = y, .w = self.wd.contentRect().w, .h = math.min(h, child_size.h) };
-        const ret = placeIn(id, rect, child_size, e, g);
+        const ret = placeIn(rect, minSize(id, child_size), e, g);
         self.next_widget_ypos = (ret.y + ret.h);
         return ret;
     }
@@ -5113,7 +5115,7 @@ pub const ScaleWidget = struct {
             s = 1_000_000.0;
         }
 
-        return placeIn(id, self.wd.contentRect().justSize().scale(s), min_size, e, g);
+        return placeIn(self.wd.contentRect().justSize().scale(s), minSize(id, min_size), e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
@@ -5207,7 +5209,7 @@ pub const MenuWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+        return placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
@@ -5405,7 +5407,7 @@ pub const MenuItemWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+        return placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
@@ -5527,7 +5529,7 @@ pub const LabelWidget = struct {
         debug("{x} Label \"{s:<10}\" {}", .{ self.wd.id, self.label_str, self.wd.rect });
         try self.wd.borderAndBackground();
 
-        var rect = placeIn(null, self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
+        var rect = placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
         var rs = self.wd.parent.screenRectScale(rect);
         var iter = std.mem.split(u8, self.label_str, "\n");
         while (iter.next()) |line| {
@@ -5585,7 +5587,7 @@ pub const IconWidget = struct {
 
         try self.wd.borderAndBackground();
 
-        var rect = placeIn(null, self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
+        var rect = placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
         var rs = self.wd.parent.screenRectScale(rect);
         try renderIcon(self.name, self.tvg_bytes, rs, self.wd.options.rotationGet(), self.wd.options.color());
 
@@ -5619,7 +5621,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, id_extra: usize, opts: 
 
     try wd.borderAndBackground();
 
-    const rs = wd.parent.screenRectScale(placeIn(null, wd.contentRect(), size, .none, opts.gravityGet()));
+    const rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
     try debugRenderFontAtlases(rs, opts.color());
 
     wd.minSizeSetAndCue();
@@ -5707,7 +5709,7 @@ pub const ButtonWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+        return placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
@@ -5961,7 +5963,7 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+        return placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
@@ -6172,10 +6174,6 @@ pub const Rect = struct {
     y: f32 = 0,
     w: f32 = 0,
     h: f32 = 0,
-
-    pub fn negate(self: *const Self) Rect {
-        return Self{ .x = -self.x, .y = -self.y, .w = -self.w, .h = -self.h };
-    }
 
     pub fn add(self: *const Self, r: Self) Rect {
         return Self{ .x = self.x + r.x, .y = self.y + r.y, .w = self.w + r.w, .h = self.h + r.h };
@@ -6689,16 +6687,6 @@ pub const WidgetData = struct {
         return !clipGet().intersect(self.borderRectScale().r).empty();
     }
 
-    pub fn centerOnRect(self: *WidgetData, r: Rect) void {
-        // make sure that we stay on the screen
-        self.rect.x = math.max(0, r.x + r.w / 2 - self.rect.w / 2);
-        self.rect.y = math.max(0, r.y + r.h / 2 - self.rect.h / 2);
-
-        // snap to logical pixels so at least things start non-blurry
-        self.rect.x = @floor(self.rect.x);
-        self.rect.y = @floor(self.rect.y);
-    }
-
     pub fn borderAndBackground(self: *const WidgetData) !void {
         var bg = self.options.backgroundGet();
         if (self.options.borderGet().nonZero()) {
@@ -7167,7 +7155,7 @@ pub const examples = struct {
                 var toast_win = FloatingWindowWidget.init(@src(), 0, false, null, null, .{ .background = false });
                 defer toast_win.deinit();
 
-                toast_win.data().centerOnRect(float.data().rect);
+                toast_win.data().rect = gui.placeInMargin(float.data().rect, toast_win.data().rect.size(), .none, .down, .{ .h = 60 });
                 toast_win.stayAboveParent();
                 toast_win.autoSize();
                 try toast_win.install(.{ .process_events = false });
