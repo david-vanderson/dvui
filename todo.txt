@@ -2,8 +2,6 @@
 make the toasts have a good margin and use placeIn and gravity to position them inside parent
 - change centerOnRect to use placeIn instead?
 
-add timeout to Toast
-
 try wrapping toasts (or window?) in an animating widget
 - animates min vertical size up and down
 - animates alpha up and down
