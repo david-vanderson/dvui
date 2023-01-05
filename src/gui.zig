@@ -733,15 +733,29 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
     var items = cw.subwindows.items;
     for (items) |sw, i| {
         if (sw.id == subwindow_id) {
-            if (i == (items.len - 1)) {
+            if (sw.stay_above_parent) {
+                std.debug.print("raiseSubwindow: tried to raise a subwindow {x} with stay_above_parent set\n", .{subwindow_id});
                 return;
-            } else {
+            }
+
+            if (i == (items.len - 1)) {
+                // already on top
+                return;
+            }
+
+            // move it to the end, also move any stay_above_parent subwindows
+            // directly on top of it as well
+            var first = true;
+            while (first or items[i].stay_above_parent) {
+                first = false;
+                const item = items[i];
                 for (items[i..(items.len - 1)]) |*b, k| {
                     b.* = items[i + 1 + k];
                 }
-                items[items.len - 1] = sw;
-                return;
+                items[items.len - 1] = item;
             }
+
+            return;
         }
     }
 
@@ -1195,7 +1209,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     cw.path.clearAndFree();
 }
 
-pub fn subwindowAdd(id: u32, rect: Rect, modal: bool) !void {
+pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: bool) !void {
     const cw = currentWindow();
 
     for (cw.subwindows.items) |*sw| {
@@ -1204,6 +1218,7 @@ pub fn subwindowAdd(id: u32, rect: Rect, modal: bool) !void {
             sw.used = true;
             sw.rect = rect;
             sw.modal = modal;
+            sw.stay_above_parent = stay_above_parent;
             sw.render_cmds = std.ArrayList(RenderCmd).init(cw.arena);
             sw.render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena);
             return;
@@ -1211,7 +1226,7 @@ pub fn subwindowAdd(id: u32, rect: Rect, modal: bool) !void {
     }
 
     // haven't seen this window before, it goes on top
-    const sw = Window.Subwindow{ .id = id, .rect = rect, .modal = modal, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena), .render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena) };
+    const sw = Window.Subwindow{ .id = id, .rect = rect, .modal = modal, .stay_above_parent = stay_above_parent, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena), .render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena) };
     try cw.subwindows.append(sw);
 }
 
@@ -1338,7 +1353,7 @@ pub fn clipSet(r: Rect) void {
 }
 
 pub fn cueFrame() void {
-    currentWindow().extra_frames_needed = 1;
+    currentWindow().cueFrame();
 }
 
 pub fn animationRate() f32 {
@@ -1764,6 +1779,7 @@ pub const Window = struct {
         render_cmds_after: std.ArrayList(RenderCmd),
         used: bool = true,
         modal: bool = false,
+        stay_above_parent: bool = false,
     };
 
     const SavedSize = struct {
@@ -1832,7 +1848,8 @@ pub const Window = struct {
     font_cache: std.AutoHashMap(u32, FontCacheEntry),
     icon_cache: std.AutoHashMap(u32, IconCacheEntry),
     dialog_mutex: std.Thread.Mutex,
-    dialogs: std.ArrayList(DialogEntry),
+    dialogs: std.ArrayList(Dialog),
+    toasts: std.ArrayList(Toast),
 
     ft2lib: freetype.Library = undefined,
 
@@ -1875,7 +1892,8 @@ pub const Window = struct {
             .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
             .icon_cache = std.AutoHashMap(u32, IconCacheEntry).init(gpa),
             .dialog_mutex = std.Thread.Mutex{},
-            .dialogs = std.ArrayList(DialogEntry).init(gpa),
+            .dialogs = std.ArrayList(Dialog).init(gpa),
+            .toasts = std.ArrayList(Toast).init(gpa),
             .wd = WidgetData{ .id = hash.final() },
             .backend = backend,
         };
@@ -1898,6 +1916,10 @@ pub const Window = struct {
         self.font_cache.deinit();
         self.icon_cache.deinit();
         self.dialogs.deinit();
+    }
+
+    pub fn cueFrame(self: *Self) void {
+        self.extra_frames_needed = 1;
     }
 
     pub fn addEventKey(self: *Self, kind: KeyEvent.Kind, mod: enums.Mod) !bool {
@@ -2125,7 +2147,7 @@ pub const Window = struct {
         if (min_micros > 0) {
             // wait unconditionally for fps target
             std.time.sleep(min_micros * 1000);
-            self.loop_wait_target = self.frame_time_ns + (target_min * 1000);
+            self.loop_wait_target = self.frame_time_ns + (@intCast(i128, target_min) * 1000);
         }
 
         if (end_micros == null) {
@@ -2137,7 +2159,7 @@ pub const Window = struct {
             // wait conditionally
             // since we have a timeout we will try to hit that target but set our
             // flag so that we don't adjust for the target if we wake up to an event
-            self.loop_wait_target = self.frame_time_ns + (target * 1000);
+            self.loop_wait_target = self.frame_time_ns + (@intCast(i128, target) * 1000);
             self.loop_wait_target_event = true;
             //std.debug.print("  wait {d:6}\n", .{wait_micros});
             return wait_micros;
@@ -2249,7 +2271,7 @@ pub const Window = struct {
 
         debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
-        try subwindowAdd(self.wd.id, self.wd.rect, false);
+        try subwindowAdd(self.wd.id, self.wd.rect, false, false);
 
         _ = subwindowCurrentSet(self.wd.id);
 
@@ -2273,7 +2295,7 @@ pub const Window = struct {
                     kv.value_ptr.start_time -|= micros;
                     kv.value_ptr.end_time -|= micros;
                     if (kv.value_ptr.start_time <= 0 and kv.value_ptr.end_time > 0) {
-                        cueFrame();
+                        self.cueFrame();
                     }
                 }
             }
@@ -2533,8 +2555,10 @@ pub const Window = struct {
                 break;
             }
         } else {
-            try self.dialogs.append(DialogEntry{ .id = id, .display = display });
+            try self.dialogs.append(Dialog{ .id = id, .display = display });
         }
+
+        self.cueFrame();
 
         return &self.dialog_mutex;
     }
@@ -2546,6 +2570,7 @@ pub const Window = struct {
         for (self.dialogs.items) |*d, i| {
             if (d.id == id) {
                 _ = self.dialogs.orderedRemove(i);
+                self.cueFrame();
                 return;
             }
         }
@@ -2553,7 +2578,7 @@ pub const Window = struct {
 
     fn dialogsShow(self: *Self) !void {
         var i: usize = 0;
-        var dialog: ?DialogEntry = null;
+        var dialog: ?Dialog = null;
         while (true) {
             self.dialog_mutex.lock();
             if (i < self.dialogs.items.len and
@@ -2575,6 +2600,42 @@ pub const Window = struct {
                 try d.display(d.id);
             } else {
                 break;
+            }
+        }
+    }
+
+    // Add a toast to be displayed on the GUI thread. Can be called from any
+    // thread. Returns a locked mutex that must be unlocked by the caller.  If
+    // calling from a non-GUI thread, do any Window.dataSet() calls before
+    // unlocking the mutex to ensure that data is available before the dialog
+    // is displayed.
+    pub fn toastAdd(self: *Self, id: u32, subwindow_id: ?u32, display: DialogDisplay) !*std.Thread.Mutex {
+        self.dialog_mutex.lock();
+
+        for (self.toasts.items) |*t| {
+            if (t.id == id) {
+                t.display = display;
+                t.subwindow_id = subwindow_id;
+                break;
+            }
+        } else {
+            try self.toasts.append(Toast{ .id = id, .subwindow_id = subwindow_id, .display = display });
+        }
+
+        self.cueFrame();
+
+        return &self.dialog_mutex;
+    }
+
+    pub fn toastRemove(self: *Self, id: u32) void {
+        self.dialog_mutex.lock();
+        defer self.dialog_mutex.unlock();
+
+        for (self.toasts.items) |*t, i| {
+            if (t.id == id) {
+                _ = self.toasts.orderedRemove(i);
+                self.cueFrame();
+                return;
             }
         }
     }
@@ -2626,7 +2687,7 @@ pub const Window = struct {
             const sw = self.subwindows.items[self.subwindows.items.len - 1];
             focusSubwindow(sw.id, null);
 
-            cueFrame();
+            self.cueFrame();
         }
 
         // Check that the final event was our synthetic mouse position event.
@@ -2794,7 +2855,7 @@ pub const PopupWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        try subwindowAdd(self.wd.id, rs.r, false);
+        try subwindowAdd(self.wd.id, rs.r, false, false);
 
         // clip to just our window (using clipSet since we are not inside our parent)
         self.prevClip = clipGet();
@@ -2965,6 +3026,7 @@ pub const FloatingWindowWidget = struct {
     options: Options = undefined,
     process_events: bool = true,
     modal: bool = false,
+    stay_above_parent: bool = false,
     captured: bool = false,
     prev_windowId: u32 = 0,
     io_rect: ?*Rect = null,
@@ -3018,7 +3080,7 @@ pub const FloatingWindowWidget = struct {
                 self.auto_pos = (self.wd.rect.x == 0 and self.wd.rect.y == 0);
                 if (self.auto_pos and !self.auto_size) {
                     self.auto_pos = false;
-                    self.wd.centerOnScreen();
+                    self.wd.centerOnRect(windowRect());
                 }
             }
         }
@@ -3039,7 +3101,7 @@ pub const FloatingWindowWidget = struct {
                 // only position ourselves once by default
                 self.auto_pos = false;
 
-                self.wd.centerOnScreen();
+                self.wd.centerOnRect(windowRect());
 
                 //std.debug.print("autopos to {}\n", .{self.wd.rect});
             }
@@ -3093,7 +3155,7 @@ pub const FloatingWindowWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        try subwindowAdd(self.wd.id, rs.r, self.modal);
+        try subwindowAdd(self.wd.id, rs.r, self.modal, self.stay_above_parent);
 
         if (self.modal) {
             // paint over everything below
@@ -3355,7 +3417,7 @@ pub const DialogResponse = enum(u8) {
     _,
 };
 
-pub const DialogEntry = struct {
+pub const Dialog = struct {
     id: u32,
     display: DialogDisplay,
 };
@@ -3431,7 +3493,87 @@ pub fn dialogOkDisplay(id: u32) !void {
     }
 }
 
-    return .keep;
+pub const Toast = struct {
+    id: u32,
+    subwindow_id: ?u32,
+    display: DialogDisplay,
+};
+
+pub fn toastAdd(src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, display: DialogDisplay) !u32 {
+    const cw = currentWindow();
+    const parent = parentGet();
+    const id = parent.extendID(src, id_extra);
+    const mutex = try cw.toastAdd(id, subwindow_id, display);
+    mutex.unlock();
+    return id;
+}
+
+pub fn toastRemove(id: u32) void {
+    const cw = currentWindow();
+    cw.toastRemove(id);
+}
+
+pub fn toastsFor(subwindow_id: ?u32) ?ToastIterator {
+    const cw = gui.currentWindow();
+    cw.dialog_mutex.lock();
+    defer cw.dialog_mutex.unlock();
+
+    for (cw.toasts.items) |*t, i| {
+        if (t.subwindow_id == subwindow_id) {
+            return ToastIterator.init(cw, subwindow_id, i);
+        }
+    }
+
+    return null;
+}
+
+pub const ToastIterator = struct {
+    const Self = @This();
+    cw: *Window,
+    subwindow_id: ?u32,
+    i: usize,
+
+    pub fn init(win: *Window, subwindow_id: ?u32, i: usize) Self {
+        return Self{ .cw = win, .subwindow_id = subwindow_id, .i = i };
+    }
+
+    pub fn next(self: *Self) ?Toast {
+        self.cw.dialog_mutex.lock();
+        defer self.cw.dialog_mutex.unlock();
+
+        while (self.i < self.cw.toasts.items.len) {
+            const t = self.cw.toasts.items[self.i];
+            self.i += 1;
+
+            if (optionalEqual(u32, self.subwindow_id, t.subwindow_id)) {
+                return t;
+            }
+        }
+
+        return null;
+    }
+};
+
+pub fn toastInfo(src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, msg: []const u8) !void {
+    const id = try gui.toastAdd(src, id_extra, subwindow_id, toastInfoDisplay);
+    gui.dataSet(id, "_msg", msg);
+}
+
+pub fn toastInfoDisplay(id: u32) !void {
+    const message = gui.dataGet(id, "_msg", []const u8) orelse {
+        std.debug.print("Error: lost data for dialog {x}\n", .{id});
+        return;
+    };
+
+    try gui.labelNoFmt(@src(), 0, message, .{});
+
+    if (!gui.timerExists(id)) {
+        try gui.timer(id, 5_000_000);
+    }
+
+    if (gui.timerDone(id)) {
+        gui.toastRemove(id);
+    }
 }
 
 pub var expander_defaults: Options = .{
@@ -6533,10 +6675,10 @@ pub const WidgetData = struct {
         return !clipGet().intersect(self.borderRectScale().r).empty();
     }
 
-    pub fn centerOnScreen(self: *WidgetData) void {
+    pub fn centerOnRect(self: *WidgetData, r: Rect) void {
         // make sure that we stay on the screen
-        self.rect.x = math.max(0, windowRect().w / 2 - self.rect.w / 2);
-        self.rect.y = math.max(0, windowRect().h / 2 - self.rect.h / 2);
+        self.rect.x = math.max(0, r.x + r.w / 2 - self.rect.w / 2);
+        self.rect.y = math.max(0, r.y + r.h / 2 - self.rect.h / 2);
 
         // snap to logical pixels so at least things start non-blurry
         self.rect.x = @floor(self.rect.x);
@@ -7006,6 +7148,20 @@ pub const examples = struct {
             const fps_str = std.fmt.bufPrint(&buf, "{d:4.0} fps", .{gui.FPS()}) catch unreachable;
             try gui.windowHeader("GUI Demo", fps_str, &show_demo_window);
 
+            var ti = gui.toastsFor(float.data().id);
+            if (ti) |*it| {
+                var toast_win = FloatingWindowWidget.init(@src(), 0, false, null, null, .{});
+                defer toast_win.deinit();
+
+                toast_win.data().centerOnRect(float.data().rect);
+                toast_win.stay_above_parent = true;
+                try toast_win.install(.{ .process_events = false });
+
+                while (it.next()) |t| {
+                    try t.display(t.id);
+                }
+            }
+
             var hbox = try gui.box(@src(), 0, .horizontal, .{ .expand = .both });
             defer hbox.deinit();
 
@@ -7268,6 +7424,15 @@ pub const examples = struct {
 
             if (try gui.button(@src(), 0, "Ok Followup", .{})) {
                 try gui.dialogOk(@src(), 0, true, "Ok Followup", "This is a modal dialog with modal followup", dialogsFollowup.callafter);
+            }
+        }
+
+        {
+            var hbox = try gui.box(@src(), 0, .horizontal, .{});
+            defer hbox.deinit();
+
+            if (try gui.button(@src(), 0, "Toast", .{})) {
+                try gui.toastInfo(@src(), 0, demo_win_id, "Toast to this demo window");
             }
         }
     }
