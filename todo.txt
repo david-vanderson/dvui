@@ -1,26 +1,18 @@
 
 catch CodepointTooLarge and convert to InvalidUtf8
 
-toasts
-- short info messages, possibly with UI interactions ("undo"), then they fade or disappear
-- can be added from other threads
-- a toast is:
-  - id
-  - subwindow_id or null
-  - function to run
-  - flag to detect stale toasts
-- during Window.end(), go over all toasts, flip flag to stale, if already stale, print warning and delete
-- add gui.showToasts(subwindow_id: ?u32, ...)
-  - makes a nested subwindow that's anchored to the parent subwindow rect
-  - shows all toasts that match the subwindow_id and marks them non-stale
-  - nested subwindow needs a flag so that it stays just above parent in stacking order always
-  - subwindow needs a transparent background
+make the toasts have a good margin and use placeIn and gravity to position them inside parent
+- change centerOnRect to use placeIn instead?
 
-probably should remove OverlayWidget, subwindows are much better for things being on top of other things
+add timeout to Toast
 
-try wrapping toasts in an animating widget
+try wrapping toasts (or window?) in an animating widget
 - animates min vertical size up and down
 - animates alpha up and down
+
+example toast that includes "undo"
+
+probably should remove OverlayWidget, subwindows are much better for things being on top of other things
 
 add draggable slider thing for podcast duration
 - drag starts in any location, don't have to hit the current location to start
