@@ -449,7 +449,7 @@ pub const StrokeTest = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: gui.Size, e: gui.Options.Expand, g: gui.Options.Gravity) gui.Rect {
-        return gui.placeIn(id, self.wd.contentRect().justSize(), min_size, e, g);
+        return gui.placeIn(self.wd.contentRect().justSize(), gui.minSize(id, min_size), e, g);
     }
 
     pub fn screenRectScale(self: *Self, r: gui.Rect) gui.RectScale {
