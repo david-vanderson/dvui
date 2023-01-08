@@ -1867,6 +1867,8 @@ pub const Window = struct {
     debug_widget_id: u32 = 0,
     debug_info_name_rect: []u8 = "",
     debug_info_src_id_extra: []u8 = "",
+    debug_under_mouse: bool = false,
+    debug_under_mouse_info: []u8 = "",
 
     pub fn init(
         src: std.builtin.SourceLocation,
@@ -2191,6 +2193,12 @@ pub const Window = struct {
         self.cursor_requested = .arrow;
         self.debug_info_name_rect = "";
         self.debug_info_src_id_extra = "";
+        if (self.debug_under_mouse) {
+            if (self.debug_under_mouse_info.len > 0) {
+                self.gpa.free(self.debug_under_mouse_info);
+            }
+            self.debug_under_mouse_info = "";
+        }
 
         self.arena = arena;
         self.path = std.ArrayList(Point).init(arena);
@@ -2659,6 +2667,13 @@ pub const Window = struct {
     }
 
     fn debugWindowShow(self: *Self) !void {
+        // disable so the widgets we are about to use to display this data
+        // don't modify the data, otherwise our iterator will get corrupted and
+        // even if you search for a widget here, the data won't be available
+        var dum = self.debug_under_mouse;
+        self.debug_under_mouse = false;
+        defer self.debug_under_mouse = dum;
+
         var float = try gui.floatingWindow(@src(), 0, false, null, &self.debug_window_show, .{ .min_size_content = .{ .w = 300, .h = 400 } });
         defer float.deinit();
 
@@ -2677,10 +2692,33 @@ pub const Window = struct {
             self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(&buf, 0), 16) catch 0;
         }
 
-        var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal });
+        var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
         try tl.addText(self.debug_info_name_rect, .{});
+        try tl.addText("\n", .{});
         try tl.addText(self.debug_info_src_id_extra, .{});
         tl.deinit();
+
+        if (try gui.button(@src(), 0, "Toggle Mouse Under", .{})) {
+            dum = !dum;
+        }
+
+        var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both, .background = false });
+        defer scroll.deinit();
+
+        var iter = std.mem.split(u8, self.debug_under_mouse_info, "\n");
+        var i: usize = 0;
+        while (iter.next()) |line| : (i += 1) {
+            if (line.len > 0) {
+                var hbox = try gui.box(@src(), i, .horizontal, .{});
+                defer hbox.deinit();
+
+                if (try gui.buttonIcon(@src(), i, 12, "find", gui.icons.papirus.actions.edit_find_symbolic, .{})) {
+                    self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(line, ' '), 16) catch 0;
+                }
+
+                try gui.labelNoFmt(@src(), i, line, .{ .gravity = .left });
+            }
+        }
     }
 
     // End of this window gui's rendering.  Renders retained dialogs and all
@@ -3984,6 +4022,7 @@ pub const TextLayoutWidget = struct {
     corners: [4]?Rect = [_]?Rect{null} ** 4,
     insert_pt: Point = Point{},
     prevClip: Rect = Rect{},
+    first_line: bool = true,
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Self {
         const options = defaults.override(opts);
@@ -4013,11 +4052,10 @@ pub const TextLayoutWidget = struct {
     pub fn addText(self: *Self, text: []const u8, opts: Options) !void {
         const options = self.wd.options.override(opts);
         var iter = std.mem.split(u8, text, "\n");
-        var first: bool = true;
         const lineskip = try options.font().lineSkip();
         while (iter.next()) |line| {
-            if (first) {
-                first = false;
+            if (self.first_line) {
+                self.first_line = false;
             } else {
                 self.insert_pt.y += lineskip;
                 self.insert_pt.x = 0;
@@ -6727,7 +6765,7 @@ pub const WidgetData = struct {
 
     pub fn register(self: *const WidgetData, name: []const u8, rectScale: ?RectScale) !void {
         var cw = currentWindow();
-        if (cw.debug_window_show or self.id == cw.debug_widget_id) {
+        if (cw.debug_under_mouse or self.id == cw.debug_widget_id) {
             var rs: RectScale = undefined;
             if (rectScale) |in| {
                 rs = in;
@@ -6735,12 +6773,22 @@ pub const WidgetData = struct {
                 rs = self.parent.screenRectScale(self.rect);
             }
 
-            if (rs.r.contains(cw.mouse_pt)) {
-                //std.debug.print("{x} {s}\n", .{ self.id, name });
+            if (cw.debug_under_mouse and
+                rs.r.contains(cw.mouse_pt) and
+                // prevents stuff in scroll area outside viewport being caught
+                clipGet().contains(cw.mouse_pt) and
+                // prevents stuff in lower subwindows being caught
+                cw.windowFor(cw.mouse_pt) == subwindowCurrentId())
+            {
+                var old = cw.debug_under_mouse_info;
+                cw.debug_under_mouse_info = try std.fmt.allocPrint(cw.gpa, "{s}\n{x} {s}", .{ old, self.id, name });
+                if (old.len > 0) {
+                    cw.gpa.free(old);
+                }
             }
 
             if (self.id == cw.debug_widget_id) {
-                cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x}\n{s}\n{}", .{ self.id, name, rs.r });
+                cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x} {s}\n\n{}", .{ self.id, name, rs.r });
                 try pathAddRect(rs.r.insetAll(0), .{});
                 var color = themeGet().color_err_bg;
                 try pathStrokeAfter(true, true, 3 * rs.s, .none, color);
@@ -7395,7 +7443,7 @@ pub const examples = struct {
             const start = "Notice that the text in this box is wrapping around the buttons in the corners.";
             try tl.addText(start, .{ .font_style = .title_4 });
 
-            try tl.addText("\n\n", .{});
+            try tl.addText("\n", .{});
 
             const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
             try tl.addText(lorem, .{});
