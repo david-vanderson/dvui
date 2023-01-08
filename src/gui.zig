@@ -373,6 +373,11 @@ pub fn themeSet(theme: *const Theme) void {
     currentWindow().theme = theme;
 }
 
+pub fn toggleDebugWindow() void {
+    var cw = currentWindow();
+    cw.debug_window_show = !cw.debug_window_show;
+}
+
 pub const InstallOptions = struct {
     process_events: bool = true,
     show_focus: bool = true,
@@ -1858,6 +1863,11 @@ pub const Window = struct {
     path: std.ArrayList(Point) = undefined,
     rendering: bool = false,
 
+    debug_window_show: bool = false,
+    debug_widget_id: u32 = 0,
+    debug_info_name_rect: []u8 = "",
+    debug_info_src_id_extra: []u8 = "",
+
     pub fn init(
         src: std.builtin.SourceLocation,
         id_extra: usize,
@@ -2179,6 +2189,8 @@ pub const Window = struct {
         current_window = self;
 
         self.cursor_requested = .arrow;
+        self.debug_info_name_rect = "";
+        self.debug_info_src_id_extra = "";
 
         self.arena = arena;
         self.path = std.ArrayList(Point).init(arena);
@@ -2646,6 +2658,31 @@ pub const Window = struct {
         }
     }
 
+    fn debugWindowShow(self: *Self) !void {
+        var float = try gui.floatingWindow(@src(), 0, false, null, &self.debug_window_show, .{ .min_size_content = .{ .w = 300, .h = 400 } });
+        defer float.deinit();
+
+        try gui.windowHeader("GUI Debug", "", &self.debug_window_show);
+
+        {
+            var hbox = try gui.box(@src(), 0, .horizontal, .{});
+            defer hbox.deinit();
+
+            try gui.labelNoFmt(@src(), 0, "Hex id of widget to highlight:", .{ .gravity = .left });
+
+            var buf = [_]u8{0} ** 20;
+            _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
+            try gui.textEntry(@src(), 0, &buf, .{});
+
+            self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(&buf, 0), 16) catch 0;
+        }
+
+        var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal });
+        try tl.addText(self.debug_info_name_rect, .{});
+        try tl.addText(self.debug_info_src_id_extra, .{});
+        tl.deinit();
+    }
+
     // End of this window gui's rendering.  Renders retained dialogs and all
     // deferred rendering (subwindows, focus highlights).  Returns micros we
     // want between last call to begin() and next call to begin() (or null
@@ -2653,6 +2690,10 @@ pub const Window = struct {
     // get a useful time to wait between render loops.
     pub fn end(self: *Self) !?u32 {
         try self.dialogsShow();
+
+        if (self.debug_window_show) {
+            try self.debugWindowShow();
+        }
 
         const oldsnap = self.snap_to_pixels;
         const oldclip = clipGet();
@@ -2837,8 +2878,6 @@ pub const PopupWidget = struct {
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
         _ = opts; // popup only processes events after the fact in deinit
-        debug("{x} Popup {}", .{ self.wd.id, self.wd.rect });
-
         _ = parentSet(self.widget());
 
         self.prev_windowId = subwindowCurrentSet(self.wd.id);
@@ -2862,6 +2901,7 @@ pub const PopupWidget = struct {
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
         try subwindowAdd(self.wd.id, rs.r, false, false);
+        try self.wd.register("Popup", rs);
 
         // clip to just our window (using clipSet since we are not inside our parent)
         self.prevClip = clipGet();
@@ -3141,8 +3181,6 @@ pub const FloatingWindowWidget = struct {
             self.wd.rect.h = 0;
         }
 
-        debug("{x} FloatingWindow {}", .{ self.wd.id, self.wd.rect });
-
         _ = parentSet(self.widget());
         self.prev_windowId = subwindowCurrentSet(self.wd.id);
 
@@ -3162,6 +3200,7 @@ pub const FloatingWindowWidget = struct {
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
         try subwindowAdd(self.wd.id, rs.r, self.modal, self.stay_above_parent);
+        try self.wd.register("FloatingWindow", rs);
 
         if (self.modal) {
             // paint over everything below
@@ -3374,7 +3413,7 @@ pub const FloatingWindowWidget = struct {
         self.layout.deinit();
 
         if (!firstFrame(self.wd.id)) {
-            // if firstFrame, we already did this in init
+            // if firstFrame, we already did this in install
             dataSet(self.wd.id, "_rect", self.wd.rect);
             if (self.io_rect) |ior| {
                 // send rect back to user
@@ -3718,7 +3757,7 @@ pub const PanedWidget = struct {
     }
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
-        debug("{x} Paned {}", .{ self.wd.id, self.wd.rect });
+        try self.wd.register("Paned", null);
 
         if (opts.process_events) {
             var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
@@ -3954,7 +3993,7 @@ pub const TextLayoutWidget = struct {
     pub fn install(self: *Self, opts: InstallOptions) !void {
         _ = opts;
         _ = parentSet(self.widget());
-        debug("{x} TextLayout {}", .{ self.wd.id, self.wd.rect });
+        try self.wd.register("TextLayout", null);
 
         const rs = self.wd.contentRectScale();
 
@@ -3997,14 +4036,15 @@ pub const TextLayoutWidget = struct {
         var container_width = rect.w;
         if (self.screenRectScale(rect).r.empty()) {
             // if we are not being shown at all, probably this is the first
-            // frame for us and we should calculate our min size assuming we
-            // get our min size
+            // frame for us and we should calculate our min height assuming we
+            // get at least our min width
 
             // do this dance so we aren't repeating the contentRect
             // calculations here
-            self.wd.rect.w = self.wd.min_size.w;
+            const given_width = self.wd.rect.w;
+            self.wd.rect.w = math.max(given_width, self.wd.min_size.w);
             container_width = self.wd.contentRect().w;
-            self.wd.rect = rect;
+            self.wd.rect.w = given_width;
         }
 
         while (txt.len > 0) {
@@ -4172,7 +4212,7 @@ pub const ContextWidget = struct {
     pub fn install(self: *Self, opts: InstallOptions) !void {
         self.process_events = opts.process_events;
         _ = parentSet(self.widget());
-        debug("{x} Context {}", .{ self.wd.id, self.wd.rect });
+        try self.wd.register("Context", null);
         try self.wd.borderAndBackground();
     }
 
@@ -4289,7 +4329,7 @@ pub const OverlayWidget = struct {
     pub fn install(self: *Self, opts: InstallOptions) !void {
         _ = opts;
         _ = parentSet(self.widget());
-        debug("{x} Overlay {}", .{ self.wd.id, self.wd.rect });
+        try self.wd.register("Overlay", null);
         try self.wd.borderAndBackground();
     }
 
@@ -4373,8 +4413,7 @@ pub const BoxWidget = struct {
     pub fn install(self: *Self, opts: InstallOptions) !void {
         _ = opts;
 
-        debug("{x} Box {}", .{ self.wd.id, self.wd.rect });
-
+        try self.wd.register("Box", null);
         try self.wd.borderAndBackground();
 
         // our rect for children has to start at 0,0
@@ -4689,7 +4728,7 @@ pub const ScrollContainerWidget = struct {
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
         self.process_events = opts.process_events;
-        debug("{x} ScrollArea {}", .{ self.wd.id, self.wd.rect });
+        try self.wd.register("ScrollContainer", null);
 
         // user code might have changed our rect
         const crect = self.wd.contentRect();
@@ -4867,8 +4906,7 @@ pub const ScrollBarWidget = struct {
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
         self.process_events = opts.process_events;
-        debug("{x} ScrollBar {}", .{ self.wd.id, self.wd.rect });
-
+        try self.wd.register("ScrollBar", null);
         try self.wd.borderAndBackground();
 
         const captured = captureMouseMaintain(self.wd.id);
@@ -5008,12 +5046,13 @@ pub const ScrollBarWidget = struct {
 
 pub fn separator(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) !void {
     const defaults: Options = .{
+        .background = true, // TODO: remove this when border and background are no longer coupled
         .border = .{ .x = 1, .y = 1, .w = 0, .h = 0 },
         .color_style = .content,
     };
 
     var wd = WidgetData.init(src, id_extra, defaults.override(opts));
-    debug("{x} Separator {}", .{ wd.id, wd.rect });
+    try wd.register("Separator", null);
     try wd.borderAndBackground();
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
@@ -5024,7 +5063,7 @@ pub fn spacer(src: std.builtin.SourceLocation, id_extra: usize, size: Size, opts
         std.debug.print("warning: spacer options had min_size but is being overwritten\n", .{});
     }
     var wd = WidgetData.init(src, id_extra, opts.override(.{ .min_size_content = size }));
-    debug("{x} Spacer {}", .{ wd.id, wd.rect });
+    wd.register("Spacer", null) catch {};
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
     return wd;
@@ -5036,7 +5075,7 @@ pub fn spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
     };
     const options = defaults.override(opts);
     var wd = WidgetData.init(src, id_extra, options);
-    debug("{x} Spinner {}", .{ wd.id, wd.rect });
+    try wd.register("Spinner", null);
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
 
@@ -5094,7 +5133,7 @@ pub const ScaleWidget = struct {
     pub fn install(self: *Self, opts: InstallOptions) !void {
         _ = opts;
         _ = parentSet(self.widget());
-        debug("{x} Scale {d} {}", .{ self.wd.id, self.scale, self.wd.rect });
+        try self.wd.register("Scale", null);
         try self.wd.borderAndBackground();
     }
 
@@ -5185,8 +5224,7 @@ pub const MenuWidget = struct {
         _ = opts;
         _ = parentSet(self.widget());
         self.parentMenu = menuSet(self);
-        debug("{x} Menu {}", .{ self.wd.id, self.wd.rect });
-
+        try self.wd.register("Menu", null);
         try self.wd.borderAndBackground();
 
         self.box = BoxWidget.init(@src(), 0, self.dir, self.wd.options.strip());
@@ -5324,7 +5362,7 @@ pub const MenuItemWidget = struct {
     }
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
-        debug("{x} MenuItem {}", .{ self.wd.id, self.wd.rect });
+        try self.wd.register("MenuItem", null);
 
         if (self.wd.visible()) {
             try tabIndexSet(self.wd.id, self.wd.options.tab_index);
@@ -5526,7 +5564,7 @@ pub const LabelWidget = struct {
 
     pub fn show(self: *Self, opts: InstallOptions) !void {
         _ = opts;
-        debug("{x} Label \"{s:<10}\" {}", .{ self.wd.id, self.label_str, self.wd.rect });
+        try self.wd.register("Label", null);
         try self.wd.borderAndBackground();
 
         var rect = placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
@@ -5583,7 +5621,8 @@ pub const IconWidget = struct {
 
     pub fn show(self: *Self, opts: InstallOptions) !void {
         _ = opts;
-        debug("{x} Icon \"{s:<10}\" {} {d}", .{ self.wd.id, self.name, self.wd.rect, self.wd.options.rotationGet() });
+        try self.wd.register("Icon", null);
+        //debug("{x} Icon \"{s:<10}\" {} {d}", .{ self.wd.id, self.name, self.wd.rect, self.wd.options.rotationGet() });
 
         try self.wd.borderAndBackground();
 
@@ -5616,8 +5655,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, id_extra: usize, opts: 
     size = size.scale(1.0 / ss);
 
     var wd = WidgetData.init(src, id_extra, opts.override(.{ .min_size_content = size }));
-
-    debug("{x} debugFontAtlases {} {}", .{ wd.id, wd.rect, opts.color() });
+    try wd.register("debugFontAtlases", null);
 
     try wd.borderAndBackground();
 
@@ -5650,7 +5688,7 @@ pub const ButtonWidget = struct {
     }
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
-        debug("{x} Button {}", .{ self.wd.id, self.wd.rect });
+        try self.wd.register("Button", null);
 
         if (self.wd.visible()) {
             try tabIndexSet(self.wd.id, self.wd.options.tab_index);
@@ -5813,8 +5851,6 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     try bw.install(.{ .show_focus = false });
     defer bw.deinit();
 
-    debug("Checkbox {?s}", .{label_str});
-
     if (bw.clicked()) {
         target.* = !target.*;
     }
@@ -5910,7 +5946,8 @@ pub const TextEntryWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, text: []u8, opts: Options) Self {
         var self = Self{};
-        const options = defaults.override(opts);
+        const msize = opts.font().textSize("M") catch unreachable;
+        const options = defaults.override(.{ .min_size_content = .{ .w = msize.w * 10, .h = msize.h } }).override(opts);
 
         self.wd = WidgetData.init(src, id_extra, options);
 
@@ -5922,7 +5959,7 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
-        debug("{x} Text {}", .{ self.wd.id, self.wd.rect });
+        try self.wd.register("TextEntry", null);
 
         if (self.wd.visible()) {
             try tabIndexSet(self.wd.id, self.wd.options.tab_index);
@@ -6680,7 +6717,35 @@ pub const WidgetData = struct {
             self.rect = self.parent.rectFor(self.id, self.min_size, self.options.expandGet(), self.options.gravityGet());
         }
 
+        var cw = currentWindow();
+        if (self.id == cw.debug_widget_id) {
+            cw.debug_info_src_id_extra = std.fmt.allocPrint(cw.arena, "{s}:{d}\nid_extra {d}", .{ src.file, src.line, id_extra }) catch "";
+        }
+
         return self;
+    }
+
+    pub fn register(self: *const WidgetData, name: []const u8, rectScale: ?RectScale) !void {
+        var cw = currentWindow();
+        if (cw.debug_window_show or self.id == cw.debug_widget_id) {
+            var rs: RectScale = undefined;
+            if (rectScale) |in| {
+                rs = in;
+            } else {
+                rs = self.parent.screenRectScale(self.rect);
+            }
+
+            if (rs.r.contains(cw.mouse_pt)) {
+                //std.debug.print("{x} {s}\n", .{ self.id, name });
+            }
+
+            if (self.id == cw.debug_widget_id) {
+                cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x}\n{s}\n{}", .{ self.id, name, rs.r });
+                try pathAddRect(rs.r.insetAll(0), .{});
+                var color = themeGet().color_err_bg;
+                try pathStrokeAfter(true, true, 3 * rs.s, .none, color);
+            }
+        }
     }
 
     pub fn visible(self: *const WidgetData) bool {
@@ -6690,7 +6755,10 @@ pub const WidgetData = struct {
     pub fn borderAndBackground(self: *const WidgetData) !void {
         var bg = self.options.backgroundGet();
         if (self.options.borderGet().nonZero()) {
-            bg = true;
+            if (!bg) {
+                std.debug.print("borderAndBackground: {x} forcing background on to support border\n", .{self.id});
+                bg = true;
+            }
             const rs = self.borderRectScale();
             try pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
             var col = Color.lerp(self.options.color_bg(), 0.3, self.options.color());
@@ -6759,6 +6827,8 @@ pub const WidgetData = struct {
             // If the size we got was exactly our previous min size then our min size
             // was a binding constraint.  So if our min size changed it might cause
             // layout changes.
+
+            //debug("{x} minSizeSetAndCue {} {} {}", .{ self.id, self.rect, ms, self.min_size });
 
             // If this was like a Label where we knew the min size before getting our
             // rect, then either our min size is the same as previous, or our rect is
@@ -7152,7 +7222,7 @@ pub const examples = struct {
 
             var ti = gui.toastsFor(float.data().id);
             if (ti) |*it| {
-                var toast_win = FloatingWindowWidget.init(@src(), 0, false, null, null, .{ .background = false });
+                var toast_win = FloatingWindowWidget.init(@src(), 0, false, null, null, .{ .background = false, .border = .{} });
                 defer toast_win.deinit();
 
                 toast_win.data().rect = gui.placeInMargin(float.data().rect, toast_win.data().rect.size(), .none, .down, .{ .h = 60 });
@@ -7168,9 +7238,6 @@ pub const examples = struct {
                 }
             }
 
-            var hbox = try gui.box(@src(), 0, .horizontal, .{ .expand = .both });
-            defer hbox.deinit();
-
             var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both, .background = false });
             defer scroll.deinit();
 
@@ -7179,6 +7246,10 @@ pub const examples = struct {
 
             var vbox = try gui.box(@src(), 0, .vertical, .{ .expand = .horizontal });
             defer vbox.deinit();
+
+            if (try gui.button(@src(), 0, "Toggle Debug Window", .{})) {
+                gui.toggleDebugWindow();
+            }
 
             if (try gui.expander(@src(), 0, "Basic Widgets", .{ .expand = .horizontal })) {
                 try basicWidgets();
