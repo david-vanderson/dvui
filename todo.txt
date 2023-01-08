@@ -1,8 +1,6 @@
 
-debugging features:
-- have an id, show me where it is, what type it is, min size, etc.
-- debugging window that shows a treeview of whatever is under the mouse?
-  - need to add a register step just inside install(), can put name of widget there
+need TextLayout.addText to not assume that each call is a new line
+- should be able to add text one word at a time, and adding \n works
 
 try wrapping toasts (or window?) in an animating widget
 - animates min vertical size up and down
