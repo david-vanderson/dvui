@@ -482,9 +482,17 @@ pub const Font = struct {
                 break;
             }
 
+            // record that we processed this codepoint
+            ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+
+            if (codepoint == '\n') {
+                // newlines always terminate, and don't use any space
+                break;
+            }
+
+            // update space taken by glyph
             tw = maxx - minx;
             th = maxy - miny;
-            ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
             x += gi.advance;
         }
 
@@ -2694,7 +2702,7 @@ pub const Window = struct {
 
         var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
         try tl.addText(self.debug_info_name_rect, .{});
-        try tl.addText("\n", .{});
+        try tl.addText("\n\n", .{});
         try tl.addText(self.debug_info_src_id_extra, .{});
         tl.deinit();
 
@@ -4051,21 +4059,6 @@ pub const TextLayoutWidget = struct {
 
     pub fn addText(self: *Self, text: []const u8, opts: Options) !void {
         const options = self.wd.options.override(opts);
-        var iter = std.mem.split(u8, text, "\n");
-        const lineskip = try options.font().lineSkip();
-        while (iter.next()) |line| {
-            if (self.first_line) {
-                self.first_line = false;
-            } else {
-                self.insert_pt.y += lineskip;
-                self.insert_pt.x = 0;
-            }
-            try self.addTextNoNewlines(line, options);
-        }
-    }
-
-    pub fn addTextNoNewlines(self: *Self, text: []const u8, opts: Options) !void {
-        const options = self.wd.options.override(opts);
         const msize = try options.font().textSize("m");
         const lineskip = try options.font().lineSkip();
         var txt = text;
@@ -4108,7 +4101,12 @@ pub const TextLayoutWidget = struct {
             }
 
             var end: usize = undefined;
+
+            // get slice of text that fits within width or ends with newline
+            // - always get at least 1 codepoint so we make progress
             var s = try options.font().textSizeEx(txt, width, &end);
+
+            const newline = (txt[end - 1] == '\n');
 
             //std.debug.print("{d} 1 txt to {d} \"{s}\"\n", .{ container_width, end, txt[0..end] });
 
@@ -4119,7 +4117,10 @@ pub const TextLayoutWidget = struct {
                 continue;
             }
 
-            if (end < txt.len and linewidth > (10 * msize.w)) {
+            // try to break on space if:
+            // - slice ended due to width (not newline)
+            // - linewidth is long enough (otherwise too narrow to break on space)
+            if (end < txt.len and !newline and linewidth > (10 * msize.w)) {
                 const space: []const u8 = &[_]u8{' '};
                 // now we are under the length limit but might be in the middle of a word
                 // look one char further because we might be right at the end of a word
@@ -4140,7 +4141,12 @@ pub const TextLayoutWidget = struct {
             if (self.insert_pt.y < rect.h) {
                 const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.h - self.insert_pt.y) });
                 //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
-                try renderText(options.font(), txt[0..end], rs, options.color());
+
+                if (newline) {
+                    try renderText(options.font(), txt[0 .. end - 1], rs, options.color());
+                } else {
+                    try renderText(options.font(), txt[0..end], rs, options.color());
+                }
             }
 
             // even if we don't actually render, need to update insert_pt and minSize
@@ -4152,7 +4158,7 @@ pub const TextLayoutWidget = struct {
             txt = txt[end..];
 
             // move insert_pt to next line if we have more text
-            if (txt.len > 0) {
+            if (txt.len > 0 or newline) {
                 self.insert_pt.y += lineskip;
                 self.insert_pt.x = 0;
             }
