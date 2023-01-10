@@ -7064,32 +7064,32 @@ pub const Widget = struct {
         const gen = struct {
             fn dataImpl(ptr: *anyopaque) *WidgetData {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, dataFn, .{self});
+                return @call(.always_inline, dataFn, .{self});
             }
 
             fn rectForImpl(ptr: *anyopaque, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, rectForFn, .{ self, id, min_size, e, g });
+                return @call(.always_inline, rectForFn, .{ self, id, min_size, e, g });
             }
 
             fn screenRectScaleImpl(ptr: *anyopaque, r: Rect) RectScale {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, screenRectScaleFn, .{ self, r });
+                return @call(.always_inline, screenRectScaleFn, .{ self, r });
             }
 
             fn minSizeForChildImpl(ptr: *anyopaque, s: Size) void {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, minSizeForChildFn, .{ self, s });
+                return @call(.always_inline, minSizeForChildFn, .{ self, s });
             }
 
             fn processEventImpl(ptr: *anyopaque, iter: *EventIterator, e: *Event) void {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, processEventFn, .{ self, iter, e });
+                return @call(.always_inline, processEventFn, .{ self, iter, e });
             }
 
             fn bubbleEventImpl(ptr: *anyopaque, e: *Event) void {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, bubbleEventFn, .{ self, e });
+                return @call(.always_inline, bubbleEventFn, .{ self, e });
             }
 
             const vtable = VTable{
@@ -7176,37 +7176,37 @@ pub const Backend = struct {
         const gen = struct {
             fn beginImpl(ptr: *anyopaque, arena: std.mem.Allocator) void {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, beginFn, .{ self, arena });
+                return @call(.always_inline, beginFn, .{ self, arena });
             }
 
             fn endImpl(ptr: *anyopaque) void {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, endFn, .{self});
+                return @call(.always_inline, endFn, .{self});
             }
 
             fn pixelSizeImpl(ptr: *anyopaque) Size {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, pixelSizeFn, .{self});
+                return @call(.always_inline, pixelSizeFn, .{self});
             }
 
             fn windowSizeImpl(ptr: *anyopaque) Size {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, windowSizeFn, .{self});
+                return @call(.always_inline, windowSizeFn, .{self});
             }
 
             fn renderGeometryImpl(ptr: *anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, renderGeometryFn, .{ self, texture, vtx, idx });
+                return @call(.always_inline, renderGeometryFn, .{ self, texture, vtx, idx });
             }
 
             fn textureCreateImpl(ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, textureCreateFn, .{ self, pixels, width, height });
+                return @call(.always_inline, textureCreateFn, .{ self, pixels, width, height });
             }
 
             fn textureDestroyImpl(ptr: *anyopaque, texture: *anyopaque) void {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, textureDestroyFn, .{ self, texture });
+                return @call(.always_inline, textureDestroyFn, .{ self, texture });
             }
 
             const vtable = VTable{
