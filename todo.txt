@@ -1,10 +1,6 @@
 
-need TextLayout.addText to not assume that each call is a new line
-- should be able to add text one word at a time, and adding \n works
-
 try wrapping toasts (or window?) in an animating widget
 - animates min vertical size up and down
-- animates alpha up and down
 
 example toast that includes "undo"
 

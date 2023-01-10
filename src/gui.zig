@@ -30,6 +30,8 @@ pub const Theme = struct {
     name: []const u8,
     dark: bool,
 
+    alpha: f32 = 1.0,
+
     color_accent: Color,
     color_accent_bg: Color,
     color_success: Color,
@@ -54,7 +56,7 @@ pub const Theme = struct {
     font_title_4: Font,
 };
 
-pub const theme_Adwaita = Theme{
+pub var theme_Adwaita = Theme{
     .name = "Adwaita",
     .dark = false,
     .font_body = Font{ .size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
@@ -80,7 +82,7 @@ pub const theme_Adwaita = Theme{
     .color_control_bg = Color{ .r = 0xe0, .g = 0xe0, .b = 0xe0 },
 };
 
-pub const theme_Adwaita_Dark = Theme{
+pub var theme_Adwaita_Dark = Theme{
     .name = "Adwaita Dark",
     .dark = true,
     .font_body = Font{ .size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
@@ -122,20 +124,13 @@ pub const Options = struct {
         }
     };
 
-    pub const Gravity = enum {
-        upleft,
-        up,
-        upright,
-        left,
-        center,
-        right,
-        downleft,
-        down,
-        downright,
+    pub const Gravity = struct {
+        // wraps Options.gravity_horz and Options.gravity_vert
+        h: f32,
+        v: f32,
     };
 
     pub const FontStyle = enum {
-        custom,
         body,
         heading,
         caption,
@@ -148,7 +143,6 @@ pub const Options = struct {
     };
 
     pub const ColorStyle = enum {
-        custom,
         accent,
         success,
         err,
@@ -167,18 +161,21 @@ pub const Options = struct {
     // default is .none
     expand: ?Expand = null,
 
-    // default is .upleft
-    gravity: ?Gravity = null,
+    // [0, 1] default is 0 (left)
+    gravity_horz: ?f32 = null,
+
+    // [0, 1] default is 0 (top)
+    gravity_vert: ?f32 = null,
 
     // widgets will be focusable by keyboard only if this is set
     tab_index: ?u16 = null,
 
     // only used if .color_style == .custom
-    color_custom: ?Color = null,
-    color_custom_bg: ?Color = null,
+    color: ?Color = null,
+    color_bg: ?Color = null,
 
     // only used if .font_style == .custom
-    font_custom: ?Font = null,
+    font: ?Font = null,
 
     // only used for icons, rotates around center, only rotates drawing
     rotation: ?f32 = null,
@@ -200,53 +197,50 @@ pub const Options = struct {
     background: ?bool = null,
     font_style: ?FontStyle = null,
 
-    pub fn color(self: *const Options) Color {
-        const style = self.color_style orelse .control;
-        const col =
-            switch (style) {
-            .custom => self.color_custom,
-            .accent => themeGet().color_accent,
-            .success => themeGet().color_success,
-            .err => themeGet().color_err,
-            .content => themeGet().color_content,
-            .window => themeGet().color_window,
-            .control => themeGet().color_control,
-        };
+    pub fn colorGet(self: *const Options) Color {
+        var ret: Color = undefined;
 
-        if (col) |cc| {
-            return cc;
+        if (self.color) |cc| {
+            ret = cc;
         } else {
-            log.debug("Options.color() couldn't find a color, substituting magenta", .{});
-            return Color{ .r = 255, .g = 0, .b = 255, .a = 255 };
+            ret = switch (self.color_style orelse .control) {
+                .accent => themeGet().color_accent,
+                .success => themeGet().color_success,
+                .err => themeGet().color_err,
+                .content => themeGet().color_content,
+                .window => themeGet().color_window,
+                .control => themeGet().color_control,
+            };
         }
+
+        return ret.transparent(themeGet().alpha);
     }
 
-    pub fn color_bg(self: *const Options) Color {
-        const style = self.color_style orelse .control;
-        const col =
-            switch (style) {
-            .custom => self.color_custom_bg,
-            .accent => themeGet().color_accent_bg,
-            .success => themeGet().color_success_bg,
-            .err => themeGet().color_err_bg,
-            .content => themeGet().color_content_bg,
-            .window => themeGet().color_window_bg,
-            .control => themeGet().color_control_bg,
-        };
+    pub fn color_bgGet(self: *const Options) Color {
+        var ret: Color = undefined;
 
-        if (col) |cc| {
-            return cc;
+        if (self.color_bg) |cc| {
+            ret = cc;
         } else {
-            log.debug("Options.color_bg() couldn't find a color, substituting green", .{});
-            return Color{ .r = 0, .g = 255, .b = 0, .a = 255 };
+            ret = switch (self.color_style orelse .control) {
+                .accent => themeGet().color_accent_bg,
+                .success => themeGet().color_success_bg,
+                .err => themeGet().color_err_bg,
+                .content => themeGet().color_content_bg,
+                .window => themeGet().color_window_bg,
+                .control => themeGet().color_control_bg,
+            };
         }
+
+        return ret.transparent(themeGet().alpha);
     }
 
-    pub fn font(self: *const Options) Font {
-        const style = self.font_style orelse .body;
-        const f =
-            switch (style) {
-            .custom => self.font_custom,
+    pub fn fontGet(self: *const Options) Font {
+        if (self.font) |ff| {
+            return ff;
+        }
+
+        return switch (self.font_style orelse .body) {
             .body => themeGet().font_body,
             .heading => themeGet().font_heading,
             .caption => themeGet().font_caption,
@@ -257,13 +251,6 @@ pub const Options = struct {
             .title_3 => themeGet().font_title_3,
             .title_4 => themeGet().font_title_4,
         };
-
-        if (f) |ff| {
-            return ff;
-        } else {
-            log.debug("Options.font() couldn't find a font, falling back", .{});
-            return Font{ .name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 12 };
-        }
     }
 
     pub fn expandGet(self: *const Options) Expand {
@@ -271,7 +258,7 @@ pub const Options = struct {
     }
 
     pub fn gravityGet(self: *const Options) Gravity {
-        return self.gravity orelse .upleft;
+        return .{ .h = self.gravity_horz orelse 0.0, .v = self.gravity_vert orelse 0.0 };
     }
 
     pub fn marginGet(self: *const Options) Rect {
@@ -338,10 +325,11 @@ pub const Options = struct {
 
             // keep the rest
             .expand = self.expand,
-            .gravity = self.gravity,
-            .color_custom = self.color_custom,
-            .color_custom_bg = self.color_custom_bg,
-            .font_custom = self.font_custom,
+            .gravity_horz = self.gravity_horz,
+            .gravity_vert = self.gravity_vert,
+            .color = self.color,
+            .color_bg = self.color_bg,
+            .font = self.font,
             .color_style = self.color_style,
             .font_style = self.font_style,
             .rotation = self.rotation,
@@ -365,11 +353,11 @@ pub const Options = struct {
     //}
 };
 
-pub fn themeGet() *const Theme {
+pub fn themeGet() *Theme {
     return currentWindow().theme;
 }
 
-pub fn themeSet(theme: *const Theme) void {
+pub fn themeSet(theme: *Theme) void {
     currentWindow().theme = theme;
 }
 
@@ -1467,11 +1455,7 @@ pub fn minSize(id: u32, min_size: Size) Size {
 }
 
 pub fn placeIn(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    return placeInMargin(avail, min_size, e, g, .{});
-}
-
-pub fn placeInMargin(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravity, margin: Rect) Rect {
-    var size = min_size.pad(margin);
+    var size = min_size;
 
     if (e.horizontal()) {
         size.w = avail.w;
@@ -1482,19 +1466,10 @@ pub fn placeInMargin(avail: Rect, min_size: Size, e: Options.Expand, g: Options.
     }
 
     var r = avail.shrinkToSize(size);
-    switch (g) {
-        .upleft, .left, .downleft => r.x = avail.x,
-        .up, .center, .down => r.x = avail.x + (avail.w - r.w) / 2.0,
-        .upright, .right, .downright => r.x = avail.x + (avail.w - r.w),
-    }
+    r.x = avail.x + g.h * (avail.w - r.w);
+    r.y = avail.y + g.v * (avail.h - r.h);
 
-    switch (g) {
-        .upleft, .up, .upright => r.y = avail.y,
-        .left, .center, .right => r.y = avail.y + (avail.h - r.h) / 2.0,
-        .downleft, .down, .downright => r.y = avail.y + (avail.h - r.h),
-    }
-
-    return r.inset(margin);
+    return r;
 }
 
 pub fn events() []Event {
@@ -1600,8 +1575,8 @@ pub const EventIterator = struct {
 
 pub const Animation = struct {
     used: bool = true,
-    start_val: f32,
-    end_val: f32,
+    start_val: f32 = 0,
+    end_val: f32 = 1,
     start_time: i32 = 0,
     end_time: i32,
 
@@ -1643,13 +1618,24 @@ pub fn animationGet(id: u32, key: []const u8) ?Animation {
     return null;
 }
 
+// returns true only on the frame where the animation expired
+pub fn animationDone(id: u32, key: []const u8) bool {
+    if (animationGet(id, key)) |a| {
+        if (a.end_time <= 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 pub fn timer(id: u32, micros: i32) !void {
     try currentWindow().timer(id, micros);
 }
 
 pub fn timerGet(id: u32) ?i32 {
     if (animationGet(id, "_timer")) |a| {
-        return a.start_time;
+        return a.end_time;
     } else {
         return null;
     }
@@ -1661,8 +1647,8 @@ pub fn timerExists(id: u32) bool {
 
 // returns true only on the frame where the timer expired
 pub fn timerDone(id: u32) bool {
-    if (timerGet(id)) |start| {
-        if (start <= 0) {
+    if (timerGet(id)) |end_time| {
+        if (end_time <= 0) {
             return true;
         }
     }
@@ -1808,6 +1794,7 @@ pub const Window = struct {
     focused_subwindowId: u32 = 0,
 
     snap_to_pixels: bool = true,
+    alpha: f32 = 1.0,
 
     events: std.ArrayList(Event) = undefined,
     // mouse_pt tracks the last position we got a mouse event for
@@ -1839,7 +1826,7 @@ pub const Window = struct {
 
     menu_current: ?*MenuWidget = null,
     popup_current: ?*PopupWidget = null,
-    theme: *const Theme = &theme_Adwaita,
+    theme: *Theme = &theme_Adwaita,
 
     min_sizes: std.AutoHashMap(u32, SavedSize),
     data_mutex: std.Thread.Mutex,
@@ -2622,7 +2609,9 @@ pub const Window = struct {
     }
 
     pub fn timer(self: *Self, id: u32, micros: i32) !void {
-        const a = Animation{ .start_val = 0, .end_val = 0, .start_time = micros, .end_time = micros };
+        // when start_time is in the future, we won't spam frames, so this will
+        // maybe cause a single frame and then expire
+        const a = Animation{ .start_time = micros, .end_time = micros };
         const h = hashIdKey(id, "_timer");
         try self.animations.put(h, a);
     }
@@ -2691,7 +2680,7 @@ pub const Window = struct {
             var hbox = try gui.box(@src(), 0, .horizontal, .{});
             defer hbox.deinit();
 
-            try gui.labelNoFmt(@src(), 0, "Hex id of widget to highlight:", .{ .gravity = .left });
+            try gui.labelNoFmt(@src(), 0, "Hex id of widget to highlight:", .{ .gravity_vert = 0.5 });
 
             var buf = [_]u8{0} ** 20;
             _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
@@ -2724,7 +2713,7 @@ pub const Window = struct {
                     self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(line, ' '), 16) catch 0;
                 }
 
-                try gui.labelNoFmt(@src(), i, line, .{ .gravity = .left });
+                try gui.labelNoFmt(@src(), i, line, .{ .gravity_vert = 0.5 });
             }
         }
     }
@@ -3172,7 +3161,7 @@ pub const FloatingWindowWidget = struct {
                 self.auto_pos = (self.wd.rect.x == 0 and self.wd.rect.y == 0);
                 if (self.auto_pos and !self.auto_size) {
                     self.auto_pos = false;
-                    self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .center);
+                    self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .{ .h = 0.5, .v = 0.5 });
                 }
             }
         }
@@ -3193,7 +3182,7 @@ pub const FloatingWindowWidget = struct {
                 // only position ourselves once by default
                 self.auto_pos = false;
 
-                self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .center);
+                self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .{ .h = 0.5, .v = 0.5 });
 
                 //std.debug.print("autopos to {}\n", .{self.wd.rect});
             }
@@ -3251,7 +3240,7 @@ pub const FloatingWindowWidget = struct {
         if (self.modal) {
             // paint over everything below
             try pathAddRect(windowRectPixels(), Rect.all(0));
-            var col = self.options.color();
+            var col = self.options.colorGet();
             col.a = 100;
             try pathFillConvex(col);
         }
@@ -3483,14 +3472,14 @@ pub const FloatingWindowWidget = struct {
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !void {
     var over = try gui.overlay(@src(), 0, .{ .expand = .horizontal });
 
-    if (try gui.buttonIcon(@src(), 0, 14, "close", gui.icons.papirus.actions.window_close_symbolic, .{ .gravity = .left, .corner_radius = Rect.all(14), .padding = Rect.all(2), .margin = Rect.all(2) })) {
+    if (try gui.buttonIcon(@src(), 0, 14, "close", gui.icons.papirus.actions.window_close_symbolic, .{ .gravity_vert = 0.5, .corner_radius = Rect.all(14), .padding = Rect.all(2), .margin = Rect.all(2) })) {
         if (openflag) |of| {
             of.* = false;
         }
     }
 
-    try gui.labelNoFmt(@src(), 0, str, .{ .gravity = .center, .expand = .horizontal, .font_style = .heading });
-    try gui.labelNoFmt(@src(), 0, right_str, .{ .gravity = .right });
+    try gui.labelNoFmt(@src(), 0, str, .{ .gravity_horz = 0.5, .gravity_vert = 0.5, .expand = .horizontal, .font_style = .heading });
+    try gui.labelNoFmt(@src(), 0, right_str, .{ .gravity_horz = 1.0 });
 
     var iter = EventIterator.init(over.wd.id, over.wd.contentRectScale().r);
     while (iter.next()) |e| {
@@ -3579,7 +3568,7 @@ pub fn dialogOkDisplay(id: u32) !void {
     try tl.addText(message, .{});
     tl.deinit();
 
-    if (try gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
+    if (try gui.button(@src(), 0, "Ok", .{ .gravity_horz = 0.5, .gravity_vert = 0.5, .tab_index = 1 })) {
         gui.dialogRemove(id);
         if (callafter) |ca| {
             try ca(id, .ok);
@@ -3665,17 +3654,107 @@ pub fn toastInfo(src: std.builtin.SourceLocation, id_extra: usize, subwindow_id:
 }
 
 pub fn toastInfoDisplay(id: u32) !void {
-    if (gui.timerDone(id)) {
-        gui.toastRemove(id);
-    }
-
     const message = gui.dataGet(id, "_msg", []const u8) orelse {
         std.debug.print("Error: lost message for toast {x}\n", .{id});
         return;
     };
 
-    try gui.labelNoFmt(@src(), 0, message, .{});
+    var fader = try gui.fade(@src(), id, .{});
+    defer fader.deinit();
+    try gui.labelNoFmt(@src(), id, message, .{ .background = true, .corner_radius = gui.Rect.all(1000), .color_bg = gui.LabelWidget.defaults.color_bgGet().transparent(0.5) });
+
+    if (gui.timerDone(id)) {
+        fader.startEnd();
+    }
+
+    if (fader.end()) {
+        gui.toastRemove(id);
+    }
 }
+
+pub fn fade(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) !*FadeWidget {
+    var ret = try currentWindow().arena.create(FadeWidget);
+    ret.* = FadeWidget.init(src, id_extra, opts);
+    try ret.install(.{});
+    return ret;
+}
+
+pub const FadeWidget = struct {
+    const Self = @This();
+    wd: WidgetData = undefined,
+    prev_alpha: f32 = 1.0,
+
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Self {
+        return Self{ .wd = WidgetData.init(src, id_extra, opts) };
+    }
+
+    pub fn install(self: *Self, opts: InstallOptions) !void {
+        self.prev_alpha = themeGet().alpha;
+
+        _ = opts;
+        _ = parentSet(self.widget());
+        try self.wd.register("Fade", null);
+
+        if (firstFrame(self.wd.id)) {
+            // start begin animation
+            gui.animation(self.wd.id, "_start", .{ .start_val = 0.0, .end_val = 1.0, .end_time = 500_000 });
+        }
+
+        if (gui.animationGet(self.wd.id, "_end")) |a| {
+            themeGet().alpha *= a.lerp();
+        } else if (gui.animationGet(self.wd.id, "_start")) |a| {
+            themeGet().alpha *= a.lerp();
+        }
+
+        try self.wd.borderAndBackground();
+    }
+
+    pub fn startEnd(self: *Self) void {
+        gui.animation(self.wd.id, "_end", .{ .start_val = 1.0, .end_val = 0.0, .end_time = 500_000 });
+    }
+
+    pub fn end(self: *Self) bool {
+        return gui.animationDone(self.wd.id, "_end");
+    }
+
+    pub fn widget(self: *Self) Widget {
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
+    }
+
+    pub fn data(self: *Self) *WidgetData {
+        return &self.wd;
+    }
+
+    pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+        return placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
+    }
+
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        const rs = self.wd.contentRectScale();
+        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+    }
+
+    pub fn minSizeForChild(self: *Self, s: Size) void {
+        self.wd.minSizeMax(self.wd.padSize(s));
+    }
+
+    pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = self;
+        _ = iter;
+        _ = e;
+    }
+
+    pub fn bubbleEvent(self: *Self, e: *Event) void {
+        self.wd.parent.bubbleEvent(e);
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.wd.minSizeSetAndCue();
+        self.wd.minSizeReportToParent();
+        _ = parentSet(self.wd.parent);
+        themeGet().alpha = self.prev_alpha;
+    }
+};
 
 pub var expander_defaults: Options = .{
     .padding = Rect.all(2),
@@ -3703,11 +3782,11 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
     var bcbox = BoxWidget.init(@src(), 0, .horizontal, options.strip());
     defer bcbox.deinit();
     try bcbox.install(.{});
-    const size = try options.font().lineSkip();
+    const size = try options.fontGet().lineSkip();
     if (expanded) {
-        try icon(@src(), 0, "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity = .left, .min_size_content = .{ .h = size } });
+        try icon(@src(), 0, "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity_vert = 0.5, .min_size_content = .{ .h = size } });
     } else {
-        try icon(@src(), 0, "right_arrow", gui.icons.papirus.actions.pan_end_symbolic, .{ .gravity = .left, .min_size_content = .{ .h = size } });
+        try icon(@src(), 0, "right_arrow", gui.icons.papirus.actions.pan_end_symbolic, .{ .gravity_vert = 0.5, .min_size_content = .{ .h = size } });
     }
     try labelNoFmt(@src(), 0, label_str, options.strip());
 
@@ -3837,7 +3916,7 @@ pub const PanedWidget = struct {
                     },
                 }
                 try pathAddRect(r, Rect.all(thick));
-                try pathFillConvex(self.wd.options.color().transparent(0.5));
+                try pathFillConvex(self.wd.options.colorGet().transparent(0.5));
             }
         }
 
@@ -4059,8 +4138,8 @@ pub const TextLayoutWidget = struct {
 
     pub fn addText(self: *Self, text: []const u8, opts: Options) !void {
         const options = self.wd.options.override(opts);
-        const msize = try options.font().textSize("m");
-        const lineskip = try options.font().lineSkip();
+        const msize = try options.fontGet().textSize("m");
+        const lineskip = try options.fontGet().lineSkip();
         var txt = text;
 
         const rect = self.wd.contentRect();
@@ -4104,7 +4183,7 @@ pub const TextLayoutWidget = struct {
 
             // get slice of text that fits within width or ends with newline
             // - always get at least 1 codepoint so we make progress
-            var s = try options.font().textSizeEx(txt, width, &end);
+            var s = try options.fontGet().textSizeEx(txt, width, &end);
 
             const newline = (txt[end - 1] == '\n');
 
@@ -4127,7 +4206,7 @@ pub const TextLayoutWidget = struct {
                 const spaceIdx = std.mem.lastIndexOfLinear(u8, txt[0 .. end + 1], space);
                 if (spaceIdx) |si| {
                     end = si + 1;
-                    s = try options.font().textSize(txt[0..end]);
+                    s = try options.fontGet().textSize(txt[0..end]);
                 } else if (self.insert_pt.x > linestart) {
                     // can't fit breaking on space, but we aren't starting at the left edge
                     // so drop to next line
@@ -4143,9 +4222,9 @@ pub const TextLayoutWidget = struct {
                 //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
 
                 if (newline) {
-                    try renderText(options.font(), txt[0 .. end - 1], rs, options.color());
+                    try renderText(options.fontGet(), txt[0 .. end - 1], rs, options.colorGet());
                 } else {
-                    try renderText(options.font(), txt[0..end], rs, options.color());
+                    try renderText(options.fontGet(), txt[0..end], rs, options.colorGet());
                 }
             }
 
@@ -4175,16 +4254,21 @@ pub const TextLayoutWidget = struct {
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         const ret = placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
-        const i: usize = switch (g) {
-            .upleft => 0,
-            .upright => 1,
-            .downleft => 2,
-            .downright => 3,
-            else => blk: {
-                std.debug.print("adding child to TextLayout with unsupported gravity (must be .upleft, .upright, .downleft, or .downright)\n", .{});
-                break :blk 0;
-            },
-        };
+        var i: usize = undefined;
+        if (g.v < 0.5) {
+            if (g.h < 0.5) {
+                i = 0; // upleft
+            } else {
+                i = 1; // upright
+            }
+        } else {
+            if (g.h < 0.5) {
+                i = 2; // downleft
+            } else {
+                i = 3; // downright
+            }
+        }
+
         self.corners[i] = ret;
         return ret;
     }
@@ -4506,29 +4590,23 @@ pub const BoxWidget = struct {
             rect.h = self.childRect.h;
             rect.w += pixels_per_w * current_weight;
 
-            switch (g) {
-                .upleft, .left, .downleft, .up, .center, .down => {
-                    self.childRect.w = math.max(0, self.childRect.w - rect.w);
-                    self.childRect.x += rect.w;
-                },
-                .upright, .right, .downright => {
-                    rect.x += math.max(0, self.childRect.w - rect.w);
-                    self.childRect.w = math.max(0, self.childRect.w - rect.w);
-                },
+            if (g.h <= 0.5) {
+                self.childRect.w = math.max(0, self.childRect.w - rect.w);
+                self.childRect.x += rect.w;
+            } else {
+                rect.x += math.max(0, self.childRect.w - rect.w);
+                self.childRect.w = math.max(0, self.childRect.w - rect.w);
             }
         } else if (self.dir == .vertical) {
             rect.w = self.childRect.w;
             rect.h += pixels_per_w * current_weight;
 
-            switch (g) {
-                .upleft, .up, .upright, .left, .center, .right => {
-                    self.childRect.h = math.max(0, self.childRect.h - rect.h);
-                    self.childRect.y += rect.h;
-                },
-                .downleft, .down, .downright => {
-                    rect.y += math.max(0, self.childRect.h - rect.h);
-                    self.childRect.h = math.max(0, self.childRect.h - rect.h);
-                },
+            if (g.v <= 0.5) {
+                self.childRect.h = math.max(0, self.childRect.h - rect.h);
+                self.childRect.y += rect.h;
+            } else {
+                rect.y += math.max(0, self.childRect.h - rect.h);
+                self.childRect.h = math.max(0, self.childRect.h - rect.h);
             }
         }
 
@@ -4645,7 +4723,7 @@ pub const ScrollAreaWidget = struct {
             si = &self.scroll_info;
         }
 
-        var bar = ScrollBarWidget.init(@src(), 0, si, .{ .gravity = .right });
+        var bar = ScrollBarWidget.init(@src(), 0, si, .{ .gravity_horz = 1.0 });
         try bar.install(.{});
         bar.deinit();
 
@@ -4965,9 +5043,9 @@ pub const ScrollBarWidget = struct {
             self.processEvents(grabrs.r);
         }
 
-        var fill = self.wd.options.color().transparent(0.5);
+        var fill = self.wd.options.colorGet().transparent(0.5);
         if (captured or self.highlight) {
-            fill = self.wd.options.color().transparent(0.3);
+            fill = self.wd.options.colorGet().transparent(0.3);
         }
         self.grabRect = self.grabRect.insetAll(2);
         const grabrs = self.wd.parent.screenRectScale(self.grabRect);
@@ -5131,7 +5209,7 @@ pub fn spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
     const r = rs.r;
 
     var angle: f32 = 0;
-    var anim = Animation{ .start_val = 0, .end_val = 2 * math.pi, .start_time = 0, .end_time = 4_500_000 };
+    var anim = Animation{ .start_val = 0, .end_val = 2 * math.pi, .end_time = 4_500_000 };
     if (animationGet(wd.id, "_angle")) |a| {
         // existing animation
         var aa = a;
@@ -5151,8 +5229,8 @@ pub fn spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
     const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
     try pathAddArc(center, math.min(r.w, r.h) / 3, angle, 0, false);
     //PathAddPoint(center);
-    //PathFillConvex(options.color());
-    try pathStroke(false, 3.0 * rs.s, .none, options.color());
+    //PathFillConvex(options.colorGet());
+    try pathStroke(false, 3.0 * rs.s, .none, options.colorGet());
 }
 
 pub fn scale(src: std.builtin.SourceLocation, id_extra: usize, scale_in: f32, opts: Options) !*ScaleWidget {
@@ -5426,7 +5504,7 @@ pub const MenuItemWidget = struct {
         if (self.wd.options.borderGet().nonZero()) {
             const rs = self.wd.borderRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            var col = Color.lerp(self.wd.options.color_bg(), 0.3, self.wd.options.color());
+            var col = Color.lerp(self.wd.options.color_bgGet(), 0.3, self.wd.options.colorGet());
             try pathFillConvex(col);
         }
 
@@ -5448,12 +5526,12 @@ pub const MenuItemWidget = struct {
             try pathFillConvex(fill);
         } else if (self.focused_in_win or self.highlight) {
             // hovered
-            const fill = Color.lerp(self.wd.options.color_bg(), 0.1, self.wd.options.color());
+            const fill = Color.lerp(self.wd.options.color_bgGet(), 0.1, self.wd.options.colorGet());
             const rs = self.wd.backgroundRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
             try pathFillConvex(fill);
         } else if (self.wd.options.backgroundGet()) {
-            const fill = self.wd.options.color_bg();
+            const fill = self.wd.options.color_bgGet();
             const rs = self.wd.backgroundRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
             try pathFillConvex(fill);
@@ -5589,12 +5667,12 @@ pub const LabelWidget = struct {
         var first: bool = true;
         var size = Size{};
         while (iter.next()) |line| {
-            const s = try options.font().textSize(line);
+            const s = try options.fontGet().textSize(line);
             if (first) {
                 first = false;
                 size = s;
             } else {
-                size.h += try options.font().lineSkip();
+                size.h += try options.fontGet().lineSkip();
                 size.w = math.max(size.w, s.w);
             }
         }
@@ -5615,8 +5693,8 @@ pub const LabelWidget = struct {
         var rs = self.wd.parent.screenRectScale(rect);
         var iter = std.mem.split(u8, self.label_str, "\n");
         while (iter.next()) |line| {
-            try renderText(self.wd.options.font(), line, rs, self.wd.options.color());
-            rs.r.y += rs.s * try self.wd.options.font().lineSkip();
+            try renderText(self.wd.options.fontGet(), line, rs, self.wd.options.colorGet());
+            rs.r.y += rs.s * try self.wd.options.fontGet().lineSkip();
         }
 
         self.wd.minSizeSetAndCue();
@@ -5654,7 +5732,7 @@ pub const IconWidget = struct {
             size.w = math.max(size.w, iconWidth(name, tvg_bytes, size.h) catch size.w);
         } else {
             // user didn't give us one, make it the height of text
-            const h = options.font().lineSkip() catch 10;
+            const h = options.fontGet().lineSkip() catch 10;
             size = Size{ .w = iconWidth(name, tvg_bytes, h) catch h, .h = h };
         }
 
@@ -5672,7 +5750,7 @@ pub const IconWidget = struct {
 
         var rect = placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
         var rs = self.wd.parent.screenRectScale(rect);
-        try renderIcon(self.name, self.tvg_bytes, rs, self.wd.options.rotationGet(), self.wd.options.color());
+        try renderIcon(self.name, self.tvg_bytes, rs, self.wd.options.rotationGet(), self.wd.options.colorGet());
 
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
@@ -5704,7 +5782,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, id_extra: usize, opts: 
     try wd.borderAndBackground();
 
     const rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
-    try debugRenderFontAtlases(rs, opts.color());
+    try debugRenderFontAtlases(rs, opts.colorGet());
 
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
@@ -5750,7 +5828,7 @@ pub const ButtonWidget = struct {
         if (self.wd.options.borderGet().nonZero()) {
             const rs = self.wd.borderRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            var col = Color.lerp(self.wd.options.color_bg(), 0.3, self.wd.options.color());
+            var col = Color.lerp(self.wd.options.color_bgGet(), 0.3, self.wd.options.colorGet());
             try pathFillConvex(col);
         }
 
@@ -5759,12 +5837,12 @@ pub const ButtonWidget = struct {
             var fill: Color = undefined;
             if (self.captured) {
                 // pressed
-                fill = Color.lerp(self.wd.options.color_bg(), 0.2, self.wd.options.color());
+                fill = Color.lerp(self.wd.options.color_bgGet(), 0.2, self.wd.options.colorGet());
             } else if (self.highlight) {
                 // hovered
-                fill = Color.lerp(self.wd.options.color_bg(), 0.1, self.wd.options.color());
+                fill = Color.lerp(self.wd.options.color_bgGet(), 0.1, self.wd.options.colorGet());
             } else {
-                fill = self.wd.options.color_bg();
+                fill = self.wd.options.color_bgGet();
             }
 
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
@@ -5858,7 +5936,7 @@ pub fn button(src: std.builtin.SourceLocation, id_extra: usize, label_str: []con
     var bw = ButtonWidget.init(src, id_extra, opts);
     try bw.install(.{});
 
-    try labelNoFmt(@src(), 0, label_str, opts.strip().override(.{ .gravity = .center }));
+    try labelNoFmt(@src(), 0, label_str, opts.strip().override(.{ .gravity_horz = 0.5, .gravity_vert = 0.5 }));
 
     var click = bw.clicked();
     bw.deinit();
@@ -5868,7 +5946,7 @@ pub fn button(src: std.builtin.SourceLocation, id_extra: usize, label_str: []con
 pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) !bool {
     // since we are given the icon height, we can precalculate our size, which can save a frame
     const width = iconWidth(name, tvg_bytes, height) catch height;
-    const iconopts = opts.strip().override(.{ .gravity = .center, .min_size_content = .{ .w = width, .h = height } });
+    const iconopts = opts.strip().override(.{ .gravity_horz = 0.5, .gravity_vert = 0.5, .min_size_content = .{ .w = width, .h = height } });
 
     var bw = ButtonWidget.init(src, id_extra, opts.override(.{ .min_size_content = iconopts.min_sizeGet() }));
     try bw.install(.{});
@@ -5902,8 +5980,8 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     var b = try box(@src(), 0, .horizontal, options.strip().override(.{ .expand = .both }));
     defer b.deinit();
 
-    var check_size = try options.font().lineSkip();
-    const s = spacer(@src(), 0, Size.all(check_size), .{ .gravity = .center });
+    var check_size = try options.fontGet().lineSkip();
+    const s = spacer(@src(), 0, Size.all(check_size), .{ .gravity_horz = 0.5, .gravity_vert = 0.5 });
 
     var rs = s.borderRectScale();
     rs.r = rs.r.insetAll(0.5 * rs.s);
@@ -5912,13 +5990,13 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
 
     if (label_str) |str| {
         _ = spacer(@src(), 0, .{ .w = checkbox_defaults.paddingGet().w }, .{});
-        try labelNoFmt(@src(), 0, str, options.strip().override(.{ .gravity = .center }));
+        try labelNoFmt(@src(), 0, str, options.strip().override(.{ .gravity_horz = 0.5, .gravity_vert = 0.5 }));
     }
 }
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
     try pathAddRect(rs.r, opts.corner_radiusGet().scale(rs.s));
-    var col = Color.lerp(opts.color_bg(), 0.3, opts.color());
+    var col = Color.lerp(opts.color_bgGet(), 0.3, opts.colorGet());
     try pathFillConvex(col);
 
     if (focused) {
@@ -5926,7 +6004,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
         try pathStroke(true, 2 * rs.s, .none, themeGet().color_accent_bg);
     }
 
-    var fill = opts.color_bg();
+    var fill = opts.color_bgGet();
     if (checked) {
         fill = themeGet().color_accent_bg;
         try pathAddRect(rs.r.insetAll(0.5 * rs.s), opts.corner_radiusGet().scale(rs.s));
@@ -5935,9 +6013,9 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     }
 
     if (pressed) {
-        fill = Color.lerp(fill, 0.2, opts.color());
+        fill = Color.lerp(fill, 0.2, opts.colorGet());
     } else if (hovered) {
-        fill = Color.lerp(fill, 0.1, opts.color());
+        fill = Color.lerp(fill, 0.1, opts.colorGet());
     }
 
     try pathFillConvex(fill);
@@ -5990,7 +6068,7 @@ pub const TextEntryWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, text: []u8, opts: Options) Self {
         var self = Self{};
-        const msize = opts.font().textSize("M") catch unreachable;
+        const msize = opts.fontGet().textSize("M") catch unreachable;
         const options = defaults.override(.{ .min_size_content = .{ .w = msize.w * 10, .h = msize.h } }).override(opts);
 
         self.wd = WidgetData.init(src, id_extra, options);
@@ -6024,7 +6102,7 @@ pub const TextEntryWidget = struct {
 
         const oldclip = clip(rs.r);
         if (!clipGet().empty()) {
-            try renderText(self.wd.options.font(), self.text[0..self.len], rs, self.wd.options.color());
+            try renderText(self.wd.options.fontGet(), self.text[0..self.len], rs, self.wd.options.colorGet());
         }
         clipSet(oldclip);
 
@@ -6815,14 +6893,14 @@ pub const WidgetData = struct {
             }
             const rs = self.borderRectScale();
             try pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-            var col = Color.lerp(self.options.color_bg(), 0.3, self.options.color());
+            var col = Color.lerp(self.options.color_bgGet(), 0.3, self.options.colorGet());
             try pathFillConvex(col);
         }
 
         if (bg) {
             const rs = self.backgroundRectScale();
             try pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-            try pathFillConvex(self.options.color_bg());
+            try pathFillConvex(self.options.color_bgGet());
         }
     }
 
@@ -6831,12 +6909,12 @@ pub const WidgetData = struct {
         const thick = 2 * rs.s;
         try pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
         var color = themeGet().color_accent_bg;
-        switch (self.options.color_style orelse .custom) {
+        switch (self.options.color_style orelse .control) {
             .err, .success, .accent => {
                 if (themeGet().dark) {
-                    color = self.options.color_bg().lighten(0.3);
+                    color = self.options.color_bgGet().lighten(0.3);
                 } else {
-                    color = self.options.color_bg().darken(0.2);
+                    color = self.options.color_bgGet().darken(0.2);
                 }
             },
             else => {},
@@ -7235,7 +7313,7 @@ pub const examples = struct {
             try tl.addText(message, .{});
             tl.deinit();
 
-            if (try gui.button(@src(), 0, "Ok", .{ .gravity = .center, .tab_index = 1 })) {
+            if (try gui.button(@src(), 0, "Ok", .{ .gravity_horz = 0.5, .gravity_vert = 0.5, .tab_index = 1 })) {
                 closing = true;
                 gui.dataSet(id, "response", gui.DialogResponse.ok);
             }
@@ -7248,13 +7326,13 @@ pub const examples = struct {
                 // On the first frame, scaler will have a scale value of 1 so
                 // the min size of the window is our target, which is why we do
                 // this after win.deinit so the min size will be available
-                gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 150_000 });
+                gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .end_time = 150_000 });
                 gui.dataSet(win.data().id, "window_size", win.data().min_size);
             }
 
             if (closing) {
                 // If we are closing, start from our current size
-                gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 150_000 });
+                gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .end_time = 150_000 });
                 gui.dataSet(win.data().id, "window_size", win.data().rect.size());
             }
         }
@@ -7279,7 +7357,7 @@ pub const examples = struct {
                 var toast_win = FloatingWindowWidget.init(@src(), 0, false, null, null, .{ .background = false, .border = .{} });
                 defer toast_win.deinit();
 
-                toast_win.data().rect = gui.placeInMargin(float.data().rect, toast_win.data().rect.size(), .none, .down, .{ .h = 60 });
+                toast_win.data().rect = gui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .h = 0.5, .v = 0.7 });
                 toast_win.stayAboveParent();
                 toast_win.autoSize();
                 try toast_win.install(.{ .process_events = false });
@@ -7398,8 +7476,12 @@ pub const examples = struct {
             var o = try gui.overlay(@src(), 0, opts);
             defer o.deinit();
 
-            inline for (@typeInfo(Options.Gravity).Enum.fields) |f, i| {
-                _ = try gui.button(@src(), i, f.name, .{ .gravity = @intToEnum(Options.Gravity, f.value) });
+            var buf: [128]u8 = undefined;
+
+            inline for ([3]f32{ 0.0, 0.5, 1.0 }) |horz, hi| {
+                inline for ([3]f32{ 0.0, 0.5, 1.0 }) |vert, vi| {
+                    _ = try gui.button(@src(), hi * 3 + vi, try std.fmt.bufPrint(&buf, "{d},{d}", .{ horz, vert }), .{ .gravity_horz = horz, .gravity_vert = vert });
+                }
             }
         }
 
@@ -7441,7 +7523,7 @@ pub const examples = struct {
             var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal });
             defer tl.deinit();
 
-            var cbox = try gui.box(@src(), 0, .vertical, gui.Options{ .gravity = .upleft });
+            var cbox = try gui.box(@src(), 0, .vertical, .{});
             _ = try gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) });
             _ = try gui.buttonIcon(@src(), 0, 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) });
             cbox.deinit();
@@ -7586,7 +7668,7 @@ pub const examples = struct {
 
         if (try gui.expander(@src(), 0, "Spinner", .{ .expand = .horizontal })) {
             try gui.labelNoFmt(@src(), 0, "Spinner maxes out frame rate", .{});
-            try gui.spinner(@src(), 0, .{ .color_style = .custom, .color_custom = .{ .r = 100, .g = 200, .b = 100 } });
+            try gui.spinner(@src(), 0, .{ .color = .{ .r = 100, .g = 200, .b = 100 } });
         }
 
         if (try gui.expander(@src(), 0, "Clock", .{ .expand = .horizontal })) {
@@ -7627,7 +7709,7 @@ pub const examples = struct {
 
         {
             _ = gui.spacer(@src(), 0, .{}, .{ .expand = .vertical });
-            var hbox = try gui.box(@src(), 0, .horizontal, .{ .gravity = .right });
+            var hbox = try gui.box(@src(), 0, .horizontal, .{ .gravity_horz = 1.0 });
             defer hbox.deinit();
 
             if (try gui.button(@src(), 0, "Yes", .{})) {
@@ -7661,7 +7743,7 @@ pub const examples = struct {
                 var iconbox = try gui.box(@src(), i, .horizontal, .{ .expand = .horizontal, .rect = r });
 
                 _ = try gui.buttonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
-                try gui.labelNoFmt(@src(), 0, d.name, .{ .gravity = .left });
+                try gui.labelNoFmt(@src(), 0, d.name, .{ .gravity_vert = 0.5 });
 
                 iconbox.deinit();
 
