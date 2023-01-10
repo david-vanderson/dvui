@@ -1,10 +1,10 @@
 
-try wrapping toasts (or window?) in an animating widget
-- animates min vertical size up and down
+add to demo place that shows margin/border/padding
+- need boxes to do equal-sized placement
+  - if total weight is 0, allocate as much space as needed for largest element
+  - if total weight is >0, allocate evenly total space
 
 example toast that includes "undo"
-
-probably should remove OverlayWidget, subwindows are much better for things being on top of other things
 
 add draggable slider thing for podcast duration
 - drag starts in any location, don't have to hit the current location to start
