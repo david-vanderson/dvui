@@ -3659,58 +3659,77 @@ pub fn toastInfoDisplay(id: u32) !void {
         return;
     };
 
-    var fader = try gui.fade(@src(), id, .{});
-    defer fader.deinit();
+    var animator = try gui.animate(@src(), id, .alpha, 500_000, .{});
+    defer animator.deinit();
     try gui.labelNoFmt(@src(), id, message, .{ .background = true, .corner_radius = gui.Rect.all(1000), .color_bg = gui.LabelWidget.defaults.color_bgGet().transparent(0.5) });
 
     if (gui.timerDone(id)) {
-        fader.startEnd();
+        animator.startEnd();
     }
 
-    if (fader.end()) {
+    if (animator.end()) {
         gui.toastRemove(id);
     }
 }
 
-pub fn fade(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) !*FadeWidget {
-    var ret = try currentWindow().arena.create(FadeWidget);
-    ret.* = FadeWidget.init(src, id_extra, opts);
+pub fn animate(src: std.builtin.SourceLocation, id_extra: usize, kind: AnimateWidget.Kind, duration_micros: i32, opts: Options) !*AnimateWidget {
+    var ret = try currentWindow().arena.create(AnimateWidget);
+    ret.* = AnimateWidget.init(src, id_extra, kind, duration_micros, opts);
     try ret.install(.{});
     return ret;
 }
 
-pub const FadeWidget = struct {
+pub const AnimateWidget = struct {
     const Self = @This();
+    pub const Kind = enum {
+        alpha,
+        vert,
+        horz,
+    };
+
     wd: WidgetData = undefined,
+    kind: Kind = undefined,
+    duration: i32 = undefined,
+    val: ?f32 = null,
+
     prev_alpha: f32 = 1.0,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Self {
-        return Self{ .wd = WidgetData.init(src, id_extra, opts) };
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, kind: Kind, duration_micros: i32, opts: Options) Self {
+        return Self{ .wd = WidgetData.init(src, id_extra, opts), .kind = kind, .duration = duration_micros };
     }
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
-        self.prev_alpha = themeGet().alpha;
-
         _ = opts;
         _ = parentSet(self.widget());
-        try self.wd.register("Fade", null);
+        try self.wd.register("Animate", null);
 
         if (firstFrame(self.wd.id)) {
             // start begin animation
-            gui.animation(self.wd.id, "_start", .{ .start_val = 0.0, .end_val = 1.0, .end_time = 500_000 });
+            gui.animation(self.wd.id, "_start", .{ .start_val = 0.0, .end_val = 1.0, .end_time = self.duration });
         }
 
         if (gui.animationGet(self.wd.id, "_end")) |a| {
-            themeGet().alpha *= a.lerp();
+            self.val = a.lerp();
         } else if (gui.animationGet(self.wd.id, "_start")) |a| {
-            themeGet().alpha *= a.lerp();
+            self.val = a.lerp();
+        }
+
+        if (self.val) |v| {
+            switch (self.kind) {
+                .alpha => {
+                    self.prev_alpha = themeGet().alpha;
+                    themeGet().alpha *= v;
+                },
+                .vert => {},
+                .horz => {},
+            }
         }
 
         try self.wd.borderAndBackground();
     }
 
     pub fn startEnd(self: *Self) void {
-        gui.animation(self.wd.id, "_end", .{ .start_val = 1.0, .end_val = 0.0, .end_time = 500_000 });
+        gui.animation(self.wd.id, "_end", .{ .start_val = 1.0, .end_val = 0.0, .end_time = self.duration });
     }
 
     pub fn end(self: *Self) bool {
@@ -3749,10 +3768,23 @@ pub const FadeWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        if (self.val) |v| {
+            switch (self.kind) {
+                .alpha => {
+                    themeGet().alpha = self.prev_alpha;
+                },
+                .vert => {
+                    self.wd.min_size.h *= v;
+                },
+                .horz => {
+                    self.wd.min_size.w *= v;
+                },
+            }
+        }
+
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
-        themeGet().alpha = self.prev_alpha;
     }
 };
 
@@ -5691,11 +5723,13 @@ pub const LabelWidget = struct {
 
         var rect = placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
         var rs = self.wd.parent.screenRectScale(rect);
+        const oldclip = clip(rs.r);
         var iter = std.mem.split(u8, self.label_str, "\n");
         while (iter.next()) |line| {
             try renderText(self.wd.options.fontGet(), line, rs, self.wd.options.colorGet());
             rs.r.y += rs.s * try self.wd.options.fontGet().lineSkip();
         }
+        clipSet(oldclip);
 
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
@@ -7392,16 +7426,16 @@ pub const examples = struct {
                 try basicWidgets();
             }
 
+            //if (try gui.expander(@src(), 0, "Styling", .{ .expand = .horizontal })) {
+            //    try styling();
+            //}
+
             if (try gui.expander(@src(), 0, "Layout", .{ .expand = .horizontal })) {
                 try layout();
             }
 
-            if (try gui.expander(@src(), 0, "Show Font Atlases", .{ .expand = .horizontal })) {
-                try debugFontAtlases(@src(), 0, .{});
-            }
-
             if (try gui.expander(@src(), 0, "Text Layout", .{ .expand = .horizontal })) {
-                try textDemo();
+                try layoutText();
             }
 
             if (try gui.expander(@src(), 0, "Menus", .{ .expand = .horizontal })) {
@@ -7443,6 +7477,10 @@ pub const examples = struct {
             try gui.checkbox(@src(), 0, &gui.currentWindow().snap_to_pixels, "Snap to Pixels", .{});
             try gui.labelNoFmt(@src(), 0, "  - watch window title", .{});
 
+            if (try gui.expander(@src(), 0, "Show Font Atlases", .{ .expand = .horizontal })) {
+                try debugFontAtlases(@src(), 0, .{});
+            }
+
             if (show_dialog) {
                 try dialogDirect();
             }
@@ -7474,8 +7512,26 @@ pub const examples = struct {
         try gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{});
     }
 
+    pub fn styling() !void {
+        const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .background = true };
+        const rect = gui.Rect{ .x = 1, .y = 3, .w = 5, .h = 7 };
+        try gui.label(@src(), 0, "margin", .{}, .{});
+        {
+            var hbox = try gui.box(@src(), 0, .horizontal, .{});
+            defer hbox.deinit();
+
+            var o = try gui.overlay(@src(), 0, opts);
+            _ = try gui.button(@src(), 0, "all 0", .{ .margin = .{}, .border = .{}, .padding = .{} });
+            o.deinit();
+
+            o = try gui.overlay(@src(), 0, opts);
+            _ = try gui.button(@src(), 0, "margin 1,3,5,7", .{ .margin = rect });
+            o.deinit();
+        }
+    }
+
     pub fn layout() !void {
-        const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .min_size_content = .{ .w = 200, .h = 120 } };
+        const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 120 } };
         {
             try gui.label(@src(), 0, "gravity options:", .{}, .{});
             var o = try gui.overlay(@src(), 0, opts);
@@ -7511,7 +7567,7 @@ pub const examples = struct {
         }
     }
 
-    pub fn textDemo() !void {
+    pub fn layoutText() !void {
         var b = try gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
         try gui.label(@src(), 0, "Title", .{}, .{ .font_style = .title });
