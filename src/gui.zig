@@ -5825,14 +5825,19 @@ pub const ButtonWidget = struct {
 
         self.focused = (self.wd.id == focusedWidgetId());
 
+        var bg = self.wd.options.backgroundGet();
         if (self.wd.options.borderGet().nonZero()) {
+            if (!bg) {
+                std.debug.print("{x} forcing background on to support border\n", .{self.wd.id});
+                bg = true;
+            }
             const rs = self.wd.borderRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
             var col = Color.lerp(self.wd.options.color_bgGet(), 0.3, self.wd.options.colorGet());
             try pathFillConvex(col);
         }
 
-        if (self.wd.options.backgroundGet()) {
+        if (bg) {
             const rs = self.wd.backgroundRectScale();
             var fill: Color = undefined;
             if (self.captured) {
