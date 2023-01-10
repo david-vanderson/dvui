@@ -25,7 +25,7 @@ pub fn init(width: u32, height: u32) !SDLBackend {
 
     _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
-    var renderer = c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_ACCELERATED) // | c.SDL_RENDERER_PRESENTVSYNC)
+    var renderer = c.SDL_CreateRenderer(window, -1, 0) // c.SDL_RENDERER_PRESENTVSYNC)
     orelse {
         std.debug.print("Failed to create renderer: {s}\n", .{c.SDL_GetError()});
         return error.BackendError;
