@@ -125,9 +125,9 @@ pub const Options = struct {
     };
 
     pub const Gravity = struct {
-        // wraps Options.gravity_horz and Options.gravity_vert
-        h: f32,
-        v: f32,
+        // wraps Options.gravity_x and Options.gravity_y
+        x: f32,
+        y: f32,
     };
 
     pub const FontStyle = enum {
@@ -162,10 +162,10 @@ pub const Options = struct {
     expand: ?Expand = null,
 
     // [0, 1] default is 0 (left)
-    gravity_horz: ?f32 = null,
+    gravity_x: ?f32 = null,
 
     // [0, 1] default is 0 (top)
-    gravity_vert: ?f32 = null,
+    gravity_y: ?f32 = null,
 
     // widgets will be focusable by keyboard only if this is set
     tab_index: ?u16 = null,
@@ -258,7 +258,7 @@ pub const Options = struct {
     }
 
     pub fn gravityGet(self: *const Options) Gravity {
-        return .{ .h = self.gravity_horz orelse 0.0, .v = self.gravity_vert orelse 0.0 };
+        return .{ .x = self.gravity_x orelse 0.0, .y = self.gravity_y orelse 0.0 };
     }
 
     pub fn marginGet(self: *const Options) Rect {
@@ -325,8 +325,8 @@ pub const Options = struct {
 
             // keep the rest
             .expand = self.expand,
-            .gravity_horz = self.gravity_horz,
-            .gravity_vert = self.gravity_vert,
+            .gravity_x = self.gravity_x,
+            .gravity_y = self.gravity_y,
             .color = self.color,
             .color_bg = self.color_bg,
             .font = self.font,
@@ -1466,8 +1466,8 @@ pub fn placeIn(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravit
     }
 
     var r = avail.shrinkToSize(size);
-    r.x = avail.x + g.h * (avail.w - r.w);
-    r.y = avail.y + g.v * (avail.h - r.h);
+    r.x = avail.x + g.x * (avail.w - r.w);
+    r.y = avail.y + g.y * (avail.h - r.h);
 
     return r;
 }
@@ -2696,7 +2696,7 @@ pub const Window = struct {
             var hbox = try gui.box(@src(), 0, .horizontal, .{});
             defer hbox.deinit();
 
-            try gui.labelNoFmt(@src(), 0, "Hex id of widget to highlight:", .{ .gravity_vert = 0.5 });
+            try gui.labelNoFmt(@src(), 0, "Hex id of widget to highlight:", .{ .gravity_y = 0.5 });
 
             var buf = [_]u8{0} ** 20;
             _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
@@ -2729,7 +2729,7 @@ pub const Window = struct {
                     self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(line, ' '), 16) catch 0;
                 }
 
-                try gui.labelNoFmt(@src(), i, line, .{ .gravity_vert = 0.5 });
+                try gui.labelNoFmt(@src(), i, line, .{ .gravity_y = 0.5 });
             }
         }
     }
@@ -3177,7 +3177,7 @@ pub const FloatingWindowWidget = struct {
                 self.auto_pos = (self.wd.rect.x == 0 and self.wd.rect.y == 0);
                 if (self.auto_pos and !self.auto_size) {
                     self.auto_pos = false;
-                    self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .{ .h = 0.5, .v = 0.5 });
+                    self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .{ .x = 0.5, .y = 0.5 });
                 }
             }
         }
@@ -3198,7 +3198,7 @@ pub const FloatingWindowWidget = struct {
                 // only position ourselves once by default
                 self.auto_pos = false;
 
-                self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .{ .h = 0.5, .v = 0.5 });
+                self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .{ .x = 0.5, .y = 0.5 });
 
                 //std.debug.print("autopos to {}\n", .{self.wd.rect});
             }
@@ -3266,7 +3266,7 @@ pub const FloatingWindowWidget = struct {
 
         // we are using BoxWidget to do border/background but floating windows
         // don't have margin, so turn that off
-        self.layout = BoxWidget.init(@src(), 0, .vertical, self.options.override(.{ .margin = .{}, .expand = .both }));
+        self.layout = BoxWidget.init(@src(), 0, .vertical, false, self.options.override(.{ .margin = .{}, .expand = .both }));
         try self.layout.install(.{});
     }
 
@@ -3488,14 +3488,14 @@ pub const FloatingWindowWidget = struct {
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !void {
     var over = try gui.overlay(@src(), 0, .{ .expand = .horizontal });
 
-    if (try gui.buttonIcon(@src(), 0, 14, "close", gui.icons.papirus.actions.window_close_symbolic, .{ .gravity_vert = 0.5, .corner_radius = Rect.all(14), .padding = Rect.all(2), .margin = Rect.all(2) })) {
+    if (try gui.buttonIcon(@src(), 0, 14, "close", gui.icons.papirus.actions.window_close_symbolic, .{ .gravity_y = 0.5, .corner_radius = Rect.all(14), .padding = Rect.all(2), .margin = Rect.all(2) })) {
         if (openflag) |of| {
             of.* = false;
         }
     }
 
-    try gui.labelNoFmt(@src(), 0, str, .{ .gravity_horz = 0.5, .gravity_vert = 0.5, .expand = .horizontal, .font_style = .heading });
-    try gui.labelNoFmt(@src(), 0, right_str, .{ .gravity_horz = 1.0 });
+    try gui.labelNoFmt(@src(), 0, str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading });
+    try gui.labelNoFmt(@src(), 0, right_str, .{ .gravity_x = 1.0 });
 
     var iter = EventIterator.init(over.wd.id, over.wd.contentRectScale().r);
     while (iter.next()) |e| {
@@ -3584,7 +3584,7 @@ pub fn dialogOkDisplay(id: u32) !void {
     try tl.addText(message, .{});
     tl.deinit();
 
-    if (try gui.button(@src(), 0, "Ok", .{ .gravity_horz = 0.5, .gravity_vert = 0.5, .tab_index = 1 })) {
+    if (try gui.button(@src(), 0, "Ok", .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
         gui.dialogRemove(id);
         if (callafter) |ca| {
             try ca(id, .ok);
@@ -3827,14 +3827,14 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
         expanded = !expanded;
     }
 
-    var bcbox = BoxWidget.init(@src(), 0, .horizontal, options.strip());
+    var bcbox = BoxWidget.init(@src(), 0, .horizontal, false, options.strip());
     defer bcbox.deinit();
     try bcbox.install(.{});
     const size = try options.fontGet().lineSkip();
     if (expanded) {
-        try icon(@src(), 0, "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity_vert = 0.5, .min_size_content = .{ .h = size } });
+        try icon(@src(), 0, "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
     } else {
-        try icon(@src(), 0, "right_arrow", gui.icons.papirus.actions.pan_end_symbolic, .{ .gravity_vert = 0.5, .min_size_content = .{ .h = size } });
+        try icon(@src(), 0, "right_arrow", gui.icons.papirus.actions.pan_end_symbolic, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
     }
     try labelNoFmt(@src(), 0, label_str, options.strip());
 
@@ -4303,14 +4303,14 @@ pub const TextLayoutWidget = struct {
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         const ret = placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
         var i: usize = undefined;
-        if (g.v < 0.5) {
-            if (g.h < 0.5) {
+        if (g.y < 0.5) {
+            if (g.x < 0.5) {
                 i = 0; // upleft
             } else {
                 i = 1; // upright
             }
         } else {
-            if (g.h < 0.5) {
+            if (g.x < 0.5) {
                 i = 2; // downleft
             } else {
                 i = 3; // downright
@@ -4554,7 +4554,14 @@ pub const Direction = enum {
 
 pub fn box(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena.create(BoxWidget);
-    ret.* = BoxWidget.init(src, id_extra, dir, opts);
+    ret.* = BoxWidget.init(src, id_extra, dir, false, opts);
+    try ret.install(.{});
+    return ret;
+}
+
+pub fn boxEqual(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) !*BoxWidget {
+    var ret = try currentWindow().arena.create(BoxWidget);
+    ret.* = BoxWidget.init(src, id_extra, dir, true, opts);
     try ret.install(.{});
     return ret;
 }
@@ -4564,22 +4571,24 @@ pub const BoxWidget = struct {
 
     const Data = struct {
         total_weight_prev: ?f32 = null,
-        space_taken_prev: ?f32 = null,
+        min_space_taken_prev: ?f32 = null,
     };
 
     wd: WidgetData = undefined,
     dir: Direction = undefined,
+    equal_space: bool = undefined,
     max_thick: f32 = 0,
     data_prev: Data = Data{},
-    space_taken: f32 = 0,
+    min_space_taken: f32 = 0,
     total_weight: f32 = 0,
     childRect: Rect = Rect{},
     extra_pixels: f32 = 0,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, opts: Options) BoxWidget {
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, dir: Direction, equal_space: bool, opts: Options) BoxWidget {
         var self = Self{};
         self.wd = WidgetData.init(src, id_extra, opts);
         self.dir = dir;
+        self.equal_space = equal_space;
         if (dataGet(self.wd.id, "_data", Data)) |d| {
             self.data_prev = d;
         }
@@ -4595,11 +4604,19 @@ pub const BoxWidget = struct {
         // our rect for children has to start at 0,0
         self.childRect = self.wd.contentRect().justSize();
 
-        if (self.data_prev.space_taken_prev) |taken_prev| {
+        if (self.data_prev.min_space_taken_prev) |taken_prev| {
             if (self.dir == .horizontal) {
-                self.extra_pixels = math.max(0, self.childRect.w - taken_prev);
+                if (self.equal_space) {
+                    self.extra_pixels = self.childRect.w;
+                } else {
+                    self.extra_pixels = math.max(0, self.childRect.w - taken_prev);
+                }
             } else {
-                self.extra_pixels = math.max(0, self.childRect.h - taken_prev);
+                if (self.equal_space) {
+                    self.extra_pixels = self.childRect.h;
+                } else {
+                    self.extra_pixels = math.max(0, self.childRect.h - taken_prev);
+                }
             }
         }
 
@@ -4616,7 +4633,7 @@ pub const BoxWidget = struct {
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         var current_weight: f32 = 0.0;
-        if ((self.dir == .horizontal and e.horizontal()) or (self.dir == .vertical and e.vertical())) {
+        if (self.equal_space or (self.dir == .horizontal and e.horizontal()) or (self.dir == .vertical and e.vertical())) {
             current_weight = 1.0;
         }
         self.total_weight += current_weight;
@@ -4636,9 +4653,13 @@ pub const BoxWidget = struct {
 
         if (self.dir == .horizontal) {
             rect.h = self.childRect.h;
-            rect.w += pixels_per_w * current_weight;
+            if (self.equal_space) {
+                rect.w = pixels_per_w * current_weight;
+            } else {
+                rect.w += pixels_per_w * current_weight;
+            }
 
-            if (g.h <= 0.5) {
+            if (g.x <= 0.5) {
                 self.childRect.w = math.max(0, self.childRect.w - rect.w);
                 self.childRect.x += rect.w;
             } else {
@@ -4647,9 +4668,13 @@ pub const BoxWidget = struct {
             }
         } else if (self.dir == .vertical) {
             rect.w = self.childRect.w;
-            rect.h += pixels_per_w * current_weight;
+            if (self.equal_space) {
+                rect.h = pixels_per_w * current_weight;
+            } else {
+                rect.h += pixels_per_w * current_weight;
+            }
 
-            if (g.v <= 0.5) {
+            if (g.y <= 0.5) {
                 self.childRect.h = math.max(0, self.childRect.h - rect.h);
                 self.childRect.y += rect.h;
             } else {
@@ -4668,10 +4693,18 @@ pub const BoxWidget = struct {
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
         if (self.dir == .horizontal) {
-            self.space_taken += s.w;
+            if (self.equal_space) {
+                self.min_space_taken = math.max(self.min_space_taken, s.w);
+            } else {
+                self.min_space_taken += s.w;
+            }
             self.max_thick = math.max(self.max_thick, s.h);
         } else {
-            self.space_taken += s.h;
+            if (self.equal_space) {
+                self.min_space_taken = math.max(self.min_space_taken, s.h);
+            } else {
+                self.min_space_taken += s.h;
+            }
             self.max_thick = math.max(self.max_thick, s.w);
         }
     }
@@ -4689,17 +4722,27 @@ pub const BoxWidget = struct {
     pub fn deinit(self: *Self) void {
         var ms: Size = undefined;
         if (self.dir == .horizontal) {
-            ms.w = self.space_taken;
+            if (self.equal_space) {
+                ms.w = self.min_space_taken * self.total_weight;
+            } else {
+                ms.w = self.min_space_taken;
+            }
             ms.h = self.max_thick;
-            if (self.total_weight > 0 and self.childRect.w > 0) {
+            if (self.total_weight > 0 and self.childRect.w > 0.001) {
                 // we have expanded children, but didn't use all the space, so something has changed
+                // equal_space could mean we don't exactly use all the space (due to floating point)
                 cueFrame();
             }
         } else {
-            ms.h = self.space_taken;
+            if (self.equal_space) {
+                ms.h = self.min_space_taken * self.total_weight;
+            } else {
+                ms.h = self.min_space_taken;
+            }
             ms.w = self.max_thick;
-            if (self.total_weight > 0 and self.childRect.h > 0) {
+            if (self.total_weight > 0 and self.childRect.h > 0.001) {
                 // we have expanded children, but didn't use all the space, so something has changed
+                // equal_space could mean we don't exactly use all the space (due to floating point)
                 cueFrame();
             }
         }
@@ -4708,7 +4751,7 @@ pub const BoxWidget = struct {
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
 
-        dataSet(self.wd.id, "_data", Data{ .total_weight_prev = self.total_weight, .space_taken_prev = self.space_taken });
+        dataSet(self.wd.id, "_data", Data{ .total_weight_prev = self.total_weight, .min_space_taken_prev = self.min_space_taken });
 
         _ = parentSet(self.wd.parent);
     }
@@ -4742,7 +4785,7 @@ pub const ScrollAreaWidget = struct {
         var self = Self{};
         const options = defaults.override(opts);
 
-        self.hbox = BoxWidget.init(src, id_extra, .horizontal, options);
+        self.hbox = BoxWidget.init(src, id_extra, .horizontal, false, options);
         self.io_scroll_info = io_si;
         self.scroll_info = if (io_si) |iosi| iosi.* else (dataGet(self.hbox.data().id, "_scroll_info", ScrollInfo) orelse ScrollInfo{});
         return self;
@@ -4771,7 +4814,7 @@ pub const ScrollAreaWidget = struct {
             si = &self.scroll_info;
         }
 
-        var bar = ScrollBarWidget.init(@src(), 0, si, .{ .gravity_horz = 1.0 });
+        var bar = ScrollBarWidget.init(@src(), 0, si, .{ .gravity_x = 1.0 });
         try bar.install(.{});
         bar.deinit();
 
@@ -5397,7 +5440,7 @@ pub const MenuWidget = struct {
         try self.wd.register("Menu", null);
         try self.wd.borderAndBackground();
 
-        self.box = BoxWidget.init(@src(), 0, self.dir, self.wd.options.strip());
+        self.box = BoxWidget.init(@src(), 0, self.dir, false, self.wd.options.strip());
         try self.box.install(.{});
     }
 
@@ -5742,6 +5785,10 @@ pub const LabelWidget = struct {
         const oldclip = clip(rs.r);
         var iter = std.mem.split(u8, self.label_str, "\n");
         while (iter.next()) |line| {
+            const lineRect = placeIn(self.wd.contentRect(), try self.wd.options.fontGet().textSize(line), .none, self.wd.options.gravityGet());
+            const liners = self.wd.parent.screenRectScale(lineRect);
+
+            rs.r.x = liners.r.x;
             try renderText(self.wd.options.fontGet(), line, rs, self.wd.options.colorGet());
             rs.r.y += rs.s * try self.wd.options.fontGet().lineSkip();
         }
@@ -5991,7 +6038,7 @@ pub fn button(src: std.builtin.SourceLocation, id_extra: usize, label_str: []con
     var bw = ButtonWidget.init(src, id_extra, opts);
     try bw.install(.{});
 
-    try labelNoFmt(@src(), 0, label_str, opts.strip().override(.{ .gravity_horz = 0.5, .gravity_vert = 0.5 }));
+    try labelNoFmt(@src(), 0, label_str, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
 
     var click = bw.clicked();
     bw.deinit();
@@ -6001,7 +6048,7 @@ pub fn button(src: std.builtin.SourceLocation, id_extra: usize, label_str: []con
 pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) !bool {
     // since we are given the icon height, we can precalculate our size, which can save a frame
     const width = iconWidth(name, tvg_bytes, height) catch height;
-    const iconopts = opts.strip().override(.{ .gravity_horz = 0.5, .gravity_vert = 0.5, .min_size_content = .{ .w = width, .h = height } });
+    const iconopts = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = .{ .w = width, .h = height } });
 
     var bw = ButtonWidget.init(src, id_extra, opts.override(.{ .min_size_content = iconopts.min_sizeGet() }));
     try bw.install(.{});
@@ -6036,7 +6083,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
     defer b.deinit();
 
     var check_size = try options.fontGet().lineSkip();
-    const s = spacer(@src(), 0, Size.all(check_size), .{ .gravity_horz = 0.5, .gravity_vert = 0.5 });
+    const s = spacer(@src(), 0, Size.all(check_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
     var rs = s.borderRectScale();
     rs.r = rs.r.insetAll(0.5 * rs.s);
@@ -6045,7 +6092,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
 
     if (label_str) |str| {
         _ = spacer(@src(), 0, .{ .w = checkbox_defaults.paddingGet().w }, .{});
-        try labelNoFmt(@src(), 0, str, options.strip().override(.{ .gravity_horz = 0.5, .gravity_vert = 0.5 }));
+        try labelNoFmt(@src(), 0, str, options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
     }
 }
 
@@ -7017,14 +7064,14 @@ pub const WidgetData = struct {
             // was a binding constraint.  So if our min size changed it might cause
             // layout changes.
 
-            //debug("{x} minSizeSetAndCue {} {} {}", .{ self.id, self.rect, ms, self.min_size });
-
             // If this was like a Label where we knew the min size before getting our
             // rect, then either our min size is the same as previous, or our rect is
             // a different size than our previous min size.
             if ((self.rect.w == ms.w and ms.w != self.min_size.w) or
                 (self.rect.h == ms.h and ms.h != self.min_size.h))
             {
+                //std.debug.print("{x} minSizeSetAndCue {} {} {}\n", .{ self.id, self.rect, ms, self.min_size });
+
                 cueFrame();
             }
         } else {
@@ -7370,7 +7417,7 @@ pub const examples = struct {
             try tl.addText(message, .{});
             tl.deinit();
 
-            if (try gui.button(@src(), 0, "Ok", .{ .gravity_horz = 0.5, .gravity_vert = 0.5, .tab_index = 1 })) {
+            if (try gui.button(@src(), 0, "Ok", .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
                 closing = true;
                 gui.dataSet(id, "response", gui.DialogResponse.ok);
             }
@@ -7414,7 +7461,7 @@ pub const examples = struct {
                 var toast_win = FloatingWindowWidget.init(@src(), 0, false, null, null, .{ .background = false, .border = .{} });
                 defer toast_win.deinit();
 
-                toast_win.data().rect = gui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .h = 0.5, .v = 0.7 });
+                toast_win.data().rect = gui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
                 toast_win.stayAboveParent();
                 toast_win.autoSize();
                 try toast_win.install(.{ .process_events = false });
@@ -7444,9 +7491,9 @@ pub const examples = struct {
                 try basicWidgets();
             }
 
-            //if (try gui.expander(@src(), 0, "Styling", .{ .expand = .horizontal })) {
-            //    try styling();
-            //}
+            if (try gui.expander(@src(), 0, "Styling", .{ .expand = .horizontal })) {
+                try styling();
+            }
 
             if (try gui.expander(@src(), 0, "Layout", .{ .expand = .horizontal })) {
                 try layout();
@@ -7516,42 +7563,75 @@ pub const examples = struct {
     pub fn basicWidgets() !void {
         var b = try gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
-
         {
             var hbox = try gui.box(@src(), 0, .horizontal, .{});
             defer hbox.deinit();
 
-            _ = try gui.button(@src(), 0, "Normal", .{});
-            _ = try gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
-            _ = try gui.button(@src(), 0, "Success", .{ .color_style = .success });
-            _ = try gui.button(@src(), 0, "Error", .{ .color_style = .err });
+            _ = try gui.button(@src(), 0, "Button", .{});
+            _ = try gui.button(@src(), 0, "Multi-line\nButton", .{});
         }
 
         try gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{});
     }
 
     pub fn styling() !void {
-        const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .background = true };
-        const rect = gui.Rect{ .x = 1, .y = 3, .w = 5, .h = 7 };
-        try gui.label(@src(), 0, "margin", .{}, .{});
+        try gui.label(@src(), 0, "color style:", .{}, .{});
         {
             var hbox = try gui.box(@src(), 0, .horizontal, .{});
             defer hbox.deinit();
 
+            _ = try gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
+            _ = try gui.button(@src(), 0, "Success", .{ .color_style = .success });
+            _ = try gui.button(@src(), 0, "Error", .{ .color_style = .err });
+            _ = try gui.button(@src(), 0, "Window", .{ .color_style = .window });
+            _ = try gui.button(@src(), 0, "Content", .{ .color_style = .content });
+            _ = try gui.button(@src(), 0, "Control", .{ .color_style = .control });
+        }
+
+        try gui.label(@src(), 0, "margin/border/padding:", .{}, .{});
+        {
+            var hbox = try gui.box(@src(), 0, .horizontal, .{});
+            defer hbox.deinit();
+
+            const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .background = true, .gravity_x = 0.5, .gravity_y = 0.5 };
+
             var o = try gui.overlay(@src(), 0, opts);
-            _ = try gui.button(@src(), 0, "all 0", .{ .margin = .{}, .border = .{}, .padding = .{} });
+            _ = try gui.button(@src(), 0, "default", .{});
             o.deinit();
 
             o = try gui.overlay(@src(), 0, opts);
-            _ = try gui.button(@src(), 0, "margin 1,3,5,7", .{ .margin = rect });
+            _ = try gui.button(@src(), 0, "+border", .{ .border = gui.Rect.all(2) });
             o.deinit();
+
+            o = try gui.overlay(@src(), 0, opts);
+            _ = try gui.button(@src(), 0, "+padding 10", .{ .border = gui.Rect.all(2), .padding = gui.Rect.all(10) });
+            o.deinit();
+
+            o = try gui.overlay(@src(), 0, opts);
+            _ = try gui.button(@src(), 0, "+margin 10", .{ .border = gui.Rect.all(2), .margin = gui.Rect.all(10), .padding = gui.Rect.all(10) });
+            o.deinit();
+        }
+
+        try gui.label(@src(), 0, "corner radius:", .{}, .{});
+        {
+            var hbox = try gui.box(@src(), 0, .horizontal, .{});
+            defer hbox.deinit();
+
+            const opts: Options = .{ .border = gui.Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
+
+            _ = try gui.button(@src(), 0, "0", opts.override(.{ .corner_radius = gui.Rect.all(0) }));
+            _ = try gui.button(@src(), 0, "2", opts.override(.{ .corner_radius = gui.Rect.all(2) }));
+            _ = try gui.button(@src(), 0, "7", opts.override(.{ .corner_radius = gui.Rect.all(7) }));
+            _ = try gui.button(@src(), 0, "100", opts.override(.{ .corner_radius = gui.Rect.all(100) }));
+            _ = try gui.button(@src(), 0, "mixed", opts.override(.{ .corner_radius = .{ .x = 0, .y = 2, .w = 7, .h = 100 } }));
         }
     }
 
     pub fn layout() !void {
-        const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 120 } };
+        const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
+
+        try gui.label(@src(), 0, "gravity:", .{}, .{});
         {
-            try gui.label(@src(), 0, "gravity options:", .{}, .{});
             var o = try gui.overlay(@src(), 0, opts);
             defer o.deinit();
 
@@ -7559,13 +7639,13 @@ pub const examples = struct {
 
             inline for ([3]f32{ 0.0, 0.5, 1.0 }) |horz, hi| {
                 inline for ([3]f32{ 0.0, 0.5, 1.0 }) |vert, vi| {
-                    _ = try gui.button(@src(), hi * 3 + vi, try std.fmt.bufPrint(&buf, "{d},{d}", .{ horz, vert }), .{ .gravity_horz = horz, .gravity_vert = vert });
+                    _ = try gui.button(@src(), hi * 3 + vi, try std.fmt.bufPrint(&buf, "{d},{d}", .{ horz, vert }), .{ .gravity_x = horz, .gravity_y = vert });
                 }
             }
         }
 
+        try gui.label(@src(), 0, "expand:", .{}, .{});
         {
-            try gui.label(@src(), 0, "expand options:", .{}, .{});
             var hbox = try gui.box(@src(), 0, .horizontal, .{});
             defer hbox.deinit();
             {
@@ -7581,6 +7661,57 @@ pub const examples = struct {
                 defer vbox.deinit();
 
                 _ = try gui.button(@src(), 0, "both", .{ .expand = .both });
+            }
+        }
+
+        try gui.label(@src(), 0, "boxes:", .{}, .{});
+        {
+            const grav: Options = .{ .gravity_x = 0.5, .gravity_y = 0.5 };
+
+            var hbox = try gui.box(@src(), 0, .horizontal, .{});
+            defer hbox.deinit();
+            {
+                var hbox2 = try gui.box(@src(), 0, .horizontal, .{ .min_size_content = .{ .w = 200, .h = 140 } });
+                defer hbox2.deinit();
+                {
+                    var vbox = try gui.box(@src(), 0, .vertical, opts.override(.{ .expand = .both, .min_size_content = .{} }));
+                    defer vbox.deinit();
+
+                    _ = try gui.button(@src(), 0, "vertical", grav);
+                    _ = try gui.button(@src(), 0, "expand", grav.override(.{ .expand = .vertical }));
+                    _ = try gui.button(@src(), 0, "a", grav);
+                }
+
+                {
+                    var vbox = try gui.box(@src(), 0, .vertical, opts.override(.{ .expand = .both, .min_size_content = .{} }));
+                    defer vbox.deinit();
+
+                    _ = try gui.button(@src(), 0, "vert equal", grav);
+                    _ = try gui.button(@src(), 0, "expand", grav.override(.{ .expand = .vertical }));
+                    _ = try gui.button(@src(), 0, "a", grav);
+                }
+            }
+
+            {
+                var vbox2 = try gui.box(@src(), 0, .vertical, .{ .min_size_content = .{ .w = 200, .h = 140 } });
+                defer vbox2.deinit();
+                {
+                    var hbox2 = try gui.box(@src(), 0, .horizontal, opts.override(.{ .expand = .both, .min_size_content = .{} }));
+                    defer hbox2.deinit();
+
+                    _ = try gui.button(@src(), 0, "horizontal", grav);
+                    _ = try gui.button(@src(), 0, "expand", grav.override(.{ .expand = .horizontal }));
+                    _ = try gui.button(@src(), 0, "a", grav);
+                }
+
+                {
+                    var hbox2 = try gui.box(@src(), 0, .horizontal, opts.override(.{ .expand = .both, .min_size_content = .{} }));
+                    defer hbox2.deinit();
+
+                    _ = try gui.button(@src(), 0, "horz\nequal", grav);
+                    _ = try gui.button(@src(), 0, "expand", grav.override(.{ .expand = .horizontal }));
+                    _ = try gui.button(@src(), 0, "a", grav);
+                }
             }
         }
     }
@@ -7724,15 +7855,15 @@ pub const examples = struct {
             defer hbox.deinit();
 
             if (try gui.button(@src(), 0, "Toast 1", .{})) {
-                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast 1 to this demo window");
+                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast 1 to demo window");
             }
 
             if (try gui.button(@src(), 0, "Toast 2", .{})) {
-                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast 2 to this demo window");
+                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast 2 to demo window");
             }
 
             if (try gui.button(@src(), 0, "Toast 3", .{})) {
-                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast 3 to this demo window");
+                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast 3 to demo window");
             }
         }
     }
@@ -7788,7 +7919,7 @@ pub const examples = struct {
 
         {
             _ = gui.spacer(@src(), 0, .{}, .{ .expand = .vertical });
-            var hbox = try gui.box(@src(), 0, .horizontal, .{ .gravity_horz = 1.0 });
+            var hbox = try gui.box(@src(), 0, .horizontal, .{ .gravity_x = 1.0 });
             defer hbox.deinit();
 
             if (try gui.button(@src(), 0, "Yes", .{})) {
@@ -7822,7 +7953,7 @@ pub const examples = struct {
                 var iconbox = try gui.box(@src(), i, .horizontal, .{ .expand = .horizontal, .rect = r });
 
                 _ = try gui.buttonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
-                try gui.labelNoFmt(@src(), 0, d.name, .{ .gravity_vert = 0.5 });
+                try gui.labelNoFmt(@src(), 0, d.name, .{ .gravity_y = 0.5 });
 
                 iconbox.deinit();
 
