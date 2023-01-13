@@ -1,9 +1,4 @@
 
-add to demo place that shows margin/border/padding
-- need boxes to do equal-sized placement
-  - if total weight is 0, allocate as much space as needed for largest element
-  - if total weight is >0, allocate evenly total space
-
 example toast that includes "undo"
 
 add draggable slider thing for podcast duration
