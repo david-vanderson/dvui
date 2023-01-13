@@ -1,7 +1,7 @@
 const std = @import("std");
 const gui = @import("gui.zig");
 pub const c = @cImport({
-    @cInclude("SDL2/SDL.h");
+    @cInclude("SDL.h");
 });
 
 const SDLBackend = @This();
