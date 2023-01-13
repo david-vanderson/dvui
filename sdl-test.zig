@@ -156,7 +156,7 @@ pub fn main() !void {
                     var z: usize = 0;
                     while (z < maxz) : (z += 1) {
                         const buf_slice = std.fmt.bufPrint(&buf, "Button {d:0>2}", .{z}) catch unreachable;
-                        if (try gui.button(@src(), z, buf_slice, .{ .gravity_horz = 0.5, .gravity_vert = 1.0 })) {
+                        if (try gui.button(@src(), z, buf_slice, .{ .gravity_x = 0.5, .gravity_y = 1.0 })) {
                             if (z % 2 == 0) {
                                 maxz += 1;
                             } else {
@@ -179,7 +179,7 @@ pub fn main() !void {
                     }
 
                     try button.install(.{});
-                    try gui.labelNoFmt(@src(), 0, "Wiggle", button.data().options.strip().override(.{ .gravity_horz = 0.5, .gravity_vert = 0.5 }));
+                    try gui.labelNoFmt(@src(), 0, "Wiggle", button.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
 
                     if (button.clicked()) {
                         const a = gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 500_000 };
@@ -238,7 +238,7 @@ pub fn main() !void {
             const fps = gui.FPS();
             //std.debug.print("fps {d}\n", .{@round(fps)});
             //gui.render_text = true;
-            try gui.label(@src(), 0, "fps {d:4.2}", .{fps}, .{ .gravity_horz = 1.0 });
+            try gui.label(@src(), 0, "fps {d:4.2}", .{fps}, .{ .gravity_x = 1.0 });
             //gui.render_text = false;
         }
 
@@ -264,7 +264,7 @@ pub fn main() !void {
 
                 try fwin.install(.{});
                 defer fwin.deinit();
-                try gui.labelNoFmt(@src(), 0, "Floating Window", .{ .gravity_horz = 0.5, .gravity_vert = 0.5 });
+                try gui.labelNoFmt(@src(), 0, "Floating Window", .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
                 try gui.label(@src(), 0, "Pretty Cool", .{}, .{ .font = .{ .name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 20 } });
 
@@ -283,7 +283,7 @@ pub fn main() !void {
                         var buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{ fi, name }) catch unreachable;
                         var fw2 = try gui.floatingWindow(@src(), fi, modal, null, f, .{ .color_style = .window, .min_size_content = .{ .w = 150, .h = 100 } });
                         defer fw2.deinit();
-                        try gui.labelNoFmt(@src(), 0, buf_slice, .{ .gravity_horz = 0.5, .gravity_vert = 0.5 });
+                        try gui.labelNoFmt(@src(), 0, buf_slice, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
                         try gui.label(@src(), 0, "Asking a Question", .{}, .{});
 
@@ -311,7 +311,7 @@ pub fn main() !void {
                     if (try gui.button(@src(), 0, "Win Up .1", .{})) {
                         fwin.wd.rect.y -= 0.1;
                     }
-                    if (try gui.button(@src(), 0, "Win Down .1", .{ .gravity_horz = 1.0 })) {
+                    if (try gui.button(@src(), 0, "Win Down .1", .{ .gravity_x = 1.0 })) {
                         fwin.wd.rect.y += 0.1;
                     }
                 }
