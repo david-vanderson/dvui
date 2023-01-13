@@ -1863,6 +1863,7 @@ pub const Window = struct {
     debug_info_name_rect: []u8 = "",
     debug_info_src_id_extra: []u8 = "",
     debug_under_mouse: bool = false,
+    debug_under_mouse_quitting: bool = false,
     debug_under_mouse_info: []u8 = "",
 
     pub fn init(
@@ -1972,12 +1973,22 @@ pub const Window = struct {
     }
 
     pub fn addEventMouseButton(self: *Self, kind: MouseEvent.Kind) !bool {
+        if (self.debug_under_mouse and kind == .press and kind.press == .left) {
+            // a left click will stop the debug stuff from following the mouse,
+            // but need to stop it at the end of the frame when we've gotten
+            // the info
+            self.debug_under_mouse_quitting = true;
+            return true;
+        }
+
         self.positionMouseEventRemove();
 
         const winId = self.windowFor(self.mouse_pt);
 
         if (kind == .press and (kind.press == .left or kind.press == .right)) {
-            // normally the focus event is what focuses windows, but since the base window is instantiated before events are added, it has to do any event processing as the events come in, right now
+            // normally the focus event is what focuses windows, but since the
+            // base window is instantiated before events are added, it has to
+            // do any event processing as the events come in, right now
             if (winId == self.wd.id) {
                 // focus the window here so any more key events get routed
                 // properly
@@ -2664,6 +2675,11 @@ pub const Window = struct {
     }
 
     fn debugWindowShow(self: *Self) !void {
+        if (self.debug_under_mouse_quitting) {
+            self.debug_under_mouse = false;
+            self.debug_under_mouse_quitting = false;
+        }
+
         // disable so the widgets we are about to use to display this data
         // don't modify the data, otherwise our iterator will get corrupted and
         // even if you search for a widget here, the data won't be available
@@ -2695,7 +2711,7 @@ pub const Window = struct {
         try tl.addText(self.debug_info_src_id_extra, .{});
         tl.deinit();
 
-        if (try gui.button(@src(), 0, "Toggle Mouse Under", .{})) {
+        if (try gui.button(@src(), 0, if (dum) "Stop (Or Left Click)" else "Debug Under Mouse", .{})) {
             dum = !dum;
         }
 
@@ -6908,6 +6924,8 @@ pub const WidgetData = struct {
                 if (old.len > 0) {
                     cw.gpa.free(old);
                 }
+
+                cw.debug_widget_id = self.id;
             }
 
             if (self.id == cw.debug_widget_id) {
