@@ -527,14 +527,14 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
         var dialog = try gui.floatingWindow(@src(), 0, true, null, &add_rss_dialog, .{});
         defer dialog.deinit();
 
-        try gui.labelNoFmt(@src(), 0, "Add RSS Feed", .{ .gravity_horz = 0.5, .gravity_vert = 0.5 });
+        try gui.labelNoFmt(@src(), 0, "Add RSS Feed", .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
         const TextEntryText = struct {
             var text = [_]u8{0} ** 100;
         };
 
         const msize = gui.TextEntryWidget.defaults.fontGet().textSize("M") catch unreachable;
-        var te = gui.TextEntryWidget.init(@src(), 0, &TextEntryText.text, .{ .gravity_horz = 0.5, .gravity_vert = 0.5, .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
+        var te = gui.TextEntryWidget.init(@src(), 0, &TextEntryText.text, .{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
         if (gui.firstFrame(te.data().id)) {
             std.mem.set(u8, &TextEntryText.text, 0);
             gui.focusWidget(te.wd.id, null);
@@ -542,7 +542,7 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
         try te.install(.{});
         te.deinit();
 
-        var box2 = try gui.box(@src(), 0, .horizontal, .{ .gravity_horz = 1.0 });
+        var box2 = try gui.box(@src(), 0, .horizontal, .{ .gravity_x = 1.0 });
         defer box2.deinit();
         if (try gui.button(@src(), 0, "Ok", .{})) {
             dialog.close();
@@ -570,7 +570,7 @@ fn podcastSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
 
     const oo3 = gui.Options{
         .expand = .horizontal,
-        .gravity_vert = 0.5,
+        .gravity_y = 0.5,
         .color_style = .content,
     };
 
@@ -692,7 +692,7 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
                 var tl = try gui.textLayout(@src(), episode.rowid, .{ .expand = .horizontal, .rect = r });
                 defer tl.deinit();
 
-                var cbox = try gui.box(@src(), 0, .vertical, gui.Options{ .gravity_horz = 1.0 });
+                var cbox = try gui.box(@src(), 0, .vertical, gui.Options{ .gravity_x = 1.0 });
 
                 const filename = try std.fmt.allocPrint(arena, "episode_{d}.aud", .{episode.rowid});
                 const file = std.fs.cwd().openFile(filename, .{}) catch null;
@@ -750,7 +750,7 @@ fn episodeSide(arena: std.mem.Allocator, paned: *gui.PanedWidget) !void {
                 const hrs = @floor(episode.duration / 60.0 / 60.0);
                 const mins = @floor((episode.duration - (hrs * 60.0 * 60.0)) / 60.0);
                 const secs = @floor(episode.duration - (hrs * 60.0 * 60.0) - (mins * 60.0));
-                try gui.label(@src(), 0, "{d:0>2}:{d:0>2}:{d:0>2}", .{ hrs, mins, secs }, .{ .font_style = .heading, .gravity_horz = 1.0, .gravity_vert = 1.0 });
+                try gui.label(@src(), 0, "{d:0>2}:{d:0>2}:{d:0>2}", .{ hrs, mins, secs }, .{ .font_style = .heading, .gravity_x = 1.0, .gravity_y = 1.0 });
 
                 var f = gui.themeGet().font_heading;
                 f.line_skip_factor = 1.3;
@@ -808,16 +808,16 @@ fn player(arena: std.mem.Allocator) !void {
         const mins_left = @floor((time_left - (hrs_left * 60.0 * 60.0)) / 60.0);
         const secs_left = @floor(time_left - (hrs_left * 60.0 * 60.0) - (mins_left * 60.0));
         if (hrs_left > 0) {
-            try gui.label(@src(), 0, "{d}:{d:0>2}:{d:0>2}", .{ hrs_left, mins_left, secs_left }, .{ .min_size_content = time_max_size, .gravity_horz = 1.0, .gravity_vert = 0.5 });
+            try gui.label(@src(), 0, "{d}:{d:0>2}:{d:0>2}", .{ hrs_left, mins_left, secs_left }, .{ .min_size_content = time_max_size, .gravity_x = 1.0, .gravity_y = 0.5 });
         } else {
-            try gui.label(@src(), 0, "{d:0>2}:{d:0>2}", .{ mins_left, secs_left }, .{ .min_size_content = time_max_size, .gravity_horz = 1.0, .gravity_vert = 0.5 });
+            try gui.label(@src(), 0, "{d:0>2}:{d:0>2}", .{ mins_left, secs_left }, .{ .min_size_content = time_max_size, .gravity_x = 1.0, .gravity_y = 0.5 });
         }
     }
 
     var button_box = try gui.box(@src(), 0, .horizontal, .{ .expand = .horizontal, .padding = .{ .x = 4, .y = 0, .w = 4, .h = 4 } });
     defer button_box.deinit();
 
-    const oo2 = gui.Options{ .expand = .both, .gravity_horz = 0.5, .gravity_vert = 0.5 };
+    const oo2 = gui.Options{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 };
 
     if (try gui.buttonIcon(@src(), 0, 20, "back", gui.icons.papirus.actions.media_seek_backward_symbolic, oo2)) {
         stream_seek_time = std.math.max(0.0, current_time - 5.0);
