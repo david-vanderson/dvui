@@ -1,8 +1,15 @@
 
-example toast that includes "undo"
-
 add draggable slider thing for podcast duration
 - drag starts in any location, don't have to hit the current location to start
+
+add alpha to Options as well and multiply it by the theme alpha
+
+use RectScale.child instead of copying it all over in screenRectScale
+- make a RectScale function to convert a Point fron screen to local and back
+
+rename CursorKind to Cursor
+
+example toast that includes "undo"
 
 add progress bar for file downloading
 

@@ -787,6 +787,15 @@ fn player(arena: std.mem.Allocator) !void {
         _ = dbRow(arena, "UPDATE episode SET duration=? WHERE rowid=?", i32, .{ current_time, episode.rowid }) catch {};
     }
 
+    var percent: f32 = @floatCast(f32, current_time / episode.duration);
+    if (try gui.slider(@src(), 0, .horizontal, &percent, .{ .expand = .horizontal })) {
+        stream_seek_time = percent * episode.duration;
+        buffer.discard(buffer.readableLength());
+        buffer_last_time = stream_seek_time.?;
+        current_time = stream_seek_time.?;
+        audio_condition.signal();
+    }
+
     {
         var box3 = try gui.box(@src(), 0, .horizontal, .{ .expand = .horizontal, .padding = .{ .x = 4, .y = 4, .w = 4, .h = 4 } });
         defer box3.deinit();

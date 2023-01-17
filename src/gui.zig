@@ -6060,6 +6060,76 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32,
     return click;
 }
 
+pub var slider_defaults: Options = .{
+    .padding = Rect.all(2),
+    .min_size_content = .{ .w = 20, .h = 20 },
+};
+
+// returns true if percent was changed
+pub fn slider(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Direction, percent: *f32, opts: Options) !bool {
+    const options = slider_defaults.override(opts);
+
+    var b = try box(src, id_extra, dir, options);
+    defer b.deinit();
+
+    _ = captureMouseMaintain(b.data().id);
+    var ret = false;
+
+    const br = b.data().contentRect();
+    const knobsize = math.min(br.w, br.h);
+    const track = Rect{ .x = knobsize / 2, .y = br.h / 2 - 2, .w = br.w - knobsize, .h = 4 };
+    const trackrs = b.widget().screenRectScale(track);
+
+    const rs = b.data().contentRectScale();
+    var iter = EventIterator.init(b.data().id, rs.r);
+    while (iter.next()) |e| {
+        switch (e.evt) {
+            .mouse => |me| {
+                var p: ?Point = null;
+                if (me.kind == .press and me.kind.press == .left) {
+                    // capture
+                    captureMouse(b.data().id);
+                    e.handled = true;
+                    p = me.p;
+                } else if (me.kind == .release and me.kind.release == .left) {
+                    // stop capture
+                    captureMouse(null);
+                    e.handled = true;
+                } else if (me.kind == .motion and captureMouseGet() == b.data().id) {
+                    // handle only if we have capture
+                    e.handled = true;
+                    p = me.p;
+                }
+
+                if (p) |pp| {
+                    const min = trackrs.r.x;
+                    const max = trackrs.r.x + trackrs.r.w;
+                    if (max > min) {
+                        percent.* = (pp.x - min) / (max - min);
+                        percent.* = math.max(0, math.min(1, percent.*));
+                        ret = true;
+                    }
+                }
+            },
+            else => {},
+        }
+    }
+
+    try pathAddRect(trackrs.r, Rect.all(100).scale(trackrs.s));
+    try pathFillConvex(options.colorGet());
+
+    var knob = Rect{ .x = (br.w - knobsize) * percent.*, .w = knobsize, .h = knobsize };
+    themeGet().alpha = 0.5;
+    _ = try gui.button(@src(), 0, "", .{ .rect = knob, .padding = .{}, .margin = .{}, .corner_radius = Rect.all(100), .color_style = .err });
+    themeGet().alpha = 1.0;
+
+    if (ret) {
+        cueFrame();
+    }
+
+    return ret;
+}
+
 pub var checkbox_defaults: Options = .{
     .corner_radius = gui.Rect.all(2),
     .padding = Rect.all(4),
@@ -7323,6 +7393,7 @@ pub const Backend = struct {
 pub const examples = struct {
     pub var show_demo_window: bool = true;
     var checkbox_bool: bool = false;
+    var slider_val: f32 = 0.0;
     var show_dialog: bool = false;
     var scale_val: f32 = 1.0;
 
@@ -7572,6 +7643,9 @@ pub const examples = struct {
         }
 
         try gui.checkbox(@src(), 0, &checkbox_bool, "Checkbox", .{});
+
+        _ = try gui.slider(@src(), 0, .horizontal, &slider_val, .{ .expand = .horizontal });
+        try gui.label(@src(), 0, "slider value: {d:2.2}", .{slider_val}, .{});
     }
 
     pub fn styling() !void {
