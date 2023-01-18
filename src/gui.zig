@@ -7844,7 +7844,7 @@ pub const examples = struct {
                 }
 
                 {
-                    var vbox = try gui.box(@src(), 0, .vertical, opts.override(.{ .expand = .both, .min_size_content = .{} }));
+                    var vbox = try gui.boxEqual(@src(), 0, .vertical, opts.override(.{ .expand = .both, .min_size_content = .{} }));
                     defer vbox.deinit();
 
                     _ = try gui.button(@src(), 0, "vert equal", grav);
@@ -7866,7 +7866,7 @@ pub const examples = struct {
                 }
 
                 {
-                    var hbox2 = try gui.box(@src(), 0, .horizontal, opts.override(.{ .expand = .both, .min_size_content = .{} }));
+                    var hbox2 = try gui.boxEqual(@src(), 0, .horizontal, opts.override(.{ .expand = .both, .min_size_content = .{} }));
                     defer hbox2.deinit();
 
                     _ = try gui.button(@src(), 0, "horz\nequal", grav);
