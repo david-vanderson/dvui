@@ -27,23 +27,46 @@ pub fn debug(comptime str: []const u8, args: anytype) void {
 }
 
 pub const Theme = struct {
+    pub const ColorStyle = enum {
+        content, // default
+        accent,
+        control,
+        window,
+        success,
+        err,
+    };
+
+    pub const StyleColors = struct {
+        // used to show focus
+        accent: ?Color = null,
+
+        text: ?Color = null,
+
+        // background color contrasting the most with the text color, used when
+        // displaying lots of text
+        fill: ?Color = null,
+
+        border: ?Color = null,
+        hover: ?Color = null,
+        press: ?Color = null,
+    };
+
     name: []const u8,
     dark: bool,
 
     alpha: f32 = 1.0,
 
-    color_accent: Color,
-    color_accent_bg: Color,
-    color_success: Color,
-    color_success_bg: Color,
-    color_err: Color,
-    color_err_bg: Color,
-    color_window: Color,
-    color_window_bg: Color,
-    color_content: Color,
-    color_content_bg: Color,
-    color_control: Color,
-    color_control_bg: Color,
+    // Options.color_style selects between these
+
+    // content is default and must have all fields non-null
+    style_content: StyleColors,
+
+    // any null fields in these will use .content fields
+    style_accent: StyleColors,
+    style_control: StyleColors,
+    style_window: StyleColors,
+    style_success: StyleColors,
+    style_err: StyleColors,
 
     font_body: Font,
     font_heading: Font,
@@ -56,56 +79,118 @@ pub const Theme = struct {
     font_title_4: Font,
 };
 
-pub var theme_Adwaita = Theme{
-    .name = "Adwaita",
-    .dark = false,
-    .font_body = Font{ .size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
-    .font_heading = Font{ .size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .font_caption = Font{ .size = 9, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
-    .font_caption_heading = Font{ .size = 9, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .font_title = Font{ .size = 24, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
-    .font_title_1 = Font{ .size = 20, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .font_title_2 = Font{ .size = 17, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .font_title_3 = Font{ .size = 15, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .font_title_4 = Font{ .size = 13, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .color_accent = Color{ .r = 0xff, .g = 0xff, .b = 0xff },
-    .color_accent_bg = Color{ .r = 0x35, .g = 0x84, .b = 0xe4 },
-    .color_success = Color{ .r = 0xff, .g = 0xff, .b = 0xff },
-    .color_success_bg = Color{ .r = 0x2e, .g = 0xc2, .b = 0x7e },
-    .color_err = Color{ .r = 0xff, .g = 0xff, .b = 0xff },
-    .color_err_bg = Color{ .r = 0xe0, .g = 0x1b, .b = 0x24 },
-    .color_window = Color{ .r = 0, .g = 0, .b = 0, .a = 0xcc },
-    .color_window_bg = Color{ .r = 0xf0, .g = 0xf0, .b = 0xf0 },
-    .color_content = Color{ .r = 0, .g = 0, .b = 0 },
-    .color_content_bg = Color{ .r = 0xff, .g = 0xff, .b = 0xff },
-    .color_control = Color{ .r = 0x31, .g = 0x31, .b = 0x31 },
-    .color_control_bg = Color{ .r = 0xe0, .g = 0xe0, .b = 0xe0 },
-};
+pub const Adwaita = struct {
+    const accent = Color{ .r = 0x35, .g = 0x84, .b = 0xe4 };
+    const success = Color{ .r = 0x2e, .g = 0xc2, .b = 0x7e };
+    const err = Color{ .r = 0xe0, .g = 0x1b, .b = 0x24 };
 
-pub var theme_Adwaita_Dark = Theme{
-    .name = "Adwaita Dark",
-    .dark = true,
-    .font_body = Font{ .size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
-    .font_heading = Font{ .size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .font_caption = Font{ .size = 9, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
-    .font_caption_heading = Font{ .size = 9, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .font_title = Font{ .size = 24, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
-    .font_title_1 = Font{ .size = 20, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .font_title_2 = Font{ .size = 17, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .font_title_3 = Font{ .size = 15, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .font_title_4 = Font{ .size = 13, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
-    .color_accent = Color{ .r = 0xff, .g = 0xff, .b = 0xff },
-    .color_accent_bg = Color{ .r = 0x35, .g = 0x84, .b = 0xe4 },
-    .color_success = Color{ .r = 0xff, .g = 0xff, .b = 0xff },
-    .color_success_bg = Color{ .r = 0x26, .g = 0xa2, .b = 0x69 },
-    .color_err = Color{ .r = 0xff, .g = 0xff, .b = 0xff },
-    .color_err_bg = Color{ .r = 0xc0, .g = 0x1c, .b = 0x28 },
-    .color_window = Color{ .r = 0xff, .g = 0xff, .b = 0xff },
-    .color_window_bg = Color{ .r = 0x24, .g = 0x24, .b = 0x24 },
-    .color_content = Color{ .r = 0xff, .g = 0xff, .b = 0xff },
-    .color_content_bg = Color{ .r = 0x1e, .g = 0x1e, .b = 0x1e },
-    .color_control = Color{ .r = 0xff, .g = 0xff, .b = 0xff },
-    .color_control_bg = Color{ .r = 0x30, .g = 0x30, .b = 0x30 },
+    pub var light = Theme{
+        .name = "Adwaita",
+        .dark = false,
+
+        .font_body = Font{ .size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
+        .font_heading = Font{ .size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
+        .font_caption = Font{ .size = 9, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
+        .font_caption_heading = Font{ .size = 9, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
+        .font_title = Font{ .size = 24, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
+        .font_title_1 = Font{ .size = 20, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
+        .font_title_2 = Font{ .size = 17, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
+        .font_title_3 = Font{ .size = 15, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
+        .font_title_4 = Font{ .size = 13, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
+
+        .style_content = .{
+            .accent = accent,
+            .text = Color.black,
+            .fill = Color.white,
+            .border = Color.lerp(Color.white, 0.4, Color.black),
+            .hover = Color.lerp(Color.white, 0.2, Color.black),
+            .press = Color.lerp(Color.white, 0.3, Color.black),
+        },
+
+        .style_control = .{ .fill = Color{ .r = 0xe0, .g = 0xe0, .b = 0xe0 } },
+        .style_window = .{ .fill = Color{ .r = 0xf0, .g = 0xf0, .b = 0xf0 } },
+
+        .style_accent = .{
+            .accent = accent.darken(0.3),
+            .fill = accent,
+            .text = Color.white,
+            .border = Color.lerp(accent, 0.4, Color.black),
+            .hover = Color.lerp(accent, 0.2, Color.black),
+            .press = Color.lerp(accent, 0.3, Color.black),
+        },
+        .style_success = .{
+            .accent = success.darken(0.3),
+            .fill = success,
+            .text = Color.white,
+            .border = Color.lerp(success, 0.4, Color.black),
+            .hover = Color.lerp(success, 0.2, Color.black),
+            .press = Color.lerp(success, 0.3, Color.black),
+        },
+        .style_err = .{
+            .accent = err.darken(0.3),
+            .fill = err,
+            .text = Color.white,
+            .border = Color.lerp(err, 0.4, Color.black),
+            .hover = Color.lerp(err, 0.2, Color.black),
+            .press = Color.lerp(err, 0.3, Color.black),
+        },
+    };
+
+    const dark_fill = Color{ .r = 0x1e, .g = 0x1e, .b = 0x1e };
+    const dark_success = Color{ .r = 0x26, .g = 0xa2, .b = 0x69 };
+    const dark_err = Color{ .r = 0xc0, .g = 0x1c, .b = 0x28 };
+
+    pub var dark = Theme{
+        .name = "Adwaita Dark",
+        .dark = true,
+
+        .font_body = Font{ .size = 11, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
+        .font_heading = Font{ .size = 11, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
+        .font_caption = Font{ .size = 9, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
+        .font_caption_heading = Font{ .size = 9, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
+        .font_title = Font{ .size = 24, .name = "Vera", .ttf_bytes = fonts.bitstream_vera.Vera },
+        .font_title_1 = Font{ .size = 20, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
+        .font_title_2 = Font{ .size = 17, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
+        .font_title_3 = Font{ .size = 15, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
+        .font_title_4 = Font{ .size = 13, .name = "VeraBd", .ttf_bytes = fonts.bitstream_vera.VeraBd },
+
+        .style_content = .{
+            .accent = accent,
+            .text = Color.white,
+            .fill = dark_fill,
+            .border = Color.lerp(dark_fill, 0.4, Color.white),
+            .hover = Color.lerp(dark_fill, 0.2, Color.white),
+            .press = Color.lerp(dark_fill, 0.3, Color.white),
+        },
+
+        .style_control = .{ .fill = Color{ .r = 0x40, .g = 0x40, .b = 0x40 } },
+        .style_window = .{ .fill = Color{ .r = 0x2b, .g = 0x2b, .b = 0x2b } },
+
+        .style_accent = .{
+            .accent = accent.lighten(0.3),
+            .fill = accent,
+            .text = Color.white,
+            .border = Color.lerp(accent, 0.4, Color.white),
+            .hover = Color.lerp(accent, 0.2, Color.white),
+            .press = Color.lerp(accent, 0.3, Color.white),
+        },
+        .style_success = .{
+            .accent = dark_success.lighten(0.3),
+            .fill = dark_success,
+            .text = Color.white,
+            .border = Color.lerp(success, 0.4, Color.white),
+            .hover = Color.lerp(success, 0.2, Color.white),
+            .press = Color.lerp(success, 0.3, Color.white),
+        },
+        .style_err = .{
+            .accent = dark_err.lighten(0.3),
+            .fill = dark_err,
+            .text = Color.white,
+            .border = Color.lerp(err, 0.4, Color.white),
+            .hover = Color.lerp(err, 0.2, Color.white),
+            .press = Color.lerp(err, 0.3, Color.white),
+        },
+    };
 };
 
 pub const Options = struct {
@@ -142,15 +227,6 @@ pub const Options = struct {
         title_4,
     };
 
-    pub const ColorStyle = enum {
-        accent,
-        success,
-        err,
-        window,
-        content,
-        control,
-    };
-
     // null is normal, meaning parent picks a rect for the child widget.  If
     // non-null, child widget is choosing its own place, meaning its not being
     // placed normally.  w and h will still be expanded if expand is set.
@@ -170,11 +246,15 @@ pub const Options = struct {
     // widgets will be focusable by keyboard only if this is set
     tab_index: ?u16 = null,
 
-    // only used if .color_style == .custom
-    color: ?Color = null,
-    color_bg: ?Color = null,
+    // used to override widget and theme defaults
+    color_accent: ?Color = null,
+    color_text: ?Color = null,
+    color_fill: ?Color = null,
+    color_border: ?Color = null,
+    color_hover: ?Color = null,
+    color_press: ?Color = null,
 
-    // only used if .font_style == .custom
+    // use to override font_style
     font: ?Font = null,
 
     // only used for icons, rotates around center, only rotates drawing
@@ -193,46 +273,60 @@ pub const Options = struct {
     // padding/border/margin will be added to this
     min_size_content: ?Size = null,
 
-    color_style: ?ColorStyle = null,
+    // whether to fill the background
     background: ?bool = null,
+
+    // use to pick a font from the theme
     font_style: ?FontStyle = null,
 
-    pub fn colorGet(self: *const Options) Color {
-        var ret: Color = undefined;
+    // use to pick a color from the theme
+    color_style: ?Theme.ColorStyle = null,
 
-        if (self.color) |cc| {
-            ret = cc;
-        } else {
-            ret = switch (self.color_style orelse .control) {
-                .accent => themeGet().color_accent,
-                .success => themeGet().color_success,
-                .err => themeGet().color_err,
-                .content => themeGet().color_content,
-                .window => themeGet().color_window,
-                .control => themeGet().color_control,
-            };
+    pub const ColorKind = enum {
+        accent,
+        text,
+        fill,
+        border,
+        hover,
+        press,
+    };
+
+    pub fn color(self: *const Options, kind: ColorKind) Color {
+        var ret: ?Color = switch (kind) {
+            .accent => self.color_accent,
+            .text => self.color_text,
+            .fill => self.color_fill,
+            .border => self.color_border,
+            .hover => self.color_hover,
+            .press => self.color_press,
+        };
+
+        // if we have a custom color, return it
+        if (ret) |r| {
+            return r.transparent(themeGet().alpha);
         }
 
-        return ret.transparent(themeGet().alpha);
-    }
+        // find the colors in our style
+        const cs: Theme.StyleColors = switch (self.color_style orelse .content) {
+            .content => themeGet().style_content,
+            .accent => themeGet().style_accent,
+            .window => themeGet().style_window,
+            .control => themeGet().style_control,
+            .success => themeGet().style_success,
+            .err => themeGet().style_err,
+        };
 
-    pub fn color_bgGet(self: *const Options) Color {
-        var ret: Color = undefined;
-
-        if (self.color_bg) |cc| {
-            ret = cc;
-        } else {
-            ret = switch (self.color_style orelse .control) {
-                .accent => themeGet().color_accent_bg,
-                .success => themeGet().color_success_bg,
-                .err => themeGet().color_err_bg,
-                .content => themeGet().color_content_bg,
-                .window => themeGet().color_window_bg,
-                .control => themeGet().color_control_bg,
-            };
+        // return color from style or default
+        switch (kind) {
+            .accent => ret = cs.accent orelse themeGet().style_content.accent orelse unreachable,
+            .text => ret = cs.text orelse themeGet().style_content.text orelse unreachable,
+            .fill => ret = cs.fill orelse themeGet().style_content.fill orelse unreachable,
+            .border => ret = cs.border orelse themeGet().style_content.border orelse unreachable,
+            .hover => ret = cs.hover orelse themeGet().style_content.hover orelse unreachable,
+            .press => ret = cs.press orelse themeGet().style_content.press orelse unreachable,
         }
 
-        return ret.transparent(themeGet().alpha);
+        return (ret orelse unreachable).transparent(themeGet().alpha);
     }
 
     pub fn fontGet(self: *const Options) Font {
@@ -327,8 +421,12 @@ pub const Options = struct {
             .expand = self.expand,
             .gravity_x = self.gravity_x,
             .gravity_y = self.gravity_y,
-            .color = self.color,
-            .color_bg = self.color_bg,
+            .color_accent = self.color_accent,
+            .color_text = self.color_text,
+            .color_fill = self.color_fill,
+            .color_border = self.color_border,
+            .color_hover = self.color_hover,
+            .color_press = self.color_press,
             .font = self.font,
             .color_style = self.color_style,
             .font_style = self.font_style,
@@ -1826,7 +1924,7 @@ pub const Window = struct {
 
     menu_current: ?*MenuWidget = null,
     popup_current: ?*PopupWidget = null,
-    theme: *Theme = &theme_Adwaita,
+    theme: *Theme = &Adwaita.light,
 
     min_sizes: std.AutoHashMap(u32, SavedSize),
     data_mutex: std.Thread.Mutex,
@@ -3256,8 +3354,8 @@ pub const FloatingWindowWidget = struct {
         if (self.modal) {
             // paint over everything below
             try pathAddRect(windowRectPixels(), Rect.all(0));
-            var col = self.options.colorGet();
-            col.a = 100;
+            var col = self.options.color(.text);
+            col.a = if (themeGet().dark) 60 else 80;
             try pathFillConvex(col);
         }
 
@@ -3964,7 +4062,7 @@ pub const PanedWidget = struct {
                     },
                 }
                 try pathAddRect(r, Rect.all(thick));
-                try pathFillConvex(self.wd.options.colorGet().transparent(0.5));
+                try pathFillConvex(self.wd.options.color(.text).transparent(0.5));
             }
         }
 
@@ -4270,9 +4368,9 @@ pub const TextLayoutWidget = struct {
                 //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
 
                 if (newline) {
-                    try renderText(options.fontGet(), txt[0 .. end - 1], rs, options.colorGet());
+                    try renderText(options.fontGet(), txt[0 .. end - 1], rs, options.color(.text));
                 } else {
-                    try renderText(options.fontGet(), txt[0..end], rs, options.colorGet());
+                    try renderText(options.fontGet(), txt[0..end], rs, options.color(.text));
                 }
             }
 
@@ -5134,9 +5232,9 @@ pub const ScrollBarWidget = struct {
             self.processEvents(grabrs.r);
         }
 
-        var fill = self.wd.options.colorGet().transparent(0.5);
+        var fill = self.wd.options.color(.text).transparent(0.5);
         if (captured or self.highlight) {
-            fill = self.wd.options.colorGet().transparent(0.3);
+            fill = self.wd.options.color(.text).transparent(0.3);
         }
         self.grabRect = self.grabRect.insetAll(2);
         const grabrs = self.wd.parent.screenRectScale(self.grabRect);
@@ -5319,9 +5417,7 @@ pub fn spinner(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) 
 
     const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
     try pathAddArc(center, math.min(r.w, r.h) / 3, angle, 0, false);
-    //PathAddPoint(center);
-    //PathFillConvex(options.colorGet());
-    try pathStroke(false, 3.0 * rs.s, .none, options.colorGet());
+    try pathStroke(false, 3.0 * rs.s, .none, options.color(.text));
 }
 
 pub fn scale(src: std.builtin.SourceLocation, id_extra: usize, scale_in: f32, opts: Options) !*ScaleWidget {
@@ -5553,9 +5649,9 @@ pub fn menuItem(src: std.builtin.SourceLocation, id_extra: usize, submenu: bool,
 pub const MenuItemWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
+        .color_style = .content,
         .corner_radius = Rect.all(5),
         .padding = Rect.all(4),
-        .color_style = .content,
         .expand = .horizontal,
     };
 
@@ -5595,7 +5691,7 @@ pub const MenuItemWidget = struct {
         if (self.wd.options.borderGet().nonZero()) {
             const rs = self.wd.borderRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            var col = Color.lerp(self.wd.options.color_bgGet(), 0.3, self.wd.options.colorGet());
+            var col = self.wd.options.color(.border);
             try pathFillConvex(col);
         }
 
@@ -5611,21 +5707,17 @@ pub const MenuItemWidget = struct {
         }
 
         if (self.show_active) {
-            const fill = themeGet().color_accent_bg;
             const rs = self.wd.backgroundRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            try pathFillConvex(fill);
+            try pathFillConvex(self.wd.options.color(.accent));
         } else if (self.focused_in_win or self.highlight) {
-            // hovered
-            const fill = Color.lerp(self.wd.options.color_bgGet(), 0.1, self.wd.options.colorGet());
             const rs = self.wd.backgroundRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            try pathFillConvex(fill);
+            try pathFillConvex(self.wd.options.color(.hover));
         } else if (self.wd.options.backgroundGet()) {
-            const fill = self.wd.options.color_bgGet();
             const rs = self.wd.backgroundRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            try pathFillConvex(fill);
+            try pathFillConvex(self.wd.options.color(.fill));
         }
 
         _ = parentSet(self.widget());
@@ -5789,7 +5881,7 @@ pub const LabelWidget = struct {
             const liners = self.wd.parent.screenRectScale(lineRect);
 
             rs.r.x = liners.r.x;
-            try renderText(self.wd.options.fontGet(), line, rs, self.wd.options.colorGet());
+            try renderText(self.wd.options.fontGet(), line, rs, self.wd.options.color(.text));
             rs.r.y += rs.s * try self.wd.options.fontGet().lineSkip();
         }
         clipSet(oldclip);
@@ -5847,7 +5939,7 @@ pub const IconWidget = struct {
 
         var rect = placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
         var rs = self.wd.parent.screenRectScale(rect);
-        try renderIcon(self.name, self.tvg_bytes, rs, self.wd.options.rotationGet(), self.wd.options.colorGet());
+        try renderIcon(self.name, self.tvg_bytes, rs, self.wd.options.rotationGet(), self.wd.options.color(.text));
 
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
@@ -5879,7 +5971,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, id_extra: usize, opts: 
     try wd.borderAndBackground();
 
     const rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
-    try debugRenderFontAtlases(rs, opts.colorGet());
+    try debugRenderFontAtlases(rs, opts.color(.text));
 
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
@@ -5888,6 +5980,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, id_extra: usize, opts: 
 pub const ButtonWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
+        .color_style = .control,
         .margin = Rect.all(4),
         .corner_radius = Rect.all(5),
         .padding = Rect.all(4),
@@ -5930,21 +6023,18 @@ pub const ButtonWidget = struct {
             }
             const rs = self.wd.borderRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            var col = Color.lerp(self.wd.options.color_bgGet(), 0.3, self.wd.options.colorGet());
-            try pathFillConvex(col);
+            try pathFillConvex(self.wd.options.color(.border));
         }
 
         if (bg) {
             const rs = self.wd.backgroundRectScale();
             var fill: Color = undefined;
             if (self.captured) {
-                // pressed
-                fill = Color.lerp(self.wd.options.color_bgGet(), 0.2, self.wd.options.colorGet());
+                fill = self.wd.options.color(.press);
             } else if (self.highlight) {
-                // hovered
-                fill = Color.lerp(self.wd.options.color_bgGet(), 0.1, self.wd.options.colorGet());
+                fill = self.wd.options.color(.hover);
             } else {
-                fill = self.wd.options.color_bgGet();
+                fill = self.wd.options.color(.fill);
             }
 
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
@@ -6118,12 +6208,12 @@ pub fn slider(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Directi
     var part = trackrs.r;
     part.w *= percent.*;
     try pathAddRect(part, Rect.all(100).scale(trackrs.s));
-    try pathFillConvex(themeGet().color_accent_bg);
+    try pathFillConvex(options.color(.accent));
 
     part.x = part.x + part.w;
     part.w = trackrs.r.w - part.w;
     try pathAddRect(part, Rect.all(100).scale(trackrs.s));
-    try pathFillConvex(options.color_bgGet());
+    try pathFillConvex(options.color(.fill));
 
     var knob = Rect{ .x = (br.w - knobsize) * percent.*, .w = knobsize, .h = knobsize };
     _ = try gui.button(@src(), 0, "", .{ .rect = knob, .padding = .{}, .margin = .{}, .border = Rect.all(1), .corner_radius = Rect.all(100) });
@@ -6173,29 +6263,28 @@ pub fn checkbox(src: std.builtin.SourceLocation, id_extra: usize, target: *bool,
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
     try pathAddRect(rs.r, opts.corner_radiusGet().scale(rs.s));
-    var col = Color.lerp(opts.color_bgGet(), 0.3, opts.colorGet());
-    try pathFillConvex(col);
+    try pathFillConvex(opts.color(.border));
 
     if (focused) {
         try pathAddRect(rs.r, opts.corner_radiusGet().scale(rs.s));
-        try pathStroke(true, 2 * rs.s, .none, themeGet().color_accent_bg);
+        try pathStroke(true, 2 * rs.s, .none, opts.color(.accent));
     }
 
-    var fill = opts.color_bgGet();
+    var options = opts;
     if (checked) {
-        fill = themeGet().color_accent_bg;
+        options = opts.override(.{ .color_style = .accent });
         try pathAddRect(rs.r.insetAll(0.5 * rs.s), opts.corner_radiusGet().scale(rs.s));
     } else {
         try pathAddRect(rs.r.insetAll(rs.s), opts.corner_radiusGet().scale(rs.s));
     }
 
     if (pressed) {
-        fill = Color.lerp(fill, 0.2, opts.colorGet());
+        try pathFillConvex(options.color(.press));
     } else if (hovered) {
-        fill = Color.lerp(fill, 0.1, opts.colorGet());
+        try pathFillConvex(options.color(.hover));
+    } else {
+        try pathFillConvex(options.color(.fill));
     }
-
-    try pathFillConvex(fill);
 
     if (checked) {
         const r = rs.r.insetAll(0.5 * rs.s);
@@ -6212,7 +6301,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
         try pathAddPoint(Point{ .x = x - third, .y = y - third });
         try pathAddPoint(Point{ .x = x, .y = y });
         try pathAddPoint(Point{ .x = x + third * 2, .y = y - third * 2 });
-        try pathStroke(false, thick, .square, themeGet().color_accent);
+        try pathStroke(false, thick, .square, options.color(.text));
     }
 }
 
@@ -6279,7 +6368,7 @@ pub const TextEntryWidget = struct {
 
         const oldclip = clip(rs.r);
         if (!clipGet().empty()) {
-            try renderText(self.wd.options.fontGet(), self.text[0..self.len], rs, self.wd.options.colorGet());
+            try renderText(self.wd.options.fontGet(), self.text[0..self.len], rs, self.wd.options.color(.text));
         }
         clipSet(oldclip);
 
@@ -6420,6 +6509,9 @@ pub const Color = struct {
     pub fn format(self: *const Color, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
         try std.fmt.format(writer, "Color{{ {x} {x} {x} {x} }}", .{ self.r, self.g, self.b, self.a });
     }
+
+    pub const white = Color{ .r = 0xff, .g = 0xff, .b = 0xff };
+    pub const black = Color{ .r = 0x00, .g = 0x00, .b = 0x00 };
 };
 
 pub const Point = struct {
@@ -7053,7 +7145,7 @@ pub const WidgetData = struct {
             if (self.id == cw.debug_widget_id) {
                 cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x} {s}\n\n{}", .{ self.id, name, rs.r });
                 try pathAddRect(rs.r.insetAll(0), .{});
-                var color = themeGet().color_err_bg;
+                var color = (Options{ .color_style = .err }).color(.fill);
                 try pathStrokeAfter(true, true, 3 * rs.s, .none, color);
             }
         }
@@ -7072,14 +7164,14 @@ pub const WidgetData = struct {
             }
             const rs = self.borderRectScale();
             try pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-            var col = Color.lerp(self.options.color_bgGet(), 0.3, self.options.colorGet());
+            var col = self.options.color(.border);
             try pathFillConvex(col);
         }
 
         if (bg) {
             const rs = self.backgroundRectScale();
             try pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-            try pathFillConvex(self.options.color_bgGet());
+            try pathFillConvex(self.options.color(.fill));
         }
     }
 
@@ -7087,17 +7179,7 @@ pub const WidgetData = struct {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
         try pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-        var color = themeGet().color_accent_bg;
-        switch (self.options.color_style orelse .control) {
-            .err, .success, .accent => {
-                if (themeGet().dark) {
-                    color = self.options.color_bgGet().lighten(0.3);
-                } else {
-                    color = self.options.color_bgGet().darken(0.2);
-                }
-            },
-            else => {},
-        }
+        var color = self.options.color(.accent);
         try pathStrokeAfter(true, true, thick, .none, color);
     }
 
@@ -7596,10 +7678,10 @@ pub const examples = struct {
             }
 
             if (try gui.button(@src(), 0, "Toggle Theme", .{})) {
-                if (gui.themeGet() == &gui.theme_Adwaita) {
-                    gui.themeSet(&gui.theme_Adwaita_Dark);
+                if (gui.themeGet() == &gui.Adwaita.light) {
+                    gui.themeSet(&gui.Adwaita.dark);
                 } else {
-                    gui.themeSet(&gui.theme_Adwaita);
+                    gui.themeSet(&gui.Adwaita.light);
                 }
             }
 
@@ -7957,7 +8039,7 @@ pub const examples = struct {
 
         if (try gui.expander(@src(), 0, "Spinner", .{ .expand = .horizontal })) {
             try gui.labelNoFmt(@src(), 0, "Spinner maxes out frame rate", .{});
-            try gui.spinner(@src(), 0, .{ .color = .{ .r = 100, .g = 200, .b = 100 } });
+            try gui.spinner(@src(), 0, .{ .color_text = .{ .r = 100, .g = 200, .b = 100 } });
         }
 
         if (try gui.expander(@src(), 0, "Clock", .{ .expand = .horizontal })) {
