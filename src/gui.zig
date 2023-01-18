@@ -3677,7 +3677,7 @@ pub fn toastInfoDisplay(id: u32) !void {
 
     var animator = try gui.animate(@src(), id, .alpha, 500_000, .{});
     defer animator.deinit();
-    try gui.labelNoFmt(@src(), id, message, .{ .background = true, .corner_radius = gui.Rect.all(1000), .color_bg = gui.LabelWidget.defaults.color_bgGet().transparent(0.5) });
+    try gui.labelNoFmt(@src(), id, message, .{ .background = true, .corner_radius = gui.Rect.all(1000) });
 
     if (gui.timerDone(id)) {
         animator.startEnd();
@@ -6115,13 +6115,18 @@ pub fn slider(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Directi
         }
     }
 
-    try pathAddRect(trackrs.r, Rect.all(100).scale(trackrs.s));
-    try pathFillConvex(options.colorGet());
+    var part = trackrs.r;
+    part.w *= percent.*;
+    try pathAddRect(part, Rect.all(100).scale(trackrs.s));
+    try pathFillConvex(themeGet().color_accent_bg);
+
+    part.x = part.x + part.w;
+    part.w = trackrs.r.w - part.w;
+    try pathAddRect(part, Rect.all(100).scale(trackrs.s));
+    try pathFillConvex(options.color_bgGet());
 
     var knob = Rect{ .x = (br.w - knobsize) * percent.*, .w = knobsize, .h = knobsize };
-    themeGet().alpha = 0.5;
-    _ = try gui.button(@src(), 0, "", .{ .rect = knob, .padding = .{}, .margin = .{}, .corner_radius = Rect.all(100), .color_style = .err });
-    themeGet().alpha = 1.0;
+    _ = try gui.button(@src(), 0, "", .{ .rect = knob, .padding = .{}, .margin = .{}, .border = Rect.all(1), .corner_radius = Rect.all(100) });
 
     if (ret) {
         cueFrame();
