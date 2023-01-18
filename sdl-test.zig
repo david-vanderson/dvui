@@ -226,10 +226,10 @@ pub fn main() !void {
                     try gui.label(@src(), 0, "Theme: {s}", .{gui.themeGet().name}, .{});
 
                     if (try gui.button(@src(), 0, "Toggle Theme", .{})) {
-                        if (gui.themeGet() == &gui.theme_Adwaita) {
-                            gui.themeSet(&gui.theme_Adwaita_Dark);
+                        if (gui.themeGet() == &gui.Adwaita.light) {
+                            gui.themeSet(&gui.Adwaita.dark);
                         } else {
-                            gui.themeSet(&gui.theme_Adwaita);
+                            gui.themeSet(&gui.Adwaita.light);
                         }
                     }
                 }
