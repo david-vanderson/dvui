@@ -13,7 +13,7 @@ pub fn main() !void {
     defer win.deinit();
 
     var buttons: [3][6]bool = undefined;
-    for (buttons) |*b| {
+    for (&buttons) |*b| {
         b.* = [_]bool{true} ** 6;
     }
 
@@ -272,7 +272,7 @@ pub fn main() !void {
                     floats[0] = true;
                 }
 
-                for (floats) |*f, fi| {
+                for (&floats, 0..) |*f, fi| {
                     if (f.*) {
                         const modal = if (fi % 2 == 0) true else false;
                         var name: []const u8 = "";
@@ -417,7 +417,7 @@ pub const StrokeTest = struct {
 
         const rs = self.wd.contentRectScale();
         const fill_color = gui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
-        for (points) |p, i| {
+        for (points, 0..) |p, i| {
             var rect = gui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
             const rsrect = rect.scale(rs.s).offset(rs.r);
             try gui.pathAddRect(rsrect, gui.Rect.all(1));
@@ -473,7 +473,7 @@ pub const StrokeTest = struct {
                             e.handled = true;
                             dragi = null;
 
-                            for (points) |p, i| {
+                            for (points, 0..) |p, i| {
                                 const dp = gui.Point.diff(p, mp);
                                 if (@fabs(dp.x) < 5 and @fabs(dp.y) < 5) {
                                     dragi = i;

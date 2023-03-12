@@ -1,0 +1,10 @@
+.{
+    .name = "gui",
+    .version = "0.0.1",
+    .dependencies = .{
+        .ffmpeg = .{
+            .url = "https://github.com/andrewrk/ffmpeg/archive/a08319788785bc8c6a3756db9db090509448853d.tar.gz",
+            .hash = "1220aee0031b53d7419d95c011db6369522d088dbb1c94509ba87cd5faef176c7817",
+        },
+    },
+}
