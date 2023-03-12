@@ -3,7 +3,7 @@ const gui = @import("src/gui.zig");
 const Backend = @import("src/SDLBackend.zig");
 
 const sqlite = @import("sqlite");
-const curl = @import("curl");
+const curl = if (DEBUG) {} else @import("curl");
 
 pub const c = @cImport({
     @cDefine("_XOPEN_SOURCE", "1");
@@ -24,7 +24,7 @@ pub const c = @cImport({
 
 // when set to true, looks for feed-{rowid}.xml and episode-{rowid}.mp3 instead
 // of fetching from network
-const DEBUG = true;
+const DEBUG = true; //test
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
@@ -1250,58 +1250,63 @@ fn bg_thread() !void {
             },
             .download_episode => {
                 const episode = try dbRow(arena, Episode.query_one, Episode, .{t.rowid}) orelse break;
-                std.debug.print("downloading url {s}\n", .{episode.enclosure_url});
-                var easy = try curl.Easy.init();
-                defer easy.cleanup();
 
-                const urlZ = try std.fmt.allocPrintZ(arena, "{s}", .{episode.enclosure_url});
-                try easy.setUrl(urlZ);
-                try easy.setSslVerifyPeer(false);
-                try easy.setAcceptEncodingGzip();
-                try easy.setFollowLocation(true);
+                if (DEBUG) {
+                    std.debug.print("DEBUG: would be downloading url {s}\n", .{episode.enclosure_url});
+                } else {
+                    std.debug.print("downloading url {s}\n", .{episode.enclosure_url});
+                    var easy = try curl.Easy.init();
+                    defer easy.cleanup();
 
-                const Fifo = std.fifo.LinearFifo(u8, .{ .Dynamic = {} });
-                try easy.setWriteFn(struct {
-                    fn writeFn(ptr: ?[*]u8, size: usize, nmemb: usize, data: ?*anyopaque) callconv(.C) usize {
-                        _ = size;
-                        var slice = (ptr orelse return 0)[0..nmemb];
-                        const fifo = @ptrCast(
-                            *Fifo,
-                            @alignCast(
-                                @alignOf(*Fifo),
-                                data orelse return 0,
-                            ),
-                        );
+                    const urlZ = try std.fmt.allocPrintZ(arena, "{s}", .{episode.enclosure_url});
+                    try easy.setUrl(urlZ);
+                    try easy.setSslVerifyPeer(false);
+                    try easy.setAcceptEncodingGzip();
+                    try easy.setFollowLocation(true);
 
-                        fifo.writer().writeAll(slice) catch return 0;
-                        return nmemb;
-                    }
-                }.writeFn);
+                    const Fifo = std.fifo.LinearFifo(u8, .{ .Dynamic = {} });
+                    try easy.setWriteFn(struct {
+                        fn writeFn(ptr: ?[*]u8, size: usize, nmemb: usize, data: ?*anyopaque) callconv(.C) usize {
+                            _ = size;
+                            var slice = (ptr orelse return 0)[0..nmemb];
+                            const fifo = @ptrCast(
+                                *Fifo,
+                                @alignCast(
+                                    @alignOf(*Fifo),
+                                    data orelse return 0,
+                                ),
+                            );
 
-                // don't deinit the fifo, it's using arena anyway and we need the contents later
-                var fifo = Fifo.init(arena);
-                try easy.setWriteData(&fifo);
-                try easy.setVerbose(true);
-                easy.perform() catch |err| {
-                    try gui.dialogOk(@src(), 0, true, "Network Error", try std.fmt.allocPrint(arena, "curl error {!}\ntrying to fetch url:\n{s}", .{ err, urlZ }), null);
-                };
-                const code = try easy.getResponseCode();
-                std.debug.print("  download_episode {d} curl code {d}\n", .{ t.rowid, code });
+                            fifo.writer().writeAll(slice) catch return 0;
+                            return nmemb;
+                        }
+                    }.writeFn);
 
-                // add null byte
-                try fifo.writeItem(0);
+                    // don't deinit the fifo, it's using arena anyway and we need the contents later
+                    var fifo = Fifo.init(arena);
+                    try easy.setWriteData(&fifo);
+                    try easy.setVerbose(true);
+                    easy.perform() catch |err| {
+                        try gui.dialogOk(@src(), 0, true, "Network Error", try std.fmt.allocPrint(arena, "curl error {!}\ntrying to fetch url:\n{s}", .{ err, urlZ }), null);
+                    };
+                    const code = try easy.getResponseCode();
+                    std.debug.print("  download_episode {d} curl code {d}\n", .{ t.rowid, code });
 
-                const tempslice = fifo.readableSlice(0);
+                    // add null byte
+                    try fifo.writeItem(0);
 
-                const filename = try std.fmt.allocPrint(arena, "episode_{d}.aud", .{t.rowid});
-                const file = std.fs.cwd().createFile(filename, .{}) catch |err| {
-                    try gui.dialogOk(@src(), 0, true, "File Error", try std.fmt.allocPrint(arena, "error {!}\ntrying to write to file:\n{s}", .{ err, filename }), null);
-                    break;
-                };
+                    const tempslice = fifo.readableSlice(0);
 
-                try file.writeAll(tempslice[0 .. tempslice.len - 1 :0]);
-                file.close();
-                std.debug.print("  downloaded episode {d} to file {s}\n", .{ t.rowid, try std.fs.cwd().realpathAlloc(arena, filename) });
+                    const filename = try std.fmt.allocPrint(arena, "episode_{d}.aud", .{t.rowid});
+                    const file = std.fs.cwd().createFile(filename, .{}) catch |err| {
+                        try gui.dialogOk(@src(), 0, true, "File Error", try std.fmt.allocPrint(arena, "error {!}\ntrying to write to file:\n{s}", .{ err, filename }), null);
+                        break;
+                    };
+
+                    try file.writeAll(tempslice[0 .. tempslice.len - 1 :0]);
+                    file.close();
+                    std.debug.print("  downloaded episode {d} to file {s}\n", .{ t.rowid, try std.fs.cwd().realpathAlloc(arena, filename) });
+                }
             },
         }
 

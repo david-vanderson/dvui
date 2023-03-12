@@ -830,7 +830,7 @@ pub fn focusSubwindow(subwindow_id: ?u32, iter: ?*EventIterator) void {
 pub fn raiseSubwindow(subwindow_id: u32) void {
     const cw = currentWindow();
     var items = cw.subwindows.items;
-    for (items) |sw, i| {
+    for (items, 0..) |sw, i| {
         if (sw.id == subwindow_id) {
             if (sw.stay_above_parent) {
                 std.debug.print("raiseSubwindow: tried to raise a subwindow {x} with stay_above_parent set\n", .{subwindow_id});
@@ -848,7 +848,7 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
             while (first or items[i].stay_above_parent) {
                 first = false;
                 const item = items[i];
-                for (items[i..(items.len - 1)]) |*b, k| {
+                for (items[i..(items.len - 1)], 0..) |*b, k| {
                     b.* = items[i + 1 + k];
                 }
                 items[items.len - 1] = item;
@@ -2322,7 +2322,7 @@ pub const Window = struct {
 
         self.events = std.ArrayList(Event).init(arena);
 
-        for (self.frame_times) |_, i| {
+        for (self.frame_times, 0..) |_, i| {
             if (i == (self.frame_times.len - 1)) {
                 self.frame_times[i] = 0;
             } else {
@@ -2680,7 +2680,7 @@ pub const Window = struct {
         self.dialog_mutex.lock();
         defer self.dialog_mutex.unlock();
 
-        for (self.dialogs.items) |*d, i| {
+        for (self.dialogs.items, 0..) |*d, i| {
             if (d.id == id) {
                 _ = self.dialogs.orderedRemove(i);
                 self.cueFrame();
@@ -2763,7 +2763,7 @@ pub const Window = struct {
         self.dialog_mutex.lock();
         defer self.dialog_mutex.unlock();
 
-        for (self.toasts.items) |*t, i| {
+        for (self.toasts.items, 0..) |*t, i| {
             if (t.id == id) {
                 _ = self.toasts.orderedRemove(i);
                 self.cueFrame();
@@ -3716,7 +3716,7 @@ pub fn toastsFor(subwindow_id: ?u32) ?ToastIterator {
     cw.dialog_mutex.lock();
     defer cw.dialog_mutex.unlock();
 
-    for (cw.toasts.items) |*t, i| {
+    for (cw.toasts.items, 0..) |*t, i| {
         if (t.subwindow_id == subwindow_id) {
             return ToastIterator.init(cw, subwindow_id, i);
         }
@@ -6153,6 +6153,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, id_extra: usize, height: f32,
 pub var slider_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
+    .color_style = .control,
 };
 
 // returns true if percent was changed
@@ -6775,7 +6776,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
 
         var pixels = try cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * 4);
         // set all pixels as white but with zero alpha
-        for (pixels) |*p, i| {
+        for (pixels, 0..) |*p, i| {
             if (i % 4 == 3) {
                 p.* = 0;
             } else {
@@ -7798,8 +7799,8 @@ pub const examples = struct {
 
             var buf: [128]u8 = undefined;
 
-            inline for ([3]f32{ 0.0, 0.5, 1.0 }) |horz, hi| {
-                inline for ([3]f32{ 0.0, 0.5, 1.0 }) |vert, vi| {
+            inline for ([3]f32{ 0.0, 0.5, 1.0 }, 0..) |horz, hi| {
+                inline for ([3]f32{ 0.0, 0.5, 1.0 }, 0..) |vert, vi| {
                     _ = try gui.button(@src(), hi * 3 + vi, try std.fmt.bufPrint(&buf, "{d},{d}", .{ horz, vert }), .{ .gravity_x = horz, .gravity_y = vert });
                 }
             }
@@ -8108,7 +8109,7 @@ pub const examples = struct {
         const visibleRect = scroll.scroll_info.viewport;
         var cursor: f32 = 0;
 
-        inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls) |d, i| {
+        inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls, 0..) |d, i| {
             if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
                 const r = gui.Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
                 var iconbox = try gui.box(@src(), i, .horizontal, .{ .expand = .horizontal, .rect = r });
