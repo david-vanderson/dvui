@@ -25,3 +25,9 @@
 [submodule "libs/zig-libxml2"]
 	path = libs/zig-libxml2
 	url = https://github.com/mitchellh/zig-libxml2.git
+[submodule "libs/curl"]
+	path = libs/curl
+	url = https://github.com/david-vanderson/curl
+[submodule "libs/mach-freetype"]
+	path = libs/mach-freetype
+	url = https://github.com/hexops/mach-freetype.git
