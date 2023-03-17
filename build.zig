@@ -54,9 +54,9 @@ pub fn build(b: *std.build.Builder) !void {
             .optimize = optimize,
         });
 
-        const freetype = @import("libs/mach-freetype/build.zig");
-        exe.addModule("freetype", freetype.module(b));
-        freetype.link(b, exe, .{});
+        //const freetype = @import("libs/mach-freetype/build.zig");
+        //exe.addModule("freetype", freetype.module(b));
+        //freetype.link(b, exe, .{});
 
         exe.linkSystemLibrary("SDL2");
         //exe.addIncludePath("/home/dvanderson/SDL/include");
