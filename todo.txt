@@ -1,8 +1,25 @@
 
-debug compiler panic everytime I switch from podcast to sdl-test or back
+split podcast into own repo
+- remove now unneeded git submodules
+
+use zig package manager to get SDL (github.com/andrewrk/SDL)
+
+use zig package manager to get mach-freetype instead of git submodule
+
+use zig package manager to get tinyvg instead of git submodule
+
+get mach example working again
 
 get libcurl working again
 - replace debug messages in podcast with toasts
+
+
+var http_client: std.http.Client = .{ .allocator = gpa };
+            defer http_client.deinit();
+
+var req = try http_client.request(uri, .{}, .{});
+        defer req.deinit();
+
 
 add alpha to Options as well and multiply it by the theme alpha
 
@@ -16,7 +33,7 @@ example toast that includes "undo"
 add progress bar for file downloading
 
 
-add disabled to options so the seek forward/backward icons can be grayed out
+add disabled to options so the seek forward/backward icons can be grayed out?
 - need to add ability to gray out things too (alpha to options?)
 - is disabled just a visual thing?
   - can still tab/click on it?
