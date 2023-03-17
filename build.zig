@@ -1,6 +1,5 @@
 const std = @import("std");
 const Pkg = std.build.Pkg;
-const freetype = @import("libs/mach/libs/freetype/build.zig");
 
 const Packages = struct {
     // Declared here because submodule may not be cloned at the time build.zig runs.
@@ -55,6 +54,7 @@ pub fn build(b: *std.build.Builder) !void {
             .optimize = optimize,
         });
 
+        const freetype = @import("libs/mach/libs/freetype/build.zig");
         exe.addModule("freetype", freetype.module(b));
         freetype.link(b, exe, .{});
 
