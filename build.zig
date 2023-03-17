@@ -13,6 +13,7 @@ pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // this doesn't seem right, still running down the "file exists in multiple modules" error
     const gui_mod = b.addModule("gui", .{ .source_file = .{ .path = "src/gui.zig" } });
 
     _ = b.addModule("SDLBackend", .{
@@ -51,7 +52,7 @@ pub fn build(b: *std.build.Builder) !void {
     //}
 
     // sdl test
-    if (false) {
+    {
         const exe = b.addExecutable(.{
             .name = "sdl-test",
             .root_source_file = .{ .path = "sdl-test" ++ ".zig" },
@@ -59,9 +60,9 @@ pub fn build(b: *std.build.Builder) !void {
             .optimize = optimize,
         });
 
-        //const freetype = @import("libs/mach-freetype/build.zig");
-        //exe.addModule("freetype", freetype.module(b));
-        //freetype.link(b, exe, .{});
+        const freetype = @import("libs/mach-freetype/build.zig");
+        exe.addModule("freetype", freetype.module(b));
+        freetype.link(b, exe, .{});
 
         exe.linkSystemLibrary("SDL2");
         //exe.addIncludePath("/home/dvanderson/SDL/include");
