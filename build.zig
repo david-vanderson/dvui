@@ -46,7 +46,7 @@ pub fn build(b: *std.build.Builder) !void {
     //}
 
     // sdl test
-    {
+    if (false) {
         const exe = b.addExecutable(.{
             .name = "sdl-test",
             .root_source_file = .{ .path = "sdl-test" ++ ".zig" },
