@@ -13,9 +13,14 @@ pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = b.addModule("gui", .{ .source_file = .{ .path = "src/gui.zig" } });
+    const gui_mod = b.addModule("gui", .{ .source_file = .{ .path = "src/gui.zig" } });
 
-    _ = b.addModule("SDLBackend", .{ .source_file = .{ .path = "src/SDLBackend.zig" } });
+    _ = b.addModule("SDLBackend", .{
+        .source_file = .{ .path = "src/SDLBackend.zig" },
+        .dependencies = &.{
+            .{ .name = "gui", .module = gui_mod },
+        },
+    });
 
     // mach example
     //{
