@@ -1,5 +1,5 @@
 const std = @import("std");
-pub const gui = @import("gui.zig");
+const gui = @import("gui");
 pub const c = @cImport({
     @cInclude("SDL.h");
 });
