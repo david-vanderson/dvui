@@ -1,0 +1,14 @@
+.{
+    .name = "gui",
+    .version = "0.0.1",
+    .dependencies = .{
+        //.sdl = .{
+            //.url = "https://github.com/andrewrk/SDL/archive/73c38318443a98b80d7cd0cd1e18a190a85e842f.tar.gz",
+            //.hash = "12202047e83332d37477811513bd6446c567efa6f03c4ae5e57585412b4ad8129cae",
+        //},
+        .freetype = .{
+            .url = "https://github.com/david-vanderson/freetype/archive/6326b3db5ae137017c0512f9b3bac52d89be908d.tar.gz",
+            .hash = "1220a56b7bb8fdad415c61a9dcf283780f1d0bf6092a1b989f972e2d827f52519810",
+        },
+    },
+}
