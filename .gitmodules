@@ -4,9 +4,6 @@
 [submodule "libs/tinyvg"]
 	path = libs/tinyvg
 	url = https://github.com/TinyVG/sdk
-[submodule "libs/mach"]
-	path = libs/mach
-	url = https://github.com/hexops/mach
 [submodule "libs/zig-sqlite"]
 	path = libs/zig-sqlite
 	url = https://github.com/vrischmann/zig-sqlite
@@ -28,6 +25,3 @@
 [submodule "libs/curl"]
 	path = libs/curl
 	url = https://github.com/david-vanderson/curl
-[submodule "libs/mach-freetype"]
-	path = libs/mach-freetype
-	url = https://github.com/hexops/mach-freetype.git
