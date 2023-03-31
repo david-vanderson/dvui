@@ -1,6 +1,6 @@
 const std = @import("std");
-const gui = @import("src/gui.zig");
-const SDLBackend = @import("src/SDLBackend.zig");
+const gui = @import("gui");
+const SDLBackend = @import("SDLBackend");
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
@@ -9,7 +9,7 @@ pub fn main() !void {
     var win_backend = try SDLBackend.init(800, 600);
     defer win_backend.deinit();
 
-    var win = gui.Window.init(@src(), 0, gpa, win_backend.guiBackend());
+    var win = try gui.Window.init(@src(), 0, gpa, win_backend.guiBackend());
     defer win.deinit();
 
     var buttons: [3][6]bool = undefined;

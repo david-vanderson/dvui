@@ -13,10 +13,15 @@ pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // this doesn't seem right, still running down the "file exists in multiple modules" error
-    const gui_mod = b.addModule("gui", .{ .source_file = .{ .path = "src/gui.zig" } });
+    const tinyvg_mod = b.addModule("tinyvg", .{ .source_file = .{ .path = "libs/tinyvg/src/lib/tinyvg.zig" } });
+    const gui_mod = b.addModule("gui", .{
+        .source_file = .{ .path = "src/gui.zig" },
+        .dependencies = &.{
+            .{ .name = "tinyvg", .module = tinyvg_mod },
+        },
+    });
 
-    _ = b.addModule("SDLBackend", .{
+    const sdl_mod = b.addModule("SDLBackend", .{
         .source_file = .{ .path = "src/SDLBackend.zig" },
         .dependencies = &.{
             .{ .name = "gui", .module = gui_mod },
@@ -59,6 +64,9 @@ pub fn build(b: *std.build.Builder) !void {
             .target = target,
             .optimize = optimize,
         });
+
+        exe.addModule("gui", gui_mod);
+        exe.addModule("SDLBackend", sdl_mod);
 
         const freetype = @import("libs/mach-freetype/build.zig");
         exe.addModule("freetype", freetype.module(b));
