@@ -14,6 +14,7 @@ pub fn build(b: *std.build.Builder) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const tinyvg_mod = b.addModule("tinyvg", .{ .source_file = .{ .path = "libs/tinyvg/src/lib/tinyvg.zig" } });
+
     const gui_mod = b.addModule("gui", .{
         .source_file = .{ .path = "src/gui.zig" },
         .dependencies = &.{
@@ -68,9 +69,11 @@ pub fn build(b: *std.build.Builder) !void {
         exe.addModule("gui", gui_mod);
         exe.addModule("SDLBackend", sdl_mod);
 
-        const freetype = @import("libs/mach-freetype/build.zig");
-        exe.addModule("freetype", freetype.module(b));
-        freetype.link(b, exe, .{});
+        const freetype_dep = b.dependency("freetype", .{
+            .target = target,
+            .optimize = optimize,
+        });
+        exe.linkLibrary(freetype_dep.artifact("freetype"));
 
         exe.linkSystemLibrary("SDL2");
         //exe.addIncludePath("/home/dvanderson/SDL/include");

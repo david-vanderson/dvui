@@ -1,21 +1,10 @@
 
 use zig package manager to get SDL (github.com/andrewrk/SDL)
 
-use zig package manager to get freetype instead of git submodule mach-freetype
-
-use zig package manager to get tinyvg instead of git submodule
-
 get mach example working again
 
 get libcurl working again
 - replace debug messages in podcast with toasts
-
-
-var http_client: std.http.Client = .{ .allocator = gpa };
-            defer http_client.deinit();
-
-var req = try http_client.request(uri, .{}, .{});
-        defer req.deinit();
 
 
 add alpha to Options as well and multiply it by the theme alpha
