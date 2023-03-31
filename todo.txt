@@ -1,10 +1,7 @@
 
-split podcast into own repo
-- remove now unneeded git submodules
-
 use zig package manager to get SDL (github.com/andrewrk/SDL)
 
-use zig package manager to get mach-freetype instead of git submodule
+use zig package manager to get freetype instead of git submodule mach-freetype
 
 use zig package manager to get tinyvg instead of git submodule
 
