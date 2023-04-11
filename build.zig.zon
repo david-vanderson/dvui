@@ -7,8 +7,8 @@
             //.hash = "12202047e83332d37477811513bd6446c567efa6f03c4ae5e57585412b4ad8129cae",
         //},
         .freetype = .{
-            .url = "https://github.com/david-vanderson/freetype/archive/6326b3db5ae137017c0512f9b3bac52d89be908d.tar.gz",
-            .hash = "1220a56b7bb8fdad415c61a9dcf283780f1d0bf6092a1b989f972e2d827f52519810",
+            .url = "https://github.com/david-vanderson/freetype/archive/09ee107f41722d14a55f1e93699d13502cbeee7d.tar.gz",
+            .hash = "12206093916f783d7b915d8aeb73c83ff26d70f4cd83345e156148353029496522cd",
         },
     },
 }
