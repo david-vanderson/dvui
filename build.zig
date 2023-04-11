@@ -108,7 +108,7 @@ pub fn build(b: *std.build.Builder) !void {
         compile_step.dependOn(&b.addInstallArtifact(exe).step);
         b.getInstallStep().dependOn(compile_step);
 
-        const run_cmd = exe.run();
+        const run_cmd = b.addRunArtifact(exe);
         run_cmd.step.dependOn(compile_step);
 
         const run_step = b.step("sdl-test", "Run " ++ "sdl-test");
