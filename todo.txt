@@ -1,4 +1,6 @@
 
+remove everything from libs
+
 use zig package manager to get SDL (github.com/andrewrk/SDL)
 
 get mach example working again

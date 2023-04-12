@@ -12,21 +12,27 @@ cursor_last: gui.CursorKind = .arrow,
 cursor_backing: [@typeInfo(gui.CursorKind).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(gui.CursorKind).Enum.fields.len,
 cursor_backing_tried: [@typeInfo(gui.CursorKind).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(gui.CursorKind).Enum.fields.len,
 
-pub fn init(width: u32, height: u32) !SDLBackend {
+pub const initOptions = struct {
+    width: u32,
+    height: u32,
+    vsync: bool,
+    title: [:0]const u8,
+};
+
+pub fn init(options: initOptions) !SDLBackend {
     if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
         std.debug.print("Couldn't initialize SDL: {s}\n", .{c.SDL_GetError()});
         return error.BackendError;
     }
 
-    var window = c.SDL_CreateWindow("Gui Test", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @intCast(c_int, width), @intCast(c_int, height), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
+    var window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @intCast(c_int, options.width), @intCast(c_int, options.height), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
         std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
         return error.BackendError;
     };
 
     _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
-    var renderer = c.SDL_CreateRenderer(window, -1, 0) // c.SDL_RENDERER_PRESENTVSYNC)
-    orelse {
+    var renderer = c.SDL_CreateRenderer(window, -1, if (options.vsync) c.SDL_RENDERER_PRESENTVSYNC else 0) orelse {
         std.debug.print("Failed to create renderer: {s}\n", .{c.SDL_GetError()});
         return error.BackendError;
     };
