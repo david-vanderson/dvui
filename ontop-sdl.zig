@@ -21,7 +21,7 @@ pub fn main() !void {
 
     // create SDL backend using existing window and renderer
     var backend = SDLBackend{ .window = window, .renderer = renderer };
-    defer backend.deinit();
+    // your app will do the SDL deinit
 
     // init gui Window (maps onto a single OS window)
     var win = try gui.Window.init(@src(), 0, gpa, backend.guiBackend());
