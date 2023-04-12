@@ -7643,7 +7643,7 @@ pub const Backend = struct {
 };
 
 pub const examples = struct {
-    pub var show_demo_window: bool = true;
+    pub var show_demo_window: bool = false;
     var checkbox_bool: bool = false;
     var slider_val: f32 = 0.0;
     var show_dialog: bool = false;
@@ -7770,117 +7770,115 @@ pub const examples = struct {
         }
     };
 
-    pub fn demo() !bool {
-        if (show_demo_window) {
-            var float = try gui.floatingWindow(@src(), 0, false, null, &show_demo_window, .{ .min_size_content = .{ .w = 400, .h = 400 } });
-            defer float.deinit();
-
-            var buf: [100]u8 = undefined;
-            const fps_str = std.fmt.bufPrint(&buf, "{d:4.0} fps", .{gui.FPS()}) catch unreachable;
-            try gui.windowHeader("GUI Demo", fps_str, &show_demo_window);
-
-            var ti = gui.toastsFor(float.data().id);
-            if (ti) |*it| {
-                var toast_win = FloatingWindowWidget.init(@src(), 0, false, null, null, .{ .background = false, .border = .{} });
-                defer toast_win.deinit();
-
-                toast_win.data().rect = gui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-                toast_win.stayAboveParent();
-                toast_win.autoSize();
-                try toast_win.install(.{ .process_events = false });
-
-                var vbox = try gui.box(@src(), 0, .vertical, .{});
-                defer vbox.deinit();
-
-                while (it.next()) |t| {
-                    try t.display(t.id);
-                }
-            }
-
-            var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both, .background = false });
-            defer scroll.deinit();
-
-            var scaler = try gui.scale(@src(), 0, scale_val, .{ .expand = .horizontal });
-            defer scaler.deinit();
-
-            var vbox = try gui.box(@src(), 0, .vertical, .{ .expand = .horizontal });
-            defer vbox.deinit();
-
-            if (try gui.button(@src(), 0, "Toggle Debug Window", .{})) {
-                gui.toggleDebugWindow();
-            }
-
-            if (try gui.expander(@src(), 0, "Basic Widgets", .{ .expand = .horizontal })) {
-                try basicWidgets();
-            }
-
-            if (try gui.expander(@src(), 0, "Styling", .{ .expand = .horizontal })) {
-                try styling();
-            }
-
-            if (try gui.expander(@src(), 0, "Layout", .{ .expand = .horizontal })) {
-                try layout();
-            }
-
-            if (try gui.expander(@src(), 0, "Text Layout", .{ .expand = .horizontal })) {
-                try layoutText();
-            }
-
-            if (try gui.expander(@src(), 0, "Menus", .{ .expand = .horizontal })) {
-                try menus();
-            }
-
-            if (try gui.expander(@src(), 0, "Dialogs and Toasts", .{ .expand = .horizontal })) {
-                try dialogs(float.data().id);
-            }
-
-            if (try gui.expander(@src(), 0, "Animations", .{ .expand = .horizontal })) {
-                try animations();
-            }
-
-            if (try gui.button(@src(), 0, "Icon Browser", .{})) {
-                IconBrowser.show = true;
-            }
-
-            if (try gui.button(@src(), 0, "Toggle Theme", .{})) {
-                if (gui.themeGet() == &gui.Adwaita.light) {
-                    gui.themeSet(&gui.Adwaita.dark);
-                } else {
-                    gui.themeSet(&gui.Adwaita.light);
-                }
-            }
-
-            if (try gui.button(@src(), 0, "Zoom In", .{})) {
-                scale_val = @round(themeGet().font_body.size * scale_val + 1.0) / themeGet().font_body.size;
-
-                //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
-            }
-
-            if (try gui.button(@src(), 0, "Zoom Out", .{})) {
-                scale_val = @round(themeGet().font_body.size * scale_val - 1.0) / themeGet().font_body.size;
-
-                //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
-            }
-
-            try gui.checkbox(@src(), 0, &gui.currentWindow().snap_to_pixels, "Snap to Pixels", .{});
-            try gui.labelNoFmt(@src(), 0, "  - watch window title", .{});
-
-            if (try gui.expander(@src(), 0, "Show Font Atlases", .{ .expand = .horizontal })) {
-                try debugFontAtlases(@src(), 0, .{});
-            }
-
-            if (show_dialog) {
-                try dialogDirect();
-            }
-
-            if (IconBrowser.show) {
-                try icon_browser();
-            }
-
-            return true;
+    pub fn demo() !void {
+        if (!show_demo_window) {
+            return;
         }
 
-        return false;
+        var float = try gui.floatingWindow(@src(), 0, false, null, &show_demo_window, .{ .min_size_content = .{ .w = 400, .h = 400 } });
+        defer float.deinit();
+
+        var buf: [100]u8 = undefined;
+        const fps_str = std.fmt.bufPrint(&buf, "{d:4.0} fps", .{gui.FPS()}) catch unreachable;
+        try gui.windowHeader("GUI Demo", fps_str, &show_demo_window);
+
+        var ti = gui.toastsFor(float.data().id);
+        if (ti) |*it| {
+            var toast_win = FloatingWindowWidget.init(@src(), 0, false, null, null, .{ .background = false, .border = .{} });
+            defer toast_win.deinit();
+
+            toast_win.data().rect = gui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
+            toast_win.stayAboveParent();
+            toast_win.autoSize();
+            try toast_win.install(.{ .process_events = false });
+
+            var vbox = try gui.box(@src(), 0, .vertical, .{});
+            defer vbox.deinit();
+
+            while (it.next()) |t| {
+                try t.display(t.id);
+            }
+        }
+
+        var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both, .background = false });
+        defer scroll.deinit();
+
+        var scaler = try gui.scale(@src(), 0, scale_val, .{ .expand = .horizontal });
+        defer scaler.deinit();
+
+        var vbox = try gui.box(@src(), 0, .vertical, .{ .expand = .horizontal });
+        defer vbox.deinit();
+
+        if (try gui.button(@src(), 0, "Toggle Debug Window", .{})) {
+            gui.toggleDebugWindow();
+        }
+
+        if (try gui.expander(@src(), 0, "Basic Widgets", .{ .expand = .horizontal })) {
+            try basicWidgets();
+        }
+
+        if (try gui.expander(@src(), 0, "Styling", .{ .expand = .horizontal })) {
+            try styling();
+        }
+
+        if (try gui.expander(@src(), 0, "Layout", .{ .expand = .horizontal })) {
+            try layout();
+        }
+
+        if (try gui.expander(@src(), 0, "Text Layout", .{ .expand = .horizontal })) {
+            try layoutText();
+        }
+
+        if (try gui.expander(@src(), 0, "Menus", .{ .expand = .horizontal })) {
+            try menus();
+        }
+
+        if (try gui.expander(@src(), 0, "Dialogs and Toasts", .{ .expand = .horizontal })) {
+            try dialogs(float.data().id);
+        }
+
+        if (try gui.expander(@src(), 0, "Animations", .{ .expand = .horizontal })) {
+            try animations();
+        }
+
+        if (try gui.button(@src(), 0, "Icon Browser", .{})) {
+            IconBrowser.show = true;
+        }
+
+        if (try gui.button(@src(), 0, "Toggle Theme", .{})) {
+            if (gui.themeGet() == &gui.Adwaita.light) {
+                gui.themeSet(&gui.Adwaita.dark);
+            } else {
+                gui.themeSet(&gui.Adwaita.light);
+            }
+        }
+
+        if (try gui.button(@src(), 0, "Zoom In", .{})) {
+            scale_val = @round(themeGet().font_body.size * scale_val + 1.0) / themeGet().font_body.size;
+
+            //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
+        }
+
+        if (try gui.button(@src(), 0, "Zoom Out", .{})) {
+            scale_val = @round(themeGet().font_body.size * scale_val - 1.0) / themeGet().font_body.size;
+
+            //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
+        }
+
+        try gui.checkbox(@src(), 0, &gui.currentWindow().snap_to_pixels, "Snap to Pixels", .{});
+        try gui.labelNoFmt(@src(), 0, "  - watch window title", .{});
+
+        if (try gui.expander(@src(), 0, "Show Font Atlases", .{ .expand = .horizontal })) {
+            try debugFontAtlases(@src(), 0, .{});
+        }
+
+        if (show_dialog) {
+            try dialogDirect();
+        }
+
+        if (IconBrowser.show) {
+            try icon_browser();
+        }
     }
 
     pub fn basicWidgets() !void {
