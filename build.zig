@@ -13,13 +13,9 @@ pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const tinyvg_mod = b.addModule("tinyvg", .{ .source_file = .{ .path = "libs/tinyvg/src/lib/tinyvg.zig" } });
-
     const gui_mod = b.addModule("gui", .{
         .source_file = .{ .path = "src/gui.zig" },
-        .dependencies = &.{
-            .{ .name = "tinyvg", .module = tinyvg_mod },
-        },
+        .dependencies = &.{},
     });
 
     const sdl_mod = b.addModule("SDLBackend", .{

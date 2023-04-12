@@ -1,7 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 const math = std.math;
-const tvg = @import("tinyvg");
+const tvg = @import("tinyvg/tinyvg.zig");
 const fnv = std.hash.Fnv1a_32;
 pub const icons = @import("icons.zig");
 pub const fonts = @import("fonts.zig");
