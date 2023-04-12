@@ -117,7 +117,7 @@ These functions allocate memory for the widget onto the arena allocator passed t
 Instead you can allocate the widget on the stack:
 ```zig
 {
-    var box = BoxWidget.init(@src(), 0, .vertical, .{.expand = .both});
+    var box = BoxWidget.init(@src(), 0, .vertical, false, .{.expand = .both});
     // box now has an id, can look up animations/timers
     try box.install(.{});  // or try box.install(.{ .process_events = false});
     defer box.deinit();
@@ -133,16 +133,20 @@ Each widget has the following options that can be changed through the Options st
 - padding (space inside border)
 - corner_radius (for each corner)
 - color_style (use theme's colors)
-- color_custom/color_custom_bg (used if color_style is .custom)
+- color_accent (overrides widget and theme defaults)
+- color_text
+- color_fill
+- color_border
+- color_hover
+- color_press
 - font_style (use theme's fonts)
-- font_custom (used if font_style is .custom)
+- font (override font_style)
 ```zig
 if (try gui.button(@src(), 0, "Wild", .{
-    .margin = gui.Rect.All(2),
+    .margin = gui.Rect.all(2),
     .padding = gui.Rect.all(8),
-    .color_style = .custom,
-    .color_custom = gui.Color{.r = 255, .g = 0, .b = 0, .a = 255},
-    .color_custom_bg = gui.Color{.r = 255, .g = 0, .b = 255, .a = 255},
+    .color_text = gui.Color{.r = 0, .g = 255, .b = 0, .a = 150},
+    .color_fill = gui.Color{.r = 100, .g = 0, .b = 100, .a = 255},
     })) {
     // clicked
 }
@@ -150,10 +154,10 @@ if (try gui.button(@src(), 0, "Wild", .{
 
 Each widget has its own default options.  These can be changed directly:
 ```zig
-gui.ButtonWidget.Defaults.background = false;
+gui.ButtonWidget.defaults.background = false;
 ```
 
-Colors come in foreground/background pairs.  Usually you want to use colors from the theme:
+Colors come in groups (accent, text, fill, etc.).  Usually you want to use colors from the theme:
 ```zig
 if (try gui.menuItemLabel(@src(), 0, "Cut", false, .{.color_style = .success, .background = true}) != null) {
     // selected
@@ -174,7 +178,7 @@ The theme's color_accent is also used to show keyboard focus.
 ### Layout
 A widget receives its position rectangle from the parent, but can influence layout with Options:
 - `.expand` - whether to take up all the space available (horizontal or vertical)
-- `.gravity` - position a non-expanded widget inside a larger rectangle
+- `.gravity_x`, `.gravity_y` - position a non-expanded widget inside a larger rectangle
 - `.min_size` - get at least this much space (unless parent is unable)
-- `.rect` - rarely used to directly specify position in parent
+- `.rect` - directly specify position in parent (rarely used)
 
