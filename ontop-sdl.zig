@@ -16,7 +16,7 @@ var renderer: *c.SDL_Renderer = undefined;
 /// - gui renders only floating windows
 /// - framerate is managed by application, not gui
 pub fn main() !void {
-    // app_init is a stand-in for what your application is already doing
+    // app_init is a stand-in for what your application is already doing to set things up
     try app_init();
 
     // create SDL backend using existing window and renderer
@@ -90,7 +90,7 @@ fn gui_stuff() !void {
     defer scroll.deinit();
 
     var tl = try gui.textLayout(@src(), 0, .{ .expand = .both, .font_style = .title_4 });
-    const lorem = "This example shows how to use gui in a normal application.";
+    const lorem = "This example shows how to use gui for floating windows on top of an existing application.";
     try tl.addText(lorem, .{});
     tl.deinit();
 
