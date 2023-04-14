@@ -376,7 +376,7 @@ pub fn renderCommand(
 
             try renderPath(&point_store, &width_store, &slice_store, data.path, data.line_width);
 
-            var slices: [slice_store.buffer.len][]const Point = undefined;
+            var slices: [temp_buffer_size][]const Point = undefined;
             for (slice_store.items(), 0..) |src, i| {
                 slices[i] = point_store.items()[src.offset..][0..src.len];
             }
