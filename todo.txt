@@ -53,6 +53,11 @@ for normal animations should be able to do a wrapper widget
 - floating windows are different since they aren't in the normal flow
  - need a special wrapper for them which doesn't insert itself into the heirarchy just adjusts values
 
+scrolling during a drag
+- a widget can opt in by bubbling an event (i_have_mouse_capture)
+- nearest parent scrollarea records that widget id
+  - on deinit, check if that widget still has mouse capture
+  - if so, and the mouse pointer is at the edge or outside, then scroll and cueframe
 
 scroll test vertical .none
 
@@ -61,11 +66,6 @@ scrollbar should separate install and events like normal, so you could put it on
   - run events
   - do all the rest of the scroll area children
   - then do the drawing
-
-ffmpeg:
-- everything in libs/ffmpeg_include needs to be done at zig build time
-- for files that just do #define stuff, can do that in build.zig
-- for c files, the contents should be everything that ffmpeg could put there but conditioned on cDefine stuff we make up
 
 look into logging, how to use it in general and how to use it for gui stuff?
 - const scope_name = std.log.scoped(.whatever);
@@ -92,7 +92,6 @@ start making real demo() contents
 - following dear imgui demo
  - Basic Widgets
   - radio
-  - slider
   - hold-repeat buttons
   - tooltips
   - dropdown selection
@@ -161,11 +160,7 @@ premultiplied alpha for all textures (and vertices from PathStroke/Fill?)
 
 when we have a widget that has captured the mouse, need to capture the mouse in the underlying window system so click-dragging works even when the mouse pointer goes outside the window
 
-try animating a fade
-- does Options need a separate alpha?
-
 punchlist for podcast app:
-- equal-sized weight option to boxlayout
 - bitmaps
 - textentry needs to be able to paste a url
 
