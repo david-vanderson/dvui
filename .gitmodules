@@ -1,24 +1,3 @@
-[submodule "libs/zmath"]
-	path = libs/zmath
-	url = https://github.com/machlibs/zmath
-[submodule "libs/zig-sqlite"]
-	path = libs/zig-sqlite
-	url = https://github.com/vrischmann/zig-sqlite
-[submodule "libs/zig-libcurl"]
-	path = libs/zig-libcurl
-	url = https://github.com/mattnite/zig-libcurl.git
-[submodule "libs/zig-libssh2"]
-	path = libs/zig-libssh2
-	url = https://github.com/mattnite/zig-libssh2.git
-[submodule "libs/zig-mbedtls"]
-	path = libs/zig-mbedtls
-	url = https://github.com/mattnite/zig-mbedtls.git
-[submodule "libs/zig-zlib"]
-	path = libs/zig-zlib
-	url = https://github.com/mattnite/zig-zlib.git
-[submodule "libs/zig-libxml2"]
-	path = libs/zig-libxml2
-	url = https://github.com/mitchellh/zig-libxml2.git
 [submodule "libs/curl"]
 	path = libs/curl
 	url = https://github.com/david-vanderson/curl
