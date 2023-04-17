@@ -1667,6 +1667,15 @@ pub fn minSizeSet(id: u32, s: Size) !void {
     try cw.min_sizes.put(id, .{ .size = s });
 }
 
+pub fn hashSrc(src: std.builtin.SourceLocation, id_extra: usize) u32 {
+    var hash = fnv.init();
+    hash.update(src.file);
+    hash.update(std.mem.asBytes(&src.line));
+    hash.update(std.mem.asBytes(&src.column));
+    hash.update(std.mem.asBytes(&id_extra));
+    return hash.final();
+}
+
 pub fn hashIdKey(id: u32, key: []const u8) u32 {
     var h = fnv.init();
     h.value = id;
@@ -2120,11 +2129,7 @@ pub const Window = struct {
         gpa: std.mem.Allocator,
         backend: Backend,
     ) !Self {
-        var hash = fnv.init();
-        hash.update(src.file);
-        hash.update(std.mem.asBytes(&src.line));
-        hash.update(std.mem.asBytes(&src.column));
-        hash.update(std.mem.asBytes(&id_extra));
+        const hashval = hashSrc(src, id_extra);
         var self = Self{
             .gpa = gpa,
             .subwindows = std.ArrayList(Subwindow).init(gpa),
@@ -2139,7 +2144,7 @@ pub const Window = struct {
             .dialog_mutex = std.Thread.Mutex{},
             .dialogs = std.ArrayList(Dialog).init(gpa),
             .toasts = std.ArrayList(Toast).init(gpa),
-            .wd = WidgetData{ .id = hash.final() },
+            .wd = WidgetData{ .id = hashval },
             .backend = backend,
         };
 
@@ -3775,13 +3780,25 @@ pub const Dialog = struct {
     display: DialogDisplay,
 };
 
-pub fn dialogAdd(src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplay) !u32 {
-    const cw = currentWindow();
-    const parent = parentGet();
-    const id = parent.extendID(src, id_extra);
-    const mutex = try cw.dialogAdd(id, display);
-    mutex.unlock();
-    return id;
+pub const DialogAddReturn = struct {
+    id: u32,
+    mutex: *std.Thread.Mutex,
+};
+
+pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplay) !DialogAddReturn {
+    var id: u32 = undefined;
+    var mutex: *std.Thread.Mutex = undefined;
+    if (win) |w| {
+        // we are being called from non gui thread
+        id = hashSrc(src, id_extra);
+        mutex = try w.dialogAdd(id, display);
+    } else {
+        const cw = currentWindow();
+        const parent = parentGet();
+        id = parent.extendID(src, id_extra);
+        mutex = try cw.dialogAdd(id, display);
+    }
+    return .{ .id = id, .mutex = mutex };
 }
 
 pub fn dialogRemove(id: u32) void {
@@ -3789,14 +3806,16 @@ pub fn dialogRemove(id: u32) void {
     cw.dialogRemove(id);
 }
 
-pub fn dialogOk(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
-    const id = try gui.dialogAdd(src, id_extra, dialogOkDisplay);
+pub fn dialogOk(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
+    const id_mutex = try gui.dialogAdd(win, src, id_extra, dialogOkDisplay);
+    const id = id_mutex.id;
     gui.dataSet(id, "_modal", modal);
     gui.dataSet(id, "_title", title);
     gui.dataSet(id, "_msg", msg);
     if (callafter) |ca| {
         gui.dataSet(id, "_callafter", ca);
     }
+    id_mutex.mutex.unlock();
 }
 
 pub fn dialogOkDisplay(id: u32) !void {
@@ -7657,13 +7676,15 @@ pub const examples = struct {
 
     const AnimatingDialog = struct {
         pub fn dialog(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
-            const id = try gui.dialogAdd(src, id_extra, AnimatingDialog.dialogDisplay);
+            const id_mutex = try gui.dialogAdd(null, src, id_extra, AnimatingDialog.dialogDisplay);
+            const id = id_mutex.id;
             gui.dataSet(id, "modal", modal);
             gui.dataSet(id, "title", title);
             gui.dataSet(id, "msg", msg);
             if (callafter) |ca| {
                 gui.dataSet(id, "callafter", ca);
             }
+            id_mutex.mutex.unlock();
         }
 
         pub fn dialogDisplay(id: u32) !void {
@@ -8157,7 +8178,7 @@ pub const examples = struct {
             defer hbox.deinit();
 
             if (try gui.button(@src(), 0, "Ok Dialog", .{})) {
-                try gui.dialogOk(@src(), 0, false, "Ok Dialog", "This is a non modal dialog with no callafter", null);
+                try gui.dialogOk(null, @src(), 0, false, "Ok Dialog", "This is a non modal dialog with no callafter", null);
             }
 
             const dialogsFollowup = struct {
@@ -8165,12 +8186,12 @@ pub const examples = struct {
                     _ = id;
                     var buf: [100]u8 = undefined;
                     const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\"", .{@tagName(response)}) catch unreachable;
-                    try gui.dialogOk(@src(), 0, true, "Ok Followup Response", text, null);
+                    try gui.dialogOk(null, @src(), 0, true, "Ok Followup Response", text, null);
                 }
             };
 
             if (try gui.button(@src(), 0, "Ok Followup", .{})) {
-                try gui.dialogOk(@src(), 0, true, "Ok Followup", "This is a modal dialog with modal followup", dialogsFollowup.callafter);
+                try gui.dialogOk(null, @src(), 0, true, "Ok Followup", "This is a modal dialog with modal followup", dialogsFollowup.callafter);
             }
         }
 
