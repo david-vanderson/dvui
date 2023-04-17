@@ -3809,11 +3809,12 @@ pub fn dialogRemove(id: u32) void {
 pub fn dialogOk(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
     const id_mutex = try gui.dialogAdd(win, src, id_extra, dialogOkDisplay);
     const id = id_mutex.id;
-    gui.dataSet(id, "_modal", modal);
-    gui.dataSet(id, "_title", title);
-    gui.dataSet(id, "_msg", msg);
+    const cw = win orelse currentWindow();
+    cw.dataSet(id, "_modal", modal);
+    cw.dataSet(id, "_title", title);
+    cw.dataSet(id, "_msg", msg);
     if (callafter) |ca| {
-        gui.dataSet(id, "_callafter", ca);
+        cw.dataSet(id, "_callafter", ca);
     }
     id_mutex.mutex.unlock();
 }

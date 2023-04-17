@@ -6,7 +6,12 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 pub fn main() !void {
-    var win_backend = try SDLBackend.init(800, 600);
+    var win_backend = try SDLBackend.init(.{
+        .width = 800,
+        .height = 600,
+        .vsync = false,
+        .title = "GUI SDL test",
+    });
     defer win_backend.deinit();
 
     var win = try gui.Window.init(@src(), 0, gpa, win_backend.guiBackend());
@@ -230,6 +235,16 @@ pub fn main() !void {
                             gui.themeSet(&gui.Adwaita.dark);
                         } else {
                             gui.themeSet(&gui.Adwaita.light);
+                        }
+                    }
+
+                    if (gui.examples.show_demo_window) {
+                        if (try gui.button(@src(), 0, "Hide Demo Window", .{})) {
+                            gui.examples.show_demo_window = false;
+                        }
+                    } else {
+                        if (try gui.button(@src(), 0, "Show Demo Window", .{})) {
+                            gui.examples.show_demo_window = true;
                         }
                     }
                 }

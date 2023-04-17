@@ -7,6 +7,8 @@ const gpa = gpa_instance.allocator();
 
 const vsync = true;
 
+var show_dialog_outside_frame: bool = false;
+
 /// This example shows how to use the gui for a normal application:
 /// - gui renders the whole application
 /// - render frames only when needed
@@ -54,6 +56,12 @@ pub fn main() !void {
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros, null);
         backend.waitEventTimeout(wait_event_micros);
+
+        // Example of how to show a dialog from another thread (outside of win.begin/win.end)
+        if (show_dialog_outside_frame) {
+            show_dialog_outside_frame = false;
+            try gui.dialogOk(&win, @src(), 0, false, "Dialog from Outside", "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread.", null);
+        }
     }
 }
 
@@ -88,6 +96,10 @@ fn gui_frame() !void {
         if (try gui.button(@src(), 0, "Show Demo Window", .{})) {
             gui.examples.show_demo_window = true;
         }
+    }
+
+    if (try gui.button(@src(), 0, "Show Dialog From\nOutside Frame", .{})) {
+        show_dialog_outside_frame = true;
     }
 
     // look at demo() for examples of gui widgets, shows in a floating window
