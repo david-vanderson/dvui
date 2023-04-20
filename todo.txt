@@ -52,12 +52,17 @@ for normal animations should be able to do a wrapper widget
  - need a special wrapper for them which doesn't insert itself into the heirarchy just adjusts values
 
 scrolling during a drag
-- a widget can opt in by bubbling an event (draggin_want_scroll) that includes mouse position and screen rect
+- after processing events, if the drag is active, then bubble event (draggin_want_scroll) that includes mouse position and screen rect
 - nearest parent scrollarea checks:
   - is the mouse on or beyond the edge (for each edge)
   - is the child's screen rect on or beyond the same edge
-  - if so, then record that we want to scroll
-  - on deinit, scroll that much and cueframe
+  - if so, then scroll (depending on how far beyond the edge?) and cueFrame
+
+scrolling to show something
+- bubble event (scroll_to_point) asking any scrollarea to scroll so a given screen point is visible
+  - scrollarea checks if point is already visible, if not whether it can scroll in that direction
+  - optional whether to jump or to scroll smoothly
+  - scrollarea sets a field on bubbled event saying if this needs to be done again next frame (if smoothscrolling and made progress)
 
 scroll test vertical .none
 
