@@ -1,6 +1,4 @@
 
-remove everything from libs
-
 change dialogOk to take an options struct
 
 use zig package manager to get SDL (github.com/andrewrk/SDL)
@@ -18,6 +16,10 @@ rename CursorKind to Cursor
 
 example toast that includes "undo"
 
+change FloatingWindowWidget.init to take an options struct
+- stayAboveParent
+- autoSize
+- others?
 
 add disabled to options so the seek forward/backward icons can be grayed out?
 - need to add ability to gray out things too (alpha to options?)
