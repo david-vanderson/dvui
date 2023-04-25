@@ -982,7 +982,7 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
     var items = cw.subwindows.items;
     for (items, 0..) |sw, i| {
         if (sw.id == subwindow_id) {
-            if (sw.stay_above_parent) {
+            if (sw.stay_above_parent != null) {
                 std.debug.print("raiseSubwindow: tried to raise a subwindow {x} with stay_above_parent set\n", .{subwindow_id});
                 return;
             }
@@ -995,7 +995,7 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
             // move it to the end, also move any stay_above_parent subwindows
             // directly on top of it as well
             var first = true;
-            while (first or items[i].stay_above_parent) {
+            while (first or items[i].stay_above_parent != null) {
                 first = false;
                 const item = items[i];
                 for (items[i..(items.len - 1)], 0..) |*b, k| {
@@ -1448,7 +1448,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     cw.path.clearAndFree();
 }
 
-pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: bool) !void {
+pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: ?u32) !void {
     const cw = currentWindow();
 
     for (cw.subwindows.items) |*sw| {
@@ -1464,9 +1464,30 @@ pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: bool) !
         }
     }
 
-    // haven't seen this window before, it goes on top
+    // haven't seen this window before
     const sw = Window.Subwindow{ .id = id, .rect = rect, .modal = modal, .stay_above_parent = stay_above_parent, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena), .render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena) };
-    try cw.subwindows.append(sw);
+    if (stay_above_parent) |subwin_id| {
+        // it wants to be above subwin_id
+        var i: usize = 0;
+        while (i < cw.subwindows.items.len and cw.subwindows.items[i].id != subwin_id) {
+            i += 1;
+        }
+
+        if (i < cw.subwindows.items.len) {
+            i += 1;
+        }
+
+        // i points just past subwin_id, go until we run out of subwindows that want to be on top of this subwin_id
+        while (i < cw.subwindows.items.len and cw.subwindows.items[i].stay_above_parent == subwin_id) {
+            i += 1;
+        }
+
+        // i points just past all subwindows that want to be on top of this subwin_id
+        try cw.subwindows.insert(i, sw);
+    } else {
+        // just put it on the top
+        try cw.subwindows.append(sw);
+    }
 }
 
 pub fn subwindowCurrentSet(id: u32) u32 {
@@ -1688,14 +1709,45 @@ const DataOffset = struct {
     end: u32,
 };
 
-pub fn dataSet(id: u32, key: []const u8, data: anytype) void {
-    var cw = currentWindow();
-    cw.dataSet(id, key, data);
+/// Set arbitrary key/value pair for given id.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside window.begin()/end(), you must
+/// pass a pointer to the Window you want to add the dialog to.
+pub fn dataSet(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
+    if (win) |w| {
+        // we are being called from non gui thread or outside begin()/end()
+        w.dataSet(id, key, data);
+    } else {
+        if (current_window) |cw| {
+            cw.dataSet(id, key, data);
+        } else {
+            @panic("dataSet: current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
+        }
+    }
 }
 
-pub fn dataGet(id: u32, key: []const u8, comptime T: type) ?T {
-    var cw = currentWindow();
-    return cw.dataGet(id, key, T);
+/// Retrieve value for given key associated with id.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside window.begin()/end(), you must
+/// pass a pointer to the Window you want to add the dialog to.
+///
+/// If T is a slice, returns slice of internal storage, so need to copy if
+/// keeping the returned slice across frames
+pub fn dataGet(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
+    if (win) |w| {
+        // we are being called from non gui thread or outside begin()/end()
+        return w.dataGet(id, key, T);
+    } else {
+        if (current_window) |cw| {
+            return cw.dataGet(id, key, T);
+        } else {
+            @panic("dataGet: current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
+        }
+    }
 }
 
 pub fn minSize(id: u32, min_size: Size) Size {
@@ -2024,7 +2076,7 @@ pub const Window = struct {
         render_cmds_after: std.ArrayList(RenderCmd),
         used: bool = true,
         modal: bool = false,
-        stay_above_parent: bool = false,
+        stay_above_parent: ?u32 = null,
     };
 
     const SavedSize = struct {
@@ -2544,7 +2596,7 @@ pub const Window = struct {
 
         debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
-        try subwindowAdd(self.wd.id, self.wd.rect, false, false);
+        try subwindowAdd(self.wd.id, self.wd.rect, false, null);
 
         _ = subwindowCurrentSet(self.wd.id);
 
@@ -2816,9 +2868,9 @@ pub const Window = struct {
 
     // Add a dialog to be displayed on the GUI thread during Window.end(). Can
     // be called from any thread. Returns a locked mutex that must be unlocked
-    // by the caller.  If calling from a non-GUI thread, do any
-    // Window.dataSet() calls before unlocking the mutex to ensure that data is
-    // available before the dialog is displayed.
+    // by the caller.  If calling from a non-GUI thread, do any dataSet() calls
+    // before unlocking the mutex to ensure that data is available before the
+    // dialog is displayed.
     pub fn dialogAdd(self: *Self, id: u32, display: DialogDisplay) !*std.Thread.Mutex {
         self.dialog_mutex.lock();
 
@@ -2892,9 +2944,9 @@ pub const Window = struct {
 
     // Add a toast to be displayed on the GUI thread. Can be called from any
     // thread. Returns a locked mutex that must be unlocked by the caller.  If
-    // calling from a non-GUI thread, do any Window.dataSet() calls before
-    // unlocking the mutex to ensure that data is available before the dialog
-    // is displayed.
+    // calling from a non-GUI thread, do any dataSet() calls before unlocking
+    // the mutex to ensure that data is available before the dialog is
+    // displayed.
     pub fn toastAdd(self: *Self, id: u32, subwindow_id: ?u32, display: DialogDisplay, timeout: ?i32) !*std.Thread.Mutex {
         self.dialog_mutex.lock();
 
@@ -2928,6 +2980,27 @@ pub const Window = struct {
                 _ = self.toasts.orderedRemove(i);
                 self.cueFrame();
                 return;
+            }
+        }
+    }
+
+    // show any toasts that didn't have a subwindow_id set
+    fn toastsShow(self: *Self) !void {
+        var ti = gui.toastsFor(null);
+        if (ti) |*it| {
+            var toast_win = FloatingWindowWidget.init(@src(), 0, false, null, null, .{ .background = false, .border = .{} });
+            defer toast_win.deinit();
+
+            toast_win.data().rect = gui.placeIn(self.wd.rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
+            toast_win.stayAboveParent();
+            toast_win.autoSize();
+            try toast_win.install(.{ .process_events = false });
+
+            var vbox = try gui.box(@src(), 0, .vertical, .{});
+            defer vbox.deinit();
+
+            while (it.next()) |t| {
+                try t.display(t.id);
             }
         }
     }
@@ -2998,6 +3071,7 @@ pub const Window = struct {
     // meaning wait for event).  If wanted, pass return value to waitTime() to
     // get a useful time to wait between render loops.
     pub fn end(self: *Self) !?u32 {
+        try self.toastsShow();
         try self.dialogsShow();
 
         if (self.debug_window_show) {
@@ -3209,7 +3283,7 @@ pub const PopupWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        try subwindowAdd(self.wd.id, rs.r, false, false);
+        try subwindowAdd(self.wd.id, rs.r, false, null);
         try self.wd.register("Popup", rs);
 
         // clip to just our window (using clipSet since we are not inside our parent)
@@ -3419,17 +3493,17 @@ pub const FloatingWindowWidget = struct {
             autopossize = false;
         } else {
             // we store the rect (only while the window is open)
-            self.wd.rect = dataGet(self.wd.id, "_rect", Rect) orelse Rect{};
+            self.wd.rect = dataGet(null, self.wd.id, "_rect", Rect) orelse Rect{};
         }
 
         if (autopossize) {
-            if (dataGet(self.wd.id, "_auto_size", @TypeOf(self.auto_size))) |as| {
+            if (dataGet(null, self.wd.id, "_auto_size", @TypeOf(self.auto_size))) |as| {
                 self.auto_size = as;
             } else {
                 self.auto_size = (self.wd.rect.w == 0 and self.wd.rect.h == 0);
             }
 
-            if (dataGet(self.wd.id, "_auto_pos", @TypeOf(self.auto_pos))) |ap| {
+            if (dataGet(null, self.wd.id, "_auto_pos", @TypeOf(self.auto_pos))) |ap| {
                 self.auto_pos = ap;
             } else {
                 self.auto_pos = (self.wd.rect.x == 0 and self.wd.rect.y == 0);
@@ -3470,7 +3544,7 @@ pub const FloatingWindowWidget = struct {
 
         if (firstFrame(self.wd.id)) {
             // write back before we hide ourselves for the first frame
-            dataSet(self.wd.id, "_rect", self.wd.rect);
+            dataSet(null, self.wd.id, "_rect", self.wd.rect);
             if (self.io_rect) |ior| {
                 // send rect back to user
                 ior.* = self.wd.rect;
@@ -3508,7 +3582,7 @@ pub const FloatingWindowWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        try subwindowAdd(self.wd.id, rs.r, self.modal, self.stay_above_parent);
+        try subwindowAdd(self.wd.id, rs.r, self.modal, if (self.stay_above_parent) self.prev_windowId else null);
         try self.wd.register("FloatingWindow", rs);
 
         if (self.modal) {
@@ -3723,15 +3797,15 @@ pub const FloatingWindowWidget = struct {
 
         if (!firstFrame(self.wd.id)) {
             // if firstFrame, we already did this in install
-            dataSet(self.wd.id, "_rect", self.wd.rect);
+            dataSet(null, self.wd.id, "_rect", self.wd.rect);
             if (self.io_rect) |ior| {
                 // send rect back to user
                 ior.* = self.wd.rect;
             }
         }
 
-        dataSet(self.wd.id, "_auto_pos", self.auto_pos);
-        dataSet(self.wd.id, "_auto_size", self.auto_size);
+        dataSet(null, self.wd.id, "_auto_pos", self.auto_pos);
+        dataSet(null, self.wd.id, "_auto_size", self.auto_size);
         self.wd.minSizeSetAndCue();
 
         // outside normal layout, don't call minSizeForChild or
@@ -3780,25 +3854,37 @@ pub const Dialog = struct {
     display: DialogDisplay,
 };
 
-pub const DialogAddReturn = struct {
+pub const IdMutex = struct {
     id: u32,
     mutex: *std.Thread.Mutex,
 };
 
-pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplay) !DialogAddReturn {
-    var id: u32 = undefined;
-    var mutex: *std.Thread.Mutex = undefined;
+/// Add a dialog to be displayed on the GUI thread during Window.end().
+///
+/// Returns an id and locked mutex that must be unlocked by the caller. Caller
+/// does any Window.dataSet() calls before unlocking the mutex to ensure that
+/// data is available before the dialog is displayed.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside window.begin()/end(), you must
+/// pass a pointer to the Window you want to add the dialog to.
+pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplay) !IdMutex {
     if (win) |w| {
         // we are being called from non gui thread
-        id = hashSrc(src, id_extra);
-        mutex = try w.dialogAdd(id, display);
+        const id = hashSrc(src, id_extra);
+        const mutex = try w.dialogAdd(id, display);
+        return .{ .id = id, .mutex = mutex };
     } else {
-        const cw = currentWindow();
-        const parent = parentGet();
-        id = parent.extendID(src, id_extra);
-        mutex = try cw.dialogAdd(id, display);
+        if (current_window) |cw| {
+            const parent = parentGet();
+            const id = parent.extendID(src, id_extra);
+            const mutex = try cw.dialogAdd(id, display);
+            return .{ .id = id, .mutex = mutex };
+        } else {
+            @panic("dialogAdd: current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
+        }
     }
-    return .{ .id = id, .mutex = mutex };
 }
 
 pub fn dialogRemove(id: u32) void {
@@ -3807,38 +3893,37 @@ pub fn dialogRemove(id: u32) void {
 }
 
 pub fn dialogOk(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
-    const id_mutex = try gui.dialogAdd(win, src, id_extra, dialogOkDisplay);
+    const id_mutex = try dialogAdd(win, src, id_extra, dialogOkDisplay);
     const id = id_mutex.id;
-    const cw = win orelse currentWindow();
-    cw.dataSet(id, "_modal", modal);
-    cw.dataSet(id, "_title", title);
-    cw.dataSet(id, "_msg", msg);
+    dataSet(win, id, "_modal", modal);
+    dataSet(win, id, "_title", title);
+    dataSet(win, id, "_msg", msg);
     if (callafter) |ca| {
-        cw.dataSet(id, "_callafter", ca);
+        dataSet(win, id, "_callafter", ca);
     }
     id_mutex.mutex.unlock();
 }
 
 pub fn dialogOkDisplay(id: u32) !void {
-    const modal = gui.dataGet(id, "_modal", bool) orelse {
+    const modal = gui.dataGet(null, id, "_modal", bool) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
         gui.dialogRemove(id);
         return;
     };
 
-    const title = gui.dataGet(id, "_title", []const u8) orelse {
+    const title = gui.dataGet(null, id, "_title", []const u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
         gui.dialogRemove(id);
         return;
     };
 
-    const message = gui.dataGet(id, "_msg", []const u8) orelse {
+    const message = gui.dataGet(null, id, "_msg", []const u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
         gui.dialogRemove(id);
         return;
     };
 
-    const callafter = gui.dataGet(id, "_callafter", DialogCallAfter);
+    const callafter = gui.dataGet(null, id, "_callafter", DialogCallAfter);
 
     var win = try floatingWindow(@src(), id, modal, null, null, .{});
     defer win.deinit();
@@ -3872,13 +3957,34 @@ pub const Toast = struct {
     display: DialogDisplay,
 };
 
-pub fn toastAdd(src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, display: DialogDisplay, timeout: ?i32) !u32 {
-    const cw = currentWindow();
-    const parent = parentGet();
-    const id = parent.extendID(src, id_extra);
-    const mutex = try cw.toastAdd(id, subwindow_id, display, timeout);
-    mutex.unlock();
-    return id;
+/// Add a toast.  If subwindow_id is null, the toast will be shown during
+/// Window.end().  If subwindow_id is not null, separate code must call
+/// toastsFor() with that subwindow_id to retrieve this toast and display it.
+///
+/// Returns an id and locked mutex that must be unlocked by the caller. Caller
+/// does any dataSet() calls before unlocking the mutex to ensure that data is
+/// available before the toast is displayed.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside window.begin()/end(), you must
+/// pass a pointer to the Window you want to add the toast to.
+pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, display: DialogDisplay, timeout: ?i32) !IdMutex {
+    if (win) |w| {
+        // we are being called from non gui thread
+        const id = hashSrc(src, id_extra);
+        const mutex = try w.toastAdd(id, subwindow_id, display, timeout);
+        return .{ .id = id, .mutex = mutex };
+    } else {
+        if (current_window) |cw| {
+            const parent = parentGet();
+            const id = parent.extendID(src, id_extra);
+            const mutex = try cw.toastAdd(id, subwindow_id, display, timeout);
+            return .{ .id = id, .mutex = mutex };
+        } else {
+            @panic("toastAdd: current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
+        }
+    }
 }
 
 pub fn toastRemove(id: u32) void {
@@ -3937,13 +4043,15 @@ pub const ToastIterator = struct {
     }
 };
 
-pub fn toastInfo(src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, timeout: ?i32, msg: []const u8) !void {
-    const id = try gui.toastAdd(src, id_extra, subwindow_id, toastInfoDisplay, timeout);
-    gui.dataSet(id, "_msg", msg);
+pub fn toastInfo(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, timeout: ?i32, msg: []const u8) !void {
+    const id_mutex = try gui.toastAdd(win, src, id_extra, subwindow_id, toastInfoDisplay, timeout);
+    const id = id_mutex.id;
+    gui.dataSet(win, id, "_msg", msg);
+    id_mutex.mutex.unlock();
 }
 
 pub fn toastInfoDisplay(id: u32) !void {
-    const message = gui.dataGet(id, "_msg", []const u8) orelse {
+    const message = gui.dataGet(null, id, "_msg", []const u8) orelse {
         std.debug.print("Error: lost message for toast {x}\n", .{id});
         return;
     };
@@ -4092,7 +4200,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
     defer bc.deinit();
 
     var expanded: bool = false;
-    if (gui.dataGet(bc.wd.id, "_expand", bool)) |e| {
+    if (gui.dataGet(null, bc.wd.id, "_expand", bool)) |e| {
         expanded = e;
     }
 
@@ -4111,7 +4219,7 @@ pub fn expander(src: std.builtin.SourceLocation, id_extra: usize, label_str: []c
     }
     try labelNoFmt(@src(), 0, label_str, options.strip());
 
-    gui.dataSet(bc.wd.id, "_expand", expanded);
+    gui.dataSet(null, bc.wd.id, "_expand", expanded);
 
     return expanded;
 }
@@ -4153,7 +4261,7 @@ pub const PanedWidget = struct {
 
         const rect = self.wd.contentRect();
 
-        if (gui.dataGet(self.wd.id, "_data", SavedData)) |d| {
+        if (gui.dataGet(null, self.wd.id, "_data", SavedData)) |d| {
             self.split_ratio = d.split_ratio;
             switch (self.dir) {
                 .horizontal => {
@@ -4397,7 +4505,7 @@ pub const PanedWidget = struct {
 
     pub fn deinit(self: *Self) void {
         clipSet(self.prevClip);
-        gui.dataSet(self.wd.id, "_data", SavedData{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
+        gui.dataSet(null, self.wd.id, "_data", SavedData{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
         _ = gui.parentSet(self.wd.parent);
@@ -4651,7 +4759,7 @@ pub const ContextWidget = struct {
             }
         }
 
-        if (dataGet(self.wd.id, "_activePt", Point)) |a| {
+        if (dataGet(null, self.wd.id, "_activePt", Point)) |a| {
             self.activePt = a;
         }
 
@@ -4752,7 +4860,7 @@ pub const ContextWidget = struct {
             self.processMouseEventsAfter();
         }
         if (self.focused) {
-            dataSet(self.wd.id, "_activePt", self.activePt);
+            dataSet(null, self.wd.id, "_activePt", self.activePt);
         }
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
@@ -4862,7 +4970,7 @@ pub const BoxWidget = struct {
         self.wd = WidgetData.init(src, id_extra, opts);
         self.dir = dir;
         self.equal_space = equal_space;
-        if (dataGet(self.wd.id, "_data", Data)) |d| {
+        if (dataGet(null, self.wd.id, "_data", Data)) |d| {
             self.data_prev = d;
         }
         return self;
@@ -5024,7 +5132,7 @@ pub const BoxWidget = struct {
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
 
-        dataSet(self.wd.id, "_data", Data{ .total_weight_prev = self.total_weight, .min_space_taken_prev = self.min_space_taken });
+        dataSet(null, self.wd.id, "_data", Data{ .total_weight_prev = self.total_weight, .min_space_taken_prev = self.min_space_taken });
 
         _ = parentSet(self.wd.parent);
     }
@@ -5060,7 +5168,7 @@ pub const ScrollAreaWidget = struct {
 
         self.hbox = BoxWidget.init(src, id_extra, .horizontal, false, options);
         self.io_scroll_info = io_si;
-        self.scroll_info = if (io_si) |iosi| iosi.* else (dataGet(self.hbox.data().id, "_scroll_info", ScrollInfo) orelse ScrollInfo{});
+        self.scroll_info = if (io_si) |iosi| iosi.* else (dataGet(null, self.hbox.data().id, "_scroll_info", ScrollInfo) orelse ScrollInfo{});
         return self;
     }
 
@@ -5113,7 +5221,7 @@ pub const ScrollAreaWidget = struct {
     pub fn deinit(self: *Self) void {
         self.scroll.deinit();
 
-        dataSet(self.hbox.data().id, "_scroll_info", if (self.io_scroll_info) |iosi| iosi.* else self.scroll_info);
+        dataSet(null, self.hbox.data().id, "_scroll_info", if (self.io_scroll_info) |iosi| iosi.* else self.scroll_info);
 
         self.hbox.deinit();
     }
@@ -5693,7 +5801,7 @@ pub const MenuWidget = struct {
 
         self.winId = subwindowCurrentId();
         self.dir = dir;
-        if (dataGet(self.wd.id, "_sub_act", bool)) |a| {
+        if (dataGet(null, self.wd.id, "_sub_act", bool)) |a| {
             self.submenus_activated = a;
             //std.debug.print("menu dataGet {x} {}\n", .{self.wd.id, self.submenus_activated});
         } else if (menuGet()) |m| {
@@ -5764,7 +5872,7 @@ pub const MenuWidget = struct {
 
     pub fn deinit(self: *Self) void {
         self.box.deinit();
-        dataSet(self.wd.id, "_sub_act", self.submenus_activated);
+        dataSet(null, self.wd.id, "_sub_act", self.submenus_activated);
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
         _ = menuSet(self.parentMenu);
@@ -7679,23 +7787,23 @@ pub const examples = struct {
         pub fn dialog(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
             const id_mutex = try gui.dialogAdd(null, src, id_extra, AnimatingDialog.dialogDisplay);
             const id = id_mutex.id;
-            gui.dataSet(id, "modal", modal);
-            gui.dataSet(id, "title", title);
-            gui.dataSet(id, "msg", msg);
+            gui.dataSet(null, id, "modal", modal);
+            gui.dataSet(null, id, "title", title);
+            gui.dataSet(null, id, "msg", msg);
             if (callafter) |ca| {
-                gui.dataSet(id, "callafter", ca);
+                gui.dataSet(null, id, "callafter", ca);
             }
             id_mutex.mutex.unlock();
         }
 
         pub fn dialogDisplay(id: u32) !void {
-            const modal = gui.dataGet(id, "modal", bool) orelse unreachable;
-            const title = gui.dataGet(id, "title", []const u8) orelse unreachable;
-            const message = gui.dataGet(id, "msg", []const u8) orelse unreachable;
-            const callafter = gui.dataGet(id, "callafter", DialogCallAfter);
+            const modal = gui.dataGet(null, id, "modal", bool) orelse unreachable;
+            const title = gui.dataGet(null, id, "title", []const u8) orelse unreachable;
+            const message = gui.dataGet(null, id, "msg", []const u8) orelse unreachable;
+            const callafter = gui.dataGet(null, id, "callafter", DialogCallAfter);
 
             // once we record a response, refresh it until we close
-            _ = gui.dataGet(id, "response", gui.DialogResponse);
+            _ = gui.dataGet(null, id, "response", gui.DialogResponse);
 
             var win = FloatingWindowWidget.init(@src(), id, modal, null, null, .{});
             const first_frame = gui.firstFrame(win.data().id);
@@ -7708,7 +7816,7 @@ pub const examples = struct {
             // To animate a window, we need both a percent and a target window
             // size (see calls to animate below).
             if (gui.animationGet(win.data().id, "rect_percent")) |a| {
-                if (gui.dataGet(win.data().id, "window_size", Size)) |target_size| {
+                if (gui.dataGet(null, win.data().id, "window_size", Size)) |target_size| {
                     scaleval = a.lerp();
 
                     // since the window is animating, calculate the center to
@@ -7731,7 +7839,7 @@ pub const examples = struct {
                         gui.dialogRemove(id);
 
                         if (callafter) |ca| {
-                            const response = gui.dataGet(id, "response", gui.DialogResponse) orelse {
+                            const response = gui.dataGet(null, id, "response", gui.DialogResponse) orelse {
                                 std.debug.print("Error: no response for dialog {x}\n", .{id});
                                 return;
                             };
@@ -7755,7 +7863,7 @@ pub const examples = struct {
             try gui.windowHeader(title, "", &header_openflag);
             if (!header_openflag) {
                 closing = true;
-                gui.dataSet(id, "response", gui.DialogResponse.closed);
+                gui.dataSet(null, id, "response", gui.DialogResponse.closed);
             }
 
             var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
@@ -7764,7 +7872,7 @@ pub const examples = struct {
 
             if (try gui.button(@src(), 0, "Ok", .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
                 closing = true;
-                gui.dataSet(id, "response", gui.DialogResponse.ok);
+                gui.dataSet(null, id, "response", gui.DialogResponse.ok);
             }
 
             vbox.deinit();
@@ -7776,13 +7884,13 @@ pub const examples = struct {
                 // the min size of the window is our target, which is why we do
                 // this after win.deinit so the min size will be available
                 gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .end_time = 150_000 });
-                gui.dataSet(win.data().id, "window_size", win.data().min_size);
+                gui.dataSet(null, win.data().id, "window_size", win.data().min_size);
             }
 
             if (closing) {
                 // If we are closing, start from our current size
                 gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .end_time = 150_000 });
-                gui.dataSet(win.data().id, "window_size", win.data().rect.size());
+                gui.dataSet(null, win.data().id, "window_size", win.data().rect.size());
             }
         }
 
@@ -8201,15 +8309,19 @@ pub const examples = struct {
             defer hbox.deinit();
 
             if (try gui.button(@src(), 0, "Toast 1", .{})) {
-                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast 1 to demo window");
+                try gui.toastInfo(null, @src(), 0, demo_win_id, 4_000_000, "Toast 1 to demo window");
             }
 
             if (try gui.button(@src(), 0, "Toast 2", .{})) {
-                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast 2 to demo window");
+                try gui.toastInfo(null, @src(), 0, demo_win_id, 4_000_000, "Toast 2 to demo window");
             }
 
             if (try gui.button(@src(), 0, "Toast 3", .{})) {
-                try gui.toastInfo(@src(), 0, demo_win_id, 4_000_000, "Toast 3 to demo window");
+                try gui.toastInfo(null, @src(), 0, demo_win_id, 4_000_000, "Toast 3 to demo window");
+            }
+
+            if (try gui.button(@src(), 0, "Toast Main Window", .{})) {
+                try gui.toastInfo(null, @src(), 0, null, 4_000_000, "Toast to main window");
             }
         }
     }
