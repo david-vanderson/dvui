@@ -165,7 +165,7 @@ pub fn windowSize(self: *SDLBackend) gui.Size {
     return gui.Size{ .w = @intToFloat(f32, w), .h = @intToFloat(f32, h) };
 }
 
-pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []gui.Vertex, idx: []u32) void {
+pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const gui.Vertex, idx: []const u32) void {
     const clipr = gui.windowRectPixels().intersect(gui.clipGet());
     if (clipr.empty()) {
         return;
@@ -186,7 +186,7 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []gui.Vertex
 
     const tex = @ptrCast(?*c.SDL_Texture, texture);
 
-    _ = c.SDL_RenderGeometryRaw(self.renderer, tex, @ptrCast(*f32, &vtx[0].pos), @sizeOf(gui.Vertex), @ptrCast(*c.SDL_Color, @alignCast(4, &vtx[0].col)), @sizeOf(gui.Vertex), @ptrCast(*f32, &vtx[0].uv), @sizeOf(gui.Vertex), @intCast(c_int, vtx.len), idx.ptr, @intCast(c_int, idx.len), @sizeOf(u32));
+    _ = c.SDL_RenderGeometryRaw(self.renderer, tex, @ptrCast(*const f32, &vtx[0].pos), @sizeOf(gui.Vertex), @ptrCast(*const c.SDL_Color, @alignCast(4, &vtx[0].col)), @sizeOf(gui.Vertex), @ptrCast(*const f32, &vtx[0].uv), @sizeOf(gui.Vertex), @intCast(c_int, vtx.len), idx.ptr, @intCast(c_int, idx.len), @sizeOf(u32));
 }
 
 pub fn textureCreate(self: *SDLBackend, pixels: []u8, width: u32, height: u32) *anyopaque {

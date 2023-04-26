@@ -248,6 +248,52 @@ pub fn main() !void {
                         }
                     }
                 }
+
+                {
+                    const Selection = struct {
+                        var sel_start: usize = 0;
+                        var sel_end: usize = 0;
+                    };
+                    {
+                        var hbox = try gui.box(@src(), 0, .horizontal, .{ .expand = .horizontal });
+                        defer hbox.deinit();
+                        try gui.label(@src(), 0, "{d} {d}", .{ Selection.sel_start, Selection.sel_end }, .{});
+                        if (try gui.button(@src(), 0, "Inc Start", .{})) {
+                            Selection.sel_start += 1;
+                        }
+                        if (try gui.button(@src(), 0, "Dec Start", .{})) {
+                            Selection.sel_start -= 1;
+                        }
+                        if (try gui.button(@src(), 0, "Inc End", .{})) {
+                            Selection.sel_end += 1;
+                        }
+                        if (try gui.button(@src(), 0, "Dec End", .{})) {
+                            Selection.sel_end -= 1;
+                        }
+                    }
+                    var scroll = try gui.scrollArea(@src(), 0, .{ .min_size_content = .{ .w = 150, .h = 150 } });
+                    defer scroll.deinit();
+                    var tl = try gui.textLayout(@src(), 0, .{ .expand = .both });
+                    tl.sel_start = Selection.sel_start;
+                    tl.sel_end = Selection.sel_end;
+                    {
+                        //if (try gui.button(@src(), 0, "Win Up .1", .{})) {
+                        //    fwin.wd.rect.y -= 0.1;
+                        //}
+                        //if (try gui.button(@src(), 0, "Win Down .1", .{ .gravity_x = 1.0 })) {
+                        //    fwin.wd.rect.y += 0.1;
+                        //}
+                    }
+                    const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+                    //const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore";
+                    try tl.addText(lorem, .{});
+                    //var it = std.mem.split(u8, lorem, " ");
+                    //while (it.next()) |word| {
+                    //  tl.addText(word);
+                    //  tl.addText(" ");
+                    //}
+                    tl.deinit();
+                }
             }
 
             const fps = gui.FPS();
@@ -361,16 +407,16 @@ fn animatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool
 
     if (gui.firstFrame(fwin.data().id)) {
         gui.animation(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
-        gui.dataSet(fwin.wd.id, "size", rect.*.size());
+        gui.dataSet(null, fwin.wd.id, "size", rect.*.size());
     }
 
     if (start_closing) {
         gui.animation(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 100_000 });
-        gui.dataSet(fwin.wd.id, "size", rect.*.size());
+        gui.dataSet(null, fwin.wd.id, "size", rect.*.size());
     }
 
     if (gui.animationGet(fwin.wd.id, "rect_percent")) |a| {
-        if (gui.dataGet(fwin.wd.id, "size", gui.Size)) |ss| {
+        if (gui.dataGet(null, fwin.wd.id, "size", gui.Size)) |ss| {
             var r = fwin.data().rect;
             const dw = ss.w * a.lerp();
             const dh = ss.h * a.lerp();

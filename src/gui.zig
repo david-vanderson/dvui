@@ -923,12 +923,7 @@ pub const RenderCmd = struct {
     clip: Rect,
     snap: bool,
     cmd: union(enum) {
-        text: struct {
-            font: Font,
-            text: []const u8,
-            rs: RectScale,
-            color: Color,
-        },
+        text: renderTextOptions,
         debug_font_atlases: struct {
             rs: RectScale,
             color: Color,
@@ -2778,7 +2773,7 @@ pub const Window = struct {
             clipSet(drc.clip);
             switch (drc.cmd) {
                 .text => |t| {
-                    try renderText(t.font, t.text, t.rs, t.color);
+                    try renderText(t);
                 },
                 .debug_font_atlases => |t| {
                     try debugRenderFontAtlases(t.rs, t.color);
@@ -4535,20 +4530,33 @@ pub const TextLayoutWidget = struct {
     };
 
     wd: WidgetData = undefined,
-    corners: [4]?Rect = [_]?Rect{null} ** 4,
+    corners: [2]?Rect = [_]?Rect{null} ** 2,
     insert_pt: Point = Point{},
     prevClip: Rect = Rect{},
     first_line: bool = true,
 
+    bytes_seen: usize = 0,
+    sel_start: usize = 0,
+    sel_end: usize = 0,
+    captured: bool = false,
+
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Self {
         const options = defaults.override(opts);
-        return Self{ .wd = WidgetData.init(src, id_extra, options) };
+        var self = Self{ .wd = WidgetData.init(src, id_extra, options) };
+        self.captured = captureMouseMaintain(self.wd.id);
+        return self;
     }
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
-        _ = opts;
         _ = parentSet(self.widget());
         try self.wd.register("TextLayout", null);
+
+        if (opts.process_events) {
+            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
+            while (iter.next()) |e| {
+                self.processEvent(&iter, e);
+            }
+        }
 
         const rs = self.wd.contentRectScale();
 
@@ -4649,12 +4657,17 @@ pub const TextLayoutWidget = struct {
             if (self.insert_pt.y < rect.h) {
                 const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.h - self.insert_pt.y) });
                 //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
-
-                if (newline) {
-                    try renderText(options.fontGet(), txt[0 .. end - 1], rs, options.color(.text));
-                } else {
-                    try renderText(options.fontGet(), txt[0..end], rs, options.color(.text));
-                }
+                const rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
+                try renderText(.{
+                    .font = options.fontGet(),
+                    .text = rtxt,
+                    .rs = rs,
+                    .color = options.color(.text),
+                    .sel_start = self.sel_start,
+                    .sel_end = self.sel_end,
+                    .sel_color = options.color(.fill),
+                    .sel_color_bg = options.color(.accent),
+                });
             }
 
             // even if we don't actually render, need to update insert_pt and minSize
@@ -4664,6 +4677,7 @@ pub const TextLayoutWidget = struct {
             const size = Size{ .w = 0, .h = self.insert_pt.y + s.h };
             self.wd.min_size.h = math.max(self.wd.min_size.h, self.wd.padSize(size).h);
             txt = txt[end..];
+            self.bytes_seen += end;
 
             // move insert_pt to next line if we have more text
             if (txt.len > 0 or newline) {
@@ -4684,18 +4698,10 @@ pub const TextLayoutWidget = struct {
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         const ret = placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
         var i: usize = undefined;
-        if (g.y < 0.5) {
-            if (g.x < 0.5) {
-                i = 0; // upleft
-            } else {
-                i = 1; // upright
-            }
+        if (g.x < 0.5) {
+            i = 0; // upleft
         } else {
-            if (g.x < 0.5) {
-                i = 2; // downleft
-            } else {
-                i = 3; // downright
-            }
+            i = 1; // upright
         }
 
         self.corners[i] = ret;
@@ -4715,6 +4721,26 @@ pub const TextLayoutWidget = struct {
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
         _ = iter;
+
+        if (e.evt == .mouse) {
+            if (e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left) {
+                e.handled = true;
+                // capture and start drag
+                captureMouse(self.wd.id);
+                dragPreStart(e.evt.mouse.p, .ibeam, Point{});
+            } else if (e.evt.mouse.kind == .release and e.evt.mouse.kind.release == .left) {
+                e.handled = true;
+                // stop possible drag and capture
+                captureMouse(null);
+                dragEnd();
+            } else if (e.evt.mouse.kind == .motion) {
+                e.handled = true;
+                // move if dragging
+                if (dragging(e.evt.mouse.p)) |dps| {
+                    _ = dps;
+                }
+            }
+        }
 
         if (bubbleable(e)) {
             self.bubbleEvent(e);
@@ -6164,7 +6190,12 @@ pub const LabelWidget = struct {
             const liners = self.wd.parent.screenRectScale(lineRect);
 
             rs.r.x = liners.r.x;
-            try renderText(self.wd.options.fontGet(), line, rs, self.wd.options.color(.text));
+            try renderText(.{
+                .font = self.wd.options.fontGet(),
+                .text = line,
+                .rs = rs,
+                .color = self.wd.options.color(.text),
+            });
             rs.r.y += rs.s * try self.wd.options.fontGet().lineSkip();
         }
         clipSet(oldclip);
@@ -6652,7 +6683,12 @@ pub const TextEntryWidget = struct {
 
         const oldclip = clip(rs.r);
         if (!clipGet().empty()) {
-            try renderText(self.wd.options.fontGet(), self.text[0..self.len], rs, self.wd.options.color(.text));
+            try renderText(.{
+                .font = self.wd.options.fontGet(),
+                .text = self.text[0..self.len],
+                .rs = rs,
+                .color = self.wd.options.color(.text),
+            });
         }
         clipSet(oldclip);
 
@@ -6989,19 +7025,33 @@ pub const RectScale = struct {
     }
 };
 
-pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !void {
-    if (rs.s == 0) return;
-    if (clipGet().intersect(rs.r).empty()) return;
-    if (text.len == 0) return;
+pub const renderTextOptions = struct {
+    font: Font,
+    text: []const u8,
+    rs: RectScale,
+    color: Color,
+    sel_start: ?usize = null,
+    sel_end: ?usize = null,
+    sel_color: ?Color = null,
+    sel_color_bg: ?Color = null,
+};
 
-    //if (true) return;
+pub fn renderText(opts: renderTextOptions) !void {
+    if (opts.rs.s == 0) return;
+    if (clipGet().intersect(opts.rs.r).empty()) return;
+    if (opts.text.len == 0) return;
+
+    if (!std.unicode.utf8ValidateSlice(opts.text)) {
+        std.debug.print("renderText: invalid utf8 for \"{s}\"\n", .{opts.text});
+        return error.InvalidUtf8;
+    }
 
     var cw = currentWindow();
 
     if (!cw.rendering) {
-        var txt = try cw.arena.alloc(u8, text.len);
-        std.mem.copy(u8, txt, text);
-        var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = .{ .font = font, .text = txt, .rs = rs, .color = color } } };
+        var opts_copy = opts;
+        opts_copy.text = try cw.arena.dupe(u8, opts.text);
+        var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
@@ -7010,17 +7060,17 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
     }
 
     // Make sure to always ask for a bigger size font, we'll reduce it down below
-    const target_size = font.size * rs.s;
+    const target_size = opts.font.size * opts.rs.s;
     const ask_size = @ceil(target_size);
     const target_fraction = target_size / ask_size;
 
-    const sized_font = font.resize(ask_size);
+    const sized_font = opts.font.resize(ask_size);
     var fce = try fontCacheGet(sized_font);
 
     // make sure the cache has all the glyphs we need
-    var utf8it = (try std.unicode.Utf8View.init(text)).iterator();
+    var utf8it = (try std.unicode.Utf8View.init(opts.text)).iterator();
     while (utf8it.nextCodepoint()) |codepoint| {
-        _ = try fce.glyphInfoGet(@intCast(u32, codepoint), font.name);
+        _ = try fce.glyphInfoGet(@intCast(u32, codepoint), opts.font.name);
     }
 
     // number of extra pixels to add on each side of each glyph
@@ -7081,7 +7131,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
 
                 const codepoint = @intCast(u32, e.key_ptr.*);
                 FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @bitCast(i32, FontCacheEntry.LoadFlags{ .render = true }))) catch |err| {
-                    std.debug.print("renderText: freetype error {!} trying to FT_Load_Char font {s} codepoint {d}\n", .{ err, font.name, codepoint });
+                    std.debug.print("renderText: freetype error {!} trying to FT_Load_Char font {s} codepoint {d}\n", .{ err, opts.font.name, codepoint });
                     return error.freetypeError;
                 };
 
@@ -7092,7 +7142,7 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
                     var col: i32 = 0;
                     while (col < bitmap.width) : (col += 1) {
                         if (bitmap.buffer == null) {
-                            std.debug.print("renderText: freetype error: bitmap null for font {s} codepoint {d}\n", .{ font.name, codepoint });
+                            std.debug.print("renderText: freetype error: bitmap null for font {s} codepoint {d}\n", .{ opts.font.name, codepoint });
                             return error.freetypeError;
                         }
                         const src = bitmap.buffer[@intCast(usize, row * bitmap.pitch + col)];
@@ -7128,21 +7178,54 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
     var idx = std.ArrayList(u32).init(cw.arena);
     defer idx.deinit();
 
-    var x: f32 = if (cw.snap_to_pixels) @round(rs.r.x) else rs.r.x;
-    var y: f32 = if (cw.snap_to_pixels) @round(rs.r.y) else rs.r.y;
+    var x: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
+    var y: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.y) else opts.rs.r.y;
 
-    var utf8 = (try std.unicode.Utf8View.init(text)).iterator();
+    var sel: bool = false;
+    var sel_in: bool = false;
+    var sel_start_x: f32 = x;
+    var sel_end_x: f32 = x;
+    var sel_start: usize = opts.sel_start orelse 0;
+    sel_start = @min(sel_start, opts.text.len);
+    var sel_end: usize = opts.sel_end orelse 0;
+    sel_end = @min(sel_end, opts.text.len);
+    if (sel_start < sel_end) {
+        // we will definitely have a selected region
+        sel = true;
+    }
+
+    var bytes_seen: usize = 0;
+    var utf8 = (try std.unicode.Utf8View.init(opts.text)).iterator();
     while (utf8.nextCodepoint()) |codepoint| {
-        const gi = try fce.glyphInfoGet(@intCast(u32, codepoint), font.name);
+        const gi = try fce.glyphInfoGet(@intCast(u32, codepoint), opts.font.name);
 
         // TODO: kerning
+
+        const nextx = x + gi.advance * target_fraction;
+
+        if (sel) {
+            bytes_seen += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+            if (!sel_in and bytes_seen > sel_start and bytes_seen <= sel_end) {
+                // entering selection
+                sel_in = true;
+                sel_start_x = x;
+            } else if (sel_in and bytes_seen > sel_end) {
+                // leaving selection
+                sel_in = false;
+            }
+
+            if (sel_in) {
+                // update selection
+                sel_end_x = nextx;
+            }
+        }
 
         const len = @intCast(u32, vtx.items.len);
         var v: Vertex = undefined;
 
         v.pos.x = x + (gi.minx - pad) * target_fraction;
         v.pos.y = y + (gi.miny - pad) * target_fraction;
-        v.col = color;
+        v.col = if (sel_in) opts.sel_color orelse opts.color else opts.color;
         v.uv = gi.uv;
         try vtx.append(v);
 
@@ -7165,7 +7248,28 @@ pub fn renderText(font: Font, text: []const u8, rs: RectScale, color: Color) !vo
         try idx.append(len + 2);
         try idx.append(len + 3);
 
-        x += gi.advance * target_fraction;
+        x = nextx;
+    }
+
+    if (sel) {
+        if (opts.sel_color_bg) |bgcol| {
+            var sel_vtx: [4]Vertex = undefined;
+            sel_vtx[0].pos.x = sel_start_x;
+            sel_vtx[0].pos.y = y;
+            sel_vtx[3].pos.x = sel_start_x;
+            sel_vtx[3].pos.y = y + fce.height * target_fraction;
+            sel_vtx[1].pos.x = sel_end_x;
+            sel_vtx[1].pos.y = y;
+            sel_vtx[2].pos.x = sel_end_x;
+            sel_vtx[2].pos.y = sel_vtx[3].pos.y;
+
+            for (&sel_vtx) |*v| {
+                v.col = bgcol;
+                v.uv[0] = 0;
+                v.uv[1] = 0;
+            }
+            cw.backend.renderGeometry(null, &sel_vtx, &[_]u32{ 0, 1, 2, 0, 2, 3 });
+        }
     }
 
     cw.backend.renderGeometry(fce.texture_atlas, vtx.items, idx.items);
@@ -7239,8 +7343,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotati
     var cw = currentWindow();
 
     if (!cw.rendering) {
-        var name_copy = try cw.arena.alloc(u8, name.len);
-        std.mem.copy(u8, name_copy, name);
+        var name_copy = try cw.arena.dupe(u8, name);
         var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .rotation = rotation, .colormod = colormod } } };
 
         var sw = cw.subwindowCurrent();
@@ -7667,7 +7770,7 @@ pub const Backend = struct {
         end: *const fn (ptr: *anyopaque) void,
         pixelSize: *const fn (ptr: *anyopaque) Size,
         windowSize: *const fn (ptr: *anyopaque) Size,
-        renderGeometry: *const fn (ptr: *anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
+        renderGeometry: *const fn (ptr: *anyopaque, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void,
         textureCreate: *const fn (ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
         textureDestroy: *const fn (ptr: *anyopaque, texture: *anyopaque) void,
     };
@@ -7678,7 +7781,7 @@ pub const Backend = struct {
         comptime endFn: fn (ptr: @TypeOf(pointer)) void,
         comptime pixelSizeFn: fn (ptr: @TypeOf(pointer)) Size,
         comptime windowSizeFn: fn (ptr: @TypeOf(pointer)) Size,
-        comptime renderGeometryFn: fn (ptr: @TypeOf(pointer), texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void,
+        comptime renderGeometryFn: fn (ptr: @TypeOf(pointer), texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void,
         comptime textureCreateFn: fn (ptr: @TypeOf(pointer), pixels: []u8, width: u32, height: u32) *anyopaque,
         comptime textureDestroyFn: fn (ptr: @TypeOf(pointer), texture: *anyopaque) void,
     ) Backend {
@@ -7709,7 +7812,7 @@ pub const Backend = struct {
                 return @call(.always_inline, windowSizeFn, .{self});
             }
 
-            fn renderGeometryImpl(ptr: *anyopaque, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void {
+            fn renderGeometryImpl(ptr: *anyopaque, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void {
                 const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
                 return @call(.always_inline, renderGeometryFn, .{ self, texture, vtx, idx });
             }
@@ -7757,7 +7860,7 @@ pub const Backend = struct {
         return self.vtable.windowSize(self.ptr);
     }
 
-    pub fn renderGeometry(self: *Backend, texture: ?*anyopaque, vtx: []Vertex, idx: []u32) void {
+    pub fn renderGeometry(self: *Backend, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void {
         self.vtable.renderGeometry(self.ptr, texture, vtx, idx);
     }
 
