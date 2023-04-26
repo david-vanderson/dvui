@@ -1551,12 +1551,14 @@ pub fn mouseTotalMotion() Point {
     return Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
 }
 
-pub fn captureMouse(id: ?u32) void {
+pub fn captureMouse(id: ?u32) bool {
     const cw = currentWindow();
     cw.captureID = id;
     if (id != null) {
         cw.captured_last_frame = true;
+        return true;
     }
+    return false;
 }
 
 pub fn captureMouseMaintain(id: u32) bool {
@@ -3031,7 +3033,7 @@ pub const Window = struct {
             self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(&buf, 0), 16) catch 0;
         }
 
-        var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
+        var tl = try gui.textLayout(@src(), 0, null, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
         try tl.addText(self.debug_info_name_rect, .{});
         try tl.addText("\n\n", .{});
         try tl.addText(self.debug_info_src_id_extra, .{});
@@ -3620,12 +3622,12 @@ pub const FloatingWindowWidget = struct {
                 if (self.captured or corner) {
                     if (me.kind == .press and me.kind.press == .left) {
                         // capture and start drag
-                        captureMouse(self.wd.id);
+                        self.captured = captureMouse(self.wd.id);
                         dragStart(me.p, .arrow_nw_se, Point.diff(rs.r.bottomRight(), me.p));
                         e.handled = true;
                     } else if (me.kind == .release and me.kind.release == .left) {
                         // stop drag and capture
-                        captureMouse(null);
+                        self.captured = captureMouse(null);
                         dragEnd();
                         e.handled = true;
                     } else if (me.kind == .motion) {
@@ -3672,14 +3674,14 @@ pub const FloatingWindowWidget = struct {
                         .press => |b| {
                             if (b == .left) {
                                 // capture and start drag
-                                captureMouse(self.wd.id);
+                                self.captured = captureMouse(self.wd.id);
                                 dragPreStart(e.evt.mouse.p, .crosshair, Point{});
                             }
                         },
                         .release => |b| {
                             if (b == .left) {
                                 // stop drag and capture
-                                captureMouse(null);
+                                self.captured = captureMouse(null);
                                 dragEnd();
                             }
                         },
@@ -3933,7 +3935,7 @@ pub fn dialogOkDisplay(id: u32) !void {
         return;
     }
 
-    var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
+    var tl = try gui.textLayout(@src(), 0, null, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
     try tl.addText(message, .{});
     tl.deinit();
 
@@ -4466,11 +4468,11 @@ pub const PanedWidget = struct {
                 e.handled = true;
                 if (e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left) {
                     // capture and start drag
-                    captureMouse(self.wd.id);
+                    self.captured = captureMouse(self.wd.id);
                     dragPreStart(e.evt.mouse.p, cursor, Point{});
                 } else if (e.evt.mouse.kind == .release and e.evt.mouse.kind.release == .left) {
                     // stop possible drag and capture
-                    captureMouse(null);
+                    self.captured = captureMouse(null);
                     dragEnd();
                 } else if (e.evt.mouse.kind == .motion) {
                     // move if dragging
@@ -4511,10 +4513,10 @@ pub const PanedWidget = struct {
 // would calculate a huge min_size.h assuming only 1 character per line can
 // fit.  To prevent starting in weird situations, TextLayout defaults to having
 // a min_size.w so at least you can see what is going on.
-pub fn textLayout(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) !*TextLayoutWidget {
+pub fn textLayout(src: std.builtin.SourceLocation, id_extra: usize, sel_in: ?*TextLayoutWidget.Selection, opts: Options) !*TextLayoutWidget {
     const cw = currentWindow();
     var ret = try cw.arena.create(TextLayoutWidget);
-    ret.* = TextLayoutWidget.init(src, id_extra, opts);
+    ret.* = TextLayoutWidget.init(src, id_extra, sel_in, opts);
     try ret.install(.{});
     return ret;
 }
@@ -4529,6 +4531,11 @@ pub const TextLayoutWidget = struct {
         .min_size_content = .{ .w = 25 },
     };
 
+    pub const Selection = struct {
+        start: usize = 0,
+        end: usize = 0,
+    };
+
     wd: WidgetData = undefined,
     corners: [2]?Rect = [_]?Rect{null} ** 2,
     insert_pt: Point = Point{},
@@ -4536,20 +4543,40 @@ pub const TextLayoutWidget = struct {
     first_line: bool = true,
 
     bytes_seen: usize = 0,
-    sel_start: usize = 0,
-    sel_end: usize = 0,
     captured: bool = false,
+    selection_in: ?*Selection = null,
+    selection: *Selection = undefined,
+    selection_store: Selection = .{},
+    sel_mouse_down_pt: ?Point = null,
+    sel_mouse_down_bytes: ?usize = null,
+    sel_mouse_drag_pt: ?Point = null,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, selection_in: ?*Selection, opts: Options) Self {
         const options = defaults.override(opts);
-        var self = Self{ .wd = WidgetData.init(src, id_extra, options) };
-        self.captured = captureMouseMaintain(self.wd.id);
+        var self = Self{ .wd = WidgetData.init(src, id_extra, options), .selection_in = selection_in };
         return self;
     }
 
     pub fn install(self: *Self, opts: InstallOptions) !void {
         _ = parentSet(self.widget());
         try self.wd.register("TextLayout", null);
+
+        if (self.selection_in) |sel| {
+            self.selection = sel;
+        } else {
+            if (dataGet(null, self.wd.id, "_selection", Selection)) |s| {
+                self.selection_store = s;
+            }
+            self.selection = &self.selection_store;
+        }
+
+        self.captured = captureMouseMaintain(self.wd.id);
+
+        if (self.captured) {
+            if (dataGet(null, self.wd.id, "_sel_mouse_down_bytes", usize)) |p| {
+                self.sel_mouse_down_bytes = p;
+            }
+        }
 
         if (opts.process_events) {
             var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
@@ -4653,6 +4680,52 @@ pub const TextLayoutWidget = struct {
                 }
             }
 
+            // see if selection needs to be updated
+            if (self.sel_mouse_down_pt) |p| {
+                const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h });
+                if (p.y < rs.r.y or (p.y < (rs.r.y + rs.r.h) and p.x < rs.r.x)) {
+                    // point is before this text
+                    self.sel_mouse_down_bytes = self.bytes_seen;
+                    self.selection.start = self.sel_mouse_down_bytes.?;
+                    self.selection.end = self.sel_mouse_down_bytes.?;
+                    self.sel_mouse_down_pt = null;
+                } else if (p.y < (rs.r.y + rs.r.h) and p.x < (rs.r.x + rs.r.w)) {
+                    // point is in this text
+                    const how_far = (p.x - rs.r.x) / rs.s;
+                    var pt_end: usize = undefined;
+                    _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end);
+                    self.sel_mouse_down_bytes = self.bytes_seen + pt_end;
+                    self.selection.start = self.sel_mouse_down_bytes.?;
+                    self.selection.end = self.sel_mouse_down_bytes.?;
+                    self.sel_mouse_down_pt = null;
+                } else {
+                    // point is after this text, but we might not get anymore
+                    self.sel_mouse_down_bytes = self.bytes_seen + end;
+                }
+            }
+
+            if (self.sel_mouse_drag_pt) |p| {
+                const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h });
+                if (p.y < rs.r.y or (p.y < (rs.r.y + rs.r.h) and p.x < rs.r.x)) {
+                    // point is before this text
+                    self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen);
+                    self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen);
+                    self.sel_mouse_drag_pt = null;
+                } else if (p.y < (rs.r.y + rs.r.h) and p.x < (rs.r.x + rs.r.w)) {
+                    // point is in this text
+                    const how_far = (p.x - rs.r.x) / rs.s;
+                    var pt_end: usize = undefined;
+                    _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end);
+                    self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + pt_end);
+                    self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen + pt_end);
+                    self.sel_mouse_drag_pt = null;
+                } else {
+                    // point is after this text, but we might not get anymore
+                    self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
+                    self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
+                }
+            }
+
             // We want to render text, but no sense in doing it if we are off the end
             if (self.insert_pt.y < rect.h) {
                 const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.h - self.insert_pt.y) });
@@ -4663,8 +4736,8 @@ pub const TextLayoutWidget = struct {
                     .text = rtxt,
                     .rs = rs,
                     .color = options.color(.text),
-                    .sel_start = self.sel_start,
-                    .sel_end = self.sel_end,
+                    .sel_start = self.selection.start -| self.bytes_seen,
+                    .sel_end = self.selection.end -| self.bytes_seen,
                     .sel_color = options.color(.fill),
                     .sel_color_bg = options.color(.accent),
                 });
@@ -4726,18 +4799,23 @@ pub const TextLayoutWidget = struct {
             if (e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left) {
                 e.handled = true;
                 // capture and start drag
-                captureMouse(self.wd.id);
+                self.captured = captureMouse(self.wd.id);
                 dragPreStart(e.evt.mouse.p, .ibeam, Point{});
+                self.sel_mouse_down_pt = e.evt.mouse.p;
+                self.sel_mouse_drag_pt = null;
+                self.selection.start = 0;
+                self.selection.end = 0;
             } else if (e.evt.mouse.kind == .release and e.evt.mouse.kind.release == .left) {
                 e.handled = true;
                 // stop possible drag and capture
-                captureMouse(null);
+                self.captured = captureMouse(null);
                 dragEnd();
             } else if (e.evt.mouse.kind == .motion) {
                 e.handled = true;
                 // move if dragging
                 if (dragging(e.evt.mouse.p)) |dps| {
                     _ = dps;
+                    self.sel_mouse_drag_pt = e.evt.mouse.p;
                 }
             }
         }
@@ -4752,6 +4830,10 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        dataSet(null, self.wd.id, "_selection", self.selection.*);
+        if (self.captured) {
+            dataSet(null, self.wd.id, "_sel_mouse_down_bytes", self.sel_mouse_down_bytes);
+        }
         clipSet(self.prevClip);
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
@@ -5571,7 +5653,7 @@ pub const ScrollBarWidget = struct {
                             e.handled = true;
                             if (grabrs.contains(e.evt.mouse.p)) {
                                 // capture and start drag
-                                captureMouse(self.data().id);
+                                _ = captureMouse(self.data().id);
                                 dragPreStart(e.evt.mouse.p, .arrow, .{ .x = 0, .y = e.evt.mouse.p.y - (grabrs.y + grabrs.h / 2) });
                             } else {
                                 var fi = self.si.fraction_visible();
@@ -5595,7 +5677,7 @@ pub const ScrollBarWidget = struct {
                         if (e.evt.mouse.kind.release == .left) {
                             e.handled = true;
                             // stop possible drag and capture
-                            captureMouse(null);
+                            _ = captureMouse(null);
                             dragEnd();
                         }
                     },
@@ -6395,13 +6477,11 @@ pub const ButtonWidget = struct {
                     focusWidget(self.wd.id, iter);
                 } else if (me.kind == .press and me.kind.press == .left) {
                     e.handled = true;
-                    captureMouse(self.wd.id);
-                    self.captured = true;
+                    self.captured = captureMouse(self.wd.id);
                 } else if (me.kind == .release and me.kind.release == .left) {
                     e.handled = true;
                     if (self.captured) {
-                        captureMouse(null);
-                        self.captured = false;
+                        self.captured = captureMouse(null);
                         if (iter.r.contains(me.p)) {
                             self.click = true;
                             cueFrame();
@@ -6493,12 +6573,12 @@ pub fn slider(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Directi
                 var p: ?Point = null;
                 if (me.kind == .press and me.kind.press == .left) {
                     // capture
-                    captureMouse(b.data().id);
+                    _ = captureMouse(b.data().id);
                     e.handled = true;
                     p = me.p;
                 } else if (me.kind == .release and me.kind.release == .left) {
                     // stop capture
-                    captureMouse(null);
+                    _ = captureMouse(null);
                     e.handled = true;
                 } else if (me.kind == .motion and captureMouseGet() == b.data().id) {
                     // handle only if we have capture
@@ -6753,12 +6833,10 @@ pub const TextEntryWidget = struct {
                     focusWidget(self.wd.id, iter);
                 } else if (me.kind == .press and me.kind.press == .left) {
                     e.handled = true;
-                    captureMouse(self.wd.id);
-                    self.captured = true;
+                    self.captured = captureMouse(self.wd.id);
                 } else if (me.kind == .release and me.kind.release == .left) {
                     e.handled = true;
-                    captureMouse(null);
-                    self.captured = false;
+                    self.captured = captureMouse(null);
                 }
             },
             else => {},
@@ -7969,7 +8047,7 @@ pub const examples = struct {
                 gui.dataSet(null, id, "response", gui.DialogResponse.closed);
             }
 
-            var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
+            var tl = try gui.textLayout(@src(), 0, null, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
             try tl.addText(message, .{});
             tl.deinit();
 
@@ -8287,7 +8365,7 @@ pub const examples = struct {
         try gui.label(@src(), 0, "Body", .{}, .{});
 
         {
-            var tl = try gui.textLayout(@src(), 0, .{ .expand = .horizontal });
+            var tl = try gui.textLayout(@src(), 0, null, .{ .expand = .horizontal });
             defer tl.deinit();
 
             var cbox = try gui.box(@src(), 0, .vertical, .{});
@@ -8432,6 +8510,27 @@ pub const examples = struct {
     pub fn animations() !void {
         var b = try gui.box(@src(), 0, .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
+
+        {
+            var hbox = try gui.box(@src(), 0, .horizontal, .{});
+            defer hbox.deinit();
+
+            _ = gui.spacer(@src(), 0, .{ .w = 20 }, .{});
+            var button_wiggle = gui.ButtonWidget.init(@src(), 0, .{ .tab_index = 10 });
+            defer button_wiggle.deinit();
+
+            if (gui.animationGet(button_wiggle.data().id, "xoffset")) |a| {
+                button_wiggle.data().rect.x += 20 * (1.0 - a.lerp()) * (1.0 - a.lerp()) * @sin(a.lerp() * std.math.pi * 50);
+            }
+
+            try button_wiggle.install(.{});
+            try gui.labelNoFmt(@src(), 0, "Wiggle", button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
+
+            if (button_wiggle.clicked()) {
+                const a = gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 500_000 };
+                gui.animation(button_wiggle.data().id, "xoffset", a);
+            }
+        }
 
         if (try gui.button(@src(), 0, "Animating Dialog", .{})) {
             try AnimatingDialog.dialog(@src(), 0, false, "Animating Dialog", "This shows how to animate dialogs and other floating windows", AnimatingDialog.after);

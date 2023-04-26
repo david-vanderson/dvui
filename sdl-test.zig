@@ -172,27 +172,6 @@ pub fn main() !void {
                 }
 
                 {
-                    var hbox = try gui.box(@src(), 0, .horizontal, .{});
-                    defer hbox.deinit();
-
-                    _ = gui.spacer(@src(), 0, .{ .w = 20 }, .{});
-                    var button = gui.ButtonWidget.init(@src(), 0, .{ .tab_index = 10 });
-                    defer button.deinit();
-
-                    if (gui.animationGet(button.data().id, "xoffset")) |a| {
-                        button.data().rect.x += 20 * (1.0 - a.lerp()) * (1.0 - a.lerp()) * @sin(a.lerp() * std.math.pi * 50);
-                    }
-
-                    try button.install(.{});
-                    try gui.labelNoFmt(@src(), 0, "Wiggle", button.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
-
-                    if (button.clicked()) {
-                        const a = gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 500_000 };
-                        gui.animation(button.data().id, "xoffset", a);
-                    }
-                }
-
-                {
                     if (try gui.button(@src(), 0, "Stroke Test", .{})) {
                         StrokeTest.show_dialog = !StrokeTest.show_dialog;
                     }
@@ -250,32 +229,29 @@ pub fn main() !void {
                 }
 
                 {
-                    const Selection = struct {
-                        var sel_start: usize = 0;
-                        var sel_end: usize = 0;
+                    const Sel = struct {
+                        var sel = gui.TextLayoutWidget.Selection{};
                     };
                     {
                         var hbox = try gui.box(@src(), 0, .horizontal, .{ .expand = .horizontal });
                         defer hbox.deinit();
-                        try gui.label(@src(), 0, "{d} {d}", .{ Selection.sel_start, Selection.sel_end }, .{});
+                        try gui.label(@src(), 0, "{d} {d}", .{ Sel.sel.start, Sel.sel.end }, .{});
                         if (try gui.button(@src(), 0, "Inc Start", .{})) {
-                            Selection.sel_start += 1;
+                            Sel.sel.start += 1;
                         }
                         if (try gui.button(@src(), 0, "Dec Start", .{})) {
-                            Selection.sel_start -= 1;
+                            Sel.sel.start -= 1;
                         }
                         if (try gui.button(@src(), 0, "Inc End", .{})) {
-                            Selection.sel_end += 1;
+                            Sel.sel.end += 1;
                         }
                         if (try gui.button(@src(), 0, "Dec End", .{})) {
-                            Selection.sel_end -= 1;
+                            Sel.sel.end -= 1;
                         }
                     }
                     var scroll = try gui.scrollArea(@src(), 0, .{ .min_size_content = .{ .w = 150, .h = 150 } });
                     defer scroll.deinit();
-                    var tl = try gui.textLayout(@src(), 0, .{ .expand = .both });
-                    tl.sel_start = Selection.sel_start;
-                    tl.sel_end = Selection.sel_end;
+                    var tl = try gui.textLayout(@src(), 0, &Sel.sel, .{ .expand = .both });
                     {
                         //if (try gui.button(@src(), 0, "Win Up .1", .{})) {
                         //    fwin.wd.rect.y -= 0.1;
@@ -367,7 +343,7 @@ pub fn main() !void {
 
                 var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both });
                 defer scroll.deinit();
-                var tl = try gui.textLayout(@src(), 0, .{ .expand = .both });
+                var tl = try gui.textLayout(@src(), 0, null, .{ .expand = .both });
                 {
                     if (try gui.button(@src(), 0, "Win Up .1", .{})) {
                         fwin.wd.rect.y -= 0.1;
@@ -549,7 +525,7 @@ pub const StrokeTest = struct {
                             }
 
                             if (dragi != null) {
-                                gui.captureMouse(self.wd.id);
+                                _ = gui.captureMouse(self.wd.id);
                                 gui.dragPreStart(me.p, .crosshair, .{});
                             }
                         }
@@ -557,7 +533,7 @@ pub const StrokeTest = struct {
                     .release => |button| {
                         if (button == .left) {
                             e.handled = true;
-                            gui.captureMouse(null);
+                            _ = gui.captureMouse(null);
                             gui.dragEnd();
                         }
                     },
