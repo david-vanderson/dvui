@@ -2491,11 +2491,12 @@ pub const Window = struct {
         arena: std.mem.Allocator,
         time_ns: i128,
     ) !void {
-        var micros_since_last: u32 = 0;
+        var micros_since_last: u32 = 1;
         if (time_ns > self.frame_time_ns) {
             // enforce monotinicity
             const nanos_since_last = time_ns - self.frame_time_ns;
             micros_since_last = @intCast(u32, @divFloor(nanos_since_last, std.time.ns_per_us));
+            micros_since_last = @max(1, micros_since_last);
             self.frame_time_ns = time_ns;
         }
 
@@ -2599,11 +2600,7 @@ pub const Window = struct {
         _ = subwindowCurrentSet(self.wd.id);
 
         self.extra_frames_needed -|= 1;
-        if (micros_since_last == 0) {
-            self.rate = 3600;
-        } else {
-            self.rate = @intToFloat(f32, micros_since_last) / 1_000_000;
-        }
+        self.rate = @intToFloat(f32, micros_since_last) / 1_000_000;
 
         {
             const micros: i32 = if (micros_since_last > math.maxInt(i32)) math.maxInt(i32) else @intCast(i32, micros_since_last);
