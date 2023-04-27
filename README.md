@@ -22,7 +22,7 @@ Examples:
 - Integrate with just a few functions
   - Existing integrations with [Mach](https://machengine.org/) and [SDL](https://libsdl.org/)
 - Icon support via [TinyVG](https://tinyvg.tech/)
-- Font support via [mach-freetype](https://github.com/hexops/mach-freetype/)
+- Font support via [freetype](https://github.com/david-vanderson/freetype/)
 - Support for:
   - Animations
   - Themes
