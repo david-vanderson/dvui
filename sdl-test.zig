@@ -249,7 +249,7 @@ pub fn main() !void {
                             Sel.sel.end -= 1;
                         }
                     }
-                    var scroll = try gui.scrollArea(@src(), 0, .{ .min_size_content = .{ .w = 150, .h = 150 } });
+                    var scroll = try gui.scrollArea(@src(), 0, .{ .min_size_content = .{ .w = 150, .h = 100 } });
                     defer scroll.deinit();
                     var tl = try gui.textLayout(@src(), 0, &Sel.sel, .{ .expand = .both });
                     {

@@ -1861,6 +1861,7 @@ pub const EventIterator = struct {
                 },
 
                 .close_popup => unreachable,
+                .scroll_drag => unreachable,
             }
 
             self.i += 1;
@@ -4793,8 +4794,6 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
-        _ = iter;
-
         if (e.evt == .mouse) {
             if (e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left) {
                 e.handled = true;
@@ -4816,6 +4815,11 @@ pub const TextLayoutWidget = struct {
                 if (dragging(e.evt.mouse.p)) |dps| {
                     _ = dps;
                     self.sel_mouse_drag_pt = e.evt.mouse.p;
+                    var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                        .mouse_pt = e.evt.mouse.p,
+                        .screen_rect = iter.r,
+                    } } };
+                    self.bubbleEvent(&scrolldrag);
                 }
             }
         }
@@ -5321,7 +5325,8 @@ pub const ScrollAreaWidget = struct {
             oldview.w != newview.w or
             oldview.h != newview.h)
         {
-            // the viewport changed after scrollbar render
+            // the viewport changed (by scroll container) after the scroll bar
+            // was already rendered, so we need another frame to sync it up
             cueFrame();
         }
     }
@@ -5346,10 +5351,14 @@ pub const ScrollInfo = struct {
     virtual_size: Size = Size{},
     viewport: Rect = Rect{},
 
+    pub fn scroll_max(self: ScrollInfo) f32 {
+        return @max(0, self.virtual_size.h - self.viewport.h);
+    }
+
     pub fn fraction_visible(self: ScrollInfo) f32 {
         if (self.viewport.h == 0) return 1.0;
 
-        const max_hard_scroll = math.max(0, self.virtual_size.h - self.viewport.h);
+        const max_hard_scroll = self.scroll_max();
         var length = math.max(self.viewport.h, self.virtual_size.h);
         if (self.viewport.y < 0) {
             // temporarily adding the dead space we are showing
@@ -5364,7 +5373,7 @@ pub const ScrollInfo = struct {
     pub fn scroll_fraction(self: ScrollInfo) f32 {
         if (self.viewport.h == 0) return 0;
 
-        const max_hard_scroll = math.max(0, self.virtual_size.h - self.viewport.h);
+        const max_hard_scroll = self.scroll_max();
         var length = math.max(self.viewport.h, self.virtual_size.h);
         if (self.viewport.y < 0) {
             // temporarily adding the dead space we are showing
@@ -5381,8 +5390,7 @@ pub const ScrollInfo = struct {
 
     pub fn scrollToFraction(self: *ScrollInfo, fin: f32) void {
         const f = math.max(0, math.min(1, fin));
-        const max_hard_scroll = math.max(0, self.virtual_size.h - self.viewport.h);
-        self.viewport.y = f * max_hard_scroll;
+        self.viewport.y = f * self.scroll_max();
     }
 };
 
@@ -5444,7 +5452,7 @@ pub const ScrollContainerWidget = struct {
             .given => {},
         }
 
-        const max_scroll = math.max(0, self.si.virtual_size.h - self.si.viewport.h);
+        const max_scroll = self.si.scroll_max();
         if (self.si.viewport.y < 0) {
             self.si.viewport.y = math.min(0, math.max(-20, self.si.viewport.y + 250 * animationRate()));
             if (self.si.viewport.y < 0) {
@@ -5530,6 +5538,32 @@ pub const ScrollContainerWidget = struct {
                     e.handled = true;
                     self.si.viewport.y += 10;
                     cueFrame();
+                }
+            },
+            .scroll_drag => |sd| {
+                e.handled = true;
+                const rs = self.wd.borderRectScale();
+                var scrollval: f32 = 0;
+                if (sd.mouse_pt.y <= rs.r.y and // want to scroll up
+                    sd.screen_rect.y < rs.r.y and // scrolling would show more of child
+                    self.si.viewport.y > 0) // can scroll up
+                {
+                    scrollval = -5;
+                }
+
+                if (sd.mouse_pt.y >= (rs.r.y + rs.r.h) and
+                    (sd.screen_rect.y + sd.screen_rect.h) > (rs.r.y + rs.r.h) and
+                    self.si.viewport.y < self.si.scroll_max())
+                {
+                    scrollval = 5;
+                }
+
+                if (scrollval != 0) {
+                    self.si.viewport.y = @max(0, @min(self.si.scroll_max(), self.si.viewport.y + scrollval));
+                    cueFrame();
+
+                    // TODO: if we want continuous scrolling, need to inject a
+                    // mouse motion event into the next frame
                 }
             },
             else => {},
@@ -7543,11 +7577,22 @@ pub const ClosePopupEvent = struct {
     intentional: bool = true,
 };
 
-pub const Event = struct { handled: bool = false, evt: union(enum) {
-    key: KeyEvent,
-    mouse: MouseEvent,
-    close_popup: ClosePopupEvent,
-} };
+pub const Event = struct {
+    pub const ScrollDrag = struct {
+        // bubbled up from a child to tell a containing scrollarea to
+        // possibly scroll to show more of the child
+        mouse_pt: Point,
+        screen_rect: Rect,
+    };
+
+    handled: bool = false,
+    evt: union(enum) {
+        key: KeyEvent,
+        mouse: MouseEvent,
+        close_popup: ClosePopupEvent,
+        scroll_drag: ScrollDrag,
+    },
+};
 
 pub const WidgetData = struct {
     id: u32 = undefined,
