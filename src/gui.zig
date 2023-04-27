@@ -7289,7 +7289,6 @@ pub fn renderText(opts: renderTextOptions) !void {
 
     var x: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
     var y: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.y) else opts.rs.r.y;
-    const ydiff = opts.rs.r.y - y;
 
     var sel: bool = false;
     var sel_in: bool = false;
@@ -7365,9 +7364,9 @@ pub fn renderText(opts: renderTextOptions) !void {
         if (opts.sel_color_bg) |bgcol| {
             var sel_vtx: [4]Vertex = undefined;
             sel_vtx[0].pos.x = sel_start_x;
-            sel_vtx[0].pos.y = y;
+            sel_vtx[0].pos.y = opts.rs.r.y;
             sel_vtx[3].pos.x = sel_start_x;
-            sel_vtx[3].pos.y = y + fce.height * target_fraction + ydiff;
+            sel_vtx[3].pos.y = opts.rs.r.y + fce.height * target_fraction;
             sel_vtx[1].pos.x = sel_end_x;
             sel_vtx[1].pos.y = sel_vtx[0].pos.y;
             sel_vtx[2].pos.x = sel_end_x;
