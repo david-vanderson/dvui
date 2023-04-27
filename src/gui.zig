@@ -3894,14 +3894,23 @@ pub fn dialogRemove(id: u32) void {
     cw.dialogRemove(id);
 }
 
-pub fn dialogOk(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
-    const id_mutex = try dialogAdd(win, src, id_extra, dialogOkDisplay);
+pub const dialogOkOptions = struct {
+    id_extra: usize = 0,
+    window: ?*Window = null,
+    modal: bool = true,
+    title: []const u8 = "",
+    message: []const u8,
+    callafter: ?DialogCallAfter = null,
+};
+
+pub fn dialogOk(src: std.builtin.SourceLocation, opts: dialogOkOptions) !void {
+    const id_mutex = try dialogAdd(opts.window, src, opts.id_extra, dialogOkDisplay);
     const id = id_mutex.id;
-    dataSet(win, id, "_modal", modal);
-    dataSet(win, id, "_title", title);
-    dataSet(win, id, "_msg", msg);
-    if (callafter) |ca| {
-        dataSet(win, id, "_callafter", ca);
+    dataSet(opts.window, id, "_modal", opts.modal);
+    dataSet(opts.window, id, "_title", opts.title);
+    dataSet(opts.window, id, "_message", opts.message);
+    if (opts.callafter) |ca| {
+        dataSet(opts.window, id, "_callafter", ca);
     }
     id_mutex.mutex.unlock();
 }
@@ -3919,7 +3928,7 @@ pub fn dialogOkDisplay(id: u32) !void {
         return;
     };
 
-    const message = gui.dataGet(null, id, "_msg", []const u8) orelse {
+    const message = gui.dataGet(null, id, "_message", []const u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
         gui.dialogRemove(id);
         return;
@@ -4048,12 +4057,12 @@ pub const ToastIterator = struct {
 pub fn toastInfo(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, timeout: ?i32, msg: []const u8) !void {
     const id_mutex = try gui.toastAdd(win, src, id_extra, subwindow_id, toastInfoDisplay, timeout);
     const id = id_mutex.id;
-    gui.dataSet(win, id, "_msg", msg);
+    gui.dataSet(win, id, "_message", msg);
     id_mutex.mutex.unlock();
 }
 
 pub fn toastInfoDisplay(id: u32) !void {
-    const message = gui.dataGet(null, id, "_msg", []const u8) orelse {
+    const message = gui.dataGet(null, id, "_message", []const u8) orelse {
         std.debug.print("Error: lost message for toast {x}\n", .{id});
         return;
     };
@@ -8532,7 +8541,7 @@ pub const examples = struct {
             defer hbox.deinit();
 
             if (try gui.button(@src(), 0, "Ok Dialog", .{})) {
-                try gui.dialogOk(null, @src(), 0, false, "Ok Dialog", "This is a non modal dialog with no callafter", null);
+                try gui.dialogOk(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "This is a non modal dialog with no callafter" });
             }
 
             const dialogsFollowup = struct {
@@ -8540,12 +8549,12 @@ pub const examples = struct {
                     _ = id;
                     var buf: [100]u8 = undefined;
                     const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\"", .{@tagName(response)}) catch unreachable;
-                    try gui.dialogOk(null, @src(), 0, true, "Ok Followup Response", text, null);
+                    try gui.dialogOk(@src(), .{ .title = "Ok Followup Response", .message = text });
                 }
             };
 
             if (try gui.button(@src(), 0, "Ok Followup", .{})) {
-                try gui.dialogOk(null, @src(), 0, true, "Ok Followup", "This is a modal dialog with modal followup", dialogsFollowup.callafter);
+                try gui.dialogOk(@src(), .{ .title = "Ok Followup", .message = "This is a modal dialog with modal followup", .callafter = dialogsFollowup.callafter });
             }
         }
 
