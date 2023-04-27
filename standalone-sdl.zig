@@ -69,12 +69,12 @@ fn gui_frame() !void {
     var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both, .color_style = .window });
     defer scroll.deinit();
 
-    var tl = try gui.textLayout(@src(), 0, .{ .expand = .both, .font_style = .title_4 });
+    var tl = try gui.textLayout(@src(), 0, null, .{ .expand = .both, .font_style = .title_4 });
     const lorem = "This example shows how to use gui in a normal application.";
     try tl.addText(lorem, .{});
     tl.deinit();
 
-    var tl2 = try gui.textLayout(@src(), 0, .{ .expand = .both });
+    var tl2 = try gui.textLayout(@src(), 0, null, .{ .expand = .both });
     try tl2.addText("The gui is painting the entire window, and can also show floating windows and dialogs.", .{});
     try tl2.addText("\n\n", .{});
     try tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
