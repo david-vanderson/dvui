@@ -73,6 +73,7 @@ scrollbar should separate install and events like normal, so you could put it on
   - run events
   - do all the rest of the scroll area children
   - then do the drawing
+    - all widgets should separate the rendering like this so that you can wrap them around children (process events before but render after)
 
 look into logging, how to use it in general and how to use it for gui stuff?
 - const scope_name = std.log.scoped(.whatever);
