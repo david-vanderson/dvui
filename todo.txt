@@ -1,6 +1,4 @@
 
-scrolling by dragging doesn't scroll all the way?
-
 use zig package manager to get SDL (github.com/andrewrk/SDL)
 - build the same SDL version to get cmake config
 

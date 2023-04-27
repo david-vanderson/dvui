@@ -4803,6 +4803,8 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
+        _ = iter;
+
         if (e.evt == .mouse) {
             if (e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left) {
                 e.handled = true;
@@ -4825,7 +4827,7 @@ pub const TextLayoutWidget = struct {
                     self.sel_mouse_drag_pt = e.evt.mouse.p;
                     var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
                         .mouse_pt = e.evt.mouse.p,
-                        .screen_rect = iter.r,
+                        .screen_rect = self.wd.rectScale().r,
                         .capture_id = self.wd.id,
                         .injected = (dps.x == 0 and dps.y == 0),
                     } } };
@@ -5551,7 +5553,7 @@ pub const ScrollContainerWidget = struct {
             },
             .scroll_drag => |sd| {
                 e.handled = true;
-                const rs = self.wd.borderRectScale();
+                const rs = self.wd.contentRectScale();
                 var scrollval: f32 = 0;
                 if (sd.mouse_pt.y <= rs.r.y and // want to scroll up
                     sd.screen_rect.y < rs.r.y and // scrolling would show more of child
@@ -7655,11 +7657,11 @@ pub const WidgetData = struct {
         return self;
     }
 
-    pub fn register(self: *const WidgetData, name: []const u8, rectScale: ?RectScale) !void {
+    pub fn register(self: *const WidgetData, name: []const u8, rect_scale: ?RectScale) !void {
         var cw = currentWindow();
         if (cw.debug_under_mouse or self.id == cw.debug_widget_id) {
             var rs: RectScale = undefined;
-            if (rectScale) |in| {
+            if (rect_scale) |in| {
                 rs = in;
             } else {
                 rs = self.parent.screenRectScale(self.rect);
@@ -7720,6 +7722,10 @@ pub const WidgetData = struct {
         try pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
         var color = self.options.color(.accent);
         try pathStrokeAfter(true, true, thick, .none, color);
+    }
+
+    pub fn rectScale(self: *const WidgetData) RectScale {
+        return self.parent.screenRectScale(self.rect);
     }
 
     pub fn borderRect(self: *const WidgetData) Rect {
