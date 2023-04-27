@@ -7386,7 +7386,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             sel_vtx[0].pos.x = sel_start_x;
             sel_vtx[0].pos.y = opts.rs.r.y;
             sel_vtx[3].pos.x = sel_start_x;
-            sel_vtx[3].pos.y = opts.rs.r.y + fce.height * target_fraction;
+            sel_vtx[3].pos.y = @max(y, opts.rs.r.y) + fce.height * target_fraction;
             sel_vtx[1].pos.x = sel_end_x;
             sel_vtx[1].pos.y = sel_vtx[0].pos.y;
             sel_vtx[2].pos.x = sel_end_x;
