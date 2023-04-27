@@ -1590,7 +1590,7 @@ pub fn captureMouseMaintain(id: u32) bool {
     return false;
 }
 
-pub fn captureMouseGet() ?u32 {
+pub fn captureMouseId() ?u32 {
     return currentWindow().captureID;
 }
 
@@ -1834,7 +1834,7 @@ pub const EventIterator = struct {
                 },
 
                 .mouse => |me| {
-                    if (captureMouseGet()) |id| {
+                    if (captureMouseId()) |id| {
                         if (id != self.id) {
                             // mouse is captured by a different widget
                             continue;
@@ -2111,6 +2111,7 @@ pub const Window = struct {
     // Start off screen so nothing is highlighted on the first frame
     mouse_pt: Point = Point{ .x = -1, .y = -1 },
     mouse_pt_prev: Point = Point{ .x = -1, .y = -1 },
+    inject_motion_event: bool = false,
 
     drag_state: enum {
         none,
@@ -2682,6 +2683,12 @@ pub const Window = struct {
         // so make our position event now, and addEvent* functions will remove
         // and re-add to keep it as the final event.
         try self.positionMouseEventAdd();
+
+        if (self.inject_motion_event) {
+            self.inject_motion_event = false;
+            const pt = self.mouse_pt.scale(1 / self.natural_scale);
+            _ = try self.addEventMouseMotion(pt.x, pt.y);
+        }
 
         self.backend.begin(arena);
     }
@@ -4810,11 +4817,12 @@ pub const TextLayoutWidget = struct {
                 e.handled = true;
                 // move if dragging
                 if (dragging(e.evt.mouse.p)) |dps| {
-                    _ = dps;
                     self.sel_mouse_drag_pt = e.evt.mouse.p;
                     var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
                         .mouse_pt = e.evt.mouse.p,
                         .screen_rect = iter.r,
+                        .capture_id = self.wd.id,
+                        .injected = (dps.x == 0 and dps.y == 0),
                     } } };
                     self.bubbleEvent(&scrolldrag);
                 }
@@ -5417,6 +5425,9 @@ pub const ScrollContainerWidget = struct {
     nextVirtualSize: Size = Size{},
     next_widget_ypos: f32 = 0, // goes from 0 to viritualSize.h
 
+    inject_capture_id: ?u32 = null,
+    inject_mouse_pt: Point = .{},
+
     pub fn init(src: std.builtin.SourceLocation, id_extra: usize, io_scroll_info: *ScrollInfo, opts: Options) Self {
         var self = Self{};
         const options = defaults.override(opts);
@@ -5545,22 +5556,24 @@ pub const ScrollContainerWidget = struct {
                     sd.screen_rect.y < rs.r.y and // scrolling would show more of child
                     self.si.viewport.y > 0) // can scroll up
                 {
-                    scrollval = -5;
+                    scrollval = if (sd.injected) -200 * animationRate() else -5;
                 }
 
                 if (sd.mouse_pt.y >= (rs.r.y + rs.r.h) and
                     (sd.screen_rect.y + sd.screen_rect.h) > (rs.r.y + rs.r.h) and
                     self.si.viewport.y < self.si.scroll_max())
                 {
-                    scrollval = 5;
+                    scrollval = if (sd.injected) 200 * animationRate() else 5;
                 }
 
                 if (scrollval != 0) {
                     self.si.viewport.y = @max(0, @min(self.si.scroll_max(), self.si.viewport.y + scrollval));
                     cueFrame();
 
-                    // TODO: if we want continuous scrolling, need to inject a
-                    // mouse motion event into the next frame
+                    // if we are scrolling, then we need a motion event next
+                    // frame so that the child widget can adjust selection
+                    self.inject_capture_id = sd.capture_id;
+                    self.inject_mouse_pt = sd.mouse_pt;
                 }
             },
             else => {},
@@ -5595,6 +5608,13 @@ pub const ScrollContainerWidget = struct {
     pub fn deinit(self: *Self) void {
         if (self.process_events) {
             self.processEventsAfter();
+        }
+
+        if (self.inject_capture_id) |ci| {
+            if (ci == captureMouseId()) {
+                // inject a mouse motion event into next frame
+                currentWindow().inject_motion_event = true;
+            }
         }
 
         clipSet(self.prevClip);
@@ -6611,7 +6631,7 @@ pub fn slider(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Directi
                     // stop capture
                     _ = captureMouse(null);
                     e.handled = true;
-                } else if (me.kind == .motion and captureMouseGet() == b.data().id) {
+                } else if (me.kind == .motion and captureMouseId() == b.data().id) {
                     // handle only if we have capture
                     e.handled = true;
                     p = me.p;
@@ -7580,6 +7600,8 @@ pub const Event = struct {
         // possibly scroll to show more of the child
         mouse_pt: Point,
         screen_rect: Rect,
+        capture_id: u32,
+        injected: bool,
     };
 
     handled: bool = false,
