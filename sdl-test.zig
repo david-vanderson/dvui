@@ -465,7 +465,7 @@ pub const StrokeTest = struct {
         }
 
         for (points) |p| {
-            const rsp = rs.childPoint(p);
+            const rsp = rs.pointToScreen(p);
             try gui.pathAddPoint(rsp);
         }
 

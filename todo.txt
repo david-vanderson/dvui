@@ -1,5 +1,5 @@
 
-change dialogOk to take an options struct
+scrolling by dragging doesn't scroll all the way?
 
 use zig package manager to get SDL (github.com/andrewrk/SDL)
 - build the same SDL version to get cmake config
@@ -8,9 +8,6 @@ get mach example working again
 
 
 add alpha to Options as well and multiply it by the theme alpha
-
-use RectScale.child instead of copying it all over in screenRectScale
-- make a RectScale function to convert a Point fron screen to local and back
 
 rename CursorKind to Cursor
 

@@ -3182,6 +3182,7 @@ pub const Window = struct {
     }
 
     pub fn screenRectScale(self: *Self, r: Rect) RectScale {
+        // can't use WidgetData helper functions because our parent is undefined
         const scaled = r.scale(self.natural_scale);
         return RectScale{ .r = scaled.offset(self.rect_pixels), .s = self.natural_scale };
     }
@@ -3312,8 +3313,7 @@ pub const PopupWidget = struct {
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
         // outside normal flow, so don't get rect from parent
-        const rs = self.ownScreenRectScale();
-        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return self.ownScreenRectScale().rectToScreen(rect);
     }
 
     pub fn ownScreenRectScale(self: *const Self) RectScale {
@@ -3752,8 +3752,7 @@ pub const FloatingWindowWidget = struct {
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
         // outside normal flow, so don't get rect from parent
-        const rs = self.ownScreenRectScale();
-        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return self.ownScreenRectScale().rectToScreen(rect);
     }
 
     pub fn ownScreenRectScale(self: *const Self) RectScale {
@@ -4157,8 +4156,7 @@ pub const AnimateWidget = struct {
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        const rs = self.wd.contentRectScale();
-        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return self.wd.contentRectScale().rectToScreen(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -4449,8 +4447,7 @@ pub const PanedWidget = struct {
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        const rs = self.wd.contentRectScale();
-        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return self.wd.contentRectScale().rectToScreen(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: gui.Size) void {
@@ -4796,8 +4793,7 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        const rs = self.wd.contentRectScale();
-        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return self.wd.contentRectScale().rectToScreen(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -4920,8 +4916,7 @@ pub const ContextWidget = struct {
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        const rs = self.wd.contentRectScale();
-        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return self.wd.contentRectScale().rectToScreen(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -5029,8 +5024,7 @@ pub const OverlayWidget = struct {
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        const rs = self.wd.contentRectScale();
-        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return self.wd.contentRectScale().rectToScreen(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -5194,8 +5188,7 @@ pub const BoxWidget = struct {
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        const rs = self.wd.contentRectScale();
-        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return self.wd.contentRectScale().rectToScreen(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -5521,8 +5514,7 @@ pub const ScrollContainerWidget = struct {
         var r = rect;
         r.y -= self.frame_viewport.y;
 
-        const rs = self.wd.contentRectScale();
-        return RectScale{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };
+        return self.wd.contentRectScale().rectToScreen(r);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -5920,7 +5912,7 @@ pub const ScaleWidget = struct {
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
         var rs = self.wd.contentRectScale();
         rs.s *= self.scale;
-        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return rs.rectToScreen(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -6011,8 +6003,7 @@ pub const MenuWidget = struct {
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        const rs = self.wd.contentRectScale();
-        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return self.wd.contentRectScale().rectToScreen(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -6205,8 +6196,7 @@ pub const MenuItemWidget = struct {
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        const rs = self.wd.contentRectScale();
-        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return self.wd.contentRectScale().rectToScreen(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -6521,8 +6511,7 @@ pub const ButtonWidget = struct {
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        const rs = self.wd.contentRectScale();
-        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return self.wd.contentRectScale().rectToScreen(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -6852,8 +6841,7 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        const rs = self.wd.contentRectScale();
-        return RectScale{ .r = rect.scale(rs.s).offset(rs.r), .s = rs.s };
+        return self.wd.contentRectScale().rectToScreen(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -7154,12 +7142,16 @@ pub const RectScale = struct {
     r: Rect = Rect{},
     s: f32 = 0.0,
 
-    pub fn child(rs: *const RectScale, r: Rect) RectScale {
+    pub fn rectToScreen(rs: *const RectScale, r: Rect) RectScale {
         return .{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };
     }
 
-    pub fn childPoint(rs: *const RectScale, p: Point) Point {
+    pub fn pointToScreen(rs: *const RectScale, p: Point) Point {
         return p.scale(rs.s).plus(rs.r.topleft());
+    }
+
+    pub fn pointFromScreen(rs: *const RectScale, p: Point) Point {
+        return Point.diff(p, rs.r.topleft()).scale(1 / rs.s);
     }
 };
 
