@@ -2877,7 +2877,7 @@ pub const Window = struct {
     // by the caller.  If calling from a non-GUI thread, do any dataSet() calls
     // before unlocking the mutex to ensure that data is available before the
     // dialog is displayed.
-    pub fn dialogAdd(self: *Self, id: u32, display: DialogDisplay) !*std.Thread.Mutex {
+    pub fn dialogAdd(self: *Self, id: u32, display: DialogDisplayFn) !*std.Thread.Mutex {
         self.dialog_mutex.lock();
 
         for (self.dialogs.items) |*d| {
@@ -2909,25 +2909,25 @@ pub const Window = struct {
 
     fn dialogsShow(self: *Self) !void {
         var i: usize = 0;
-        var dialog: ?Dialog = null;
+        var dia: ?Dialog = null;
         while (true) {
             self.dialog_mutex.lock();
             if (i < self.dialogs.items.len and
-                dialog != null and
-                dialog.?.id == self.dialogs.items[i].id)
+                dia != null and
+                dia.?.id == self.dialogs.items[i].id)
             {
                 // we just did this one, move to the next
                 i += 1;
             }
 
             if (i < self.dialogs.items.len) {
-                dialog = self.dialogs.items[i];
+                dia = self.dialogs.items[i];
             } else {
-                dialog = null;
+                dia = null;
             }
             self.dialog_mutex.unlock();
 
-            if (dialog) |d| {
+            if (dia) |d| {
                 try d.display(d.id);
             } else {
                 break;
@@ -2953,7 +2953,7 @@ pub const Window = struct {
     // calling from a non-GUI thread, do any dataSet() calls before unlocking
     // the mutex to ensure that data is available before the dialog is
     // displayed.
-    pub fn toastAdd(self: *Self, id: u32, subwindow_id: ?u32, display: DialogDisplay, timeout: ?i32) !*std.Thread.Mutex {
+    pub fn toastAdd(self: *Self, id: u32, subwindow_id: ?u32, display: DialogDisplayFn, timeout: ?i32) !*std.Thread.Mutex {
         self.dialog_mutex.lock();
 
         for (self.toasts.items) |*t| {
@@ -3846,8 +3846,8 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     try gui.separator(@src(), 0, .{ .expand = .horizontal });
 }
 
-pub const DialogDisplay = *const fn (u32) Error!void;
-pub const DialogCallAfter = *const fn (u32, DialogResponse) Error!void;
+pub const DialogDisplayFn = *const fn (u32) Error!void;
+pub const DialogCallAfterFn = *const fn (u32, DialogResponse) Error!void;
 pub const DialogResponse = enum(u8) {
     closed,
     ok,
@@ -3856,7 +3856,7 @@ pub const DialogResponse = enum(u8) {
 
 pub const Dialog = struct {
     id: u32,
-    display: DialogDisplay,
+    display: DialogDisplayFn,
 };
 
 pub const IdMutex = struct {
@@ -3874,7 +3874,7 @@ pub const IdMutex = struct {
 ///
 /// If called from non-GUI thread or outside window.begin()/end(), you must
 /// pass a pointer to the Window you want to add the dialog to.
-pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplay) !IdMutex {
+pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplayFn) !IdMutex {
     if (win) |w| {
         // we are being called from non gui thread
         const id = hashSrc(src, id_extra);
@@ -3897,28 +3897,29 @@ pub fn dialogRemove(id: u32) void {
     cw.dialogRemove(id);
 }
 
-pub const dialogOkOptions = struct {
+pub const dialogOptions = struct {
     id_extra: usize = 0,
     window: ?*Window = null,
     modal: bool = true,
     title: []const u8 = "",
     message: []const u8,
-    callafter: ?DialogCallAfter = null,
+    displayFn: DialogDisplayFn = dialogDisplay,
+    callafterFn: ?DialogCallAfterFn = null,
 };
 
-pub fn dialogOk(src: std.builtin.SourceLocation, opts: dialogOkOptions) !void {
-    const id_mutex = try dialogAdd(opts.window, src, opts.id_extra, dialogOkDisplay);
+pub fn dialog(src: std.builtin.SourceLocation, opts: dialogOptions) !void {
+    const id_mutex = try dialogAdd(opts.window, src, opts.id_extra, opts.displayFn);
     const id = id_mutex.id;
     dataSet(opts.window, id, "_modal", opts.modal);
     dataSet(opts.window, id, "_title", opts.title);
     dataSet(opts.window, id, "_message", opts.message);
-    if (opts.callafter) |ca| {
+    if (opts.callafterFn) |ca| {
         dataSet(opts.window, id, "_callafter", ca);
     }
     id_mutex.mutex.unlock();
 }
 
-pub fn dialogOkDisplay(id: u32) !void {
+pub fn dialogDisplay(id: u32) !void {
     const modal = gui.dataGet(null, id, "_modal", bool) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
         gui.dialogRemove(id);
@@ -3937,7 +3938,7 @@ pub fn dialogOkDisplay(id: u32) !void {
         return;
     };
 
-    const callafter = gui.dataGet(null, id, "_callafter", DialogCallAfter);
+    const callafter = gui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
     var win = try floatingWindow(@src(), id, modal, null, null, .{});
     defer win.deinit();
@@ -3968,7 +3969,7 @@ pub fn dialogOkDisplay(id: u32) !void {
 pub const Toast = struct {
     id: u32,
     subwindow_id: ?u32,
-    display: DialogDisplay,
+    display: DialogDisplayFn,
 };
 
 /// Add a toast.  If subwindow_id is null, the toast will be shown during
@@ -3983,7 +3984,7 @@ pub const Toast = struct {
 ///
 /// If called from non-GUI thread or outside window.begin()/end(), you must
 /// pass a pointer to the Window you want to add the toast to.
-pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, display: DialogDisplay, timeout: ?i32) !IdMutex {
+pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, display: DialogDisplayFn, timeout: ?i32) !IdMutex {
     if (win) |w| {
         // we are being called from non gui thread
         const id = hashSrc(src, id_extra);
@@ -8040,23 +8041,11 @@ pub const examples = struct {
     };
 
     const AnimatingDialog = struct {
-        pub fn dialog(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, title: []const u8, msg: []const u8, callafter: ?DialogCallAfter) !void {
-            const id_mutex = try gui.dialogAdd(null, src, id_extra, AnimatingDialog.dialogDisplay);
-            const id = id_mutex.id;
-            gui.dataSet(null, id, "modal", modal);
-            gui.dataSet(null, id, "title", title);
-            gui.dataSet(null, id, "msg", msg);
-            if (callafter) |ca| {
-                gui.dataSet(null, id, "callafter", ca);
-            }
-            id_mutex.mutex.unlock();
-        }
-
         pub fn dialogDisplay(id: u32) !void {
-            const modal = gui.dataGet(null, id, "modal", bool) orelse unreachable;
-            const title = gui.dataGet(null, id, "title", []const u8) orelse unreachable;
-            const message = gui.dataGet(null, id, "msg", []const u8) orelse unreachable;
-            const callafter = gui.dataGet(null, id, "callafter", DialogCallAfter);
+            const modal = gui.dataGet(null, id, "_modal", bool) orelse unreachable;
+            const title = gui.dataGet(null, id, "_title", []const u8) orelse unreachable;
+            const message = gui.dataGet(null, id, "_message", []const u8) orelse unreachable;
+            const callafter = gui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
             // once we record a response, refresh it until we close
             _ = gui.dataGet(null, id, "response", gui.DialogResponse);
@@ -8543,7 +8532,7 @@ pub const examples = struct {
             defer hbox.deinit();
 
             if (try gui.button(@src(), 0, "Ok Dialog", .{})) {
-                try gui.dialogOk(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "This is a non modal dialog with no callafter" });
+                try gui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "This is a non modal dialog with no callafter" });
             }
 
             const dialogsFollowup = struct {
@@ -8551,12 +8540,12 @@ pub const examples = struct {
                     _ = id;
                     var buf: [100]u8 = undefined;
                     const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\"", .{@tagName(response)}) catch unreachable;
-                    try gui.dialogOk(@src(), .{ .title = "Ok Followup Response", .message = text });
+                    try gui.dialog(@src(), .{ .title = "Ok Followup Response", .message = text });
                 }
             };
 
             if (try gui.button(@src(), 0, "Ok Followup", .{})) {
-                try gui.dialogOk(@src(), .{ .title = "Ok Followup", .message = "This is a modal dialog with modal followup", .callafter = dialogsFollowup.callafter });
+                try gui.dialog(@src(), .{ .title = "Ok Followup", .message = "This is a modal dialog with modal followup", .callafterFn = dialogsFollowup.callafter });
             }
         }
 
@@ -8608,7 +8597,7 @@ pub const examples = struct {
         }
 
         if (try gui.button(@src(), 0, "Animating Dialog", .{})) {
-            try AnimatingDialog.dialog(@src(), 0, false, "Animating Dialog", "This shows how to animate dialogs and other floating windows", AnimatingDialog.after);
+            try gui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog", .message = "This shows how to animate dialogs and other floating windows", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
         }
 
         if (try gui.expander(@src(), 0, "Spinner", .{ .expand = .horizontal })) {
