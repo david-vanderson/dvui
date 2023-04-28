@@ -8,9 +8,9 @@ const SDLBackend = @This();
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
-cursor_last: gui.CursorKind = .arrow,
-cursor_backing: [@typeInfo(gui.CursorKind).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(gui.CursorKind).Enum.fields.len,
-cursor_backing_tried: [@typeInfo(gui.CursorKind).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(gui.CursorKind).Enum.fields.len,
+cursor_last: gui.Cursor = .arrow,
+cursor_backing: [@typeInfo(gui.Cursor).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(gui.Cursor).Enum.fields.len,
+cursor_backing_tried: [@typeInfo(gui.Cursor).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(gui.Cursor).Enum.fields.len,
 
 pub const initOptions = struct {
     width: u32,
@@ -87,7 +87,7 @@ pub fn addAllEvents(self: *SDLBackend, win: *gui.Window) !bool {
     return false;
 }
 
-pub fn setCursor(self: *SDLBackend, cursor: gui.CursorKind) void {
+pub fn setCursor(self: *SDLBackend, cursor: gui.Cursor) void {
     if (cursor != self.cursor_last) {
         self.cursor_last = cursor;
 
