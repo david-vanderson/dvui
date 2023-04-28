@@ -217,14 +217,8 @@ pub fn main() !void {
                         }
                     }
 
-                    if (gui.examples.show_demo_window) {
-                        if (try gui.button(@src(), 0, "Hide Demo Window", .{})) {
-                            gui.examples.show_demo_window = false;
-                        }
-                    } else {
-                        if (try gui.button(@src(), 0, "Show Demo Window", .{})) {
-                            gui.examples.show_demo_window = true;
-                        }
+                    if (try gui.button(@src(), 0, if (gui.examples.show_demo_window) "Hide Demo Window" else "Show Demo Window", .{})) {
+                        gui.examples.show_demo_window = !gui.examples.show_demo_window;
                     }
                 }
 
