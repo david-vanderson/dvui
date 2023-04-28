@@ -1670,7 +1670,6 @@ pub fn minSizeGet(id: u32) ?Size {
     var cw = currentWindow();
     const saved_size = cw.min_sizes.getPtr(id);
     if (saved_size) |ss| {
-        ss.used = true;
         debug("{x} minSizeGet {}", .{ id, ss.size });
         return ss.size;
     } else {
@@ -1682,7 +1681,12 @@ pub fn minSizeGet(id: u32) ?Size {
 pub fn minSizeSet(id: u32, s: Size) !void {
     debug("{x} minSizeSet {}", .{ id, s });
     var cw = currentWindow();
-    try cw.min_sizes.put(id, .{ .size = s });
+    if (try cw.min_sizes.fetchPut(id, .{ .size = s })) |ss| {
+        if (ss.value.used) {
+            std.debug.print("gui: id {x} was already used this frame (highlighting)\n", .{id});
+            cw.debug_widget_id = id;
+        }
+    }
 }
 
 pub fn hashSrc(src: std.builtin.SourceLocation, id_extra: usize) u32 {
