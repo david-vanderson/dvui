@@ -1045,7 +1045,7 @@ pub fn focusedWidgetIdInCurrentSubwindow() ?u32 {
     return sw.focused_widgetId;
 }
 
-pub const CursorKind = enum(u8) {
+pub const Cursor = enum(u8) {
     arrow,
     ibeam,
     wait,
@@ -1060,12 +1060,12 @@ pub const CursorKind = enum(u8) {
     hand,
 };
 
-pub fn cursorGetDragging() ?CursorKind {
+pub fn cursorGetDragging() ?Cursor {
     const cw = currentWindow();
     return cw.cursor_dragging;
 }
 
-pub fn cursorSet(cursor: CursorKind) void {
+pub fn cursorSet(cursor: Cursor) void {
     const cw = currentWindow();
     cw.cursor_requested = cursor;
 }
@@ -1497,7 +1497,7 @@ pub fn subwindowCurrentId() u32 {
     return cw.subwindow_currentId;
 }
 
-pub fn dragPreStart(p: Point, cursor: CursorKind, offset: Point) void {
+pub fn dragPreStart(p: Point, cursor: Cursor, offset: Point) void {
     const cw = currentWindow();
     cw.drag_state = .prestart;
     cw.drag_pt = p;
@@ -1505,7 +1505,7 @@ pub fn dragPreStart(p: Point, cursor: CursorKind, offset: Point) void {
     cw.cursor_dragging = cursor;
 }
 
-pub fn dragStart(p: Point, cursor: CursorKind, offset: Point) void {
+pub fn dragStart(p: Point, cursor: Cursor, offset: Point) void {
     const cw = currentWindow();
     cw.drag_state = .dragging;
     cw.drag_pt = p;
@@ -2154,8 +2154,8 @@ pub const Window = struct {
 
     ft2lib: c.FT_Library = undefined,
 
-    cursor_requested: CursorKind = .arrow,
-    cursor_dragging: CursorKind = .arrow,
+    cursor_requested: Cursor = .arrow,
+    cursor_dragging: Cursor = .arrow,
 
     wd: WidgetData = undefined,
     rect_pixels: Rect = Rect{}, // pixels
@@ -2752,7 +2752,7 @@ pub const Window = struct {
 
     // Return the cursor the gui wants.  Client code should cache this if
     // switching the platform's cursor is expensive.
-    pub fn cursorRequested(self: *const Self) CursorKind {
+    pub fn cursorRequested(self: *const Self) Cursor {
         if (self.drag_state == .dragging) {
             return self.cursor_dragging;
         } else {
@@ -2763,7 +2763,7 @@ pub const Window = struct {
     // Return the cursor the gui wants or null if mouse is not in gui windows.
     // Client code should cache this if switching the platform's cursor is
     // expensive.
-    pub fn cursorRequestedFloating(self: *const Self) ?CursorKind {
+    pub fn cursorRequestedFloating(self: *const Self) ?Cursor {
         if (self.captureID != null or self.windowFor(self.mouse_pt) != self.wd.id) {
             // gui owns the cursor if we have mouse capture or if the mouse is above
             // a floating window
@@ -3642,11 +3642,11 @@ pub const FloatingWindowWidget = struct {
                     } else if (me.kind == .motion) {
                         // move if dragging
                         if (dragging(me.p)) |dps| {
-                            if (cursorGetDragging() == CursorKind.crosshair) {
+                            if (cursorGetDragging() == Cursor.crosshair) {
                                 const dp = dps.scale(1 / rs.s);
                                 self.wd.rect.x += dp.x;
                                 self.wd.rect.y += dp.y;
-                            } else if (cursorGetDragging() == CursorKind.arrow_nw_se) {
+                            } else if (cursorGetDragging() == Cursor.arrow_nw_se) {
                                 const p = me.p.plus(dragOffset()).scale(1 / rs.s);
                                 self.wd.rect.w = math.max(40, p.x - self.wd.rect.x);
                                 self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
@@ -3697,7 +3697,7 @@ pub const FloatingWindowWidget = struct {
                         .motion => {
                             // move if dragging
                             if (dragging(me.p)) |dps| {
-                                if (cursorGetDragging() == CursorKind.crosshair) {
+                                if (cursorGetDragging() == Cursor.crosshair) {
                                     const dp = dps.scale(1 / rs.s);
                                     self.wd.rect.x += dp.x;
                                     self.wd.rect.y += dp.y;
@@ -4465,7 +4465,7 @@ pub const PanedWidget = struct {
             const rs = self.wd.contentRectScale();
             var target: f32 = undefined;
             var mouse: f32 = undefined;
-            var cursor: CursorKind = undefined;
+            var cursor: Cursor = undefined;
             switch (self.dir) {
                 .horizontal => {
                     target = rs.r.x + rs.r.w * self.split_ratio;

@@ -28,7 +28,7 @@ index_buffer_len: u32,
 vertex_buffer_size: u32,
 index_buffer_size: u32,
 
-cursor_last: gui.CursorKind = .arrow,
+cursor_last: gui.Cursor = .arrow,
 
 pub fn init(core: *mach.Core) !MachBackend {
     var back: MachBackend = undefined;
@@ -127,7 +127,7 @@ pub fn init(core: *mach.Core) !MachBackend {
     return back;
 }
 
-fn toMachCursor(cursor: gui.CursorKind) mach.MouseCursor {
+fn toMachCursor(cursor: gui.Cursor) mach.MouseCursor {
     return switch (cursor) {
         .arrow => .arrow,
         .ibeam => .ibeam,
@@ -146,7 +146,7 @@ fn toMachCursor(cursor: gui.CursorKind) mach.MouseCursor {
     };
 }
 
-pub fn setCursor(self: *MachBackend, cursor: gui.CursorKind) void {
+pub fn setCursor(self: *MachBackend, cursor: gui.Cursor) void {
     if (cursor != self.cursor_last) {
         self.cursor_last = cursor;
         self.core.setMouseCursor(toMachCursor(cursor)) catch unreachable;

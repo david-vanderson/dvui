@@ -7,8 +7,6 @@ get mach example working again
 
 add alpha to Options as well and multiply it by the theme alpha
 
-rename CursorKind to Cursor
-
 example toast that includes "undo"
 
 change FloatingWindowWidget.init to take an options struct
