@@ -312,7 +312,7 @@ pub fn main() !void {
                         }
                         var buf = std.mem.zeroes([100]u8);
                         var buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{ fi, name }) catch unreachable;
-                        var fw2 = try gui.floatingWindow(@src(), fi, modal, null, f, .{ .color_style = .window, .min_size_content = .{ .w = 150, .h = 100 } });
+                        var fw2 = try gui.floatingWindow(@src(), .{ .id_extra = fi, .modal = modal, .open_flag = f }, .{ .color_style = .window, .min_size_content = .{ .w = 150, .h = 100 } });
                         defer fw2.deinit();
                         try gui.labelNoFmt(@src(), 0, buf_slice, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
@@ -360,6 +360,11 @@ pub fn main() !void {
 
         window_box.deinit();
 
+        //var mx: c_int = 0;
+        //var my: c_int = 0;
+        //_ = SDLBackend.c.SDL_GetMouseState(&mx, &my);
+        //try gui.icon(@src(), 0, "mouse", gui.icons.papirus.actions.application_menu_symbolic, .{ .rect = gui.Rect{ .x = @intToFloat(f32, mx), .y = @intToFloat(f32, my), .w = 10, .h = 10 } });
+
         const end_micros = try win.end();
 
         win_backend.setCursor(win.cursorRequested());
@@ -373,7 +378,7 @@ pub fn main() !void {
 }
 
 fn animatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, rect: *gui.Rect, openflag: *bool, start_closing: bool, opts: gui.Options) gui.FloatingWindowWidget {
-    var fwin = gui.FloatingWindowWidget.init(src, id_extra, modal, rect, openflag, opts);
+    var fwin = gui.FloatingWindowWidget.init(src, .{ .id_extra = id_extra, .modal = modal, .rect = rect, .open_flag = openflag }, opts);
 
     if (gui.firstFrame(fwin.data().id)) {
         gui.animation(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
@@ -396,7 +401,7 @@ fn animatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool
             r.h = dh;
 
             // pass null so our animating rect doesn't get saved back
-            fwin = gui.FloatingWindowWidget.init(src, id_extra, modal, null, openflag, opts.override(.{ .rect = r }));
+            fwin = gui.FloatingWindowWidget.init(src, .{ .id_extra = id_extra, .modal = modal, .open_flag = openflag }, opts.override(.{ .rect = r }));
 
             if (a.done() and r.empty()) {
                 // done with closing animation
@@ -409,7 +414,7 @@ fn animatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool
 }
 
 fn show_stroke_test_window() !void {
-    var win = try gui.floatingWindow(@src(), 0, false, &StrokeTest.show_rect, &StrokeTest.show_dialog, .{});
+    var win = try gui.floatingWindow(@src(), .{ .rect = &StrokeTest.show_rect, .open_flag = &StrokeTest.show_dialog }, .{});
     defer win.deinit();
     try gui.windowHeader("Stroke Test", "", &StrokeTest.show_dialog);
 
