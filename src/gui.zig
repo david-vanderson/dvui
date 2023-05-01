@@ -2994,11 +2994,10 @@ pub const Window = struct {
     fn toastsShow(self: *Self) !void {
         var ti = gui.toastsFor(null);
         if (ti) |*it| {
-            var toast_win = FloatingWindowWidget.init(@src(), 0, false, null, null, .{ .background = false, .border = .{} });
+            var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent = true }, .{ .background = false, .border = .{} });
             defer toast_win.deinit();
 
             toast_win.data().rect = gui.placeIn(self.wd.rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-            toast_win.stayAboveParent();
             toast_win.autoSize();
             try toast_win.install(.{ .process_events = false });
 
@@ -3024,7 +3023,7 @@ pub const Window = struct {
         self.debug_under_mouse = false;
         defer self.debug_under_mouse = dum;
 
-        var float = try gui.floatingWindow(@src(), 0, false, null, &self.debug_window_show, .{ .min_size_content = .{ .w = 300, .h = 400 } });
+        var float = try gui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
         defer float.deinit();
 
         try gui.windowHeader("GUI Debug", "", &self.debug_window_show);
@@ -3441,9 +3440,9 @@ pub const PopupWidget = struct {
     }
 };
 
-pub fn floatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, rect: ?*Rect, openflag: ?*bool, opts: Options) !*FloatingWindowWidget {
+pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) !*FloatingWindowWidget {
     var ret = try currentWindow().arena.create(FloatingWindowWidget);
-    ret.* = FloatingWindowWidget.init(src, id_extra, modal, rect, openflag, opts);
+    ret.* = FloatingWindowWidget.init(src, floating_opts, opts);
     try ret.install(.{});
     return ret;
 }
@@ -3455,6 +3454,14 @@ pub const FloatingWindowWidget = struct {
         .border = Rect.all(1),
         .background = true,
         .color_style = .window,
+    };
+
+    pub const InitOptions = struct {
+        id_extra: usize = 0,
+        modal: bool = false,
+        rect: ?*Rect = null,
+        open_flag: ?*bool = null,
+        stay_above_parent: bool = false,
     };
 
     wd: WidgetData = undefined,
@@ -3471,7 +3478,7 @@ pub const FloatingWindowWidget = struct {
     auto_pos: bool = false,
     auto_size: bool = false,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, io_rect: ?*Rect, openflag: ?*bool, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, floating_opts: InitOptions, opts: Options) Self {
         var self = Self{};
 
         // options is really for our embedded BoxWidget, so save them for the
@@ -3483,15 +3490,15 @@ pub const FloatingWindowWidget = struct {
         // the embedded BoxWidget
         // passing options.rect will stop WidgetData.init from calling rectFor
         // which is important because we are outside normal layout
-        self.wd = WidgetData.init(src, id_extra, .{ .rect = .{} });
+        self.wd = WidgetData.init(src, floating_opts.id_extra, .{ .rect = .{} });
 
-        self.modal = modal;
-        self.openflag = openflag;
+        self.modal = floating_opts.modal;
+        self.openflag = floating_opts.open_flag;
 
         var autopossize = true;
-        if (io_rect) |ior| {
+        if (floating_opts.rect) |ior| {
             // user is storing the rect for us across open/close
-            self.io_rect = io_rect;
+            self.io_rect = floating_opts.rect;
             self.wd.rect = ior.*;
         } else if (opts.rect) |r| {
             // we were given a rect, just use that
@@ -3730,10 +3737,6 @@ pub const FloatingWindowWidget = struct {
         self.auto_size = true;
     }
 
-    pub fn stayAboveParent(self: *Self) void {
-        self.stay_above_parent = true;
-    }
-
     pub fn close(self: *Self) void {
         //subwindowClosing(self.wd.id);
         if (self.openflag) |of| {
@@ -3940,7 +3943,7 @@ pub fn dialogDisplay(id: u32) !void {
 
     const callafter = gui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
-    var win = try floatingWindow(@src(), id, modal, null, null, .{});
+    var win = try floatingWindow(@src(), .{ .id_extra = id, .modal = modal }, .{});
     defer win.deinit();
 
     var header_openflag = true;
@@ -8050,7 +8053,7 @@ pub const examples = struct {
             // once we record a response, refresh it until we close
             _ = gui.dataGet(null, id, "response", gui.DialogResponse);
 
-            var win = FloatingWindowWidget.init(@src(), id, modal, null, null, .{});
+            var win = FloatingWindowWidget.init(@src(), .{ .id_extra = id, .modal = modal }, .{});
             const first_frame = gui.firstFrame(win.data().id);
 
             // On the first frame the window size will be 0 so you won't see
@@ -8150,7 +8153,7 @@ pub const examples = struct {
             return;
         }
 
-        var float = try gui.floatingWindow(@src(), 0, false, null, &show_demo_window, .{ .min_size_content = .{ .w = 400, .h = 400 } });
+        var float = try gui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 400, .h = 400 } });
         defer float.deinit();
 
         var buf: [100]u8 = undefined;
@@ -8159,11 +8162,10 @@ pub const examples = struct {
 
         var ti = gui.toastsFor(float.data().id);
         if (ti) |*it| {
-            var toast_win = FloatingWindowWidget.init(@src(), 0, false, null, null, .{ .background = false, .border = .{} });
+            var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent = true }, .{ .background = false, .border = .{} });
             defer toast_win.deinit();
 
             toast_win.data().rect = gui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-            toast_win.stayAboveParent();
             toast_win.autoSize();
             try toast_win.install(.{ .process_events = false });
 
@@ -8625,7 +8627,7 @@ pub const examples = struct {
         const data = struct {
             var extra_stuff: bool = false;
         };
-        var dialog_win = try gui.floatingWindow(@src(), 0, true, null, &show_dialog, .{ .color_style = .window });
+        var dialog_win = try gui.floatingWindow(@src(), .{ .modal = true, .open_flag = &show_dialog }, .{ .color_style = .window });
         defer dialog_win.deinit();
 
         try gui.windowHeader("Modal Dialog", "", &show_dialog);
@@ -8657,7 +8659,7 @@ pub const examples = struct {
     }
 
     pub fn icon_browser() !void {
-        var fwin = try gui.floatingWindow(@src(), 0, false, &IconBrowser.rect, &IconBrowser.show, .{ .min_size_content = .{ .w = 300, .h = 400 } });
+        var fwin = try gui.floatingWindow(@src(), .{ .rect = &IconBrowser.rect, .open_flag = &IconBrowser.show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
         defer fwin.deinit();
         try gui.windowHeader("Icon Browser", "", &IconBrowser.show);
 
@@ -8676,7 +8678,7 @@ pub const examples = struct {
                 const r = gui.Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
                 var iconbox = try gui.box(@src(), i, .horizontal, .{ .expand = .horizontal, .rect = r });
 
-                _ = try gui.buttonIcon(@src(), 0, 20, d.name, @field(gui.icons.papirus.actions, d.name), .{});
+                _ = try gui.buttonIcon(@src(), 0, 20, "gui.icons.papirus.actions." ++ d.name, @field(gui.icons.papirus.actions, d.name), .{});
                 try gui.labelNoFmt(@src(), 0, d.name, .{ .gravity_y = 0.5 });
 
                 iconbox.deinit();

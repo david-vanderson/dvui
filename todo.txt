@@ -9,11 +9,6 @@ add alpha to Options as well and multiply it by the theme alpha
 
 example toast that includes "undo"
 
-change FloatingWindowWidget.init to take an options struct
-- stayAboveParent
-- autoSize
-- others?
-
 add disabled to options so the seek forward/backward icons can be grayed out?
 - need to add ability to gray out things too (alpha to options?)
 - is disabled just a visual thing?

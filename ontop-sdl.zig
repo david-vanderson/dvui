@@ -83,7 +83,7 @@ pub fn main() !void {
 }
 
 fn gui_stuff() !void {
-    var float = try gui.floatingWindow(@src(), 0, false, null, null, .{ .min_size_content = .{ .w = 400, .h = 400 } });
+    var float = try gui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 400 } });
     defer float.deinit();
 
     var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both, .color_style = .window });
