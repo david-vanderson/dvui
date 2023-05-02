@@ -555,7 +555,7 @@ pub const Font = struct {
         var miny: f32 = 0;
         var maxy: f32 = fce.height;
         var tw: f32 = 0;
-        var th: f32 = 0;
+        var th: f32 = fce.height;
 
         var ei: usize = 0;
 
@@ -3041,7 +3041,7 @@ pub const Window = struct {
             self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(&buf, 0), 16) catch 0;
         }
 
-        var tl = try gui.textLayout(@src(), 0, null, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
+        var tl = try gui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
         try tl.addText(self.debug_info_name_rect, .{});
         try tl.addText("\n\n", .{});
         try tl.addText(self.debug_info_src_id_extra, .{});
@@ -3956,7 +3956,7 @@ pub fn dialogDisplay(id: u32) !void {
         return;
     }
 
-    var tl = try gui.textLayout(@src(), 0, null, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
+    var tl = try gui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
     try tl.addText(message, .{});
     tl.deinit();
 
@@ -4532,10 +4532,10 @@ pub const PanedWidget = struct {
 // would calculate a huge min_size.h assuming only 1 character per line can
 // fit.  To prevent starting in weird situations, TextLayout defaults to having
 // a min_size.w so at least you can see what is going on.
-pub fn textLayout(src: std.builtin.SourceLocation, id_extra: usize, sel_in: ?*TextLayoutWidget.Selection, opts: Options) !*TextLayoutWidget {
+pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.InitOptions, opts: Options) !*TextLayoutWidget {
     const cw = currentWindow();
     var ret = try cw.arena.create(TextLayoutWidget);
-    ret.* = TextLayoutWidget.init(src, id_extra, sel_in, opts);
+    ret.* = TextLayoutWidget.init(src, init_opts, opts);
     try ret.install(.{});
     return ret;
 }
@@ -4548,6 +4548,12 @@ pub const TextLayoutWidget = struct {
         .background = true,
         .color_style = .content,
         .min_size_content = .{ .w = 25 },
+    };
+
+    pub const InitOptions = struct {
+        id_extra: u32 = 0,
+        selection: ?*Selection = null,
+        cursor: ?*usize = null,
     };
 
     pub const Selection = struct {
@@ -4570,9 +4576,12 @@ pub const TextLayoutWidget = struct {
     sel_mouse_down_bytes: ?usize = null,
     sel_mouse_drag_pt: ?Point = null,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, selection_in: ?*Selection, opts: Options) Self {
+    cursor: ?*usize = null,
+    cursor_drawn: bool = false,
+
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         const options = defaults.override(opts);
-        var self = Self{ .wd = WidgetData.init(src, id_extra, options), .selection_in = selection_in };
+        var self = Self{ .wd = WidgetData.init(src, init_opts.id_extra, options), .selection_in = init_opts.selection, .cursor = init_opts.cursor };
         return self;
     }
 
@@ -4760,6 +4769,14 @@ pub const TextLayoutWidget = struct {
                     .sel_color = options.color(.fill),
                     .sel_color_bg = options.color(.accent),
                 });
+
+                if (!self.cursor_drawn and self.cursor != null and self.cursor.?.* < self.bytes_seen + end) {
+                    self.cursor_drawn = true;
+                    const size = try options.fontGet().textSize(txt[0 .. self.cursor.?.* - self.bytes_seen]);
+                    const crs = self.screenRectScale(Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h });
+                    try pathAddRect(crs.r, Rect.all(0));
+                    try pathFillConvex(options.color(.accent));
+                }
             }
 
             // even if we don't actually render, need to update insert_pt and minSize
@@ -4777,6 +4794,16 @@ pub const TextLayoutWidget = struct {
                 self.insert_pt.x = 0;
             }
         }
+    }
+
+    pub fn finish(self: *Self, opts: Options) !void {
+        _ = self;
+        _ = opts;
+        //const options = self.wd.options.override(opts);
+        //const msize = try options.fontGet().textSize("m");
+        //const lineskip = try options.fontGet().lineSkip();
+
+        // FIXME: need to draw cursor if we haven't already and cursor is => bytes_seen
     }
 
     pub fn widget(self: *Self) Widget {
@@ -8114,7 +8141,7 @@ pub const examples = struct {
                 gui.dataSet(null, id, "response", gui.DialogResponse.closed);
             }
 
-            var tl = try gui.textLayout(@src(), 0, null, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
+            var tl = try gui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
             try tl.addText(message, .{});
             tl.deinit();
 
@@ -8431,7 +8458,7 @@ pub const examples = struct {
         try gui.label(@src(), 0, "Body", .{}, .{});
 
         {
-            var tl = try gui.textLayout(@src(), 0, null, .{ .expand = .horizontal });
+            var tl = try gui.textLayout(@src(), .{}, .{ .expand = .horizontal });
             defer tl.deinit();
 
             var cbox = try gui.box(@src(), 0, .vertical, .{});
