@@ -204,17 +204,11 @@ pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
 pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
     switch (event.type) {
         c.SDL_KEYDOWN => {
-            if (event.key.repeat > 0) {
-                return try win.addEventKey(
-                    .{ .repeat = SDL_keysym_to_gui(event.key.keysym.sym) },
-                    SDL_keymod_to_gui(event.key.keysym.mod),
-                );
-            } else {
-                return try win.addEventKey(
-                    .{ .down = SDL_keysym_to_gui(event.key.keysym.sym) },
-                    SDL_keymod_to_gui(event.key.keysym.mod),
-                );
-            }
+            return try win.addEventKey(.{
+                .code = SDL_keysym_to_gui(event.key.keysym.sym),
+                .action = if (event.key.repeat > 0) .repeat else .down,
+                .mod = SDL_keymod_to_gui(event.key.keysym.mod),
+            });
         },
         c.SDL_TEXTINPUT => {
             return try win.addEventText(std.mem.sliceTo(&event.text.text, 0));
