@@ -4576,12 +4576,14 @@ pub const TextLayoutWidget = struct {
     sel_mouse_down_bytes: ?usize = null,
     sel_mouse_drag_pt: ?Point = null,
 
-    cursor: ?*usize = null,
     cursor_drawn: bool = false,
+    cursor_in: ?*usize = null,
+    cursor: *usize = undefined,
+    cursor_store: usize = 0,
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         const options = defaults.override(opts);
-        var self = Self{ .wd = WidgetData.init(src, init_opts.id_extra, options), .selection_in = init_opts.selection, .cursor = init_opts.cursor };
+        var self = Self{ .wd = WidgetData.init(src, init_opts.id_extra, options), .selection_in = init_opts.selection, .cursor_in = init_opts.cursor };
         return self;
     }
 
@@ -4596,6 +4598,15 @@ pub const TextLayoutWidget = struct {
                 self.selection_store = s;
             }
             self.selection = &self.selection_store;
+        }
+
+        if (self.cursor_in) |cur| {
+            self.cursor = cur;
+        } else {
+            if (dataGet(null, self.wd.id, "_cursor", usize)) |cur| {
+                self.cursor_store = cur;
+            }
+            self.cursor = &self.cursor_store;
         }
 
         self.captured = captureMouseMaintain(self.wd.id);
@@ -4629,6 +4640,7 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn addText(self: *Self, text: []const u8, opts: Options) !void {
+        std.debug.print("{d}\n", .{self.cursor.*});
         const options = self.wd.options.override(opts);
         const msize = try options.fontGet().textSize("m");
         const lineskip = try options.fontGet().lineSkip();
@@ -4717,6 +4729,7 @@ pub const TextLayoutWidget = struct {
                     self.selection.start = self.sel_mouse_down_bytes.?;
                     self.selection.end = self.sel_mouse_down_bytes.?;
                     self.sel_mouse_down_pt = null;
+                    self.cursor.* = self.sel_mouse_down_bytes.?;
                 } else if (p.y < (rs.r.y + rs.r.h) and p.x < (rs.r.x + rs.r.w)) {
                     // point is in this text
                     const how_far = (p.x - rs.r.x) / rs.s;
@@ -4726,9 +4739,11 @@ pub const TextLayoutWidget = struct {
                     self.selection.start = self.sel_mouse_down_bytes.?;
                     self.selection.end = self.sel_mouse_down_bytes.?;
                     self.sel_mouse_down_pt = null;
+                    self.cursor.* = self.sel_mouse_down_bytes.?;
                 } else {
                     // point is after this text, but we might not get anymore
                     self.sel_mouse_down_bytes = self.bytes_seen + end;
+                    self.cursor.* = self.sel_mouse_down_bytes.?;
                 }
             }
 
@@ -4739,6 +4754,7 @@ pub const TextLayoutWidget = struct {
                     self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen);
                     self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen);
                     self.sel_mouse_drag_pt = null;
+                    self.cursor.* = self.bytes_seen;
                 } else if (p.y < (rs.r.y + rs.r.h) and p.x < (rs.r.x + rs.r.w)) {
                     // point is in this text
                     const how_far = (p.x - rs.r.x) / rs.s;
@@ -4747,32 +4763,33 @@ pub const TextLayoutWidget = struct {
                     self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + pt_end);
                     self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen + pt_end);
                     self.sel_mouse_drag_pt = null;
+                    self.cursor.* = self.bytes_seen + pt_end;
                 } else {
                     // point is after this text, but we might not get anymore
                     self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
                     self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
+                    self.cursor.* = self.bytes_seen + end;
                 }
             }
 
-            // We want to render text, but no sense in doing it if we are off the end
-            if (self.insert_pt.y < rect.h) {
-                const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.h - self.insert_pt.y) });
-                //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
-                const rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
-                try renderText(.{
-                    .font = options.fontGet(),
-                    .text = rtxt,
-                    .rs = rs,
-                    .color = options.color(.text),
-                    .sel_start = self.selection.start -| self.bytes_seen,
-                    .sel_end = self.selection.end -| self.bytes_seen,
-                    .sel_color = options.color(.fill),
-                    .sel_color_bg = options.color(.accent),
-                });
+            const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.h - self.insert_pt.y) });
+            //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
+            const rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
+            try renderText(.{
+                .font = options.fontGet(),
+                .text = rtxt,
+                .rs = rs,
+                .color = options.color(.text),
+                .sel_start = self.selection.start -| self.bytes_seen,
+                .sel_end = self.selection.end -| self.bytes_seen,
+                .sel_color = options.color(.fill),
+                .sel_color_bg = options.color(.accent),
+            });
 
-                if (!self.cursor_drawn and self.cursor != null and self.cursor.?.* < self.bytes_seen + end) {
-                    self.cursor_drawn = true;
-                    const size = try options.fontGet().textSize(txt[0 .. self.cursor.?.* - self.bytes_seen]);
+            if (!self.cursor_drawn and self.cursor.* < self.bytes_seen + end) {
+                self.cursor_drawn = true;
+                if (self.selection.start == self.selection.end) {
+                    const size = try options.fontGet().textSize(txt[0 .. self.cursor.* - self.bytes_seen]);
                     const crs = self.screenRectScale(Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h });
                     try pathAddRect(crs.r, Rect.all(0));
                     try pathFillConvex(options.color(.accent));
@@ -4797,13 +4814,17 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn finish(self: *Self, opts: Options) !void {
-        _ = self;
-        _ = opts;
-        //const options = self.wd.options.override(opts);
-        //const msize = try options.fontGet().textSize("m");
-        //const lineskip = try options.fontGet().lineSkip();
-
-        // FIXME: need to draw cursor if we haven't already and cursor is => bytes_seen
+        if (!self.cursor_drawn) {
+            self.cursor_drawn = true;
+            self.cursor.* = self.bytes_seen;
+            if (self.selection.start == self.selection.end) {
+                const options = self.wd.options.override(opts);
+                const size = try options.fontGet().textSize("");
+                const crs = self.screenRectScale(Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h });
+                try pathAddRect(crs.r, Rect.all(0));
+                try pathFillConvex(options.color(.accent));
+            }
+        }
     }
 
     pub fn widget(self: *Self) Widget {
@@ -4882,6 +4903,7 @@ pub const TextLayoutWidget = struct {
 
     pub fn deinit(self: *Self) void {
         dataSet(null, self.wd.id, "_selection", self.selection.*);
+        dataSet(null, self.wd.id, "_cursor", self.cursor.*);
         if (self.captured) {
             dataSet(null, self.wd.id, "_sel_mouse_down_bytes", self.sel_mouse_down_bytes);
         }
