@@ -1801,9 +1801,9 @@ pub const EventIterator = struct {
         var evts = events();
         while (k < evts.len) : (k += 1) {
             var e: *Event = &evts[k];
-            if (e.evt == .key) {
-                e.evt.key.focus_windowId = focusWindowId;
-                e.evt.key.focus_widgetId = focusWidgetId;
+            if (e.focus_windowId != null) {
+                e.focus_windowId = focusWindowId;
+                e.focus_widgetId = focusWidgetId;
             }
         }
     }
@@ -1820,23 +1820,26 @@ pub const EventIterator = struct {
                 continue;
             }
 
-            switch (e.evt) {
-                .key => |ke| {
-                    if (cleanup) {
-                        // window is catching all focus-routed events that didn't get
-                        // processed (maybe the focus widget never showed up)
-                        if (ke.focus_windowId != self.id) {
-                            // not the focused window
-                            continue;
-                        }
-                    } else {
-                        if (ke.focus_widgetId != self.id) {
-                            // not the focused widget
-                            continue;
-                        }
+            if (e.focus_windowId) |wid| {
+                // focusable event
+                if (cleanup) {
+                    // window is catching all focus-routed events that didn't get
+                    // processed (maybe the focus widget never showed up)
+                    if (wid != self.id) {
+                        // not the focused window
+                        continue;
                     }
-                },
+                } else {
+                    if (e.focus_widgetId != self.id) {
+                        // not the focused widget
+                        continue;
+                    }
+                }
+            }
 
+            switch (e.evt) {
+                .key => {},
+                .text => {},
                 .mouse => |me| {
                     if (captureMouseId()) |id| {
                         if (id != self.id) {
@@ -2232,15 +2235,14 @@ pub const Window = struct {
         self.extra_frames_needed = 1;
     }
 
-    pub fn addEventKey(self: *Self, kind: KeyEvent.Kind, mod: enums.Mod) !bool {
+    pub fn addEventKey(self: *Self, event: KeyEvent) !bool {
         self.positionMouseEventRemove();
 
-        try self.events.append(Event{ .evt = .{ .key = KeyEvent{
+        try self.events.append(Event{
+            .evt = .{ .key = event },
             .focus_windowId = self.focused_subwindowId,
             .focus_widgetId = self.subwindowFocused().focused_widgetId,
-            .kind = kind,
-            .mod = mod,
-        } } });
+        });
 
         const ret = (self.wd.id != self.focused_subwindowId);
         try self.positionMouseEventAdd();
@@ -2250,12 +2252,11 @@ pub const Window = struct {
     pub fn addEventText(self: *Self, text: []const u8) !bool {
         self.positionMouseEventRemove();
 
-        try self.events.append(Event{ .evt = .{ .key = KeyEvent{
+        try self.events.append(Event{
+            .evt = .{ .text = try self.arena.dupe(u8, text) },
             .focus_windowId = self.focused_subwindowId,
             .focus_widgetId = self.subwindowFocused().focused_widgetId,
-            .kind = .{ .text = try self.arena.dupe(u8, text) },
-            .mod = .none,
-        } } });
+        });
 
         const ret = (self.wd.id != self.focused_subwindowId);
         try self.positionMouseEventAdd();
@@ -3104,7 +3105,7 @@ pub const Window = struct {
                     focusWidget(null, null);
                 }
             } else if (e.evt == .key) {
-                if (e.evt.key.kind == .down and e.evt.key.kind.down == .tab) {
+                if (e.evt.key.code == .tab and e.evt.key.action == .down) {
                     if (e.evt.key.mod.shift()) {
                         tabIndexPrev(&iter);
                     } else {
@@ -3390,24 +3391,24 @@ pub const PopupWidget = struct {
                     focusWidget(null, null);
                 }
             } else if (e.evt == .key) {
-                if (e.evt.key.kind == .down and e.evt.key.kind.down == .escape) {
+                if (e.evt.key.code == .escape and e.evt.key.action == .down) {
                     e.handled = true;
                     var closeE = Event{ .evt = .{ .close_popup = ClosePopupEvent{} } };
                     self.bubbleEvent(&closeE);
-                } else if (e.evt.key.kind == .down and e.evt.key.kind.down == .tab) {
+                } else if (e.evt.key.code == .tab and e.evt.key.action == .down) {
                     e.handled = true;
                     if (e.evt.key.mod.shift()) {
                         tabIndexPrev(null);
                     } else {
                         tabIndexNext(null);
                     }
-                } else if (e.evt.key.kind == .down and e.evt.key.kind.down == .up) {
+                } else if (e.evt.key.code == .up and e.evt.key.action == .down) {
                     e.handled = true;
                     tabIndexPrev(&iter);
-                } else if (e.evt.key.kind == .down and e.evt.key.kind.down == .down) {
+                } else if (e.evt.key.code == .down and e.evt.key.action == .down) {
                     e.handled = true;
                     tabIndexNext(&iter);
-                } else if (e.evt.key.kind == .down and e.evt.key.kind.down == .left) {
+                } else if (e.evt.key.code == .left and e.evt.key.action == .down) {
                     e.handled = true;
                     if (self.layout.parentMenu) |pm| {
                         pm.submenus_activated = false;
@@ -3717,7 +3718,7 @@ pub const FloatingWindowWidget = struct {
                 },
                 .key => |ke| {
                     // catch any tabs that weren't handled by widgets
-                    if (ke.kind == .down and ke.kind.down == .tab) {
+                    if (ke.code == .tab and ke.action == .down) {
                         if (ke.mod.shift()) {
                             tabIndexPrev(&iter);
                         } else {
@@ -4640,7 +4641,6 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn addText(self: *Self, text: []const u8, opts: Options) !void {
-        std.debug.print("{d}\n", .{self.cursor.*});
         const options = self.wd.options.override(opts);
         const msize = try options.fontGet().textSize("m");
         const lineskip = try options.fontGet().lineSkip();
@@ -4859,10 +4859,12 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
-        _ = iter;
-
         if (e.evt == .mouse) {
-            if (e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left) {
+            if (e.evt.mouse.kind == .focus) {
+                e.handled = true;
+                // focus so that we can receive keyboard input
+                focusWidget(self.wd.id, iter);
+            } else if (e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left) {
                 e.handled = true;
                 // capture and start drag
                 self.captured = captureMouse(self.wd.id);
@@ -4888,6 +4890,30 @@ pub const TextLayoutWidget = struct {
                         .injected = (dps.x == 0 and dps.y == 0),
                     } } };
                     self.bubbleEvent(&scrolldrag);
+                }
+            }
+        } else if (e.evt == .key and e.evt.key.mod.shift()) {
+            if (e.evt.key.code == .left) {
+                e.handled = true;
+                if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null) {
+                    // only change selection if mouse isn't trying to change it
+                    if (self.cursor.* == self.selection.start) {
+                        self.selection.start -|= 1;
+                    } else {
+                        self.selection.end -|= 1;
+                    }
+                    self.cursor.* -|= 1;
+                }
+            } else if (e.evt.key.code == .right) {
+                e.handled = true;
+                if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null) {
+                    // only change selection if mouse isn't trying to change it
+                    if (self.cursor.* == self.selection.end) {
+                        self.selection.end += 1;
+                    } else {
+                        self.selection.start += 1;
+                    }
+                    self.cursor.* += 1;
                 }
             }
         }
@@ -5594,15 +5620,11 @@ pub const ScrollContainerWidget = struct {
     pub fn bubbleEvent(self: *Self, e: *Event) void {
         switch (e.evt) {
             .key => |ke| {
-                if ((ke.kind == .down and ke.kind.down == .up) or
-                    (ke.kind == .repeat and ke.kind.repeat == .up))
-                {
+                if (ke.code == .up and (ke.action == .down or ke.action == .repeat)) {
                     e.handled = true;
                     self.si.viewport.y -= 10;
                     cueFrame();
-                } else if ((ke.kind == .down and ke.kind.down == .down) or
-                    (ke.kind == .repeat and ke.kind.repeat == .down))
-                {
+                } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
                     e.handled = true;
                     self.si.viewport.y += 10;
                     cueFrame();
@@ -5829,15 +5851,11 @@ pub const ScrollBarWidget = struct {
     pub fn bubbleEvent(self: *Self, e: *Event) void {
         switch (e.evt) {
             .key => |ke| {
-                if ((ke.kind == .down and ke.kind.down == .up) or
-                    (ke.kind == .repeat and ke.kind.repeat == .up))
-                {
+                if (ke.code == .up and (ke.action == .down or ke.action == .repeat)) {
                     e.handled = true;
                     self.si.viewport.y -= 10;
                     cueFrame();
-                } else if ((ke.kind == .down and ke.kind.down == .down) or
-                    (ke.kind == .repeat and ke.kind.repeat == .down))
-                {
+                } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
                     e.handled = true;
                     self.si.viewport.y += 10;
                     cueFrame();
@@ -6294,14 +6312,14 @@ pub const MenuItemWidget = struct {
                 }
             },
             .key => |ke| {
-                if (ke.kind == .down and ke.kind.down == .space) {
+                if (ke.code == .space and ke.action == .down) {
                     e.handled = true;
                     if (self.submenu) {
                         menuGet().?.submenus_activated = true;
                     } else {
                         self.activated = true;
                     }
-                } else if (ke.kind == .down and ke.kind.down == .right) {
+                } else if (ke.code == .right and ke.action == .down) {
                     e.handled = true;
                     if (self.submenu) {
                         menuGet().?.submenus_activated = true;
@@ -6601,7 +6619,7 @@ pub const ButtonWidget = struct {
                 }
             },
             .key => |ke| {
-                if (ke.kind == .down and ke.kind.down == .space) {
+                if (ke.code == .space and ke.action == .down) {
                     e.handled = true;
                     self.click = true;
                     cueFrame();
@@ -6910,13 +6928,11 @@ pub const TextEntryWidget = struct {
     pub fn processEvent(self: *Self, iter: *EventIterator, e: *Event) void {
         switch (e.evt) {
             .key => |ke| {
-                if ((ke.kind == .down and ke.kind.down == .backspace) or
-                    (ke.kind == .repeat and ke.kind.repeat == .backspace))
-                {
+                if (ke.code == .backspace and (ke.action == .down or ke.action == .repeat)) {
                     e.handled = true;
                     self.len -|= 1;
                     self.text[self.len] = 0;
-                } else if (ke.kind == .down and ke.kind.down == .v and ke.mod.gui()) {
+                } else if (ke.code == .v and ke.action == .down and ke.mod.gui()) {
                     //e.handled = true;
                     //const ct = c.SDL_GetClipboardText();
                     //defer c.SDL_free(ct);
@@ -6926,13 +6942,14 @@ pub const TextEntryWidget = struct {
                     //  self.text[i] = ct[i - self.len];
                     //}
                     //self.len = i;
-                } else if (ke.kind == .text) {
-                    e.handled = true;
-                    var new = std.mem.sliceTo(ke.kind.text, 0);
-                    new.len = math.min(new.len, self.text.len - self.len);
-                    std.mem.copy(u8, self.text[self.len..], new);
-                    self.len += new.len;
                 }
+            },
+            .text => |te| {
+                e.handled = true;
+                var new = std.mem.sliceTo(te, 0);
+                new.len = math.min(new.len, self.text.len - self.len);
+                std.mem.copy(u8, self.text[self.len..], new);
+                self.len += new.len;
             },
             .mouse => |me| {
                 if (me.kind == .focus) {
@@ -7609,15 +7626,12 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotati
 }
 
 pub const KeyEvent = struct {
-    pub const Kind = union(enum) {
-        down: enums.Key,
-        repeat: enums.Key,
-        up: enums.Key,
-        text: []u8,
-    };
-    focus_windowId: u32,
-    focus_widgetId: ?u32,
-    kind: Kind,
+    code: enums.Key,
+    action: union(enum) {
+        down,
+        repeat,
+        up,
+    },
     mod: enums.Mod,
 };
 
@@ -7665,8 +7679,11 @@ pub const Event = struct {
     };
 
     handled: bool = false,
+    focus_windowId: ?u32 = null,
+    focus_widgetId: ?u32 = null,
     evt: union(enum) {
         key: KeyEvent,
+        text: []u8,
         mouse: MouseEvent,
         close_popup: ClosePopupEvent,
         scroll_drag: ScrollDrag,

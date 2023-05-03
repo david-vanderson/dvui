@@ -1,4 +1,12 @@
 
+how to move the cursor on shift-up or shift-down?
+
+move events inside Event
+
+redo MouseEvent like KeyEvent
+
+maybe if a widget gets a mouse event outside its rect, clear the remaining key event's focus_widgetId?  Assume we lost focus?
+
 use zig package manager to get SDL (github.com/andrewrk/SDL)
 - build the same SDL version to get cmake config
 
