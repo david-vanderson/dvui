@@ -270,7 +270,7 @@ pub fn main() !void {
                     //  tl.addText(word);
                     //  tl.addText(" ");
                     //}
-                    try tl.finish(.{});
+                    try tl.addTextDone(.{});
                     tl.deinit();
                 }
             }
