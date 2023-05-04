@@ -1,5 +1,4 @@
 
-how to move the cursor on shift-up or shift-down?
 
 move events inside Event
 

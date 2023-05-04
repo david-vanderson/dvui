@@ -1710,7 +1710,7 @@ const DataOffset = struct {
     end: u32,
 };
 
-/// Set arbitrary key/value pair for given id.
+/// Set key/value pair for given id.
 ///
 /// Can be called from any thread.
 ///
@@ -1747,6 +1747,25 @@ pub fn dataGet(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
             return cw.dataGet(id, key, T);
         } else {
             @panic("dataGet: current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
+        }
+    }
+}
+
+/// Remove key (and associated value if any) for given id.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside window.begin()/end(), you must
+/// pass a pointer to the Window you want to add the dialog to.
+pub fn dataRemove(win: ?*Window, id: u32, key: []const u8) void {
+    if (win) |w| {
+        // we are being called from non gui thread or outside begin()/end()
+        return w.dataRemove(id, key);
+    } else {
+        if (current_window) |cw| {
+            return cw.dataRemove(id, key);
+        } else {
+            @panic("dataRemove: current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
         }
     }
 }
@@ -2582,7 +2601,7 @@ pub const Window = struct {
             }
 
             for (deadDatas.items) |id| {
-                var dd = self.datas.fetchRemove(id) orelse unreachable;
+                var dd = self.datas.fetchRemove(id).?;
                 self.gpa.free(dd.value.data);
             }
 
@@ -2644,7 +2663,7 @@ pub const Window = struct {
             }
 
             for (deadFonts.items) |id| {
-                var tce = self.font_cache.fetchRemove(id) orelse unreachable;
+                var tce = self.font_cache.fetchRemove(id).?;
                 tce.value.glyph_info.deinit();
                 _ = c.FT_Done_Face(tce.value.face);
             }
@@ -2665,7 +2684,7 @@ pub const Window = struct {
             }
 
             for (deadIcons.items) |id| {
-                const ice = self.icon_cache.fetchRemove(id) orelse unreachable;
+                const ice = self.icon_cache.fetchRemove(id).?;
                 self.backend.textureDestroy(ice.value.texture);
             }
 
@@ -2870,6 +2889,17 @@ pub const Window = struct {
             }
         } else {
             return null;
+        }
+    }
+
+    pub fn dataRemove(self: *Self, id: u32, key: []const u8) void {
+        const hash = hashIdKey(id, key);
+
+        self.data_mutex.lock();
+        defer self.data_mutex.unlock();
+
+        if (self.datas.fetchRemove(hash)) |dd| {
+            self.gpa.free(dd.value.data);
         }
     }
 
@@ -4560,6 +4590,14 @@ pub const TextLayoutWidget = struct {
     pub const Selection = struct {
         start: usize = 0,
         end: usize = 0,
+
+        pub fn order(self: *Selection) void {
+            if (self.end < self.start) {
+                const tmp = self.start;
+                self.start = self.end;
+                self.end = tmp;
+            }
+        }
     };
 
     wd: WidgetData = undefined,
@@ -4581,6 +4619,8 @@ pub const TextLayoutWidget = struct {
     cursor_in: ?*usize = null,
     cursor: *usize = undefined,
     cursor_store: usize = 0,
+    cursor_updown: i8 = 0, // positive is down
+    cursor_updown_pt: ?Point = null,
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         const options = defaults.override(opts);
@@ -4616,6 +4656,11 @@ pub const TextLayoutWidget = struct {
             if (dataGet(null, self.wd.id, "_sel_mouse_down_bytes", usize)) |p| {
                 self.sel_mouse_down_bytes = p;
             }
+        }
+
+        if (dataGet(null, self.wd.id, "_cursor_updown_pt", Point)) |p| {
+            self.cursor_updown_pt = p;
+            dataRemove(null, self.wd.id, "_cursor_updown_pt");
         }
 
         if (opts.process_events) {
@@ -4772,6 +4817,48 @@ pub const TextLayoutWidget = struct {
                 }
             }
 
+            if (self.cursor_updown == 0) {
+                if (self.cursor_updown_pt) |p| {
+                    const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h });
+                    if (p.y < rs.r.y or (p.y < (rs.r.y + rs.r.h) and p.x < rs.r.x)) {
+                        // point is before this text
+                        if (self.cursor.* == self.selection.start) {
+                            self.cursor.* = self.bytes_seen;
+                            self.selection.start = self.bytes_seen;
+                        } else {
+                            self.cursor.* = self.bytes_seen;
+                            self.selection.end = self.bytes_seen;
+                        }
+                        self.cursor_updown_pt = null;
+                        self.selection.order();
+                    } else if (p.y < (rs.r.y + rs.r.h) and p.x < (rs.r.x + rs.r.w)) {
+                        // point is in this text
+                        const how_far = (p.x - rs.r.x) / rs.s;
+                        var pt_end: usize = undefined;
+                        _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end);
+                        if (self.cursor.* == self.selection.start) {
+                            self.cursor.* = self.bytes_seen + pt_end;
+                            self.selection.start = self.bytes_seen + pt_end;
+                        } else {
+                            self.cursor.* = self.bytes_seen + pt_end;
+                            self.selection.end = self.bytes_seen + pt_end;
+                        }
+                        self.cursor_updown_pt = null;
+                        self.selection.order();
+                    } else {
+                        // point is after this text, but we might not get anymore
+                        if (self.cursor.* == self.selection.start) {
+                            self.cursor.* = self.bytes_seen + end;
+                            self.selection.start = self.bytes_seen + end;
+                        } else {
+                            self.cursor.* = self.bytes_seen + end;
+                            self.selection.end = self.bytes_seen + end;
+                        }
+                        self.selection.order();
+                    }
+                }
+            }
+
             const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.h - self.insert_pt.y) });
             //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
             const rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
@@ -4788,9 +4875,16 @@ pub const TextLayoutWidget = struct {
 
             if (!self.cursor_drawn and self.cursor.* < self.bytes_seen + end) {
                 self.cursor_drawn = true;
+                const size = try options.fontGet().textSize(txt[0 .. self.cursor.* - self.bytes_seen]);
+                const crs = self.screenRectScale(Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h });
+
+                if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
+                    self.cursor_updown_pt = crs.r.topleft().plus(.{ .y = @intToFloat(f32, self.cursor_updown) * size.h });
+                    // might have already passed, so need to go again next frame
+                    cueFrame();
+                }
+
                 if (self.selection.start == self.selection.end) {
-                    const size = try options.fontGet().textSize(txt[0 .. self.cursor.* - self.bytes_seen]);
-                    const crs = self.screenRectScale(Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h });
                     try pathAddRect(crs.r, Rect.all(0));
                     try pathFillConvex(options.color(.accent));
                 }
@@ -4813,14 +4907,26 @@ pub const TextLayoutWidget = struct {
         }
     }
 
-    pub fn finish(self: *Self, opts: Options) !void {
+    pub fn addTextDone(self: *Self, opts: Options) !void {
+        self.selection.start = @min(self.selection.start, self.bytes_seen);
+        self.selection.end = @min(self.selection.end, self.bytes_seen);
+        self.cursor.* = @min(self.cursor.*, self.bytes_seen);
+
         if (!self.cursor_drawn) {
             self.cursor_drawn = true;
             self.cursor.* = self.bytes_seen;
+
+            const options = self.wd.options.override(opts);
+            const size = try options.fontGet().textSize("");
+            const crs = self.screenRectScale(Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h });
+
+            if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
+                self.cursor_updown_pt = crs.r.topleft().plus(.{ .y = @intToFloat(f32, self.cursor_updown) * size.h });
+                // might have already passed, so need to go again next frame
+                cueFrame();
+            }
+
             if (self.selection.start == self.selection.end) {
-                const options = self.wd.options.override(opts);
-                const size = try options.fontGet().textSize("");
-                const crs = self.screenRectScale(Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h });
                 try pathAddRect(crs.r, Rect.all(0));
                 try pathFillConvex(options.color(.accent));
             }
@@ -4871,8 +4977,8 @@ pub const TextLayoutWidget = struct {
                 dragPreStart(e.evt.mouse.p, .ibeam, Point{});
                 self.sel_mouse_down_pt = e.evt.mouse.p;
                 self.sel_mouse_drag_pt = null;
-                self.selection.start = 0;
-                self.selection.end = 0;
+                self.cursor_updown = 0;
+                self.cursor_updown_pt = null;
             } else if (e.evt.mouse.kind == .release and e.evt.mouse.kind.release == .left) {
                 e.handled = true;
                 // stop possible drag and capture
@@ -4883,6 +4989,8 @@ pub const TextLayoutWidget = struct {
                 // move if dragging
                 if (dragging(e.evt.mouse.p)) |dps| {
                     self.sel_mouse_drag_pt = e.evt.mouse.p;
+                    self.cursor_updown = 0;
+                    self.cursor_updown_pt = null;
                     var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
                         .mouse_pt = e.evt.mouse.p,
                         .screen_rect = self.wd.rectScale().r,
@@ -4893,28 +5001,38 @@ pub const TextLayoutWidget = struct {
                 }
             }
         } else if (e.evt == .key and e.evt.key.mod.shift()) {
-            if (e.evt.key.code == .left) {
-                e.handled = true;
-                if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null) {
-                    // only change selection if mouse isn't trying to change it
-                    if (self.cursor.* == self.selection.start) {
-                        self.selection.start -|= 1;
-                    } else {
-                        self.selection.end -|= 1;
+            switch (e.evt.key.code) {
+                .left => {
+                    e.handled = true;
+                    if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null and self.cursor_updown == 0) {
+                        // only change selection if mouse isn't trying to change it
+                        if (self.cursor.* == self.selection.start) {
+                            self.selection.start -|= 1;
+                        } else {
+                            self.selection.end -|= 1;
+                        }
+                        self.cursor.* -|= 1;
                     }
-                    self.cursor.* -|= 1;
-                }
-            } else if (e.evt.key.code == .right) {
-                e.handled = true;
-                if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null) {
-                    // only change selection if mouse isn't trying to change it
-                    if (self.cursor.* == self.selection.end) {
-                        self.selection.end += 1;
-                    } else {
-                        self.selection.start += 1;
+                },
+                .right => {
+                    e.handled = true;
+                    if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null and self.cursor_updown == 0) {
+                        // only change selection if mouse isn't trying to change it
+                        if (self.cursor.* == self.selection.end) {
+                            self.selection.end += 1;
+                        } else {
+                            self.selection.start += 1;
+                        }
+                        self.cursor.* += 1;
                     }
-                    self.cursor.* += 1;
-                }
+                },
+                .up, .down => |code| {
+                    e.handled = true;
+                    if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null and self.cursor_updown_pt == null) {
+                        self.cursor_updown += if (code == .down) 1 else -1;
+                    }
+                },
+                else => {},
             }
         }
 
@@ -4932,6 +5050,9 @@ pub const TextLayoutWidget = struct {
         dataSet(null, self.wd.id, "_cursor", self.cursor.*);
         if (self.captured) {
             dataSet(null, self.wd.id, "_sel_mouse_down_bytes", self.sel_mouse_down_bytes);
+        }
+        if (self.cursor_updown != 0) {
+            dataSet(null, self.wd.id, "_cursor_updown_pt", self.cursor_updown_pt);
         }
         clipSet(self.prevClip);
         self.wd.minSizeSetAndCue();
