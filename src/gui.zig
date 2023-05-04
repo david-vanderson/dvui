@@ -4622,6 +4622,8 @@ pub const TextLayoutWidget = struct {
     cursor_updown: i8 = 0, // positive is down
     cursor_updown_pt: ?Point = null,
 
+    add_text_done: bool = false,
+
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         const options = defaults.override(opts);
         var self = Self{ .wd = WidgetData.init(src, init_opts.id_extra, options), .selection_in = init_opts.selection, .cursor_in = init_opts.cursor };
@@ -4879,7 +4881,7 @@ pub const TextLayoutWidget = struct {
                 const crs = self.screenRectScale(Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h });
 
                 if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                    self.cursor_updown_pt = crs.r.topleft().plus(.{ .y = @intToFloat(f32, self.cursor_updown) * size.h });
+                    self.cursor_updown_pt = crs.r.topleft().plus(.{ .y = (@intToFloat(f32, self.cursor_updown) + 0.5) * size.h });
                     // might have already passed, so need to go again next frame
                     cueFrame();
                 }
@@ -4908,6 +4910,8 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn addTextDone(self: *Self, opts: Options) !void {
+        self.add_text_done = true;
+
         self.selection.start = @min(self.selection.start, self.bytes_seen);
         self.selection.end = @min(self.selection.end, self.bytes_seen);
         self.cursor.* = @min(self.cursor.*, self.bytes_seen);
@@ -4921,7 +4925,7 @@ pub const TextLayoutWidget = struct {
             const crs = self.screenRectScale(Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h });
 
             if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                self.cursor_updown_pt = crs.r.topleft().plus(.{ .y = @intToFloat(f32, self.cursor_updown) * size.h });
+                self.cursor_updown_pt = crs.r.topleft().plus(.{ .y = (@intToFloat(f32, self.cursor_updown) + 0.5) * size.h });
                 // might have already passed, so need to go again next frame
                 cueFrame();
             }
@@ -5046,6 +5050,9 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        if (!self.add_text_done) {
+            self.addTextDone(.{}) catch {};
+        }
         dataSet(null, self.wd.id, "_selection", self.selection.*);
         dataSet(null, self.wd.id, "_cursor", self.cursor.*);
         if (self.captured) {
