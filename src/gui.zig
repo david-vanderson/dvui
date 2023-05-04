@@ -4640,6 +4640,7 @@ pub const TextLayoutWidget = struct {
     cursor_store: usize = 0,
     cursor_updown: i8 = 0, // positive is down
     cursor_updown_pt: ?Point = null,
+    scroll_to_cursor: bool = false,
 
     add_text_done: bool = false,
 
@@ -4788,17 +4789,17 @@ pub const TextLayoutWidget = struct {
 
             // see if selection needs to be updated
             if (self.sel_mouse_down_pt) |p| {
-                const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h });
-                if (p.y < rs.r.y or (p.y < (rs.r.y + rs.r.h) and p.x < rs.r.x)) {
+                const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
+                if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
                     // point is before this text
                     self.sel_mouse_down_bytes = self.bytes_seen;
                     self.selection.start = self.sel_mouse_down_bytes.?;
                     self.selection.end = self.sel_mouse_down_bytes.?;
                     self.sel_mouse_down_pt = null;
                     self.cursor.* = self.sel_mouse_down_bytes.?;
-                } else if (p.y < (rs.r.y + rs.r.h) and p.x < (rs.r.x + rs.r.w)) {
+                } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
                     // point is in this text
-                    const how_far = (p.x - rs.r.x) / rs.s;
+                    const how_far = p.x - rs.x;
                     var pt_end: usize = undefined;
                     _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
                     self.sel_mouse_down_bytes = self.bytes_seen + pt_end;
@@ -4814,16 +4815,16 @@ pub const TextLayoutWidget = struct {
             }
 
             if (self.sel_mouse_drag_pt) |p| {
-                const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h });
-                if (p.y < rs.r.y or (p.y < (rs.r.y + rs.r.h) and p.x < rs.r.x)) {
+                const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
+                if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
                     // point is before this text
                     self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen);
                     self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen);
                     self.sel_mouse_drag_pt = null;
                     self.cursor.* = self.bytes_seen;
-                } else if (p.y < (rs.r.y + rs.r.h) and p.x < (rs.r.x + rs.r.w)) {
+                } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
                     // point is in this text
-                    const how_far = (p.x - rs.r.x) / rs.s;
+                    const how_far = p.x - rs.x;
                     var pt_end: usize = undefined;
                     _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
                     self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + pt_end);
@@ -4840,8 +4841,8 @@ pub const TextLayoutWidget = struct {
 
             if (self.cursor_updown == 0) {
                 if (self.cursor_updown_pt) |p| {
-                    const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h });
-                    if (p.y < rs.r.y or (p.y < (rs.r.y + rs.r.h) and p.x < rs.r.x)) {
+                    const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
+                    if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
                         // point is before this text
                         if (self.cursor.* == self.selection.start) {
                             self.cursor.* = self.bytes_seen;
@@ -4852,9 +4853,10 @@ pub const TextLayoutWidget = struct {
                         }
                         self.cursor_updown_pt = null;
                         self.selection.order();
-                    } else if (p.y < (rs.r.y + rs.r.h) and p.x < (rs.r.x + rs.r.w)) {
+                        self.scroll_to_cursor = true;
+                    } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
                         // point is in this text
-                        const how_far = (p.x - rs.r.x) / rs.s;
+                        const how_far = p.x - rs.x;
                         var pt_end: usize = undefined;
                         _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
                         if (self.cursor.* == self.selection.start) {
@@ -4866,6 +4868,7 @@ pub const TextLayoutWidget = struct {
                         }
                         self.cursor_updown_pt = null;
                         self.selection.order();
+                        self.scroll_to_cursor = true;
                     } else {
                         // point is after this text, but we might not get anymore
                         if (self.cursor.* == self.selection.start) {
@@ -4876,6 +4879,7 @@ pub const TextLayoutWidget = struct {
                             self.selection.end = self.bytes_seen + end;
                         }
                         self.selection.order();
+                        self.scroll_to_cursor = true;
                     }
                 }
             }
@@ -4897,21 +4901,32 @@ pub const TextLayoutWidget = struct {
             if (!self.cursor_drawn and self.cursor.* < self.bytes_seen + end) {
                 self.cursor_drawn = true;
                 const size = try options.fontGet().textSize(txt[0 .. self.cursor.* - self.bytes_seen]);
-                const crs = self.screenRectScale(Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h });
+                const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h };
 
                 if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                    self.cursor_updown_pt = crs.pointToScreen(.{ .y = (@intToFloat(f32, self.cursor_updown) + 0.5) * size.h });
+                    const cr_new = cr.add(.{ .y = @intToFloat(f32, self.cursor_updown) * size.h });
+                    self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
+
+                    // might have already passed, so need to go again next frame
+                    cueFrame();
+
                     var scrollto = Event{ .evt = .{ .scroll_to = .{
-                        .pt = self.cursor_updown_pt.?,
+                        .rect = self.screenRectScale(cr_new).r,
                         .screen_rect = self.wd.rectScale().r,
                     } } };
                     self.bubbleEvent(&scrollto);
-                    // might have already passed, so need to go again next frame
-                    cueFrame();
+                }
+
+                if (self.scroll_to_cursor) {
+                    var scrollto = Event{ .evt = .{ .scroll_to = .{
+                        .rect = self.screenRectScale(cr).r,
+                        .screen_rect = self.wd.rectScale().r,
+                    } } };
+                    self.bubbleEvent(&scrollto);
                 }
 
                 if (self.selection.start == self.selection.end) {
-                    try pathAddRect(crs.r, Rect.all(0));
+                    try pathAddRect(self.screenRectScale(cr).r, Rect.all(0));
                     try pathFillConvex(options.color(.accent));
                 }
             }
@@ -4946,21 +4961,32 @@ pub const TextLayoutWidget = struct {
 
             const options = self.wd.options.override(opts);
             const size = try options.fontGet().textSize("");
-            const crs = self.screenRectScale(Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h });
+            const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h };
 
             if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                self.cursor_updown_pt = crs.pointToScreen(.{ .y = (@intToFloat(f32, self.cursor_updown) + 0.5) * size.h });
+                const cr_new = cr.add(.{ .y = @intToFloat(f32, self.cursor_updown) * size.h });
+                self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
+
                 // might have already passed, so need to go again next frame
+                cueFrame();
+
                 var scrollto = Event{ .evt = .{ .scroll_to = .{
-                    .pt = self.cursor_updown_pt.?,
+                    .rect = self.screenRectScale(cr_new).r,
                     .screen_rect = self.wd.rectScale().r,
                 } } };
                 self.bubbleEvent(&scrollto);
-                cueFrame();
+            }
+
+            if (self.scroll_to_cursor) {
+                var scrollto = Event{ .evt = .{ .scroll_to = .{
+                    .rect = self.screenRectScale(cr).r,
+                    .screen_rect = self.wd.rectScale().r,
+                } } };
+                self.bubbleEvent(&scrollto);
             }
 
             if (self.selection.start == self.selection.end) {
-                try pathAddRect(crs.r, Rect.all(0));
+                try pathAddRect(self.screenRectScale(cr).r, Rect.all(0));
                 try pathFillConvex(options.color(.accent));
             }
         }
@@ -5008,7 +5034,7 @@ pub const TextLayoutWidget = struct {
                 // capture and start drag
                 self.captured = captureMouse(self.wd.id);
                 dragPreStart(e.evt.mouse.p, .ibeam, Point{});
-                self.sel_mouse_down_pt = e.evt.mouse.p;
+                self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
                 self.sel_mouse_drag_pt = null;
                 self.cursor_updown = 0;
                 self.cursor_updown_pt = null;
@@ -5021,7 +5047,7 @@ pub const TextLayoutWidget = struct {
                 e.handled = true;
                 // move if dragging
                 if (dragging(e.evt.mouse.p)) |dps| {
-                    self.sel_mouse_drag_pt = e.evt.mouse.p;
+                    self.sel_mouse_drag_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
                     self.cursor_updown = 0;
                     self.cursor_updown_pt = null;
                     var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
@@ -5045,6 +5071,7 @@ pub const TextLayoutWidget = struct {
                             self.selection.end -|= 1;
                         }
                         self.cursor.* -|= 1;
+                        self.scroll_to_cursor = true;
                     }
                 },
                 .right => {
@@ -5057,6 +5084,7 @@ pub const TextLayoutWidget = struct {
                             self.selection.start += 1;
                         }
                         self.cursor.* += 1;
+                        self.scroll_to_cursor = true;
                     }
                 },
                 .up, .down => |code| {
@@ -5819,16 +5847,16 @@ pub const ScrollContainerWidget = struct {
                 e.handled = true;
                 const rs = self.wd.contentRectScale();
 
-                const ypx = @max(0, @min(rs.r.y - st.pt.y, rs.r.y - st.screen_rect.y));
-                if (ypx > 0) // can scroll up
-                {
+                const ypx = @max(0, @min(rs.r.y - st.rect.y, rs.r.y - st.screen_rect.y));
+                if (ypx > 0 and self.si.viewport.y > 0) {
                     self.si.viewport.y = @max(0, @min(self.si.scroll_max(), self.si.viewport.y - (ypx / rs.s)));
+                    cueFrame();
                 }
 
-                const ypx2 = @max(0, @min(st.pt.y - (rs.r.y + rs.r.h), (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h)));
-                if (ypx2 > 0) // can scroll down
-                {
+                const ypx2 = @max(0, @min((st.rect.y + st.rect.h) - (rs.r.y + rs.r.h), (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h)));
+                if (ypx2 > 0 and self.si.viewport.y < self.si.scroll_max()) {
                     self.si.viewport.y = @max(0, @min(self.si.scroll_max(), self.si.viewport.y + (ypx2 / rs.s)));
+                    cueFrame();
                 }
             },
             else => {},
@@ -7853,8 +7881,8 @@ pub const Event = struct {
 
     pub const ScrollTo = struct {
         // bubbled up from a child to tell a containing scrollarea to
-        // possibly scroll to show the given point
-        pt: Point,
+        // possibly scroll to show the given rect
+        rect: Rect,
         screen_rect: Rect,
     };
 
