@@ -4899,7 +4899,7 @@ pub const TextLayoutWidget = struct {
                 const crs = self.screenRectScale(Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h });
 
                 if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                    self.cursor_updown_pt = crs.r.topleft().plus(.{ .y = (@intToFloat(f32, self.cursor_updown) + 0.5) * size.h });
+                    self.cursor_updown_pt = crs.pointToScreen(.{ .y = (@intToFloat(f32, self.cursor_updown) + 0.5) * size.h });
                     // might have already passed, so need to go again next frame
                     cueFrame();
                 }
@@ -4943,7 +4943,7 @@ pub const TextLayoutWidget = struct {
             const crs = self.screenRectScale(Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h });
 
             if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                self.cursor_updown_pt = crs.r.topleft().plus(.{ .y = (@intToFloat(f32, self.cursor_updown) + 0.5) * size.h });
+                self.cursor_updown_pt = crs.pointToScreen(.{ .y = (@intToFloat(f32, self.cursor_updown) + 0.5) * size.h });
                 // might have already passed, so need to go again next frame
                 cueFrame();
             }
