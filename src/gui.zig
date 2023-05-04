@@ -521,10 +521,15 @@ pub const Font = struct {
     }
 
     pub fn textSize(self: *const Font, text: []const u8) !Size {
-        return try self.textSizeEx(text, null, null);
+        return try self.textSizeEx(text, null, null, .before);
     }
 
-    pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize) !Size {
+    pub const EndMetric = enum {
+        before, // end_idx stops before text goes past max_width
+        nearest, // end_idx stops at start of character closest to max_width
+    };
+
+    pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: EndMetric) !Size {
         // ask for a font that matches the natural display pixels so we get a more
         // accurate size
 
@@ -533,7 +538,7 @@ pub const Font = struct {
         const ask_size = @ceil(self.size * ss);
         const max_width_sized = (max_width orelse 1000000.0) * ss;
         const sized_font = self.resize(ask_size);
-        const s = try sized_font.textSizeRaw(text, max_width_sized, end_idx);
+        const s = try sized_font.textSizeRaw(text, max_width_sized, end_idx, end_metric);
 
         // do this check after calling textSizeRaw so that end_idx is set
         if (ss == 0) return Size{};
@@ -544,7 +549,7 @@ pub const Font = struct {
     }
 
     // doesn't scale the font or max_width
-    pub fn textSizeRaw(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize) !Size {
+    pub fn textSizeRaw(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: EndMetric) !Size {
         const fce = try fontCacheGet(self.*);
 
         const mwidth = max_width orelse 1000000.0;
@@ -558,6 +563,7 @@ pub const Font = struct {
         var th: f32 = fce.height;
 
         var ei: usize = 0;
+        var nearest_break: bool = false;
 
         var utf8 = (try std.unicode.Utf8View.init(text)).iterator();
         while (utf8.nextCodepoint()) |codepoint| {
@@ -572,24 +578,36 @@ pub const Font = struct {
 
             // TODO: kerning
 
+            if (codepoint == '\n') {
+                // newlines always terminate, and don't use any space
+                ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+                break;
+            }
+
             // always include the first codepoint
             if (ei > 0 and (maxx - minx) > mwidth) {
-                // went too far
-                break;
+                switch (end_metric) {
+                    .before => break, // went too far
+                    .nearest => {
+                        if ((maxx - minx) - mwidth >= mwidth - tw) {
+                            break; // current one is closest
+                        } else {
+                            // get the next glyph and then break
+                            nearest_break = true;
+                        }
+                    },
+                }
             }
 
             // record that we processed this codepoint
             ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
 
-            if (codepoint == '\n') {
-                // newlines always terminate, and don't use any space
-                break;
-            }
-
             // update space taken by glyph
             tw = maxx - minx;
             th = maxy - miny;
             x += gi.advance;
+
+            if (nearest_break) break;
         }
 
         // TODO: xstart and ystart
@@ -4734,7 +4752,7 @@ pub const TextLayoutWidget = struct {
 
             // get slice of text that fits within width or ends with newline
             // - always get at least 1 codepoint so we make progress
-            var s = try options.fontGet().textSizeEx(txt, width, &end);
+            var s = try options.fontGet().textSizeEx(txt, width, &end, .before);
 
             const newline = (txt[end - 1] == '\n');
 
@@ -4781,7 +4799,7 @@ pub const TextLayoutWidget = struct {
                     // point is in this text
                     const how_far = (p.x - rs.r.x) / rs.s;
                     var pt_end: usize = undefined;
-                    _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end);
+                    _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
                     self.sel_mouse_down_bytes = self.bytes_seen + pt_end;
                     self.selection.start = self.sel_mouse_down_bytes.?;
                     self.selection.end = self.sel_mouse_down_bytes.?;
@@ -4806,7 +4824,7 @@ pub const TextLayoutWidget = struct {
                     // point is in this text
                     const how_far = (p.x - rs.r.x) / rs.s;
                     var pt_end: usize = undefined;
-                    _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end);
+                    _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
                     self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + pt_end);
                     self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen + pt_end);
                     self.sel_mouse_drag_pt = null;
@@ -4837,7 +4855,7 @@ pub const TextLayoutWidget = struct {
                         // point is in this text
                         const how_far = (p.x - rs.r.x) / rs.s;
                         var pt_end: usize = undefined;
-                        _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end);
+                        _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
                         if (self.cursor.* == self.selection.start) {
                             self.cursor.* = self.bytes_seen + pt_end;
                             self.selection.start = self.bytes_seen + pt_end;
