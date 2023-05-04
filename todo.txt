@@ -1,6 +1,4 @@
 
-shift-up/down doesn't work when text is zoomed
-
 move events inside Event
 
 redo MouseEvent like KeyEvent

@@ -1906,6 +1906,7 @@ pub const EventIterator = struct {
 
                 .close_popup => unreachable,
                 .scroll_drag => unreachable,
+                .scroll_to => unreachable,
             }
 
             self.i += 1;
@@ -4900,6 +4901,11 @@ pub const TextLayoutWidget = struct {
 
                 if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
                     self.cursor_updown_pt = crs.pointToScreen(.{ .y = (@intToFloat(f32, self.cursor_updown) + 0.5) * size.h });
+                    var scrollto = Event{ .evt = .{ .scroll_to = .{
+                        .pt = self.cursor_updown_pt.?,
+                        .screen_rect = self.wd.rectScale().r,
+                    } } };
+                    self.bubbleEvent(&scrollto);
                     // might have already passed, so need to go again next frame
                     cueFrame();
                 }
@@ -4945,6 +4951,11 @@ pub const TextLayoutWidget = struct {
             if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
                 self.cursor_updown_pt = crs.pointToScreen(.{ .y = (@intToFloat(f32, self.cursor_updown) + 0.5) * size.h });
                 // might have already passed, so need to go again next frame
+                var scrollto = Event{ .evt = .{ .scroll_to = .{
+                    .pt = self.cursor_updown_pt.?,
+                    .screen_rect = self.wd.rectScale().r,
+                } } };
+                self.bubbleEvent(&scrollto);
                 cueFrame();
             }
 
@@ -5802,6 +5813,22 @@ pub const ScrollContainerWidget = struct {
                     // frame so that the child widget can adjust selection
                     self.inject_capture_id = sd.capture_id;
                     self.inject_mouse_pt = sd.mouse_pt;
+                }
+            },
+            .scroll_to => |st| {
+                e.handled = true;
+                const rs = self.wd.contentRectScale();
+
+                const ypx = @max(0, @min(rs.r.y - st.pt.y, rs.r.y - st.screen_rect.y));
+                if (ypx > 0) // can scroll up
+                {
+                    self.si.viewport.y = @max(0, @min(self.si.scroll_max(), self.si.viewport.y - (ypx / rs.s)));
+                }
+
+                const ypx2 = @max(0, @min(st.pt.y - (rs.r.y + rs.r.h), (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h)));
+                if (ypx2 > 0) // can scroll down
+                {
+                    self.si.viewport.y = @max(0, @min(self.si.scroll_max(), self.si.viewport.y + (ypx2 / rs.s)));
                 }
             },
             else => {},
@@ -7824,6 +7851,13 @@ pub const Event = struct {
         injected: bool,
     };
 
+    pub const ScrollTo = struct {
+        // bubbled up from a child to tell a containing scrollarea to
+        // possibly scroll to show the given point
+        pt: Point,
+        screen_rect: Rect,
+    };
+
     handled: bool = false,
     focus_windowId: ?u32 = null,
     focus_widgetId: ?u32 = null,
@@ -7833,6 +7867,7 @@ pub const Event = struct {
         mouse: MouseEvent,
         close_popup: ClosePopupEvent,
         scroll_drag: ScrollDrag,
+        scroll_to: ScrollTo,
     },
 };
 
