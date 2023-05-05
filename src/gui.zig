@@ -2273,7 +2273,7 @@ pub const Window = struct {
         self.extra_frames_needed = 1;
     }
 
-    pub fn addEventKey(self: *Self, event: KeyEvent) !bool {
+    pub fn addEventKey(self: *Self, event: Event.Key) !bool {
         self.positionMouseEventRemove();
 
         try self.events.append(Event{
@@ -2313,7 +2313,7 @@ pub const Window = struct {
         // - generate a .focus event here instead of just doing focusWindow(winId, null);
         // - how to make it optional?
 
-        try self.events.append(Event{ .evt = .{ .mouse = MouseEvent{
+        try self.events.append(Event{ .evt = .{ .mouse = .{
             .kind = .{ .motion = dp },
             .p = self.mouse_pt,
             .floating_win = winId,
@@ -2324,7 +2324,7 @@ pub const Window = struct {
         return ret;
     }
 
-    pub fn addEventMouseButton(self: *Self, kind: MouseEvent.Kind) !bool {
+    pub fn addEventMouseButton(self: *Self, kind: Event.Mouse.Kind) !bool {
         if (self.debug_under_mouse and kind == .press and kind.press == .left) {
             // a left click will stop the debug stuff from following the mouse,
             // but need to stop it at the end of the frame when we've gotten
@@ -2348,14 +2348,14 @@ pub const Window = struct {
             }
 
             // add mouse focus event
-            try self.events.append(Event{ .evt = .{ .mouse = MouseEvent{
+            try self.events.append(Event{ .evt = .{ .mouse = .{
                 .kind = .{ .focus = kind.press },
                 .p = self.mouse_pt,
                 .floating_win = winId,
             } } });
         }
 
-        try self.events.append(Event{ .evt = .{ .mouse = MouseEvent{
+        try self.events.append(Event{ .evt = .{ .mouse = .{
             .kind = kind,
             .p = self.mouse_pt,
             .floating_win = winId,
@@ -2377,7 +2377,7 @@ pub const Window = struct {
         }
         //std.debug.print("mouse wheel {d}\n", .{ticks_adj});
 
-        try self.events.append(Event{ .evt = .{ .mouse = MouseEvent{
+        try self.events.append(Event{ .evt = .{ .mouse = .{
             .kind = .{ .wheel_y = ticks_adj },
             .p = self.mouse_pt,
             .floating_win = winId,
@@ -2737,7 +2737,7 @@ pub const Window = struct {
     }
 
     fn positionMouseEventAdd(self: *Self) !void {
-        try self.events.append(.{ .evt = .{ .mouse = MouseEvent{
+        try self.events.append(.{ .evt = .{ .mouse = .{
             .kind = .position,
             .p = self.mouse_pt,
             .floating_win = self.windowFor(self.mouse_pt),
@@ -3442,7 +3442,7 @@ pub const PopupWidget = struct {
             } else if (e.evt == .key) {
                 if (e.evt.key.code == .escape and e.evt.key.action == .down) {
                     e.handled = true;
-                    var closeE = Event{ .evt = .{ .close_popup = ClosePopupEvent{} } };
+                    var closeE = Event{ .evt = .{ .close_popup = .{} } };
                     self.bubbleEvent(&closeE);
                 } else if (e.evt.key.code == .tab and e.evt.key.action == .down) {
                     e.handled = true;
@@ -3473,7 +3473,7 @@ pub const PopupWidget = struct {
 
             // only the last popup can do the check, you can't query the focus
             // status of children, only parents
-            var closeE = Event{ .evt = .{ .close_popup = ClosePopupEvent{ .intentional = false } } };
+            var closeE = Event{ .evt = .{ .close_popup = .{ .intentional = false } } };
             self.bubbleEvent(&closeE);
         }
 
@@ -6263,7 +6263,7 @@ pub const MenuWidget = struct {
 
     pub fn close(self: *Self) void {
         // bubble this event to close all popups that had submenus leading to this
-        var e = Event{ .evt = .{ .close_popup = ClosePopupEvent{} } };
+        var e = Event{ .evt = .{ .close_popup = .{} } };
         self.bubbleEvent(&e);
         cueFrame();
     }
@@ -7826,50 +7826,50 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotati
     cw.backend.renderGeometry(ice.texture, vtx.items, idx.items);
 }
 
-pub const KeyEvent = struct {
-    code: enums.Key,
-    action: union(enum) {
-        down,
-        repeat,
-        up,
-    },
-    mod: enums.Mod,
-};
-
-pub const MouseEvent = struct {
-    pub const Kind = union(enum) {
-        // Focus events come right before their associated mouse event, usually
-        // leftdown/rightdown or motion. Separated to enable changing what
-        // causes focus changes.
-        focus: enums.Button,
-        press: enums.Button,
-        release: enums.Button,
-        wheel_y: f32,
-
-        // motion Point is the change in position
-        // if you just want to react to the current mouse position if it got
-        // moved at all, use the .position event with mouseTotalMotion()
-        motion: Point,
-
-        // only one position event per frame, and it's always after all other
-        // mouse events, used to change mouse cursor and do widget highlighting
-        // - also useful with mouseTotalMotion() to respond to mouse motion but
-        // only at the final location
-        position: void,
+pub const Event = struct {
+    pub const Key = struct {
+        code: enums.Key,
+        action: enum {
+            down,
+            repeat,
+            up,
+        },
+        mod: enums.Mod,
     };
 
-    p: Point,
-    floating_win: u32,
-    kind: Kind,
-};
+    pub const Mouse = struct {
+        pub const Kind = union(enum) {
+            // Focus events come right before their associated mouse event, usually
+            // leftdown/rightdown or motion. Separated to enable changing what
+            // causes focus changes.
+            focus: enums.Button,
+            press: enums.Button,
+            release: enums.Button,
+            wheel_y: f32,
 
-pub const ClosePopupEvent = struct {
-    // are we closing because of a specific user action (clicked on menu item,
-    // pressed escape), or because they clicked off the menu somewhere?
-    intentional: bool = true,
-};
+            // motion Point is the change in position
+            // if you just want to react to the current mouse position if it got
+            // moved at all, use the .position event with mouseTotalMotion()
+            motion: Point,
 
-pub const Event = struct {
+            // only one position event per frame, and it's always after all other
+            // mouse events, used to change mouse cursor and do widget highlighting
+            // - also useful with mouseTotalMotion() to respond to mouse motion but
+            // only at the final location
+            position: void,
+        };
+
+        p: Point,
+        floating_win: u32,
+        kind: Kind,
+    };
+
+    pub const ClosePopup = struct {
+        // are we closing because of a specific user action (clicked on menu item,
+        // pressed escape), or because they clicked off the menu somewhere?
+        intentional: bool = true,
+    };
+
     pub const ScrollDrag = struct {
         // bubbled up from a child to tell a containing scrollarea to
         // possibly scroll to show more of the child
@@ -7890,10 +7890,10 @@ pub const Event = struct {
     focus_windowId: ?u32 = null,
     focus_widgetId: ?u32 = null,
     evt: union(enum) {
-        key: KeyEvent,
+        key: Key,
         text: []u8,
-        mouse: MouseEvent,
-        close_popup: ClosePopupEvent,
+        mouse: Mouse,
+        close_popup: ClosePopup,
         scroll_drag: ScrollDrag,
         scroll_to: ScrollTo,
     },
