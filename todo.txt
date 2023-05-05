@@ -1,14 +1,4 @@
 
-unify bubbleEvent into processEvent?
-- bubbleable needs to be all non-mouse events
-- audit processEvent to make sure they all bubble
-- processEvent no longer takes an iter
-- remove bubbleEvent
-
-- Event needs to have a u16 event number, default 0
-  - all newly added events get an increasing number starting with 1
-  - use that number in focusRemainingEvents to find the event to start with
-- search through FIXME
 
 TextLayoutWidget needs to not process mouse events if they are in the corner widget's rects
 
