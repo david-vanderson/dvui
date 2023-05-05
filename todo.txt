@@ -1,8 +1,4 @@
 
-move events inside Event
-
-redo MouseEvent like KeyEvent
-
 maybe if a widget gets a mouse event outside its rect, clear the remaining key event's focus_widgetId?  Assume we lost focus?
 
 use zig package manager to get SDL (github.com/andrewrk/SDL)
@@ -167,12 +163,6 @@ debugging:
 - show layout somehow (mouseover?)
 - maybe just a separate floating window that shows a tree-view of all the widgets
   - mouseover to highlight the widget?
-
-textlayout:
-- minSizeForChild should recalc based on the four corners
-- height can be unstable with stuff in downleft or downright
-  - 1st frame the icon causes text to flow onto additional line
-  - 2nd frame the icon moves lower so the text doesn't go as far, repeat
 
 hover and highlight properties need to propogate down to children so that icons can draw properly in buttons where the button is highlighted but not the icon directly?
   - maybe as part of the Options struct?
