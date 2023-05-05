@@ -453,7 +453,7 @@ pub const StrokeTest = struct {
 
         var iter = gui.EventIterator.init(self.data().id, self.data().borderRectScale().r);
         while (iter.next()) |e| {
-            self.processEvent(&iter, e);
+            self.processEvent(e);
         }
 
         try self.wd.borderAndBackground();
@@ -486,7 +486,7 @@ pub const StrokeTest = struct {
     }
 
     pub fn widget(self: *Self) gui.Widget {
-        return gui.Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent, bubbleEvent);
+        return gui.Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
     }
 
     pub fn data(self: *Self) *gui.WidgetData {
@@ -506,8 +506,7 @@ pub const StrokeTest = struct {
         self.wd.minSizeMax(self.wd.padSize(s));
     }
 
-    pub fn processEvent(self: *Self, iter: *gui.EventIterator, e: *gui.Event) void {
-        _ = iter;
+    pub fn processEvent(self: *Self, e: *gui.Event) void {
         switch (e.evt) {
             .mouse => |me| {
                 const rs = self.wd.contentRectScale();
@@ -569,12 +568,8 @@ pub const StrokeTest = struct {
             else => {},
         }
 
-        if (gui.bubbleable(e)) {
-            self.bubbleEvent(e);
+        if (e.bubbleable()) {
+            self.wd.parent.processEvent(e);
         }
-    }
-
-    pub fn bubbleEvent(self: *Self, e: *gui.Event) void {
-        self.wd.parent.bubbleEvent(e);
     }
 };
