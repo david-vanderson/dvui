@@ -407,17 +407,19 @@ pub const Options = struct {
     // - background
     // - padding
     // - corner_radius
+    // - expand
+    // - gravity
     // while the label uses:
     // - fonts
     // - colors
-    // and they both use:
-    // - expand
-    // - gravity
     pub fn strip(self: *const Options) Options {
         return Options{
             // reset to defaults of internal widgets
             .rect = null,
             .min_size_content = null,
+            .expand = null,
+            .gravity_x = null,
+            .gravity_y = null,
 
             // ignore defaults of internal widgets
             .tab_index = null,
@@ -428,9 +430,6 @@ pub const Options = struct {
             .background = false,
 
             // keep the rest
-            .expand = self.expand,
-            .gravity_x = self.gravity_x,
-            .gravity_y = self.gravity_y,
             .color_accent = self.color_accent,
             .color_text = self.color_text,
             .color_fill = self.color_fill,

@@ -182,20 +182,20 @@ pub fn main() !void {
                 }
 
                 {
-                    const TextEntryText = struct {
-                        //var text = array(u8, 100, "abcdefghijklmnopqrstuvwxyz");
-                        var text1 = array(u8, 100, "abc");
-                        var text2 = array(u8, 100, "abc");
-                        fn array(comptime T: type, comptime size: usize, items: ?[]const T) [size]T {
-                            var output = std.mem.zeroes([size]T);
-                            if (items) |slice| std.mem.copy(T, &output, slice);
-                            return output;
-                        }
-                    };
+                    //const TextEntryText = struct {
+                    //    //var text = array(u8, 100, "abcdefghijklmnopqrstuvwxyz");
+                    //    var text1 = array(u8, 100, "abc");
+                    //    var text2 = array(u8, 100, "abc");
+                    //    fn array(comptime T: type, comptime size: usize, items: ?[]const T) [size]T {
+                    //        var output = std.mem.zeroes([size]T);
+                    //        if (items) |slice| std.mem.copy(T, &output, slice);
+                    //        return output;
+                    //    }
+                    //};
 
-                    const msize = gui.TextEntryWidget.defaults.fontGet().textSize("M") catch unreachable;
-                    try gui.textEntry(@src(), 0, &TextEntryText.text1, .{ .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
-                    try gui.textEntry(@src(), 0, &TextEntryText.text2, .{ .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
+                    //const msize = gui.TextEntryWidget.defaults.fontGet().textSize("M") catch unreachable;
+                    //try gui.textEntry(@src(), 0, &TextEntryText.text1, .{ .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
+                    //try gui.textEntry(@src(), 0, &TextEntryText.text2, .{ .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
                 }
 
                 {
@@ -382,7 +382,7 @@ pub fn main() !void {
 
         win_backend.renderPresent();
 
-        const wait_event_micros = win.waitTime(end_micros, null);
+        const wait_event_micros = win.waitTime(end_micros, 2);
 
         win_backend.waitEventTimeout(wait_event_micros);
     }
