@@ -3098,7 +3098,7 @@ pub const Window = struct {
 
             var buf = [_]u8{0} ** 20;
             _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
-            try gui.textEntry(@src(), 0, &buf, .{});
+            try gui.textEntry(@src(), .{ .text = &buf }, .{});
 
             self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(&buf, 0), 16) catch 0;
         }
@@ -4592,10 +4592,10 @@ pub const TextLayoutWidget = struct {
     pub const InitOptions = struct {
         id_extra: u32 = 0,
         selection: ?*Selection = null,
-        cursor: ?*usize = null,
     };
 
     pub const Selection = struct {
+        cursor: usize = 0,
         start: usize = 0,
         end: usize = 0,
 
@@ -4624,9 +4624,6 @@ pub const TextLayoutWidget = struct {
     sel_mouse_drag_pt: ?Point = null,
 
     cursor_drawn: bool = false,
-    cursor_in: ?*usize = null,
-    cursor: *usize = undefined,
-    cursor_store: usize = 0,
     cursor_updown: i8 = 0, // positive is down
     cursor_updown_pt: ?Point = null,
     scroll_to_cursor: bool = false,
@@ -4635,7 +4632,7 @@ pub const TextLayoutWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         const options = defaults.override(opts);
-        var self = Self{ .wd = WidgetData.init(src, init_opts.id_extra, options), .selection_in = init_opts.selection, .cursor_in = init_opts.cursor };
+        var self = Self{ .wd = WidgetData.init(src, init_opts.id_extra, options), .selection_in = init_opts.selection };
         return self;
     }
 
@@ -4650,15 +4647,6 @@ pub const TextLayoutWidget = struct {
                 self.selection_store = s;
             }
             self.selection = &self.selection_store;
-        }
-
-        if (self.cursor_in) |cur| {
-            self.cursor = cur;
-        } else {
-            if (dataGet(null, self.wd.id, "_cursor", usize)) |cur| {
-                self.cursor_store = cur;
-            }
-            self.cursor = &self.cursor_store;
         }
 
         self.captured = captureMouseMaintain(self.wd.id);
@@ -4782,24 +4770,26 @@ pub const TextLayoutWidget = struct {
                 if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
                     // point is before this text
                     self.sel_mouse_down_bytes = self.bytes_seen;
+                    self.selection.cursor = self.sel_mouse_down_bytes.?;
                     self.selection.start = self.sel_mouse_down_bytes.?;
                     self.selection.end = self.sel_mouse_down_bytes.?;
                     self.sel_mouse_down_pt = null;
-                    self.cursor.* = self.sel_mouse_down_bytes.?;
                 } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
                     // point is in this text
                     const how_far = p.x - rs.x;
                     var pt_end: usize = undefined;
                     _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
                     self.sel_mouse_down_bytes = self.bytes_seen + pt_end;
+                    self.selection.cursor = self.sel_mouse_down_bytes.?;
                     self.selection.start = self.sel_mouse_down_bytes.?;
                     self.selection.end = self.sel_mouse_down_bytes.?;
                     self.sel_mouse_down_pt = null;
-                    self.cursor.* = self.sel_mouse_down_bytes.?;
                 } else {
                     // point is after this text, but we might not get anymore
                     self.sel_mouse_down_bytes = self.bytes_seen + end;
-                    self.cursor.* = self.sel_mouse_down_bytes.?;
+                    self.selection.cursor = self.sel_mouse_down_bytes.?;
+                    self.selection.start = self.sel_mouse_down_bytes.?;
+                    self.selection.end = self.sel_mouse_down_bytes.?;
                 }
             }
 
@@ -4807,24 +4797,24 @@ pub const TextLayoutWidget = struct {
                 const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
                 if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
                     // point is before this text
+                    self.selection.cursor = self.bytes_seen;
                     self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen);
                     self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen);
                     self.sel_mouse_drag_pt = null;
-                    self.cursor.* = self.bytes_seen;
                 } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
                     // point is in this text
                     const how_far = p.x - rs.x;
                     var pt_end: usize = undefined;
                     _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
+                    self.selection.cursor = self.bytes_seen + pt_end;
                     self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + pt_end);
                     self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen + pt_end);
                     self.sel_mouse_drag_pt = null;
-                    self.cursor.* = self.bytes_seen + pt_end;
                 } else {
                     // point is after this text, but we might not get anymore
+                    self.selection.cursor = self.bytes_seen + end;
                     self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
                     self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
-                    self.cursor.* = self.bytes_seen + end;
                 }
             }
 
@@ -4833,11 +4823,11 @@ pub const TextLayoutWidget = struct {
                     const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
                     if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
                         // point is before this text
-                        if (self.cursor.* == self.selection.start) {
-                            self.cursor.* = self.bytes_seen;
+                        if (self.selection.cursor == self.selection.start) {
+                            self.selection.cursor = self.bytes_seen;
                             self.selection.start = self.bytes_seen;
                         } else {
-                            self.cursor.* = self.bytes_seen;
+                            self.selection.cursor = self.bytes_seen;
                             self.selection.end = self.bytes_seen;
                         }
                         self.cursor_updown_pt = null;
@@ -4848,11 +4838,11 @@ pub const TextLayoutWidget = struct {
                         const how_far = p.x - rs.x;
                         var pt_end: usize = undefined;
                         _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
-                        if (self.cursor.* == self.selection.start) {
-                            self.cursor.* = self.bytes_seen + pt_end;
+                        if (self.selection.cursor == self.selection.start) {
+                            self.selection.cursor = self.bytes_seen + pt_end;
                             self.selection.start = self.bytes_seen + pt_end;
                         } else {
-                            self.cursor.* = self.bytes_seen + pt_end;
+                            self.selection.cursor = self.bytes_seen + pt_end;
                             self.selection.end = self.bytes_seen + pt_end;
                         }
                         self.cursor_updown_pt = null;
@@ -4860,11 +4850,11 @@ pub const TextLayoutWidget = struct {
                         self.scroll_to_cursor = true;
                     } else {
                         // point is after this text, but we might not get anymore
-                        if (self.cursor.* == self.selection.start) {
-                            self.cursor.* = self.bytes_seen + end;
+                        if (self.selection.cursor == self.selection.start) {
+                            self.selection.cursor = self.bytes_seen + end;
                             self.selection.start = self.bytes_seen + end;
                         } else {
-                            self.cursor.* = self.bytes_seen + end;
+                            self.selection.cursor = self.bytes_seen + end;
                             self.selection.end = self.bytes_seen + end;
                         }
                         self.selection.order();
@@ -4887,9 +4877,9 @@ pub const TextLayoutWidget = struct {
                 .sel_color_bg = options.color(.accent),
             });
 
-            if (!self.cursor_drawn and self.cursor.* < self.bytes_seen + end) {
+            if (!self.cursor_drawn and self.selection.cursor < self.bytes_seen + end) {
                 self.cursor_drawn = true;
-                const size = try options.fontGet().textSize(txt[0 .. self.cursor.* - self.bytes_seen]);
+                const size = try options.fontGet().textSize(txt[0 .. self.selection.cursor - self.bytes_seen]);
                 const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h };
 
                 if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
@@ -4940,13 +4930,13 @@ pub const TextLayoutWidget = struct {
     pub fn addTextDone(self: *Self, opts: Options) !void {
         self.add_text_done = true;
 
+        self.selection.cursor = @min(self.selection.cursor, self.bytes_seen);
         self.selection.start = @min(self.selection.start, self.bytes_seen);
         self.selection.end = @min(self.selection.end, self.bytes_seen);
-        self.cursor.* = @min(self.cursor.*, self.bytes_seen);
 
         if (!self.cursor_drawn) {
             self.cursor_drawn = true;
-            self.cursor.* = self.bytes_seen;
+            self.selection.cursor = self.bytes_seen;
 
             const options = self.wd.options.override(opts);
             const size = try options.fontGet().textSize("");
@@ -5012,6 +5002,18 @@ pub const TextLayoutWidget = struct {
         self.wd.min_size.h += padded.h;
     }
 
+    pub fn selectionGet(self: *Self) ?*Selection {
+        if (self.sel_mouse_down_pt == null and
+            self.sel_mouse_drag_pt == null and
+            self.cursor_updown_pt == null and
+            self.cursor_updown == 0)
+        {
+            return self.selection;
+        } else {
+            return null;
+        }
+    }
+
     pub fn processEvent(self: *Self, e: *Event) void {
         if (e.evt == .mouse) {
             if (e.evt.mouse.kind == .focus) {
@@ -5054,12 +5056,12 @@ pub const TextLayoutWidget = struct {
                     e.handled = true;
                     if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null and self.cursor_updown == 0) {
                         // only change selection if mouse isn't trying to change it
-                        if (self.cursor.* == self.selection.start) {
+                        if (self.selection.cursor == self.selection.start) {
                             self.selection.start -|= 1;
                         } else {
                             self.selection.end -|= 1;
                         }
-                        self.cursor.* -|= 1;
+                        self.selection.cursor -|= 1;
                         self.scroll_to_cursor = true;
                     }
                 },
@@ -5067,12 +5069,12 @@ pub const TextLayoutWidget = struct {
                     e.handled = true;
                     if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null and self.cursor_updown == 0) {
                         // only change selection if mouse isn't trying to change it
-                        if (self.cursor.* == self.selection.end) {
+                        if (self.selection.cursor == self.selection.end) {
                             self.selection.end += 1;
                         } else {
                             self.selection.start += 1;
                         }
-                        self.cursor.* += 1;
+                        self.selection.cursor += 1;
                         self.scroll_to_cursor = true;
                     }
                 },
@@ -5096,7 +5098,6 @@ pub const TextLayoutWidget = struct {
             self.addTextDone(.{}) catch {};
         }
         dataSet(null, self.wd.id, "_selection", self.selection.*);
-        dataSet(null, self.wd.id, "_cursor", self.cursor.*);
         if (self.captured) {
             dataSet(null, self.wd.id, "_sel_mouse_down_bytes", self.sel_mouse_down_bytes);
         }
@@ -6964,10 +6965,10 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     }
 }
 
-pub fn textEntry(src: std.builtin.SourceLocation, id_extra: usize, text: []u8, opts: Options) !void {
+pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) !void {
     const cw = currentWindow();
     var ret = try cw.arena.create(TextEntryWidget);
-    ret.* = TextEntryWidget.init(src, id_extra, text, opts);
+    ret.* = TextEntryWidget.init(src, init_opts, opts);
     ret.allocator = cw.arena;
     try ret.install(.{});
     ret.deinit();
@@ -6984,23 +6985,27 @@ pub const TextEntryWidget = struct {
         .color_style = .content,
     };
 
+    pub const InitOptions = struct {
+        id_extra: usize = 0,
+        text: []u8,
+    };
+
     wd: WidgetData = undefined,
+    scroll: ScrollAreaWidget = undefined,
+    textLayout: TextLayoutWidget = undefined,
 
     allocator: ?std.mem.Allocator = null,
-    captured: bool = false,
     text: []u8 = undefined,
     len: usize = undefined,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, text: []u8, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         var self = Self{};
         const msize = opts.fontGet().textSize("M") catch unreachable;
         const options = defaults.override(.{ .min_size_content = .{ .w = msize.w * 10, .h = msize.h } }).override(opts);
 
-        self.wd = WidgetData.init(src, id_extra, options);
+        self.wd = WidgetData.init(src, init_opts.id_extra, options);
 
-        self.captured = captureMouseMaintain(self.wd.id);
-
-        self.text = text;
+        self.text = init_opts.text;
         self.len = std.mem.indexOfScalar(u8, self.text, 0) orelse self.text.len;
         return self;
     }
@@ -7012,35 +7017,46 @@ pub const TextEntryWidget = struct {
             try tabIndexSet(self.wd.id, self.wd.options.tab_index);
         }
 
+        _ = parentSet(self.widget());
+
+        try self.wd.borderAndBackground();
+
+        const oldclip = clipGet();
+
+        self.scroll = ScrollAreaWidget.init(@src(), 0, null, self.wd.options.strip().override(.{ .expand = .both }));
+        // scrollbars process mouse events here
+        try self.scroll.install(.{});
+
+        self.textLayout = TextLayoutWidget.init(@src(), .{}, self.wd.options.strip().override(.{ .expand = .both }));
+        try self.textLayout.install(.{ .process_events = false });
+
+        // textLayout clips to its content, but we need to get events out to our border
+        const textclip = clipGet();
+        clipSet(oldclip);
+
         if (opts.process_events) {
             var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, self.textLayout.data().id);
             while (iter.next()) |e| {
                 self.processEvent(e);
+                if (!e.handled) {
+                    self.textLayout.processEvent(e);
+                }
             }
         }
 
-        try self.wd.borderAndBackground();
+        // set clip back to what textLayout expects
+        clipSet(textclip);
+
+        try self.textLayout.addText(self.text[0..self.len], self.wd.options.strip());
+        try self.textLayout.addTextDone(self.wd.options.strip());
+        self.textLayout.deinit();
+        self.scroll.deinit();
 
         const focused = (self.wd.id == focusedWidgetId());
-
-        const rs = self.wd.contentRectScale();
-
-        const oldclip = clip(rs.r);
-        if (!clipGet().empty()) {
-            try renderText(.{
-                .font = self.wd.options.fontGet(),
-                .text = self.text[0..self.len],
-                .rs = rs,
-                .color = self.wd.options.color(.text),
-            });
-        }
-        clipSet(oldclip);
 
         if (focused) {
             try self.wd.focusBorder();
         }
-
-        _ = parentSet(self.widget());
     }
 
     pub fn widget(self: *Self) Widget {
@@ -7091,21 +7107,18 @@ pub const TextEntryWidget = struct {
             },
             .text => |te| {
                 e.handled = true;
-                var new = std.mem.sliceTo(te, 0);
-                new.len = math.min(new.len, self.text.len - self.len);
-                std.mem.copy(u8, self.text[self.len..], new);
-                self.len += new.len;
+                if (self.textLayout.selectionGet()) |sel| {
+                    _ = sel;
+                    var new = std.mem.sliceTo(te, 0);
+                    new.len = math.min(new.len, self.text.len - self.len);
+                    std.mem.copy(u8, self.text[self.len..], new);
+                    self.len += new.len;
+                }
             },
             .mouse => |me| {
                 if (me.kind == .focus) {
                     e.handled = true;
                     focusWidget(self.wd.id, e.num);
-                } else if (me.kind == .press and me.kind.press == .left) {
-                    e.handled = true;
-                    self.captured = captureMouse(self.wd.id);
-                } else if (me.kind == .release and me.kind.release == .left) {
-                    e.handled = true;
-                    self.captured = captureMouse(null);
                 }
             },
             else => {},

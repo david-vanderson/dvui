@@ -225,13 +225,13 @@ pub fn main() !void {
                 {
                     const Sel = struct {
                         var sel = gui.TextLayoutWidget.Selection{};
-                        var cursor: usize = 0;
                         var text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+                        var buf = std.mem.zeroes([256]u8);
                     };
                     {
                         var hbox = try gui.box(@src(), 0, .horizontal, .{ .expand = .horizontal });
                         defer hbox.deinit();
-                        try gui.label(@src(), 0, "{d} {d} : {d}", .{ Sel.sel.start, Sel.sel.end, Sel.cursor }, .{});
+                        try gui.label(@src(), 0, "{d} {d} : {d}", .{ Sel.sel.start, Sel.sel.end, Sel.sel.cursor }, .{});
                         if (try gui.button(@src(), 0, "Inc Start", .{})) {
                             Sel.sel.start += 1;
                         }
@@ -245,15 +245,14 @@ pub fn main() !void {
                             Sel.sel.end -= 1;
                         }
                         if (try gui.button(@src(), 0, "Inc Cur", .{})) {
-                            Sel.cursor += 1;
+                            Sel.sel.cursor += 1;
                         }
                         if (try gui.button(@src(), 0, "Dec Cur", .{})) {
-                            Sel.cursor -= 1;
+                            Sel.sel.cursor -= 1;
                         }
                     }
                     var scroll = try gui.scrollArea(@src(), 0, .{ .min_size_content = .{ .w = 150, .h = 100 } });
-                    defer scroll.deinit();
-                    var tl = try gui.textLayout(@src(), .{ .selection = &Sel.sel, .cursor = &Sel.cursor }, .{ .expand = .both });
+                    var tl = try gui.textLayout(@src(), .{ .selection = &Sel.sel }, .{ .expand = .both });
                     {
                         //if (try gui.button(@src(), 0, "Win Up .1", .{})) {
                         //    fwin.wd.rect.y -= 0.1;
@@ -272,6 +271,9 @@ pub fn main() !void {
                     //}
                     try tl.addTextDone(.{});
                     tl.deinit();
+                    scroll.deinit();
+
+                    try gui.textEntry(@src(), .{ .text = &Sel.buf }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
                 }
             }
 
