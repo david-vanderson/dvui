@@ -51,7 +51,7 @@ pub fn main() !void {
 
             const scale = try gui.scale(@src(), 0, scale_val, oo);
             defer {
-                var iter = gui.EventIterator.init(scale.wd.id, scale.wd.borderRectScale().r);
+                var iter = gui.EventIterator.init(scale.wd.id, scale.wd.borderRectScale().r, null);
                 while (iter.next()) |e| {
                     switch (e.evt) {
                         .mouse => |me| {
@@ -451,7 +451,7 @@ pub const StrokeTest = struct {
 
         _ = gui.captureMouseMaintain(self.wd.id);
 
-        var iter = gui.EventIterator.init(self.data().id, self.data().borderRectScale().r);
+        var iter = gui.EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
         while (iter.next()) |e| {
             self.processEvent(e);
         }

@@ -1831,11 +1831,12 @@ pub fn events() []Event {
 pub const EventIterator = struct {
     const Self = @This();
     id: u32,
+    id_capture: u32,
     i: u32,
     r: Rect,
 
-    pub fn init(id: u32, r: Rect) Self {
-        return Self{ .id = id, .i = 0, .r = r };
+    pub fn init(id: u32, r: Rect, id_capture: ?u32) Self {
+        return Self{ .id = id, .i = 0, .r = r, .id_capture = id_capture orelse id };
     }
 
     pub fn next(self: *Self) ?*Event {
@@ -1872,7 +1873,7 @@ pub const EventIterator = struct {
                 .text => {},
                 .mouse => |me| {
                     if (captureMouseId()) |id| {
-                        if (id != self.id) {
+                        if (id != self.id_capture) {
                             // mouse is captured by a different widget
                             continue;
                         }
@@ -3155,7 +3156,7 @@ pub const Window = struct {
 
         // events may have been tagged with a focus widget that never showed up, so
         // we wouldn't even get them bubbled
-        var iter = EventIterator.init(self.wd.id, self.rect_pixels);
+        var iter = EventIterator.init(self.wd.id, self.rect_pixels, null);
         while (iter.nextCleanup(true)) |e| {
             // doesn't matter if we mark events has handled or not because this is
             // the end of the line for all events
@@ -3428,7 +3429,7 @@ pub const PopupWidget = struct {
     pub fn deinit(self: *Self) void {
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r);
+        var iter = EventIterator.init(self.wd.id, rs.r, null);
         while (iter.nextCleanup(true)) |e| {
             if (e.evt == .mouse) {
                 // mark all events as handled so no mouse events are handled by
@@ -3667,7 +3668,7 @@ pub const FloatingWindowWidget = struct {
     pub fn processEventsBefore(self: *Self) void {
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r);
+        var iter = EventIterator.init(self.wd.id, rs.r, null);
         while (iter.next()) |e| {
             if (e.evt == .mouse) {
                 const me = e.evt.mouse;
@@ -3724,7 +3725,7 @@ pub const FloatingWindowWidget = struct {
     pub fn processEventsAfter(self: *Self) void {
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r);
+        var iter = EventIterator.init(self.wd.id, rs.r, null);
         // duplicate processEventsBefore (minus corner stuff) because you could
         // have a click down, motion, and up in same frame and you wouldn't know
         // you needed to do anything until you got capture here
@@ -3880,7 +3881,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     try gui.labelNoFmt(@src(), 0, str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading });
     try gui.labelNoFmt(@src(), 0, right_str, .{ .gravity_x = 1.0 });
 
-    var iter = EventIterator.init(over.wd.id, over.wd.contentRectScale().r);
+    var iter = EventIterator.init(over.wd.id, over.wd.contentRectScale().r, null);
     while (iter.next()) |e| {
         if (e.evt == .mouse and e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left) {
             raiseSubwindow(subwindowCurrentId());
@@ -4370,7 +4371,7 @@ pub const PanedWidget = struct {
         try self.wd.register("Paned", null);
 
         if (opts.process_events) {
-            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
+            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
             while (iter.next()) |e| {
                 self.processEvent(e);
             }
@@ -4674,7 +4675,7 @@ pub const TextLayoutWidget = struct {
         }
 
         if (opts.process_events) {
-            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
+            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
             while (iter.next()) |e| {
                 self.processEvent(e);
             }
@@ -5197,7 +5198,7 @@ pub const ContextWidget = struct {
 
     pub fn processMouseEventsAfter(self: *Self) void {
         const rs = self.wd.borderRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r);
+        var iter = EventIterator.init(self.wd.id, rs.r, null);
         while (iter.next()) |e| {
             switch (e.evt) {
                 .mouse => |me| {
@@ -5716,7 +5717,7 @@ pub const ScrollContainerWidget = struct {
         }
 
         if (opts.process_events) {
-            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
+            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
             while (iter.next()) |e| {
                 self.processEvent(e);
             }
@@ -5830,7 +5831,7 @@ pub const ScrollContainerWidget = struct {
 
     pub fn processEventsAfter(self: *Self) void {
         const rs = self.wd.borderRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r);
+        var iter = EventIterator.init(self.wd.id, rs.r, null);
         while (iter.next()) |e| {
             switch (e.evt) {
                 .mouse => |me| {
@@ -5934,7 +5935,7 @@ pub const ScrollBarWidget = struct {
 
     pub fn processEvents(self: *Self, grabrs: Rect) void {
         const rs = self.wd.borderRectScale();
-        var iter = EventIterator.init(self.data().id, rs.r);
+        var iter = EventIterator.init(self.data().id, rs.r, null);
         while (iter.next()) |e| {
             switch (e.evt) {
                 .mouse => |me| {
@@ -6342,7 +6343,7 @@ pub const MenuItemWidget = struct {
         }
 
         if (opts.process_events) {
-            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
+            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
             while (iter.next()) |e| {
                 self.processEvent(e);
             }
@@ -6671,7 +6672,7 @@ pub const ButtonWidget = struct {
         }
 
         if (opts.process_events) {
-            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
+            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
             while (iter.next()) |e| {
                 self.processEvent(e);
             }
@@ -6829,7 +6830,7 @@ pub fn slider(src: std.builtin.SourceLocation, id_extra: usize, dir: gui.Directi
     const trackrs = b.widget().screenRectScale(track);
 
     const rs = b.data().contentRectScale();
-    var iter = EventIterator.init(b.data().id, rs.r);
+    var iter = EventIterator.init(b.data().id, rs.r, null);
     while (iter.next()) |e| {
         switch (e.evt) {
             .mouse => |me| {
@@ -7012,7 +7013,7 @@ pub const TextEntryWidget = struct {
         }
 
         if (opts.process_events) {
-            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r);
+            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, self.textLayout.data().id);
             while (iter.next()) |e| {
                 self.processEvent(e);
             }
