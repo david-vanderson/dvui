@@ -4622,7 +4622,8 @@ pub const TextLayoutWidget = struct {
     sel_mouse_down_bytes: ?usize = null,
     sel_mouse_drag_pt: ?Point = null,
 
-    cursor_drawn: bool = false,
+    cursor_seen: bool = false,
+    cursor_rect: ?Rect = null,
     cursor_updown: i8 = 0, // positive is down
     cursor_updown_pt: ?Point = null,
     scroll_to_cursor: bool = false,
@@ -4794,6 +4795,7 @@ pub const TextLayoutWidget = struct {
                     self.selection.start = self.sel_mouse_down_bytes.?;
                     self.selection.end = self.sel_mouse_down_bytes.?;
                 }
+                self.scroll_to_cursor = true;
             }
 
             if (self.sel_mouse_drag_pt) |p| {
@@ -4819,6 +4821,7 @@ pub const TextLayoutWidget = struct {
                     self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
                     self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
                 }
+                self.scroll_to_cursor = true;
             }
 
             if (self.cursor_updown == 0) {
@@ -4880,8 +4883,8 @@ pub const TextLayoutWidget = struct {
                 .sel_color_bg = options.color(.accent),
             });
 
-            if (!self.cursor_drawn and self.selection.cursor < self.bytes_seen + end) {
-                self.cursor_drawn = true;
+            if (!self.cursor_seen and self.selection.cursor < self.bytes_seen + end) {
+                self.cursor_seen = true;
                 const size = try options.fontGet().textSize(txt[0 .. self.selection.cursor - self.bytes_seen]);
                 const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h };
 
@@ -4908,8 +4911,7 @@ pub const TextLayoutWidget = struct {
                 }
 
                 if (self.selection.start == self.selection.end) {
-                    try pathAddRect(self.screenRectScale(cr).r, Rect.all(0));
-                    try pathFillConvex(options.color(.accent));
+                    self.cursor_rect = cr;
                 }
             }
 
@@ -4937,8 +4939,8 @@ pub const TextLayoutWidget = struct {
         self.selection.start = @min(self.selection.start, self.bytes_seen);
         self.selection.end = @min(self.selection.end, self.bytes_seen);
 
-        if (!self.cursor_drawn) {
-            self.cursor_drawn = true;
+        if (!self.cursor_seen) {
+            self.cursor_seen = true;
             self.selection.cursor = self.bytes_seen;
 
             const options = self.wd.options.override(opts);
@@ -4968,8 +4970,7 @@ pub const TextLayoutWidget = struct {
             }
 
             if (self.selection.start == self.selection.end) {
-                try pathAddRect(self.screenRectScale(cr).r, Rect.all(0));
-                try pathFillConvex(options.color(.accent));
+                self.cursor_rect = cr;
             }
         }
     }
@@ -6996,6 +6997,7 @@ pub const TextEntryWidget = struct {
     wd: WidgetData = undefined,
     scroll: ScrollAreaWidget = undefined,
     textLayout: TextLayoutWidget = undefined,
+    padding: Rect = undefined,
 
     allocator: ?std.mem.Allocator = null,
     text: []u8 = undefined,
@@ -7004,7 +7006,11 @@ pub const TextEntryWidget = struct {
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         var self = Self{};
         const msize = opts.fontGet().textSize("M") catch unreachable;
-        const options = defaults.override(.{ .min_size_content = .{ .w = msize.w * 10, .h = msize.h } }).override(opts);
+        var options = defaults.override(.{ .min_size_content = .{ .w = msize.w * 10, .h = msize.h } }).override(opts);
+
+        // padding is interpreted as the padding for the TextLayoutWidget
+        self.padding = options.paddingGet();
+        options.padding = null;
 
         self.wd = WidgetData.init(src, init_opts.id_extra, options);
 
@@ -7030,7 +7036,7 @@ pub const TextEntryWidget = struct {
         // scrollbars process mouse events here
         try self.scroll.install(.{});
 
-        self.textLayout = TextLayoutWidget.init(@src(), .{}, self.wd.options.strip().override(.{ .expand = .both }));
+        self.textLayout = TextLayoutWidget.init(@src(), .{}, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding }));
         try self.textLayout.install(.{ .process_events = false });
 
         // textLayout clips to its content, but we need to get events out to our border
@@ -7047,15 +7053,28 @@ pub const TextEntryWidget = struct {
             }
         }
 
+        const focused = (self.wd.id == focusedWidgetId());
+
         // set clip back to what textLayout expects
         clipSet(textclip);
 
         try self.textLayout.addText(self.text[0..self.len], self.wd.options.strip());
         try self.textLayout.addTextDone(self.wd.options.strip());
-        self.textLayout.deinit();
-        self.scroll.deinit();
 
-        const focused = (self.wd.id == focusedWidgetId());
+        // get cursor_rect before textLayout.deinit
+        const cursor_rect = self.textLayout.cursor_rect;
+        self.textLayout.deinit();
+
+        if (focused) {
+            if (cursor_rect) |cr| {
+                // drawing the cursor after textLayout.deinit so our clipping
+                // region is back to all of the scroll area
+                try pathAddRect(self.textLayout.screenRectScale(cr.add(.{ .x = -1 })).r, Rect.all(0));
+                try pathFillConvex(self.wd.options.color(.accent));
+            }
+        }
+
+        self.scroll.deinit();
 
         if (focused) {
             try self.wd.focusBorder();

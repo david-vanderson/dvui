@@ -227,7 +227,7 @@ pub fn main() !void {
                     const Sel = struct {
                         var sel = gui.TextLayoutWidget.Selection{};
                         var text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-                        var buf = std.mem.zeroes([10]u8);
+                        var buf = std.mem.zeroes([256]u8);
                     };
                     {
                         var hbox = try gui.box(@src(), 0, .horizontal, .{ .expand = .horizontal });
@@ -274,7 +274,7 @@ pub fn main() !void {
                     tl.deinit();
                     scroll.deinit();
 
-                    try gui.textEntry(@src(), .{ .text = &Sel.buf }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
+                    try gui.textEntry(@src(), .{ .text = &Sel.buf }, .{ .min_size_content = .{ .w = 150, .h = 30 } });
                 }
             }
 
