@@ -4662,7 +4662,7 @@ pub const TextLayoutWidget = struct {
         }
 
         if (opts.process_events) {
-            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
+            var iter = self.eventIterator();
             while (iter.next()) |e| {
                 self.processEvent(e);
             }
@@ -4675,6 +4675,10 @@ pub const TextLayoutWidget = struct {
         }
 
         self.prevClip = clip(rs.r);
+    }
+
+    pub fn eventIterator(self: *Self) EventIterator {
+        return EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
     }
 
     pub fn format(self: *Self, comptime fmt: []const u8, args: anytype, opts: Options) !void {
@@ -8695,13 +8699,23 @@ pub const examples = struct {
         try gui.label(@src(), 0, "Body", .{}, .{});
 
         {
-            var tl = try gui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+            var tl = TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
+            try tl.install(.{ .process_events = false });
             defer tl.deinit();
 
             var cbox = try gui.box(@src(), 0, .vertical, .{});
-            _ = try gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) });
-            _ = try gui.buttonIcon(@src(), 0, 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) });
+            if (try gui.buttonIcon(@src(), 0, 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) })) {
+                try gui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
+            }
+            if (try gui.buttonIcon(@src(), 0, 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) })) {
+                try gui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
+            }
             cbox.deinit();
+
+            var iter = tl.eventIterator();
+            while (iter.next()) |e| {
+                tl.processEvent(e);
+            }
 
             const start = "Notice that the text in this box is wrapping around the buttons in the corners.";
             try tl.addText(start, .{ .font_style = .title_4 });
