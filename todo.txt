@@ -1,6 +1,7 @@
 
-TextEntry is losing focus when clicking on a scroll handle
-- also can't scroll with mouse wheel while dragging (because TextEntry has focus)
+TextEntry can't scroll with mouse wheel while dragging (because TextEntry has focus)
+
+put id_extra inside Options
 
 text editing
 - make TextEntryWidget wrap a scrollarea and TextLayout
