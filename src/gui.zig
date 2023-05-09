@@ -7083,8 +7083,24 @@ pub const TextEntryWidget = struct {
             .key => |ke| {
                 if (ke.code == .backspace and (ke.action == .down or ke.action == .repeat)) {
                     e.handled = true;
-                    self.len -|= 1;
-                    self.text[self.len] = 0;
+                    if (self.textLayout.selectionGet()) |sel| {
+                        if (sel.start != sel.end) {
+                            // just delete selection
+                            std.mem.copy(u8, self.text[sel.start..], self.text[sel.end..self.len]);
+                            self.len -= (sel.end - sel.start);
+                            self.text[self.len] = 0;
+                            sel.end = sel.start;
+                            sel.cursor = sel.start;
+                        } else if (sel.cursor > 0) {
+                            // delete character just before cursor
+                            std.mem.copy(u8, self.text[sel.cursor - 1 ..], self.text[sel.cursor..self.len]);
+                            self.len -= 1;
+                            self.text[self.len] = 0;
+                            sel.cursor -= 1;
+                            sel.start = sel.cursor;
+                            sel.end = sel.cursor;
+                        }
+                    }
                 } else if (e.evt.key.code == .tab and e.evt.key.action == .down) {
                     e.handled = true;
                     if (e.evt.key.mod.shift()) {
@@ -7107,11 +7123,32 @@ pub const TextEntryWidget = struct {
             .text => |te| {
                 e.handled = true;
                 if (self.textLayout.selectionGet()) |sel| {
-                    _ = sel;
                     var new = std.mem.sliceTo(te, 0);
+                    if (sel.start != sel.end) {
+                        // delete selection
+                        std.mem.copy(u8, self.text[sel.start..], self.text[sel.end..self.len]);
+                        self.len -= (sel.end - sel.start);
+                        sel.end = sel.start;
+                        sel.cursor = sel.start;
+                    }
                     new.len = math.min(new.len, self.text.len - self.len);
-                    std.mem.copy(u8, self.text[self.len..], new);
+
+                    // make room if we can
+                    if (sel.cursor + new.len < self.text.len) {
+                        std.mem.copyBackwards(u8, self.text[sel.cursor + new.len ..], self.text[sel.cursor..self.len]);
+                    }
+
+                    // update our len and maintain 0 termination if possible
                     self.len += new.len;
+                    if (self.len < self.text.len) {
+                        self.text[self.len] = 0;
+                    }
+
+                    // insert
+                    std.mem.copy(u8, self.text[sel.cursor..], new);
+                    sel.cursor += new.len;
+                    sel.end = sel.cursor;
+                    sel.start = sel.cursor;
                 }
             },
             .mouse => |me| {

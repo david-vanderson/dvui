@@ -182,6 +182,7 @@ pub fn main() !void {
                 }
 
                 {
+                    // FIXME
                     //const TextEntryText = struct {
                     //    //var text = array(u8, 100, "abcdefghijklmnopqrstuvwxyz");
                     //    var text1 = array(u8, 100, "abc");
@@ -226,7 +227,7 @@ pub fn main() !void {
                     const Sel = struct {
                         var sel = gui.TextLayoutWidget.Selection{};
                         var text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-                        var buf = std.mem.zeroes([256]u8);
+                        var buf = std.mem.zeroes([10]u8);
                     };
                     {
                         var hbox = try gui.box(@src(), 0, .horizontal, .{ .expand = .horizontal });
@@ -382,7 +383,7 @@ pub fn main() !void {
 
         win_backend.renderPresent();
 
-        const wait_event_micros = win.waitTime(end_micros, 2);
+        const wait_event_micros = win.waitTime(end_micros, null);
 
         win_backend.waitEventTimeout(wait_event_micros);
     }

@@ -1,10 +1,4 @@
 
-TextEntry:
-- first init scrollarea (processes events)
-- then init TextLayoutWidget (no events)
-- then process events, sending any unhandled ones to TextLayoutWidget
-- TextLayoutWidget needs a simple way to communicate that the cursor is changing (?cursor) so that we can stop processing key/text events
-
 TextLayoutWidget needs to not process mouse events if they are in the corner widget's rects
 
 text editing
