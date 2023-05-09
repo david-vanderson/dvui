@@ -473,11 +473,6 @@ pub fn toggleDebugWindow() void {
     cw.debug_window_show = !cw.debug_window_show;
 }
 
-pub const InstallOptions = struct {
-    process_events: bool = true,
-    show_focus: bool = true,
-};
-
 pub fn placeOnScreen(spawner: Rect, start: Rect) Rect {
     var r = start;
     const wr = windowRect();
@@ -3320,8 +3315,8 @@ pub const PopupWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
-        _ = opts; // popup only processes events after the fact in deinit
+    pub fn install(self: *Self, opts: struct {}) !void {
+        _ = opts;
         _ = parentSet(self.widget());
 
         self.prev_windowId = subwindowCurrentSet(self.wd.id);
@@ -3601,7 +3596,7 @@ pub const FloatingWindowWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
         self.process_events = opts.process_events;
 
         if (firstFrame(self.wd.id)) {
@@ -4156,7 +4151,7 @@ pub const AnimateWidget = struct {
         return Self{ .wd = WidgetData.init(src, id_extra, opts), .kind = kind, .duration = duration_micros };
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct {}) !void {
         _ = opts;
         _ = parentSet(self.widget());
         try self.wd.register("Animate", null);
@@ -4366,7 +4361,7 @@ pub const PanedWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
         try self.wd.register("Paned", null);
 
         if (opts.process_events) {
@@ -4636,7 +4631,7 @@ pub const TextLayoutWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
         _ = parentSet(self.widget());
         try self.wd.register("TextLayout", null);
 
@@ -5148,7 +5143,7 @@ pub const ContextWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
         self.process_events = opts.process_events;
         _ = parentSet(self.widget());
         try self.wd.register("Context", null);
@@ -5258,7 +5253,7 @@ pub const OverlayWidget = struct {
         return Self{ .wd = WidgetData.init(src, id_extra, opts) };
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct {}) !void {
         _ = opts;
         _ = parentSet(self.widget());
         try self.wd.register("Overlay", null);
@@ -5346,9 +5341,8 @@ pub const BoxWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct {}) !void {
         _ = opts;
-
         try self.wd.register("Box", null);
         try self.wd.borderAndBackground();
 
@@ -5550,7 +5544,7 @@ pub const ScrollAreaWidget = struct {
         }
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct { process_events: bool = true, focus_id: ?u32 = null }) !void {
         try self.hbox.install(.{});
 
         var si: *ScrollInfo = undefined;
@@ -5560,17 +5554,25 @@ pub const ScrollAreaWidget = struct {
             si = &self.scroll_info;
         }
 
-        var bar = ScrollBarWidget.init(@src(), 0, si, .{ .gravity_x = 1.0 });
+        var container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
+
+        // since we have a scrollbar to the right of us, we only need to copy
+        // corner_radius.h (lower-left)
+        // TODO: revisit this when adding horizontal scroll and also when
+        // making scrollbars disappear if not needed
+        container_opts.corner_radius.?.h = self.hbox.data().options.corner_radiusGet().h;
+
+        self.scroll = ScrollContainerWidget.init(@src(), 0, si, container_opts);
+
+        // run the scrollbars first because they might click-drag scroll and we
+        // can do that this frame
+        var bar = ScrollBarWidget.init(@src(), .{ .scroll_info = si, .focus_id = opts.focus_id orelse self.scroll.data().id }, .{ .gravity_x = 1.0 });
         try bar.install(.{});
         bar.deinit();
 
         const oldview = si.viewport;
 
-        var container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
-        container_opts.corner_radius.?.w = self.hbox.data().options.corner_radiusGet().w;
-        self.scroll = ScrollContainerWidget.init(@src(), 0, si, container_opts);
-
-        try self.scroll.install(opts);
+        try self.scroll.install(.{ .process_events = opts.process_events });
 
         const newview = si.viewport;
         if (oldview.x != newview.x or
@@ -5692,7 +5694,7 @@ pub const ScrollContainerWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
         self.process_events = opts.process_events;
         try self.wd.register("ScrollContainer", null);
 
@@ -5892,22 +5894,30 @@ pub const ScrollBarWidget = struct {
         .min_size_content = .{ .w = 10, .h = 10 },
     };
 
+    pub const InitOptions = struct {
+        id_extra: u32 = 0,
+        scroll_info: *ScrollInfo,
+        focus_id: ?u32 = null,
+    };
+
     wd: WidgetData = undefined,
     process_events: bool = true,
     grabRect: Rect = Rect{},
     si: *ScrollInfo = undefined,
+    focus_id: ?u32 = null,
     highlight: bool = false,
 
-    pub fn init(src: std.builtin.SourceLocation, id_extra: usize, scroll_info: *ScrollInfo, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         var self = Self{};
         const options = defaults.override(opts);
-        self.wd = WidgetData.init(src, id_extra, options);
+        self.wd = WidgetData.init(src, init_opts.id_extra, options);
 
-        self.si = scroll_info;
+        self.si = init_opts.scroll_info;
+        self.focus_id = init_opts.focus_id;
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
         self.process_events = opts.process_events;
         try self.wd.register("ScrollBar", null);
         try self.wd.borderAndBackground();
@@ -5946,9 +5956,11 @@ pub const ScrollBarWidget = struct {
                 .mouse => |me| {
                     switch (me.kind) {
                         .focus => {
-                            e.handled = true;
-                            // focus so that we can receive keyboard input
-                            focusWidget(self.wd.id, e.num);
+                            if (self.focus_id) |fid| {
+                                e.handled = true;
+                                std.debug.print("focusing {x}\n", .{fid});
+                                focusWidget(fid, e.num);
+                            }
                         },
                         .press => {
                             if (e.evt.mouse.kind.press == .left) {
@@ -6008,17 +6020,6 @@ pub const ScrollBarWidget = struct {
                             self.si.viewport.y -= ticks;
                             cueFrame();
                         },
-                    }
-                },
-                .key => |ke| {
-                    if (ke.code == .up and (ke.action == .down or ke.action == .repeat)) {
-                        e.handled = true;
-                        self.si.viewport.y -= 10;
-                        cueFrame();
-                    } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
-                        e.handled = true;
-                        self.si.viewport.y += 10;
-                        cueFrame();
                     }
                 },
                 else => {},
@@ -6120,7 +6121,7 @@ pub const ScaleWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct {}) !void {
         _ = opts;
         _ = parentSet(self.widget());
         try self.wd.register("Scale", null);
@@ -6206,7 +6207,7 @@ pub const MenuWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct {}) !void {
         _ = opts;
         _ = parentSet(self.widget());
         self.parentMenu = menuSet(self);
@@ -6340,7 +6341,7 @@ pub const MenuItemWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
         try self.wd.register("MenuItem", null);
 
         if (self.wd.visible()) {
@@ -6532,7 +6533,7 @@ pub const LabelWidget = struct {
         return self;
     }
 
-    pub fn show(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct {}) !void {
         _ = opts;
         try self.wd.register("Label", null);
         try self.wd.borderAndBackground();
@@ -6559,16 +6560,22 @@ pub const LabelWidget = struct {
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
     }
+
+    pub fn deinit(self: *Self) void {
+        _ = self;
+    }
 };
 
 pub fn label(src: std.builtin.SourceLocation, id_extra: usize, comptime fmt: []const u8, args: anytype, opts: Options) !void {
     var lw = try LabelWidget.init(src, id_extra, fmt, args, opts);
-    try lw.show(.{});
+    try lw.install(.{});
+    lw.deinit();
 }
 
 pub fn labelNoFmt(src: std.builtin.SourceLocation, id_extra: usize, str: []const u8, opts: Options) !void {
     var lw = try LabelWidget.initNoFmt(src, id_extra, str, opts);
-    try lw.show(.{});
+    try lw.install(.{});
+    lw.deinit();
 }
 
 pub const IconWidget = struct {
@@ -6600,7 +6607,7 @@ pub const IconWidget = struct {
         return self;
     }
 
-    pub fn show(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct {}) !void {
         _ = opts;
         try self.wd.register("Icon", null);
         //debug("{x} Icon \"{s:<10}\" {} {d}", .{ self.wd.id, self.name, self.wd.rect, self.wd.options.rotationGet() });
@@ -6614,11 +6621,16 @@ pub const IconWidget = struct {
         self.wd.minSizeSetAndCue();
         self.wd.minSizeReportToParent();
     }
+
+    pub fn deinit(self: *Self) void {
+        _ = self;
+    }
 };
 
 pub fn icon(src: std.builtin.SourceLocation, id_extra: usize, name: []const u8, tvg_bytes: []const u8, opts: Options) !void {
     var iw = try IconWidget.init(src, id_extra, name, tvg_bytes, opts);
-    try iw.show(.{});
+    try iw.install(.{});
+    iw.deinit();
 }
 
 pub fn debugFontAtlases(src: std.builtin.SourceLocation, id_extra: usize, opts: Options) !void {
@@ -6669,7 +6681,7 @@ pub const ButtonWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct { process_events: bool = true, show_focus: bool = true }) !void {
         try self.wd.register("Button", null);
 
         if (self.wd.visible()) {
@@ -7019,7 +7031,7 @@ pub const TextEntryWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: InstallOptions) !void {
+    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
         try self.wd.register("TextEntry", null);
 
         if (self.wd.visible()) {
@@ -7034,7 +7046,7 @@ pub const TextEntryWidget = struct {
 
         self.scroll = ScrollAreaWidget.init(@src(), 0, null, self.wd.options.strip().override(.{ .expand = .both }));
         // scrollbars process mouse events here
-        try self.scroll.install(.{});
+        try self.scroll.install(.{ .focus_id = self.wd.id });
 
         self.textLayout = TextLayoutWidget.init(@src(), .{}, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding }));
         try self.textLayout.install(.{ .process_events = false });
@@ -8911,7 +8923,8 @@ pub const examples = struct {
             const left = @intCast(i32, @rem(millis, 1000));
 
             var mslabel = try gui.LabelWidget.init(@src(), 0, "{d} ms into second", .{@intCast(u32, left)}, .{});
-            try mslabel.show(.{});
+            try mslabel.install(.{});
+            mslabel.deinit();
 
             if (gui.timerDone(mslabel.wd.id) or !gui.timerExists(mslabel.wd.id)) {
                 const wait = 1000 * (1000 - left);
