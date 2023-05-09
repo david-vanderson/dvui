@@ -1,5 +1,6 @@
 
-TextLayoutWidget needs to not process mouse events if they are in the corner widget's rects
+TextEntry is losing focus when clicking on a scroll handle
+- also can't scroll with mouse wheel while dragging (because TextEntry has focus)
 
 text editing
 - make TextEntryWidget wrap a scrollarea and TextLayout
