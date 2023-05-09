@@ -5,6 +5,10 @@ text editing
 - make TextEntryWidget wrap a scrollarea and TextLayout
   - TextEntryWidget gets focus (and tabindex), when it processes events, it sends unhandled events directly to TextLayout's processEvent function
 
+TextLayout support for large documents
+- need a function to say "we are skipping a bunch of bytes" (might be useful for code folding as well)
+- addTextDone needs to not always set cursor because there might be lots of text remaining that we aren't rendering
+
 maybe if a widget gets a mouse event outside its rect, clear the remaining key event's focus_widgetId?  Assume we lost focus?
 
 use zig package manager to get SDL (github.com/andrewrk/SDL)
