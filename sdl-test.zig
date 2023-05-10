@@ -42,14 +42,14 @@ pub fn main() !void {
 
         _ = try gui.examples.demo();
 
-        var window_box = try gui.box(@src(), 0, .vertical, .{ .expand = .both, .color_style = .window, .background = true });
+        var window_box = try gui.box(@src(), .vertical, .{ .expand = .both, .color_style = .window, .background = true });
 
         {
             const oo = gui.Options{ .expand = .both };
-            var overlay = try gui.overlay(@src(), 0, oo);
+            var overlay = try gui.overlay(@src(), oo);
             defer overlay.deinit();
 
-            const scale = try gui.scale(@src(), 0, scale_val, oo);
+            const scale = try gui.scale(@src(), scale_val, oo);
             defer {
                 var iter = gui.EventIterator.init(scale.wd.id, scale.wd.borderRectScale().r, null);
                 while (iter.next()) |e| {
@@ -72,23 +72,23 @@ pub fn main() !void {
                 scale.deinit();
             }
 
-            const context = try gui.context(@src(), 0, oo);
+            const context = try gui.context(@src(), oo);
             defer context.deinit();
 
             if (context.activePoint()) |cp| {
                 //std.debug.print("context.rect {}\n", .{context.rect});
-                var fw2 = try gui.popup(@src(), 0, gui.Rect.fromPoint(cp), .{});
+                var fw2 = try gui.popup(@src(), gui.Rect.fromPoint(cp), .{});
                 defer fw2.deinit();
 
-                _ = try gui.menuItemLabel(@src(), 0, "Cut", false, .{});
-                if ((gui.menuItemLabel(@src(), 0, "Close", false, .{}) catch unreachable) != null) {
+                _ = try gui.menuItemLabel(@src(), "Cut", false, .{});
+                if ((gui.menuItemLabel(@src(), "Close", false, .{}) catch unreachable) != null) {
                     gui.menuGet().?.close();
                 }
-                _ = try gui.menuItemLabel(@src(), 0, "Paste", false, .{});
+                _ = try gui.menuItemLabel(@src(), "Paste", false, .{});
             }
 
             {
-                var layout = try gui.box(@src(), 0, .vertical, .{});
+                var layout = try gui.box(@src(), .vertical, .{});
                 defer layout.deinit();
 
                 //{
@@ -98,7 +98,7 @@ pub fn main() !void {
                 //  var margin = gui.Margin(gui.Rect{.x = 20, .y = 20, .w = 20, .h = 20});
                 //  defer _ = gui.Margin(margin);
 
-                //  var box = gui.Box(@src(), 0, .horizontal);
+                //  var box = gui.Box(@src(), .horizontal);
                 //  defer box.deinit();
                 //
                 //  for (buttons) |*buttoncol, k| {
@@ -151,17 +151,17 @@ pub fn main() !void {
                 //}
 
                 {
-                    var scroll = try gui.scrollArea(@src(), 0, .{ .min_size_content = .{ .h = 100 } });
+                    var scroll = try gui.scrollArea(@src(), .{ .min_size_content = .{ .h = 100 } });
                     defer scroll.deinit();
 
-                    var vbox = try gui.box(@src(), 0, .vertical, .{ .expand = .both });
+                    var vbox = try gui.box(@src(), .vertical, .{ .expand = .both });
                     defer vbox.deinit();
 
                     var buf: [100]u8 = undefined;
                     var z: usize = 0;
                     while (z < maxz) : (z += 1) {
                         const buf_slice = std.fmt.bufPrint(&buf, "Button {d:0>2}", .{z}) catch unreachable;
-                        if (try gui.button(@src(), z, buf_slice, .{ .gravity_x = 0.5, .gravity_y = 1.0 })) {
+                        if (try gui.button(@src(), buf_slice, .{ .id_extra = z, .gravity_x = 0.5, .gravity_y = 1.0 })) {
                             if (z % 2 == 0) {
                                 maxz += 1;
                             } else {
@@ -172,7 +172,7 @@ pub fn main() !void {
                 }
 
                 {
-                    if (try gui.button(@src(), 0, "Stroke Test", .{})) {
+                    if (try gui.button(@src(), "Stroke Test", .{})) {
                         StrokeTest.show_dialog = !StrokeTest.show_dialog;
                     }
 
@@ -195,22 +195,22 @@ pub fn main() !void {
                     //};
 
                     //const msize = gui.TextEntryWidget.defaults.fontGet().textSize("M") catch unreachable;
-                    //try gui.textEntry(@src(), 0, &TextEntryText.text1, .{ .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
-                    //try gui.textEntry(@src(), 0, &TextEntryText.text2, .{ .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
+                    //try gui.textEntry(@src(), &TextEntryText.text1, .{ .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
+                    //try gui.textEntry(@src(), &TextEntryText.text2, .{ .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
                 }
 
                 {
-                    var box = try gui.box(@src(), 0, .horizontal, .{});
+                    var box = try gui.box(@src(), .horizontal, .{});
 
-                    _ = try gui.button(@src(), 0, "Accent", .{ .color_style = .accent });
-                    _ = try gui.button(@src(), 0, "Success", .{ .color_style = .success });
-                    _ = try gui.button(@src(), 0, "Error", .{ .color_style = .err });
+                    _ = try gui.button(@src(), "Accent", .{ .color_style = .accent });
+                    _ = try gui.button(@src(), "Success", .{ .color_style = .success });
+                    _ = try gui.button(@src(), "Error", .{ .color_style = .err });
 
                     box.deinit();
 
-                    try gui.label(@src(), 0, "Theme: {s}", .{gui.themeGet().name}, .{});
+                    try gui.label(@src(), "Theme: {s}", .{gui.themeGet().name}, .{});
 
-                    if (try gui.button(@src(), 0, "Toggle Theme", .{})) {
+                    if (try gui.button(@src(), "Toggle Theme", .{})) {
                         if (gui.themeGet() == &gui.Adwaita.light) {
                             gui.themeSet(&gui.Adwaita.dark);
                         } else {
@@ -218,7 +218,7 @@ pub fn main() !void {
                         }
                     }
 
-                    if (try gui.button(@src(), 0, if (gui.examples.show_demo_window) "Hide Demo Window" else "Show Demo Window", .{})) {
+                    if (try gui.button(@src(), if (gui.examples.show_demo_window) "Hide Demo Window" else "Show Demo Window", .{})) {
                         gui.examples.show_demo_window = !gui.examples.show_demo_window;
                     }
                 }
@@ -230,35 +230,35 @@ pub fn main() !void {
                         var buf = std.mem.zeroes([256]u8);
                     };
                     {
-                        var hbox = try gui.box(@src(), 0, .horizontal, .{ .expand = .horizontal });
+                        var hbox = try gui.box(@src(), .horizontal, .{ .expand = .horizontal });
                         defer hbox.deinit();
-                        try gui.label(@src(), 0, "{d} {d} : {d}", .{ Sel.sel.start, Sel.sel.end, Sel.sel.cursor }, .{});
-                        if (try gui.button(@src(), 0, "Inc Start", .{})) {
+                        try gui.label(@src(), "{d} {d} : {d}", .{ Sel.sel.start, Sel.sel.end, Sel.sel.cursor }, .{});
+                        if (try gui.button(@src(), "Inc Start", .{})) {
                             Sel.sel.start += 1;
                         }
-                        if (try gui.button(@src(), 0, "Dec Start", .{})) {
+                        if (try gui.button(@src(), "Dec Start", .{})) {
                             Sel.sel.start -= 1;
                         }
-                        if (try gui.button(@src(), 0, "Inc End", .{})) {
+                        if (try gui.button(@src(), "Inc End", .{})) {
                             Sel.sel.end += 1;
                         }
-                        if (try gui.button(@src(), 0, "Dec End", .{})) {
+                        if (try gui.button(@src(), "Dec End", .{})) {
                             Sel.sel.end -= 1;
                         }
-                        if (try gui.button(@src(), 0, "Inc Cur", .{})) {
+                        if (try gui.button(@src(), "Inc Cur", .{})) {
                             Sel.sel.cursor += 1;
                         }
-                        if (try gui.button(@src(), 0, "Dec Cur", .{})) {
+                        if (try gui.button(@src(), "Dec Cur", .{})) {
                             Sel.sel.cursor -= 1;
                         }
                     }
-                    var scroll = try gui.scrollArea(@src(), 0, .{ .min_size_content = .{ .w = 150, .h = 100 } });
+                    var scroll = try gui.scrollArea(@src(), .{ .min_size_content = .{ .w = 150, .h = 100 } });
                     var tl = try gui.textLayout(@src(), .{ .selection = &Sel.sel }, .{ .expand = .both });
                     {
-                        //if (try gui.button(@src(), 0, "Win Up .1", .{})) {
+                        //if (try gui.button(@src(), "Win Up .1", .{})) {
                         //    fwin.wd.rect.y -= 0.1;
                         //}
-                        //if (try gui.button(@src(), 0, "Win Down .1", .{ .gravity_x = 1.0 })) {
+                        //if (try gui.button(@src(), "Win Down .1", .{ .gravity_x = 1.0 })) {
                         //    fwin.wd.rect.y += 0.1;
                         //}
                     }
@@ -281,7 +281,7 @@ pub fn main() !void {
             const fps = gui.FPS();
             //std.debug.print("fps {d}\n", .{@round(fps)});
             //gui.render_text = true;
-            try gui.label(@src(), 0, "fps {d:4.2}", .{fps}, .{ .gravity_x = 1.0 });
+            try gui.label(@src(), "fps {d:4.2}", .{fps}, .{ .gravity_x = 1.0 });
             //gui.render_text = false;
         }
 
@@ -293,7 +293,7 @@ pub fn main() !void {
 
             var start_closing: bool = false;
 
-            if (try gui.button(@src(), 0, "Floating Window", .{})) {
+            if (try gui.button(@src(), "Floating Window", .{})) {
                 if (FloatingWindowTest.show) {
                     start_closing = true;
                 } else {
@@ -302,16 +302,16 @@ pub fn main() !void {
             }
 
             if (FloatingWindowTest.show) {
-                var fwin = animatingWindow(@src(), 0, false, &FloatingWindowTest.rect, &FloatingWindowTest.show, start_closing, .{});
-                //var fwin = gui.FloatingWindowWidget.init(@src(), 0, false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
+                var fwin = animatingWindow(@src(), false, &FloatingWindowTest.rect, &FloatingWindowTest.show, start_closing, .{});
+                //var fwin = gui.FloatingWindowWidget.init(@src(), false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
 
                 try fwin.install(.{});
                 defer fwin.deinit();
-                try gui.labelNoFmt(@src(), 0, "Floating Window", .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+                try gui.labelNoFmt(@src(), "Floating Window", .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-                try gui.label(@src(), 0, "Pretty Cool", .{}, .{ .font = .{ .name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 20 } });
+                try gui.label(@src(), "Pretty Cool", .{}, .{ .font = .{ .name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 20 } });
 
-                if (try gui.button(@src(), 0, "button", .{})) {
+                if (try gui.button(@src(), "button", .{})) {
                     floats[0] = true;
                 }
 
@@ -324,21 +324,21 @@ pub fn main() !void {
                         }
                         var buf = std.mem.zeroes([100]u8);
                         var buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{ fi, name }) catch unreachable;
-                        var fw2 = try gui.floatingWindow(@src(), .{ .id_extra = fi, .modal = modal, .open_flag = f }, .{ .color_style = .window, .min_size_content = .{ .w = 150, .h = 100 } });
+                        var fw2 = try gui.floatingWindow(@src(), .{ .modal = modal, .open_flag = f }, .{ .id_extra = fi, .color_style = .window, .min_size_content = .{ .w = 150, .h = 100 } });
                         defer fw2.deinit();
-                        try gui.labelNoFmt(@src(), 0, buf_slice, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+                        try gui.labelNoFmt(@src(), buf_slice, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-                        try gui.label(@src(), 0, "Asking a Question", .{}, .{});
+                        try gui.label(@src(), "Asking a Question", .{}, .{});
 
                         const oo = gui.Options{ .margin = gui.Rect.all(4), .expand = .horizontal };
-                        var box = try gui.box(@src(), 0, .horizontal, oo);
+                        var box = try gui.box(@src(), .horizontal, oo);
 
-                        if (try gui.button(@src(), 0, "Yes", oo)) {
+                        if (try gui.button(@src(), "Yes", oo)) {
                             std.debug.print("Yes {d}\n", .{fi});
                             floats[fi + 1] = true;
                         }
 
-                        if (try gui.button(@src(), 0, "No", oo)) {
+                        if (try gui.button(@src(), "No", oo)) {
                             std.debug.print("No {d}\n", .{fi});
                             fw2.close();
                         }
@@ -347,17 +347,19 @@ pub fn main() !void {
                     }
                 }
 
-                var scroll = try gui.scrollArea(@src(), 0, .{ .expand = .both });
+                var scroll = try gui.scrollArea(@src(), .{ .expand = .both });
                 defer scroll.deinit();
-                var tl = try gui.textLayout(@src(), .{}, .{ .expand = .both });
+                var tl = gui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .both });
+                try tl.install(.{ .process_events = false });
                 {
-                    if (try gui.button(@src(), 0, "Win Up .1", .{})) {
+                    if (try gui.button(@src(), "Win Up .1", .{})) {
                         fwin.wd.rect.y -= 0.1;
                     }
-                    if (try gui.button(@src(), 0, "Win Down .1", .{ .gravity_x = 1.0 })) {
+                    if (try gui.button(@src(), "Win Down .1", .{ .gravity_x = 1.0 })) {
                         fwin.wd.rect.y += 0.1;
                     }
                 }
+                tl.processEvents();
                 const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
                 //const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore";
                 try tl.addText(lorem, .{});
@@ -375,7 +377,7 @@ pub fn main() !void {
         //var mx: c_int = 0;
         //var my: c_int = 0;
         //_ = SDLBackend.c.SDL_GetMouseState(&mx, &my);
-        //try gui.icon(@src(), 0, "mouse", gui.icons.papirus.actions.application_menu_symbolic, .{ .rect = gui.Rect{ .x = @intToFloat(f32, mx), .y = @intToFloat(f32, my), .w = 10, .h = 10 } });
+        //try gui.icon(@src(), "mouse", gui.icons.papirus.actions.application_menu_symbolic, .{ .rect = gui.Rect{ .x = @intToFloat(f32, mx), .y = @intToFloat(f32, my), .w = 10, .h = 10 } });
 
         const end_micros = try win.end();
 
@@ -389,8 +391,8 @@ pub fn main() !void {
     }
 }
 
-fn animatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool, rect: *gui.Rect, openflag: *bool, start_closing: bool, opts: gui.Options) gui.FloatingWindowWidget {
-    var fwin = gui.FloatingWindowWidget.init(src, .{ .id_extra = id_extra, .modal = modal, .rect = rect, .open_flag = openflag }, opts);
+fn animatingWindow(src: std.builtin.SourceLocation, modal: bool, rect: *gui.Rect, openflag: *bool, start_closing: bool, opts: gui.Options) gui.FloatingWindowWidget {
+    var fwin = gui.FloatingWindowWidget.init(src, .{ .modal = modal, .rect = rect, .open_flag = openflag }, opts);
 
     if (gui.firstFrame(fwin.data().id)) {
         gui.animation(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
@@ -413,7 +415,7 @@ fn animatingWindow(src: std.builtin.SourceLocation, id_extra: usize, modal: bool
             r.h = dh;
 
             // pass null so our animating rect doesn't get saved back
-            fwin = gui.FloatingWindowWidget.init(src, .{ .id_extra = id_extra, .modal = modal, .open_flag = openflag }, opts.override(.{ .rect = r }));
+            fwin = gui.FloatingWindowWidget.init(src, .{ .modal = modal, .open_flag = openflag }, opts.override(.{ .rect = r }));
 
             if (a.done() and r.empty()) {
                 // done with closing animation
@@ -430,11 +432,11 @@ fn show_stroke_test_window() !void {
     defer win.deinit();
     try gui.windowHeader("Stroke Test", "", &StrokeTest.show_dialog);
 
-    //var scale = gui.scale(@src(), 0, 1, .{.expand = .both});
+    //var scale = gui.scale(@src(), 1, .{.expand = .both});
     //defer scale.deinit();
 
     var st = StrokeTest{};
-    try st.install(@src(), 0, .{ .min_size_content = .{ .w = 400, .h = 400 }, .expand = .both });
+    try st.install(@src(), .{ .min_size_content = .{ .w = 400, .h = 400 }, .expand = .both });
 }
 
 pub const StrokeTest = struct {
@@ -448,8 +450,8 @@ pub const StrokeTest = struct {
 
     wd: gui.WidgetData = undefined,
 
-    pub fn install(self: *Self, src: std.builtin.SourceLocation, id_extra: usize, options: gui.Options) !void {
-        self.wd = gui.WidgetData.init(src, id_extra, options);
+    pub fn install(self: *Self, src: std.builtin.SourceLocation, options: gui.Options) !void {
+        self.wd = gui.WidgetData.init(src, options);
         gui.debug("{x} StrokeTest {}", .{ self.wd.id, self.wd.rect });
 
         _ = gui.captureMouseMaintain(self.wd.id);
