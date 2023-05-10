@@ -1,6 +1,4 @@
 
-convert toastInfo to just toast and use options like dialog
-
 add TextEntry to demo basic widgets
 
 add horizontal scrolling
