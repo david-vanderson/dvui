@@ -1474,7 +1474,7 @@ pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: ?u32) !
 
     for (cw.subwindows.items) |*sw| {
         if (id == sw.id) {
-            // this window was here previously, just update data
+            // this window was here previously, just update data, so it stays in the same place in the stack
             sw.used = true;
             sw.rect = rect;
             sw.modal = modal;
@@ -3520,20 +3520,17 @@ pub const FloatingWindowWidget = struct {
     };
 
     wd: WidgetData = undefined,
+    init_options: InitOptions = undefined,
     options: Options = undefined,
     process_events: bool = true,
-    modal: bool = false,
-    stay_above_parent: bool = false,
     captured: bool = false,
     prev_windowId: u32 = 0,
-    io_rect: ?*Rect = null,
     layout: BoxWidget = undefined,
-    openflag: ?*bool = null,
     prevClip: Rect = Rect{},
     auto_pos: bool = false,
     auto_size: bool = false,
 
-    pub fn init(src: std.builtin.SourceLocation, floating_opts: InitOptions, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         var self = Self{};
 
         // options is really for our embedded BoxWidget, so save them for the
@@ -3547,13 +3544,11 @@ pub const FloatingWindowWidget = struct {
         // which is important because we are outside normal layout
         self.wd = WidgetData.init(src, .{ .id_extra = opts.id_extra, .rect = .{} });
 
-        self.modal = floating_opts.modal;
-        self.openflag = floating_opts.open_flag;
+        self.init_options = init_opts;
 
         var autopossize = true;
-        if (floating_opts.rect) |ior| {
+        if (self.init_options.rect) |ior| {
             // user is storing the rect for us across open/close
-            self.io_rect = floating_opts.rect;
             self.wd.rect = ior.*;
         } else if (opts.rect) |r| {
             // we were given a rect, just use that
@@ -3613,7 +3608,7 @@ pub const FloatingWindowWidget = struct {
         if (firstFrame(self.wd.id)) {
             // write back before we hide ourselves for the first frame
             dataSet(null, self.wd.id, "_rect", self.wd.rect);
-            if (self.io_rect) |ior| {
+            if (self.init_options.rect) |ior| {
                 // send rect back to user
                 ior.* = self.wd.rect;
             }
@@ -3650,10 +3645,10 @@ pub const FloatingWindowWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        try subwindowAdd(self.wd.id, rs.r, self.modal, if (self.stay_above_parent) self.prev_windowId else null);
+        try subwindowAdd(self.wd.id, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent) self.prev_windowId else null);
         try self.wd.register("FloatingWindow", rs);
 
-        if (self.modal) {
+        if (self.init_options.modal) {
             // paint over everything below
             try pathAddRect(windowRectPixels(), Rect.all(0));
             var col = self.options.color(.text);
@@ -3794,7 +3789,7 @@ pub const FloatingWindowWidget = struct {
 
     pub fn close(self: *Self) void {
         //subwindowClosing(self.wd.id);
-        if (self.openflag) |of| {
+        if (self.init_options.open_flag) |of| {
             of.* = false;
         }
         cueFrame();
@@ -3856,7 +3851,7 @@ pub const FloatingWindowWidget = struct {
         if (!firstFrame(self.wd.id)) {
             // if firstFrame, we already did this in install
             dataSet(null, self.wd.id, "_rect", self.wd.rect);
-            if (self.io_rect) |ior| {
+            if (self.init_options.rect) |ior| {
                 // send rect back to user
                 ior.* = self.wd.rect;
             }
