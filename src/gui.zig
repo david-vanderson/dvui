@@ -1866,8 +1866,9 @@ pub const EventIterator = struct {
                 .key => {},
                 .text => {},
                 .mouse => |me| {
-                    if (captureMouseId()) |id| {
-                        if (id != self.id_capture) {
+                    const capture_id = captureMouseId();
+                    if (capture_id != null and me.kind != .wheel_y) {
+                        if (capture_id.? != self.id_capture) {
                             // mouse is captured by a different widget
                             continue;
                         }
