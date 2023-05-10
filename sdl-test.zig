@@ -456,7 +456,7 @@ pub const StrokeTest = struct {
 
         var iter = gui.EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
         while (iter.next()) |e| {
-            self.processEvent(e);
+            self.processEvent(e, false);
         }
 
         try self.wd.borderAndBackground();
@@ -509,7 +509,8 @@ pub const StrokeTest = struct {
         self.wd.minSizeMax(self.wd.padSize(s));
     }
 
-    pub fn processEvent(self: *Self, e: *gui.Event) void {
+    pub fn processEvent(self: *Self, e: *gui.Event, bubbling: bool) void {
+        _ = bubbling;
         switch (e.evt) {
             .mouse => |me| {
                 const rs = self.wd.contentRectScale();
@@ -572,7 +573,7 @@ pub const StrokeTest = struct {
         }
 
         if (e.bubbleable()) {
-            self.wd.parent.processEvent(e);
+            self.wd.parent.processEvent(e, true);
         }
     }
 };
