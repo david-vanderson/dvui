@@ -32,7 +32,7 @@ Examples:
 
 ### Immediate Mode
 ```zig
-if (try gui.button(@src(), 0, "Ok", .{})) {
+if (try gui.button(@src(), "Ok", .{})) {
   dialog.close();
 }
 ```
@@ -44,7 +44,7 @@ For an intro to immediate mode guis, see: https://github.com/ocornut/imgui/wiki#
 Each widget gets a `u32` id by combining:
 - parent's id
 - @src() passed to widget
-- extra `usize` passed to widget for loops
+- extra `usize` passed to widget (use in loops, passed through Options)
 
 The id a widget gets should be the same each frame, even if other widgets are being added or removed.  Mixing in the parent's id also means you can package up a collection of widgets in a function and call that function in many different parents making it easy to replicate parts of the gui.
 
@@ -108,7 +108,7 @@ If you want to only render frames when needed, add `window.beginWait()` at the s
 The easiest way to use widgets is through the functions that create and install them:
 ```zig
 {
-    var box = try gui.box(@src(), 0, .vertical, .{.expand = .both});
+    var box = try gui.box(@src(), .vertical, .{.expand = .both});
     defer box.deinit();
 }
 ```
@@ -117,9 +117,9 @@ These functions allocate memory for the widget onto the arena allocator passed t
 Instead you can allocate the widget on the stack:
 ```zig
 {
-    var box = BoxWidget.init(@src(), 0, .vertical, false, .{.expand = .both});
+    var box = BoxWidget.init(@src(), .vertical, false, .{.expand = .both});
     // box now has an id, can look up animations/timers
-    try box.install(.{});  // or try box.install(.{ .process_events = false});
+    try box.install(.{});
     defer box.deinit();
 }
 ```
@@ -142,7 +142,7 @@ Each widget has the following options that can be changed through the Options st
 - font_style (use theme's fonts)
 - font (override font_style)
 ```zig
-if (try gui.button(@src(), 0, "Wild", .{
+if (try gui.button(@src(), "Wild", .{
     .margin = gui.Rect.all(2),
     .padding = gui.Rect.all(8),
     .color_text = gui.Color{.r = 0, .g = 255, .b = 0, .a = 150},
@@ -157,9 +157,9 @@ Each widget has its own default options.  These can be changed directly:
 gui.ButtonWidget.defaults.background = false;
 ```
 
-Colors come in groups (accent, text, fill, etc.).  Usually you want to use colors from the theme:
+Colors come in styles (content, accent, control, window, success, err).  Usually you want to use colors from the theme:
 ```zig
-if (try gui.menuItemLabel(@src(), 0, "Cut", false, .{.color_style = .success, .background = true}) != null) {
+if (try gui.menuItemLabel(@src(), "Cut", false, .{.color_style = .success, .background = true}) != null) {
     // selected
 }
 ```

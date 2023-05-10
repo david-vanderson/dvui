@@ -1,7 +1,17 @@
 
-put id_extra inside Options
+Toast Main Window
+- the toast is showing up above floating windows
+  - it should appear just above the main window (below floating)
 
-make widget functions optional with defaults
+convert toastInfo to just toast and use options like dialog
+
+add TextEntry to demo basic widgets
+
+add horizontal scrolling
+
+unify Widget and WidgetData somehow?
+
+make widget functions optional with defaults?
 
 text editing
 - make TextEntryWidget wrap a scrollarea and TextLayout
