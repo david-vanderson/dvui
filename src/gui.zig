@@ -3945,7 +3945,7 @@ pub fn dialogRemove(id: u32) void {
     cw.dialogRemove(id);
 }
 
-pub const dialogOptions = struct {
+pub const DialogOptions = struct {
     id_extra: usize = 0,
     window: ?*Window = null,
     modal: bool = true,
@@ -3955,7 +3955,7 @@ pub const dialogOptions = struct {
     callafterFn: ?DialogCallAfterFn = null,
 };
 
-pub fn dialog(src: std.builtin.SourceLocation, opts: dialogOptions) !void {
+pub fn dialog(src: std.builtin.SourceLocation, opts: DialogOptions) !void {
     const id_mutex = try dialogAdd(opts.window, src, opts.id_extra, opts.displayFn);
     const id = id_mutex.id;
     dataSet(opts.window, id, "_modal", opts.modal);
@@ -4106,14 +4106,23 @@ pub const ToastIterator = struct {
     }
 };
 
-pub fn toastInfo(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, timeout: ?i32, msg: []const u8) !void {
-    const id_mutex = try gui.toastAdd(win, src, id_extra, subwindow_id, toastInfoDisplay, timeout);
+pub const ToastOptions = struct {
+    id_extra: usize = 0,
+    window: ?*Window = null,
+    subwindow_id: ?u32 = null,
+    timeout: ?i32 = 5_000_000,
+    message: []const u8,
+    displayFn: DialogDisplayFn = toastDisplay,
+};
+
+pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) !void {
+    const id_mutex = try gui.toastAdd(opts.window, src, opts.id_extra, opts.subwindow_id, opts.displayFn, opts.timeout);
     const id = id_mutex.id;
-    gui.dataSet(win, id, "_message", msg);
+    gui.dataSet(opts.window, id, "_message", opts.message);
     id_mutex.mutex.unlock();
 }
 
-pub fn toastInfoDisplay(id: u32) !void {
+pub fn toastDisplay(id: u32) !void {
     const message = gui.dataGet(null, id, "_message", []const u8) orelse {
         std.debug.print("Error: lost message for toast {x}\n", .{id});
         return;
@@ -8881,19 +8890,19 @@ pub const examples = struct {
             defer hbox.deinit();
 
             if (try gui.button(@src(), "Toast 1", .{})) {
-                try gui.toastInfo(null, @src(), 0, demo_win_id, 4_000_000, "Toast 1 to demo window");
+                try gui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 1 to demo window" });
             }
 
             if (try gui.button(@src(), "Toast 2", .{})) {
-                try gui.toastInfo(null, @src(), 0, demo_win_id, 4_000_000, "Toast 2 to demo window");
+                try gui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 2 to demo window" });
             }
 
             if (try gui.button(@src(), "Toast 3", .{})) {
-                try gui.toastInfo(null, @src(), 0, demo_win_id, 4_000_000, "Toast 3 to demo window");
+                try gui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 3 to demo window" });
             }
 
             if (try gui.button(@src(), "Toast Main Window", .{})) {
-                try gui.toastInfo(null, @src(), 0, null, 4_000_000, "Toast to main window");
+                try gui.toast(@src(), .{ .message = "Toast to main window" });
             }
         }
     }
