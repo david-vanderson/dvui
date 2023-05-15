@@ -4901,16 +4901,14 @@ pub const TextLayoutWidget = struct {
                     cueFrame();
 
                     var scrollto = Event{ .evt = .{ .scroll_to = .{
-                        .rect = self.screenRectScale(cr_new).r,
-                        .screen_rect = self.wd.rectScale().r,
+                        .screen_rect = self.screenRectScale(cr_new).r,
                     } } };
                     self.processEvent(&scrollto, true);
                 }
 
                 if (self.scroll_to_cursor) {
                     var scrollto = Event{ .evt = .{ .scroll_to = .{
-                        .rect = self.screenRectScale(cr).r,
-                        .screen_rect = self.wd.rectScale().r,
+                        .screen_rect = self.screenRectScale(cr).r,
                     } } };
                     self.processEvent(&scrollto, true);
                 }
@@ -4960,16 +4958,14 @@ pub const TextLayoutWidget = struct {
                 cueFrame();
 
                 var scrollto = Event{ .evt = .{ .scroll_to = .{
-                    .rect = self.screenRectScale(cr_new).r,
-                    .screen_rect = self.wd.rectScale().r,
+                    .screen_rect = self.screenRectScale(cr_new).r,
                 } } };
                 self.processEvent(&scrollto, true);
             }
 
             if (self.scroll_to_cursor) {
                 var scrollto = Event{ .evt = .{ .scroll_to = .{
-                    .rect = self.screenRectScale(cr).r,
-                    .screen_rect = self.wd.rectScale().r,
+                    .screen_rect = self.screenRectScale(cr).r,
                 } } };
                 self.processEvent(&scrollto, true);
             }
@@ -5534,7 +5530,6 @@ pub const ScrollAreaWidget = struct {
         // of a window)
         .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
         .color_style = .content,
-        .min_size_content = .{ .w = 25, .h = 25 },
     };
 
     hbox: BoxWidget = undefined,
@@ -5679,7 +5674,7 @@ pub const ScrollContainerWidget = struct {
         // of a window)
         .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
         .color_style = .content,
-        .min_size_content = .{ .w = 25, .h = 25 },
+        .min_size_content = .{ .w = 5, .h = 5 },
     };
 
     wd: WidgetData = undefined,
@@ -5839,15 +5834,15 @@ pub const ScrollContainerWidget = struct {
                 e.handled = true;
                 const rs = self.wd.contentRectScale();
 
-                const ypx = @max(0, @min(rs.r.y - st.rect.y, rs.r.y - st.screen_rect.y));
-                if (ypx > 0 and self.si.viewport.y > 0) {
-                    self.si.viewport.y = @max(0, @min(self.si.scroll_max(), self.si.viewport.y - (ypx / rs.s)));
+                const ypx = @max(0, rs.r.y - st.screen_rect.y);
+                if (ypx > 0) {
+                    self.si.viewport.y = @max(0, self.si.viewport.y - (ypx / rs.s));
                     cueFrame();
                 }
 
-                const ypx2 = @max(0, @min((st.rect.y + st.rect.h) - (rs.r.y + rs.r.h), (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h)));
-                if (ypx2 > 0 and self.si.viewport.y < self.si.scroll_max()) {
-                    self.si.viewport.y = @max(0, @min(self.si.scroll_max(), self.si.viewport.y + (ypx2 / rs.s)));
+                const ypx2 = @max(0, (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h));
+                if (ypx2 > 0) {
+                    self.si.viewport.y = @max(0, self.si.viewport.y + (ypx2 / rs.s));
                     cueFrame();
                 }
             },
@@ -5914,7 +5909,7 @@ pub const ScrollBarWidget = struct {
     pub var defaults: Options = .{
         .expand = .vertical,
         .color_style = .content,
-        .min_size_content = .{ .w = 10, .h = 10 },
+        .min_size_content = .{ .w = 10 },
     };
 
     pub const InitOptions = struct {
@@ -5947,7 +5942,7 @@ pub const ScrollBarWidget = struct {
         const captured = captureMouseMaintain(self.wd.id);
 
         self.grabRect = self.wd.contentRect();
-        self.grabRect.h = math.max(20, self.grabRect.h * self.si.fraction_visible());
+        self.grabRect.h = @min(self.grabRect.h, @max(20, self.grabRect.h * self.si.fraction_visible()));
         const insideH = self.wd.contentRect().h - self.grabRect.h;
         self.grabRect.y += insideH * self.si.scroll_fraction();
 
@@ -7038,15 +7033,20 @@ pub const TextEntryWidget = struct {
     allocator: ?std.mem.Allocator = null,
     text: []u8 = undefined,
     len: usize = undefined,
+    scroll_to_cursor: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         var self = Self{};
         const msize = opts.fontGet().textSize("M") catch unreachable;
-        var options = defaults.override(.{ .min_size_content = .{ .w = msize.w * 10, .h = msize.h } }).override(opts);
+        var options = defaults.override(.{ .min_size_content = .{ .w = msize.w * 14, .h = msize.h } }).override(opts);
 
-        // padding is interpreted as the padding for the TextLayoutWidget
+        // padding is interpreted as the padding for the TextLayoutWidget, but
+        // we also need to add it to content size because TextLayoutWidget is
+        // inside the scroll area
         self.padding = options.paddingGet();
         options.padding = null;
+        options.min_size_content.?.w += self.padding.x + self.padding.w;
+        options.min_size_content.?.h += self.padding.y + self.padding.h;
 
         self.wd = WidgetData.init(src, options);
 
@@ -7071,6 +7071,8 @@ pub const TextEntryWidget = struct {
         self.scroll = ScrollAreaWidget.init(@src(), null, self.wd.options.strip().override(.{ .expand = .both }));
         // scrollbars process mouse events here
         try self.scroll.install(.{ .focus_id = self.wd.id });
+
+        const scrollclip = clipGet();
 
         self.textLayout = TextLayoutWidget.init(@src(), .{}, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding }));
         try self.textLayout.install(.{ .process_events = false });
@@ -7100,19 +7102,26 @@ pub const TextEntryWidget = struct {
         try self.textLayout.addText(self.text[0..self.len], self.wd.options.strip());
         try self.textLayout.addTextDone(self.wd.options.strip());
 
-        // get cursor_rect before textLayout.deinit
-        const cursor_rect = self.textLayout.cursor_rect;
-        self.textLayout.deinit();
-
         if (focused) {
-            if (cursor_rect) |cr| {
-                // drawing the cursor after textLayout.deinit so our clipping
-                // region is back to all of the scroll area
-                try pathAddRect(self.textLayout.screenRectScale(cr.add(.{ .x = -1 })).r, Rect.all(0));
+            if (self.textLayout.cursor_rect) |cr| {
+                // might draw the cursor slightly outside TextLayoutWidget's
+                // clipping, so go back to scroll clipping
+                clipSet(scrollclip);
+
+                const crect = cr.add(.{ .x = -1 });
+                try pathAddRect(self.textLayout.screenRectScale(crect).r, Rect.all(0));
                 try pathFillConvex(self.wd.options.color(.accent));
+
+                if (self.scroll_to_cursor) {
+                    var scrollto = Event{ .evt = .{ .scroll_to = .{
+                        .screen_rect = self.textLayout.screenRectScale(crect.outset(self.padding)).r,
+                    } } };
+                    self.scroll.scroll.processEvent(&scrollto, true);
+                }
             }
         }
 
+        self.textLayout.deinit();
         self.scroll.deinit();
 
         if (focused) {
@@ -7212,6 +7221,9 @@ pub const TextEntryWidget = struct {
                     sel.cursor += new.len;
                     sel.end = sel.cursor;
                     sel.start = sel.cursor;
+
+                    // we might have dropped to a new line, so make sure the cursor is visible
+                    self.scroll_to_cursor = true;
                 }
             },
             .mouse => |me| {
@@ -7958,7 +7970,6 @@ pub const Event = struct {
     pub const ScrollTo = struct {
         // bubbled up from a child to tell a containing scrollarea to
         // possibly scroll to show the given rect
-        rect: Rect,
         screen_rect: Rect,
     };
 };
@@ -8031,7 +8042,7 @@ pub const WidgetData = struct {
             }
 
             if (self.id == cw.debug_widget_id) {
-                cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x} {s}\n\n{}", .{ self.id, name, rs.r });
+                cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x} {s}\n\n{}\nmargin {}\npadding {}", .{ self.id, name, rs.r, self.options.marginGet(), self.options.paddingGet() });
                 try pathAddRect(rs.r.insetAll(0), .{});
                 var color = (Options{ .color_style = .err }).color(.fill);
                 try pathStrokeAfter(true, true, 3 * rs.s, .none, color);
@@ -8361,6 +8372,7 @@ pub const examples = struct {
     pub var show_demo_window: bool = false;
     var checkbox_bool: bool = false;
     var slider_val: f32 = 0.0;
+    var text_entry_buf = std.mem.zeroes([30]u8);
     var show_dialog: bool = false;
     var scale_val: f32 = 1.0;
 
@@ -8600,6 +8612,14 @@ pub const examples = struct {
 
         _ = try gui.slider(@src(), .horizontal, &slider_val, .{ .expand = .horizontal });
         try gui.label(@src(), "slider value: {d:2.2}", .{slider_val}, .{});
+
+        {
+            var hbox = try gui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
+
+            try gui.label(@src(), "Text Entry", .{}, .{ .gravity_y = 0.5 });
+            try gui.textEntry(@src(), .{ .text = &text_entry_buf }, .{});
+        }
     }
 
     pub fn styling() !void {
