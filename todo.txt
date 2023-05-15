@@ -1,7 +1,7 @@
 
-add TextEntry to demo basic widgets
-
 add horizontal scrolling
+
+TextEntry needs a single_line option which replaces newlines with spaces
 
 unify Widget and WidgetData somehow?
 
