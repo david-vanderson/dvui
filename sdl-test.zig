@@ -61,7 +61,7 @@ pub fn main() !void {
                                 const zs = @exp(@log(base) * me.kind.wheel_y);
                                 if (zs != 1.0) {
                                     scale_val *= zs;
-                                    gui.cueFrame();
+                                    gui.refresh();
                                 }
                             }
                         },
@@ -556,7 +556,7 @@ pub const StrokeTest = struct {
                             const dp = dps.scale(1 / rs.s);
                             points[dragi.?].x += dp.x;
                             points[dragi.?].y += dp.y;
-                            gui.cueFrame();
+                            gui.refresh();
                         }
                     },
                     .wheel_y => |ticks| {
@@ -565,7 +565,7 @@ pub const StrokeTest = struct {
                         const zs = @exp(@log(base) * ticks);
                         if (zs != 1.0) {
                             thickness *= zs;
-                            gui.cueFrame();
+                            gui.refresh();
                         }
                     },
                     else => {},

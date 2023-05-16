@@ -1,8 +1,4 @@
 
-remove process_events, if you call install, you have to call processEvents and draw
-
-rename cueFrame to refresh
-
 add horizontal scrolling
 
 TextEntry needs a single_line option which replaces newlines with spaces
