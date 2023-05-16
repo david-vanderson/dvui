@@ -4637,6 +4637,7 @@ pub const TextLayoutWidget = struct {
     cursor_seen: bool = false,
     cursor_rect: ?Rect = null,
     cursor_updown: i8 = 0, // positive is down
+    cursor_updown_drag: bool = true,
     cursor_updown_pt: ?Point = null,
     scroll_to_cursor: bool = false,
 
@@ -4672,6 +4673,9 @@ pub const TextLayoutWidget = struct {
         if (dataGet(null, self.wd.id, "_cursor_updown_pt", Point)) |p| {
             self.cursor_updown_pt = p;
             dataRemove(null, self.wd.id, "_cursor_updown_pt");
+            if (dataGet(null, self.wd.id, "_cursor_updown_drag", bool)) |cud| {
+                self.cursor_updown_drag = cud;
+            }
         }
 
         if (opts.process_events) {
@@ -4834,11 +4838,17 @@ pub const TextLayoutWidget = struct {
                     const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
                     if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
                         // point is before this text
-                        if (self.selection.cursor == self.selection.start) {
-                            self.selection.cursor = self.bytes_seen;
-                            self.selection.start = self.bytes_seen;
+                        if (self.cursor_updown_drag) {
+                            if (self.selection.cursor == self.selection.start) {
+                                self.selection.cursor = self.bytes_seen;
+                                self.selection.start = self.bytes_seen;
+                            } else {
+                                self.selection.cursor = self.bytes_seen;
+                                self.selection.end = self.bytes_seen;
+                            }
                         } else {
                             self.selection.cursor = self.bytes_seen;
+                            self.selection.start = self.bytes_seen;
                             self.selection.end = self.bytes_seen;
                         }
                         self.cursor_updown_pt = null;
@@ -4849,11 +4859,17 @@ pub const TextLayoutWidget = struct {
                         const how_far = p.x - rs.x;
                         var pt_end: usize = undefined;
                         _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
-                        if (self.selection.cursor == self.selection.start) {
-                            self.selection.cursor = self.bytes_seen + pt_end;
-                            self.selection.start = self.bytes_seen + pt_end;
+                        if (self.cursor_updown_drag) {
+                            if (self.selection.cursor == self.selection.start) {
+                                self.selection.cursor = self.bytes_seen + pt_end;
+                                self.selection.start = self.bytes_seen + pt_end;
+                            } else {
+                                self.selection.cursor = self.bytes_seen + pt_end;
+                                self.selection.end = self.bytes_seen + pt_end;
+                            }
                         } else {
                             self.selection.cursor = self.bytes_seen + pt_end;
+                            self.selection.start = self.bytes_seen + pt_end;
                             self.selection.end = self.bytes_seen + pt_end;
                         }
                         self.cursor_updown_pt = null;
@@ -4861,11 +4877,17 @@ pub const TextLayoutWidget = struct {
                         self.scroll_to_cursor = true;
                     } else {
                         // point is after this text, but we might not get anymore
-                        if (self.selection.cursor == self.selection.start) {
-                            self.selection.cursor = self.bytes_seen + end;
-                            self.selection.start = self.bytes_seen + end;
+                        if (self.cursor_updown_drag) {
+                            if (self.selection.cursor == self.selection.start) {
+                                self.selection.cursor = self.bytes_seen + end;
+                                self.selection.start = self.bytes_seen + end;
+                            } else {
+                                self.selection.cursor = self.bytes_seen + end;
+                                self.selection.end = self.bytes_seen + end;
+                            }
                         } else {
                             self.selection.cursor = self.bytes_seen + end;
+                            self.selection.start = self.bytes_seen + end;
                             self.selection.end = self.bytes_seen + end;
                         }
                         self.selection.order();
@@ -5007,11 +5029,11 @@ pub const TextLayoutWidget = struct {
         self.wd.min_size.h += padded.h;
     }
 
-    pub fn selectionGet(self: *Self) ?*Selection {
+    pub fn selectionGet(self: *Self, opts: struct { check_updown: bool = true }) ?*Selection {
         if (self.sel_mouse_down_pt == null and
             self.sel_mouse_drag_pt == null and
             self.cursor_updown_pt == null and
-            self.cursor_updown == 0)
+            (!opts.check_updown or self.cursor_updown == 0))
         {
             return self.selection;
         } else {
@@ -5116,6 +5138,7 @@ pub const TextLayoutWidget = struct {
         }
         if (self.cursor_updown != 0) {
             dataSet(null, self.wd.id, "_cursor_updown_pt", self.cursor_updown_pt);
+            dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
         }
         clipSet(self.prevClip);
         self.wd.minSizeSetAndCue();
@@ -5836,13 +5859,19 @@ pub const ScrollContainerWidget = struct {
 
                 const ypx = @max(0, rs.r.y - st.screen_rect.y);
                 if (ypx > 0) {
-                    self.si.viewport.y = @max(0, self.si.viewport.y - (ypx / rs.s));
+                    self.si.viewport.y = self.si.viewport.y - (ypx / rs.s);
+                    if (!st.over_scroll) {
+                        self.si.viewport.y = @max(0, @min(self.si.scroll_max(), self.si.viewport.y));
+                    }
                     cueFrame();
                 }
 
                 const ypx2 = @max(0, (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h));
                 if (ypx2 > 0) {
-                    self.si.viewport.y = @max(0, self.si.viewport.y + (ypx2 / rs.s));
+                    self.si.viewport.y = self.si.viewport.y + (ypx2 / rs.s);
+                    if (!st.over_scroll) {
+                        self.si.viewport.y = @max(0, @min(self.si.scroll_max(), self.si.viewport.y));
+                    }
                     cueFrame();
                 }
             },
@@ -7113,9 +7142,15 @@ pub const TextEntryWidget = struct {
                 try pathFillConvex(self.wd.options.color(.accent));
 
                 if (self.scroll_to_cursor) {
-                    var scrollto = Event{ .evt = .{ .scroll_to = .{
-                        .screen_rect = self.textLayout.screenRectScale(crect.outset(self.padding)).r,
-                    } } };
+                    var scrollto = Event{
+                        .evt = .{
+                            .scroll_to = .{
+                                .screen_rect = self.textLayout.screenRectScale(crect.outset(self.padding)).r,
+                                // cursor might just have transitioned to a new line, so scroll area has not expanded yet
+                                .over_scroll = true,
+                            },
+                        },
+                    };
                     self.scroll.scroll.processEvent(&scrollto, true);
                 }
             }
@@ -7153,48 +7188,85 @@ pub const TextEntryWidget = struct {
         _ = bubbling;
         switch (e.evt) {
             .key => |ke| {
-                if (ke.code == .backspace and (ke.action == .down or ke.action == .repeat)) {
-                    e.handled = true;
-                    if (self.textLayout.selectionGet()) |sel| {
-                        if (sel.start != sel.end) {
-                            // just delete selection
-                            std.mem.copy(u8, self.text[sel.start..], self.text[sel.end..self.len]);
-                            self.len -= (sel.end - sel.start);
-                            self.text[self.len] = 0;
-                            sel.end = sel.start;
-                            sel.cursor = sel.start;
-                        } else if (sel.cursor > 0) {
-                            // delete character just before cursor
-                            std.mem.copy(u8, self.text[sel.cursor - 1 ..], self.text[sel.cursor..self.len]);
-                            self.len -= 1;
-                            self.text[self.len] = 0;
-                            sel.cursor -= 1;
-                            sel.start = sel.cursor;
-                            sel.end = sel.cursor;
+                switch (ke.code) {
+                    .backspace => {
+                        if (ke.action == .down or ke.action == .repeat) {
+                            e.handled = true;
+                            if (self.textLayout.selectionGet(.{})) |sel| {
+                                if (sel.start != sel.end) {
+                                    // just delete selection
+                                    std.mem.copy(u8, self.text[sel.start..], self.text[sel.end..self.len]);
+                                    self.len -= (sel.end - sel.start);
+                                    self.text[self.len] = 0;
+                                    sel.end = sel.start;
+                                    sel.cursor = sel.start;
+                                } else if (sel.cursor > 0) {
+                                    // delete character just before cursor
+                                    std.mem.copy(u8, self.text[sel.cursor - 1 ..], self.text[sel.cursor..self.len]);
+                                    self.len -= 1;
+                                    self.text[self.len] = 0;
+                                    sel.cursor -= 1;
+                                    sel.start = sel.cursor;
+                                    sel.end = sel.cursor;
+                                }
+                            }
                         }
-                    }
-                } else if (e.evt.key.code == .tab and e.evt.key.action == .down) {
-                    e.handled = true;
-                    if (e.evt.key.mod.shift()) {
-                        tabIndexPrev(e.num);
-                    } else {
-                        tabIndexNext(e.num);
-                    }
-                } else if (ke.code == .v and ke.action == .down and ke.mod.gui()) {
-                    //e.handled = true;
-                    //const ct = c.SDL_GetClipboardText();
-                    //defer c.SDL_free(ct);
+                    },
+                    .tab => {
+                        if (ke.action == .down) {
+                            e.handled = true;
+                            if (ke.mod.shift()) {
+                                tabIndexPrev(e.num);
+                            } else {
+                                tabIndexNext(e.num);
+                            }
+                        }
+                    },
+                    .v => {
+                        if (ke.action == .down and ke.mod.gui()) {
+                            // TODO: paste
+                            //e.handled = true;
+                            //const ct = c.SDL_GetClipboardText();
+                            //defer c.SDL_free(ct);
 
-                    //var i = self.len;
-                    //while (i < self.text.len and ct.* != 0) : (i += 1) {
-                    //  self.text[i] = ct[i - self.len];
-                    //}
-                    //self.len = i;
+                            //var i = self.len;
+                            //while (i < self.text.len and ct.* != 0) : (i += 1) {
+                            //  self.text[i] = ct[i - self.len];
+                            //}
+                            //self.len = i;
+                        }
+                    },
+                    .left, .right => |code| {
+                        if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
+                            e.handled = true;
+                            if (self.textLayout.selectionGet(.{})) |sel| {
+                                if (code == .left) {
+                                    sel.cursor -|= 1;
+                                } else {
+                                    sel.cursor += 1;
+                                    sel.cursor = @min(sel.cursor, self.len);
+                                }
+                                sel.start = sel.cursor;
+                                sel.end = sel.cursor;
+                                self.scroll_to_cursor = true;
+                            }
+                        }
+                    },
+                    .up, .down => |code| {
+                        if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
+                            e.handled = true;
+                            if (self.textLayout.selectionGet(.{ .check_updown = false })) |_| {
+                                self.textLayout.cursor_updown += if (code == .down) 1 else -1;
+                                self.textLayout.cursor_updown_drag = false;
+                            }
+                        }
+                    },
+                    else => {},
                 }
             },
             .text => |te| {
                 e.handled = true;
-                if (self.textLayout.selectionGet()) |sel| {
+                if (self.textLayout.selectionGet(.{})) |sel| {
                     var new = std.mem.sliceTo(te, 0);
                     if (sel.start != sel.end) {
                         // delete selection
@@ -7969,8 +8041,12 @@ pub const Event = struct {
 
     pub const ScrollTo = struct {
         // bubbled up from a child to tell a containing scrollarea to
-        // possibly scroll to show the given rect
+        // scroll to show the given rect
         screen_rect: Rect,
+
+        // whether to scroll outside the current scroll bounds (useful if the
+        // current action might be expanding the scroll area)
+        over_scroll: bool = false,
     };
 };
 
