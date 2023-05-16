@@ -4646,12 +4646,6 @@ pub const TextLayoutWidget = struct {
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         const options = defaults.override(opts);
         var self = Self{ .wd = WidgetData.init(src, options), .selection_in = init_opts.selection };
-        return self;
-    }
-
-    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
-        _ = parentSet(self.widget());
-        try self.wd.register("TextLayout", null);
 
         if (self.selection_in) |sel| {
             self.selection = sel;
@@ -4661,8 +4655,6 @@ pub const TextLayoutWidget = struct {
             }
             self.selection = &self.selection_store;
         }
-
-        self.captured = captureMouseMaintain(self.wd.id);
 
         if (self.captured) {
             if (dataGet(null, self.wd.id, "_sel_mouse_down_bytes", usize)) |p| {
@@ -4677,6 +4669,15 @@ pub const TextLayoutWidget = struct {
                 self.cursor_updown_drag = cud;
             }
         }
+
+        self.captured = captureMouseMaintain(self.wd.id);
+
+        return self;
+    }
+
+    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
+        try self.wd.register("TextLayout", null);
+        _ = parentSet(self.widget());
 
         if (opts.process_events) {
             self.processEvents();
@@ -6729,7 +6730,7 @@ pub const ButtonWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct { process_events: bool = true, draw: bool = true }) !void {
+    pub fn install(self: *Self, opts: struct { process_events: bool = true, draw_focus: bool = true }) !void {
         try self.wd.register("Button", null);
         _ = parentSet(self.widget());
 
@@ -6746,26 +6747,16 @@ pub const ButtonWidget = struct {
 
         self.focus = (self.wd.id == focusedWidgetId());
 
-        if (opts.draw) {
-            try self.draw(.{});
-        }
-    }
-
-    pub fn draw(self: *Self, opts: struct { focus: ?bool = null, capture: ?bool = null, hover: ?bool = null }) !void {
-
-        // caller might have done their own event processing which focused us
-        self.focus = (self.wd.id == focusedWidgetId());
-
         var fill_color: ?Color = null;
-        if (self.capture or (opts.capture != null and opts.capture.?)) {
+        if (self.capture) {
             fill_color = self.wd.options.color(.press);
-        } else if (self.hover or (opts.hover != null and opts.hover.?)) {
+        } else if (self.hover) {
             fill_color = self.wd.options.color(.hover);
         }
 
         try self.wd.borderAndBackground(.{ .fill_color = fill_color });
 
-        if ((opts.focus != null and opts.focus.?) or (opts.focus == null and self.focus)) {
+        if (opts.draw_focus and self.focus) {
             try self.wd.focusBorder();
         }
     }
@@ -7044,8 +7035,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     var bw = ButtonWidget.init(src, options.strip().override(options));
 
     // don't want to show a focus ring around the label
-    try bw.install(.{ .draw = false });
-    try bw.draw(.{ .focus = false });
+    try bw.install(.{ .draw_focus = false });
     defer bw.deinit();
 
     if (bw.clicked()) {
