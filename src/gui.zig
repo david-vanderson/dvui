@@ -4194,7 +4194,7 @@ pub const AnimateWidget = struct {
             }
         }
 
-        try self.wd.borderAndBackground();
+        try self.wd.borderAndBackground(.{});
     }
 
     pub fn startEnd(self: *Self) void {
@@ -4388,7 +4388,7 @@ pub const PanedWidget = struct {
             }
         }
 
-        try self.wd.borderAndBackground();
+        try self.wd.borderAndBackground(.{});
         self.prevClip = clip(self.wd.contentRectScale().r);
 
         if (!self.collapsed()) {
@@ -4685,7 +4685,7 @@ pub const TextLayoutWidget = struct {
         const rs = self.wd.contentRectScale();
 
         if (!rs.r.empty()) {
-            try self.wd.borderAndBackground();
+            try self.wd.borderAndBackground(.{});
         }
 
         self.prevClip = clip(rs.r);
@@ -5184,7 +5184,7 @@ pub const ContextWidget = struct {
         self.process_events = opts.process_events;
         _ = parentSet(self.widget());
         try self.wd.register("Context", null);
-        try self.wd.borderAndBackground();
+        try self.wd.borderAndBackground(.{});
     }
 
     pub fn activePoint(self: *Self) ?Point {
@@ -5295,7 +5295,7 @@ pub const OverlayWidget = struct {
         _ = opts;
         _ = parentSet(self.widget());
         try self.wd.register("Overlay", null);
-        try self.wd.borderAndBackground();
+        try self.wd.borderAndBackground(.{});
     }
 
     pub fn widget(self: *Self) Widget {
@@ -5383,7 +5383,7 @@ pub const BoxWidget = struct {
     pub fn install(self: *Self, opts: struct {}) !void {
         _ = opts;
         try self.wd.register("Box", null);
-        try self.wd.borderAndBackground();
+        try self.wd.borderAndBackground(.{});
 
         // our rect for children has to start at 0,0
         self.childRect = self.wd.contentRect().justSize();
@@ -5769,7 +5769,7 @@ pub const ScrollContainerWidget = struct {
             }
         }
 
-        try self.wd.borderAndBackground();
+        try self.wd.borderAndBackground(.{});
 
         self.prevClip = clip(self.wd.contentRectScale().r);
 
@@ -5966,7 +5966,7 @@ pub const ScrollBarWidget = struct {
     pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
         self.process_events = opts.process_events;
         try self.wd.register("ScrollBar", null);
-        try self.wd.borderAndBackground();
+        try self.wd.borderAndBackground(.{});
 
         const captured = captureMouseMaintain(self.wd.id);
 
@@ -6091,7 +6091,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) !void {
 
     var wd = WidgetData.init(src, defaults.override(opts));
     try wd.register("Separator", null);
-    try wd.borderAndBackground();
+    try wd.borderAndBackground(.{});
     wd.minSizeSetAndCue();
     wd.minSizeReportToParent();
 }
@@ -6170,7 +6170,7 @@ pub const ScaleWidget = struct {
         _ = opts;
         _ = parentSet(self.widget());
         try self.wd.register("Scale", null);
-        try self.wd.borderAndBackground();
+        try self.wd.borderAndBackground(.{});
     }
 
     pub fn widget(self: *Self) Widget {
@@ -6258,7 +6258,7 @@ pub const MenuWidget = struct {
         _ = parentSet(self.widget());
         self.parentMenu = menuSet(self);
         try self.wd.register("Menu", null);
-        try self.wd.borderAndBackground();
+        try self.wd.borderAndBackground(.{});
 
         self.box = BoxWidget.init(@src(), self.dir, false, self.wd.options.strip());
         try self.box.install(.{});
@@ -6584,7 +6584,7 @@ pub const LabelWidget = struct {
     pub fn install(self: *Self, opts: struct {}) !void {
         _ = opts;
         try self.wd.register("Label", null);
-        try self.wd.borderAndBackground();
+        try self.wd.borderAndBackground(.{});
 
         var rect = placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
         var rs = self.wd.parent.screenRectScale(rect);
@@ -6660,7 +6660,7 @@ pub const IconWidget = struct {
         try self.wd.register("Icon", null);
         //debug("{x} Icon \"{s:<10}\" {} {d}", .{ self.wd.id, self.name, self.wd.rect, self.wd.options.rotationGet() });
 
-        try self.wd.borderAndBackground();
+        try self.wd.borderAndBackground(.{});
 
         var rect = placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
         var rs = self.wd.parent.screenRectScale(rect);
@@ -6698,7 +6698,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
     var wd = WidgetData.init(src, opts.override(.{ .min_size_content = size }));
     try wd.register("debugFontAtlases", null);
 
-    try wd.borderAndBackground();
+    try wd.borderAndBackground(.{});
 
     const rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
     try debugRenderFontAtlases(rs, opts.color(.text));
@@ -6756,31 +6756,14 @@ pub const ButtonWidget = struct {
         // caller might have done their own event processing which focused us
         self.focus = (self.wd.id == focusedWidgetId());
 
-        var bg = self.wd.options.backgroundGet();
-        if (self.wd.options.borderGet().nonZero()) {
-            if (!bg) {
-                std.debug.print("{x} forcing background on to support border\n", .{self.wd.id});
-                bg = true;
-            }
-            const rs = self.wd.borderRectScale();
-            try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            try pathFillConvex(self.wd.options.color(.border));
+        var fill_color: ?Color = null;
+        if (self.capture or (opts.capture != null and opts.capture.?)) {
+            fill_color = self.wd.options.color(.press);
+        } else if (self.hover or (opts.hover != null and opts.hover.?)) {
+            fill_color = self.wd.options.color(.hover);
         }
 
-        if (bg) {
-            const rs = self.wd.backgroundRectScale();
-            var fill: Color = undefined;
-            if (self.capture or (opts.capture != null and opts.capture.?)) {
-                fill = self.wd.options.color(.press);
-            } else if (self.hover or (opts.hover != null and opts.hover.?)) {
-                fill = self.wd.options.color(.hover);
-            } else {
-                fill = self.wd.options.color(.fill);
-            }
-
-            try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            try pathFillConvex(fill);
-        }
+        try self.wd.borderAndBackground(.{ .fill_color = fill_color });
 
         if ((opts.focus != null and opts.focus.?) or (opts.focus == null and self.focus)) {
             try self.wd.focusBorder();
@@ -6908,6 +6891,10 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
     var b = try box(src, dir, options);
     defer b.deinit();
 
+    if (b.data().visible()) {
+        try tabIndexSet(b.data().id, options.tab_index);
+    }
+
     var captured = captureMouseMaintain(b.data().id);
     var hovered: bool = false;
     var ret = false;
@@ -6919,7 +6906,6 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
         .vertical => Rect{ .x = br.w / 2 - 2, .y = knobsize / 2, .w = 4, .h = br.h - knobsize },
     };
 
-    var want_focus: ?u16 = null;
     const trackrs = b.widget().screenRectScale(track);
 
     const rs = b.data().contentRectScale();
@@ -6930,7 +6916,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
                 var p: ?Point = null;
                 if (me.kind == .focus) {
                     e.handled = true;
-                    want_focus = e.num;
+                    focusWidget(b.data().id, e.num);
                 } else if (me.kind == .press and me.kind.press == .left) {
                     // capture
                     captured = captureMouse(b.data().id);
@@ -6971,6 +6957,23 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
                     }
                 }
             },
+            .key => |ke| {
+                if (ke.action == .down or ke.action == .repeat) {
+                    switch (ke.code) {
+                        .left, .down => {
+                            e.handled = true;
+                            percent.* = math.max(0, math.min(1, percent.* - 0.05));
+                            ret = true;
+                        },
+                        .right, .up => {
+                            e.handled = true;
+                            percent.* = math.max(0, math.min(1, percent.* + 0.05));
+                            ret = true;
+                        },
+                        else => {},
+                    }
+                }
+            },
             else => {},
         }
     }
@@ -7002,45 +7005,25 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
     try pathAddRect(part, Rect.all(100).scale(trackrs.s));
     try pathFillConvex(options.color(.fill));
 
-    var knob = switch (dir) {
+    var knobRect = switch (dir) {
         .horizontal => Rect{ .x = (br.w - knobsize) * perc, .w = knobsize, .h = knobsize },
         .vertical => Rect{ .y = (br.h - knobsize) * (1 - perc), .w = knobsize, .h = knobsize },
     };
-    var bw = ButtonWidget.init(@src(), .{ .rect = knob, .padding = .{}, .margin = .{}, .border = Rect.all(1), .corner_radius = Rect.all(100) });
-    if (want_focus) |num| {
-        focusWidget(bw.wd.id, num);
-    }
-    try bw.install(.{ .process_events = false, .draw = false });
-    iter = EventIterator.init(bw.data().id, bw.data().borderRectScale().r, null);
-    while (iter.next()) |e| {
-        switch (e.evt) {
-            .key => |ke| {
-                if (ke.action == .down or ke.action == .repeat) {
-                    switch (ke.code) {
-                        .left, .down => {
-                            e.handled = true;
-                            percent.* = math.max(0, math.min(1, percent.* - 0.05));
-                            ret = true;
-                        },
-                        .right, .up => {
-                            e.handled = true;
-                            percent.* = math.max(0, math.min(1, percent.* + 0.05));
-                            ret = true;
-                        },
-                        else => {},
-                    }
-                }
-            },
-            else => {},
-        }
 
-        if (!e.handled) {
-            bw.processEvent(e, false);
-        }
+    var fill_color: Color = undefined;
+    if (captured) {
+        fill_color = options.color(.press);
+    } else if (hovered) {
+        fill_color = options.color(.hover);
+    } else {
+        fill_color = options.color(.fill);
     }
-
-    try bw.draw(.{ .capture = captured, .hover = hovered });
-    bw.deinit();
+    var knob = BoxWidget.init(@src(), .horizontal, false, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
+    try knob.install(.{});
+    if (b.data().id == focusedWidgetId()) {
+        try knob.wd.focusBorder();
+    }
+    knob.deinit();
 
     if (ret) {
         cueFrame();
@@ -7193,7 +7176,7 @@ pub const TextEntryWidget = struct {
 
         _ = parentSet(self.widget());
 
-        try self.wd.borderAndBackground();
+        try self.wd.borderAndBackground(.{});
 
         const oldclip = clipGet();
 
@@ -8230,7 +8213,7 @@ pub const WidgetData = struct {
         return !clipGet().intersect(self.borderRectScale().r).empty();
     }
 
-    pub fn borderAndBackground(self: *const WidgetData) !void {
+    pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) !void {
         var bg = self.options.backgroundGet();
         if (self.options.borderGet().nonZero()) {
             if (!bg) {
@@ -8246,7 +8229,7 @@ pub const WidgetData = struct {
         if (bg) {
             const rs = self.backgroundRectScale();
             try pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-            try pathFillConvex(self.options.color(.fill));
+            try pathFillConvex(opts.fill_color orelse self.options.color(.fill));
         }
     }
 
