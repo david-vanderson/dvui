@@ -6717,20 +6717,21 @@ pub const ButtonWidget = struct {
         .background = true,
     };
     wd: WidgetData = undefined,
-    highlight: bool = false,
-    captured: bool = false,
-    focused: bool = false,
+    hover: bool = false,
+    capture: bool = false,
+    focus: bool = false,
     click: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, opts: Options) Self {
         var self = Self{};
         self.wd = WidgetData.init(src, defaults.override(opts));
-        self.captured = captureMouseMaintain(self.wd.id);
+        self.capture = captureMouseMaintain(self.wd.id);
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct { process_events: bool = true, show_focus: bool = true }) !void {
+    pub fn install(self: *Self, opts: struct { process_events: bool = true, draw: bool = true }) !void {
         try self.wd.register("Button", null);
+        _ = parentSet(self.widget());
 
         if (self.wd.visible()) {
             try tabIndexSet(self.wd.id, self.wd.options.tab_index);
@@ -6743,7 +6744,17 @@ pub const ButtonWidget = struct {
             }
         }
 
-        self.focused = (self.wd.id == focusedWidgetId());
+        self.focus = (self.wd.id == focusedWidgetId());
+
+        if (opts.draw) {
+            try self.draw(.{});
+        }
+    }
+
+    pub fn draw(self: *Self, opts: struct { focus: ?bool = null, capture: ?bool = null, hover: ?bool = null }) !void {
+
+        // caller might have done their own event processing which focused us
+        self.focus = (self.wd.id == focusedWidgetId());
 
         var bg = self.wd.options.backgroundGet();
         if (self.wd.options.borderGet().nonZero()) {
@@ -6759,9 +6770,9 @@ pub const ButtonWidget = struct {
         if (bg) {
             const rs = self.wd.backgroundRectScale();
             var fill: Color = undefined;
-            if (self.captured) {
+            if (self.capture or (opts.capture != null and opts.capture.?)) {
                 fill = self.wd.options.color(.press);
-            } else if (self.highlight) {
+            } else if (self.hover or (opts.hover != null and opts.hover.?)) {
                 fill = self.wd.options.color(.hover);
             } else {
                 fill = self.wd.options.color(.fill);
@@ -6771,11 +6782,21 @@ pub const ButtonWidget = struct {
             try pathFillConvex(fill);
         }
 
-        if (self.focused and opts.show_focus) {
+        if ((opts.focus != null and opts.focus.?) or (opts.focus == null and self.focus)) {
             try self.wd.focusBorder();
         }
+    }
 
-        _ = parentSet(self.widget());
+    pub fn focused(self: *Self) bool {
+        return self.focus;
+    }
+
+    pub fn hovered(self: *Self) bool {
+        return self.hover;
+    }
+
+    pub fn captured(self: *Self) bool {
+        return self.capture;
     }
 
     pub fn clicked(self: *Self) bool {
@@ -6811,11 +6832,11 @@ pub const ButtonWidget = struct {
                     focusWidget(self.wd.id, e.num);
                 } else if (me.kind == .press and me.kind.press == .left) {
                     e.handled = true;
-                    self.captured = captureMouse(self.wd.id);
+                    self.capture = captureMouse(self.wd.id);
                 } else if (me.kind == .release and me.kind.release == .left) {
                     e.handled = true;
-                    if (self.captured) {
-                        self.captured = captureMouse(null);
+                    if (self.capture) {
+                        self.capture = captureMouse(null);
                         if (self.data().borderRectScale().r.contains(me.p)) {
                             self.click = true;
                             cueFrame();
@@ -6823,7 +6844,7 @@ pub const ButtonWidget = struct {
                     }
                 } else if (me.kind == .position) {
                     e.handled = true;
-                    self.highlight = true;
+                    self.hover = true;
                 }
             },
             .key => |ke| {
@@ -6887,12 +6908,18 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
     var b = try box(src, dir, options);
     defer b.deinit();
 
-    _ = captureMouseMaintain(b.data().id);
+    var captured = captureMouseMaintain(b.data().id);
+    var hovered: bool = false;
     var ret = false;
 
     const br = b.data().contentRect();
     const knobsize = math.min(br.w, br.h);
-    const track = Rect{ .x = knobsize / 2, .y = br.h / 2 - 2, .w = br.w - knobsize, .h = 4 };
+    const track = switch (dir) {
+        .horizontal => Rect{ .x = knobsize / 2, .y = br.h / 2 - 2, .w = br.w - knobsize, .h = 4 },
+        .vertical => Rect{ .x = br.w / 2 - 2, .y = knobsize / 2, .w = 4, .h = br.h - knobsize },
+    };
+
+    var want_focus: ?u16 = null;
     const trackrs = b.widget().screenRectScale(track);
 
     const rs = b.data().contentRectScale();
@@ -6901,26 +6928,44 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
         switch (e.evt) {
             .mouse => |me| {
                 var p: ?Point = null;
-                if (me.kind == .press and me.kind.press == .left) {
+                if (me.kind == .focus) {
+                    e.handled = true;
+                    want_focus = e.num;
+                } else if (me.kind == .press and me.kind.press == .left) {
                     // capture
-                    _ = captureMouse(b.data().id);
+                    captured = captureMouse(b.data().id);
                     e.handled = true;
                     p = me.p;
                 } else if (me.kind == .release and me.kind.release == .left) {
                     // stop capture
-                    _ = captureMouse(null);
+                    captured = captureMouse(null);
                     e.handled = true;
                 } else if (me.kind == .motion and captureMouseId() == b.data().id) {
                     // handle only if we have capture
                     e.handled = true;
                     p = me.p;
+                } else if (me.kind == .position) {
+                    e.handled = true;
+                    hovered = true;
                 }
 
                 if (p) |pp| {
-                    const min = trackrs.r.x;
-                    const max = trackrs.r.x + trackrs.r.w;
+                    var min: f32 = undefined;
+                    var max: f32 = undefined;
+                    switch (dir) {
+                        .horizontal => {
+                            min = trackrs.r.x;
+                            max = trackrs.r.x + trackrs.r.w;
+                        },
+                        .vertical => {
+                            min = 0;
+                            max = trackrs.r.h;
+                        },
+                    }
+
                     if (max > min) {
-                        percent.* = (pp.x - min) / (max - min);
+                        const v = if (dir == .horizontal) pp.x else (trackrs.r.y + trackrs.r.h - pp.y);
+                        percent.* = (v - min) / (max - min);
                         percent.* = math.max(0, math.min(1, percent.*));
                         ret = true;
                     }
@@ -6930,18 +6975,72 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
         }
     }
 
+    const perc = math.max(0, math.min(1, percent.*));
+
     var part = trackrs.r;
-    part.w *= percent.*;
+    switch (dir) {
+        .horizontal => part.w *= perc,
+        .vertical => {
+            const h = part.h * (1 - perc);
+            part.y += h;
+            part.h = trackrs.r.h - h;
+        },
+    }
     try pathAddRect(part, Rect.all(100).scale(trackrs.s));
     try pathFillConvex(options.color(.accent));
 
-    part.x = part.x + part.w;
-    part.w = trackrs.r.w - part.w;
+    switch (dir) {
+        .horizontal => {
+            part.x = part.x + part.w;
+            part.w = trackrs.r.w - part.w;
+        },
+        .vertical => {
+            part = trackrs.r;
+            part.h *= (1 - perc);
+        },
+    }
     try pathAddRect(part, Rect.all(100).scale(trackrs.s));
     try pathFillConvex(options.color(.fill));
 
-    var knob = Rect{ .x = (br.w - knobsize) * percent.*, .w = knobsize, .h = knobsize };
-    _ = try gui.button(@src(), "", .{ .rect = knob, .padding = .{}, .margin = .{}, .border = Rect.all(1), .corner_radius = Rect.all(100) });
+    var knob = switch (dir) {
+        .horizontal => Rect{ .x = (br.w - knobsize) * perc, .w = knobsize, .h = knobsize },
+        .vertical => Rect{ .y = (br.h - knobsize) * (1 - perc), .w = knobsize, .h = knobsize },
+    };
+    var bw = ButtonWidget.init(@src(), .{ .rect = knob, .padding = .{}, .margin = .{}, .border = Rect.all(1), .corner_radius = Rect.all(100) });
+    if (want_focus) |num| {
+        focusWidget(bw.wd.id, num);
+    }
+    try bw.install(.{ .process_events = false, .draw = false });
+    iter = EventIterator.init(bw.data().id, bw.data().borderRectScale().r, null);
+    while (iter.next()) |e| {
+        switch (e.evt) {
+            .key => |ke| {
+                if (ke.action == .down or ke.action == .repeat) {
+                    switch (ke.code) {
+                        .left, .down => {
+                            e.handled = true;
+                            percent.* = math.max(0, math.min(1, percent.* - 0.05));
+                            ret = true;
+                        },
+                        .right, .up => {
+                            e.handled = true;
+                            percent.* = math.max(0, math.min(1, percent.* + 0.05));
+                            ret = true;
+                        },
+                        else => {},
+                    }
+                }
+            },
+            else => {},
+        }
+
+        if (!e.handled) {
+            bw.processEvent(e, false);
+        }
+    }
+
+    try bw.draw(.{ .capture = captured, .hover = hovered });
+    bw.deinit();
 
     if (ret) {
         cueFrame();
@@ -6962,7 +7061,8 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     var bw = ButtonWidget.init(src, options.strip().override(options));
 
     // don't want to show a focus ring around the label
-    try bw.install(.{ .show_focus = false });
+    try bw.install(.{ .draw = false });
+    try bw.draw(.{ .focus = false });
     defer bw.deinit();
 
     if (bw.clicked()) {
@@ -6978,7 +7078,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     var rs = s.borderRectScale();
     rs.r = rs.r.insetAll(0.5 * rs.s);
 
-    try checkmark(target.*, bw.focused, rs, bw.captured, bw.highlight, options);
+    try checkmark(target.*, bw.focused(), rs, bw.captured(), bw.hovered(), options);
 
     if (label_str) |str| {
         _ = spacer(@src(), .{ .w = checkbox_defaults.paddingGet().w }, .{});
@@ -8682,12 +8782,13 @@ pub const examples = struct {
 
             _ = try gui.button(@src(), "Button", .{});
             _ = try gui.button(@src(), "Multi-line\nButton", .{});
+            _ = try gui.slider(@src(), .vertical, &slider_val, .{ .expand = .vertical, .min_size_content = .{ .w = 10 } });
         }
-
-        try gui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
         _ = try gui.slider(@src(), .horizontal, &slider_val, .{ .expand = .horizontal });
         try gui.label(@src(), "slider value: {d:2.2}", .{slider_val}, .{});
+
+        try gui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
         {
             var hbox = try gui.box(@src(), .horizontal, .{});
