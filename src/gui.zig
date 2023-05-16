@@ -974,7 +974,7 @@ pub fn focusSubwindow(subwindow_id: ?u32, event_num: ?u16) void {
     const winId = subwindow_id orelse cw.subwindow_currentId;
     if (cw.focused_subwindowId != winId) {
         cw.focused_subwindowId = winId;
-        cueFrame();
+        refresh();
         if (event_num) |en| {
             for (cw.subwindows.items) |*sw| {
                 if (cw.focused_subwindowId == sw.id) {
@@ -1044,7 +1044,7 @@ pub fn focusWidget(id: ?u32, event_num: ?u16) void {
                 if (event_num) |en| {
                     focusRemainingEvents(en, sw.id, sw.focused_widgetId);
                 }
-                cueFrame();
+                refresh();
             }
             break;
         }
@@ -1635,8 +1635,8 @@ pub fn clipSet(r: Rect) void {
     currentWindow().clipRect = r;
 }
 
-pub fn cueFrame() void {
-    currentWindow().cueFrame();
+pub fn refresh() void {
+    currentWindow().refresh();
 }
 
 pub fn animationRate() f32 {
@@ -2268,7 +2268,7 @@ pub const Window = struct {
         self.dialogs.deinit();
     }
 
-    pub fn cueFrame(self: *Self) void {
+    pub fn refresh(self: *Self) void {
         self.extra_frames_needed = 1;
     }
 
@@ -2675,7 +2675,7 @@ pub const Window = struct {
                     kv.value_ptr.start_time -|= micros;
                     kv.value_ptr.end_time -|= micros;
                     if (kv.value_ptr.start_time <= 0 and kv.value_ptr.end_time > 0) {
-                        self.cueFrame();
+                        self.refresh();
                     }
                 }
             }
@@ -2955,7 +2955,7 @@ pub const Window = struct {
             try self.dialogs.append(Dialog{ .id = id, .display = display });
         }
 
-        self.cueFrame();
+        self.refresh();
 
         return &self.dialog_mutex;
     }
@@ -2967,7 +2967,7 @@ pub const Window = struct {
         for (self.dialogs.items, 0..) |*d, i| {
             if (d.id == id) {
                 _ = self.dialogs.orderedRemove(i);
-                self.cueFrame();
+                self.refresh();
                 return;
             }
         }
@@ -3038,7 +3038,7 @@ pub const Window = struct {
             self.timerRemove(id);
         }
 
-        self.cueFrame();
+        self.refresh();
 
         return &self.dialog_mutex;
     }
@@ -3050,7 +3050,7 @@ pub const Window = struct {
         for (self.toasts.items, 0..) |*t, i| {
             if (t.id == id) {
                 _ = self.toasts.orderedRemove(i);
-                self.cueFrame();
+                self.refresh();
                 return;
             }
         }
@@ -3188,7 +3188,7 @@ pub const Window = struct {
             const sw = self.subwindows.items[self.subwindows.items.len - 1];
             focusSubwindow(sw.id, null);
 
-            self.cueFrame();
+            self.refresh();
         }
 
         // Check that the final event was our synthetic mouse position event.
@@ -3200,7 +3200,7 @@ pub const Window = struct {
 
         defer current_window = self.previous_window;
 
-        // This is what cueFrame affects
+        // This is what refresh affects
         if (self.extra_frames_needed > 0) {
             return 0;
         }
@@ -3343,9 +3343,9 @@ pub const PopupWidget = struct {
             self.wd.rect = placeOnScreen(self.initialRect, Rect.fromPoint(self.initialRect.topleft()));
             focusSubwindow(self.wd.id, null);
 
-            // need a second frame to fit contents (FocusWindow calls cueFrame but
+            // need a second frame to fit contents (FocusWindow calls refresh but
             // here for clarity)
-            cueFrame();
+            refresh();
         }
 
         // outside normal flow, so don't get rect from parent
@@ -3617,8 +3617,8 @@ pub const FloatingWindowWidget = struct {
             focusSubwindow(self.wd.id, null);
 
             // need a second frame to fit contents (FocusWindow calls
-            // cueFrame but here for clarity)
-            cueFrame();
+            // refresh but here for clarity)
+            refresh();
 
             // hide our first frame so the user doesn't see an empty window or
             // jump when we autopos/autosize - do this in install() because
@@ -3708,7 +3708,7 @@ pub const FloatingWindowWidget = struct {
                                 self.wd.rect.w = math.max(40, p.x - self.wd.rect.x);
                                 self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
                             }
-                            // don't need cueFrame() because we're before drawing
+                            // don't need refresh() because we're before drawing
                             e.handled = true;
                         }
                     } else if (me.kind == .position) {
@@ -3759,7 +3759,7 @@ pub const FloatingWindowWidget = struct {
                                     self.wd.rect.x += dp.x;
                                     self.wd.rect.y += dp.y;
                                 }
-                                cueFrame();
+                                refresh();
                             }
                         },
                         else => {},
@@ -3792,7 +3792,7 @@ pub const FloatingWindowWidget = struct {
         if (self.init_options.open_flag) |of| {
             of.* = false;
         }
-        cueFrame();
+        refresh();
     }
 
     pub fn widget(self: *Self) Widget {
@@ -4435,7 +4435,7 @@ pub const PanedWidget = struct {
             self.animate(0.0);
         } else {
             // if we are expanded, then the user means for something to happen
-            cueFrame();
+            refresh();
         }
     }
 
@@ -4921,7 +4921,7 @@ pub const TextLayoutWidget = struct {
                     self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
 
                     // might have already passed, so need to go again next frame
-                    cueFrame();
+                    refresh();
 
                     var scrollto = Event{ .evt = .{ .scroll_to = .{
                         .screen_rect = self.screenRectScale(cr_new).r,
@@ -4978,7 +4978,7 @@ pub const TextLayoutWidget = struct {
                 self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
 
                 // might have already passed, so need to go again next frame
-                cueFrame();
+                refresh();
 
                 var scrollto = Event{ .evt = .{ .scroll_to = .{
                     .screen_rect = self.screenRectScale(cr_new).r,
@@ -5512,7 +5512,7 @@ pub const BoxWidget = struct {
             if (self.total_weight > 0 and self.childRect.w > 0.001) {
                 // we have expanded children, but didn't use all the space, so something has changed
                 // equal_space could mean we don't exactly use all the space (due to floating point)
-                cueFrame();
+                refresh();
             }
         } else {
             if (self.equal_space) {
@@ -5524,7 +5524,7 @@ pub const BoxWidget = struct {
             if (self.total_weight > 0 and self.childRect.h > 0.001) {
                 // we have expanded children, but didn't use all the space, so something has changed
                 // equal_space could mean we don't exactly use all the space (due to floating point)
-                cueFrame();
+                refresh();
             }
         }
 
@@ -5622,7 +5622,7 @@ pub const ScrollAreaWidget = struct {
         {
             // the viewport changed (by scroll container) after the scroll bar
             // was already rendered, so we need another frame to sync it up
-            cueFrame();
+            refresh();
         }
     }
 
@@ -5761,12 +5761,12 @@ pub const ScrollContainerWidget = struct {
         if (self.si.viewport.y < 0) {
             self.si.viewport.y = math.min(0, math.max(-20, self.si.viewport.y + 250 * animationRate()));
             if (self.si.viewport.y < 0) {
-                cueFrame();
+                refresh();
             }
         } else if (self.si.viewport.y > max_scroll) {
             self.si.viewport.y = math.max(max_scroll, math.min(max_scroll + 20, self.si.viewport.y - 250 * animationRate()));
             if (self.si.viewport.y > max_scroll) {
-                cueFrame();
+                refresh();
             }
         }
 
@@ -5818,11 +5818,11 @@ pub const ScrollContainerWidget = struct {
                     if (ke.code == .up and (ke.action == .down or ke.action == .repeat)) {
                         e.handled = true;
                         self.si.viewport.y -= 10;
-                        cueFrame();
+                        refresh();
                     } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
                         e.handled = true;
                         self.si.viewport.y += 10;
-                        cueFrame();
+                        refresh();
                     }
                 }
             },
@@ -5846,7 +5846,7 @@ pub const ScrollContainerWidget = struct {
 
                 if (scrollval != 0) {
                     self.si.viewport.y = @max(0, @min(self.si.scroll_max(), self.si.viewport.y + scrollval));
-                    cueFrame();
+                    refresh();
 
                     // if we are scrolling, then we need a motion event next
                     // frame so that the child widget can adjust selection
@@ -5864,7 +5864,7 @@ pub const ScrollContainerWidget = struct {
                     if (!st.over_scroll) {
                         self.si.viewport.y = @max(0, @min(self.si.scroll_max(), self.si.viewport.y));
                     }
-                    cueFrame();
+                    refresh();
                 }
 
                 const ypx2 = @max(0, (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h));
@@ -5873,7 +5873,7 @@ pub const ScrollContainerWidget = struct {
                     if (!st.over_scroll) {
                         self.si.viewport.y = @max(0, @min(self.si.scroll_max(), self.si.viewport.y));
                     }
-                    cueFrame();
+                    refresh();
                 }
             },
             else => {},
@@ -5897,7 +5897,7 @@ pub const ScrollContainerWidget = struct {
                     } else if (me.kind == .wheel_y) {
                         e.handled = true;
                         self.si.viewport.y -= me.kind.wheel_y;
-                        cueFrame();
+                        refresh();
                     }
                 },
                 else => {},
@@ -5923,7 +5923,7 @@ pub const ScrollContainerWidget = struct {
             .none => {},
             .auto => if (self.nextVirtualSize.h != self.si.virtual_size.h) {
                 self.si.virtual_size.h = self.nextVirtualSize.h;
-                cueFrame();
+                refresh();
             },
             .given => {},
         }
@@ -6029,7 +6029,7 @@ pub const ScrollBarWidget = struct {
                                         f = self.si.scroll_fraction() + fi;
                                     }
                                     self.si.scrollToFraction(f);
-                                    cueFrame();
+                                    refresh();
                                 }
                             }
                         },
@@ -6054,7 +6054,7 @@ pub const ScrollBarWidget = struct {
                                     f = (grabmid - min) / (max - min);
                                 }
                                 self.si.scrollToFraction(f);
-                                cueFrame();
+                                refresh();
                             }
                         },
                         .position => {
@@ -6064,7 +6064,7 @@ pub const ScrollBarWidget = struct {
                         .wheel_y => |ticks| {
                             e.handled = true;
                             self.si.viewport.y -= ticks;
-                            cueFrame();
+                            refresh();
                         },
                     }
                 },
@@ -6269,7 +6269,7 @@ pub const MenuWidget = struct {
         // bubble this event to close all popups that had submenus leading to this
         var e = Event{ .evt = .{ .close_popup = .{} } };
         self.processEvent(&e, true);
-        cueFrame();
+        refresh();
     }
 
     pub fn widget(self: *Self) Widget {
@@ -6813,7 +6813,7 @@ pub const ButtonWidget = struct {
                         self.capture = captureMouse(null);
                         if (self.data().borderRectScale().r.contains(me.p)) {
                             self.click = true;
-                            cueFrame();
+                            refresh();
                         }
                     }
                 } else if (me.kind == .position) {
@@ -6825,7 +6825,7 @@ pub const ButtonWidget = struct {
                 if (ke.code == .space and ke.action == .down) {
                     e.handled = true;
                     self.click = true;
-                    cueFrame();
+                    refresh();
                 }
             },
             else => {},
@@ -7017,7 +7017,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
     knob.deinit();
 
     if (ret) {
-        cueFrame();
+        refresh();
     }
 
     return ret;
@@ -8281,13 +8281,13 @@ pub const WidgetData = struct {
             {
                 //std.debug.print("{x} minSizeSetAndCue {} {} {}\n", .{ self.id, self.rect, ms, self.min_size });
 
-                cueFrame();
+                refresh();
             }
         } else {
             // This is the first frame for this widget.  Almost always need a
             // second frame to appear correctly since nobody knew our min size the
             // first frame.
-            cueFrame();
+            refresh();
         }
         minSizeSet(self.id, self.min_size) catch |err| switch (err) {
             error.OutOfMemory => {
