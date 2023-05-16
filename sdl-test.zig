@@ -461,7 +461,7 @@ pub const StrokeTest = struct {
             self.processEvent(e, false);
         }
 
-        try self.wd.borderAndBackground();
+        try self.wd.borderAndBackground(.{});
 
         _ = gui.parentSet(self.widget());
 
