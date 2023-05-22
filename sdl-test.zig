@@ -151,7 +151,7 @@ pub fn main() !void {
                 //}
 
                 {
-                    var scroll = try gui.scrollArea(@src(), .{ .min_size_content = .{ .h = 100 } });
+                    var scroll = try gui.scrollArea(@src(), .{ .min_size_content = .{ .w = 50, .h = 100 } });
                     defer scroll.deinit();
 
                     var vbox = try gui.box(@src(), .vertical, .{ .expand = .both });
@@ -253,7 +253,7 @@ pub fn main() !void {
                         }
                     }
                     var scroll = try gui.scrollArea(@src(), .{ .min_size_content = .{ .w = 150, .h = 100 } });
-                    var tl = try gui.textLayout(@src(), .{ .selection = &Sel.sel }, .{ .expand = .both });
+                    var tl = try gui.textLayout(@src(), .{ .selection = &Sel.sel, .break_lines = false }, .{ .expand = .both });
                     {
                         //if (try gui.button(@src(), "Win Up .1", .{})) {
                         //    fwin.wd.rect.y -= 0.1;
@@ -262,9 +262,20 @@ pub fn main() !void {
                         //    fwin.wd.rect.y += 0.1;
                         //}
                     }
-                    //const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+                    const lorem =
+                        \\Lorem ipsum dolor sit amet, consectetur adipiscing elit,
+                        \\sed do eiusmod tempor incididunt ut labore et dolore
+                        \\magna aliqua. Ut enim ad minim veniam, quis nostrud
+                        \\exercitation ullamco laboris nisi ut aliquip ex ea
+                        \\commodo consequat. Duis aute irure dolor in
+                        \\reprehenderit in voluptate velit esse cillum dolore
+                        \\eu fugiat nulla pariatur. Excepteur sint occaecat
+                        \\cupidatat non proident, sunt in culpa qui officia
+                        \\deserunt mollit anim id est laborum."
+                    ;
+                    try tl.addText(lorem, .{});
                     //const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore";
-                    try tl.addText(Sel.text, .{});
+                    //try tl.addText(Sel.text, .{});
                     //var it = std.mem.split(u8, lorem, " ");
                     //while (it.next()) |word| {
                     //  tl.addText(word);
