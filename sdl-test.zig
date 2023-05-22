@@ -285,7 +285,7 @@ pub fn main() !void {
                     tl.deinit();
                     scroll.deinit();
 
-                    try gui.textEntry(@src(), .{ .text = &Sel.buf }, .{ .min_size_content = .{ .w = 150, .h = 30 } });
+                    try gui.textEntry(@src(), .{ .text = &Sel.buf }, .{ .min_size_content = .{ .w = 150, .h = 130 } });
                 }
             }
 

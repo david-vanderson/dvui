@@ -288,6 +288,17 @@ pub fn SDL_keysym_to_gui(keysym: i32) gui.enums.Key {
         c.SDLK_y => .y,
         c.SDLK_z => .z,
 
+        c.SDLK_0 => .zero,
+        c.SDLK_1 => .one,
+        c.SDLK_2 => .two,
+        c.SDLK_3 => .three,
+        c.SDLK_4 => .four,
+        c.SDLK_5 => .five,
+        c.SDLK_6 => .six,
+        c.SDLK_7 => .seven,
+        c.SDLK_8 => .eight,
+        c.SDLK_9 => .nine,
+
         c.SDLK_SPACE => .space,
         c.SDLK_BACKSPACE => .backspace,
         c.SDLK_UP => .up,
@@ -296,6 +307,7 @@ pub fn SDL_keysym_to_gui(keysym: i32) gui.enums.Key {
         c.SDLK_RIGHT => .right,
         c.SDLK_TAB => .tab,
         c.SDLK_ESCAPE => .escape,
+        c.SDLK_RETURN => .enter,
         else => .unknown,
     };
 }

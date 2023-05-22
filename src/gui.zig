@@ -4650,6 +4650,13 @@ pub const TextLayoutWidget = struct {
         var self = Self{ .wd = WidgetData.init(src, options), .selection_in = init_opts.selection };
         self.break_lines = init_opts.break_lines;
 
+        return self;
+    }
+
+    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
+        try self.wd.register("TextLayout", null);
+        _ = parentSet(self.widget());
+
         if (self.selection_in) |sel| {
             self.selection = sel;
         } else {
@@ -4674,13 +4681,6 @@ pub const TextLayoutWidget = struct {
                 self.cursor_updown_drag = cud;
             }
         }
-
-        return self;
-    }
-
-    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
-        try self.wd.register("TextLayout", null);
-        _ = parentSet(self.widget());
 
         if (opts.process_events) {
             self.processEvents();
@@ -4802,8 +4802,14 @@ pub const TextLayoutWidget = struct {
                     self.selection.end = self.sel_mouse_down_bytes.?;
                     self.sel_mouse_down_pt = null;
                 } else {
-                    // point is after this text, but we might not get anymore
-                    self.sel_mouse_down_bytes = self.bytes_seen + end;
+                    if (newline and p.y < (rs.y + rs.h)) {
+                        // point is after this text on this same horizontal line
+                        self.sel_mouse_down_bytes = self.bytes_seen + end - 1;
+                        self.sel_mouse_down_pt = null;
+                    } else {
+                        // point is after this text, but we might not get anymore
+                        self.sel_mouse_down_bytes = self.bytes_seen + end;
+                    }
                     self.selection.cursor = self.sel_mouse_down_bytes.?;
                     self.selection.start = self.sel_mouse_down_bytes.?;
                     self.selection.end = self.sel_mouse_down_bytes.?;
@@ -4880,19 +4886,37 @@ pub const TextLayoutWidget = struct {
                         self.selection.order();
                         self.scroll_to_cursor = true;
                     } else {
-                        // point is after this text, but we might not get anymore
-                        if (self.cursor_updown_drag) {
-                            if (self.selection.cursor == self.selection.start) {
-                                self.selection.cursor = self.bytes_seen + end;
-                                self.selection.start = self.bytes_seen + end;
+                        if (newline and p.y < (rs.y + rs.h)) {
+                            // point is after this text on this same horizontal line
+                            if (self.cursor_updown_drag) {
+                                if (self.selection.cursor == self.selection.start) {
+                                    self.selection.cursor = self.bytes_seen + end - 1;
+                                    self.selection.start = self.bytes_seen + end - 1;
+                                } else {
+                                    self.selection.cursor = self.bytes_seen + end - 1;
+                                    self.selection.end = self.bytes_seen + end - 1;
+                                }
+                            } else {
+                                self.selection.cursor = self.bytes_seen + end - 1;
+                                self.selection.start = self.bytes_seen + end - 1;
+                                self.selection.end = self.bytes_seen + end - 1;
+                            }
+                            self.cursor_updown_pt = null;
+                        } else {
+                            // point is after this text, but we might not get anymore
+                            if (self.cursor_updown_drag) {
+                                if (self.selection.cursor == self.selection.start) {
+                                    self.selection.cursor = self.bytes_seen + end;
+                                    self.selection.start = self.bytes_seen + end;
+                                } else {
+                                    self.selection.cursor = self.bytes_seen + end;
+                                    self.selection.end = self.bytes_seen + end;
+                                }
                             } else {
                                 self.selection.cursor = self.bytes_seen + end;
+                                self.selection.start = self.bytes_seen + end;
                                 self.selection.end = self.bytes_seen + end;
                             }
-                        } else {
-                            self.selection.cursor = self.bytes_seen + end;
-                            self.selection.start = self.bytes_seen + end;
-                            self.selection.end = self.bytes_seen + end;
                         }
                         self.selection.order();
                         self.scroll_to_cursor = true;
@@ -4958,6 +4982,11 @@ pub const TextLayoutWidget = struct {
             if (txt.len > 0 or newline) {
                 self.insert_pt.y += lineskip;
                 self.insert_pt.x = 0;
+                if (newline) {
+                    const newline_size = Size{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h };
+                    self.wd.min_size.w = math.max(self.wd.min_size.w, self.wd.padSize(newline_size).w);
+                    self.wd.min_size.h = math.max(self.wd.min_size.h, self.wd.padSize(newline_size).h);
+                }
             }
         }
     }
@@ -5960,6 +5989,24 @@ pub const ScrollContainerWidget = struct {
                     self.si.viewport.y = self.si.viewport.y + (ypx2 / rs.s);
                     if (!st.over_scroll) {
                         self.si.viewport.y = @max(0.0, @min(self.si.scroll_max(.vertical), self.si.viewport.y));
+                    }
+                    refresh();
+                }
+
+                const xpx = @max(0.0, rs.r.x - st.screen_rect.x);
+                if (xpx > 0) {
+                    self.si.viewport.x = self.si.viewport.x - (xpx / rs.s);
+                    if (!st.over_scroll) {
+                        self.si.viewport.x = @max(0.0, @min(self.si.scroll_max(.horizontal), self.si.viewport.x));
+                    }
+                    refresh();
+                }
+
+                const xpx2 = @max(0.0, (st.screen_rect.x + st.screen_rect.w) - (rs.r.x + rs.r.w));
+                if (xpx2 > 0) {
+                    self.si.viewport.x = self.si.viewport.x + (xpx2 / rs.s);
+                    if (!st.over_scroll) {
+                        self.si.viewport.x = @max(0.0, @min(self.si.scroll_max(.horizontal), self.si.viewport.x));
                     }
                     refresh();
                 }
@@ -7251,6 +7298,7 @@ pub const TextEntryWidget = struct {
 
     pub const InitOptions = struct {
         text: []u8,
+        break_lines: bool = false,
     };
 
     wd: WidgetData = undefined,
@@ -7261,6 +7309,7 @@ pub const TextEntryWidget = struct {
     allocator: ?std.mem.Allocator = null,
     text: []u8 = undefined,
     len: usize = undefined,
+    break_lines: bool = undefined,
     scroll_to_cursor: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
@@ -7279,6 +7328,7 @@ pub const TextEntryWidget = struct {
         self.wd = WidgetData.init(src, options);
 
         self.text = init_opts.text;
+        self.break_lines = init_opts.break_lines;
         self.len = std.mem.indexOfScalar(u8, self.text, 0) orelse self.text.len;
         return self;
     }
@@ -7302,7 +7352,7 @@ pub const TextEntryWidget = struct {
 
         const scrollclip = clipGet();
 
-        self.textLayout = TextLayoutWidget.init(@src(), .{}, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding }));
+        self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.break_lines }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding }));
         try self.textLayout.install(.{ .process_events = false });
 
         // textLayout clips to its content, but we need to get events out to our border
@@ -7383,6 +7433,39 @@ pub const TextEntryWidget = struct {
         self.wd.minSizeMax(self.wd.padSize(s));
     }
 
+    pub fn textTyped(self: *Self, new: []const u8) void {
+        if (self.textLayout.selectionGet(.{})) |sel| {
+            if (sel.start != sel.end) {
+                // delete selection
+                std.mem.copy(u8, self.text[sel.start..], self.text[sel.end..self.len]);
+                self.len -= (sel.end - sel.start);
+                sel.end = sel.start;
+                sel.cursor = sel.start;
+            }
+            const new_len = math.min(new.len, self.text.len - self.len);
+
+            // make room if we can
+            if (sel.cursor + new_len < self.text.len) {
+                std.mem.copyBackwards(u8, self.text[sel.cursor + new_len ..], self.text[sel.cursor..self.len]);
+            }
+
+            // update our len and maintain 0 termination if possible
+            self.len += new_len;
+            if (self.len < self.text.len) {
+                self.text[self.len] = 0;
+            }
+
+            // insert
+            std.mem.copy(u8, self.text[sel.cursor..], new);
+            sel.cursor += new_len;
+            sel.end = sel.cursor;
+            sel.start = sel.cursor;
+
+            // we might have dropped to a new line, so make sure the cursor is visible
+            self.scroll_to_cursor = true;
+        }
+    }
+
     pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
         _ = bubbling;
         switch (e.evt) {
@@ -7409,6 +7492,12 @@ pub const TextEntryWidget = struct {
                                     sel.end = sel.cursor;
                                 }
                             }
+                        }
+                    },
+                    .enter => {
+                        if (ke.action == .down or ke.action == .repeat) {
+                            e.handled = true;
+                            self.textTyped("\n");
                         }
                     },
                     .tab => {
@@ -7465,37 +7554,8 @@ pub const TextEntryWidget = struct {
             },
             .text => |te| {
                 e.handled = true;
-                if (self.textLayout.selectionGet(.{})) |sel| {
-                    var new = std.mem.sliceTo(te, 0);
-                    if (sel.start != sel.end) {
-                        // delete selection
-                        std.mem.copy(u8, self.text[sel.start..], self.text[sel.end..self.len]);
-                        self.len -= (sel.end - sel.start);
-                        sel.end = sel.start;
-                        sel.cursor = sel.start;
-                    }
-                    new.len = math.min(new.len, self.text.len - self.len);
-
-                    // make room if we can
-                    if (sel.cursor + new.len < self.text.len) {
-                        std.mem.copyBackwards(u8, self.text[sel.cursor + new.len ..], self.text[sel.cursor..self.len]);
-                    }
-
-                    // update our len and maintain 0 termination if possible
-                    self.len += new.len;
-                    if (self.len < self.text.len) {
-                        self.text[self.len] = 0;
-                    }
-
-                    // insert
-                    std.mem.copy(u8, self.text[sel.cursor..], new);
-                    sel.cursor += new.len;
-                    sel.end = sel.cursor;
-                    sel.start = sel.cursor;
-
-                    // we might have dropped to a new line, so make sure the cursor is visible
-                    self.scroll_to_cursor = true;
-                }
+                var new = std.mem.sliceTo(te, 0);
+                self.textTyped(new);
             },
             .mouse => |me| {
                 if (me.kind == .focus) {
