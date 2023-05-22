@@ -1,15 +1,29 @@
 
 add horizontal scrolling
+- ScrollArea: don't make boxes and bars if there's no scrolling in that direction
+
+make horizontal scrolling default to none
+- ScrollInfo
+
+TODO in ScrollArea.install about corner_radius
+
+remove setVirtualSize in favor of init options
+
+remove that weird thing where animating floating window creates a floating window and then maybe recreates it
+
+make textSize handle multiple lines
+ - textSizeEx can stop on newline
 
 TextEntry needs a single_line option which replaces newlines with spaces
+
+update gui-demo and podcast
+
+look into why mouse events seem delayed when using vsync
+- try only calling SDL_PollEvent (or pump events) once per frame? (and using peep events to actually get the events)
 
 unify Widget and WidgetData somehow?
 
 make widget functions optional with defaults?
-
-text editing
-- make TextEntryWidget wrap a scrollarea and TextLayout
-  - TextEntryWidget gets focus (and tabindex), when it processes events, it sends unhandled events directly to TextLayout's processEvent function
 
 TextLayout support for large documents
 - need a function to say "we are skipping a bunch of bytes" (might be useful for code folding as well)

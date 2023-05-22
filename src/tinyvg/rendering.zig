@@ -83,7 +83,7 @@ pub fn renderStream(
     // Fill the destination buffer with magic magenta. None if this will be visible
     // in the end, but it will show users where they do wrong alpha interpolation
     // by bleeding in magenta
-    std.mem.set(Color, framebuffer.slice, Color{ .r = 1, .g = 0, .b = 1, .a = 0 });
+    @memset(framebuffer.slice, Color{ .r = 1, .g = 0, .b = 1, .a = 0 });
 
     while (try parser.next()) |cmd| {
         try renderCommand(&framebuffer, parser.header, parser.color_table, cmd, temporary_allocator);
