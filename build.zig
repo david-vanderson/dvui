@@ -113,8 +113,8 @@ pub fn build(b: *std.build.Builder) !void {
         //exe.linkLibrary(sdl_dep.artifact("SDL2"));
 
         exe.linkSystemLibrary("SDL2");
-        //exe.addIncludePath("/home/dvanderson/code/SDL/zig-out/include");
-        //exe.addObjectFile("/home/dvanderson/code/SDL/zig-out/lib/libSDL2.a");
+        //exe.addIncludePath("/home/dvanderson/SDL/include");
+        //exe.addObjectFile("/home/dvanderson/SDL/build/.libs/libSDL2.a");
 
         if (target.isDarwin()) {
             exe.linkSystemLibrary("z");
