@@ -5697,17 +5697,21 @@ pub const ScrollAreaWidget = struct {
         self.focus_id = opts.focus_id;
         try self.hbox.install(.{});
 
-        // do the scrollbars first so that they still appear even if there's not enough space
-        var vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = si, .focus_id = self.focus_id orelse self.scroll.data().id }, .{ .gravity_x = 1.0 });
-        try vbar.install(.{});
-        vbar.deinit();
+        if (si.vertical != .none) {
+            // do the scrollbars first so that they still appear even if there's not enough space
+            var vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = si, .focus_id = self.focus_id orelse self.scroll.data().id }, .{ .gravity_x = 1.0 });
+            try vbar.install(.{});
+            vbar.deinit();
+        }
 
-        self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both }));
-        try self.vbox.install(.{});
+        if (si.horizontal != .none) {
+            self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both }));
+            try self.vbox.install(.{});
 
-        var hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = si, .focus_id = self.focus_id orelse self.scroll.data().id }, .{ .expand = .horizontal, .gravity_y = 1.0 });
-        try hbar.install(.{});
-        hbar.deinit();
+            var hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = si, .focus_id = self.focus_id orelse self.scroll.data().id }, .{ .expand = .horizontal, .gravity_y = 1.0 });
+            try hbar.install(.{});
+            hbar.deinit();
+        }
 
         var container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
 
@@ -5725,7 +5729,16 @@ pub const ScrollAreaWidget = struct {
     pub fn deinit(self: *Self) void {
         self.scroll.deinit();
 
-        self.vbox.deinit();
+        var si: *ScrollInfo = undefined;
+        if (self.io_scroll_info) |iosi| {
+            si = iosi;
+        } else {
+            si = &self.scroll_info;
+        }
+
+        if (si.horizontal != .none) {
+            self.vbox.deinit();
+        }
 
         dataSet(null, self.hbox.data().id, "_scroll_info", if (self.io_scroll_info) |iosi| iosi.* else self.scroll_info);
 

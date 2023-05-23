@@ -3,6 +3,8 @@ add horizontal scrolling
 - ScrollArea: don't make boxes and bars if there's no scrolling in that direction
 - also need option to have scrolling but not show bars?  For single line text entry
 
+textEntry: support shift-left/right
+
 test a scrollArea with horizontal scrolling but no vertical scrolling
 - can you expand vertically?
 
