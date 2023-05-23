@@ -3511,7 +3511,7 @@ pub const PopupWidget = struct {
         }
 
         self.layout.deinit();
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
 
         // outside normal layout, don't call minSizeForChild or
         // self.wd.minSizeReportToParent();
@@ -3886,7 +3886,7 @@ pub const FloatingWindowWidget = struct {
 
         dataSet(null, self.wd.id, "_auto_pos", self.auto_pos);
         dataSet(null, self.wd.id, "_auto_size", self.auto_size);
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
 
         // outside normal layout, don't call minSizeForChild or
         // self.wd.minSizeReportToParent();
@@ -4274,7 +4274,7 @@ pub const AnimateWidget = struct {
             }
         }
 
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
     }
@@ -4600,7 +4600,7 @@ pub const PanedWidget = struct {
     pub fn deinit(self: *Self) void {
         clipSet(self.prevClip);
         gui.dataSet(null, self.wd.id, "_data", SavedData{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = gui.parentSet(self.wd.parent);
     }
@@ -5213,7 +5213,7 @@ pub const TextLayoutWidget = struct {
             dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
         }
         clipSet(self.prevClip);
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
     }
@@ -5342,7 +5342,7 @@ pub const ContextWidget = struct {
         if (self.focused) {
             dataSet(null, self.wd.id, "_activePt", self.activePt);
         }
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
     }
@@ -5398,7 +5398,7 @@ pub const OverlayWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
     }
@@ -5600,7 +5600,7 @@ pub const BoxWidget = struct {
         }
 
         self.wd.minSizeMax(self.wd.padSize(ms));
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
 
         dataSet(null, self.wd.id, "_data", Data{ .total_weight_prev = self.total_weight, .min_space_taken_prev = self.min_space_taken });
@@ -5634,7 +5634,9 @@ pub const ScrollAreaWidget = struct {
     };
 
     hbox: BoxWidget = undefined,
+    vbar: ScrollBarWidget = undefined,
     vbox: BoxWidget = undefined,
+    hbar: ScrollBarWidget = undefined,
     io_scroll_info: ?*ScrollInfo = null,
     scroll_info: ScrollInfo = undefined,
     scroll: ScrollContainerWidget = undefined,
@@ -5699,18 +5701,16 @@ pub const ScrollAreaWidget = struct {
 
         if (si.vertical != .none) {
             // do the scrollbars first so that they still appear even if there's not enough space
-            var vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = si, .focus_id = self.focus_id orelse self.scroll.data().id }, .{ .gravity_x = 1.0 });
-            try vbar.install(.{});
-            vbar.deinit();
+            self.vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = si, .focus_id = self.focus_id orelse self.scroll.data().id }, .{ .gravity_x = 1.0 });
+            try self.vbar.install(.{});
         }
 
         if (si.horizontal != .none) {
             self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both }));
             try self.vbox.install(.{});
 
-            var hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = si, .focus_id = self.focus_id orelse self.scroll.data().id }, .{ .expand = .horizontal, .gravity_y = 1.0 });
-            try hbar.install(.{});
-            hbar.deinit();
+            self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = si, .focus_id = self.focus_id orelse self.scroll.data().id }, .{ .expand = .horizontal, .gravity_y = 1.0 });
+            try self.hbar.install(.{});
         }
 
         var container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
@@ -5737,7 +5737,12 @@ pub const ScrollAreaWidget = struct {
         }
 
         if (si.horizontal != .none) {
+            self.hbar.deinit();
             self.vbox.deinit();
+        }
+
+        if (si.vertical != .none) {
+            self.vbar.deinit();
         }
 
         dataSet(null, self.hbox.data().id, "_scroll_info", if (self.io_scroll_info) |iosi| iosi.* else self.scroll_info);
@@ -6177,7 +6182,7 @@ pub const ScrollContainerWidget = struct {
             .given => {},
         }
 
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
     }
@@ -6195,6 +6200,7 @@ pub const ScrollBarWidget = struct {
         scroll_info: *ScrollInfo,
         direction: Direction = .vertical,
         focus_id: ?u32 = null,
+        overlay: bool = false,
     };
 
     wd: WidgetData = undefined,
@@ -6203,16 +6209,25 @@ pub const ScrollBarWidget = struct {
     si: *ScrollInfo = undefined,
     focus_id: ?u32 = null,
     dir: Direction = undefined,
+    overlay: bool = false,
     highlight: bool = false,
+    captured: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         var self = Self{};
-        const options = defaults.override(opts);
-        self.wd = WidgetData.init(src, options);
-
         self.si = init_opts.scroll_info;
         self.focus_id = init_opts.focus_id;
         self.dir = init_opts.direction;
+        self.overlay = init_opts.overlay;
+
+        var options = defaults.override(opts);
+        if (self.overlay) {
+            // we don't want to take any space from parent
+            options.min_size_content = .{ .w = 5, .h = 5 };
+            options.rect = placeIn(parentGet().data().contentRect().justSize(), options.min_sizeGet(), opts.expandGet(), opts.gravityGet());
+        }
+        self.wd = WidgetData.init(src, options);
+
         return self;
     }
 
@@ -6221,7 +6236,7 @@ pub const ScrollBarWidget = struct {
         try self.wd.register("ScrollBar", null);
         try self.wd.borderAndBackground(.{});
 
-        const captured = captureMouseMaintain(self.wd.id);
+        self.captured = captureMouseMaintain(self.wd.id);
 
         self.grabRect = self.wd.contentRect();
         switch (self.dir) {
@@ -6241,15 +6256,6 @@ pub const ScrollBarWidget = struct {
             const grabrs = self.wd.parent.screenRectScale(self.grabRect);
             self.processEvents(grabrs.r);
         }
-
-        var fill = self.wd.options.color(.text).transparent(0.5);
-        if (captured or self.highlight) {
-            fill = self.wd.options.color(.text).transparent(0.3);
-        }
-        self.grabRect = self.grabRect.insetAll(2);
-        const grabrs = self.wd.parent.screenRectScale(self.grabRect);
-        try pathAddRect(grabrs.r, Rect.all(100));
-        try pathFillConvex(fill);
     }
 
     pub fn data(self: *Self) *WidgetData {
@@ -6354,7 +6360,16 @@ pub const ScrollBarWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.wd.minSizeSetAndCue();
+        var fill = self.wd.options.color(.text).transparent(0.5);
+        if (self.captured or self.highlight) {
+            fill = self.wd.options.color(.text).transparent(0.3);
+        }
+        self.grabRect = self.grabRect.insetAll(2);
+        const grabrs = self.wd.parent.screenRectScale(self.grabRect);
+        pathAddRect(grabrs.r, Rect.all(100)) catch {};
+        pathFillConvex(fill) catch {};
+
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
     }
 };
@@ -6369,7 +6384,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) !void {
     var wd = WidgetData.init(src, defaults.override(opts));
     try wd.register("Separator", null);
     try wd.borderAndBackground(.{});
-    wd.minSizeSetAndCue();
+    wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
 }
 
@@ -6379,7 +6394,7 @@ pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) Widget
     }
     var wd = WidgetData.init(src, opts.override(.{ .min_size_content = size }));
     wd.register("Spacer", null) catch {};
-    wd.minSizeSetAndCue();
+    wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
     return wd;
 }
@@ -6391,7 +6406,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     const options = defaults.override(opts);
     var wd = WidgetData.init(src, options);
     try wd.register("Spinner", null);
-    wd.minSizeSetAndCue();
+    wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
 
     if (wd.rect.empty()) {
@@ -6488,7 +6503,7 @@ pub const ScaleWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
     }
@@ -6585,7 +6600,7 @@ pub const MenuWidget = struct {
     pub fn deinit(self: *Self) void {
         self.box.deinit();
         dataSet(null, self.wd.id, "_sub_act", self.submenus_activated);
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = menuSet(self.parentMenu);
         _ = parentSet(self.wd.parent);
@@ -6812,7 +6827,7 @@ pub const MenuItemWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
     }
@@ -6882,7 +6897,7 @@ pub const LabelWidget = struct {
         }
         clipSet(oldclip);
 
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
     }
 
@@ -6943,7 +6958,7 @@ pub const IconWidget = struct {
         var rs = self.wd.parent.screenRectScale(rect);
         try renderIcon(self.name, self.tvg_bytes, rs, self.wd.options.rotationGet(), self.wd.options.color(.text));
 
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
     }
 
@@ -6980,7 +6995,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
     const rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
     try debugRenderFontAtlases(rs, opts.color(.text));
 
-    wd.minSizeSetAndCue();
+    wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
 }
 
@@ -7113,7 +7128,7 @@ pub const ButtonWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
     }
@@ -7672,7 +7687,7 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
 
@@ -8553,7 +8568,7 @@ pub const WidgetData = struct {
         self.min_size = Size.max(self.min_size, s);
     }
 
-    pub fn minSizeSetAndCue(self: *const WidgetData) void {
+    pub fn minSizeSetAndRefresh(self: *const WidgetData) void {
         if (minSizeGet(self.id)) |ms| {
             // If the size we got was exactly our previous min size then our min size
             // was a binding constraint.  So if our min size changed it might cause
@@ -8565,7 +8580,7 @@ pub const WidgetData = struct {
             if ((self.rect.w == ms.w and ms.w != self.min_size.w) or
                 (self.rect.h == ms.h and ms.h != self.min_size.h))
             {
-                //std.debug.print("{x} minSizeSetAndCue {} {} {}\n", .{ self.id, self.rect, ms, self.min_size });
+                //std.debug.print("{x} minSizeSetAndRefresh {} {} {}\n", .{ self.id, self.rect, ms, self.min_size });
 
                 refresh();
             }
@@ -8581,7 +8596,7 @@ pub const WidgetData = struct {
                 // it, which is very annoying because you can't "defer try
                 // widget.deinit()".  Also if we are having memory issues then we
                 // have larger problems than here.
-                std.debug.print("minSizeSetAndCue: got {!} when trying to minSizeSet widget {x}\n", .{ err, self.id });
+                std.debug.print("minSizeSetAndRefresh: got {!} when trying to minSizeSet widget {x}\n", .{ err, self.id });
             },
         };
     }
@@ -9077,7 +9092,7 @@ pub const examples = struct {
             var hbox = try gui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .background = true, .gravity_x = 0.5, .gravity_y = 0.5 };
+            const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .background = true, .gravity_y = 0.5 };
 
             var o = try gui.overlay(@src(), opts);
             _ = try gui.button(@src(), "default", .{});
