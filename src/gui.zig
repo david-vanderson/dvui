@@ -7547,7 +7547,7 @@ pub const TextEntryWidget = struct {
             }
 
             // insert
-            std.mem.copy(u8, self.text[sel.cursor..], new);
+            std.mem.copy(u8, self.text[sel.cursor..], new[0..new_len]);
             sel.cursor += new_len;
             sel.end = sel.cursor;
             sel.start = sel.cursor;
