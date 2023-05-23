@@ -4774,8 +4774,13 @@ pub const TextLayoutWidget = struct {
             var end: usize = undefined;
 
             // get slice of text that fits within width or ends with newline
-            // - always get at least 1 codepoint so we make progress
             var s = try options.fontGet().textSizeEx(txt, if (self.break_lines) width else null, &end, .before);
+
+            // ensure we always get at least 1 codepoint so we make progress
+            if (end == 0) {
+                end = std.unicode.utf8ByteSequenceLength(txt[0]) catch return error.InvalidUtf8;
+                s = try options.fontGet().textSize(txt[0..end]);
+            }
 
             const newline = (txt[end - 1] == '\n');
 
