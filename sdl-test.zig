@@ -496,7 +496,7 @@ pub const StrokeTest = struct {
         const stroke_color = gui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
         try gui.pathStroke(false, rs.s * thickness, .square, stroke_color);
 
-        self.wd.minSizeSetAndCue();
+        self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = gui.parentSet(self.wd.parent);
     }
