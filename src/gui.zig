@@ -210,12 +210,30 @@ pub const Options = struct {
         vertical,
         both,
 
-        pub fn horizontal(self: *const Expand) bool {
-            return (self.* == .horizontal or self.* == .both);
+        pub fn horizontal(self: Expand) bool {
+            return (self == .horizontal or self == .both);
         }
 
-        pub fn vertical(self: *const Expand) bool {
-            return (self.* == .vertical or self.* == .both);
+        pub fn vertical(self: Expand) bool {
+            return (self == .vertical or self == .both);
+        }
+
+        pub fn removeHorizontal(self: Expand) Expand {
+            return switch (self) {
+                .none => .none,
+                .horizontal => .none,
+                .vertical => .vertical,
+                .both => .vertical,
+            };
+        }
+
+        pub fn removeVertical(self: Expand) Expand {
+            return switch (self) {
+                .none => .none,
+                .horizontal => .horizontal,
+                .vertical => .none,
+                .both => .horizontal,
+            };
         }
     };
 
@@ -239,6 +257,10 @@ pub const Options = struct {
 
     // used to adjust widget id when @src() is not enough (like in a loop)
     id_extra: ?usize = null,
+
+    // used in debugging to give widgets a name, especially in compound widgets
+    name: ?[]const u8 = null,
+    debug: ?bool = null,
 
     // null is normal, meaning parent picks a rect for the child widget.  If
     // non-null, child widget is choosing its own place, meaning its not being
@@ -365,6 +387,10 @@ pub const Options = struct {
         return self.id_extra orelse 0;
     }
 
+    pub fn debugging(self: *const Options) bool {
+        return self.debug orelse false;
+    }
+
     pub fn expandGet(self: *const Options) Expand {
         return self.expand orelse .none;
     }
@@ -424,6 +450,7 @@ pub const Options = struct {
         return Options{
             // reset to defaults of internal widgets
             .id_extra = null,
+            .name = null,
             .rect = null,
             .min_size_content = null,
             .expand = null,
@@ -449,6 +476,7 @@ pub const Options = struct {
             .color_style = self.color_style,
             .font_style = self.font_style,
             .rotation = self.rotation,
+            .debug = self.debug,
         };
     }
 
@@ -580,8 +608,7 @@ pub const Font = struct {
                 break;
             }
 
-            // always include the first codepoint
-            if (ei > 0 and (maxx - minx) > mwidth) {
+            if ((maxx - minx) > mwidth) {
                 switch (end_metric) {
                     .before => break, // went too far
                     .nearest => {
@@ -3117,7 +3144,7 @@ pub const Window = struct {
             dum = !dum;
         }
 
-        var scroll = try gui.scrollArea(@src(), .{ .expand = .both, .background = false });
+        var scroll = try gui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
         defer scroll.deinit();
 
         var iter = std.mem.split(u8, self.debug_under_mouse_info, "\n");
@@ -4975,7 +5002,9 @@ pub const TextLayoutWidget = struct {
             // scroll area)
             self.insert_pt.x += s.w;
             const size = Size{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h };
-            self.wd.min_size.w = math.max(self.wd.min_size.w, self.wd.padSize(size).w);
+            if (!self.break_lines) {
+                self.wd.min_size.w = math.max(self.wd.min_size.w, self.wd.padSize(size).w);
+            }
             self.wd.min_size.h = math.max(self.wd.min_size.h, self.wd.padSize(size).h);
             txt = txt[end..];
             self.bytes_seen += end;
@@ -4986,7 +5015,9 @@ pub const TextLayoutWidget = struct {
                 self.insert_pt.x = 0;
                 if (newline) {
                     const newline_size = Size{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h };
-                    self.wd.min_size.w = math.max(self.wd.min_size.w, self.wd.padSize(newline_size).w);
+                    if (!self.break_lines) {
+                        self.wd.min_size.w = math.max(self.wd.min_size.w, self.wd.padSize(newline_size).w);
+                    }
                     self.wd.min_size.h = math.max(self.wd.min_size.h, self.wd.padSize(newline_size).h);
                 }
             }
@@ -5418,7 +5449,7 @@ pub const BoxWidget = struct {
 
     pub fn install(self: *Self, opts: struct {}) !void {
         _ = opts;
-        try self.wd.register("Box", null);
+        try self.wd.register(self.wd.options.name orelse "Box", null);
         try self.wd.borderAndBackground(.{});
 
         // our rect for children has to start at 0,0
@@ -5573,9 +5604,9 @@ pub const BoxWidget = struct {
     }
 };
 
-pub fn scrollArea(src: std.builtin.SourceLocation, opts: Options) !*ScrollAreaWidget {
+pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) !*ScrollAreaWidget {
     var ret = try currentWindow().arena.create(ScrollAreaWidget);
-    ret.* = ScrollAreaWidget.init(src, null, opts);
+    ret.* = ScrollAreaWidget.init(src, init_opts, opts);
     try ret.install(.{});
     return ret;
 }
@@ -5591,6 +5622,12 @@ pub const ScrollAreaWidget = struct {
         .color_style = .content,
     };
 
+    pub const InitOpts = struct {
+        scroll_info: ?*ScrollInfo = null,
+        vertical: ?ScrollInfo.ScrollType = null,
+        horizontal: ?ScrollInfo.ScrollType = null,
+    };
+
     hbox: BoxWidget = undefined,
     vbox: BoxWidget = undefined,
     io_scroll_info: ?*ScrollInfo = null,
@@ -5598,13 +5635,36 @@ pub const ScrollAreaWidget = struct {
     scroll: ScrollContainerWidget = undefined,
     focus_id: ?u32 = null,
 
-    pub fn init(src: std.builtin.SourceLocation, io_si: ?*ScrollInfo, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) Self {
         var self = Self{};
         const options = defaults.override(opts);
 
-        self.hbox = BoxWidget.init(src, .horizontal, false, options);
-        self.io_scroll_info = io_si;
-        self.scroll_info = if (io_si) |iosi| iosi.* else (dataGet(null, self.hbox.data().id, "_scroll_info", ScrollInfo) orelse ScrollInfo{});
+        self.hbox = BoxWidget.init(src, .horizontal, false, options.override(.{ .name = "ScrollAreaWidget" }));
+        self.io_scroll_info = init_opts.scroll_info;
+        if (self.io_scroll_info) |iosi| {
+            self.scroll_info = iosi.*;
+            if (init_opts.vertical) |_| {
+                std.debug.print("gui: ScrollAreaWidget {x} init_opts.vertical ignored because given init_opts.scroll_info\n", .{self.hbox.wd.id});
+            }
+            if (init_opts.horizontal) |_| {
+                std.debug.print("gui: ScrollAreaWidget {x} init_opts.horizontal ignored because given init_opts.scroll_info\n", .{self.hbox.wd.id});
+            }
+        } else if (dataGet(null, self.hbox.data().id, "_scroll_info", ScrollInfo)) |si| {
+            self.scroll_info = si;
+        } else {
+            self.scroll_info = ScrollInfo{};
+            if (init_opts.vertical) |iov| {
+                self.scroll_info.vertical = iov;
+            } else {
+                self.scroll_info.vertical = .auto;
+            }
+
+            if (init_opts.horizontal) |ioh| {
+                self.scroll_info.horizontal = ioh;
+            } else {
+                self.scroll_info.horizontal = .none;
+            }
+        }
         return self;
     }
 
@@ -5664,7 +5724,7 @@ pub const ScrollAreaWidget = struct {
 
         self.vbox.deinit();
 
-        var vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = si, .focus_id = self.focus_id orelse self.scroll.data().id }, .{ .gravity_x = 1.0 });
+        var vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = si, .focus_id = self.focus_id orelse self.scroll.data().id }, .{});
         vbar.install(.{}) catch {};
         vbar.deinit();
 
@@ -5675,14 +5735,14 @@ pub const ScrollAreaWidget = struct {
 };
 
 pub const ScrollInfo = struct {
-    pub const ScrollType = enum(u8) {
+    pub const ScrollType = enum {
         none, // no scrolling
         auto, // virtual size calculated from children
         given, // virtual size left as given
     };
 
     vertical: ScrollType = .auto,
-    horizontal: ScrollType = .auto,
+    horizontal: ScrollType = .none,
     virtual_size: Size = Size{},
     viewport: Rect = Rect{},
 
@@ -5881,13 +5941,21 @@ pub const ScrollContainerWidget = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        var child_size = minSize(id, min_size);
-
+        var expand = e;
         const y = self.next_widget_ypos;
         const h = self.si.virtual_size.h - y;
-        const w = self.si.virtual_size.w;
-        const rect = Rect{ .x = 0, .y = y, .w = math.min(w, child_size.w), .h = math.min(h, child_size.h) };
-        const ret = placeIn(rect, minSize(id, child_size), e, g);
+        switch (self.si.horizontal) {
+            .none => {},
+            .auto => expand = expand.removeHorizontal(), // can't expand when virtual size depends on child size
+            .given => {},
+        }
+        switch (self.si.vertical) {
+            .none => {},
+            .auto => expand = expand.removeVertical(), // can't expand when virtual size depends on child size
+            .given => {},
+        }
+        const rect = Rect{ .x = 0, .y = y, .w = self.si.virtual_size.w, .h = h };
+        const ret = placeIn(rect, minSize(id, min_size), expand, g);
         self.next_widget_ypos = (ret.y + ret.h);
         return ret;
     }
@@ -7369,7 +7437,7 @@ pub const TextEntryWidget = struct {
 
         const oldclip = clipGet();
 
-        self.scroll = ScrollAreaWidget.init(@src(), null, self.wd.options.strip().override(.{ .expand = .both }));
+        self.scroll = ScrollAreaWidget.init(@src(), .{}, self.wd.options.strip().override(.{ .expand = .both }));
         // scrollbars process mouse events here
         try self.scroll.install(.{ .focus_id = self.wd.id });
 
@@ -8874,7 +8942,7 @@ pub const examples = struct {
             }
         }
 
-        var scroll = try gui.scrollArea(@src(), .{ .expand = .both, .background = false });
+        var scroll = try gui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false, .debug = true });
         defer scroll.deinit();
 
         var scaler = try gui.scale(@src(), scale_val, .{ .expand = .horizontal });
@@ -9380,7 +9448,7 @@ pub const examples = struct {
         const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len;
         const height = @intToFloat(f32, num_icons) * IconBrowser.row_height;
 
-        var scroll = try gui.scrollArea(@src(), .{ .expand = .both });
+        var scroll = try gui.scrollArea(@src(), .{}, .{ .expand = .both });
         scroll.setVirtualSize(.{ .w = 0, .h = height });
         defer scroll.deinit();
 

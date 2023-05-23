@@ -151,7 +151,7 @@ pub fn main() !void {
                 //}
 
                 {
-                    var scroll = try gui.scrollArea(@src(), .{ .min_size_content = .{ .w = 50, .h = 100 } });
+                    var scroll = try gui.scrollArea(@src(), .{}, .{ .min_size_content = .{ .w = 50, .h = 100 } });
                     defer scroll.deinit();
 
                     var vbox = try gui.box(@src(), .vertical, .{ .expand = .both });
@@ -252,7 +252,7 @@ pub fn main() !void {
                             Sel.sel.cursor -= 1;
                         }
                     }
-                    var scroll = try gui.scrollArea(@src(), .{ .min_size_content = .{ .w = 150, .h = 100 } });
+                    var scroll = try gui.scrollArea(@src(), .{ .horizontal = .auto }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
                     var tl = try gui.textLayout(@src(), .{ .selection = &Sel.sel, .break_lines = false }, .{ .expand = .both });
                     {
                         //if (try gui.button(@src(), "Win Up .1", .{})) {
@@ -358,7 +358,7 @@ pub fn main() !void {
                     }
                 }
 
-                var scroll = try gui.scrollArea(@src(), .{ .expand = .both });
+                var scroll = try gui.scrollArea(@src(), .{}, .{ .expand = .both });
                 defer scroll.deinit();
                 var tl = gui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .both });
                 try tl.install(.{ .process_events = false });
