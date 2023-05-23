@@ -1,7 +1,4 @@
 
-test textlayout when it's too narrow for a single character
-- it needs to always render at least 1 character to progress
-
 add horizontal scrolling
 - ScrollArea: don't make boxes and bars if there's no scrolling in that direction
 - also need option to have scrolling but not show bars?  For single line text entry
