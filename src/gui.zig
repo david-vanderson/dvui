@@ -4840,7 +4840,9 @@ pub const TextLayoutWidget = struct {
                     self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
                     self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
                 }
-                self.scroll_to_cursor = true;
+
+                // don't set scroll_to_cursor here because when we are dragging
+                // we are already doing a scroll_drag in processEvent
             }
 
             if (self.cursor_updown == 0) {
@@ -5946,23 +5948,44 @@ pub const ScrollContainerWidget = struct {
             .scroll_drag => |sd| {
                 e.handled = true;
                 const rs = self.wd.contentRectScale();
-                var scrollval: f32 = 0;
+                var scrolly: f32 = 0;
                 if (sd.mouse_pt.y <= rs.r.y and // want to scroll up
                     sd.screen_rect.y < rs.r.y and // scrolling would show more of child
                     self.si.viewport.y > 0) // can scroll up
                 {
-                    scrollval = if (sd.injected) -200 * animationRate() else -5;
+                    scrolly = if (sd.injected) -200 * animationRate() else -5;
                 }
 
                 if (sd.mouse_pt.y >= (rs.r.y + rs.r.h) and
                     (sd.screen_rect.y + sd.screen_rect.h) > (rs.r.y + rs.r.h) and
                     self.si.viewport.y < self.si.scroll_max(.vertical))
                 {
-                    scrollval = if (sd.injected) 200 * animationRate() else 5;
+                    scrolly = if (sd.injected) 200 * animationRate() else 5;
                 }
 
-                if (scrollval != 0) {
-                    self.si.viewport.y = @max(0.0, @min(self.si.scroll_max(.vertical), self.si.viewport.y + scrollval));
+                var scrollx: f32 = 0;
+                if (sd.mouse_pt.x <= rs.r.x and // want to scroll left
+                    sd.screen_rect.x < rs.r.x and // scrolling would show more of child
+                    self.si.viewport.x > 0) // can scroll left
+                {
+                    scrollx = if (sd.injected) -200 * animationRate() else -5;
+                }
+
+                if (sd.mouse_pt.x >= (rs.r.x + rs.r.w) and
+                    (sd.screen_rect.x + sd.screen_rect.w) > (rs.r.x + rs.r.w) and
+                    self.si.viewport.x < self.si.scroll_max(.horizontal))
+                {
+                    scrollx = if (sd.injected) 200 * animationRate() else 5;
+                }
+
+                if (scrolly != 0 or scrollx != 0) {
+                    if (scrolly != 0) {
+                        self.si.viewport.y = @max(0.0, @min(self.si.scroll_max(.vertical), self.si.viewport.y + scrolly));
+                    }
+                    if (scrollx != 0) {
+                        self.si.viewport.x = @max(0.0, @min(self.si.scroll_max(.horizontal), self.si.viewport.x + scrollx));
+                    }
+
                     refresh();
 
                     // if we are scrolling, then we need a motion event next
