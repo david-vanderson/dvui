@@ -7466,12 +7466,6 @@ pub const TextEntryWidget = struct {
             var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, self.textLayout.data().id);
             while (iter.next()) |e| {
                 self.processEvent(e, false);
-                if (!e.handled) {
-                    self.scroll.scroll.processEvent(e, false);
-                }
-                if (!e.handled) {
-                    self.textLayout.processEvent(e, false);
-                }
             }
         }
 
@@ -7570,7 +7564,6 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
-        _ = bubbling;
         switch (e.evt) {
             .key => |ke| {
                 switch (ke.code) {
@@ -7667,6 +7660,10 @@ pub const TextEntryWidget = struct {
                 }
             },
             else => {},
+        }
+
+        if (!e.handled and !bubbling) {
+            self.textLayout.processEvent(e, false);
         }
 
         if (e.bubbleable()) {
