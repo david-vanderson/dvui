@@ -403,21 +403,23 @@ pub fn main() !void {
 }
 
 fn animatingWindow(src: std.builtin.SourceLocation, modal: bool, rect: *gui.Rect, openflag: *bool, start_closing: bool, opts: gui.Options) gui.FloatingWindowWidget {
-    var fwin = gui.FloatingWindowWidget.init(src, .{ .modal = modal, .rect = rect, .open_flag = openflag }, opts);
+    const fwin_id = gui.parentGet().extendID(src, opts.idExtra());
 
-    if (gui.firstFrame(fwin.data().id)) {
-        gui.animation(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
-        gui.dataSet(null, fwin.wd.id, "size", rect.*.size());
+    if (gui.firstFrame(fwin_id)) {
+        gui.animation(fwin_id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
+        gui.dataSet(null, fwin_id, "size", rect.*.size());
     }
 
     if (start_closing) {
-        gui.animation(fwin.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 100_000 });
-        gui.dataSet(null, fwin.wd.id, "size", rect.*.size());
+        gui.animation(fwin_id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 100_000 });
+        gui.dataSet(null, fwin_id, "size", rect.*.size());
     }
 
-    if (gui.animationGet(fwin.wd.id, "rect_percent")) |a| {
-        if (gui.dataGet(null, fwin.wd.id, "size", gui.Size)) |ss| {
-            var r = fwin.data().rect;
+    var fwin: gui.FloatingWindowWidget = undefined;
+
+    if (gui.animationGet(fwin_id, "rect_percent")) |a| {
+        if (gui.dataGet(null, fwin_id, "size", gui.Size)) |ss| {
+            var r = rect.*;
             const dw = ss.w * a.lerp();
             const dh = ss.h * a.lerp();
             r.x = r.x + (r.w / 2) - (dw / 2);
@@ -425,7 +427,7 @@ fn animatingWindow(src: std.builtin.SourceLocation, modal: bool, rect: *gui.Rect
             r.y = r.y + (r.h / 2) - (dh / 2);
             r.h = dh;
 
-            // pass null so our animating rect doesn't get saved back
+            // don't pass rect so our animating rect doesn't get saved back
             fwin = gui.FloatingWindowWidget.init(src, .{ .modal = modal, .open_flag = openflag }, opts.override(.{ .rect = r }));
 
             if (a.done() and r.empty()) {
@@ -433,6 +435,8 @@ fn animatingWindow(src: std.builtin.SourceLocation, modal: bool, rect: *gui.Rect
                 fwin.close();
             }
         }
+    } else {
+        fwin = gui.FloatingWindowWidget.init(src, .{ .modal = modal, .rect = rect, .open_flag = openflag }, opts);
     }
 
     return fwin;
