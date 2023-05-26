@@ -1,9 +1,4 @@
 
-test a scrollArea with horizontal scrolling but no vertical scrolling
-- can you expand vertically?
-
-TODO in ScrollArea.install about corner_radius
-
 remove setVirtualSize in favor of init options
 
 remove that weird thing where animating floating window creates a floating window and then maybe recreates it

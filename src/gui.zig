@@ -5712,13 +5712,6 @@ pub const ScrollAreaWidget = struct {
         }
 
         var container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
-
-        // since we have a scrollbar to the right of us, we only need to copy
-        // corner_radius.h (lower-left)
-        // TODO: revisit this when adding horizontal scroll and also when
-        // making scrollbars disappear if not needed
-        container_opts.corner_radius.?.h = self.hbox.data().options.corner_radiusGet().h;
-
         self.scroll = ScrollContainerWidget.init(@src(), self.si, container_opts);
 
         try self.scroll.install(.{ .process_events = opts.process_events });
@@ -5833,11 +5826,9 @@ pub const ScrollInfo = struct {
 pub const ScrollContainerWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
+        // most of the time ScrollContainer is used inside ScrollArea which
+        // overrides these
         .background = true,
-        // generally the top of a scroll area is against something flat (like
-        // window header), and the bottom is against something curved (bottom
-        // of a window)
-        .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
         .color_style = .content,
         .min_size_content = .{ .w = 5, .h = 5 },
     };
