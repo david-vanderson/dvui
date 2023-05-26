@@ -1,5 +1,6 @@
 
-remove that weird thing where animating floating window creates a floating window and then maybe recreates it
+move animatingWindow from sdl-test to demo/animations
+- it does window rect change instead of scale and remembers the position of the window
 
 textLayout: make ctrl-c copy work
 
