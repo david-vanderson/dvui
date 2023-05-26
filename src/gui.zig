@@ -5654,18 +5654,6 @@ pub const ScrollAreaWidget = struct {
         return self;
     }
 
-    pub fn setVirtualSize(self: *Self, s: Size) void {
-        if (s.w != 0) {
-            self.si.virtual_size.w = s.w;
-            self.si.horizontal = .given;
-        }
-
-        if (s.h != 0) {
-            self.si.virtual_size.h = s.h;
-            self.si.vertical = .given;
-        }
-    }
-
     pub fn install(self: *Self, opts: struct { process_events: bool = true, focus_id: ?u32 = null }) !void {
         if (self.init_opts.scroll_info) |si| {
             self.si = si;
@@ -9472,8 +9460,15 @@ pub const examples = struct {
         const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len;
         const height = @intToFloat(f32, num_icons) * IconBrowser.row_height;
 
-        var scroll = try gui.scrollArea(@src(), .{}, .{ .expand = .both });
-        scroll.setVirtualSize(.{ .w = 0, .h = height });
+        // we won't have the height the first frame, so always set it
+        var scroll_info: ScrollInfo = .{ .vertical = .given };
+        if (dataGet(null, fwin.wd.id, "scroll_info", ScrollInfo)) |si| {
+            scroll_info = si;
+            scroll_info.virtual_size.h = height;
+        }
+        defer dataSet(null, fwin.wd.id, "scroll_info", scroll_info);
+
+        var scroll = try gui.scrollArea(@src(), .{ .scroll_info = &scroll_info }, .{ .expand = .both });
         defer scroll.deinit();
 
         const visibleRect = scroll.si.viewport;
@@ -9484,8 +9479,12 @@ pub const examples = struct {
                 const r = gui.Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
                 var iconbox = try gui.box(@src(), .horizontal, .{ .id_extra = i, .expand = .horizontal, .rect = r });
 
-                _ = try gui.buttonIcon(@src(), 20, "gui.icons.papirus.actions." ++ d.name, @field(gui.icons.papirus.actions, d.name), .{});
-                try gui.labelNoFmt(@src(), d.name, .{ .gravity_y = 0.5 });
+                if (try gui.buttonIcon(@src(), 20, "gui.icons.papirus.actions." ++ d.name, @field(gui.icons.papirus.actions, d.name), .{})) {
+                    // TODO: copy full buttonIcon code line into clipboard and show toast
+                }
+                var tl = try gui.textLayout(@src(), .{ .break_lines = false }, .{});
+                try tl.addText("gui.icons.papirus.actions." ++ d.name, .{});
+                tl.deinit();
 
                 iconbox.deinit();
 
