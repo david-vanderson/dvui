@@ -5630,87 +5630,85 @@ pub const ScrollAreaWidget = struct {
     pub const InitOpts = struct {
         scroll_info: ?*ScrollInfo = null,
         vertical: ?ScrollInfo.ScrollType = null,
+        vertical_bar: ?bool = null,
         horizontal: ?ScrollInfo.ScrollType = null,
+        horizontal_bar: ?bool = null,
     };
 
     hbox: BoxWidget = undefined,
-    vbar: ScrollBarWidget = undefined,
-    vbox: BoxWidget = undefined,
-    hbar: ScrollBarWidget = undefined,
-    io_scroll_info: ?*ScrollInfo = null,
-    scroll_info: ScrollInfo = undefined,
+    vbar: ?ScrollBarWidget = undefined,
+    vbox: ?BoxWidget = undefined,
+    hbar: ?ScrollBarWidget = undefined,
+    init_opts: InitOpts = undefined,
+    si: *ScrollInfo = undefined,
+    si_store: ScrollInfo = .{},
     scroll: ScrollContainerWidget = undefined,
-    focus_id: ?u32 = null,
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) Self {
         var self = Self{};
+        self.init_opts = init_opts;
         const options = defaults.override(opts);
 
         self.hbox = BoxWidget.init(src, .horizontal, false, options.override(.{ .name = "ScrollAreaWidget" }));
-        self.io_scroll_info = init_opts.scroll_info;
-        if (self.io_scroll_info) |iosi| {
-            self.scroll_info = iosi.*;
-            if (init_opts.vertical) |_| {
-                std.debug.print("gui: ScrollAreaWidget {x} init_opts.vertical ignored because given init_opts.scroll_info\n", .{self.hbox.wd.id});
-            }
-            if (init_opts.horizontal) |_| {
-                std.debug.print("gui: ScrollAreaWidget {x} init_opts.horizontal ignored because given init_opts.scroll_info\n", .{self.hbox.wd.id});
-            }
-        } else if (dataGet(null, self.hbox.data().id, "_scroll_info", ScrollInfo)) |si| {
-            self.scroll_info = si;
-        } else {
-            self.scroll_info = ScrollInfo{};
-            if (init_opts.vertical) |iov| {
-                self.scroll_info.vertical = iov;
-            } else {
-                self.scroll_info.vertical = .auto;
-            }
 
-            if (init_opts.horizontal) |ioh| {
-                self.scroll_info.horizontal = ioh;
-            } else {
-                self.scroll_info.horizontal = .none;
-            }
-        }
         return self;
     }
 
     pub fn setVirtualSize(self: *Self, s: Size) void {
         if (s.w != 0) {
-            self.scroll_info.virtual_size.w = s.w;
-            if (self.io_scroll_info) |iosi| iosi.* = self.scroll_info;
+            self.si.virtual_size.w = s.w;
+            self.si.horizontal = .given;
         }
 
         if (s.h != 0) {
-            self.scroll_info.virtual_size.h = s.h;
-            self.scroll_info.vertical = .given;
-            if (self.io_scroll_info) |iosi| iosi.* = self.scroll_info;
+            self.si.virtual_size.h = s.h;
+            self.si.vertical = .given;
         }
     }
 
     pub fn install(self: *Self, opts: struct { process_events: bool = true, focus_id: ?u32 = null }) !void {
-        var si: *ScrollInfo = undefined;
-        if (self.io_scroll_info) |iosi| {
-            si = iosi;
+        if (self.init_opts.scroll_info) |si| {
+            self.si = si;
+            if (self.init_opts.vertical) |_| {
+                std.debug.print("gui: ScrollAreaWidget {x} init_opts.vertical ignored because given init_opts.scroll_info\n", .{self.hbox.wd.id});
+            }
+            if (self.init_opts.horizontal) |_| {
+                std.debug.print("gui: ScrollAreaWidget {x} init_opts.horizontal ignored because given init_opts.scroll_info\n", .{self.hbox.wd.id});
+            }
+        } else if (dataGet(null, self.hbox.data().id, "_scroll_info", ScrollInfo)) |si| {
+            self.si_store = si;
+            self.si = &self.si_store; // can't take pointer to self in init, so we do it in install
         } else {
-            si = &self.scroll_info;
+            self.si = &self.si_store; // can't take pointer to self in init, so we do it in install
+            if (self.init_opts.vertical) |iov| {
+                self.si.vertical = iov;
+            } else {
+                self.si.vertical = .auto;
+            }
+
+            if (self.init_opts.horizontal) |ioh| {
+                self.si.horizontal = ioh;
+            } else {
+                self.si.horizontal = .none;
+            }
         }
 
-        self.focus_id = opts.focus_id;
         try self.hbox.install(.{});
 
-        if (si.vertical != .none) {
+        const focus_target = opts.focus_id orelse dataGet(null, self.hbox.data().id, "_scroll_id", u32);
+
+        if (self.si.vertical != .none and self.init_opts.vertical_bar != false) {
             // do the scrollbars first so that they still appear even if there's not enough space
-            self.vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = si, .focus_id = self.focus_id orelse self.scroll.data().id }, .{ .gravity_x = 1.0 });
-            try self.vbar.install(.{});
+            self.vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = self.si, .focus_id = focus_target }, .{ .gravity_x = 1.0 });
+            try self.vbar.?.install(.{});
         }
 
-        if (si.horizontal != .none) {
+        if (self.si.horizontal != .none and self.init_opts.horizontal_bar != false) {
             self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both }));
-            try self.vbox.install(.{});
+            try self.vbox.?.install(.{});
 
-            self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = si, .focus_id = self.focus_id orelse self.scroll.data().id }, .{ .expand = .horizontal, .gravity_y = 1.0 });
-            try self.hbar.install(.{});
+            self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, .{ .expand = .horizontal, .gravity_y = 1.0 });
+            try self.hbar.?.install(.{});
         }
 
         var container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
@@ -5721,31 +5719,25 @@ pub const ScrollAreaWidget = struct {
         // making scrollbars disappear if not needed
         container_opts.corner_radius.?.h = self.hbox.data().options.corner_radiusGet().h;
 
-        self.scroll = ScrollContainerWidget.init(@src(), si, container_opts);
+        self.scroll = ScrollContainerWidget.init(@src(), self.si, container_opts);
 
         try self.scroll.install(.{ .process_events = opts.process_events });
     }
 
     pub fn deinit(self: *Self) void {
+        dataSet(null, self.hbox.data().id, "_scroll_id", self.scroll.wd.id);
         self.scroll.deinit();
 
-        var si: *ScrollInfo = undefined;
-        if (self.io_scroll_info) |iosi| {
-            si = iosi;
-        } else {
-            si = &self.scroll_info;
+        if (self.hbar) |*hbar| {
+            hbar.deinit();
+            self.vbox.?.deinit();
         }
 
-        if (si.horizontal != .none) {
-            self.hbar.deinit();
-            self.vbox.deinit();
+        if (self.vbar) |*vbar| {
+            vbar.deinit();
         }
 
-        if (si.vertical != .none) {
-            self.vbar.deinit();
-        }
-
-        dataSet(null, self.hbox.data().id, "_scroll_info", if (self.io_scroll_info) |iosi| iosi.* else self.scroll_info);
+        dataSet(null, self.hbox.data().id, "_scroll_info", self.si.*);
 
         self.hbox.deinit();
     }
@@ -7417,6 +7409,10 @@ pub const TextEntryWidget = struct {
     pub const InitOptions = struct {
         text: []u8,
         break_lines: bool = false,
+        scroll_vertical: bool = false,
+        scroll_vertical_bar: bool = true,
+        scroll_horizontal: bool = true,
+        scroll_horizontal_bar: bool = false,
     };
 
     wd: WidgetData = undefined,
@@ -7425,13 +7421,14 @@ pub const TextEntryWidget = struct {
     padding: Rect = undefined,
 
     allocator: ?std.mem.Allocator = null,
-    text: []u8 = undefined,
+    init_opts: InitOptions = undefined,
     len: usize = undefined,
-    break_lines: bool = undefined,
     scroll_to_cursor: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         var self = Self{};
+        self.init_opts = init_opts;
+
         const msize = opts.fontGet().textSize("M") catch unreachable;
         var options = defaults.override(.{ .min_size_content = .{ .w = msize.w * 14, .h = msize.h } }).override(opts);
 
@@ -7445,9 +7442,7 @@ pub const TextEntryWidget = struct {
 
         self.wd = WidgetData.init(src, options);
 
-        self.text = init_opts.text;
-        self.break_lines = init_opts.break_lines;
-        self.len = std.mem.indexOfScalar(u8, self.text, 0) orelse self.text.len;
+        self.len = std.mem.indexOfScalar(u8, self.init_opts.text, 0) orelse self.init_opts.text.len;
         return self;
     }
 
@@ -7464,13 +7459,18 @@ pub const TextEntryWidget = struct {
 
         const oldclip = clipGet();
 
-        self.scroll = ScrollAreaWidget.init(@src(), .{}, self.wd.options.strip().override(.{ .expand = .both }));
+        self.scroll = ScrollAreaWidget.init(@src(), .{
+            .vertical = if (self.init_opts.scroll_vertical) .auto else .none,
+            .vertical_bar = self.init_opts.scroll_vertical_bar,
+            .horizontal = if (self.init_opts.scroll_horizontal) .auto else .none,
+            .horizontal_bar = self.init_opts.scroll_horizontal_bar,
+        }, self.wd.options.strip().override(.{ .expand = .both }));
         // scrollbars process mouse events here
         try self.scroll.install(.{ .focus_id = self.wd.id });
 
         const scrollclip = clipGet();
 
-        self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.break_lines }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding }));
+        self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding }));
         try self.textLayout.install(.{ .process_events = false });
 
         // textLayout clips to its content, but we need to get events out to our border
@@ -7489,7 +7489,7 @@ pub const TextEntryWidget = struct {
         // set clip back to what textLayout expects
         clipSet(textclip);
 
-        try self.textLayout.addText(self.text[0..self.len], self.wd.options.strip());
+        try self.textLayout.addText(self.init_opts.text[0..self.len], self.wd.options.strip());
         try self.textLayout.addTextDone(self.wd.options.strip());
 
         if (focused) {
@@ -7549,26 +7549,26 @@ pub const TextEntryWidget = struct {
         if (self.textLayout.selectionGet(.{})) |sel| {
             if (sel.start != sel.end) {
                 // delete selection
-                std.mem.copy(u8, self.text[sel.start..], self.text[sel.end..self.len]);
+                std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
                 self.len -= (sel.end - sel.start);
                 sel.end = sel.start;
                 sel.cursor = sel.start;
             }
-            const new_len = math.min(new.len, self.text.len - self.len);
+            const new_len = math.min(new.len, self.init_opts.text.len - self.len);
 
             // make room if we can
-            if (sel.cursor + new_len < self.text.len) {
-                std.mem.copyBackwards(u8, self.text[sel.cursor + new_len ..], self.text[sel.cursor..self.len]);
+            if (sel.cursor + new_len < self.init_opts.text.len) {
+                std.mem.copyBackwards(u8, self.init_opts.text[sel.cursor + new_len ..], self.init_opts.text[sel.cursor..self.len]);
             }
 
             // update our len and maintain 0 termination if possible
             self.len += new_len;
-            if (self.len < self.text.len) {
-                self.text[self.len] = 0;
+            if (self.len < self.init_opts.text.len) {
+                self.init_opts.text[self.len] = 0;
             }
 
             // insert
-            std.mem.copy(u8, self.text[sel.cursor..], new[0..new_len]);
+            std.mem.copy(u8, self.init_opts.text[sel.cursor..], new[0..new_len]);
             sel.cursor += new_len;
             sel.end = sel.cursor;
             sel.start = sel.cursor;
@@ -7588,16 +7588,16 @@ pub const TextEntryWidget = struct {
                             if (self.textLayout.selectionGet(.{})) |sel| {
                                 if (sel.start != sel.end) {
                                     // just delete selection
-                                    std.mem.copy(u8, self.text[sel.start..], self.text[sel.end..self.len]);
+                                    std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
                                     self.len -= (sel.end - sel.start);
-                                    self.text[self.len] = 0;
+                                    self.init_opts.text[self.len] = 0;
                                     sel.end = sel.start;
                                     sel.cursor = sel.start;
                                 } else if (sel.cursor > 0) {
                                     // delete character just before cursor
-                                    std.mem.copy(u8, self.text[sel.cursor - 1 ..], self.text[sel.cursor..self.len]);
+                                    std.mem.copy(u8, self.init_opts.text[sel.cursor - 1 ..], self.init_opts.text[sel.cursor..self.len]);
                                     self.len -= 1;
-                                    self.text[self.len] = 0;
+                                    self.init_opts.text[self.len] = 0;
                                     sel.cursor -= 1;
                                     sel.start = sel.cursor;
                                     sel.end = sel.cursor;
@@ -8823,6 +8823,7 @@ pub const examples = struct {
     var checkbox_bool: bool = false;
     var slider_val: f32 = 0.0;
     var text_entry_buf = std.mem.zeroes([30]u8);
+    var text_entry_multiline_buf = std.mem.zeroes([500]u8);
     var show_dialog: bool = false;
     var scale_val: f32 = 1.0;
 
@@ -9070,6 +9071,14 @@ pub const examples = struct {
 
             try gui.label(@src(), "Text Entry", .{}, .{ .gravity_y = 0.5 });
             try gui.textEntry(@src(), .{ .text = &text_entry_buf }, .{});
+        }
+
+        {
+            var hbox = try gui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
+
+            try gui.label(@src(), "Text Entry Multiline", .{}, .{});
+            try gui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .scroll_vertical = true, .scroll_horizontal_bar = true }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
         }
     }
 
@@ -9476,7 +9485,7 @@ pub const examples = struct {
         scroll.setVirtualSize(.{ .w = 0, .h = height });
         defer scroll.deinit();
 
-        const visibleRect = scroll.scroll_info.viewport;
+        const visibleRect = scroll.si.viewport;
         var cursor: f32 = 0;
 
         inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls, 0..) |d, i| {
