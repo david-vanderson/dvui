@@ -66,7 +66,7 @@ pub fn main() !void {
 }
 
 fn gui_frame() !void {
-    var scroll = try gui.scrollArea(@src(), .{ .expand = .both, .color_style = .window });
+    var scroll = try gui.scrollArea(@src(), .{}, .{ .expand = .both, .color_style = .window });
     defer scroll.deinit();
 
     var tl = try gui.textLayout(@src(), .{}, .{ .expand = .both, .font_style = .title_4 });
