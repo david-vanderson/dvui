@@ -4648,7 +4648,7 @@ pub const TextLayoutWidget = struct {
     };
 
     wd: WidgetData = undefined,
-    corners: [4]?Rect = [_]?Rect{null} ** 2,
+    corners: [4]?Rect = [_]?Rect{null} ** 4,
     insert_pt: Point = Point{},
     prevClip: Rect = Rect{},
     first_line: bool = true,
