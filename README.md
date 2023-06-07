@@ -2,6 +2,8 @@
 
 A [Zig](https://ziglang.org/) native GUI toolkit for whole applications or extra debugging windows in an existing application.
 
+Status: Alpha.  Works well enough for use in real applications, like this [podcast player](https://github.com/david-vanderson/podcast), but not widely used as yet.
+
 Note: This tracks Zig master and won't work with 0.10.x
 
 See [gui-demo](https://github.com/david-vanderson/gui-demo) for integration examples.
@@ -10,9 +12,29 @@ Examples:
 - ```zig build run-standalone-sdl```
 - ```zig build run-ontop-sdl```
 
+Get Started: find the widget you want in the example and copy the code from the `demo()` function in `src/gui.zig`.
+
 ## Screenshot
 
 ![screenshot of demo](/screenshot_demo.png?raw=true)
+
+## Widgets
+
+- Text Entry (single and multiline)
+- Floating Window
+- Menu
+- Popup/Context Window
+- Scroll Area
+- Button
+- Slider
+- Checkbox
+- Toast
+
+- Missing Widgets for now
+ - dropdown box
+ - combo box
+ - radio button
+ - datagrid
 
 ## Features
 
