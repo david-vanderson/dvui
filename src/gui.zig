@@ -4648,7 +4648,7 @@ pub const TextLayoutWidget = struct {
     };
 
     wd: WidgetData = undefined,
-    corners: [2]?Rect = [_]?Rect{null} ** 2,
+    corners: [4]?Rect = [_]?Rect{null} ** 2,
     insert_pt: Point = Point{},
     prevClip: Rect = Rect{},
     first_line: bool = true,
@@ -5081,10 +5081,18 @@ pub const TextLayoutWidget = struct {
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         const ret = placeIn(self.wd.contentRect().justSize(), minSize(id, min_size), e, g);
         var i: usize = undefined;
-        if (g.x < 0.5) {
-            i = 0; // upleft
+        if (g.y < 0.5) {
+            if (g.x < 0.5) {
+                i = 0; // upleft
+            } else {
+                i = 1; // upright
+            }
         } else {
-            i = 1; // upright
+            if (g.x < 0.5) {
+                i = 2; // downleft
+            } else {
+                i = 3; // downright
+            }
         }
 
         self.corners[i] = ret;
@@ -6523,7 +6531,7 @@ pub const MenuWidget = struct {
         try self.wd.register("Menu", null);
         try self.wd.borderAndBackground(.{});
 
-        self.box = BoxWidget.init(@src(), self.dir, false, self.wd.options.strip());
+        self.box = BoxWidget.init(@src(), self.dir, false, self.wd.options.strip().override(.{ .expand = .both }));
         try self.box.install(.{});
     }
 
