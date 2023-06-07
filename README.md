@@ -20,21 +20,20 @@ Get Started: find the widget you want in the example and copy the code from the 
 
 ## Widgets
 
-- Text Entry (single and multiline)
-- Floating Window
-- Menu
-- Popup/Context Window
-- Scroll Area
-- Button
-- Slider
-- Checkbox
-- Toast
-
+  - Text Entry (single and multiline)
+  - Floating Window
+  - Menu
+  - Popup/Context Window
+  - Scroll Area
+  - Button
+  - Slider
+  - Checkbox
+  - Toast
 - Missing Widgets for now
- - dropdown box
- - combo box
- - radio button
- - datagrid
+  - dropdown box
+  - combo box
+  - radio button
+  - datagrid
 
 ## Features
 
