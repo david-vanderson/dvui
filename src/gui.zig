@@ -3958,7 +3958,7 @@ pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize
     } else {
         if (current_window) |cw| {
             const parent = parentGet();
-            const id = parent.extendID(src, id_extra);
+            const id = parent.extendId(src, id_extra);
             const mutex = try cw.dialogAdd(id, display);
             return .{ .id = id, .mutex = mutex };
         } else {
@@ -4068,7 +4068,7 @@ pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize,
     } else {
         if (current_window) |cw| {
             const parent = parentGet();
-            const id = parent.extendID(src, id_extra);
+            const id = parent.extendId(src, id_extra);
             const mutex = try cw.toastAdd(id, subwindow_id, display, timeout);
             return .{ .id = id, .mutex = mutex };
         } else {
@@ -8423,7 +8423,7 @@ pub const WidgetData = struct {
         self.options = opts;
 
         self.parent = parentGet();
-        self.id = self.parent.extendID(src, opts.idExtra());
+        self.id = self.parent.extendId(src, opts.idExtra());
 
         self.min_size = self.options.min_sizeGet();
 
@@ -8666,7 +8666,7 @@ pub const Widget = struct {
         return self.vtable.data(self.ptr);
     }
 
-    pub fn extendID(self: Widget, src: std.builtin.SourceLocation, id_extra: usize) u32 {
+    pub fn extendId(self: Widget, src: std.builtin.SourceLocation, id_extra: usize) u32 {
         var hash = fnv.init();
         hash.value = self.data().id;
         hash.update(src.file);
