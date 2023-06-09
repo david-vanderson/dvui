@@ -66,6 +66,28 @@ pub fn main() !void {
 }
 
 fn gui_frame() !void {
+    {
+        var m = try gui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
+        defer m.deinit();
+
+        if (try gui.menuItemLabel(@src(), "File", true, .{ .expand = .none })) |r| {
+            var fw = try gui.popup(@src(), gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
+            defer fw.deinit();
+
+            if (try gui.menuItemLabel(@src(), "Close Menu", false, .{}) != null) {
+                gui.menuGet().?.close();
+            }
+        }
+
+        if (try gui.menuItemLabel(@src(), "Edit", true, .{ .expand = .none })) |r| {
+            var fw = try gui.popup(@src(), gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
+            defer fw.deinit();
+            _ = try gui.menuItemLabel(@src(), "Cut", false, .{});
+            _ = try gui.menuItemLabel(@src(), "Copy", false, .{});
+            _ = try gui.menuItemLabel(@src(), "Paste", false, .{});
+        }
+    }
+
     var scroll = try gui.scrollArea(@src(), .{}, .{ .expand = .both, .color_style = .window });
     defer scroll.deinit();
 
@@ -75,7 +97,13 @@ fn gui_frame() !void {
     tl.deinit();
 
     var tl2 = try gui.textLayout(@src(), .{}, .{ .expand = .both });
-    try tl2.addText("The gui is painting the entire window, and can also show floating windows and dialogs.", .{});
+    try tl2.addText(
+        \\The gui
+        \\- paints the entire window
+        \\- can show floating windows and dialogs
+        \\- example menu at the top of the window
+        \\- rest of the window is a scroll area
+    , .{});
     try tl2.addText("\n\n", .{});
     try tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
     try tl2.addText("\n\n", .{});
