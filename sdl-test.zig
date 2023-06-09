@@ -403,7 +403,7 @@ pub fn main() !void {
 }
 
 fn animatingWindow(src: std.builtin.SourceLocation, modal: bool, rect: *gui.Rect, openflag: *bool, start_closing: bool, opts: gui.Options) gui.FloatingWindowWidget {
-    const fwin_id = gui.parentGet().extendID(src, opts.idExtra());
+    const fwin_id = gui.parentGet().extendId(src, opts.idExtra());
 
     if (gui.firstFrame(fwin_id)) {
         gui.animation(fwin_id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
