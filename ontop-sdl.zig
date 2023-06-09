@@ -86,6 +86,8 @@ fn gui_stuff() !void {
     var float = try gui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 400 } });
     defer float.deinit();
 
+    try gui.windowHeader("Floating Window", "", null);
+
     var scroll = try gui.scrollArea(@src(), .{}, .{ .expand = .both, .color_style = .window });
     defer scroll.deinit();
 
