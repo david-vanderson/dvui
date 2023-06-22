@@ -227,7 +227,7 @@ pub fn Parser(comptime Reader: type) type {
             try self.temp_buffer.resize(@sizeOf(T1) * length1 + @sizeOf(T2) * length2 + (@alignOf(T2) - 1));
 
             // T2 alignment could be larger than T1
-            const offset = std.mem.alignForward(@sizeOf(T1) * length1, @alignOf(T2));
+            const offset = std.mem.alignBackwardAnyAlign(@sizeOf(T1) * length1, @alignOf(T2));
 
             var result = .{
                 .first = std.mem.bytesAsSlice(T1, self.temp_buffer.items[0 .. @sizeOf(T1) * length1]),

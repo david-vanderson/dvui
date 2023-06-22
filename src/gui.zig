@@ -2527,7 +2527,7 @@ pub const Window = struct {
         var slop = self.loop_target_slop;
 
         // get slop we can take out of min_micros
-        const min_us_slop = @min(slop, min_micros);
+        const min_us_slop = @min(slop, @intCast(i32, min_micros));
         slop -= min_us_slop;
         if (min_us_slop >= 0) {
             min_micros -= @intCast(u32, min_us_slop);
@@ -2536,7 +2536,7 @@ pub const Window = struct {
         }
 
         // remaining slop we can take out of wait_micros
-        const wait_us_slop = @min(slop, wait_micros);
+        const wait_us_slop = @min(slop, @intCast(i32, wait_micros));
         slop -= wait_us_slop;
         if (wait_us_slop >= 0) {
             wait_micros -= @intCast(u32, wait_us_slop);
