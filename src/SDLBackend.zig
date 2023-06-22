@@ -50,7 +50,7 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) void {
         _ = c.SDL_WaitEvent(null);
     } else if (timeout_micros > 0) {
         // wait with a timeout
-        const timeout = std.math.min((timeout_micros + 999) / 1000, std.math.maxInt(c_int));
+        const timeout = @min((timeout_micros + 999) / 1000, std.math.maxInt(c_int));
         _ = c.SDL_WaitEventTimeout(null, @intCast(c_int, timeout));
     } else {
         // don't wait
@@ -87,7 +87,7 @@ pub fn setCursor(self: *SDLBackend, cursor: gui.Cursor) void {
     if (cursor != self.cursor_last) {
         self.cursor_last = cursor;
 
-        const enum_int = @enumToInt(cursor);
+        const enum_int = @intFromEnum(cursor);
         const tried = self.cursor_backing_tried[enum_int];
         if (!tried) {
             self.cursor_backing_tried[enum_int] = true;
@@ -151,14 +151,14 @@ pub fn pixelSize(self: *SDLBackend) gui.Size {
     var w: i32 = undefined;
     var h: i32 = undefined;
     _ = c.SDL_GetRendererOutputSize(self.renderer, &w, &h);
-    return gui.Size{ .w = @intToFloat(f32, w), .h = @intToFloat(f32, h) };
+    return gui.Size{ .w = @floatFromInt(f32, w), .h = @floatFromInt(f32, h) };
 }
 
 pub fn windowSize(self: *SDLBackend) gui.Size {
     var w: i32 = undefined;
     var h: i32 = undefined;
     _ = c.SDL_GetWindowSize(self.window, &w, &h);
-    return gui.Size{ .w = @intToFloat(f32, w), .h = @intToFloat(f32, h) };
+    return gui.Size{ .w = @floatFromInt(f32, w), .h = @floatFromInt(f32, h) };
 }
 
 pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const gui.Vertex, idx: []const u32) void {
@@ -176,7 +176,7 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const gui.
     //}
 
     // figure out how much we are losing by truncating x and y, need to add that back to w and h
-    const clip = c.SDL_Rect{ .x = @floatToInt(c_int, clipr.x), .y = @floatToInt(c_int, clipr.y), .w = std.math.max(0, @floatToInt(c_int, @ceil(clipr.w + clipr.x - @floor(clipr.x)))), .h = std.math.max(0, @floatToInt(c_int, @ceil(clipr.h + clipr.y - @floor(clipr.y)))) };
+    const clip = c.SDL_Rect{ .x = @intFromFloat(c_int, clipr.x), .y = @intFromFloat(c_int, clipr.y), .w = @max(0, @intFromFloat(c_int, @ceil(clipr.w + clipr.x - @floor(clipr.x)))), .h = @max(0, @intFromFloat(c_int, @ceil(clipr.h + clipr.y - @floor(clipr.y)))) };
 
     _ = c.SDL_RenderSetClipRect(self.renderer, &clip);
 
@@ -210,7 +210,7 @@ pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
             return try win.addEventText(std.mem.sliceTo(&event.text.text, 0));
         },
         c.SDL_MOUSEMOTION => {
-            return try win.addEventMouseMotion(@intToFloat(f32, event.motion.x), @intToFloat(f32, event.motion.y));
+            return try win.addEventMouseMotion(@floatFromInt(f32, event.motion.x), @floatFromInt(f32, event.motion.y));
         },
         c.SDL_MOUSEBUTTONDOWN => {
             return try win.addEventMouseButton(.{ .press = SDL_mouse_button_to_gui(event.button.button) });
@@ -219,7 +219,7 @@ pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
             return try win.addEventMouseButton(.{ .release = SDL_mouse_button_to_gui(event.button.button) });
         },
         c.SDL_MOUSEWHEEL => {
-            const ticks = @intToFloat(f32, event.wheel.y);
+            const ticks = @floatFromInt(f32, event.wheel.y);
             return try win.addEventMouseWheel(ticks);
         },
         else => {
@@ -247,16 +247,16 @@ pub fn SDL_keymod_to_gui(keymod: u16) gui.enums.Mod {
     if (keymod == c.KMOD_NONE) return gui.enums.Mod.none;
 
     var m: u16 = 0;
-    if (keymod & c.KMOD_LSHIFT > 0) m |= @enumToInt(gui.enums.Mod.lshift);
-    if (keymod & c.KMOD_RSHIFT > 0) m |= @enumToInt(gui.enums.Mod.rshift);
-    if (keymod & c.KMOD_LCTRL > 0) m |= @enumToInt(gui.enums.Mod.lctrl);
-    if (keymod & c.KMOD_RCTRL > 0) m |= @enumToInt(gui.enums.Mod.rctrl);
-    if (keymod & c.KMOD_LALT > 0) m |= @enumToInt(gui.enums.Mod.lalt);
-    if (keymod & c.KMOD_RALT > 0) m |= @enumToInt(gui.enums.Mod.ralt);
-    if (keymod & c.KMOD_LGUI > 0) m |= @enumToInt(gui.enums.Mod.lgui);
-    if (keymod & c.KMOD_RGUI > 0) m |= @enumToInt(gui.enums.Mod.rgui);
+    if (keymod & c.KMOD_LSHIFT > 0) m |= @intFromEnum(gui.enums.Mod.lshift);
+    if (keymod & c.KMOD_RSHIFT > 0) m |= @intFromEnum(gui.enums.Mod.rshift);
+    if (keymod & c.KMOD_LCTRL > 0) m |= @intFromEnum(gui.enums.Mod.lctrl);
+    if (keymod & c.KMOD_RCTRL > 0) m |= @intFromEnum(gui.enums.Mod.rctrl);
+    if (keymod & c.KMOD_LALT > 0) m |= @intFromEnum(gui.enums.Mod.lalt);
+    if (keymod & c.KMOD_RALT > 0) m |= @intFromEnum(gui.enums.Mod.ralt);
+    if (keymod & c.KMOD_LGUI > 0) m |= @intFromEnum(gui.enums.Mod.lgui);
+    if (keymod & c.KMOD_RGUI > 0) m |= @intFromEnum(gui.enums.Mod.rgui);
 
-    return @intToEnum(gui.enums.Mod, m);
+    return @enumFromInt(gui.enums.Mod, m);
 }
 
 pub fn SDL_keysym_to_gui(keysym: i32) gui.enums.Key {
