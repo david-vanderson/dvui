@@ -216,7 +216,7 @@ pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) !bool {
 }
 
 pub fn waitEventTimeout(self: *MachBackend, timeout_micros: u32) void {
-    self.core.setWaitEvent(@intToFloat(f64, timeout_micros) / 1_000_000);
+    self.core.setWaitEvent(@floatFromInt(f64, timeout_micros) / 1_000_000);
 }
 
 pub fn addAllEvents(self: *MachBackend, win: *gui.Window) !bool {
@@ -263,12 +263,12 @@ pub fn end(self: *MachBackend) void {
 
 pub fn pixelSize(self: *MachBackend) gui.Size {
     const psize = self.core.getFramebufferSize();
-    return gui.Size{ .w = @intToFloat(f32, psize.width), .h = @intToFloat(f32, psize.height) };
+    return gui.Size{ .w = @floatFromInt(f32, psize.width), .h = @floatFromInt(f32, psize.height) };
 }
 
 pub fn windowSize(self: *MachBackend) gui.Size {
     const size = self.core.getWindowSize();
-    return gui.Size{ .w = @intToFloat(f32, size.width), .h = @intToFloat(f32, size.height) };
+    return gui.Size{ .w = @floatFromInt(f32, size.width), .h = @floatFromInt(f32, size.height) };
 }
 
 pub fn renderGeometry(self: *MachBackend, tex: ?*anyopaque, vtx: []const gui.Vertex, idx: []const u32) void {
@@ -417,7 +417,7 @@ pub fn flushRender(self: *MachBackend) void {
 
     var vertices = arena.alloc(Vertex, self.vtx.items.len) catch unreachable;
     for (self.vtx.items, 0..) |vin, i| {
-        vertices[i] = Vertex{ .pos = vin.pos, .col = .{ @intToFloat(f32, vin.col.r) / 255.0, @intToFloat(f32, vin.col.g) / 255.0, @intToFloat(f32, vin.col.b) / 255.0, @intToFloat(f32, vin.col.a) / 255.0 }, .uv = vin.uv };
+        vertices[i] = Vertex{ .pos = vin.pos, .col = .{ @floatFromInt(f32, vin.col.r) / 255.0, @floatFromInt(f32, vin.col.g) / 255.0, @floatFromInt(f32, vin.col.b) / 255.0, @floatFromInt(f32, vin.col.a) / 255.0 }, .uv = vin.uv };
     }
     //std.debug.print("vertexes {d} + {d} indexes {d} + {d}\n", .{self.vertex_buffer_len, self.vtx.items.len, self.index_buffer_len, self.idx.items.len});
     self.encoder.writeBuffer(self.vertex_buffer, self.vertex_buffer_len * @sizeOf(Vertex), vertices);
@@ -434,7 +434,7 @@ pub fn flushRender(self: *MachBackend) void {
     pass.setBindGroup(0, bind_group, &.{});
 
     // figure out how much we are losing by truncating x and y, need to add that back to w and h
-    pass.setScissorRect(@floatToInt(u32, self.clipr.x), @floatToInt(u32, self.clipr.y), @floatToInt(u32, @ceil(self.clipr.w + self.clipr.x - @floor(self.clipr.x))), @floatToInt(u32, @ceil(self.clipr.h + self.clipr.y - @floor(self.clipr.y))));
+    pass.setScissorRect(@intFromFloat(u32, self.clipr.x), @intFromFloat(u32, self.clipr.y), @intFromFloat(u32, @ceil(self.clipr.w + self.clipr.x - @floor(self.clipr.x))), @intFromFloat(u32, @ceil(self.clipr.h + self.clipr.y - @floor(self.clipr.y))));
 
     pass.drawIndexed(@intCast(u32, self.idx.items.len), 1, 0, 0, 0);
     pass.end();

@@ -136,9 +136,9 @@ pub fn Parser(comptime Reader: type) type {
 
                     const scale_and_flags = @bitCast(ScaleAndFlags, try reader.readByte());
 
-                    const scale = @intToEnum(tvg.Scale, scale_and_flags.scale);
-                    const color_encoding = @intToEnum(tvg.ColorEncoding, scale_and_flags.color_encoding);
-                    const range = @intToEnum(tvg.Range, scale_and_flags.coordinate_range);
+                    const scale = @enumFromInt(tvg.Scale, scale_and_flags.scale);
+                    const color_encoding = @enumFromInt(tvg.ColorEncoding, scale_and_flags.color_encoding);
+                    const range = @enumFromInt(tvg.Range, scale_and_flags.coordinate_range);
 
                     const width: u32 = switch (range) {
                         .reduced => mapZeroToMax(try reader.readIntLittle(u8)),
@@ -159,17 +159,17 @@ pub fn Parser(comptime Reader: type) type {
                     for (self.color_table) |*c| {
                         c.* = switch (color_encoding) {
                             .u8888 => tvg.Color{
-                                .r = @intToFloat(f32, try reader.readIntLittle(u8)) / 255.0,
-                                .g = @intToFloat(f32, try reader.readIntLittle(u8)) / 255.0,
-                                .b = @intToFloat(f32, try reader.readIntLittle(u8)) / 255.0,
-                                .a = @intToFloat(f32, try reader.readIntLittle(u8)) / 255.0,
+                                .r = @floatFromInt(f32, try reader.readIntLittle(u8)) / 255.0,
+                                .g = @floatFromInt(f32, try reader.readIntLittle(u8)) / 255.0,
+                                .b = @floatFromInt(f32, try reader.readIntLittle(u8)) / 255.0,
+                                .a = @floatFromInt(f32, try reader.readIntLittle(u8)) / 255.0,
                             },
                             .u565 => blk: {
                                 const rgb = try reader.readIntLittle(u16);
                                 break :blk tvg.Color{
-                                    .r = @intToFloat(f32, (rgb & 0x001F) >> 0) / 31.0,
-                                    .g = @intToFloat(f32, (rgb & 0x07E0) >> 5) / 63.0,
-                                    .b = @intToFloat(f32, (rgb & 0xF800) >> 11) / 31.0,
+                                    .r = @floatFromInt(f32, (rgb & 0x001F) >> 0) / 31.0,
+                                    .g = @floatFromInt(f32, (rgb & 0x07E0) >> 5) / 63.0,
+                                    .b = @floatFromInt(f32, (rgb & 0xF800) >> 11) / 31.0,
                                     .a = 1.0,
                                 };
                             },
@@ -298,7 +298,7 @@ pub fn Parser(comptime Reader: type) type {
                 return null;
             const command_byte = try self.reader.readByte();
             const primary_style_type = std.meta.intToEnum(tvg.StyleType, @truncate(u2, command_byte >> 6)) catch return error.InvalidData;
-            const command = @intToEnum(tvg.Command, @truncate(u6, command_byte));
+            const command = @enumFromInt(tvg.Command, @truncate(u6, command_byte));
 
             return switch (command) {
                 .end_of_document => {
@@ -589,9 +589,9 @@ pub fn Parser(comptime Reader: type) type {
 
         fn readUnit(self: *const Self) !f32 {
             switch (self.header.coordinate_range) {
-                .reduced => return @intToEnum(tvg.Unit, try self.reader.readIntLittle(i8)).toFloat(self.header.scale),
-                .default => return @intToEnum(tvg.Unit, try self.reader.readIntLittle(i16)).toFloat(self.header.scale),
-                .enhanced => return @intToEnum(tvg.Unit, try self.reader.readIntLittle(i32)).toFloat(self.header.scale),
+                .reduced => return @enumFromInt(tvg.Unit, try self.reader.readIntLittle(i8)).toFloat(self.header.scale),
+                .default => return @enumFromInt(tvg.Unit, try self.reader.readIntLittle(i16)).toFloat(self.header.scale),
+                .enhanced => return @enumFromInt(tvg.Unit, try self.reader.readIntLittle(i32)).toFloat(self.header.scale),
             }
         }
 
@@ -621,9 +621,9 @@ const CountAndStyleTag = packed struct {
 
 fn convertStyleType(value: u2) !StyleType {
     return switch (value) {
-        @enumToInt(StyleType.flat) => StyleType.flat,
-        @enumToInt(StyleType.linear) => StyleType.linear,
-        @enumToInt(StyleType.radial) => StyleType.radial,
+        @intFromEnum(StyleType.flat) => StyleType.flat,
+        @intFromEnum(StyleType.linear) => StyleType.linear,
+        @intFromEnum(StyleType.radial) => StyleType.radial,
         else => error.InvalidData,
     };
 }

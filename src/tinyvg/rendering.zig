@@ -60,7 +60,7 @@ pub fn renderStream(
     };
 
     const super_scale: u32 = if (anti_alias) |factor|
-        @enumToInt(factor)
+        @intFromEnum(factor)
     else
         1;
 
@@ -127,7 +127,7 @@ pub fn renderStream(
 
         // Compute average
         for (&color) |*chan| {
-            chan.* = chan.* / @intToFloat(f32, super_scale * super_scale);
+            chan.* = chan.* / @floatFromInt(f32, super_scale * super_scale);
         }
 
         const final_a = color[3];
@@ -138,7 +138,7 @@ pub fn renderStream(
                 .r = mapToGamma8(color[0] / final_a),
                 .g = mapToGamma8(color[1] / final_a),
                 .b = mapToGamma8(color[2] / final_a),
-                .a = @floatToInt(u8, 255.0 * color[3]),
+                .a = @intFromFloat(u8, 255.0 * color[3]),
             };
         } else {
             pixel.* = Color8{ .r = 0xFF, .g = 0x00, .b = 0xFF, .a = 0x00 };
@@ -159,7 +159,7 @@ fn mapToGamma(val: f32) f32 {
 }
 
 fn mapToGamma8(val: f32) u8 {
-    return @floatToInt(u8, 255.0 * mapToGamma(val));
+    return @intFromFloat(u8, 255.0 * mapToGamma(val));
 }
 
 const Framebuffer = struct {
@@ -301,13 +301,13 @@ pub fn renderCommand(
 ) !void {
     if (!comptime isFramebuffer(@TypeOf(framebuffer)))
         @compileError("framebuffer needs fields width, height and function setPixel!");
-    const fb_width = @intToFloat(f32, framebuffer.width);
-    const fb_height = @intToFloat(f32, framebuffer.height);
+    const fb_width = @floatFromInt(f32, framebuffer.width);
+    const fb_height = @floatFromInt(f32, framebuffer.height);
     // std.debug.print("render {}\n", .{cmd});#
 
     var painter = Painter{
-        .scale_x = fb_width / @intToFloat(f32, header.width),
-        .scale_y = fb_height / @intToFloat(f32, header.height),
+        .scale_x = fb_width / @floatFromInt(f32, header.width),
+        .scale_y = fb_height / @floatFromInt(f32, header.height),
     };
 
     switch (cmd) {
@@ -532,7 +532,7 @@ pub fn renderPath(
                     const oct0_y = [4]f32{ previous.y, bezier.data.c0.y, bezier.data.c1.y, bezier.data.p1.y };
 
                     for (1..bezier_divs) |i| {
-                        const f = @intToFloat(f32, i) / @intToFloat(f32, bezier_divs);
+                        const f = @floatFromInt(f32, i) / @floatFromInt(f32, bezier_divs);
 
                         const x = lerpAndReduceToOne(4, oct0_x, f);
                         const y = lerpAndReduceToOne(4, oct0_y, f);
@@ -549,7 +549,7 @@ pub fn renderPath(
                     const oct0_y = [3]f32{ previous.y, bezier.data.c.y, bezier.data.p1.y };
 
                     for (1..bezier_divs) |i| {
-                        const f = @intToFloat(f32, i) / @intToFloat(f32, bezier_divs);
+                        const f = @floatFromInt(f32, i) / @floatFromInt(f32, bezier_divs);
 
                         const x = lerpAndReduceToOne(3, oct0_x, f);
                         const y = lerpAndReduceToOne(3, oct0_y, f);
@@ -746,10 +746,10 @@ fn renderCircle(
 
     var pos = sub(p0, center);
     for (0..circle_divs - 1) |i| {
-        const step_mat = rotationMat(@intToFloat(f32, i) * (if (turn_left) -arc else arc) / circle_divs);
+        const step_mat = rotationMat(@floatFromInt(f32, i) * (if (turn_left) -arc else arc) / circle_divs);
         const point = add(applyMat(step_mat, pos), center);
 
-        try point_list.append(point, lerp(start_width, end_width, @intToFloat(f32, i) / circle_divs));
+        try point_list.append(point, lerp(start_width, end_width, @floatFromInt(f32, i) / circle_divs));
     }
 
     try point_list.append(p1, end_width);
@@ -772,7 +772,7 @@ fn applyMat(mat: [2][2]f32, p: Point) Point {
 }
 
 fn pointFromInts(x: i16, y: i16) Point {
-    return Point{ .x = @intToFloat(f32, x) + 0.5, .y = @intToFloat(f32, y) + 0.5 };
+    return Point{ .x = @floatFromInt(f32, x) + 0.5, .y = @floatFromInt(f32, y) + 0.5 };
 }
 
 const IntPoint = struct { x: i16, y: i16 };
@@ -937,12 +937,12 @@ const Painter = struct {
     }
 
     fn fillRectangle(self: Painter, framebuffer: anytype, x: f32, y: f32, width: f32, height: f32, color_table: []const Color, style: Style) void {
-        const xlimit = @floatToInt(i16, @ceil(self.scale_x * (x + width)));
-        const ylimit = @floatToInt(i16, @ceil(self.scale_y * (y + height)));
+        const xlimit = @intFromFloat(i16, @ceil(self.scale_x * (x + width)));
+        const ylimit = @intFromFloat(i16, @ceil(self.scale_y * (y + height)));
 
-        var py = @floatToInt(i16, @floor(self.scale_y * y));
+        var py = @intFromFloat(i16, @floor(self.scale_y * y));
         while (py < ylimit) : (py += 1) {
-            var px = @floatToInt(i16, @floor(self.scale_x * x));
+            var px = @intFromFloat(i16, @floor(self.scale_x * x));
             while (px < xlimit) : (px += 1) {
                 framebuffer.setPixel(px, py, self.sampleStlye(color_table, style, px, py));
             }
@@ -1010,10 +1010,10 @@ const Painter = struct {
 
         const points = [_]tvg.Point{ line.start, line.end };
         for (points) |pt| {
-            min_x = std.math.min(min_x, @floatToInt(i16, @floor(self.scale_x * (pt.x - max_width))));
-            min_y = std.math.min(min_y, @floatToInt(i16, @floor(self.scale_y * (pt.y - max_width))));
-            max_x = std.math.max(max_x, @floatToInt(i16, @ceil(self.scale_x * (pt.x + max_width))));
-            max_y = std.math.max(max_y, @floatToInt(i16, @ceil(self.scale_y * (pt.y + max_width))));
+            min_x = std.math.min(min_x, @intFromFloat(i16, @floor(self.scale_x * (pt.x - max_width))));
+            min_y = std.math.min(min_y, @intFromFloat(i16, @floor(self.scale_y * (pt.y - max_width))));
+            max_x = std.math.max(max_x, @intFromFloat(i16, @ceil(self.scale_x * (pt.x + max_width))));
+            max_y = std.math.max(max_y, @intFromFloat(i16, @ceil(self.scale_y * (pt.y + max_width))));
         }
 
         // limit to valid screen area
@@ -1231,7 +1231,7 @@ fn floatToInt(comptime I: type, f: anytype) error{Overflow}!I {
         return error.Overflow;
     if (f > std.math.maxInt(I))
         return error.Overflow;
-    return @floatToInt(I, f);
+    return @intFromFloat(I, f);
 }
 
 fn floatToIntClamped(comptime I: type, f: anytype) I {
@@ -1241,5 +1241,5 @@ fn floatToIntClamped(comptime I: type, f: anytype) I {
         return std.math.minInt(I);
     if (f > std.math.maxInt(I))
         return std.math.maxInt(I);
-    return @floatToInt(I, f);
+    return @intFromFloat(I, f);
 }
