@@ -277,8 +277,8 @@ const SvgPath = struct {
                         data.data.radius,
                         data.data.radius,
                         0,
-                        @boolToInt(data.data.large_arc),
-                        @boolToInt(!data.data.sweep),
+                        @intFromBool(data.data.large_arc),
+                        @intFromBool(!data.data.sweep),
                         data.data.target.x,
                         data.data.target.y,
                     }),
@@ -286,8 +286,8 @@ const SvgPath = struct {
                         data.data.radius_x,
                         data.data.radius_y,
                         data.data.rotation,
-                        @boolToInt(data.data.large_arc),
-                        @boolToInt(!data.data.sweep),
+                        @intFromBool(data.data.large_arc),
+                        @intFromBool(!data.data.sweep),
                         data.data.target.x,
                         data.data.target.y,
                     }),
@@ -328,9 +328,9 @@ const SvgStyleCache = struct {
         }
         const color = self.color_table[i];
 
-        var r = @floatToInt(u8, std.math.clamp(255.0 * color.r, 0.0, 255.0));
-        var g = @floatToInt(u8, std.math.clamp(255.0 * color.g, 0.0, 255.0));
-        var b = @floatToInt(u8, std.math.clamp(255.0 * color.b, 0.0, 255.0));
+        var r = @intFromFloat(u8, std.math.clamp(255.0 * color.r, 0.0, 255.0));
+        var g = @intFromFloat(u8, std.math.clamp(255.0 * color.g, 0.0, 255.0));
+        var b = @intFromFloat(u8, std.math.clamp(255.0 * color.b, 0.0, 255.0));
         try writer.print("{s}:#{X:0>2}{X:0>2}{X:0>2};", .{ prefix, r, g, b });
         if (color.a != 1.0) {
             try writer.print("{s}-opacity:{d};", .{ prefix, color.a });
@@ -343,9 +343,9 @@ const SvgStyleCache = struct {
         }
         const color = self.color_table[i];
 
-        var r = @floatToInt(u8, std.math.clamp(255.0 * color.r, 0.0, 255.0));
-        var g = @floatToInt(u8, std.math.clamp(255.0 * color.g, 0.0, 255.0));
-        var b = @floatToInt(u8, std.math.clamp(255.0 * color.b, 0.0, 255.0));
+        var r = @intFromFloat(u8, std.math.clamp(255.0 * color.r, 0.0, 255.0));
+        var g = @intFromFloat(u8, std.math.clamp(255.0 * color.g, 0.0, 255.0));
+        var b = @intFromFloat(u8, std.math.clamp(255.0 * color.b, 0.0, 255.0));
         try writer.print("{s}#{X:0>2}{X:0>2}{X:0>2}{s}", .{ prefix, r, g, b, postfix });
     }
 };

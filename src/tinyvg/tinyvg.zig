@@ -150,7 +150,7 @@ pub const Scale = enum(u4) {
     }
 
     pub fn getShiftBits(self: *const Self) u4 {
-        return @enumToInt(self.*);
+        return @intFromEnum(self.*);
     }
 
     pub fn getScaleFactor(self: *const Self) u15 {
@@ -165,20 +165,20 @@ pub const Unit = enum(i32) {
     _,
 
     pub fn init(scale: Scale, value: f32) Self {
-        return @intToEnum(Self, @floatToInt(i32, value * @intToFloat(f32, scale.getScaleFactor()) + 0.5));
+        return @enumFromInt(Self, @intFromFloat(i32, value * @floatFromInt(f32, scale.getScaleFactor()) + 0.5));
     }
 
     pub fn raw(self: *const Self) i32 {
-        return @enumToInt(self.*);
+        return @intFromEnum(self.*);
     }
 
     pub fn toFloat(self: *const Self, scale: Scale) f32 {
-        return @intToFloat(f32, @enumToInt(self.*)) / @intToFloat(f32, scale.getScaleFactor());
+        return @floatFromInt(f32, @intFromEnum(self.*)) / @floatFromInt(f32, scale.getScaleFactor());
     }
 
     pub fn toInt(self: *const Self, scale: Scale) i32 {
         const factor = scale.getScaleFactor();
-        return @divFloor(@enumToInt(self.*) + (@divExact(factor, 2)), factor);
+        return @divFloor(@intFromEnum(self.*) + (@divExact(factor, 2)), factor);
     }
 
     pub fn toUnsignedInt(self: *const Self, scale: Scale) !u31 {
@@ -199,17 +199,17 @@ pub const Color = extern struct {
 
     pub fn toRgba8(self: *const Self) [4]u8 {
         return [4]u8{
-            @floatToInt(u8, std.math.clamp(255.0 * self.r, 0.0, 255.0)),
-            @floatToInt(u8, std.math.clamp(255.0 * self.g, 0.0, 255.0)),
-            @floatToInt(u8, std.math.clamp(255.0 * self.b, 0.0, 255.0)),
-            @floatToInt(u8, std.math.clamp(255.0 * self.a, 0.0, 255.0)),
+            @intFromFloat(u8, std.math.clamp(255.0 * self.r, 0.0, 255.0)),
+            @intFromFloat(u8, std.math.clamp(255.0 * self.g, 0.0, 255.0)),
+            @intFromFloat(u8, std.math.clamp(255.0 * self.b, 0.0, 255.0)),
+            @intFromFloat(u8, std.math.clamp(255.0 * self.a, 0.0, 255.0)),
         };
     }
 
     pub fn lerp(lhs: Self, rhs: Self, factor: f32) Self {
         const l = struct {
             fn l(a: f32, b: f32, c: f32) u8 {
-                return @floatToInt(u8, @intToFloat(f32, a) + (@intToFloat(f32, b) - @intToFloat(f32, a)) * std.math.clamp(c, 0, 1));
+                return @intFromFloat(u8, @floatFromInt(f32, a) + (@floatFromInt(f32, b) - @floatFromInt(f32, a)) * std.math.clamp(c, 0, 1));
             }
         }.l;
 
@@ -224,9 +224,9 @@ pub const Color = extern struct {
     pub fn fromString(str: []const u8) !Self {
         return switch (str.len) {
             6 => Self{
-                .r = @intToFloat(f32, try std.fmt.parseInt(u8, str[0..2], 16)) / 255.0,
-                .g = @intToFloat(f32, try std.fmt.parseInt(u8, str[2..4], 16)) / 255.0,
-                .b = @intToFloat(f32, try std.fmt.parseInt(u8, str[4..6], 16)) / 255.0,
+                .r = @floatFromInt(f32, try std.fmt.parseInt(u8, str[0..2], 16)) / 255.0,
+                .g = @floatFromInt(f32, try std.fmt.parseInt(u8, str[2..4], 16)) / 255.0,
+                .b = @floatFromInt(f32, try std.fmt.parseInt(u8, str[4..6], 16)) / 255.0,
                 .a = 1.0,
             },
             else => error.InvalidFormat,
