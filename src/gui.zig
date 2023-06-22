@@ -828,15 +828,15 @@ const FontCacheEntry = struct {
         };
 
         const m = self.face.*.glyph.*.metrics;
-        const minx = @intToFloat(f32, m.horiBearingX) / 64.0;
-        const miny = self.ascent - @intToFloat(f32, m.horiBearingY) / 64.0;
+        const minx = @floatFromInt(f32, m.horiBearingX) / 64.0;
+        const miny = self.ascent - @floatFromInt(f32, m.horiBearingY) / 64.0;
 
         const gi = GlyphInfo{
             .minx = @floor(minx),
-            .maxx = @ceil(minx + @intToFloat(f32, m.width) / 64.0),
-            .advance = @ceil(@intToFloat(f32, m.horiAdvance) / 64.0),
+            .maxx = @ceil(minx + @floatFromInt(f32, m.width) / 64.0),
+            .advance = @ceil(@floatFromInt(f32, m.horiAdvance) / 64.0),
             .miny = @floor(miny),
-            .maxy = @ceil(miny + @intToFloat(f32, m.height) / 64.0),
+            .maxy = @ceil(miny + @floatFromInt(f32, m.height) / 64.0),
             .uv = .{ 0, 0 },
         };
 
@@ -869,28 +869,28 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         return error.freetypeError;
     };
 
-    const pixel_size = @floatToInt(u32, font.size);
+    const pixel_size = @intFromFloat(u32, font.size);
     FontCacheEntry.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
         std.debug.print("fontCacheGet: freetype error {!} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, font.name });
         return error.freetypeError;
     };
 
-    const ascender = @intToFloat(f32, face.*.ascender) / 64.0;
-    const ss = @intToFloat(f32, face.*.size.*.metrics.y_scale) / 0x10000;
+    const ascender = @floatFromInt(f32, face.*.ascender) / 64.0;
+    const ss = @floatFromInt(f32, face.*.size.*.metrics.y_scale) / 0x10000;
     const ascent = ascender * ss;
     //std.debug.print("fontcache size {d} ascender {d} scale {d} ascent {d}\n", .{font.size, ascender, scale, ascent});
 
     // make debug texture atlas so we can see if something later goes wrong
     const size = .{ .w = 10, .h = 10 };
-    var pixels = try cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * 4);
+    var pixels = try cw.arena.alloc(u8, @intFromFloat(usize, size.w * size.h) * 4);
     @memset(pixels, 255);
 
     const entry = FontCacheEntry{
         .face = face,
-        .height = @ceil(@intToFloat(f32, face.*.size.*.metrics.height) / 64.0),
+        .height = @ceil(@floatFromInt(f32, face.*.size.*.metrics.height) / 64.0),
         .ascent = @ceil(ascent),
         .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-        .texture_atlas = cw.backend.textureCreate(pixels, @floatToInt(u32, size.w), @floatToInt(u32, size.h)),
+        .texture_atlas = cw.backend.textureCreate(pixels, @intFromFloat(u32, size.w), @intFromFloat(u32, size.h)),
         .texture_atlas_size = size,
         .texture_atlas_regen = true,
     };
@@ -921,7 +921,7 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
     };
     defer parser.deinit();
 
-    return height * @intToFloat(f32, parser.header.width) / @intToFloat(f32, parser.header.height);
+    return height * @floatFromInt(f32, parser.header.width) / @floatFromInt(f32, parser.header.height);
 }
 
 pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !IconCacheEntry {
@@ -938,7 +938,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !IconCa
         cw.arena,
         cw.arena,
         tvg.rendering.SizeHint{ .height = height },
-        @intToEnum(tvg.rendering.AntiAliasing, 2),
+        @enumFromInt(tvg.rendering.AntiAliasing, 2),
         tvg_bytes,
     ) catch |err| {
         std.debug.print("iconTexture: Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
@@ -954,7 +954,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !IconCa
 
     //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, image.width, image.height });
 
-    const entry = IconCacheEntry{ .texture = texture, .size = .{ .w = @intToFloat(f32, image.width), .h = @intToFloat(f32, image.height) } };
+    const entry = IconCacheEntry{ .texture = texture, .size = .{ .w = @floatFromInt(f32, image.width), .h = @floatFromInt(f32, image.height) } };
     try cw.icon_cache.put(icon_hash, entry);
 
     return entry;
@@ -1158,7 +1158,7 @@ pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool)
     const num_segments = math.max(@ceil((start - end) / theta), 4.0);
     const step = (start - end) / num_segments;
 
-    const num = @floatToInt(u32, num_segments);
+    const num = @intFromFloat(u32, num_segments);
     var a: f32 = start;
     var i: u32 = 0;
     while (i < num) : (i += 1) {
@@ -1958,7 +1958,7 @@ pub const Animation = struct {
     end_time: i32,
 
     pub fn lerp(a: *const Animation) f32 {
-        var frac = @intToFloat(f32, -a.start_time) / @intToFloat(f32, a.end_time - a.start_time);
+        var frac = @floatFromInt(f32, -a.start_time) / @floatFromInt(f32, a.end_time - a.start_time);
         frac = math.max(0, math.min(1, frac));
         return (a.start_val * (1.0 - frac)) + (a.end_val * frac);
     }
@@ -2436,7 +2436,7 @@ pub const Window = struct {
             return 0;
         }
 
-        const avg = @intToFloat(f32, diff) / @intToFloat(f32, self.frame_times.len - 1);
+        const avg = @floatFromInt(f32, diff) / @floatFromInt(f32, self.frame_times.len - 1);
         const fps = 1_000_000.0 / avg;
         return fps;
     }
@@ -2494,7 +2494,7 @@ pub const Window = struct {
         // minimum time to wait to hit max fps target
         var min_micros: u32 = 0;
         if (maxFPS) |mfps| {
-            min_micros = @floatToInt(u32, 1_000_000.0 / mfps);
+            min_micros = @intFromFloat(u32, 1_000_000.0 / mfps);
         }
 
         //std.debug.print("  end {d:6} min {d:6}", .{end_micros, min_micros});
@@ -2687,7 +2687,7 @@ pub const Window = struct {
         _ = subwindowCurrentSet(self.wd.id);
 
         self.extra_frames_needed -|= 1;
-        self.rate = @intToFloat(f32, micros_since_last) / 1_000_000;
+        self.rate = @floatFromInt(f32, micros_since_last) / 1_000_000;
 
         {
             const micros: i32 = if (micros_since_last > math.maxInt(i32)) math.maxInt(i32) else @intCast(i32, micros_since_last);
@@ -4979,7 +4979,7 @@ pub const TextLayoutWidget = struct {
                 const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h };
 
                 if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                    const cr_new = cr.add(.{ .y = @intToFloat(f32, self.cursor_updown) * size.h });
+                    const cr_new = cr.add(.{ .y = @floatFromInt(f32, self.cursor_updown) * size.h });
                     self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
 
                     // might have already passed, so need to go again next frame
@@ -5046,7 +5046,7 @@ pub const TextLayoutWidget = struct {
             const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h };
 
             if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                const cr_new = cr.add(.{ .y = @intToFloat(f32, self.cursor_updown) * size.h });
+                const cr_new = cr.add(.{ .y = @floatFromInt(f32, self.cursor_updown) * size.h });
                 self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
 
                 // might have already passed, so need to go again next frame
@@ -7700,34 +7700,34 @@ pub const Color = struct {
             .r = x.r,
             .g = x.g,
             .b = x.b,
-            .a = @floatToInt(u8, @intToFloat(f32, x.a) * y),
+            .a = @intFromFloat(u8, @floatFromInt(f32, x.a) * y),
         };
     }
 
     pub fn darken(x: Color, y: f32) Color {
         return Color{
-            .r = @floatToInt(u8, math.max(@intToFloat(f32, x.r) * (1 - y), 0)),
-            .g = @floatToInt(u8, math.max(@intToFloat(f32, x.g) * (1 - y), 0)),
-            .b = @floatToInt(u8, math.max(@intToFloat(f32, x.b) * (1 - y), 0)),
+            .r = @intFromFloat(u8, math.max(@floatFromInt(f32, x.r) * (1 - y), 0)),
+            .g = @intFromFloat(u8, math.max(@floatFromInt(f32, x.g) * (1 - y), 0)),
+            .b = @intFromFloat(u8, math.max(@floatFromInt(f32, x.b) * (1 - y), 0)),
             .a = x.a,
         };
     }
 
     pub fn lighten(x: Color, y: f32) Color {
         return Color{
-            .r = @floatToInt(u8, math.min(@intToFloat(f32, x.r) * (1 + y), 255)),
-            .g = @floatToInt(u8, math.min(@intToFloat(f32, x.g) * (1 + y), 255)),
-            .b = @floatToInt(u8, math.min(@intToFloat(f32, x.b) * (1 + y), 255)),
+            .r = @intFromFloat(u8, math.min(@floatFromInt(f32, x.r) * (1 + y), 255)),
+            .g = @intFromFloat(u8, math.min(@floatFromInt(f32, x.g) * (1 + y), 255)),
+            .b = @intFromFloat(u8, math.min(@floatFromInt(f32, x.b) * (1 + y), 255)),
             .a = x.a,
         };
     }
 
     pub fn lerp(x: Color, y: f32, z: Color) Color {
         return Color{
-            .r = @floatToInt(u8, @intToFloat(f32, x.r) * (1 - y) + @intToFloat(f32, z.r) * y),
-            .g = @floatToInt(u8, @intToFloat(f32, x.g) * (1 - y) + @intToFloat(f32, z.g) * y),
-            .b = @floatToInt(u8, @intToFloat(f32, x.b) * (1 - y) + @intToFloat(f32, z.b) * y),
-            .a = @floatToInt(u8, @intToFloat(f32, x.a) * (1 - y) + @intToFloat(f32, z.a) * y),
+            .r = @intFromFloat(u8, @floatFromInt(f32, x.r) * (1 - y) + @floatFromInt(f32, z.r) * y),
+            .g = @intFromFloat(u8, @floatFromInt(f32, x.g) * (1 - y) + @floatFromInt(f32, z.g) * y),
+            .b = @intFromFloat(u8, @floatFromInt(f32, x.b) * (1 - y) + @floatFromInt(f32, z.b) * y),
+            .a = @intFromFloat(u8, @floatFromInt(f32, x.a) * (1 - y) + @floatFromInt(f32, z.a) * y),
         };
     }
 
@@ -7989,7 +7989,7 @@ pub fn renderText(opts: renderTextOptions) !void {
         fce.texture_atlas_regen = false;
         cw.backend.textureDestroy(fce.texture_atlas);
 
-        const row_glyphs = @floatToInt(u32, @ceil(@sqrt(@intToFloat(f32, fce.glyph_info.count()))));
+        const row_glyphs = @intFromFloat(u32, @ceil(@sqrt(@floatFromInt(f32, fce.glyph_info.count()))));
 
         var size = Size{};
         {
@@ -8016,7 +8016,7 @@ pub fn renderText(opts: renderTextOptions) !void {
         size.w += 2 * pad;
         size.h += 2 * pad;
 
-        var pixels = try cw.arena.alloc(u8, @floatToInt(usize, size.w * size.h) * 4);
+        var pixels = try cw.arena.alloc(u8, @intFromFloat(usize, size.w * size.h) * 4);
         // set all pixels as white but with zero alpha
         for (pixels, 0..) |*p, i| {
             if (i % 4 == 3) {
@@ -8035,8 +8035,8 @@ pub fn renderText(opts: renderTextOptions) !void {
             var it = fce.glyph_info.iterator();
             var i: u32 = 0;
             while (it.next()) |e| {
-                e.value_ptr.uv[0] = @intToFloat(f32, x) / size.w;
-                e.value_ptr.uv[1] = @intToFloat(f32, y) / size.h;
+                e.value_ptr.uv[0] = @floatFromInt(f32, x) / size.w;
+                e.value_ptr.uv[1] = @floatFromInt(f32, y) / size.h;
 
                 const codepoint = @intCast(u32, e.key_ptr.*);
                 FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @bitCast(i32, FontCacheEntry.LoadFlags{ .render = true }))) catch |err| {
@@ -8057,7 +8057,7 @@ pub fn renderText(opts: renderTextOptions) !void {
                         const src = bitmap.buffer[@intCast(usize, row * bitmap.pitch + col)];
 
                         // because of the extra edge, offset by 1 row and 1 col
-                        const di = @intCast(usize, (y + row + pad) * @floatToInt(i32, size.w) * 4 + (x + col + pad) * 4);
+                        const di = @intCast(usize, (y + row + pad) * @intFromFloat(i32, size.w) * 4 + (x + col + pad) * 4);
 
                         // not doing premultiplied alpha (yet), so keep the white color but adjust the alpha
                         //pixels[di] = src;
@@ -8072,12 +8072,12 @@ pub fn renderText(opts: renderTextOptions) !void {
                 i += 1;
                 if (i % row_glyphs == 0) {
                     x = pad;
-                    y += @floatToInt(i32, fce.height) + 2 * pad;
+                    y += @intFromFloat(i32, fce.height) + 2 * pad;
                 }
             }
         }
 
-        fce.texture_atlas = cw.backend.textureCreate(pixels, @floatToInt(u32, size.w), @floatToInt(u32, size.h));
+        fce.texture_atlas = cw.backend.textureCreate(pixels, @intFromFloat(u32, size.w), @intFromFloat(u32, size.h));
         fce.texture_atlas_size = size;
     }
 
@@ -8266,7 +8266,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotati
     const ask_height = @ceil(target_size);
     const target_fraction = target_size / ask_height;
 
-    const ice = iconTexture(name, tvg_bytes, @floatToInt(u32, ask_height)) catch return;
+    const ice = iconTexture(name, tvg_bytes, @intFromFloat(u32, ask_height)) catch return;
 
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, 4);
     defer vtx.deinit();
@@ -9470,7 +9470,7 @@ pub const examples = struct {
         try gui.windowHeader("Icon Browser", "", &IconBrowser.show);
 
         const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len;
-        const height = @intToFloat(f32, num_icons) * IconBrowser.row_height;
+        const height = @floatFromInt(f32, num_icons) * IconBrowser.row_height;
 
         // we won't have the height the first frame, so always set it
         var scroll_info: ScrollInfo = .{ .vertical = .given };
