@@ -655,7 +655,7 @@ pub fn renderEllipse(
     // });
 
     const radius_min = distance(p0, p1) / 2.0;
-    const radius_lim = sqrt(radius_x * radius_x + radius_y * radius_y); // std.math.min(std.math.fabs(radius_x), std.math.fabs(radius_y));
+    const radius_lim = sqrt(radius_x * radius_x + radius_y * radius_y); // @min(std.math.fabs(radius_x), std.math.fabs(radius_y));
 
     const up_scale = if (radius_lim < radius_min)
         radius_min / radius_lim
@@ -738,7 +738,7 @@ fn renderCircle(
         // return error.InvalidRadius;
     }
 
-    const to_center = scale(radius_vec, sqrt(std.math.max(0, r * r / len_squared - 1)));
+    const to_center = scale(radius_vec, sqrt(@max(0, r * r / len_squared - 1)));
     const center = add(midpoint, to_center);
 
     const angle = std.math.asin(std.math.clamp(sqrt(len_squared) / r, -1.0, 1.0)) * 2;
@@ -883,19 +883,19 @@ const Painter = struct {
         for (points_lists) |points| {
             // std.debug.assert(points.len >= 3);
             for (points) |pt| {
-                min_x = std.math.min(min_x, floatToIntClamped(i16, @floor(self.scale_x * pt.x)));
-                min_y = std.math.min(min_y, floatToIntClamped(i16, @floor(self.scale_y * pt.y)));
-                max_x = std.math.max(max_x, floatToIntClamped(i16, @ceil(self.scale_x * pt.x)));
-                max_y = std.math.max(max_y, floatToIntClamped(i16, @ceil(self.scale_y * pt.y)));
+                min_x = @min(min_x, floatToIntClamped(i16, @floor(self.scale_x * pt.x)));
+                min_y = @min(min_y, floatToIntClamped(i16, @floor(self.scale_y * pt.y)));
+                max_x = @max(max_x, floatToIntClamped(i16, @ceil(self.scale_x * pt.x)));
+                max_y = @max(max_y, floatToIntClamped(i16, @ceil(self.scale_y * pt.y)));
             }
         }
 
         // limit to valid screen area
-        min_x = std.math.max(min_x, 0);
-        min_y = std.math.max(min_y, 0);
+        min_x = @max(min_x, 0);
+        min_y = @max(min_y, 0);
 
-        max_x = std.math.min(max_x, @intCast(i16, framebuffer.width - 1));
-        max_y = std.math.min(max_y, @intCast(i16, framebuffer.height - 1));
+        max_x = @min(max_x, @intCast(i16, framebuffer.width - 1));
+        max_y = @min(max_y, @intCast(i16, framebuffer.height - 1));
 
         var y: i16 = min_y;
         while (y <= max_y) : (y += 1) {
@@ -1006,22 +1006,22 @@ const Painter = struct {
         var max_x: i16 = std.math.minInt(i16);
         var max_y: i16 = std.math.minInt(i16);
 
-        const max_width = std.math.max(width_start, width_end);
+        const max_width = @max(width_start, width_end);
 
         const points = [_]tvg.Point{ line.start, line.end };
         for (points) |pt| {
-            min_x = std.math.min(min_x, @intFromFloat(i16, @floor(self.scale_x * (pt.x - max_width))));
-            min_y = std.math.min(min_y, @intFromFloat(i16, @floor(self.scale_y * (pt.y - max_width))));
-            max_x = std.math.max(max_x, @intFromFloat(i16, @ceil(self.scale_x * (pt.x + max_width))));
-            max_y = std.math.max(max_y, @intFromFloat(i16, @ceil(self.scale_y * (pt.y + max_width))));
+            min_x = @min(min_x, @intFromFloat(i16, @floor(self.scale_x * (pt.x - max_width))));
+            min_y = @min(min_y, @intFromFloat(i16, @floor(self.scale_y * (pt.y - max_width))));
+            max_x = @max(max_x, @intFromFloat(i16, @ceil(self.scale_x * (pt.x + max_width))));
+            max_y = @max(max_y, @intFromFloat(i16, @ceil(self.scale_y * (pt.y + max_width))));
         }
 
         // limit to valid screen area
-        min_x = std.math.max(min_x, 0);
-        min_y = std.math.max(min_y, 0);
+        min_x = @max(min_x, 0);
+        min_y = @max(min_y, 0);
 
-        max_x = std.math.min(max_x, @intCast(i16, framebuffer.width - 1));
-        max_y = std.math.min(max_y, @intCast(i16, framebuffer.height - 1));
+        max_x = @min(max_x, @intCast(i16, framebuffer.width - 1));
+        max_y = @min(max_y, @intCast(i16, framebuffer.height - 1));
 
         var y: i16 = min_y;
         while (y <= max_y) : (y += 1) {
@@ -1035,8 +1035,8 @@ const Painter = struct {
                     p,
                     line.start,
                     line.end,
-                    std.math.max(0.35, width_start / 2),
-                    std.math.max(0.35, width_end / 2),
+                    @max(0.35, width_start / 2),
+                    @max(0.35, width_end / 2),
                 );
 
                 if (dist <= 0.0) {

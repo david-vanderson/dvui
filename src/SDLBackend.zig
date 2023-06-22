@@ -50,7 +50,7 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) void {
         _ = c.SDL_WaitEvent(null);
     } else if (timeout_micros > 0) {
         // wait with a timeout
-        const timeout = std.math.min((timeout_micros + 999) / 1000, std.math.maxInt(c_int));
+        const timeout = @min((timeout_micros + 999) / 1000, std.math.maxInt(c_int));
         _ = c.SDL_WaitEventTimeout(null, @intCast(c_int, timeout));
     } else {
         // don't wait
@@ -176,7 +176,7 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const gui.
     //}
 
     // figure out how much we are losing by truncating x and y, need to add that back to w and h
-    const clip = c.SDL_Rect{ .x = @intFromFloat(c_int, clipr.x), .y = @intFromFloat(c_int, clipr.y), .w = std.math.max(0, @intFromFloat(c_int, @ceil(clipr.w + clipr.x - @floor(clipr.x)))), .h = std.math.max(0, @intFromFloat(c_int, @ceil(clipr.h + clipr.y - @floor(clipr.y)))) };
+    const clip = c.SDL_Rect{ .x = @intFromFloat(c_int, clipr.x), .y = @intFromFloat(c_int, clipr.y), .w = @max(0, @intFromFloat(c_int, @ceil(clipr.w + clipr.x - @floor(clipr.x)))), .h = @max(0, @intFromFloat(c_int, @ceil(clipr.h + clipr.y - @floor(clipr.y)))) };
 
     _ = c.SDL_RenderSetClipRect(self.renderer, &clip);
 
