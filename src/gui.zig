@@ -593,12 +593,12 @@ pub const Font = struct {
         while (utf8.nextCodepoint()) |codepoint| {
             const gi = try fce.glyphInfoGet(@intCast(u32, codepoint), self.name);
 
-            minx = math.min(minx, x + gi.minx);
-            maxx = math.max(maxx, x + gi.maxx);
-            maxx = math.max(maxx, x + gi.advance);
+            minx = @min(minx, x + gi.minx);
+            maxx = @max(maxx, x + gi.maxx);
+            maxx = @max(maxx, x + gi.advance);
 
-            miny = math.min(miny, gi.miny);
-            maxy = math.max(maxy, gi.maxy);
+            miny = @min(miny, gi.miny);
+            maxy = @max(maxy, gi.maxy);
 
             // TODO: kerning
 
@@ -1130,11 +1130,11 @@ pub fn pathAddPoint(p: Point) !void {
 
 pub fn pathAddRect(r: Rect, radius: Rect) !void {
     var rad = radius;
-    const maxrad = math.min(r.w, r.h) / 2;
-    rad.x = math.min(rad.x, maxrad);
-    rad.y = math.min(rad.y, maxrad);
-    rad.w = math.min(rad.w, maxrad);
-    rad.h = math.min(rad.h, maxrad);
+    const maxrad = @min(r.w, r.h) / 2;
+    rad.x = @min(rad.x, maxrad);
+    rad.y = @min(rad.y, maxrad);
+    rad.w = @min(rad.w, maxrad);
+    rad.h = @min(rad.h, maxrad);
     const tl = Point{ .x = r.x + rad.x, .y = r.y + rad.x };
     const bl = Point{ .x = r.x + rad.h, .y = r.y + r.h - rad.h };
     const br = Point{ .x = r.x + r.w - rad.w, .y = r.y + r.h - rad.w };
@@ -1152,10 +1152,10 @@ pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool)
     }
     const err = 1.0;
     // angle that has err error between circle and segments
-    const theta = math.acos(1.0 - math.min(rad, err) / rad);
+    const theta = math.acos(1.0 - @min(rad, err) / rad);
     // make sure we never have less than 4 segments
     // so a full circle can't be less than a diamond
-    const num_segments = math.max(@ceil((start - end) / theta), 4.0);
+    const num_segments = @max(@ceil((start - end) / theta), 4.0);
     const step = (start - end) / num_segments;
 
     const num = @intFromFloat(u32, num_segments);
@@ -1959,7 +1959,7 @@ pub const Animation = struct {
 
     pub fn lerp(a: *const Animation) f32 {
         var frac = @floatFromInt(f32, -a.start_time) / @floatFromInt(f32, a.end_time - a.start_time);
-        frac = math.max(0, math.min(1, frac));
+        frac = @max(0, @min(1, frac));
         return (a.start_val * (1.0 - frac)) + (a.end_val * frac);
     }
 
@@ -2442,7 +2442,7 @@ pub const Window = struct {
     }
 
     pub fn beginWait(self: *Self, has_event: bool) i128 {
-        var new_time = math.max(self.frame_time_ns, std.time.nanoTimestamp());
+        var new_time = @max(self.frame_time_ns, std.time.nanoTimestamp());
 
         if (self.loop_wait_target) |target| {
             if (self.loop_wait_target_event and has_event) {
@@ -2456,11 +2456,11 @@ pub const Window = struct {
             // compensate if we didn't hit our target
             if (new_time > target) {
                 // woke up later than expected
-                self.loop_target_slop_frames = math.max(1, self.loop_target_slop_frames + 1);
+                self.loop_target_slop_frames = @max(1, self.loop_target_slop_frames + 1);
                 self.loop_target_slop += self.loop_target_slop_frames;
             } else if (new_time < target) {
                 // woke up sooner than expected
-                self.loop_target_slop_frames = math.min(-1, self.loop_target_slop_frames - 1);
+                self.loop_target_slop_frames = @min(-1, self.loop_target_slop_frames - 1);
                 self.loop_target_slop += self.loop_target_slop_frames;
 
                 // since we are early, spin a bit to guarantee that we never run before
@@ -2470,7 +2470,7 @@ pub const Window = struct {
                 while (new_time < target) {
                     //i += 1;
                     std.time.sleep(0);
-                    new_time = math.max(self.frame_time_ns, std.time.nanoTimestamp());
+                    new_time = @max(self.frame_time_ns, std.time.nanoTimestamp());
                 }
 
                 //if (i > 0) {
@@ -2510,24 +2510,24 @@ pub const Window = struct {
         const target = min_micros + wait_micros;
 
         // how long it's taken from begin to here
-        const so_far_nanos = math.max(self.frame_time_ns, std.time.nanoTimestamp()) - self.frame_time_ns;
+        const so_far_nanos = @max(self.frame_time_ns, std.time.nanoTimestamp()) - self.frame_time_ns;
         var so_far_micros = @intCast(u32, @divFloor(so_far_nanos, 1000));
         //std.debug.print("  far {d:6}", .{so_far_micros});
 
         // take time from min_micros first
-        const min_so_far = math.min(so_far_micros, min_micros);
+        const min_so_far = @min(so_far_micros, min_micros);
         so_far_micros -= min_so_far;
         min_micros -= min_so_far;
 
         // then take time from wait_micros
-        const min_so_far2 = math.min(so_far_micros, wait_micros);
+        const min_so_far2 = @min(so_far_micros, wait_micros);
         so_far_micros -= min_so_far2;
         wait_micros -= min_so_far2;
 
         var slop = self.loop_target_slop;
 
         // get slop we can take out of min_micros
-        const min_us_slop = math.min(slop, min_micros);
+        const min_us_slop = @min(slop, min_micros);
         slop -= min_us_slop;
         if (min_us_slop >= 0) {
             min_micros -= @intCast(u32, min_us_slop);
@@ -2536,7 +2536,7 @@ pub const Window = struct {
         }
 
         // remaining slop we can take out of wait_micros
-        const wait_us_slop = math.min(slop, wait_micros);
+        const wait_us_slop = @min(slop, wait_micros);
         slop -= wait_us_slop;
         if (wait_us_slop >= 0) {
             wait_micros -= @intCast(u32, wait_us_slop);
@@ -3240,7 +3240,7 @@ pub const Window = struct {
             if (kv.value_ptr.used) {
                 if (kv.value_ptr.start_time > 0) {
                     const st = @intCast(u32, kv.value_ptr.start_time);
-                    ret = math.min(ret orelse st, st);
+                    ret = @min(ret orelse st, st);
                 } else if (kv.value_ptr.end_time > 0) {
                     ret = 0;
                     break;
@@ -3733,8 +3733,8 @@ pub const FloatingWindowWidget = struct {
                                 self.wd.rect.y += dp.y;
                             } else if (cursorGetDragging() == Cursor.arrow_nw_se) {
                                 const p = me.p.plus(dragOffset()).scale(1 / rs.s);
-                                self.wd.rect.w = math.max(40, p.x - self.wd.rect.x);
-                                self.wd.rect.h = math.max(10, p.y - self.wd.rect.y);
+                                self.wd.rect.w = @max(40, p.x - self.wd.rect.x);
+                                self.wd.rect.h = @max(10, p.y - self.wd.rect.y);
                             }
                             // don't need refresh() because we're before drawing
                             e.handled = true;
@@ -4585,7 +4585,7 @@ pub const PanedWidget = struct {
                             },
                         }
 
-                        self.split_ratio = math.max(0.0, math.min(1.0, self.split_ratio));
+                        self.split_ratio = @max(0.0, @min(1.0, self.split_ratio));
                     }
                 } else if (e.evt.mouse.kind == .position) {
                     cursorSet(cursor);
@@ -4745,7 +4745,7 @@ pub const TextLayoutWidget = struct {
             // do this dance so we aren't repeating the contentRect
             // calculations here
             const given_width = self.wd.rect.w;
-            self.wd.rect.w = math.max(given_width, self.wd.min_size.w);
+            self.wd.rect.w = @max(given_width, self.wd.min_size.w);
             container_width = self.wd.contentRect().w;
             self.wd.rect.w = given_width;
         }
@@ -4756,7 +4756,7 @@ pub const TextLayoutWidget = struct {
             var width = linewidth - self.insert_pt.x;
             for (self.corners) |corner| {
                 if (corner) |cor| {
-                    if (math.max(cor.y, self.insert_pt.y) < math.min(cor.y + cor.h, self.insert_pt.y + lineskip)) {
+                    if (@max(cor.y, self.insert_pt.y) < @min(cor.y + cor.h, self.insert_pt.y + lineskip)) {
                         linewidth -= cor.w;
                         if (linestart == cor.x) {
                             linestart = (cor.x + cor.w);
@@ -4959,7 +4959,7 @@ pub const TextLayoutWidget = struct {
                 }
             }
 
-            const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = math.max(0, rect.h - self.insert_pt.y) });
+            const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });
             //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
             const rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
             try renderText(.{
@@ -5009,9 +5009,9 @@ pub const TextLayoutWidget = struct {
             self.insert_pt.x += s.w;
             const size = Size{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h };
             if (!self.break_lines) {
-                self.wd.min_size.w = math.max(self.wd.min_size.w, self.wd.padSize(size).w);
+                self.wd.min_size.w = @max(self.wd.min_size.w, self.wd.padSize(size).w);
             }
-            self.wd.min_size.h = math.max(self.wd.min_size.h, self.wd.padSize(size).h);
+            self.wd.min_size.h = @max(self.wd.min_size.h, self.wd.padSize(size).h);
             txt = txt[end..];
             self.bytes_seen += end;
 
@@ -5022,9 +5022,9 @@ pub const TextLayoutWidget = struct {
                 if (newline) {
                     const newline_size = Size{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h };
                     if (!self.break_lines) {
-                        self.wd.min_size.w = math.max(self.wd.min_size.w, self.wd.padSize(newline_size).w);
+                        self.wd.min_size.w = @max(self.wd.min_size.w, self.wd.padSize(newline_size).w);
                     }
-                    self.wd.min_size.h = math.max(self.wd.min_size.h, self.wd.padSize(newline_size).h);
+                    self.wd.min_size.h = @max(self.wd.min_size.h, self.wd.padSize(newline_size).h);
                 }
             }
         }
@@ -5106,7 +5106,7 @@ pub const TextLayoutWidget = struct {
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
         const padded = self.wd.padSize(s);
-        self.wd.min_size.w = math.max(self.wd.min_size.w, padded.w);
+        self.wd.min_size.w = @max(self.wd.min_size.w, padded.w);
         self.wd.min_size.h += padded.h;
     }
 
@@ -5474,13 +5474,13 @@ pub const BoxWidget = struct {
                 if (self.equal_space) {
                     self.extra_pixels = self.childRect.w;
                 } else {
-                    self.extra_pixels = math.max(0, self.childRect.w - taken_prev);
+                    self.extra_pixels = @max(0, self.childRect.w - taken_prev);
                 }
             } else {
                 if (self.equal_space) {
                     self.extra_pixels = self.childRect.h;
                 } else {
-                    self.extra_pixels = math.max(0, self.childRect.h - taken_prev);
+                    self.extra_pixels = @max(0, self.childRect.h - taken_prev);
                 }
             }
         }
@@ -5513,8 +5513,8 @@ pub const BoxWidget = struct {
         var child_size = minSize(id, min_size);
 
         var rect = self.childRect;
-        rect.w = math.min(rect.w, child_size.w);
-        rect.h = math.min(rect.h, child_size.h);
+        rect.w = @min(rect.w, child_size.w);
+        rect.h = @min(rect.h, child_size.h);
 
         if (self.dir == .horizontal) {
             rect.h = self.childRect.h;
@@ -5525,11 +5525,11 @@ pub const BoxWidget = struct {
             }
 
             if (g.x <= 0.5) {
-                self.childRect.w = math.max(0, self.childRect.w - rect.w);
+                self.childRect.w = @max(0, self.childRect.w - rect.w);
                 self.childRect.x += rect.w;
             } else {
-                rect.x += math.max(0, self.childRect.w - rect.w);
-                self.childRect.w = math.max(0, self.childRect.w - rect.w);
+                rect.x += @max(0, self.childRect.w - rect.w);
+                self.childRect.w = @max(0, self.childRect.w - rect.w);
             }
         } else if (self.dir == .vertical) {
             rect.w = self.childRect.w;
@@ -5540,11 +5540,11 @@ pub const BoxWidget = struct {
             }
 
             if (g.y <= 0.5) {
-                self.childRect.h = math.max(0, self.childRect.h - rect.h);
+                self.childRect.h = @max(0, self.childRect.h - rect.h);
                 self.childRect.y += rect.h;
             } else {
-                rect.y += math.max(0, self.childRect.h - rect.h);
-                self.childRect.h = math.max(0, self.childRect.h - rect.h);
+                rect.y += @max(0, self.childRect.h - rect.h);
+                self.childRect.h = @max(0, self.childRect.h - rect.h);
             }
         }
 
@@ -5558,18 +5558,18 @@ pub const BoxWidget = struct {
     pub fn minSizeForChild(self: *Self, s: Size) void {
         if (self.dir == .horizontal) {
             if (self.equal_space) {
-                self.min_space_taken = math.max(self.min_space_taken, s.w);
+                self.min_space_taken = @max(self.min_space_taken, s.w);
             } else {
                 self.min_space_taken += s.w;
             }
-            self.max_thick = math.max(self.max_thick, s.h);
+            self.max_thick = @max(self.max_thick, s.h);
         } else {
             if (self.equal_space) {
-                self.min_space_taken = math.max(self.min_space_taken, s.h);
+                self.min_space_taken = @max(self.min_space_taken, s.h);
             } else {
                 self.min_space_taken += s.h;
             }
-            self.max_thick = math.max(self.max_thick, s.w);
+            self.max_thick = @max(self.max_thick, s.w);
         }
     }
 
@@ -5769,7 +5769,7 @@ pub const ScrollInfo = struct {
         if (viewport_size == 0) return 1.0;
 
         const max_hard_scroll = self.scroll_max(dir);
-        var length = math.max(viewport_size, virtual_size);
+        var length = @max(viewport_size, virtual_size);
         if (viewport_start < 0) {
             // temporarily adding the dead space we are showing
             length += -viewport_start;
@@ -5797,7 +5797,7 @@ pub const ScrollInfo = struct {
         if (viewport_size == 0) return 0;
 
         const max_hard_scroll = self.scroll_max(dir);
-        var length = math.max(viewport_size, virtual_size);
+        var length = @max(viewport_size, virtual_size);
         if (viewport_start < 0) {
             // temporarily adding the dead space we are showing
             length += -viewport_start;
@@ -5805,14 +5805,14 @@ pub const ScrollInfo = struct {
             length += (viewport_start - max_hard_scroll);
         }
 
-        const max_scroll = math.max(0, length - viewport_size);
+        const max_scroll = @max(0, length - viewport_size);
         if (max_scroll == 0) return 0;
 
-        return math.max(0, math.min(1.0, viewport_start / max_scroll));
+        return @max(0, @min(1.0, viewport_start / max_scroll));
     }
 
     pub fn scrollToFraction(self: *ScrollInfo, dir: Direction, fin: f32) void {
-        const f = math.max(0, math.min(1, fin));
+        const f = @max(0, @min(1, fin));
         switch (dir) {
             .vertical => self.viewport.y = f * self.scroll_max(dir),
             .horizontal => self.viewport.x = f * self.scroll_max(dir),
@@ -5893,12 +5893,12 @@ pub const ScrollContainerWidget = struct {
         {
             const max_scroll = self.si.scroll_max(.horizontal);
             if (self.si.viewport.x < 0) {
-                self.si.viewport.x = math.min(0, math.max(-20, self.si.viewport.x + 250 * animationRate()));
+                self.si.viewport.x = @min(0, @max(-20, self.si.viewport.x + 250 * animationRate()));
                 if (self.si.viewport.x < 0) {
                     refresh();
                 }
             } else if (self.si.viewport.x > max_scroll) {
-                self.si.viewport.x = math.max(max_scroll, math.min(max_scroll + 20, self.si.viewport.x - 250 * animationRate()));
+                self.si.viewport.x = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.x - 250 * animationRate()));
                 if (self.si.viewport.x > max_scroll) {
                     refresh();
                 }
@@ -5908,12 +5908,12 @@ pub const ScrollContainerWidget = struct {
         {
             const max_scroll = self.si.scroll_max(.vertical);
             if (self.si.viewport.y < 0) {
-                self.si.viewport.y = math.min(0, math.max(-20, self.si.viewport.y + 250 * animationRate()));
+                self.si.viewport.y = @min(0, @max(-20, self.si.viewport.y + 250 * animationRate()));
                 if (self.si.viewport.y < 0) {
                     refresh();
                 }
             } else if (self.si.viewport.y > max_scroll) {
-                self.si.viewport.y = math.max(max_scroll, math.min(max_scroll + 20, self.si.viewport.y - 250 * animationRate()));
+                self.si.viewport.y = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.y - 250 * animationRate()));
                 if (self.si.viewport.y > max_scroll) {
                     refresh();
                 }
@@ -5967,7 +5967,7 @@ pub const ScrollContainerWidget = struct {
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
         self.nextVirtualSize.h += s.h;
-        self.nextVirtualSize.w = math.max(self.nextVirtualSize.w, s.w);
+        self.nextVirtualSize.w = @max(self.nextVirtualSize.w, s.w);
         const padded = self.wd.padSize(self.nextVirtualSize);
         switch (self.si.vertical) {
             .none => self.wd.min_size.h = padded.h,
@@ -6415,7 +6415,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     }
 
     const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
-    try pathAddArc(center, math.min(r.w, r.h) / 3, angle, 0, false);
+    try pathAddArc(center, @min(r.w, r.h) / 3, angle, 0, false);
     try pathStroke(false, 3.0 * rs.s, .none, options.color(.text));
 }
 
@@ -6846,7 +6846,7 @@ pub const LabelWidget = struct {
                 size = s;
             } else {
                 size.h += try options.fontGet().lineSkip();
-                size.w = math.max(size.w, s.w);
+                size.w = @max(size.w, s.w);
             }
         }
 
@@ -6919,7 +6919,7 @@ pub const IconWidget = struct {
         if (options.min_size_content) |msc| {
             // user gave us a min size, use it
             size = msc;
-            size.w = math.max(size.w, iconWidth(name, tvg_bytes, size.h) catch size.w);
+            size.w = @max(size.w, iconWidth(name, tvg_bytes, size.h) catch size.w);
         } else {
             // user didn't give us one, make it the height of text
             const h = options.fontGet().lineSkip() catch 10;
@@ -6963,7 +6963,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
     var size = Size{};
     var it = cw.font_cache.iterator();
     while (it.next()) |kv| {
-        size.w = math.max(size.w, kv.value_ptr.texture_atlas_size.w);
+        size.w = @max(size.w, kv.value_ptr.texture_atlas_size.w);
         size.h += kv.value_ptr.texture_atlas_size.h;
     }
 
@@ -7166,7 +7166,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
     var ret = false;
 
     const br = b.data().contentRect();
-    const knobsize = math.min(br.w, br.h);
+    const knobsize = @min(br.w, br.h);
     const track = switch (dir) {
         .horizontal => Rect{ .x = knobsize / 2, .y = br.h / 2 - 2, .w = br.w - knobsize, .h = 4 },
         .vertical => Rect{ .x = br.w / 2 - 2, .y = knobsize / 2, .w = 4, .h = br.h - knobsize },
@@ -7218,7 +7218,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
                     if (max > min) {
                         const v = if (dir == .horizontal) pp.x else (trackrs.r.y + trackrs.r.h - pp.y);
                         percent.* = (v - min) / (max - min);
-                        percent.* = math.max(0, math.min(1, percent.*));
+                        percent.* = @max(0, @min(1, percent.*));
                         ret = true;
                     }
                 }
@@ -7228,12 +7228,12 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
                     switch (ke.code) {
                         .left, .down => {
                             e.handled = true;
-                            percent.* = math.max(0, math.min(1, percent.* - 0.05));
+                            percent.* = @max(0, @min(1, percent.* - 0.05));
                             ret = true;
                         },
                         .right, .up => {
                             e.handled = true;
-                            percent.* = math.max(0, math.min(1, percent.* + 0.05));
+                            percent.* = @max(0, @min(1, percent.* + 0.05));
                             ret = true;
                         },
                         else => {},
@@ -7244,7 +7244,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
         }
     }
 
-    const perc = math.max(0, math.min(1, percent.*));
+    const perc = @max(0, @min(1, percent.*));
 
     var part = trackrs.r;
     switch (dir) {
@@ -7361,9 +7361,9 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
     if (checked) {
         const r = rs.r.insetAll(0.5 * rs.s);
-        const pad = math.max(1.0, r.w / 6);
+        const pad = @max(1.0, r.w / 6);
 
-        var thick = math.max(1.0, r.w / 5);
+        var thick = @max(1.0, r.w / 5);
         const size = r.w - (thick / 2) - pad * 2;
         const third = size / 3.0;
         const x = r.x + pad + (0.25 * thick) + third;
@@ -7546,7 +7546,7 @@ pub const TextEntryWidget = struct {
                 sel.end = sel.start;
                 sel.cursor = sel.start;
             }
-            const new_len = math.min(new.len, self.init_opts.text.len - self.len);
+            const new_len = @min(new.len, self.init_opts.text.len - self.len);
 
             // make room if we can
             if (sel.cursor + new_len < self.init_opts.text.len) {
@@ -7706,18 +7706,18 @@ pub const Color = struct {
 
     pub fn darken(x: Color, y: f32) Color {
         return Color{
-            .r = @intFromFloat(u8, math.max(@floatFromInt(f32, x.r) * (1 - y), 0)),
-            .g = @intFromFloat(u8, math.max(@floatFromInt(f32, x.g) * (1 - y), 0)),
-            .b = @intFromFloat(u8, math.max(@floatFromInt(f32, x.b) * (1 - y), 0)),
+            .r = @intFromFloat(u8, @max(@floatFromInt(f32, x.r) * (1 - y), 0)),
+            .g = @intFromFloat(u8, @max(@floatFromInt(f32, x.g) * (1 - y), 0)),
+            .b = @intFromFloat(u8, @max(@floatFromInt(f32, x.b) * (1 - y), 0)),
             .a = x.a,
         };
     }
 
     pub fn lighten(x: Color, y: f32) Color {
         return Color{
-            .r = @intFromFloat(u8, math.min(@floatFromInt(f32, x.r) * (1 + y), 255)),
-            .g = @intFromFloat(u8, math.min(@floatFromInt(f32, x.g) * (1 + y), 255)),
-            .b = @intFromFloat(u8, math.min(@floatFromInt(f32, x.b) * (1 + y), 255)),
+            .r = @intFromFloat(u8, @min(@floatFromInt(f32, x.r) * (1 + y), 255)),
+            .g = @intFromFloat(u8, @min(@floatFromInt(f32, x.g) * (1 + y), 255)),
+            .b = @intFromFloat(u8, @min(@floatFromInt(f32, x.b) * (1 + y), 255)),
             .a = x.a,
         };
     }
@@ -7809,7 +7809,7 @@ pub const Size = struct {
     }
 
     pub fn max(a: Self, b: Self) Self {
-        return Self{ .w = math.max(a.w, b.w), .h = math.max(a.h, b.h) };
+        return Self{ .w = @max(a.w, b.w), .h = @max(a.h, b.h) };
     }
 
     pub fn scale(self: *const Self, s: f32) Self {
@@ -7885,19 +7885,19 @@ pub const Rect = struct {
         const ay2 = a.y + a.h;
         const bx2 = b.x + b.w;
         const by2 = b.y + b.h;
-        const x = math.max(a.x, b.x);
-        const y = math.max(a.y, b.y);
-        const x2 = math.min(ax2, bx2);
-        const y2 = math.min(ay2, by2);
-        return Self{ .x = x, .y = y, .w = math.max(0, x2 - x), .h = math.max(0, y2 - y) };
+        const x = @max(a.x, b.x);
+        const y = @max(a.y, b.y);
+        const x2 = @min(ax2, bx2);
+        const y2 = @min(ay2, by2);
+        return Self{ .x = x, .y = y, .w = @max(0, x2 - x), .h = @max(0, y2 - y) };
     }
 
     pub fn shrinkToSize(self: *const Self, s: Size) Self {
-        return Self{ .x = self.x, .y = self.y, .w = math.min(self.w, s.w), .h = math.min(self.h, s.h) };
+        return Self{ .x = self.x, .y = self.y, .w = @min(self.w, s.w), .h = @min(self.h, s.h) };
     }
 
     pub fn inset(self: *const Self, r: Rect) Self {
-        return Self{ .x = self.x + r.x, .y = self.y + r.y, .w = math.max(0, self.w - r.x - r.w), .h = math.max(0, self.h - r.y - r.h) };
+        return Self{ .x = self.x + r.x, .y = self.y + r.y, .w = @max(0, self.w - r.x - r.w), .h = @max(0, self.h - r.y - r.h) };
     }
 
     pub fn insetAll(self: *const Self, p: f32) Self {
@@ -7998,7 +7998,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             var rowlen: f32 = 0;
             while (it.next()) |gi| {
                 if (i % row_glyphs == 0) {
-                    size.w = math.max(size.w, rowlen);
+                    size.w = @max(size.w, rowlen);
                     size.h += fce.height + 2 * pad;
                     rowlen = 0;
                 }
@@ -8006,7 +8006,7 @@ pub fn renderText(opts: renderTextOptions) !void {
                 rowlen += (gi.maxx - gi.minx) + 2 * pad;
                 i += 1;
             } else {
-                size.w = math.max(size.w, rowlen);
+                size.w = @max(size.w, rowlen);
             }
 
             size = size.ceil();
