@@ -25,7 +25,7 @@ pub fn init(options: initOptions) !SDLBackend {
         return error.BackendError;
     }
 
-    var window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @intCast(c_int, options.width), @intCast(c_int, options.height), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
+    var window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intCast(options.width)), @as(c_int, @intCast(options.height)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
         std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
         return error.BackendError;
     };
@@ -51,7 +51,7 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) void {
     } else if (timeout_micros > 0) {
         // wait with a timeout
         const timeout = @min((timeout_micros + 999) / 1000, std.math.maxInt(c_int));
-        _ = c.SDL_WaitEventTimeout(null, @intCast(c_int, timeout));
+        _ = c.SDL_WaitEventTimeout(null, @as(c_int, @intCast(timeout)));
     } else {
         // don't wait
     }
@@ -151,14 +151,14 @@ pub fn pixelSize(self: *SDLBackend) gui.Size {
     var w: i32 = undefined;
     var h: i32 = undefined;
     _ = c.SDL_GetRendererOutputSize(self.renderer, &w, &h);
-    return gui.Size{ .w = @floatFromInt(f32, w), .h = @floatFromInt(f32, h) };
+    return gui.Size{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
 }
 
 pub fn windowSize(self: *SDLBackend) gui.Size {
     var w: i32 = undefined;
     var h: i32 = undefined;
     _ = c.SDL_GetWindowSize(self.window, &w, &h);
-    return gui.Size{ .w = @floatFromInt(f32, w), .h = @floatFromInt(f32, h) };
+    return gui.Size{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
 }
 
 pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const gui.Vertex, idx: []const u32) void {
@@ -176,17 +176,17 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const gui.
     //}
 
     // figure out how much we are losing by truncating x and y, need to add that back to w and h
-    const clip = c.SDL_Rect{ .x = @intFromFloat(c_int, clipr.x), .y = @intFromFloat(c_int, clipr.y), .w = @max(0, @intFromFloat(c_int, @ceil(clipr.w + clipr.x - @floor(clipr.x)))), .h = @max(0, @intFromFloat(c_int, @ceil(clipr.h + clipr.y - @floor(clipr.y)))) };
+    const clip = c.SDL_Rect{ .x = @as(c_int, @intFromFloat(clipr.x)), .y = @as(c_int, @intFromFloat(clipr.y)), .w = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x))))), .h = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.h + clipr.y - @floor(clipr.y))))) };
 
     _ = c.SDL_RenderSetClipRect(self.renderer, &clip);
 
-    const tex = @ptrCast(?*c.SDL_Texture, texture);
+    const tex = @as(?*c.SDL_Texture, @ptrCast(texture));
 
-    _ = c.SDL_RenderGeometryRaw(self.renderer, tex, @ptrCast(*const f32, &vtx[0].pos), @sizeOf(gui.Vertex), @ptrCast(*const c.SDL_Color, @alignCast(4, &vtx[0].col)), @sizeOf(gui.Vertex), @ptrCast(*const f32, &vtx[0].uv), @sizeOf(gui.Vertex), @intCast(c_int, vtx.len), idx.ptr, @intCast(c_int, idx.len), @sizeOf(u32));
+    _ = c.SDL_RenderGeometryRaw(self.renderer, tex, @as(*const f32, @ptrCast(&vtx[0].pos)), @sizeOf(gui.Vertex), @as(*const c.SDL_Color, @ptrCast(@alignCast(&vtx[0].col))), @sizeOf(gui.Vertex), @as(*const f32, @ptrCast(&vtx[0].uv)), @sizeOf(gui.Vertex), @as(c_int, @intCast(vtx.len)), idx.ptr, @as(c_int, @intCast(idx.len)), @sizeOf(u32));
 }
 
 pub fn textureCreate(self: *SDLBackend, pixels: []u8, width: u32, height: u32) *anyopaque {
-    var surface = c.SDL_CreateRGBSurfaceWithFormatFrom(pixels.ptr, @intCast(c_int, width), @intCast(c_int, height), 32, @intCast(c_int, 4 * width), c.SDL_PIXELFORMAT_ABGR8888);
+    var surface = c.SDL_CreateRGBSurfaceWithFormatFrom(pixels.ptr, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), 32, @as(c_int, @intCast(4 * width)), c.SDL_PIXELFORMAT_ABGR8888);
     defer c.SDL_FreeSurface(surface);
 
     const texture = c.SDL_CreateTextureFromSurface(self.renderer, surface) orelse unreachable;
@@ -194,7 +194,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: []u8, width: u32, height: u32) *
 }
 
 pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
-    c.SDL_DestroyTexture(@ptrCast(*c.SDL_Texture, texture));
+    c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(texture)));
 }
 
 pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
@@ -210,7 +210,7 @@ pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
             return try win.addEventText(std.mem.sliceTo(&event.text.text, 0));
         },
         c.SDL_MOUSEMOTION => {
-            return try win.addEventMouseMotion(@floatFromInt(f32, event.motion.x), @floatFromInt(f32, event.motion.y));
+            return try win.addEventMouseMotion(@as(f32, @floatFromInt(event.motion.x)), @as(f32, @floatFromInt(event.motion.y)));
         },
         c.SDL_MOUSEBUTTONDOWN => {
             return try win.addEventMouseButton(.{ .press = SDL_mouse_button_to_gui(event.button.button) });
@@ -219,7 +219,7 @@ pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
             return try win.addEventMouseButton(.{ .release = SDL_mouse_button_to_gui(event.button.button) });
         },
         c.SDL_MOUSEWHEEL => {
-            const ticks = @floatFromInt(f32, event.wheel.y);
+            const ticks = @as(f32, @floatFromInt(event.wheel.y));
             return try win.addEventMouseWheel(ticks);
         },
         else => {
@@ -256,7 +256,7 @@ pub fn SDL_keymod_to_gui(keymod: u16) gui.enums.Mod {
     if (keymod & c.KMOD_LGUI > 0) m |= @intFromEnum(gui.enums.Mod.lgui);
     if (keymod & c.KMOD_RGUI > 0) m |= @intFromEnum(gui.enums.Mod.rgui);
 
-    return @enumFromInt(gui.enums.Mod, m);
+    return @as(gui.enums.Mod, @enumFromInt(m));
 }
 
 pub fn SDL_keysym_to_gui(keysym: i32) gui.enums.Key {

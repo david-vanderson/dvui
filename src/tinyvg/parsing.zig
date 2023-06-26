@@ -134,11 +134,11 @@ pub fn Parser(comptime Reader: type) type {
                         if (@sizeOf(ScaleAndFlags) != 1) @compileError("Invalid range!");
                     }
 
-                    const scale_and_flags = @bitCast(ScaleAndFlags, try reader.readByte());
+                    const scale_and_flags = @as(ScaleAndFlags, @bitCast(try reader.readByte()));
 
-                    const scale = @enumFromInt(tvg.Scale, scale_and_flags.scale);
-                    const color_encoding = @enumFromInt(tvg.ColorEncoding, scale_and_flags.color_encoding);
-                    const range = @enumFromInt(tvg.Range, scale_and_flags.coordinate_range);
+                    const scale = @as(tvg.Scale, @enumFromInt(scale_and_flags.scale));
+                    const color_encoding = @as(tvg.ColorEncoding, @enumFromInt(scale_and_flags.color_encoding));
+                    const range = @as(tvg.Range, @enumFromInt(scale_and_flags.coordinate_range));
 
                     const width: u32 = switch (range) {
                         .reduced => mapZeroToMax(try reader.readIntLittle(u8)),
@@ -159,26 +159,26 @@ pub fn Parser(comptime Reader: type) type {
                     for (self.color_table) |*c| {
                         c.* = switch (color_encoding) {
                             .u8888 => tvg.Color{
-                                .r = @floatFromInt(f32, try reader.readIntLittle(u8)) / 255.0,
-                                .g = @floatFromInt(f32, try reader.readIntLittle(u8)) / 255.0,
-                                .b = @floatFromInt(f32, try reader.readIntLittle(u8)) / 255.0,
-                                .a = @floatFromInt(f32, try reader.readIntLittle(u8)) / 255.0,
+                                .r = @as(f32, @floatFromInt(try reader.readIntLittle(u8))) / 255.0,
+                                .g = @as(f32, @floatFromInt(try reader.readIntLittle(u8))) / 255.0,
+                                .b = @as(f32, @floatFromInt(try reader.readIntLittle(u8))) / 255.0,
+                                .a = @as(f32, @floatFromInt(try reader.readIntLittle(u8))) / 255.0,
                             },
                             .u565 => blk: {
                                 const rgb = try reader.readIntLittle(u16);
                                 break :blk tvg.Color{
-                                    .r = @floatFromInt(f32, (rgb & 0x001F) >> 0) / 31.0,
-                                    .g = @floatFromInt(f32, (rgb & 0x07E0) >> 5) / 63.0,
-                                    .b = @floatFromInt(f32, (rgb & 0xF800) >> 11) / 31.0,
+                                    .r = @as(f32, @floatFromInt((rgb & 0x001F) >> 0)) / 31.0,
+                                    .g = @as(f32, @floatFromInt((rgb & 0x07E0) >> 5)) / 63.0,
+                                    .b = @as(f32, @floatFromInt((rgb & 0xF800) >> 11)) / 31.0,
                                     .a = 1.0,
                                 };
                             },
                             .f32 => tvg.Color{
                                 // TODO: Verify if this is platform independently correct:
-                                .r = @bitCast(f32, try reader.readIntLittle(u32)),
-                                .g = @bitCast(f32, try reader.readIntLittle(u32)),
-                                .b = @bitCast(f32, try reader.readIntLittle(u32)),
-                                .a = @bitCast(f32, try reader.readIntLittle(u32)),
+                                .r = @as(f32, @bitCast(try reader.readIntLittle(u32))),
+                                .g = @as(f32, @bitCast(try reader.readIntLittle(u32))),
+                                .b = @as(f32, @bitCast(try reader.readIntLittle(u32))),
+                                .a = @as(f32, @bitCast(try reader.readIntLittle(u32))),
                             },
                             .custom => return error.UnsupportedColorFormat,
                         };
@@ -231,7 +231,7 @@ pub fn Parser(comptime Reader: type) type {
 
             var result = .{
                 .first = std.mem.bytesAsSlice(T1, self.temp_buffer.items[0 .. @sizeOf(T1) * length1]),
-                .second = @alignCast(@alignOf(T2), std.mem.bytesAsSlice(T2, self.temp_buffer.items[offset..][0 .. @sizeOf(T2) * length2])),
+                .second = @as([]T2, @alignCast(std.mem.bytesAsSlice(T2, self.temp_buffer.items[offset..][0 .. @sizeOf(T2) * length2]))),
             };
 
             std.debug.assert(result.first.len == length1);
@@ -282,7 +282,7 @@ pub fn Parser(comptime Reader: type) type {
 
             var value: T = undefined;
 
-            const count_and_grad = @bitCast(CountAndStyleTag, try self.readByte());
+            const count_and_grad = @as(CountAndStyleTag, @bitCast(try self.readByte()));
 
             const count = count_and_grad.getCount();
 
@@ -297,8 +297,8 @@ pub fn Parser(comptime Reader: type) type {
             if (self.end_of_document)
                 return null;
             const command_byte = try self.reader.readByte();
-            const primary_style_type = std.meta.intToEnum(tvg.StyleType, @truncate(u2, command_byte >> 6)) catch return error.InvalidData;
-            const command = @enumFromInt(tvg.Command, @truncate(u6, command_byte));
+            const primary_style_type = std.meta.intToEnum(tvg.StyleType, @as(u2, @truncate(command_byte >> 6))) catch return error.InvalidData;
+            const command = @as(tvg.Command, @enumFromInt(@as(u6, @truncate(command_byte))));
 
             return switch (command) {
                 .end_of_document => {
@@ -470,7 +470,7 @@ pub fn Parser(comptime Reader: type) type {
                 has_line_width: bool,
                 padding1: u3 = 0,
             };
-            const tag = @bitCast(Tag, try self.readByte());
+            const tag = @as(Tag, @bitCast(try self.readByte()));
 
             var line_width: ?f32 = if (tag.has_line_width)
                 try self.readUnit()
@@ -577,7 +577,7 @@ pub fn Parser(comptime Reader: type) type {
                 // check for too long *and* out of range in a single check
                 if (byte_count == 4 and (byte & 0xF0) != 0)
                     return error.InvalidData;
-                const val = @as(u32, (byte & 0x7F)) << @intCast(u5, (7 * byte_count));
+                const val = @as(u32, (byte & 0x7F)) << @as(u5, @intCast((7 * byte_count)));
                 result |= val;
                 if ((byte & 0x80) == 0)
                     break;
@@ -589,9 +589,9 @@ pub fn Parser(comptime Reader: type) type {
 
         fn readUnit(self: *const Self) !f32 {
             switch (self.header.coordinate_range) {
-                .reduced => return @enumFromInt(tvg.Unit, try self.reader.readIntLittle(i8)).toFloat(self.header.scale),
-                .default => return @enumFromInt(tvg.Unit, try self.reader.readIntLittle(i16)).toFloat(self.header.scale),
-                .enhanced => return @enumFromInt(tvg.Unit, try self.reader.readIntLittle(i32)).toFloat(self.header.scale),
+                .reduced => return @as(tvg.Unit, @enumFromInt(try self.reader.readIntLittle(i8))).toFloat(self.header.scale),
+                .default => return @as(tvg.Unit, @enumFromInt(try self.reader.readIntLittle(i16))).toFloat(self.header.scale),
+                .enhanced => return @as(tvg.Unit, @enumFromInt(try self.reader.readIntLittle(i32))).toFloat(self.header.scale),
             }
         }
 

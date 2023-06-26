@@ -165,7 +165,7 @@ pub const Unit = enum(i32) {
     _,
 
     pub fn init(scale: Scale, value: f32) Self {
-        return @enumFromInt(Self, @intFromFloat(i32, value * @floatFromInt(f32, scale.getScaleFactor()) + 0.5));
+        return @as(Self, @enumFromInt(@as(i32, @intFromFloat(value * @as(f32, @floatFromInt(scale.getScaleFactor())) + 0.5))));
     }
 
     pub fn raw(self: *const Self) i32 {
@@ -173,7 +173,7 @@ pub const Unit = enum(i32) {
     }
 
     pub fn toFloat(self: *const Self, scale: Scale) f32 {
-        return @floatFromInt(f32, @intFromEnum(self.*)) / @floatFromInt(f32, scale.getScaleFactor());
+        return @as(f32, @floatFromInt(@intFromEnum(self.*))) / @as(f32, @floatFromInt(scale.getScaleFactor()));
     }
 
     pub fn toInt(self: *const Self, scale: Scale) i32 {
@@ -185,7 +185,7 @@ pub const Unit = enum(i32) {
         const i = toInt(self, scale);
         if (i < 0)
             return error.InvalidData;
-        return @intCast(u31, i);
+        return @as(u31, @intCast(i));
     }
 };
 
@@ -199,17 +199,17 @@ pub const Color = extern struct {
 
     pub fn toRgba8(self: *const Self) [4]u8 {
         return [4]u8{
-            @intFromFloat(u8, std.math.clamp(255.0 * self.r, 0.0, 255.0)),
-            @intFromFloat(u8, std.math.clamp(255.0 * self.g, 0.0, 255.0)),
-            @intFromFloat(u8, std.math.clamp(255.0 * self.b, 0.0, 255.0)),
-            @intFromFloat(u8, std.math.clamp(255.0 * self.a, 0.0, 255.0)),
+            @as(u8, @intFromFloat(std.math.clamp(255.0 * self.r, 0.0, 255.0))),
+            @as(u8, @intFromFloat(std.math.clamp(255.0 * self.g, 0.0, 255.0))),
+            @as(u8, @intFromFloat(std.math.clamp(255.0 * self.b, 0.0, 255.0))),
+            @as(u8, @intFromFloat(std.math.clamp(255.0 * self.a, 0.0, 255.0))),
         };
     }
 
     pub fn lerp(lhs: Self, rhs: Self, factor: f32) Self {
         const l = struct {
             fn l(a: f32, b: f32, c: f32) u8 {
-                return @intFromFloat(u8, @floatFromInt(f32, a) + (@floatFromInt(f32, b) - @floatFromInt(f32, a)) * std.math.clamp(c, 0, 1));
+                return @as(u8, @intFromFloat(@as(f32, @floatFromInt(a)) + (@as(f32, @floatFromInt(b)) - @as(f32, @floatFromInt(a))) * std.math.clamp(c, 0, 1)));
             }
         }.l;
 
@@ -224,9 +224,9 @@ pub const Color = extern struct {
     pub fn fromString(str: []const u8) !Self {
         return switch (str.len) {
             6 => Self{
-                .r = @floatFromInt(f32, try std.fmt.parseInt(u8, str[0..2], 16)) / 255.0,
-                .g = @floatFromInt(f32, try std.fmt.parseInt(u8, str[2..4], 16)) / 255.0,
-                .b = @floatFromInt(f32, try std.fmt.parseInt(u8, str[4..6], 16)) / 255.0,
+                .r = @as(f32, @floatFromInt(try std.fmt.parseInt(u8, str[0..2], 16))) / 255.0,
+                .g = @as(f32, @floatFromInt(try std.fmt.parseInt(u8, str[2..4], 16))) / 255.0,
+                .b = @as(f32, @floatFromInt(try std.fmt.parseInt(u8, str[4..6], 16))) / 255.0,
                 .a = 1.0,
             },
             else => error.InvalidFormat,
