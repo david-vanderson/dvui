@@ -140,7 +140,17 @@ pub fn clear(self: *SDLBackend) void {
 }
 
 pub fn guiBackend(self: *SDLBackend) gui.Backend {
-    return gui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy);
+    return gui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy, clipboardText, free);
+}
+
+pub fn clipboardText(self: *SDLBackend) []u8 {
+    _ = self;
+    return std.mem.sliceTo(c.SDL_GetClipboardText(), 0);
+}
+
+pub fn free(self: *SDLBackend, p: *anyopaque) void {
+    _ = self;
+    c.SDL_free(p);
 }
 
 pub fn begin(_: *SDLBackend, _: std.mem.Allocator) void {}

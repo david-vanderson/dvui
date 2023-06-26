@@ -1,3 +1,5 @@
+const builtin = @import("builtin");
+
 pub const Button = enum {
     left,
     right,
@@ -41,6 +43,14 @@ pub const Mod = enum(u16) {
 
     pub fn gui(self: Mod) bool {
         return self == .lgui or self == .rgui;
+    }
+
+    pub fn controlGui(self: Mod) bool {
+        if (builtin.target.isDarwin()) {
+            return self.gui();
+        } else {
+            return self.ctrl();
+        }
     }
 };
 
