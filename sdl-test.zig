@@ -390,7 +390,7 @@ pub fn main() !void {
         //_ = SDLBackend.c.SDL_GetMouseState(&mx, &my);
         //try gui.icon(@src(), "mouse", gui.icons.papirus.actions.application_menu_symbolic, .{ .rect = gui.Rect{ .x = @intToFloat(f32, mx), .y = @intToFloat(f32, my), .w = 10, .h = 10 } });
 
-        const end_micros = try win.end();
+        const end_micros = try win.end(.{ .show_toasts = false });
 
         win_backend.setCursor(win.cursorRequested());
 

@@ -45,7 +45,7 @@ pub fn main() !void {
 
         // marks end of gui frame, don't call gui functions after this
         // - sends all gui stuff to backend for rendering, must be called before renderPresent()
-        const end_micros = try win.end();
+        const end_micros = try win.end(.{});
 
         // cursor management
         backend.setCursor(win.cursorRequested());

@@ -66,7 +66,7 @@ pub fn main() !void {
 
         // marks end of gui frame, don't call gui functions after this
         // - sends all gui stuff to backend for rendering, must be called before renderPresent()
-        _ = try win.end();
+        _ = try win.end(.{});
 
         // cursor management
         if (win.cursorRequestedFloating()) |cursor| {
