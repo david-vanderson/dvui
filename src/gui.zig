@@ -9242,10 +9242,8 @@ pub const examples = struct {
 
             tl.processEvents();
 
-            const start = "Notice that the text in this box is wrapping around the buttons in the corners.";
+            const start = "Notice that the text in this box is wrapping around the buttons in the corners.\n";
             try tl.addText(start, .{ .font_style = .title_4 });
-
-            try tl.addText("\n", .{});
 
             const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
             try tl.addText(lorem, .{});
