@@ -1666,6 +1666,16 @@ pub fn refresh() void {
     currentWindow().refresh();
 }
 
+pub fn clipboardText() []u8 {
+    const cw = currentWindow();
+    return cw.backend.clipboardText();
+}
+
+pub fn backendFree(p: *anyopaque) void {
+    const cw = currentWindow();
+    cw.backend.free(p);
+}
+
 pub fn animationRate() f32 {
     return currentWindow().rate;
 }
@@ -7620,17 +7630,11 @@ pub const TextEntryWidget = struct {
                         }
                     },
                     .v => {
-                        if (ke.action == .down and ke.mod.gui()) {
-                            // TODO: paste
-                            //e.handled = true;
-                            //const ct = c.SDL_GetClipboardText();
-                            //defer c.SDL_free(ct);
-
-                            //var i = self.len;
-                            //while (i < self.text.len and ct.* != 0) : (i += 1) {
-                            //  self.text[i] = ct[i - self.len];
-                            //}
-                            //self.len = i;
+                        if (ke.action == .down and ke.mod.controlGui()) {
+                            e.handled = true;
+                            const clip_text = gui.clipboardText();
+                            defer gui.backendFree(clip_text.ptr);
+                            self.textTyped(clip_text);
                         }
                     },
                     .left, .right => |code| {
@@ -8715,6 +8719,8 @@ pub const Backend = struct {
         renderGeometry: *const fn (ptr: *anyopaque, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void,
         textureCreate: *const fn (ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
         textureDestroy: *const fn (ptr: *anyopaque, texture: *anyopaque) void,
+        clipboardText: *const fn (ptr: *anyopaque) []u8,
+        free: *const fn (ptr: *anyopaque, p: *anyopaque) void,
     };
 
     pub fn init(
@@ -8726,6 +8732,8 @@ pub const Backend = struct {
         comptime renderGeometryFn: fn (ptr: @TypeOf(pointer), texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void,
         comptime textureCreateFn: fn (ptr: @TypeOf(pointer), pixels: []u8, width: u32, height: u32) *anyopaque,
         comptime textureDestroyFn: fn (ptr: @TypeOf(pointer), texture: *anyopaque) void,
+        comptime clipboardTextFn: fn (ptr: @TypeOf(pointer)) []u8,
+        comptime freeFn: fn (ptr: @TypeOf(pointer), p: *anyopaque) void,
     ) Backend {
         const Ptr = @TypeOf(pointer);
         const ptr_info = @typeInfo(Ptr);
@@ -8768,6 +8776,16 @@ pub const Backend = struct {
                 return @call(.always_inline, textureDestroyFn, .{ self, texture });
             }
 
+            fn clipboardTextImpl(ptr: *anyopaque) []u8 {
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
+                return @call(.always_inline, clipboardTextFn, .{self});
+            }
+
+            fn freeImpl(ptr: *anyopaque, p: *anyopaque) void {
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
+                return @call(.always_inline, freeFn, .{ self, p });
+            }
+
             const vtable = VTable{
                 .begin = beginImpl,
                 .end = endImpl,
@@ -8776,6 +8794,8 @@ pub const Backend = struct {
                 .renderGeometry = renderGeometryImpl,
                 .textureCreate = textureCreateImpl,
                 .textureDestroy = textureDestroyImpl,
+                .clipboardText = clipboardTextImpl,
+                .free = freeImpl,
             };
         };
 
@@ -8811,6 +8831,14 @@ pub const Backend = struct {
 
     pub fn textureDestroy(self: *Backend, texture: *anyopaque) void {
         self.vtable.textureDestroy(self.ptr, texture);
+    }
+
+    pub fn clipboardText(self: *Backend) []u8 {
+        return self.vtable.clipboardText(self.ptr);
+    }
+
+    pub fn free(self: *Backend, p: *anyopaque) void {
+        return self.vtable.free(self.ptr, p);
     }
 };
 
@@ -9108,8 +9136,13 @@ pub const examples = struct {
             var hbox = try gui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            try gui.label(@src(), "Text Entry", .{}, .{ .gravity_y = 0.5 });
+            try gui.label(@src(), "Text Entry Singleline", .{}, .{ .gravity_y = 0.5 });
             try gui.textEntry(@src(), .{ .text = &text_entry_buf }, .{});
+            // replace newlines with spaces
+            for (&text_entry_buf) |*char| {
+                if (char.* == '\n')
+                    char.* = ' ';
+            }
         }
 
         {

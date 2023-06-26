@@ -1,4 +1,7 @@
 
+textLayout: make ctrl-c copy work
+- push to clipboard
+
 podcast needs:
 - dropdown for speed selection
 - progress bar for downloads
@@ -6,8 +9,6 @@ podcast needs:
 
 demo:
 - add uses of animate
-
-textLayout: make ctrl-c copy work
 
 icon browser: when clicking an icon, copy the buttonIcon line of code and show a toast
 - can the demo have more of these kind of "click to copy the code" things?
