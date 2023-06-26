@@ -328,9 +328,9 @@ const SvgStyleCache = struct {
         }
         const color = self.color_table[i];
 
-        var r = @intFromFloat(u8, std.math.clamp(255.0 * color.r, 0.0, 255.0));
-        var g = @intFromFloat(u8, std.math.clamp(255.0 * color.g, 0.0, 255.0));
-        var b = @intFromFloat(u8, std.math.clamp(255.0 * color.b, 0.0, 255.0));
+        var r = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.r, 0.0, 255.0)));
+        var g = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.g, 0.0, 255.0)));
+        var b = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.b, 0.0, 255.0)));
         try writer.print("{s}:#{X:0>2}{X:0>2}{X:0>2};", .{ prefix, r, g, b });
         if (color.a != 1.0) {
             try writer.print("{s}-opacity:{d};", .{ prefix, color.a });
@@ -343,9 +343,9 @@ const SvgStyleCache = struct {
         }
         const color = self.color_table[i];
 
-        var r = @intFromFloat(u8, std.math.clamp(255.0 * color.r, 0.0, 255.0));
-        var g = @intFromFloat(u8, std.math.clamp(255.0 * color.g, 0.0, 255.0));
-        var b = @intFromFloat(u8, std.math.clamp(255.0 * color.b, 0.0, 255.0));
+        var r = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.r, 0.0, 255.0)));
+        var g = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.g, 0.0, 255.0)));
+        var b = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.b, 0.0, 255.0)));
         try writer.print("{s}#{X:0>2}{X:0>2}{X:0>2}{s}", .{ prefix, r, g, b, postfix });
     }
 };

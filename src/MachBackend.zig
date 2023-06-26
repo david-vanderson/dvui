@@ -190,7 +190,7 @@ pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) !bool {
             return try win.addEventKey(.{ .up = toGUIKey(ev.key) }, .none);
         },
         .mouse_motion => |mm| {
-            return try win.addEventMouseMotion(@floatCast(f32, mm.pos.x), @floatCast(f32, mm.pos.y));
+            return try win.addEventMouseMotion(@as(f32, @floatCast(mm.pos.x)), @as(f32, @floatCast(mm.pos.y)));
         },
         .mouse_press => |mb| {
             switch (mb.button) {
@@ -216,7 +216,7 @@ pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) !bool {
 }
 
 pub fn waitEventTimeout(self: *MachBackend, timeout_micros: u32) void {
-    self.core.setWaitEvent(@floatFromInt(f64, timeout_micros) / 1_000_000);
+    self.core.setWaitEvent(@as(f64, @floatFromInt(timeout_micros)) / 1_000_000);
 }
 
 pub fn addAllEvents(self: *MachBackend, win: *gui.Window) !bool {
@@ -263,12 +263,12 @@ pub fn end(self: *MachBackend) void {
 
 pub fn pixelSize(self: *MachBackend) gui.Size {
     const psize = self.core.getFramebufferSize();
-    return gui.Size{ .w = @floatFromInt(f32, psize.width), .h = @floatFromInt(f32, psize.height) };
+    return gui.Size{ .w = @as(f32, @floatFromInt(psize.width)), .h = @as(f32, @floatFromInt(psize.height)) };
 }
 
 pub fn windowSize(self: *MachBackend) gui.Size {
     const size = self.core.getWindowSize();
-    return gui.Size{ .w = @floatFromInt(f32, size.width), .h = @floatFromInt(f32, size.height) };
+    return gui.Size{ .w = @as(f32, @floatFromInt(size.width)), .h = @as(f32, @floatFromInt(size.height)) };
 }
 
 pub fn renderGeometry(self: *MachBackend, tex: ?*anyopaque, vtx: []const gui.Vertex, idx: []const u32) void {
@@ -295,7 +295,7 @@ pub fn renderGeometry(self: *MachBackend, tex: ?*anyopaque, vtx: []const gui.Ver
     self.texture = tex;
 
     for (idx) |id| {
-        self.idx.append(id + @intCast(u32, self.vtx.items.len)) catch unreachable;
+        self.idx.append(id + @as(u32, @intCast(self.vtx.items.len))) catch unreachable;
     }
 
     for (vtx) |v| {
@@ -332,7 +332,7 @@ pub fn flushRender(self: *MachBackend) void {
         if (self.vertex_buffer_size < self.vertex_buffer_len + self.vtx.items.len) {
             self.vertex_buffer.release();
 
-            self.vertex_buffer_size = self.vertex_buffer_len + @intCast(u32, self.vtx.items.len);
+            self.vertex_buffer_size = self.vertex_buffer_len + @as(u32, @intCast(self.vtx.items.len));
 
             //std.debug.print("creating vertex buffer {d}\n", .{self.vertex_buffer_size});
             self.vertex_buffer = self.core.device.createBuffer(&.{
@@ -347,7 +347,7 @@ pub fn flushRender(self: *MachBackend) void {
         if (self.index_buffer_size < self.index_buffer_len + self.idx.items.len) {
             self.index_buffer.release();
 
-            self.index_buffer_size = self.index_buffer_len + @intCast(u32, self.idx.items.len);
+            self.index_buffer_size = self.index_buffer_len + @as(u32, @intCast(self.idx.items.len));
 
             //std.debug.print("creating index buffer {d}\n", .{self.index_buffer_size});
             self.index_buffer = self.core.device.createBuffer(&.{
@@ -375,11 +375,11 @@ pub fn flushRender(self: *MachBackend) void {
         std.debug.print("MachBackend:flushRender: got {!} when doing iconTexture for default texture\n", .{err});
         return;
     };
-    const default_texture_ptr = @ptrCast(*gpu.Texture, default_tex.texture);
+    const default_texture_ptr = @as(*gpu.Texture, @ptrCast(default_tex.texture));
 
     var texture: ?*gpu.Texture = null;
     if (self.texture) |t| {
-        texture = @ptrCast(*gpu.Texture, t);
+        texture = @as(*gpu.Texture, @ptrCast(t));
     }
 
     {
@@ -417,7 +417,7 @@ pub fn flushRender(self: *MachBackend) void {
 
     var vertices = arena.alloc(Vertex, self.vtx.items.len) catch unreachable;
     for (self.vtx.items, 0..) |vin, i| {
-        vertices[i] = Vertex{ .pos = vin.pos, .col = .{ @floatFromInt(f32, vin.col.r) / 255.0, @floatFromInt(f32, vin.col.g) / 255.0, @floatFromInt(f32, vin.col.b) / 255.0, @floatFromInt(f32, vin.col.a) / 255.0 }, .uv = vin.uv };
+        vertices[i] = Vertex{ .pos = vin.pos, .col = .{ @as(f32, @floatFromInt(vin.col.r)) / 255.0, @as(f32, @floatFromInt(vin.col.g)) / 255.0, @as(f32, @floatFromInt(vin.col.b)) / 255.0, @as(f32, @floatFromInt(vin.col.a)) / 255.0 }, .uv = vin.uv };
     }
     //std.debug.print("vertexes {d} + {d} indexes {d} + {d}\n", .{self.vertex_buffer_len, self.vtx.items.len, self.index_buffer_len, self.idx.items.len});
     self.encoder.writeBuffer(self.vertex_buffer, self.vertex_buffer_len * @sizeOf(Vertex), vertices);
@@ -429,20 +429,20 @@ pub fn flushRender(self: *MachBackend) void {
     });
     const pass = self.encoder.beginRenderPass(&render_pass_info);
     pass.setPipeline(self.pipeline);
-    pass.setVertexBuffer(0, self.vertex_buffer, @sizeOf(Vertex) * self.vertex_buffer_len, @sizeOf(Vertex) * @intCast(u32, self.vtx.items.len));
-    pass.setIndexBuffer(self.index_buffer, .uint32, @sizeOf(u32) * self.index_buffer_len, @sizeOf(u32) * @intCast(u32, self.idx.items.len));
+    pass.setVertexBuffer(0, self.vertex_buffer, @sizeOf(Vertex) * self.vertex_buffer_len, @sizeOf(Vertex) * @as(u32, @intCast(self.vtx.items.len)));
+    pass.setIndexBuffer(self.index_buffer, .uint32, @sizeOf(u32) * self.index_buffer_len, @sizeOf(u32) * @as(u32, @intCast(self.idx.items.len)));
     pass.setBindGroup(0, bind_group, &.{});
 
     // figure out how much we are losing by truncating x and y, need to add that back to w and h
-    pass.setScissorRect(@intFromFloat(u32, self.clipr.x), @intFromFloat(u32, self.clipr.y), @intFromFloat(u32, @ceil(self.clipr.w + self.clipr.x - @floor(self.clipr.x))), @intFromFloat(u32, @ceil(self.clipr.h + self.clipr.y - @floor(self.clipr.y))));
+    pass.setScissorRect(@as(u32, @intFromFloat(self.clipr.x)), @as(u32, @intFromFloat(self.clipr.y)), @as(u32, @intFromFloat(@ceil(self.clipr.w + self.clipr.x - @floor(self.clipr.x)))), @as(u32, @intFromFloat(@ceil(self.clipr.h + self.clipr.y - @floor(self.clipr.y)))));
 
-    pass.drawIndexed(@intCast(u32, self.idx.items.len), 1, 0, 0, 0);
+    pass.drawIndexed(@as(u32, @intCast(self.idx.items.len)), 1, 0, 0, 0);
     pass.end();
     pass.release();
     bind_group.release();
 
-    self.vertex_buffer_len += @intCast(u32, self.vtx.items.len);
-    self.index_buffer_len += @intCast(u32, self.idx.items.len);
+    self.vertex_buffer_len += @as(u32, @intCast(self.vtx.items.len));
+    self.index_buffer_len += @as(u32, @intCast(self.idx.items.len));
 
     self.vtx.clearRetainingCapacity();
     self.idx.clearRetainingCapacity();
@@ -461,8 +461,8 @@ pub fn textureCreate(self: *MachBackend, pixels: []const u8, width: u32, height:
     });
 
     const data_layout = gpu.Texture.DataLayout{
-        .bytes_per_row = @intCast(u32, width * 4),
-        .rows_per_image = @intCast(u32, height),
+        .bytes_per_row = @as(u32, @intCast(width * 4)),
+        .rows_per_image = @as(u32, @intCast(height)),
     };
 
     var queue = self.core.device.getQueue();
@@ -477,7 +477,7 @@ pub fn textureDestroy(self: *MachBackend, texture: *anyopaque) void {
         self.flushRender();
     }
 
-    const tex = @ptrCast(*gpu.Texture, texture);
+    const tex = @as(*gpu.Texture, @ptrCast(texture));
     tex.release();
 }
 

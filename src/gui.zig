@@ -591,7 +591,7 @@ pub const Font = struct {
 
         var utf8 = (try std.unicode.Utf8View.init(text)).iterator();
         while (utf8.nextCodepoint()) |codepoint| {
-            const gi = try fce.glyphInfoGet(@intCast(u32, codepoint), self.name);
+            const gi = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), self.name);
 
             minx = @min(minx, x + gi.minx);
             maxx = @max(maxx, x + gi.maxx);
@@ -822,21 +822,21 @@ const FontCacheEntry = struct {
             return gi;
         }
 
-        FontCacheEntry.intToError(c.FT_Load_Char(self.face, codepoint, @bitCast(i32, LoadFlags{ .render = false }))) catch |err| {
+        FontCacheEntry.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(LoadFlags{ .render = false })))) catch |err| {
             std.debug.print("glyphInfoGet: freetype error {!} font {s} codepoint {d}\n", .{ err, font_name, codepoint });
             return error.freetypeError;
         };
 
         const m = self.face.*.glyph.*.metrics;
-        const minx = @floatFromInt(f32, m.horiBearingX) / 64.0;
-        const miny = self.ascent - @floatFromInt(f32, m.horiBearingY) / 64.0;
+        const minx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
+        const miny = self.ascent - @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
 
         const gi = GlyphInfo{
             .minx = @floor(minx),
-            .maxx = @ceil(minx + @floatFromInt(f32, m.width) / 64.0),
-            .advance = @ceil(@floatFromInt(f32, m.horiAdvance) / 64.0),
+            .maxx = @ceil(minx + @as(f32, @floatFromInt(m.width)) / 64.0),
+            .advance = @ceil(@as(f32, @floatFromInt(m.horiAdvance)) / 64.0),
             .miny = @floor(miny),
-            .maxy = @ceil(miny + @floatFromInt(f32, m.height) / 64.0),
+            .maxy = @ceil(miny + @as(f32, @floatFromInt(m.height)) / 64.0),
             .uv = .{ 0, 0 },
         };
 
@@ -861,36 +861,36 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
 
     var face: c.FT_Face = undefined;
     var args: c.FT_Open_Args = undefined;
-    args.flags = @bitCast(u32, FontCacheEntry.OpenFlags{ .memory = true });
+    args.flags = @as(u32, @bitCast(FontCacheEntry.OpenFlags{ .memory = true }));
     args.memory_base = font.ttf_bytes.ptr;
-    args.memory_size = @intCast(u31, font.ttf_bytes.len);
+    args.memory_size = @as(u31, @intCast(font.ttf_bytes.len));
     FontCacheEntry.intToError(c.FT_Open_Face(cw.ft2lib, &args, 0, &face)) catch |err| {
         std.debug.print("fontCacheGet: freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, font.name });
         return error.freetypeError;
     };
 
-    const pixel_size = @intFromFloat(u32, font.size);
+    const pixel_size = @as(u32, @intFromFloat(font.size));
     FontCacheEntry.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
         std.debug.print("fontCacheGet: freetype error {!} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, font.name });
         return error.freetypeError;
     };
 
-    const ascender = @floatFromInt(f32, face.*.ascender) / 64.0;
-    const ss = @floatFromInt(f32, face.*.size.*.metrics.y_scale) / 0x10000;
+    const ascender = @as(f32, @floatFromInt(face.*.ascender)) / 64.0;
+    const ss = @as(f32, @floatFromInt(face.*.size.*.metrics.y_scale)) / 0x10000;
     const ascent = ascender * ss;
     //std.debug.print("fontcache size {d} ascender {d} scale {d} ascent {d}\n", .{font.size, ascender, scale, ascent});
 
     // make debug texture atlas so we can see if something later goes wrong
     const size = .{ .w = 10, .h = 10 };
-    var pixels = try cw.arena.alloc(u8, @intFromFloat(usize, size.w * size.h) * 4);
+    var pixels = try cw.arena.alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
     @memset(pixels, 255);
 
     const entry = FontCacheEntry{
         .face = face,
-        .height = @ceil(@floatFromInt(f32, face.*.size.*.metrics.height) / 64.0),
+        .height = @ceil(@as(f32, @floatFromInt(face.*.size.*.metrics.height)) / 64.0),
         .ascent = @ceil(ascent),
         .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-        .texture_atlas = cw.backend.textureCreate(pixels, @intFromFloat(u32, size.w), @intFromFloat(u32, size.h)),
+        .texture_atlas = cw.backend.textureCreate(pixels, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h))),
         .texture_atlas_size = size,
         .texture_atlas_regen = true,
     };
@@ -921,7 +921,7 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
     };
     defer parser.deinit();
 
-    return height * @floatFromInt(f32, parser.header.width) / @floatFromInt(f32, parser.header.height);
+    return height * @as(f32, @floatFromInt(parser.header.width)) / @as(f32, @floatFromInt(parser.header.height));
 }
 
 pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !IconCacheEntry {
@@ -938,7 +938,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !IconCa
         cw.arena,
         cw.arena,
         tvg.rendering.SizeHint{ .height = height },
-        @enumFromInt(tvg.rendering.AntiAliasing, 2),
+        @as(tvg.rendering.AntiAliasing, @enumFromInt(2)),
         tvg_bytes,
     ) catch |err| {
         std.debug.print("iconTexture: Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
@@ -947,14 +947,14 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !IconCa
     defer image.deinit(cw.arena);
 
     var pixels: []u8 = undefined;
-    pixels.ptr = @ptrCast([*]u8, image.pixels.ptr);
+    pixels.ptr = @as([*]u8, @ptrCast(image.pixels.ptr));
     pixels.len = image.pixels.len * 4;
 
     const texture = cw.backend.textureCreate(pixels, image.width, image.height);
 
     //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, image.width, image.height });
 
-    const entry = IconCacheEntry{ .texture = texture, .size = .{ .w = @floatFromInt(f32, image.width), .h = @floatFromInt(f32, image.height) } };
+    const entry = IconCacheEntry{ .texture = texture, .size = .{ .w = @as(f32, @floatFromInt(image.width)), .h = @as(f32, @floatFromInt(image.height)) } };
     try cw.icon_cache.put(icon_hash, entry);
 
     return entry;
@@ -1158,7 +1158,7 @@ pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool)
     const num_segments = @max(@ceil((start - end) / theta), 4.0);
     const step = (start - end) / num_segments;
 
-    const num = @intFromFloat(u32, num_segments);
+    const num = @as(u32, @intFromFloat(num_segments));
     var a: f32 = start;
     var i: u32 = 0;
     while (i < num) : (i += 1) {
@@ -1228,18 +1228,18 @@ pub fn pathFillConvex(col: Color) !void {
 
         // indexes for fill
         if (i > 1) {
-            try idx.append(@intCast(u32, 0));
-            try idx.append(@intCast(u32, ai * 2));
-            try idx.append(@intCast(u32, bi * 2));
+            try idx.append(@as(u32, @intCast(0)));
+            try idx.append(@as(u32, @intCast(ai * 2)));
+            try idx.append(@as(u32, @intCast(bi * 2)));
         }
 
         // indexes for aa fade from inner to outer
-        try idx.append(@intCast(u32, ai * 2));
-        try idx.append(@intCast(u32, ai * 2 + 1));
-        try idx.append(@intCast(u32, bi * 2));
-        try idx.append(@intCast(u32, ai * 2 + 1));
-        try idx.append(@intCast(u32, bi * 2 + 1));
-        try idx.append(@intCast(u32, bi * 2));
+        try idx.append(@as(u32, @intCast(ai * 2)));
+        try idx.append(@as(u32, @intCast(ai * 2 + 1)));
+        try idx.append(@as(u32, @intCast(bi * 2)));
+        try idx.append(@as(u32, @intCast(ai * 2 + 1)));
+        try idx.append(@as(u32, @intCast(bi * 2 + 1)));
+        try idx.append(@as(u32, @intCast(bi * 2)));
     }
 
     cw.backend.renderGeometry(null, vtx.items, idx.items);
@@ -1362,21 +1362,21 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
                 try vtx.append(v);
 
                 // add indexes for endcap fringe
-                try idx.append(@intCast(u32, 0));
-                try idx.append(@intCast(u32, vtx_start));
-                try idx.append(@intCast(u32, vtx_start + 1));
+                try idx.append(@as(u32, @intCast(0)));
+                try idx.append(@as(u32, @intCast(vtx_start)));
+                try idx.append(@as(u32, @intCast(vtx_start + 1)));
 
-                try idx.append(@intCast(u32, 0));
-                try idx.append(@intCast(u32, 1));
-                try idx.append(@intCast(u32, vtx_start));
+                try idx.append(@as(u32, @intCast(0)));
+                try idx.append(@as(u32, @intCast(1)));
+                try idx.append(@as(u32, @intCast(vtx_start)));
 
-                try idx.append(@intCast(u32, 1));
-                try idx.append(@intCast(u32, vtx_start));
-                try idx.append(@intCast(u32, vtx_start + 2));
+                try idx.append(@as(u32, @intCast(1)));
+                try idx.append(@as(u32, @intCast(vtx_start)));
+                try idx.append(@as(u32, @intCast(vtx_start + 2)));
 
-                try idx.append(@intCast(u32, 1));
-                try idx.append(@intCast(u32, vtx_start + 2));
-                try idx.append(@intCast(u32, vtx_start + 2 + 1));
+                try idx.append(@as(u32, @intCast(1)));
+                try idx.append(@as(u32, @intCast(vtx_start + 2)));
+                try idx.append(@as(u32, @intCast(vtx_start + 2 + 1)));
             } else if ((i + 1) == cw.path.items.len) {
                 diffab = Point.diff(aa, bb).normalize();
                 // rotate by 90 to get normal
@@ -1435,31 +1435,31 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
 
         if (closed or ((i + 1) != cw.path.items.len)) {
             // indexes for fill
-            try idx.append(@intCast(u32, vtx_start + bi * 4));
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
-            try idx.append(@intCast(u32, vtx_start + ci * 4));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4)));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
+            try idx.append(@as(u32, @intCast(vtx_start + ci * 4)));
 
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
-            try idx.append(@intCast(u32, vtx_start + ci * 4 + 2));
-            try idx.append(@intCast(u32, vtx_start + ci * 4));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
+            try idx.append(@as(u32, @intCast(vtx_start + ci * 4 + 2)));
+            try idx.append(@as(u32, @intCast(vtx_start + ci * 4)));
 
             // indexes for aa fade from inner to outer side 1
-            try idx.append(@intCast(u32, vtx_start + bi * 4));
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 1));
-            try idx.append(@intCast(u32, vtx_start + ci * 4 + 1));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4)));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 1)));
+            try idx.append(@as(u32, @intCast(vtx_start + ci * 4 + 1)));
 
-            try idx.append(@intCast(u32, vtx_start + bi * 4));
-            try idx.append(@intCast(u32, vtx_start + ci * 4 + 1));
-            try idx.append(@intCast(u32, vtx_start + ci * 4));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4)));
+            try idx.append(@as(u32, @intCast(vtx_start + ci * 4 + 1)));
+            try idx.append(@as(u32, @intCast(vtx_start + ci * 4)));
 
             // indexes for aa fade from inner to outer side 2
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 3));
-            try idx.append(@intCast(u32, vtx_start + ci * 4 + 3));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 3)));
+            try idx.append(@as(u32, @intCast(vtx_start + ci * 4 + 3)));
 
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
-            try idx.append(@intCast(u32, vtx_start + ci * 4 + 2));
-            try idx.append(@intCast(u32, vtx_start + ci * 4 + 3));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
+            try idx.append(@as(u32, @intCast(vtx_start + ci * 4 + 2)));
+            try idx.append(@as(u32, @intCast(vtx_start + ci * 4 + 3)));
         } else if (!closed and (i + 1) == cw.path.items.len) {
             // add 2 extra vertexes for endcap fringe
             v.pos.x = bb.x - halfnorm.x * (thickness + 1.0) - diffab.x;
@@ -1473,21 +1473,21 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
             try vtx.append(v);
 
             // add indexes for endcap fringe
-            try idx.append(@intCast(u32, vtx_start + bi * 4));
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 1));
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 4));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4)));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 1)));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 4)));
 
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 4));
-            try idx.append(@intCast(u32, vtx_start + bi * 4));
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 4)));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4)));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
 
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 4));
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 5));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 4)));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 5)));
 
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 2));
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 3));
-            try idx.append(@intCast(u32, vtx_start + bi * 4 + 5));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 3)));
+            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 5)));
         }
     }
 
@@ -1958,7 +1958,7 @@ pub const Animation = struct {
     end_time: i32,
 
     pub fn lerp(a: *const Animation) f32 {
-        var frac = @floatFromInt(f32, -a.start_time) / @floatFromInt(f32, a.end_time - a.start_time);
+        var frac = @as(f32, @floatFromInt(-a.start_time)) / @as(f32, @floatFromInt(a.end_time - a.start_time));
         frac = @max(0, @min(1, frac));
         return (a.start_val * (1.0 - frac)) + (a.end_val * frac);
     }
@@ -2436,7 +2436,7 @@ pub const Window = struct {
             return 0;
         }
 
-        const avg = @floatFromInt(f32, diff) / @floatFromInt(f32, self.frame_times.len - 1);
+        const avg = @as(f32, @floatFromInt(diff)) / @as(f32, @floatFromInt(self.frame_times.len - 1));
         const fps = 1_000_000.0 / avg;
         return fps;
     }
@@ -2494,7 +2494,7 @@ pub const Window = struct {
         // minimum time to wait to hit max fps target
         var min_micros: u32 = 0;
         if (maxFPS) |mfps| {
-            min_micros = @intFromFloat(u32, 1_000_000.0 / mfps);
+            min_micros = @as(u32, @intFromFloat(1_000_000.0 / mfps));
         }
 
         //std.debug.print("  end {d:6} min {d:6}", .{end_micros, min_micros});
@@ -2511,7 +2511,7 @@ pub const Window = struct {
 
         // how long it's taken from begin to here
         const so_far_nanos = @max(self.frame_time_ns, std.time.nanoTimestamp()) - self.frame_time_ns;
-        var so_far_micros = @intCast(u32, @divFloor(so_far_nanos, 1000));
+        var so_far_micros = @as(u32, @intCast(@divFloor(so_far_nanos, 1000)));
         //std.debug.print("  far {d:6}", .{so_far_micros});
 
         // take time from min_micros first
@@ -2527,28 +2527,28 @@ pub const Window = struct {
         var slop = self.loop_target_slop;
 
         // get slop we can take out of min_micros
-        const min_us_slop = @min(slop, @intCast(i32, min_micros));
+        const min_us_slop = @min(slop, @as(i32, @intCast(min_micros)));
         slop -= min_us_slop;
         if (min_us_slop >= 0) {
-            min_micros -= @intCast(u32, min_us_slop);
+            min_micros -= @as(u32, @intCast(min_us_slop));
         } else {
-            min_micros += @intCast(u32, -min_us_slop);
+            min_micros += @as(u32, @intCast(-min_us_slop));
         }
 
         // remaining slop we can take out of wait_micros
-        const wait_us_slop = @min(slop, @intCast(i32, wait_micros));
+        const wait_us_slop = @min(slop, @as(i32, @intCast(wait_micros)));
         slop -= wait_us_slop;
         if (wait_us_slop >= 0) {
-            wait_micros -= @intCast(u32, wait_us_slop);
+            wait_micros -= @as(u32, @intCast(wait_us_slop));
         } else {
-            wait_micros += @intCast(u32, -wait_us_slop);
+            wait_micros += @as(u32, @intCast(-wait_us_slop));
         }
 
         //std.debug.print("  min {d:6}", .{min_micros});
         if (min_micros > 0) {
             // wait unconditionally for fps target
             std.time.sleep(min_micros * 1000);
-            self.loop_wait_target = self.frame_time_ns + (@intCast(i128, target_min) * 1000);
+            self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target_min)) * 1000);
         }
 
         if (end_micros == null) {
@@ -2560,7 +2560,7 @@ pub const Window = struct {
             // wait conditionally
             // since we have a timeout we will try to hit that target but set our
             // flag so that we don't adjust for the target if we wake up to an event
-            self.loop_wait_target = self.frame_time_ns + (@intCast(i128, target) * 1000);
+            self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target)) * 1000);
             self.loop_wait_target_event = true;
             //std.debug.print("  wait {d:6}\n", .{wait_micros});
             return wait_micros;
@@ -2581,7 +2581,7 @@ pub const Window = struct {
         if (time_ns > self.frame_time_ns) {
             // enforce monotinicity
             const nanos_since_last = time_ns - self.frame_time_ns;
-            micros_since_last = @intCast(u32, @divFloor(nanos_since_last, std.time.ns_per_us));
+            micros_since_last = @as(u32, @intCast(@divFloor(nanos_since_last, std.time.ns_per_us)));
             micros_since_last = @max(1, micros_since_last);
             self.frame_time_ns = time_ns;
         }
@@ -2687,10 +2687,10 @@ pub const Window = struct {
         _ = subwindowCurrentSet(self.wd.id);
 
         self.extra_frames_needed -|= 1;
-        self.rate = @floatFromInt(f32, micros_since_last) / 1_000_000;
+        self.rate = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
 
         {
-            const micros: i32 = if (micros_since_last > math.maxInt(i32)) math.maxInt(i32) else @intCast(i32, micros_since_last);
+            const micros: i32 = if (micros_since_last > math.maxInt(i32)) math.maxInt(i32) else @as(i32, @intCast(micros_since_last));
             var deadAnimations = std.ArrayList(u32).init(arena);
             defer deadAnimations.deinit();
             var it = self.animations.iterator();
@@ -3239,7 +3239,7 @@ pub const Window = struct {
         while (it.next()) |kv| {
             if (kv.value_ptr.used) {
                 if (kv.value_ptr.start_time > 0) {
-                    const st = @intCast(u32, kv.value_ptr.start_time);
+                    const st = @as(u32, @intCast(kv.value_ptr.start_time));
                     ret = @min(ret orelse st, st);
                 } else if (kv.value_ptr.end_time > 0) {
                     ret = 0;
@@ -4979,7 +4979,7 @@ pub const TextLayoutWidget = struct {
                 const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h };
 
                 if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                    const cr_new = cr.add(.{ .y = @floatFromInt(f32, self.cursor_updown) * size.h });
+                    const cr_new = cr.add(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * size.h });
                     self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
 
                     // might have already passed, so need to go again next frame
@@ -5046,7 +5046,7 @@ pub const TextLayoutWidget = struct {
             const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h };
 
             if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                const cr_new = cr.add(.{ .y = @floatFromInt(f32, self.cursor_updown) * size.h });
+                const cr_new = cr.add(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * size.h });
                 self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
 
                 // might have already passed, so need to go again next frame
@@ -7700,34 +7700,34 @@ pub const Color = struct {
             .r = x.r,
             .g = x.g,
             .b = x.b,
-            .a = @intFromFloat(u8, @floatFromInt(f32, x.a) * y),
+            .a = @as(u8, @intFromFloat(@as(f32, @floatFromInt(x.a)) * y)),
         };
     }
 
     pub fn darken(x: Color, y: f32) Color {
         return Color{
-            .r = @intFromFloat(u8, @max(@floatFromInt(f32, x.r) * (1 - y), 0)),
-            .g = @intFromFloat(u8, @max(@floatFromInt(f32, x.g) * (1 - y), 0)),
-            .b = @intFromFloat(u8, @max(@floatFromInt(f32, x.b) * (1 - y), 0)),
+            .r = @as(u8, @intFromFloat(@max(@as(f32, @floatFromInt(x.r)) * (1 - y), 0))),
+            .g = @as(u8, @intFromFloat(@max(@as(f32, @floatFromInt(x.g)) * (1 - y), 0))),
+            .b = @as(u8, @intFromFloat(@max(@as(f32, @floatFromInt(x.b)) * (1 - y), 0))),
             .a = x.a,
         };
     }
 
     pub fn lighten(x: Color, y: f32) Color {
         return Color{
-            .r = @intFromFloat(u8, @min(@floatFromInt(f32, x.r) * (1 + y), 255)),
-            .g = @intFromFloat(u8, @min(@floatFromInt(f32, x.g) * (1 + y), 255)),
-            .b = @intFromFloat(u8, @min(@floatFromInt(f32, x.b) * (1 + y), 255)),
+            .r = @as(u8, @intFromFloat(@min(@as(f32, @floatFromInt(x.r)) * (1 + y), 255))),
+            .g = @as(u8, @intFromFloat(@min(@as(f32, @floatFromInt(x.g)) * (1 + y), 255))),
+            .b = @as(u8, @intFromFloat(@min(@as(f32, @floatFromInt(x.b)) * (1 + y), 255))),
             .a = x.a,
         };
     }
 
     pub fn lerp(x: Color, y: f32, z: Color) Color {
         return Color{
-            .r = @intFromFloat(u8, @floatFromInt(f32, x.r) * (1 - y) + @floatFromInt(f32, z.r) * y),
-            .g = @intFromFloat(u8, @floatFromInt(f32, x.g) * (1 - y) + @floatFromInt(f32, z.g) * y),
-            .b = @intFromFloat(u8, @floatFromInt(f32, x.b) * (1 - y) + @floatFromInt(f32, z.b) * y),
-            .a = @intFromFloat(u8, @floatFromInt(f32, x.a) * (1 - y) + @floatFromInt(f32, z.a) * y),
+            .r = @as(u8, @intFromFloat(@as(f32, @floatFromInt(x.r)) * (1 - y) + @as(f32, @floatFromInt(z.r)) * y)),
+            .g = @as(u8, @intFromFloat(@as(f32, @floatFromInt(x.g)) * (1 - y) + @as(f32, @floatFromInt(z.g)) * y)),
+            .b = @as(u8, @intFromFloat(@as(f32, @floatFromInt(x.b)) * (1 - y) + @as(f32, @floatFromInt(z.b)) * y)),
+            .a = @as(u8, @intFromFloat(@as(f32, @floatFromInt(x.a)) * (1 - y) + @as(f32, @floatFromInt(z.a)) * y)),
         };
     }
 
@@ -7979,7 +7979,7 @@ pub fn renderText(opts: renderTextOptions) !void {
     // make sure the cache has all the glyphs we need
     var utf8it = (try std.unicode.Utf8View.init(opts.text)).iterator();
     while (utf8it.nextCodepoint()) |codepoint| {
-        _ = try fce.glyphInfoGet(@intCast(u32, codepoint), opts.font.name);
+        _ = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), opts.font.name);
     }
 
     // number of extra pixels to add on each side of each glyph
@@ -7989,7 +7989,7 @@ pub fn renderText(opts: renderTextOptions) !void {
         fce.texture_atlas_regen = false;
         cw.backend.textureDestroy(fce.texture_atlas);
 
-        const row_glyphs = @intFromFloat(u32, @ceil(@sqrt(@floatFromInt(f32, fce.glyph_info.count()))));
+        const row_glyphs = @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(fce.glyph_info.count()))))));
 
         var size = Size{};
         {
@@ -8016,7 +8016,7 @@ pub fn renderText(opts: renderTextOptions) !void {
         size.w += 2 * pad;
         size.h += 2 * pad;
 
-        var pixels = try cw.arena.alloc(u8, @intFromFloat(usize, size.w * size.h) * 4);
+        var pixels = try cw.arena.alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
         // set all pixels as white but with zero alpha
         for (pixels, 0..) |*p, i| {
             if (i % 4 == 3) {
@@ -8035,11 +8035,11 @@ pub fn renderText(opts: renderTextOptions) !void {
             var it = fce.glyph_info.iterator();
             var i: u32 = 0;
             while (it.next()) |e| {
-                e.value_ptr.uv[0] = @floatFromInt(f32, x) / size.w;
-                e.value_ptr.uv[1] = @floatFromInt(f32, y) / size.h;
+                e.value_ptr.uv[0] = @as(f32, @floatFromInt(x)) / size.w;
+                e.value_ptr.uv[1] = @as(f32, @floatFromInt(y)) / size.h;
 
-                const codepoint = @intCast(u32, e.key_ptr.*);
-                FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @bitCast(i32, FontCacheEntry.LoadFlags{ .render = true }))) catch |err| {
+                const codepoint = @as(u32, @intCast(e.key_ptr.*));
+                FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @as(i32, @bitCast(FontCacheEntry.LoadFlags{ .render = true })))) catch |err| {
                     std.debug.print("renderText: freetype error {!} trying to FT_Load_Char font {s} codepoint {d}\n", .{ err, opts.font.name, codepoint });
                     return error.freetypeError;
                 };
@@ -8054,10 +8054,10 @@ pub fn renderText(opts: renderTextOptions) !void {
                             std.debug.print("renderText: freetype error: bitmap null for font {s} codepoint {d}\n", .{ opts.font.name, codepoint });
                             return error.freetypeError;
                         }
-                        const src = bitmap.buffer[@intCast(usize, row * bitmap.pitch + col)];
+                        const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
 
                         // because of the extra edge, offset by 1 row and 1 col
-                        const di = @intCast(usize, (y + row + pad) * @intFromFloat(i32, size.w) * 4 + (x + col + pad) * 4);
+                        const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) * 4 + (x + col + pad) * 4));
 
                         // not doing premultiplied alpha (yet), so keep the white color but adjust the alpha
                         //pixels[di] = src;
@@ -8067,17 +8067,17 @@ pub fn renderText(opts: renderTextOptions) !void {
                     }
                 }
 
-                x += @intCast(i32, bitmap.width) + 2 * pad;
+                x += @as(i32, @intCast(bitmap.width)) + 2 * pad;
 
                 i += 1;
                 if (i % row_glyphs == 0) {
                     x = pad;
-                    y += @intFromFloat(i32, fce.height) + 2 * pad;
+                    y += @as(i32, @intFromFloat(fce.height)) + 2 * pad;
                 }
             }
         }
 
-        fce.texture_atlas = cw.backend.textureCreate(pixels, @intFromFloat(u32, size.w), @intFromFloat(u32, size.h));
+        fce.texture_atlas = cw.backend.textureCreate(pixels, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)));
         fce.texture_atlas_size = size;
     }
 
@@ -8106,7 +8106,7 @@ pub fn renderText(opts: renderTextOptions) !void {
     var bytes_seen: usize = 0;
     var utf8 = (try std.unicode.Utf8View.init(opts.text)).iterator();
     while (utf8.nextCodepoint()) |codepoint| {
-        const gi = try fce.glyphInfoGet(@intCast(u32, codepoint), opts.font.name);
+        const gi = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), opts.font.name);
 
         // TODO: kerning
 
@@ -8129,7 +8129,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             }
         }
 
-        const len = @intCast(u32, vtx.items.len);
+        const len = @as(u32, @intCast(vtx.items.len));
         var v: Vertex = undefined;
 
         v.pos.x = x + (gi.minx - pad) * target_fraction;
@@ -8210,7 +8210,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
         var idx = std.ArrayList(u32).init(cw.arena);
         defer idx.deinit();
 
-        const len = @intCast(u32, vtx.items.len);
+        const len = @as(u32, @intCast(vtx.items.len));
         var v: Vertex = undefined;
         v.pos.x = x;
         v.pos.y = y + offset;
@@ -8266,7 +8266,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotati
     const ask_height = @ceil(target_size);
     const target_fraction = target_size / ask_height;
 
-    const ice = iconTexture(name, tvg_bytes, @intFromFloat(u32, ask_height)) catch return;
+    const ice = iconTexture(name, tvg_bytes, @as(u32, @intFromFloat(ask_height))) catch return;
 
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, 4);
     defer vtx.deinit();
@@ -8624,31 +8624,30 @@ pub const Widget = struct {
         const ptr_info = @typeInfo(Ptr);
         std.debug.assert(ptr_info == .Pointer); // Must be a pointer
         std.debug.assert(ptr_info.Pointer.size == .One); // Must be a single-item pointer
-        const alignment = ptr_info.Pointer.alignment;
 
         const gen = struct {
             fn dataImpl(ptr: *anyopaque) *WidgetData {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, dataFn, .{self});
             }
 
             fn rectForImpl(ptr: *anyopaque, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, rectForFn, .{ self, id, min_size, e, g });
             }
 
             fn screenRectScaleImpl(ptr: *anyopaque, r: Rect) RectScale {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, screenRectScaleFn, .{ self, r });
             }
 
             fn minSizeForChildImpl(ptr: *anyopaque, s: Size) void {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, minSizeForChildFn, .{ self, s });
             }
 
             fn processEventImpl(ptr: *anyopaque, e: *Event, bubbling: bool) void {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, processEventFn, .{ self, e, bubbling });
             }
 
@@ -8726,41 +8725,40 @@ pub const Backend = struct {
         const ptr_info = @typeInfo(Ptr);
         std.debug.assert(ptr_info == .Pointer); // Must be a pointer
         std.debug.assert(ptr_info.Pointer.size == .One); // Must be a single-item pointer
-        const alignment = ptr_info.Pointer.alignment;
 
         const gen = struct {
             fn beginImpl(ptr: *anyopaque, arena: std.mem.Allocator) void {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, beginFn, .{ self, arena });
             }
 
             fn endImpl(ptr: *anyopaque) void {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, endFn, .{self});
             }
 
             fn pixelSizeImpl(ptr: *anyopaque) Size {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, pixelSizeFn, .{self});
             }
 
             fn windowSizeImpl(ptr: *anyopaque) Size {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, windowSizeFn, .{self});
             }
 
             fn renderGeometryImpl(ptr: *anyopaque, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, renderGeometryFn, .{ self, texture, vtx, idx });
             }
 
             fn textureCreateImpl(ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, textureCreateFn, .{ self, pixels, width, height });
             }
 
             fn textureDestroyImpl(ptr: *anyopaque, texture: *anyopaque) void {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, textureDestroyFn, .{ self, texture });
             }
 
@@ -9416,9 +9414,9 @@ pub const examples = struct {
             try gui.labelNoFmt(@src(), "Schedules a frame at the beginning of each second", .{});
 
             const millis = @divFloor(gui.frameTimeNS(), 1_000_000);
-            const left = @intCast(i32, @rem(millis, 1000));
+            const left = @as(i32, @intCast(@rem(millis, 1000)));
 
-            var mslabel = try gui.LabelWidget.init(@src(), "{d} ms into second", .{@intCast(u32, left)}, .{});
+            var mslabel = try gui.LabelWidget.init(@src(), "{d} ms into second", .{@as(u32, @intCast(left))}, .{});
             try mslabel.install(.{});
             mslabel.deinit();
 
@@ -9470,7 +9468,7 @@ pub const examples = struct {
         try gui.windowHeader("Icon Browser", "", &IconBrowser.show);
 
         const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len;
-        const height = @floatFromInt(f32, num_icons) * IconBrowser.row_height;
+        const height = @as(f32, @floatFromInt(num_icons)) * IconBrowser.row_height;
 
         // we won't have the height the first frame, so always set it
         var scroll_info: ScrollInfo = .{ .vertical = .given };

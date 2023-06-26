@@ -104,10 +104,10 @@ pub fn Builder(comptime Writer: type) type {
                     try self.writer.writeIntLittle(u8, rgba[3]);
                 },
                 .f32 => for (colors) |c| {
-                    try self.writer.writeIntLittle(u32, @bitCast(u32, c.r));
-                    try self.writer.writeIntLittle(u32, @bitCast(u32, c.g));
-                    try self.writer.writeIntLittle(u32, @bitCast(u32, c.b));
-                    try self.writer.writeIntLittle(u32, @bitCast(u32, c.a));
+                    try self.writer.writeIntLittle(u32, @as(u32, @bitCast(c.r)));
+                    try self.writer.writeIntLittle(u32, @as(u32, @bitCast(c.g)));
+                    try self.writer.writeIntLittle(u32, @as(u32, @bitCast(c.b)));
+                    try self.writer.writeIntLittle(u32, @as(u32, @bitCast(c.a)));
                 },
 
                 .custom => return error.UnsupportedColorEncoding,
@@ -230,7 +230,7 @@ pub fn Builder(comptime Writer: type) type {
         fn writeOutlineFillHeader(self: *Self, command: tvg.Command, fill_style: tvg.Style, line_style: tvg.Style, line_width: f32, length: usize) Error!void {
             const total_count = try validateLength(length);
             const reduced_count = if (total_count < std.math.maxInt(u6))
-                @enumFromInt(ReducedCount, @truncate(u6, total_count))
+                @as(ReducedCount, @enumFromInt(@as(u6, @truncate(total_count))))
             else
                 return error.OutOfRange;
 
@@ -280,7 +280,7 @@ pub fn Builder(comptime Writer: type) type {
         fn writePath(self: *Self, path: []const tvg.Path.Segment) !void {
             for (path) |item| {
                 std.debug.assert(item.commands.len > 0);
-                try self.writeUint(@intCast(u32, item.commands.len - 1));
+                try self.writeUint(@as(u32, @intCast(item.commands.len - 1)));
             }
             for (path) |item| {
                 try self.writePoint(item.start);
@@ -346,10 +346,10 @@ pub fn Builder(comptime Writer: type) type {
         fn writeUint(self: *Self, value: u32) Error!void {
             var iter = value;
             while (iter >= 0x80) {
-                try self.writer.writeByte(@as(u8, 0x80) | @truncate(u7, iter));
+                try self.writer.writeByte(@as(u8, 0x80) | @as(u7, @truncate(iter)));
                 iter >>= 7;
             }
-            try self.writer.writeByte(@truncate(u7, iter));
+            try self.writer.writeByte(@as(u7, @truncate(iter)));
         }
 
         fn writeUnit(self: *Self, value: f32) Error!void {
@@ -397,7 +397,7 @@ fn mapSizeToType(comptime Dest: type, value: usize) error{OutOfRange}!Dest {
     }
     if (value == std.math.maxInt(Dest))
         return 0;
-    return @intCast(Dest, value);
+    return @as(Dest, @intCast(value));
 }
 
 const ReducedCount = enum(u6) {
