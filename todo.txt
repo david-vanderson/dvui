@@ -4,13 +4,8 @@ podcast needs:
 - progress bar for downloads
 - image support for podcast/episode images
 
-try to make an AnimateWindowWidget
-- out of normal flow, just wraps FloatingWindowWidget
-
 demo:
 - add uses of animate
-- move animatingWindow from sdl-test to demo/animations
-  - it does window rect change instead of scale and remembers the position of the window
 
 textLayout: make ctrl-c copy work
 

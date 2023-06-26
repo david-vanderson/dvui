@@ -8822,6 +8822,9 @@ pub const examples = struct {
     var text_entry_multiline_buf = std.mem.zeroes([500]u8);
     var show_dialog: bool = false;
     var scale_val: f32 = 1.0;
+    var animating_window_show: bool = false;
+    var animating_window_closing: bool = false;
+    var animating_window_rect = gui.Rect{ .x = 300, .y = 200, .w = 300, .h = 200 };
 
     const IconBrowser = struct {
         var show: bool = false;
@@ -8917,13 +8920,13 @@ pub const examples = struct {
                 // On the first frame, scaler will have a scale value of 1 so
                 // the min size of the window is our target, which is why we do
                 // this after win.deinit so the min size will be available
-                gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .end_time = 150_000 });
+                gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .end_time = 300_000 });
                 gui.dataSet(null, win.data().id, "window_size", win.data().min_size);
             }
 
             if (closing) {
                 // If we are closing, start from our current size
-                gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .end_time = 150_000 });
+                gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .end_time = 300_000 });
                 gui.dataSet(null, win.data().id, "window_size", win.data().rect.size());
             }
         }
@@ -8933,6 +8936,47 @@ pub const examples = struct {
             std.debug.print("You clicked \"{s}\"\n", .{@tagName(response)});
         }
     };
+
+    pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_flag: *bool, closing: *bool, opts: Options) FloatingWindowWidget {
+        const fwin_id = gui.parentGet().extendId(src, opts.idExtra());
+
+        if (gui.firstFrame(fwin_id)) {
+            gui.animation(fwin_id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 300_000 });
+            gui.dataSet(null, fwin_id, "size", rect.*.size());
+        }
+
+        if (closing.*) {
+            closing.* = false;
+            gui.animation(fwin_id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 300_000 });
+            gui.dataSet(null, fwin_id, "size", rect.*.size());
+        }
+
+        var fwin: gui.FloatingWindowWidget = undefined;
+
+        if (gui.animationGet(fwin_id, "rect_percent")) |a| {
+            if (gui.dataGet(null, fwin_id, "size", gui.Size)) |ss| {
+                var r = rect.*;
+                const dw = ss.w * a.lerp();
+                const dh = ss.h * a.lerp();
+                r.x = r.x + (r.w / 2) - (dw / 2);
+                r.w = dw;
+                r.y = r.y + (r.h / 2) - (dh / 2);
+                r.h = dh;
+
+                // don't pass rect so our animating rect doesn't get saved back
+                fwin = gui.FloatingWindowWidget.init(src, .{ .open_flag = show_flag }, opts.override(.{ .rect = r }));
+
+                if (a.done() and r.empty()) {
+                    // done with closing animation
+                    fwin.close();
+                }
+            }
+        } else {
+            fwin = gui.FloatingWindowWidget.init(src, .{ .rect = rect, .open_flag = show_flag }, opts);
+        }
+
+        return fwin;
+    }
 
     pub fn demo() !void {
         if (!show_demo_window) {
@@ -9405,8 +9449,33 @@ pub const examples = struct {
             }
         }
 
-        if (try gui.button(@src(), "Animating Dialog", .{})) {
-            try gui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog", .message = "This shows how to animate dialogs and other floating windows", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
+        if (try gui.button(@src(), "Animating Dialog (Scale)", .{})) {
+            try gui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog (Scale)", .message = "This shows how to animate dialogs and other floating windows by changing the scale", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
+        }
+
+        if (try gui.button(@src(), "Animating Window (Rect)", .{})) {
+            if (animating_window_show) {
+                animating_window_closing = true;
+            } else {
+                animating_window_show = true;
+                animating_window_closing = false;
+            }
+        }
+
+        if (animating_window_show) {
+            var win = animatingWindowRect(@src(), &animating_window_rect, &animating_window_show, &animating_window_closing, .{});
+            try win.install(.{});
+            defer win.deinit();
+
+            var keep_open = true;
+            try gui.windowHeader("Animating Window (Rect)", "", &keep_open);
+            if (!keep_open) {
+                animating_window_closing = true;
+            }
+
+            var tl = try gui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+            try tl.addText("This shows how to animate dialogs and other floating windows by changing the rect", .{});
+            tl.deinit();
         }
 
         if (try gui.expander(@src(), "Spinner", .{ .expand = .horizontal })) {
