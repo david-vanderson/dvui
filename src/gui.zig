@@ -3163,13 +3163,19 @@ pub const Window = struct {
         }
     }
 
+    pub const endOptions = struct {
+        show_toasts: bool = true,
+    };
+
     // End of this window gui's rendering.  Renders retained dialogs and all
     // deferred rendering (subwindows, focus highlights).  Returns micros we
     // want between last call to begin() and next call to begin() (or null
     // meaning wait for event).  If wanted, pass return value to waitTime() to
     // get a useful time to wait between render loops.
-    pub fn end(self: *Self) !?u32 {
-        try self.toastsShow();
+    pub fn end(self: *Self, opts: endOptions) !?u32 {
+        if (opts.show_toasts) {
+            try self.toastsShow();
+        }
         try self.dialogsShow();
 
         if (self.debug_window_show) {
