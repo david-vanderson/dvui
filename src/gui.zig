@@ -1671,6 +1671,11 @@ pub fn clipboardText() []u8 {
     return cw.backend.clipboardText();
 }
 
+pub fn clipboardTextSet(text: []u8) error{OutOfMemory}!void {
+    const cw = currentWindow();
+    try cw.backend.clipboardTextSet(text);
+}
+
 pub fn backendFree(p: *anyopaque) void {
     const cw = currentWindow();
     cw.backend.free(p);
@@ -4689,6 +4694,9 @@ pub const TextLayoutWidget = struct {
 
     add_text_done: bool = false,
 
+    copy_sel: ?Selection = null,
+    copy_slice: ?[]u8 = null,
+
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         const options = defaults.override(opts);
         var self = Self{ .wd = WidgetData.init(src, options), .selection_in = init_opts.selection };
@@ -5028,6 +5036,35 @@ pub const TextLayoutWidget = struct {
                 self.wd.min_size.w = @max(self.wd.min_size.w, self.wd.padSize(size).w);
             }
             self.wd.min_size.h = @max(self.wd.min_size.h, self.wd.padSize(size).h);
+
+            if (self.copy_sel) |sel| {
+                // we are copying to clipboard
+                if (sel.start < self.bytes_seen + end) {
+                    // need to copy some
+                    const cstart = if (sel.start < self.bytes_seen) 0 else (sel.start - self.bytes_seen);
+                    const cend = if (sel.end < self.bytes_seen + end) (sel.end - self.bytes_seen) else end;
+
+                    // initialize or realloc
+                    if (self.copy_slice) |slice| {
+                        const old_len = slice.len;
+                        self.copy_slice = try currentWindow().arena.realloc(slice, slice.len + (cend - cstart));
+                        @memcpy(self.copy_slice.?[old_len..], txt[cstart..cend]);
+                    } else {
+                        self.copy_slice = try currentWindow().arena.dupe(u8, txt[cstart..cend]);
+                    }
+
+                    // push to clipboard if done
+                    if (sel.end <= self.bytes_seen + end) {
+                        try gui.clipboardTextSet(self.copy_slice.?);
+
+                        self.copy_sel = null;
+                        currentWindow().arena.free(self.copy_slice.?);
+                        self.copy_slice = null;
+                    }
+                }
+            }
+
+            // discard bytes we've dealt with
             txt = txt[end..];
             self.bytes_seen += end;
 
@@ -5048,6 +5085,15 @@ pub const TextLayoutWidget = struct {
 
     pub fn addTextDone(self: *Self, opts: Options) !void {
         self.add_text_done = true;
+
+        if (self.copy_sel) |_| {
+            // we are copying to clipboard and never stopped
+            try gui.clipboardTextSet(self.copy_slice.?);
+
+            self.copy_sel = null;
+            currentWindow().arena.free(self.copy_slice.?);
+            self.copy_slice = null;
+        }
 
         self.selection.cursor = @min(self.selection.cursor, self.bytes_seen);
         self.selection.start = @min(self.selection.start, self.bytes_seen);
@@ -5217,6 +5263,13 @@ pub const TextLayoutWidget = struct {
                     }
                 },
                 else => {},
+            }
+        } else if (e.evt == .key and e.evt.key.mod.controlGui() and e.evt.key.code == .c) {
+            // copy
+            if (self.selectionGet(.{})) |sel| {
+                if (sel.end > sel.start) {
+                    self.copy_sel = sel.*;
+                }
             }
         }
 
@@ -8720,6 +8773,7 @@ pub const Backend = struct {
         textureCreate: *const fn (ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
         textureDestroy: *const fn (ptr: *anyopaque, texture: *anyopaque) void,
         clipboardText: *const fn (ptr: *anyopaque) []u8,
+        clipboardTextSet: *const fn (ptr: *anyopaque, text: []u8) error{OutOfMemory}!void,
         free: *const fn (ptr: *anyopaque, p: *anyopaque) void,
     };
 
@@ -8733,6 +8787,7 @@ pub const Backend = struct {
         comptime textureCreateFn: fn (ptr: @TypeOf(pointer), pixels: []u8, width: u32, height: u32) *anyopaque,
         comptime textureDestroyFn: fn (ptr: @TypeOf(pointer), texture: *anyopaque) void,
         comptime clipboardTextFn: fn (ptr: @TypeOf(pointer)) []u8,
+        comptime clipboardTextSetFn: fn (ptr: @TypeOf(pointer), text: []u8) error{OutOfMemory}!void,
         comptime freeFn: fn (ptr: @TypeOf(pointer), p: *anyopaque) void,
     ) Backend {
         const Ptr = @TypeOf(pointer);
@@ -8781,6 +8836,11 @@ pub const Backend = struct {
                 return @call(.always_inline, clipboardTextFn, .{self});
             }
 
+            fn clipboardTextSetImpl(ptr: *anyopaque, text: []u8) error{OutOfMemory}!void {
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
+                try @call(.always_inline, clipboardTextSetFn, .{ self, text });
+            }
+
             fn freeImpl(ptr: *anyopaque, p: *anyopaque) void {
                 const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, freeFn, .{ self, p });
@@ -8795,6 +8855,7 @@ pub const Backend = struct {
                 .textureCreate = textureCreateImpl,
                 .textureDestroy = textureDestroyImpl,
                 .clipboardText = clipboardTextImpl,
+                .clipboardTextSet = clipboardTextSetImpl,
                 .free = freeImpl,
             };
         };
@@ -8835,6 +8896,10 @@ pub const Backend = struct {
 
     pub fn clipboardText(self: *Backend) []u8 {
         return self.vtable.clipboardText(self.ptr);
+    }
+
+    pub fn clipboardTextSet(self: *Backend, text: []u8) error{OutOfMemory}!void {
+        try self.vtable.clipboardTextSet(self.ptr, text);
     }
 
     pub fn free(self: *Backend, p: *anyopaque) void {

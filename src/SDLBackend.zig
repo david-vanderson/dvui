@@ -11,6 +11,7 @@ renderer: *c.SDL_Renderer,
 cursor_last: gui.Cursor = .arrow,
 cursor_backing: [@typeInfo(gui.Cursor).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(gui.Cursor).Enum.fields.len,
 cursor_backing_tried: [@typeInfo(gui.Cursor).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(gui.Cursor).Enum.fields.len,
+arena: std.mem.Allocator = undefined,
 
 pub const initOptions = struct {
     width: u32,
@@ -140,7 +141,7 @@ pub fn clear(self: *SDLBackend) void {
 }
 
 pub fn guiBackend(self: *SDLBackend) gui.Backend {
-    return gui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy, clipboardText, free);
+    return gui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free);
 }
 
 pub fn clipboardText(self: *SDLBackend) []u8 {
@@ -148,12 +149,21 @@ pub fn clipboardText(self: *SDLBackend) []u8 {
     return std.mem.sliceTo(c.SDL_GetClipboardText(), 0);
 }
 
+pub fn clipboardTextSet(self: *SDLBackend, text: []u8) !void {
+    var cstr = try self.arena.alloc(u8, text.len + 1);
+    @memcpy(cstr[0..text.len], text);
+    cstr[cstr.len - 1] = 0;
+    _ = c.SDL_SetClipboardText(cstr.ptr);
+}
+
 pub fn free(self: *SDLBackend, p: *anyopaque) void {
     _ = self;
     c.SDL_free(p);
 }
 
-pub fn begin(_: *SDLBackend, _: std.mem.Allocator) void {}
+pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) void {
+    self.arena = arena;
+}
 
 pub fn end(_: *SDLBackend) void {}
 
@@ -318,6 +328,9 @@ pub fn SDL_keysym_to_gui(keysym: i32) gui.enums.Key {
         c.SDLK_TAB => .tab,
         c.SDLK_ESCAPE => .escape,
         c.SDLK_RETURN => .enter,
-        else => .unknown,
+        else => blk: {
+            std.debug.print("SDL_keysym_to_gui unknown keysym {d}\n", .{keysym});
+            break :blk .unknown;
+        },
     };
 }

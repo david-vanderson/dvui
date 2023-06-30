@@ -1,8 +1,6 @@
 
-textLayout: make ctrl-c copy work
-- push to clipboard
-
 podcast needs:
+- update gui to be able to paste urls into the rss textEntry
 - dropdown for speed selection
 - progress bar for downloads
 - image support for podcast/episode images
@@ -37,6 +35,7 @@ use zig package manager to get SDL (github.com/andrewrk/SDL)
 - build the same SDL version to get cmake config
 
 get mach example working again
+- MachBackend should save the passed allocator
 
 
 add alpha to Options as well and multiply it by the theme alpha
