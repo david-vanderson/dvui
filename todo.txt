@@ -1,4 +1,10 @@
 
+when translating SDL keysyms, if there is an unknown, try to print the char
+
+"Toggle Debug Window" button text gets the gg cutoff when zoomed in a single time
+
+multiline text entry when adding text doesn't scroll down enough to see the text?
+
 podcast needs:
 - update gui to be able to paste urls into the rss textEntry
 - dropdown for speed selection
@@ -10,9 +16,6 @@ demo:
 
 icon browser: when clicking an icon, copy the buttonIcon line of code and show a toast
 - can the demo have more of these kind of "click to copy the code" things?
-
-make textSize handle multiple lines
- - textSizeEx can stop on newline
 
 TextEntry needs a single_line option which replaces newlines with spaces
 

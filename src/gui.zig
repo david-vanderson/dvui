@@ -544,8 +544,21 @@ pub const Font = struct {
         return Font{ .size = s, .name = self.name, .ttf_bytes = self.ttf_bytes };
     }
 
+    // handles multiple lines
     pub fn textSize(self: *const Font, text: []const u8) !Size {
-        return try self.textSizeEx(text, null, null, .before);
+        var ret = Size{};
+
+        var end: usize = 0;
+        while (end < text.len) {
+            var end_idx: usize = undefined;
+            const s = try self.textSizeEx(text[end..], null, &end_idx, .before);
+            ret.h += try self.lineSkip();
+            ret.w = @max(ret.w, s.w);
+
+            end += end_idx;
+        }
+
+        return ret;
     }
 
     pub const EndMetric = enum {
@@ -553,6 +566,7 @@ pub const Font = struct {
         nearest, // end_idx stops at start of character closest to max_width
     };
 
+    /// textSizeEx always stops at a newline, use textSize to get multiline sizes
     pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: EndMetric) !Size {
         // ask for a font that matches the natural display pixels so we get a more
         // accurate size
@@ -572,7 +586,7 @@ pub const Font = struct {
         return s.scale(target_fraction);
     }
 
-    // doesn't scale the font or max_width
+    // doesn't scale the font or max_width, always stops at newlines
     pub fn textSizeRaw(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: EndMetric) !Size {
         const fce = try fontCacheGet(self.*);
 
@@ -6905,20 +6919,7 @@ pub const LabelWidget = struct {
         const options = defaults.override(opts);
         self.label_str = label_str;
 
-        var iter = std.mem.split(u8, self.label_str, "\n");
-        var first: bool = true;
-        var size = Size{};
-        while (iter.next()) |line| {
-            const s = try options.fontGet().textSize(line);
-            if (first) {
-                first = false;
-                size = s;
-            } else {
-                size.h += try options.fontGet().lineSkip();
-                size.w = @max(size.w, s.w);
-            }
-        }
-
+        var size = try options.fontGet().textSize(self.label_str);
         size = Size.max(size, options.min_size_contentGet());
 
         self.wd = WidgetData.init(src, options.override(.{ .min_size_content = size }));
@@ -8008,6 +8009,7 @@ pub const renderTextOptions = struct {
     sel_color_bg: ?Color = null,
 };
 
+// only renders a single line of text
 pub fn renderText(opts: renderTextOptions) !void {
     if (opts.rs.s == 0) return;
     if (clipGet().intersect(opts.rs.r).empty()) return;
