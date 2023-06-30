@@ -29,6 +29,7 @@ Get Started: find the widget you want in the example and copy the code from the 
   - Slider
   - Checkbox
   - Toast
+  - Panes with draggable sash
 - Missing Widgets for now
   - dropdown box
   - combo box
