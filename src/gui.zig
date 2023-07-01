@@ -536,12 +536,16 @@ pub fn frameTimeNS() i128 {
 
 pub const Font = struct {
     size: f32,
-    line_skip_factor: f32 = 1.0,
+    line_height_factor: f32 = 1.0,
     name: []const u8,
     ttf_bytes: []const u8,
 
     pub fn resize(self: *const Font, s: f32) Font {
-        return Font{ .size = s, .name = self.name, .ttf_bytes = self.ttf_bytes };
+        return Font{ .size = s, .line_height_factor = self.line_height_factor, .name = self.name, .ttf_bytes = self.ttf_bytes };
+    }
+
+    pub fn lineHeightFactor(self: *const Font, factor: f32) Font {
+        return Font{ .size = self.size, .line_height_factor = factor, .name = self.name, .ttf_bytes = self.ttf_bytes };
     }
 
     // handles multiple lines
@@ -657,7 +661,7 @@ pub const Font = struct {
         return Size{ .w = tw, .h = th };
     }
 
-    pub fn lineSkip(self: *const Font) !f32 {
+    pub fn lineHeight(self: *const Font) !f32 {
         // do the same sized thing as textSizeEx so they will cache the same font
         const ss = parentGet().screenRectScale(Rect{}).s;
         if (ss == 0) return 0;
@@ -667,9 +671,8 @@ pub const Font = struct {
         const sized_font = self.resize(ask_size);
 
         const fce = try fontCacheGet(sized_font);
-        const skip = fce.height;
-        //std.debug.print("lineSkip fontsize {d} is {d}\n", .{sized_font.size, skip});
-        return skip * target_fraction * self.line_skip_factor;
+        const face_height = fce.height;
+        return face_height * target_fraction * self.line_height_factor;
     }
 };
 
@@ -4343,7 +4346,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
     var bcbox = BoxWidget.init(@src(), .horizontal, false, options.strip());
     defer bcbox.deinit();
     try bcbox.install(.{});
-    const size = try options.fontGet().lineSkip();
+    const size = try options.fontGet().lineHeight();
     if (expanded) {
         try icon(@src(), "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
     } else {
@@ -4771,7 +4774,7 @@ pub const TextLayoutWidget = struct {
     pub fn addText(self: *Self, text: []const u8, opts: Options) !void {
         const options = self.wd.options.override(opts);
         const msize = try options.fontGet().textSize("m");
-        const lineskip = try options.fontGet().lineSkip();
+        const line_height = try options.fontGet().lineHeight();
         var txt = text;
 
         const rect = self.wd.contentRect();
@@ -4795,7 +4798,7 @@ pub const TextLayoutWidget = struct {
             var width = linewidth - self.insert_pt.x;
             for (self.corners) |corner| {
                 if (corner) |cor| {
-                    if (@max(cor.y, self.insert_pt.y) < @min(cor.y + cor.h, self.insert_pt.y + lineskip)) {
+                    if (@max(cor.y, self.insert_pt.y) < @min(cor.y + cor.h, self.insert_pt.y + line_height)) {
                         linewidth -= cor.w;
                         if (linestart == cor.x) {
                             linestart = (cor.x + cor.w);
@@ -4828,7 +4831,7 @@ pub const TextLayoutWidget = struct {
 
             // if we are boxed in too much by corner widgets drop to next line
             if (self.break_lines and s.w > width and linewidth < container_width) {
-                self.insert_pt.y += lineskip;
+                self.insert_pt.y += line_height;
                 self.insert_pt.x = 0;
                 continue;
             }
@@ -4847,7 +4850,7 @@ pub const TextLayoutWidget = struct {
                 } else if (self.insert_pt.x > linestart) {
                     // can't fit breaking on space, but we aren't starting at the left edge
                     // so drop to next line
-                    self.insert_pt.y += lineskip;
+                    self.insert_pt.y += line_height;
                     self.insert_pt.x = 0;
                     continue;
                 }
@@ -5085,7 +5088,7 @@ pub const TextLayoutWidget = struct {
 
             // move insert_pt to next line if we have more text
             if (txt.len > 0 or newline) {
-                self.insert_pt.y += lineskip;
+                self.insert_pt.y += line_height;
                 self.insert_pt.x = 0;
                 if (newline) {
                     const newline_size = Size{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h };
@@ -6952,7 +6955,7 @@ pub const LabelWidget = struct {
                 .color = self.wd.options.color(.text),
                 .debug = self.wd.options.debugGet(),
             });
-            rs.r.y += rs.s * try self.wd.options.fontGet().lineSkip();
+            rs.r.y += rs.s * try self.wd.options.fontGet().lineHeight();
         }
         clipSet(oldclip);
 
@@ -6997,7 +7000,7 @@ pub const IconWidget = struct {
             size.w = @max(size.w, iconWidth(name, tvg_bytes, size.h) catch size.w);
         } else {
             // user didn't give us one, make it the height of text
-            const h = options.fontGet().lineSkip() catch 10;
+            const h = options.fontGet().lineHeight() catch 10;
             size = Size{ .w = iconWidth(name, tvg_bytes, h) catch h, .h = h };
         }
 
@@ -7395,7 +7398,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     var b = try box(@src(), .horizontal, options.strip().override(.{ .expand = .both }));
     defer b.deinit();
 
-    var check_size = try options.fontGet().lineSkip();
+    var check_size = try options.fontGet().lineHeight();
     const s = spacer(@src(), Size.all(check_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
     var rs = s.borderRectScale();
@@ -8251,7 +8254,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             sel_vtx[0].pos.x = sel_start_x;
             sel_vtx[0].pos.y = opts.rs.r.y;
             sel_vtx[3].pos.x = sel_start_x;
-            sel_vtx[3].pos.y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_skip_factor);
+            sel_vtx[3].pos.y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor);
             sel_vtx[1].pos.x = sel_end_x;
             sel_vtx[1].pos.y = sel_vtx[0].pos.y;
             sel_vtx[2].pos.x = sel_end_x;
@@ -8937,6 +8940,7 @@ pub const examples = struct {
     var text_entry_multiline_buf = std.mem.zeroes([500]u8);
     var show_dialog: bool = false;
     var scale_val: f32 = 1.0;
+    var line_height_factor: f32 = 1.0;
     var animating_window_show: bool = false;
     var animating_window_closing: bool = false;
     var animating_window_rect = gui.Rect{ .x = 300, .y = 200, .w = 300, .h = 200 };
@@ -9416,7 +9420,24 @@ pub const examples = struct {
             try tl.addText(start, .{ .font_style = .title_4 });
 
             const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-            try tl.addText(lorem, .{});
+            try tl.addText(lorem, .{ .font = gui.themeGet().font_body.lineHeightFactor(line_height_factor) });
+        }
+
+        {
+            var hbox = try gui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
+
+            try gui.label(@src(), "line height factor: {d:0.2}", .{line_height_factor}, .{ .gravity_y = 0.5 });
+
+            if (try gui.button(@src(), "inc", .{})) {
+                line_height_factor += 0.1;
+                line_height_factor = @min(10, line_height_factor);
+            }
+
+            if (try gui.button(@src(), "dec", .{})) {
+                line_height_factor -= 0.1;
+                line_height_factor = @max(0.1, line_height_factor);
+            }
         }
     }
 
