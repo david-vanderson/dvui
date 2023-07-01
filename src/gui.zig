@@ -387,7 +387,7 @@ pub const Options = struct {
         return self.id_extra orelse 0;
     }
 
-    pub fn debugging(self: *const Options) bool {
+    pub fn debugGet(self: *const Options) bool {
         return self.debug orelse false;
     }
 
@@ -552,7 +552,7 @@ pub const Font = struct {
         while (end < text.len) {
             var end_idx: usize = undefined;
             const s = try self.textSizeEx(text[end..], null, &end_idx, .before);
-            ret.h += try self.lineSkip();
+            ret.h += s.h;
             ret.w = @max(ret.w, s.w);
 
             end += end_idx;
@@ -892,7 +892,8 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     const ascender = @as(f32, @floatFromInt(face.*.ascender)) / 64.0;
     const ss = @as(f32, @floatFromInt(face.*.size.*.metrics.y_scale)) / 0x10000;
     const ascent = ascender * ss;
-    //std.debug.print("fontcache size {d} ascender {d} scale {d} ascent {d}\n", .{font.size, ascender, scale, ascent});
+    const height = @as(f32, @floatFromInt(face.*.size.*.metrics.height)) / 64.0;
+    //std.debug.print("fontcache size {d} ascender {d} scale {d} ascent {d} height {d}\n", .{ font.size, ascender, ss, ascent, height });
 
     // make debug texture atlas so we can see if something later goes wrong
     const size = .{ .w = 10, .h = 10 };
@@ -901,8 +902,8 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
 
     const entry = FontCacheEntry{
         .face = face,
-        .height = @ceil(@as(f32, @floatFromInt(face.*.size.*.metrics.height)) / 64.0),
-        .ascent = @ceil(ascent),
+        .height = @ceil(height),
+        .ascent = @floor(ascent),
         .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
         .texture_atlas = cw.backend.textureCreate(pixels, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h))),
         .texture_atlas_size = size,
@@ -6920,6 +6921,9 @@ pub const LabelWidget = struct {
         self.label_str = label_str;
 
         var size = try options.fontGet().textSize(self.label_str);
+        if (opts.debugGet()) {
+            std.debug.print("label size {}\n", .{size});
+        }
         size = Size.max(size, options.min_size_contentGet());
 
         self.wd = WidgetData.init(src, options.override(.{ .min_size_content = size }));
@@ -6946,6 +6950,7 @@ pub const LabelWidget = struct {
                 .text = line,
                 .rs = rs,
                 .color = self.wd.options.color(.text),
+                .debug = self.wd.options.debugGet(),
             });
             rs.r.y += rs.s * try self.wd.options.fontGet().lineSkip();
         }
@@ -8007,6 +8012,7 @@ pub const renderTextOptions = struct {
     sel_end: ?usize = null,
     sel_color: ?Color = null,
     sel_color_bg: ?Color = null,
+    debug: bool = false,
 };
 
 // only renders a single line of text
@@ -8155,10 +8161,15 @@ pub fn renderText(opts: renderTextOptions) !void {
     var x: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
     var y: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.y) else opts.rs.r.y;
 
+    if (opts.debug) {
+        std.debug.print("renderText x {d} y {d}\n", .{ x, y });
+    }
+
     var sel: bool = false;
     var sel_in: bool = false;
     var sel_start_x: f32 = x;
     var sel_end_x: f32 = x;
+    var sel_max_y: f32 = y;
     var sel_start: usize = opts.sel_start orelse 0;
     sel_start = @min(sel_start, opts.text.len);
     var sel_end: usize = opts.sel_end orelse 0;
@@ -8203,13 +8214,22 @@ pub fn renderText(opts: renderTextOptions) !void {
         v.uv = gi.uv;
         try vtx.append(v);
 
+        if (opts.debug) {
+            std.debug.print("{d} pad {d} minx {d} maxx {d} miny {d} maxy {d} x {d} y {d} ", .{ bytes_seen, pad, gi.minx, gi.maxx, gi.miny, gi.maxy, v.pos.x, v.pos.y });
+        }
+
         v.pos.x = x + (gi.maxx + pad) * target_fraction;
         v.uv[0] = gi.uv[0] + (gi.maxx - gi.minx + 2 * pad) / fce.texture_atlas_size.w;
         try vtx.append(v);
 
         v.pos.y = y + (gi.maxy + pad) * target_fraction;
+        sel_max_y = @max(sel_max_y, v.pos.y);
         v.uv[1] = gi.uv[1] + (gi.maxy - gi.miny + 2 * pad) / fce.texture_atlas_size.h;
         try vtx.append(v);
+
+        if (opts.debug) {
+            std.debug.print("    x {d} y {d}\n", .{ v.pos.x, v.pos.y });
+        }
 
         v.pos.x = x + (gi.minx - pad) * target_fraction;
         v.uv[0] = gi.uv[0];
@@ -8231,7 +8251,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             sel_vtx[0].pos.x = sel_start_x;
             sel_vtx[0].pos.y = opts.rs.r.y;
             sel_vtx[3].pos.x = sel_start_x;
-            sel_vtx[3].pos.y = @max(y, opts.rs.r.y) + fce.height * target_fraction;
+            sel_vtx[3].pos.y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_skip_factor);
             sel_vtx[1].pos.x = sel_end_x;
             sel_vtx[1].pos.y = sel_vtx[0].pos.y;
             sel_vtx[2].pos.x = sel_end_x;
@@ -8549,7 +8569,7 @@ pub const WidgetData = struct {
             }
 
             if (self.id == cw.debug_widget_id) {
-                cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x} {s}\n\n{}\nmargin {}\npadding {}", .{ self.id, name, rs.r, self.options.marginGet(), self.options.paddingGet() });
+                cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x} {s}\n\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{ self.id, name, rs.r, rs.s, self.options.paddingGet().scale(rs.s), self.options.borderGet().scale(rs.s), self.options.marginGet().scale(rs.s) });
                 try pathAddRect(rs.r.insetAll(0), .{});
                 var color = (Options{ .color_style = .err }).color(.fill);
                 try pathStrokeAfter(true, true, 3 * rs.s, .none, color);
@@ -9102,7 +9122,7 @@ pub const examples = struct {
             }
         }
 
-        var scroll = try gui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false, .debug = true });
+        var scroll = try gui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
         defer scroll.deinit();
 
         var scaler = try gui.scale(@src(), scale_val, .{ .expand = .horizontal });
@@ -9381,7 +9401,7 @@ pub const examples = struct {
             try tl.install(.{ .process_events = false });
             defer tl.deinit();
 
-            var cbox = try gui.box(@src(), .vertical, .{});
+            var cbox = try gui.box(@src(), .vertical, .{ .padding = .{ .w = 4 } });
             if (try gui.buttonIcon(@src(), 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) })) {
                 try gui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
             }
