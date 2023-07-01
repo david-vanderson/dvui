@@ -198,6 +198,7 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const gui.
     // figure out how much we are losing by truncating x and y, need to add that back to w and h
     const clip = c.SDL_Rect{ .x = @as(c_int, @intFromFloat(clipr.x)), .y = @as(c_int, @intFromFloat(clipr.y)), .w = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x))))), .h = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.h + clipr.y - @floor(clipr.y))))) };
 
+    //std.debug.print("SDL clip {} -> SDL_Rect{{ .x = {d}, .y = {d}, .w = {d}, .h = {d} }}\n", .{ clipr, clip.x, clip.y, clip.w, clip.h });
     _ = c.SDL_RenderSetClipRect(self.renderer, &clip);
 
     const tex = @as(?*c.SDL_Texture, @ptrCast(texture));
