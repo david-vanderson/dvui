@@ -1,10 +1,6 @@
 
-test selecting text with a larger line_skip_factor
-
 gui is getting mouse events even when the window is not focused?
 - is that a SDL option?
-
-multiline text entry when adding text doesn't scroll down enough to see the text?
 
 podcast needs:
 - update gui to be able to paste urls into the rss textEntry

@@ -5018,10 +5018,10 @@ pub const TextLayoutWidget = struct {
             if (!self.cursor_seen and self.selection.cursor < self.bytes_seen + end) {
                 self.cursor_seen = true;
                 const size = try options.fontGet().textSize(txt[0 .. self.selection.cursor - self.bytes_seen]);
-                const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h };
+                const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
 
                 if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                    const cr_new = cr.add(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * size.h });
+                    const cr_new = cr.add(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
                     self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
 
                     // might have already passed, so need to go again next frame
@@ -5123,10 +5123,10 @@ pub const TextLayoutWidget = struct {
 
             const options = self.wd.options.override(opts);
             const size = try options.fontGet().textSize("");
-            const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 2, .h = size.h };
+            const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
 
             if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                const cr_new = cr.add(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * size.h });
+                const cr_new = cr.add(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
                 self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
 
                 // might have already passed, so need to go again next frame
@@ -7568,7 +7568,8 @@ pub const TextEntryWidget = struct {
                 // clipping, so go back to scroll clipping
                 clipSet(scrollclip);
 
-                const crect = cr.add(.{ .x = -1 });
+                var crect = cr.add(.{ .x = -1 });
+                crect.w = 2;
                 try pathAddRect(self.textLayout.screenRectScale(crect).r, Rect.all(0));
                 try pathFillConvex(self.wd.options.color(.accent));
 
