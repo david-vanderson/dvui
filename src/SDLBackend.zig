@@ -65,15 +65,14 @@ pub fn refresh() void {
 }
 
 pub fn addAllEvents(self: *SDLBackend, win: *gui.Window) !bool {
+    //const flags = c.SDL_GetWindowFlags(self.window);
+    //if (flags & c.SDL_WINDOW_MOUSE_FOCUS == 0 and flags & c.SDL_WINDOW_INPUT_FOCUS == 0) {
+    //std.debug.print("bailing\n", .{});
+    //}
     var event: c.SDL_Event = undefined;
     while (c.SDL_PollEvent(&event) != 0) {
         _ = try self.addEvent(win, event);
         switch (event.type) {
-            c.SDL_KEYDOWN => {
-                if (((event.key.keysym.mod & c.KMOD_CTRL) > 0) and event.key.keysym.sym == c.SDLK_q) {
-                    return true;
-                }
-            },
             c.SDL_QUIT => {
                 return true;
             },
