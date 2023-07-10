@@ -522,9 +522,9 @@ pub fn placeOnScreen(spawner: Rect, start: Rect) Rect {
     }
 
     if ((r.y + r.h) > wr.h) {
-        if (spawner.h == 0) {
-            r.y = wr.h - r.h;
-        }
+        r.y = wr.h - r.h;
+    } else if (r.y < wr.y) {
+        r.y = wr.y;
     }
 
     return r;
@@ -3540,6 +3540,15 @@ pub const PopupWidget = struct {
             }
         }
 
+        // check if a focus event is happening outside our window
+        var evts = events();
+        for (evts) |e| {
+            if (!e.handled and e.evt == .mouse and e.evt.mouse.kind == .focus) {
+                var closeE = Event{ .evt = .{ .close_popup = .{} } };
+                self.processEvent(&closeE, true);
+            }
+        }
+
         if (!self.have_popup_child and !self.chainFocused(true)) {
             // if a popup chain is open and the user focuses a different window
             // (not the parent of the popups), then we want to close the popups
@@ -4319,6 +4328,47 @@ pub const AnimateWidget = struct {
         _ = parentSet(self.wd.parent);
     }
 };
+
+pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: *usize, opts: Options) !bool {
+    var m = try gui.menu(@src(), .horizontal, opts.strip().override(.{ .name = "Dropdown" }));
+    defer m.deinit();
+
+    var b = MenuItemWidget.init(src, .{ .submenu = true, .focus_on_hover = false }, opts.override(.{ .expand = .horizontal, .color_style = .control, .background = true }));
+    try b.install(.{ .focus_as_outline = true });
+    defer b.deinit();
+
+    var hbox = try gui.box(@src(), .horizontal, .{ .expand = .horizontal });
+    defer hbox.deinit();
+
+    try labelNoFmt(@src(), entries[choice.*], opts.strip());
+    try icon(@src(), "dropdown_triangle", gui.icons.papirus.actions.keyboard_hide_symbolic, opts.strip().override(.{ .gravity_x = 1.0 }));
+
+    var ret = false;
+    if (b.activeRect()) |r| {
+        var pop = PopupWidget.init(@src(), r, .{ .min_size_content = r.size() });
+        if (!firstFrame(pop.wd.id)) {
+            // move popup to align first item with b
+            pop.initialRect.y -= pop.options.borderGet().y;
+            pop.initialRect.y -= pop.options.paddingGet().y;
+
+            // move popup up so selected entry is aligned with b
+            const h = pop.wd.contentRect().inset(pop.options.borderGet()).inset(pop.options.paddingGet()).h;
+            pop.initialRect.y -= (h / @as(f32, @floatFromInt(entries.len))) * @as(f32, @floatFromInt(choice.*));
+        }
+        try pop.install(.{});
+        defer pop.deinit();
+
+        for (entries, 0..) |_, i| {
+            if (try gui.menuItemLabel(@src(), entries[i], .{}, .{ .id_extra = i })) |_| {
+                choice.* = i;
+                ret = true;
+                gui.menuGet().?.close();
+            }
+        }
+    }
+
+    return ret;
+}
 
 pub var expander_defaults: Options = .{
     .padding = Rect.all(2),
@@ -6607,10 +6657,14 @@ pub const MenuWidget = struct {
         self.dir = dir;
         if (dataGet(null, self.wd.id, "_sub_act", bool)) |a| {
             self.submenus_activated = a;
-            //std.debug.print("menu dataGet {x} {}\n", .{self.wd.id, self.submenus_activated});
+            if (opts.debugGet()) {
+                std.debug.print("menu dataGet {x} {}\n", .{ self.wd.id, self.submenus_activated });
+            }
         } else if (menuGet()) |m| {
             self.submenus_activated = m.submenus_activated;
-            //std.debug.print("menu menuGet {x} {}\n", .{self.wd.id, self.submenus_activated});
+            if (opts.debugGet()) {
+                std.debug.print("menu menuGet {x} {}\n", .{ self.wd.id, self.submenus_activated });
+            }
         }
 
         return self;
@@ -6678,8 +6732,8 @@ pub const MenuWidget = struct {
     }
 };
 
-pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, submenu: bool, opts: Options) !?Rect {
-    var mi = try menuItem(src, submenu, opts);
+pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) !?Rect {
+    var mi = try menuItem(src, init_opts, opts);
 
     var labelopts = opts.strip();
 
@@ -6699,8 +6753,8 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, sub
     return ret;
 }
 
-pub fn menuItemIcon(src: std.builtin.SourceLocation, submenu: bool, name: []const u8, tvg_bytes: []const u8, opts: Options) !?Rect {
-    var mi = try menuItem(src, submenu, opts);
+pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) !?Rect {
+    var mi = try menuItem(src, init_opts, opts);
 
     var iconopts = opts.strip();
 
@@ -6720,9 +6774,9 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, submenu: bool, name: []cons
     return ret;
 }
 
-pub fn menuItem(src: std.builtin.SourceLocation, submenu: bool, opts: Options) !*MenuItemWidget {
+pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: Options) !*MenuItemWidget {
     var ret = try currentWindow().arena.create(MenuItemWidget);
-    ret.* = MenuItemWidget.init(src, submenu, opts);
+    ret.* = MenuItemWidget.init(src, init_opts, opts);
     try ret.install(.{});
     return ret;
 }
@@ -6736,22 +6790,26 @@ pub const MenuItemWidget = struct {
         .expand = .horizontal,
     };
 
+    pub const InitOptions = struct {
+        submenu: bool = false,
+        focus_on_hover: bool = true,
+    };
+
     wd: WidgetData = undefined,
-    focused_in_win: bool = false,
     highlight: bool = false,
-    submenu: bool = false,
+    init_opts: InitOptions = undefined,
     activated: bool = false,
     show_active: bool = false,
 
-    pub fn init(src: std.builtin.SourceLocation, submenu: bool, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         var self = Self{};
         const options = defaults.override(opts);
         self.wd = WidgetData.init(src, options);
-        self.submenu = submenu;
+        self.init_opts = init_opts;
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
+    pub fn install(self: *Self, opts: struct { process_events: bool = true, focus_as_outline: bool = false }) !void {
         try self.wd.register("MenuItem", null);
 
         if (self.wd.visible()) {
@@ -6765,33 +6823,28 @@ pub const MenuItemWidget = struct {
             }
         }
 
-        if (self.wd.id == focusedWidgetIdInCurrentSubwindow()) {
-            self.focused_in_win = true;
-        }
-
-        if (self.wd.options.borderGet().nonZero()) {
-            const rs = self.wd.borderRectScale();
-            try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            var col = self.wd.options.color(.border);
-            try pathFillConvex(col);
-        }
+        try self.wd.borderAndBackground(.{});
 
         var focused: bool = false;
         if (self.wd.id == focusedWidgetId()) {
             focused = true;
         }
 
-        if (focused or (self.focused_in_win and self.highlight)) {
-            if (!self.submenu or !menuGet().?.submenus_activated) {
+        if (focused or ((self.wd.id == focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {
+            if (!self.init_opts.submenu or !menuGet().?.submenus_activated) {
                 self.show_active = true;
             }
         }
 
         if (self.show_active) {
-            const rs = self.wd.backgroundRectScale();
-            try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-            try pathFillConvex(self.wd.options.color(.accent));
-        } else if (self.focused_in_win or self.highlight) {
+            if (opts.focus_as_outline) {
+                try self.wd.focusBorder();
+            } else {
+                const rs = self.wd.backgroundRectScale();
+                try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
+                try pathFillConvex(self.wd.options.color(.accent));
+            }
+        } else if ((self.wd.id == focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
             const rs = self.wd.backgroundRectScale();
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
             try pathFillConvex(self.wd.options.color(.hover));
@@ -6806,8 +6859,8 @@ pub const MenuItemWidget = struct {
 
     pub fn activeRect(self: *const Self) ?Rect {
         var act = false;
-        if (self.submenu) {
-            if (menuGet().?.submenus_activated and self.focused_in_win) {
+        if (self.init_opts.submenu) {
+            if (menuGet().?.submenus_activated and (self.wd.id == focusedWidgetIdInCurrentSubwindow())) {
                 act = true;
             }
         } else if (self.activated) {
@@ -6815,7 +6868,7 @@ pub const MenuItemWidget = struct {
         }
 
         if (act) {
-            const rs = self.wd.borderRectScale();
+            const rs = self.wd.backgroundRectScale();
             return rs.r.scale(1 / windowNaturalScale());
         } else {
             return null;
@@ -6848,17 +6901,18 @@ pub const MenuItemWidget = struct {
             .mouse => |me| {
                 if (me.kind == .focus) {
                     e.handled = true;
+                    focusSubwindow(null, null); // focuses the window we are in
+                    focusWidget(self.wd.id, e.num);
                 } else if (me.kind == .press and me.kind.press == .left) {
                     e.handled = true;
-                    if (self.submenu) {
-                        focusSubwindow(null, null); // focuses the window we are in
-                        focusWidget(self.wd.id, e.num);
+                    if (self.init_opts.submenu) {
                         menuGet().?.submenus_activated = !menuGet().?.submenus_activated;
                     }
                 } else if (me.kind == .release and me.kind.release == .left) {
                     e.handled = true;
-                    if (!self.submenu) {
+                    if (!self.init_opts.submenu and (self.wd.id == focusedWidgetIdInCurrentSubwindow())) {
                         self.activated = true;
+                        refresh();
                     }
                 } else if (me.kind == .position) {
                     e.handled = true;
@@ -6867,7 +6921,7 @@ pub const MenuItemWidget = struct {
                     // We get a .position mouse event every frame.  If we
                     // focus the menu item under the mouse even if it's not
                     // moving then it breaks keyboard navigation.
-                    if (mouseTotalMotion().nonZero()) {
+                    if (self.init_opts.focus_on_hover and mouseTotalMotion().nonZero()) {
                         // TODO don't do the rest here if the menu has an existing popup and the motion is towards the popup
                         focusSubwindow(null, null); // focuses the window we are in
                         focusWidget(self.wd.id, null);
@@ -6877,14 +6931,15 @@ pub const MenuItemWidget = struct {
             .key => |ke| {
                 if (ke.code == .space and ke.action == .down) {
                     e.handled = true;
-                    if (self.submenu) {
+                    if (self.init_opts.submenu) {
                         menuGet().?.submenus_activated = true;
                     } else {
                         self.activated = true;
+                        refresh();
                     }
                 } else if (ke.code == .right and ke.action == .down) {
                     e.handled = true;
-                    if (self.submenu) {
+                    if (self.init_opts.submenu) {
                         menuGet().?.submenus_activated = true;
                     }
                 }
@@ -6924,9 +6979,6 @@ pub const LabelWidget = struct {
         self.label_str = label_str;
 
         var size = try options.fontGet().textSize(self.label_str);
-        if (opts.debugGet()) {
-            std.debug.print("label size {}\n", .{size});
-        }
         size = Size.max(size, options.min_size_contentGet());
 
         self.wd = WidgetData.init(src, options.override(.{ .min_size_content = size }));
@@ -8939,6 +8991,7 @@ pub const examples = struct {
     var slider_val: f32 = 0.0;
     var text_entry_buf = std.mem.zeroes([30]u8);
     var text_entry_multiline_buf = std.mem.zeroes([500]u8);
+    var dropdown_val: usize = 1;
     var show_dialog: bool = false;
     var scale_val: f32 = 1.0;
     var line_height_factor: f32 = 1.0;
@@ -9241,8 +9294,19 @@ pub const examples = struct {
             var hbox = try gui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            try gui.label(@src(), "Text Entry Multiline", .{}, .{});
+            try gui.label(@src(), "Text Entry Multiline", .{}, .{ .gravity_y = 0.5 });
             try gui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .scroll_vertical = true, .scroll_horizontal_bar = true }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
+        }
+
+        {
+            var hbox = try gui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
+
+            try gui.label(@src(), "Dropdown", .{}, .{ .gravity_y = 0.5 });
+
+            const entries = [_][]const u8{ "First", "Second", "Third is a really long one that doesn't fit" };
+
+            _ = try gui.dropdown(@src(), &entries, &dropdown_val, .{ .min_size_content = .{ .w = 120 } });
         }
     }
 
@@ -9450,11 +9514,11 @@ pub const examples = struct {
             var fw2 = try gui.popup(@src(), gui.Rect.fromPoint(cp), .{});
             defer fw2.deinit();
 
-            _ = try gui.menuItemLabel(@src(), "Cut", false, .{});
-            if ((try gui.menuItemLabel(@src(), "Close", false, .{})) != null) {
+            _ = try gui.menuItemLabel(@src(), "Cut", .{}, .{});
+            if ((try gui.menuItemLabel(@src(), "Close", .{}, .{})) != null) {
                 gui.menuGet().?.close();
             }
-            _ = try gui.menuItemLabel(@src(), "Paste", false, .{});
+            _ = try gui.menuItemLabel(@src(), "Paste", .{}, .{});
         }
 
         var vbox = try gui.box(@src(), .vertical, .{});
@@ -9464,30 +9528,30 @@ pub const examples = struct {
             var m = try gui.menu(@src(), .horizontal, .{});
             defer m.deinit();
 
-            if (try gui.menuItemLabel(@src(), "File", true, .{})) |r| {
+            if (try gui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
                 var fw = try gui.popup(@src(), gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                 defer fw.deinit();
 
                 try submenus();
 
-                if (try gui.menuItemLabel(@src(), "Close", false, .{}) != null) {
+                if (try gui.menuItemLabel(@src(), "Close", .{}, .{}) != null) {
                     gui.menuGet().?.close();
                 }
 
                 try gui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
-                if (try gui.menuItemLabel(@src(), "Dialog", false, .{}) != null) {
+                if (try gui.menuItemLabel(@src(), "Dialog", .{}, .{}) != null) {
                     gui.menuGet().?.close();
                     show_dialog = true;
                 }
             }
 
-            if (try gui.menuItemLabel(@src(), "Edit", true, .{})) |r| {
+            if (try gui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{})) |r| {
                 var fw = try gui.popup(@src(), gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                 defer fw.deinit();
-                _ = try gui.menuItemLabel(@src(), "Cut", false, .{});
-                _ = try gui.menuItemLabel(@src(), "Copy", false, .{});
-                _ = try gui.menuItemLabel(@src(), "Paste", false, .{});
+                _ = try gui.menuItemLabel(@src(), "Cut", .{}, .{});
+                _ = try gui.menuItemLabel(@src(), "Copy", .{}, .{});
+                _ = try gui.menuItemLabel(@src(), "Paste", .{}, .{});
             }
         }
 
@@ -9495,7 +9559,7 @@ pub const examples = struct {
     }
 
     pub fn submenus() !void {
-        if (try gui.menuItemLabel(@src(), "Submenu...", true, .{})) |r| {
+        if (try gui.menuItemLabel(@src(), "Submenu...", .{ .submenu = true }, .{})) |r| {
             var menu_rect = r;
             menu_rect.x += menu_rect.w;
             var fw2 = try gui.popup(@src(), menu_rect, .{});
@@ -9503,11 +9567,11 @@ pub const examples = struct {
 
             try submenus();
 
-            if (try gui.menuItemLabel(@src(), "Close", false, .{}) != null) {
+            if (try gui.menuItemLabel(@src(), "Close", .{}, .{}) != null) {
                 gui.menuGet().?.close();
             }
 
-            if (try gui.menuItemLabel(@src(), "Dialog", false, .{}) != null) {
+            if (try gui.menuItemLabel(@src(), "Dialog", .{}, .{}) != null) {
                 gui.menuGet().?.close();
                 show_dialog = true;
             }

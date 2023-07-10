@@ -80,11 +80,11 @@ pub fn main() !void {
                 var fw2 = try gui.popup(@src(), gui.Rect.fromPoint(cp), .{});
                 defer fw2.deinit();
 
-                _ = try gui.menuItemLabel(@src(), "Cut", false, .{});
-                if ((gui.menuItemLabel(@src(), "Close", false, .{}) catch unreachable) != null) {
+                _ = try gui.menuItemLabel(@src(), "Cut", .{}, .{});
+                if ((gui.menuItemLabel(@src(), "Close", .{}, .{}) catch unreachable) != null) {
                     gui.menuGet().?.close();
                 }
-                _ = try gui.menuItemLabel(@src(), "Paste", false, .{});
+                _ = try gui.menuItemLabel(@src(), "Paste", .{}, .{});
             }
 
             {
