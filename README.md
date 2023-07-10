@@ -30,8 +30,8 @@ Get Started: find the widget you want in the example and copy the code from the 
   - Checkbox
   - Toast
   - Panes with draggable sash
+  - Dropdown
 - Missing Widgets for now
-  - dropdown box
   - combo box
   - radio button
   - datagrid
