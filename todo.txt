@@ -1,4 +1,7 @@
 
+
+maybe focusWidget should default to focusing it in the current subwindow?
+
 gui is getting mouse events even when the window is not focused?
 - is that a SDL option?
 

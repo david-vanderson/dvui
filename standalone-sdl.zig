@@ -70,21 +70,21 @@ fn gui_frame() !void {
         var m = try gui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();
 
-        if (try gui.menuItemLabel(@src(), "File", true, .{ .expand = .none })) |r| {
+        if (try gui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .none })) |r| {
             var fw = try gui.popup(@src(), gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
             defer fw.deinit();
 
-            if (try gui.menuItemLabel(@src(), "Close Menu", false, .{}) != null) {
+            if (try gui.menuItemLabel(@src(), "Close Menu", .{}, .{}) != null) {
                 gui.menuGet().?.close();
             }
         }
 
-        if (try gui.menuItemLabel(@src(), "Edit", true, .{ .expand = .none })) |r| {
+        if (try gui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .none })) |r| {
             var fw = try gui.popup(@src(), gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
             defer fw.deinit();
-            _ = try gui.menuItemLabel(@src(), "Cut", false, .{});
-            _ = try gui.menuItemLabel(@src(), "Copy", false, .{});
-            _ = try gui.menuItemLabel(@src(), "Paste", false, .{});
+            _ = try gui.menuItemLabel(@src(), "Cut", .{}, .{});
+            _ = try gui.menuItemLabel(@src(), "Copy", .{}, .{});
+            _ = try gui.menuItemLabel(@src(), "Paste", .{}, .{});
         }
     }
 
