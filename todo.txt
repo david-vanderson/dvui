@@ -1,4 +1,8 @@
 
+can't debug mouse over spacers?
+
+typing into the debug widget id can cause a crash?
+- maybe non hex stuff?
 
 maybe focusWidget should default to focusing it in the current subwindow?
 
