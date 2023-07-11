@@ -480,6 +480,26 @@ pub const Options = struct {
         };
     }
 
+    pub fn wrapOuter(self: *const Options) Options {
+        var ret = self.*;
+        ret.tab_index = null;
+        ret.border = Rect{};
+        ret.padding = Rect{};
+        ret.background = false;
+        return ret;
+    }
+
+    pub fn wrapInner(self: *const Options) Options {
+        return self.strip().override(.{
+            .tab_index = self.tab_index,
+            .border = self.border,
+            .padding = self.padding,
+            .corner_radius = self.corner_radius,
+            .background = self.background,
+            .expand = .both,
+        });
+    }
+
     pub fn override(self: *const Options, over: Options) Options {
         var ret = self.*;
 
@@ -4329,32 +4349,53 @@ pub const AnimateWidget = struct {
     }
 };
 
+pub var dropdown_defaults: Options = .{
+    .color_style = .control,
+    .margin = Rect.all(4),
+    .corner_radius = Rect.all(5),
+    .padding = Rect.all(4),
+    .background = true,
+    .name = "Dropdown",
+};
+
 pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: *usize, opts: Options) !bool {
-    var m = try gui.menu(@src(), .horizontal, opts.strip().override(.{ .name = "Dropdown" }));
+    const options = dropdown_defaults.override(opts);
+
+    var m = try gui.menu(@src(), .horizontal, options.wrapOuter());
     defer m.deinit();
 
-    var b = MenuItemWidget.init(src, .{ .submenu = true, .focus_on_hover = false }, opts.override(.{ .expand = .horizontal, .color_style = .control, .background = true }));
+    var b = MenuItemWidget.init(src, .{ .submenu = true, .focus_on_hover = false }, options.wrapInner());
     try b.install(.{ .focus_as_outline = true });
     defer b.deinit();
 
-    var hbox = try gui.box(@src(), .horizontal, .{ .expand = .horizontal });
+    var hbox = try gui.box(@src(), .horizontal, .{ .expand = .both });
     defer hbox.deinit();
 
-    try labelNoFmt(@src(), entries[choice.*], opts.strip());
-    try icon(@src(), "dropdown_triangle", gui.icons.papirus.actions.keyboard_hide_symbolic, opts.strip().override(.{ .gravity_x = 1.0 }));
+    var lw = try LabelWidget.initNoFmt(@src(), entries[choice.*], options.strip().override(.{ .gravity_y = 0.5 }));
+    const lw_rect = lw.wd.contentRectScale().r.scale(1 / windowNaturalScale());
+    try lw.install(.{});
+    lw.deinit();
+    try icon(@src(), "dropdown_triangle", gui.icons.papirus.actions.keyboard_hide_symbolic, options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }));
 
     var ret = false;
     if (b.activeRect()) |r| {
-        var pop = PopupWidget.init(@src(), r, .{ .min_size_content = r.size() });
-        if (!firstFrame(pop.wd.id)) {
-            // move popup to align first item with b
-            pop.initialRect.y -= pop.options.borderGet().y;
-            pop.initialRect.y -= pop.options.paddingGet().y;
+        var pop = PopupWidget.init(@src(), lw_rect, .{ .min_size_content = r.size() });
 
-            // move popup up so selected entry is aligned with b
-            const h = pop.wd.contentRect().inset(pop.options.borderGet()).inset(pop.options.paddingGet()).h;
-            pop.initialRect.y -= (h / @as(f32, @floatFromInt(entries.len))) * @as(f32, @floatFromInt(choice.*));
-        }
+        // move popup to align first item with b
+        pop.initialRect.x -= MenuItemWidget.defaults.borderGet().x;
+        pop.initialRect.x -= MenuItemWidget.defaults.paddingGet().x;
+        pop.initialRect.y -= MenuItemWidget.defaults.borderGet().y;
+        pop.initialRect.y -= MenuItemWidget.defaults.paddingGet().y;
+
+        pop.initialRect.x -= pop.options.borderGet().x;
+        pop.initialRect.x -= pop.options.paddingGet().x;
+        pop.initialRect.y -= pop.options.borderGet().y;
+        pop.initialRect.y -= pop.options.paddingGet().y;
+
+        // move popup up so selected entry is aligned with b
+        const h = pop.wd.contentRect().inset(pop.options.borderGet()).inset(pop.options.paddingGet()).h;
+        pop.initialRect.y -= (h / @as(f32, @floatFromInt(entries.len))) * @as(f32, @floatFromInt(choice.*));
+
         try pop.install(.{});
         defer pop.deinit();
 
