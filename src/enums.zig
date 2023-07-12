@@ -29,20 +29,26 @@ pub const Mod = enum(u16) {
     // make non-exhaustive so that we can take combinations of the values
     _,
 
+    pub fn is(self: Mod, other: Mod) bool {
+        const s: u16 = @intFromEnum(self);
+        const t: u16 = @intFromEnum(other);
+        return (s & t) != 0;
+    }
+
     pub fn shift(self: Mod) bool {
-        return self == .lshift or self == .rshift;
+        return self.is(.lshift) or self.is(.rshift);
     }
 
     pub fn ctrl(self: Mod) bool {
-        return self == .lctrl or self == .rctrl;
+        return self.is(.lctrl) or self.is(.rctrl);
     }
 
     pub fn alt(self: Mod) bool {
-        return self == .lalt or self == .ralt;
+        return self.is(.lalt) or self.is(.ralt);
     }
 
     pub fn gui(self: Mod) bool {
-        return self == .lgui or self == .rgui;
+        return self.is(.lgui) or self.is(.rgui);
     }
 
     pub fn controlGui(self: Mod) bool {
