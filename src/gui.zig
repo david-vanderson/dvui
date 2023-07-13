@@ -5996,6 +5996,12 @@ pub const ScrollInfo = struct {
             .horizontal => self.viewport.x = f * self.scroll_max(dir),
         }
     }
+
+    /// clip viewport within virtual rect
+    pub fn clip_viewport(self: *ScrollInfo) void {
+        self.viewport.x = std.math.clamp(self.viewport.x, 0, self.scroll_max(.horizontal));
+        self.viewport.y = std.math.clamp(self.viewport.y, 0, self.scroll_max(.vertical));
+    }
 };
 
 pub const ScrollContainerWidget = struct {
@@ -6041,6 +6047,11 @@ pub const ScrollContainerWidget = struct {
         return self;
     }
 
+    pub fn clipviewport_refresh(self: *Self) void {
+        self.si.clip_viewport();
+        refresh();
+    }
+
     pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
         self.process_events = opts.process_events;
         try self.wd.register("ScrollContainer", null);
@@ -6073,12 +6084,12 @@ pub const ScrollContainerWidget = struct {
             if (self.si.viewport.x < 0) {
                 self.si.viewport.x = @min(0, @max(-20, self.si.viewport.x + 250 * animationRate()));
                 if (self.si.viewport.x < 0) {
-                    refresh();
+                    self.clipviewport_refresh();
                 }
             } else if (self.si.viewport.x > max_scroll) {
                 self.si.viewport.x = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.x - 250 * animationRate()));
                 if (self.si.viewport.x > max_scroll) {
-                    refresh();
+                    self.clipviewport_refresh();
                 }
             }
         }
@@ -6088,12 +6099,12 @@ pub const ScrollContainerWidget = struct {
             if (self.si.viewport.y < 0) {
                 self.si.viewport.y = @min(0, @max(-20, self.si.viewport.y + 250 * animationRate()));
                 if (self.si.viewport.y < 0) {
-                    refresh();
+                    self.clipviewport_refresh();
                 }
             } else if (self.si.viewport.y > max_scroll) {
                 self.si.viewport.y = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.y - 250 * animationRate()));
                 if (self.si.viewport.y > max_scroll) {
-                    refresh();
+                    self.clipviewport_refresh();
                 }
             }
         }
@@ -6166,25 +6177,25 @@ pub const ScrollContainerWidget = struct {
                         if (self.si.vertical != .none) {
                             self.si.viewport.y -= 10;
                         }
-                        refresh();
+                        self.clipviewport_refresh();
                     } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
                         e.handled = true;
                         if (self.si.vertical != .none) {
                             self.si.viewport.y += 10;
                         }
-                        refresh();
+                        self.clipviewport_refresh();
                     } else if (ke.code == .left and (ke.action == .down or ke.action == .repeat)) {
                         e.handled = true;
                         if (self.si.horizontal != .none) {
                             self.si.viewport.x -= 10;
                         }
-                        refresh();
+                        self.clipviewport_refresh();
                     } else if (ke.code == .right and (ke.action == .down or ke.action == .repeat)) {
                         e.handled = true;
                         if (self.si.horizontal != .none) {
                             self.si.viewport.x += 10;
                         }
-                        refresh();
+                        self.clipviewport_refresh();
                     }
                 }
             },
@@ -6229,7 +6240,7 @@ pub const ScrollContainerWidget = struct {
                         self.si.viewport.x = @max(0.0, @min(self.si.scroll_max(.horizontal), self.si.viewport.x + scrollx));
                     }
 
-                    refresh();
+                    self.clipviewport_refresh();
 
                     // if we are scrolling, then we need a motion event next
                     // frame so that the child widget can adjust selection
@@ -6247,7 +6258,7 @@ pub const ScrollContainerWidget = struct {
                     if (!st.over_scroll) {
                         self.si.viewport.y = @max(0.0, @min(self.si.scroll_max(.vertical), self.si.viewport.y));
                     }
-                    refresh();
+                    self.clipviewport_refresh();
                 }
 
                 const ypx2 = @max(0.0, (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h));
@@ -6256,7 +6267,7 @@ pub const ScrollContainerWidget = struct {
                     if (!st.over_scroll) {
                         self.si.viewport.y = @max(0.0, @min(self.si.scroll_max(.vertical), self.si.viewport.y));
                     }
-                    refresh();
+                    self.clipviewport_refresh();
                 }
 
                 const xpx = @max(0.0, rs.r.x - st.screen_rect.x);
@@ -6265,7 +6276,7 @@ pub const ScrollContainerWidget = struct {
                     if (!st.over_scroll) {
                         self.si.viewport.x = @max(0.0, @min(self.si.scroll_max(.horizontal), self.si.viewport.x));
                     }
-                    refresh();
+                    self.clipviewport_refresh();
                 }
 
                 const xpx2 = @max(0.0, (st.screen_rect.x + st.screen_rect.w) - (rs.r.x + rs.r.w));
@@ -6274,7 +6285,7 @@ pub const ScrollContainerWidget = struct {
                     if (!st.over_scroll) {
                         self.si.viewport.x = @max(0.0, @min(self.si.scroll_max(.horizontal), self.si.viewport.x));
                     }
-                    refresh();
+                    self.clipviewport_refresh();
                 }
             },
             else => {},
@@ -6300,7 +6311,7 @@ pub const ScrollContainerWidget = struct {
                         if (self.si.vertical != .none) {
                             self.si.viewport.y -= me.kind.wheel_y;
                         }
-                        refresh();
+                        self.clipviewport_refresh();
                     }
                 },
                 else => {},
@@ -6326,7 +6337,7 @@ pub const ScrollContainerWidget = struct {
             .none => {},
             .auto => if (self.nextVirtualSize.w != self.si.virtual_size.w) {
                 self.si.virtual_size.w = self.nextVirtualSize.w;
-                refresh();
+                self.clipviewport_refresh();
             },
             .given => {},
         }
@@ -6335,7 +6346,7 @@ pub const ScrollContainerWidget = struct {
             .none => {},
             .auto => if (self.nextVirtualSize.h != self.si.virtual_size.h) {
                 self.si.virtual_size.h = self.nextVirtualSize.h;
-                refresh();
+                self.clipviewport_refresh();
             },
             .given => {},
         }
