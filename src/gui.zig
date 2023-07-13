@@ -6165,24 +6165,28 @@ pub const ScrollContainerWidget = struct {
                         e.handled = true;
                         if (self.si.vertical != .none) {
                             self.si.viewport.y -= 10;
+                            self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
                         }
                         refresh();
                     } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
                         e.handled = true;
                         if (self.si.vertical != .none) {
                             self.si.viewport.y += 10;
+                            self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
                         }
                         refresh();
                     } else if (ke.code == .left and (ke.action == .down or ke.action == .repeat)) {
                         e.handled = true;
                         if (self.si.horizontal != .none) {
                             self.si.viewport.x -= 10;
+                            self.si.viewport.x = math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
                         }
                         refresh();
                     } else if (ke.code == .right and (ke.action == .down or ke.action == .repeat)) {
                         e.handled = true;
                         if (self.si.horizontal != .none) {
                             self.si.viewport.x += 10;
+                            self.si.viewport.x = math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
                         }
                         refresh();
                     }
@@ -6299,6 +6303,7 @@ pub const ScrollContainerWidget = struct {
                         e.handled = true;
                         if (self.si.vertical != .none) {
                             self.si.viewport.y -= me.kind.wheel_y;
+                            self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
                         }
                         refresh();
                     }
