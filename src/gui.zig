@@ -9801,7 +9801,7 @@ pub const examples = struct {
         defer fwin.deinit();
         try gui.windowHeader("Icon Browser", "", &IconBrowser.show);
 
-        const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len + @typeInfo(gui.icons.entypo).Struct.decls.len;
+        const num_icons = @typeInfo(gui.icons.entypo).Struct.decls.len;
         const height = @as(f32, @floatFromInt(num_icons)) * IconBrowser.row_height;
 
         // we won't have the height the first frame, so always set it
@@ -9818,26 +9818,6 @@ pub const examples = struct {
         const visibleRect = scroll.si.viewport;
         var cursor: f32 = 0;
 
-        inline for (@typeInfo(gui.icons.papirus.actions).Struct.decls, 0..) |d, i| {
-            if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
-                const r = gui.Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
-                var iconbox = try gui.box(@src(), .horizontal, .{ .id_extra = i, .expand = .horizontal, .rect = r });
-
-                if (try gui.buttonIcon(@src(), 20, "gui.icons.papirus.actions." ++ d.name, @field(gui.icons.papirus.actions, d.name), .{})) {
-                    // TODO: copy full buttonIcon code line into clipboard and show toast
-                }
-                var tl = try gui.textLayout(@src(), .{ .break_lines = false }, .{});
-                try tl.addText("gui.icons.papirus.actions." ++ d.name, .{});
-                tl.deinit();
-
-                iconbox.deinit();
-
-                IconBrowser.row_height = iconbox.wd.min_size.h;
-            }
-
-            cursor += IconBrowser.row_height;
-        }
-
         inline for (@typeInfo(gui.icons.entypo).Struct.decls, 0..) |d, i| {
             if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
                 const r = gui.Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
@@ -9851,6 +9831,8 @@ pub const examples = struct {
                 tl.deinit();
 
                 iconbox.deinit();
+
+                IconBrowser.row_height = iconbox.wd.min_size.h;
             }
 
             cursor += IconBrowser.row_height;
