@@ -293,7 +293,7 @@ pub const Options = struct {
     // use to override font_style
     font: ?Font = null,
 
-    // only used for icons, rotates around center, only rotates drawing
+    // only used for icons, rotates around center, only rotates drawing, radians counterclockwise
     rotation: ?f32 = null,
 
     // For the rest of these fields, if null, each widget uses its defaults
@@ -1698,6 +1698,13 @@ pub fn clip(new: Rect) Rect {
 
 pub fn clipSet(r: Rect) void {
     currentWindow().clipRect = r;
+}
+
+pub fn snapToPixels(snap: bool) bool {
+    const cw = currentWindow();
+    const old = cw.snap_to_pixels;
+    cw.snap_to_pixels = snap;
+    return old;
 }
 
 pub fn refresh() void {
@@ -3207,7 +3214,7 @@ pub const Window = struct {
                 var hbox = try gui.box(@src(), .horizontal, .{ .id_extra = i });
                 defer hbox.deinit();
 
-                if (try gui.buttonIcon(@src(), 12, "find", gui.icons.papirus.actions.edit_find_symbolic, .{})) {
+                if (try gui.buttonIcon(@src(), 12, "find", gui.icons.entypo.magnifying_glass, .{})) {
                     self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(line, ' '), 16) catch 0;
                 }
 
@@ -3970,7 +3977,9 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     var over = try gui.overlay(@src(), .{ .expand = .horizontal });
 
     if (openflag) |of| {
-        if (try gui.buttonIcon(@src(), 14, "close", gui.icons.papirus.actions.window_close_symbolic, .{ .gravity_y = 0.5, .corner_radius = Rect.all(14), .padding = Rect.all(2), .margin = Rect.all(2) })) {
+        const saved = gui.snapToPixels(false);
+        defer _ = gui.snapToPixels(saved);
+        if (try gui.buttonIcon(@src(), 16, "close", gui.icons.entypo.plus, .{ .gravity_y = 0.5, .corner_radius = Rect.all(16), .padding = Rect.all(0), .margin = Rect.all(2), .rotation = math.pi / 4.0 })) {
             of.* = false;
         }
     }
@@ -4375,7 +4384,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
     const lw_rect = lw.wd.contentRectScale().r.scale(1 / windowNaturalScale());
     try lw.install(.{});
     lw.deinit();
-    try icon(@src(), "dropdown_triangle", gui.icons.papirus.actions.keyboard_hide_symbolic, options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }));
+    try icon(@src(), "dropdown_triangle", gui.icons.entypo.chevron_small_down, options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }));
 
     var ret = false;
     if (b.activeRect()) |r| {
@@ -4439,9 +4448,9 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
     try bcbox.install(.{});
     const size = try options.fontGet().lineHeight();
     if (expanded) {
-        try icon(@src(), "down_arrow", gui.icons.papirus.actions.pan_down_symbolic, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
+        try icon(@src(), "down_arrow", gui.icons.entypo.triangle_down, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
     } else {
-        try icon(@src(), "right_arrow", gui.icons.papirus.actions.pan_end_symbolic, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
+        try icon(@src(), "right_arrow", gui.icons.entypo.triangle_right, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
     }
     try labelNoFmt(@src(), label_str, options.strip());
 
@@ -9517,10 +9526,10 @@ pub const examples = struct {
             defer tl.deinit();
 
             var cbox = try gui.box(@src(), .vertical, .{ .padding = .{ .w = 4 } });
-            if (try gui.buttonIcon(@src(), 18, "play", gui.icons.papirus.actions.media_playback_start_symbolic, .{ .padding = gui.Rect.all(6) })) {
+            if (try gui.buttonIcon(@src(), 18, "play", gui.icons.entypo.controller_play, .{ .padding = gui.Rect.all(6) })) {
                 try gui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
             }
-            if (try gui.buttonIcon(@src(), 18, "more", gui.icons.papirus.actions.view_more_symbolic, .{ .padding = gui.Rect.all(6) })) {
+            if (try gui.buttonIcon(@src(), 18, "more", gui.icons.entypo.dots_three_vertical, .{ .padding = gui.Rect.all(6) })) {
                 try gui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
             }
             cbox.deinit();
@@ -9792,7 +9801,7 @@ pub const examples = struct {
         defer fwin.deinit();
         try gui.windowHeader("Icon Browser", "", &IconBrowser.show);
 
-        const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len;
+        const num_icons = @typeInfo(gui.icons.papirus.actions).Struct.decls.len + @typeInfo(gui.icons.entypo).Struct.decls.len;
         const height = @as(f32, @floatFromInt(num_icons)) * IconBrowser.row_height;
 
         // we won't have the height the first frame, so always set it
@@ -9824,6 +9833,24 @@ pub const examples = struct {
                 iconbox.deinit();
 
                 IconBrowser.row_height = iconbox.wd.min_size.h;
+            }
+
+            cursor += IconBrowser.row_height;
+        }
+
+        inline for (@typeInfo(gui.icons.entypo).Struct.decls, 0..) |d, i| {
+            if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
+                const r = gui.Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
+                var iconbox = try gui.box(@src(), .horizontal, .{ .id_extra = i, .expand = .horizontal, .rect = r });
+
+                if (try gui.buttonIcon(@src(), 20, "gui.icons.entypo." ++ d.name, @field(gui.icons.entypo, d.name), .{})) {
+                    // TODO: copy full buttonIcon code line into clipboard and show toast
+                }
+                var tl = try gui.textLayout(@src(), .{ .break_lines = false }, .{});
+                try tl.addText("gui.icons.entypo." ++ d.name, .{});
+                tl.deinit();
+
+                iconbox.deinit();
             }
 
             cursor += IconBrowser.row_height;
