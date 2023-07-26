@@ -234,22 +234,22 @@ pub fn main() !void {
                         defer hbox.deinit();
                         try gui.label(@src(), "{d} {d} : {d}", .{ Sel.sel.start, Sel.sel.end, Sel.sel.cursor }, .{});
                         if (try gui.button(@src(), "Inc Start", .{})) {
-                            Sel.sel.start += 1;
+                            Sel.sel.incStart();
                         }
                         if (try gui.button(@src(), "Dec Start", .{})) {
-                            Sel.sel.start -= 1;
+                            Sel.sel.decStart();
                         }
                         if (try gui.button(@src(), "Inc End", .{})) {
-                            Sel.sel.end += 1;
+                            Sel.sel.incEnd();
                         }
                         if (try gui.button(@src(), "Dec End", .{})) {
-                            Sel.sel.end -= 1;
+                            Sel.sel.decEnd();
                         }
                         if (try gui.button(@src(), "Inc Cur", .{})) {
-                            Sel.sel.cursor += 1;
+                            Sel.sel.incCursor();
                         }
                         if (try gui.button(@src(), "Dec Cur", .{})) {
-                            Sel.sel.cursor -= 1;
+                            Sel.sel.decCursor();
                         }
                     }
                     var scroll = try gui.scrollArea(@src(), .{ .horizontal = .auto }, .{ .min_size_content = .{ .w = 150, .h = 100 } });

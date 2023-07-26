@@ -4778,6 +4778,36 @@ pub const TextLayoutWidget = struct {
         start: usize = 0,
         end: usize = 0,
 
+        pub fn incCursor(self: *Selection) void {
+            self.cursor += 1;
+        }
+
+        pub fn decCursor(self: *Selection) void {
+            if (self.cursor <= 0) {
+                self.cursor = 0;
+            } else self.cursor -= 1;
+        }
+
+        pub fn incStart(self: *Selection) void {
+            self.start += 1;
+        }
+
+        pub fn decStart(self: *Selection) void {
+            if (self.start <= 0) {
+                self.start = 0;
+            } else self.start -= 1;
+        }
+
+        pub fn incEnd(self: *Selection) void {
+            self.end += 1;
+        }
+
+        pub fn decEnd(self: *Selection) void {
+            if (self.end <= 0) {
+                self.end = 0;
+            } else self.end -= 1;
+        }
+
         pub fn order(self: *Selection) void {
             if (self.end < self.start) {
                 const tmp = self.start;
