@@ -76,6 +76,15 @@ pub fn build(b: *std.build.Builder) !void {
 
         exe.linkSystemLibrary("SDL2");
         exe.linkLibC();
+        if (target.isWindows()) {
+            exe.linkSystemLibrary("setupapi");
+            exe.linkSystemLibrary("winmm");
+            exe.linkSystemLibrary("gdi32");
+            exe.linkSystemLibrary("imm32");
+            exe.linkSystemLibrary("version");
+            exe.linkSystemLibrary("oleaut32");
+            exe.linkSystemLibrary("ole32");
+        }
 
         const compile_step = b.step(ex, "Compile " ++ ex);
         compile_step.dependOn(&b.addInstallArtifact(exe).step);
@@ -133,6 +142,14 @@ pub fn build(b: *std.build.Builder) !void {
             exe.linkFramework("GameController");
             exe.linkFramework("IOKit");
             exe.linkFramework("Metal");
+        } else if (target.isWindows()) {
+            exe.linkSystemLibrary("setupapi");
+            exe.linkSystemLibrary("winmm");
+            exe.linkSystemLibrary("gdi32");
+            exe.linkSystemLibrary("imm32");
+            exe.linkSystemLibrary("version");
+            exe.linkSystemLibrary("oleaut32");
+            exe.linkSystemLibrary("ole32");
         }
 
         const compile_step = b.step("compile-" ++ "sdl-test", "Compile " ++ "sdl-test");
