@@ -226,6 +226,13 @@ pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
                 .mod = SDL_keymod_to_gui(event.key.keysym.mod),
             });
         },
+        c.SDL_KEYUP => {
+            return try win.addEventKey(.{
+                .code = SDL_keysym_to_gui(event.key.keysym.sym),
+                .action = .up,
+                .mod = SDL_keymod_to_gui(event.key.keysym.mod),
+            });
+        },
         c.SDL_TEXTINPUT => {
             return try win.addEventText(std.mem.sliceTo(&event.text.text, 0));
         },

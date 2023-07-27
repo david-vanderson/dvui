@@ -25,6 +25,7 @@ pub fn main() !void {
     var maxz: usize = 20;
     var floats: [6]bool = [_]bool{false} ** 6;
     var scale_val: f32 = 1.0;
+    var scale_mod: gui.enums.Mod = .none;
 
     //var rng = std.rand.DefaultPrng.init(0);
 
@@ -51,11 +52,22 @@ pub fn main() !void {
 
             const scale = try gui.scale(@src(), scale_val, oo);
             defer {
-                var iter = gui.EventIterator.init(scale.wd.id, scale.wd.borderRectScale().r, null);
-                while (iter.next()) |e| {
+                var evts = gui.events();
+                for (evts) |*e| {
+                    switch (e.evt) {
+                        .key => |ke| {
+                            scale_mod = ke.mod;
+                            //std.debug.print("mod = {d}\n", .{scale_mod});
+                        },
+                        else => {},
+                    }
+
+                    if (!gui.eventMatch(e, .{ .id = scale.wd.id, .r = scale.wd.borderRectScale().r }))
+                        continue;
+
                     switch (e.evt) {
                         .mouse => |me| {
-                            if (me.kind == .wheel_y) {
+                            if (me.kind == .wheel_y and scale_mod.ctrl()) {
                                 e.handled = true;
                                 var base: f32 = 1.01;
                                 const zs = @exp(@log(base) * me.kind.wheel_y);
@@ -471,8 +483,11 @@ pub const StrokeTest = struct {
 
         _ = gui.captureMouseMaintain(self.wd.id);
 
-        var iter = gui.EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
-        while (iter.next()) |e| {
+        var evts = gui.events();
+        for (evts) |*e| {
+            if (!gui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
+                continue;
+
             self.processEvent(e, false);
         }
 
