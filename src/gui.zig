@@ -3792,7 +3792,7 @@ pub const FloatingWindowWidget = struct {
                     if (me.kind == .press and me.kind.press == .left) {
                         // capture and start drag
                         self.captured = captureMouse(self.wd.id);
-                        dragStart(me.p, .arrow_nw_se, Point.diff(rs.r.bottomRight(), me.p));
+                        dragStart(me.p, .arrow_all, Point.diff(rs.r.bottomRight(), me.p));
                         e.handled = true;
                     } else if (me.kind == .release and me.kind.release == .left) {
                         // stop drag and capture
@@ -3806,7 +3806,7 @@ pub const FloatingWindowWidget = struct {
                                 const dp = dps.scale(1 / rs.s);
                                 self.wd.rect.x += dp.x;
                                 self.wd.rect.y += dp.y;
-                            } else if (cursorGetDragging() == Cursor.arrow_nw_se) {
+                            } else if (cursorGetDragging() == Cursor.arrow_all) {
                                 const p = me.p.plus(dragOffset()).scale(1 / rs.s);
                                 self.wd.rect.w = @max(40, p.x - self.wd.rect.x);
                                 self.wd.rect.h = @max(10, p.y - self.wd.rect.y);
@@ -3816,7 +3816,7 @@ pub const FloatingWindowWidget = struct {
                         }
                     } else if (me.kind == .position) {
                         if (corner) {
-                            cursorSet(.arrow_nw_se);
+                            cursorSet(.arrow_all);
                             e.handled = true;
                         }
                     }
