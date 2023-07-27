@@ -1918,89 +1918,73 @@ pub fn events() []Event {
     return currentWindow().events.items;
 }
 
-pub const EventIterator = struct {
-    const Self = @This();
+pub const eventMatchOptions = struct {
     id: u32,
-    id_capture: u32,
-    i: u32,
     r: Rect,
+    id_capture: ?u32 = null,
+    cleanup: bool = false,
+};
 
-    pub fn init(id: u32, r: Rect, id_capture: ?u32) Self {
-        return Self{ .id = id, .i = 0, .r = r, .id_capture = id_capture orelse id };
-    }
+// returns true if the given event should normally be processed according to
+// the options given
+pub fn eventMatch(e: *Event, opts: eventMatchOptions) bool {
+    if (e.handled) return false;
 
-    pub fn next(self: *Self) ?*Event {
-        return self.nextCleanup(false);
-    }
-
-    pub fn nextCleanup(self: *Self, cleanup: bool) ?*Event {
-        var evts = events();
-        while (self.i < evts.len) : (self.i += 1) {
-            var e: *Event = &evts[self.i];
-            if (e.handled) {
-                continue;
+    if (e.focus_windowId) |wid| {
+        // focusable event
+        if (opts.cleanup) {
+            // window is catching all focus-routed events that didn't get
+            // processed (maybe the focus widget never showed up)
+            if (wid != opts.id) {
+                // not the focused window
+                return false;
             }
+        } else {
+            if (e.focus_widgetId != opts.id) {
+                // not the focused widget
+                return false;
+            }
+        }
+    }
 
-            if (e.focus_windowId) |wid| {
-                // focusable event
-                if (cleanup) {
-                    // window is catching all focus-routed events that didn't get
-                    // processed (maybe the focus widget never showed up)
-                    if (wid != self.id) {
-                        // not the focused window
-                        continue;
-                    }
-                } else {
-                    if (e.focus_widgetId != self.id) {
-                        // not the focused widget
-                        continue;
-                    }
+    switch (e.evt) {
+        .key => {},
+        .text => {},
+        .mouse => |me| {
+            const capture_id = captureMouseId();
+            if (capture_id != null and me.kind != .wheel_y) {
+                if (capture_id.? != (opts.id_capture orelse opts.id)) {
+                    // mouse is captured by a different widget
+                    return false;
+                }
+            } else {
+                if (me.floating_win != subwindowCurrentId()) {
+                    // floating window is above us
+                    return false;
+                }
+
+                if (!opts.r.contains(me.p)) {
+                    // mouse not in our rect
+                    return false;
+                }
+
+                if (!clipGet().contains(me.p)) {
+                    // mouse not in clip region
+
+                    // prevents widgets that are scrolled off a
+                    // scroll area from processing events
+                    return false;
                 }
             }
+        },
 
-            switch (e.evt) {
-                .key => {},
-                .text => {},
-                .mouse => |me| {
-                    const capture_id = captureMouseId();
-                    if (capture_id != null and me.kind != .wheel_y) {
-                        if (capture_id.? != self.id_capture) {
-                            // mouse is captured by a different widget
-                            continue;
-                        }
-                    } else {
-                        if (me.floating_win != subwindowCurrentId()) {
-                            // floating window is above us
-                            continue;
-                        }
-
-                        if (!self.r.contains(me.p)) {
-                            // mouse not in our rect
-                            continue;
-                        }
-
-                        if (!clipGet().contains(me.p)) {
-                            // mouse not in clip region
-
-                            // prevents widgets that are scrolled off a
-                            // scroll area from processing events
-                            continue;
-                        }
-                    }
-                },
-
-                .close_popup => unreachable,
-                .scroll_drag => unreachable,
-                .scroll_to => unreachable,
-            }
-
-            self.i += 1;
-            return e;
-        }
-
-        return null;
+        .close_popup => unreachable,
+        .scroll_drag => unreachable,
+        .scroll_to => unreachable,
     }
-};
+
+    return true;
+}
 
 // Animations
 // start_time and end_time are relative to the current frame time.  At the
@@ -3253,8 +3237,11 @@ pub const Window = struct {
 
         // events may have been tagged with a focus widget that never showed up, so
         // we wouldn't even get them bubbled
-        var iter = EventIterator.init(self.wd.id, self.rect_pixels, null);
-        while (iter.nextCleanup(true)) |e| {
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, .{ .id = self.wd.id, .r = self.rect_pixels, .cleanup = true }))
+                continue;
+
             // doesn't matter if we mark events has handled or not because this is
             // the end of the line for all events
             if (e.evt == .mouse) {
@@ -3529,8 +3516,11 @@ pub const PopupWidget = struct {
     pub fn deinit(self: *Self) void {
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r, null);
-        while (iter.nextCleanup(true)) |e| {
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, .{ .id = self.wd.id, .r = rs.r, .cleanup = true }))
+                continue;
+
             if (e.evt == .mouse) {
                 // mark all events as handled so no mouse events are handled by
                 // windows under us
@@ -3568,7 +3558,6 @@ pub const PopupWidget = struct {
         }
 
         // check if a focus event is happening outside our window
-        var evts = events();
         for (evts) |e| {
             if (!e.handled and e.evt == .mouse and e.evt.mouse.kind == .focus) {
                 var closeE = Event{ .evt = .{ .close_popup = .{} } };
@@ -3771,8 +3760,11 @@ pub const FloatingWindowWidget = struct {
     pub fn processEventsBefore(self: *Self) void {
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r, null);
-        while (iter.next()) |e| {
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, .{ .id = self.wd.id, .r = rs.r }))
+                continue;
+
             if (e.evt == .mouse) {
                 const me = e.evt.mouse;
                 var corner: bool = false;
@@ -3828,11 +3820,14 @@ pub const FloatingWindowWidget = struct {
     pub fn processEventsAfter(self: *Self) void {
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r, null);
         // duplicate processEventsBefore (minus corner stuff) because you could
         // have a click down, motion, and up in same frame and you wouldn't know
         // you needed to do anything until you got capture here
-        while (iter.nextCleanup(true)) |e| {
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, .{ .id = self.wd.id, .r = rs.r, .cleanup = true }))
+                continue;
+
             // mark all events as handled so no mouse events are handled by windows
             // under us
             e.handled = true;
@@ -3987,8 +3982,11 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     try gui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading });
     try gui.labelNoFmt(@src(), right_str, .{ .gravity_x = 1.0 });
 
-    var iter = EventIterator.init(over.wd.id, over.wd.contentRectScale().r, null);
-    while (iter.next()) |e| {
+    var evts = events();
+    for (evts) |*e| {
+        if (!eventMatch(e, .{ .id = over.wd.id, .r = over.wd.contentRectScale().r }))
+            continue;
+
         if (e.evt == .mouse and e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left) {
             raiseSubwindow(subwindowCurrentId());
         }
@@ -4549,8 +4547,11 @@ pub const PanedWidget = struct {
         try self.wd.register("Paned", null);
 
         if (opts.process_events) {
-            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
-            while (iter.next()) |e| {
+            var evts = events();
+            for (evts) |*e| {
+                if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
+                    continue;
+
                 self.processEvent(e, false);
             }
         }
@@ -5333,8 +5334,11 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn processEvents(self: *Self) void {
-        var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
-        while (iter.next()) |e| {
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
+                continue;
+
             self.processEvent(e, false);
         }
     }
@@ -5534,8 +5538,11 @@ pub const ContextWidget = struct {
 
     pub fn processMouseEventsAfter(self: *Self) void {
         const rs = self.wd.borderRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r, null);
-        while (iter.next()) |e| {
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, .{ .id = self.wd.id, .r = rs.r }))
+                continue;
+
             switch (e.evt) {
                 .mouse => |me| {
                     if (me.kind == .focus and me.kind.focus == .right) {
@@ -6101,8 +6108,11 @@ pub const ScrollContainerWidget = struct {
         }
 
         if (opts.process_events) {
-            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
-            while (iter.next()) |e| {
+            var evts = events();
+            for (evts) |*e| {
+                if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
+                    continue;
+
                 self.processEvent(e, false);
             }
         }
@@ -6330,8 +6340,11 @@ pub const ScrollContainerWidget = struct {
 
     pub fn processEventsAfter(self: *Self) void {
         const rs = self.wd.borderRectScale();
-        var iter = EventIterator.init(self.wd.id, rs.r, null);
-        while (iter.next()) |e| {
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, .{ .id = self.wd.id, .r = rs.r }))
+                continue;
+
             switch (e.evt) {
                 .mouse => |me| {
                     if (me.kind == .focus) {
@@ -6466,8 +6479,11 @@ pub const ScrollBarWidget = struct {
 
     pub fn processEvents(self: *Self, grabrs: Rect) void {
         const rs = self.wd.borderRectScale();
-        var iter = EventIterator.init(self.data().id, rs.r, null);
-        while (iter.next()) |e| {
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, .{ .id = self.data().id, .r = rs.r }))
+                continue;
+
             switch (e.evt) {
                 .mouse => |me| {
                     switch (me.kind) {
@@ -6902,8 +6918,11 @@ pub const MenuItemWidget = struct {
         }
 
         if (opts.process_events) {
-            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
-            while (iter.next()) |e| {
+            var evts = events();
+            for (evts) |*e| {
+                if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
+                    continue;
+
                 self.processEvent(e, false);
             }
         }
@@ -7229,8 +7248,11 @@ pub const ButtonWidget = struct {
         }
 
         if (opts.process_events) {
-            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, null);
-            while (iter.next()) |e| {
+            var evts = events();
+            for (evts) |*e| {
+                if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
+                    continue;
+
                 self.processEvent(e, false);
             }
         }
@@ -7390,8 +7412,11 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
     const trackrs = b.widget().screenRectScale(track);
 
     const rs = b.data().contentRectScale();
-    var iter = EventIterator.init(b.data().id, rs.r, null);
-    while (iter.next()) |e| {
+    var evts = events();
+    for (evts) |*e| {
+        if (!eventMatch(e, .{ .id = b.data().id, .r = rs.r }))
+            continue;
+
         switch (e.evt) {
             .mouse => |me| {
                 var p: ?Point = null;
@@ -7685,8 +7710,11 @@ pub const TextEntryWidget = struct {
         clipSet(oldclip);
 
         if (opts.process_events) {
-            var iter = EventIterator.init(self.data().id, self.data().borderRectScale().r, self.textLayout.data().id);
-            while (iter.next()) |e| {
+            var evts = events();
+            for (evts) |*e| {
+                if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r, .id_capture = self.textLayout.data().id }))
+                    continue;
+
                 self.processEvent(e, false);
             }
         }

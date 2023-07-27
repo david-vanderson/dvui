@@ -1,6 +1,8 @@
 
 send updates to tinyvg
 
+all widget's sizes should default to theme font size?
+
 text on phone seems blurry?
 
 entypo cc.svg is weird - flip ccw.svg?
