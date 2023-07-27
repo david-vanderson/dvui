@@ -177,7 +177,10 @@ pub const Vertex = struct {
 fn toGUIKey(key: mach.Key) gui.enums.Key {
     return switch (key) {
         .a => .a,
-        else => .z,
+        else => blk: {
+            std.debug.print("toGUIKey unknown key {d}\n", .{key});
+            break :blk .unknown;
+        },
     };
 }
 
