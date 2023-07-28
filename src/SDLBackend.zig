@@ -4,6 +4,8 @@ pub const c = @cImport({
     @cInclude("SDL2/SDL.h");
 });
 
+pub var proportionalScale: f32 = 1.0;
+
 const SDLBackend = @This();
 
 window: *c.SDL_Window,
@@ -26,10 +28,32 @@ pub fn init(options: initOptions) !SDLBackend {
         return error.BackendError;
     }
 
-    var window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intCast(options.width)), @as(c_int, @intCast(options.height)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
-        std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
-        return error.BackendError;
-    };
+    var desktop = std.mem.zeroes(c.SDL_DisplayMode);
+    _ = c.SDL_GetDesktopDisplayMode(0, &desktop);
+
+    var window: *c.SDL_Window = undefined;
+    if (desktop.w >= 1920 and desktop.h >= 1080) {
+        var typicalScreenWidth: f32 = @floatFromInt(1920);
+        var typicalScreenHeight: f32 = @floatFromInt(1080);
+
+        var proportionalScreenWidth: f32 = @as(f32, @floatFromInt(desktop.w)) / typicalScreenWidth;
+        var proportionalScreenHeight: f32 = @as(f32, @floatFromInt(desktop.h)) / typicalScreenHeight;
+
+        proportionalScale = proportionalScreenWidth;
+
+        var tmpWidth = @as(f32, @floatFromInt(options.width)) * proportionalScreenWidth;
+        var tmpHeight = @as(f32, @floatFromInt(options.height)) * proportionalScreenHeight;
+
+        window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intFromFloat(tmpWidth)), @as(c_int, @intFromFloat(tmpHeight)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
+            std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
+            return error.BackendError;
+        };
+    } else {
+        window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intCast(options.width)), @as(c_int, @intCast(options.height)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
+            std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
+            return error.BackendError;
+        };
+    }
 
     _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 

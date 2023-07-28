@@ -27,6 +27,9 @@ pub fn main() !void {
     var scale_val: f32 = 1.0;
     var scale_mod: gui.enums.Mod = .none;
 
+    // This will get updated during window startup on displays larger than 1080p resolution
+    scale_val = SDLBackend.proportionalScale;
+
     //var rng = std.rand.DefaultPrng.init(0);
 
     main_loop: while (true) {
