@@ -17,6 +17,10 @@ pub fn main() !void {
     var win = try gui.Window.init(@src(), 0, gpa, win_backend.guiBackend());
     defer win.deinit();
 
+    const winSize = win_backend.windowSize();
+    const pxSize = win_backend.pixelSize();
+    std.debug.print("initial window logical {} pixels {} natural scale {d}\n", .{winSize, pxSize, pxSize.w / winSize.w});
+
     var buttons: [3][6]bool = undefined;
     for (&buttons) |*b| {
         b.* = [_]bool{true} ** 6;
