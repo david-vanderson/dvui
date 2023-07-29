@@ -25,6 +25,8 @@ const gui = @This();
 
 var current_window: ?*Window = null;
 
+pub var overall_scale: f32 = 1.0;
+
 pub fn currentWindow() *Window {
     return current_window orelse unreachable;
 }
@@ -9106,7 +9108,7 @@ pub const examples = struct {
     var text_entry_multiline_buf = std.mem.zeroes([500]u8);
     var dropdown_val: usize = 1;
     var show_dialog: bool = false;
-    var scale_val: f32 = 1.0;
+    pub var scale_val: f32 = 1.0;
     var line_height_factor: f32 = 1.0;
     var animating_window_show: bool = false;
     var animating_window_closing: bool = false;
@@ -9269,6 +9271,8 @@ pub const examples = struct {
             return;
         }
 
+        scale_val = overall_scale;
+
         var float = try gui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 400, .h = 400 } });
         defer float.deinit();
 
@@ -9348,14 +9352,24 @@ pub const examples = struct {
 
         if (try gui.button(@src(), "Zoom In", .{})) {
             scale_val = @round(themeGet().font_body.size * scale_val + 1.0) / themeGet().font_body.size;
+            overall_scale = scale_val;
 
             //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
         }
 
         if (try gui.button(@src(), "Zoom Out", .{})) {
             scale_val = @round(themeGet().font_body.size * scale_val - 1.0) / themeGet().font_body.size;
+            overall_scale = scale_val;
 
             //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
+        }
+
+        if (try gui.button(@src(), "Increase Font Only", .{})) {
+            try themeScale(1.1);
+        }
+
+        if (try gui.button(@src(), "Decrease Font Only", .{})) {
+            try themeScale(0.9);
         }
 
         try gui.checkbox(@src(), &gui.currentWindow().snap_to_pixels, "Snap to Pixels (see window title)", .{});
@@ -9371,6 +9385,19 @@ pub const examples = struct {
         if (IconBrowser.show) {
             try icon_browser();
         }
+    }
+
+    pub fn themeScale(scale_amount: f32) !void {
+        var gt: *gui.Theme = gui.themeGet();
+        gt.font_heading = gt.font_heading.resize(@round(gt.font_heading.size * scale_amount));
+        gt.font_caption = gt.font_caption.resize(@round(gt.font_caption.size * scale_amount));
+        gt.font_caption_heading = gt.font_caption_heading.resize(@round(gt.font_caption_heading.size * scale_amount));
+        gt.font_title = gt.font_title.resize(@round(gt.font_title.size * scale_amount));
+        gt.font_title_1 = gt.font_title_1.resize(@round(gt.font_title_1.size * scale_amount));
+        gt.font_title_2 = gt.font_title_2.resize(@round(gt.font_title_2.size * scale_amount));
+        gt.font_title_3 = gt.font_title_3.resize(@round(gt.font_title_3.size * scale_amount));
+        gt.font_title_4 = gt.font_title_4.resize(@round(gt.font_title_4.size * scale_amount));
+        gui.themeSet(gt);
     }
 
     pub fn basicWidgets() !void {

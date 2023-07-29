@@ -6,9 +6,11 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 pub fn main() !void {
+    const winWidth = 800;
+    const winHeight = 600;
     var win_backend = try SDLBackend.init(.{
-        .width = 800,
-        .height = 600,
+        .width = winWidth,
+        .height = winHeight,
         .vsync = false,
         .title = "GUI SDL test",
     });
@@ -19,7 +21,7 @@ pub fn main() !void {
 
     const winSize = win_backend.windowSize();
     const pxSize = win_backend.pixelSize();
-    std.debug.print("initial window logical {} pixels {} natural scale {d}\n", .{winSize, pxSize, pxSize.w / winSize.w});
+    std.debug.print("initial window logical {} pixels {} natural scale {d}\n", .{ winSize, pxSize, pxSize.w / winSize.w });
 
     var buttons: [3][6]bool = undefined;
     for (&buttons) |*b| {
@@ -28,7 +30,7 @@ pub fn main() !void {
 
     var maxz: usize = 20;
     var floats: [6]bool = [_]bool{false} ** 6;
-    var scale_val: f32 = 1.0;
+    var scale_val: f32 = gui.overall_scale;
     var scale_mod: gui.enums.Mod = .none;
 
     //var rng = std.rand.DefaultPrng.init(0);
@@ -77,6 +79,8 @@ pub fn main() !void {
                                 const zs = @exp(@log(base) * me.kind.wheel_y);
                                 if (zs != 1.0) {
                                     scale_val *= zs;
+                                    SDLBackend.c.SDL_SetWindowSize(win_backend.window, @as(c_int, @as(c_int, @intFromFloat(winWidth * scale_val))), @as(c_int, @as(c_int, @intFromFloat(winHeight * scale_val))));
+                                    gui.overall_scale = scale_val;
                                     gui.refresh();
                                 }
                             }
