@@ -19,7 +19,7 @@ pub fn main() !void {
 
     const winSize = win_backend.windowSize();
     const pxSize = win_backend.pixelSize();
-    std.debug.print("initial window logical {} pixels {} natural scale {d}\n", .{winSize, pxSize, pxSize.w / winSize.w});
+    std.debug.print("initial window logical {} pixels {} natural scale {d}\n", .{ winSize, pxSize, pxSize.w / winSize.w });
 
     var buttons: [3][6]bool = undefined;
     for (&buttons) |*b| {
@@ -198,21 +198,15 @@ pub fn main() !void {
                 }
 
                 {
-                    // FIXME
-                    //const TextEntryText = struct {
-                    //    //var text = array(u8, 100, "abcdefghijklmnopqrstuvwxyz");
-                    //    var text1 = array(u8, 100, "abc");
-                    //    var text2 = array(u8, 100, "abc");
-                    //    fn array(comptime T: type, comptime size: usize, items: ?[]const T) [size]T {
-                    //        var output = std.mem.zeroes([size]T);
-                    //        if (items) |slice| std.mem.copy(T, &output, slice);
-                    //        return output;
-                    //    }
-                    //};
+                    try gui.label(@src(), "content_scale {d}", .{win.content_scale}, .{});
 
-                    //const msize = gui.TextEntryWidget.defaults.fontGet().textSize("M") catch unreachable;
-                    //try gui.textEntry(@src(), &TextEntryText.text1, .{ .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
-                    //try gui.textEntry(@src(), &TextEntryText.text2, .{ .min_size_content = .{ .w = msize.w * 26.0, .h = msize.h } });
+                    if (try gui.button(@src(), "content_scale + .1", .{})) {
+                        win.content_scale += 0.1;
+                    }
+
+                    if (try gui.button(@src(), "content_scale - .1", .{})) {
+                        win.content_scale -= 0.1;
+                    }
                 }
 
                 {
