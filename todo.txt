@@ -1,11 +1,5 @@
 
-add way to adjust natural_scale
- - does it need to change the window size?
-
 redo menu and menuItem stuff to fix:
-- clicking on submenu closes it
-- mousing off a menuItem onto a non-menuItem leaves the menuItem highlighted
-  - maybe menu logs mouse motion over itself and then menuItems can defocus themselves if that mouse motion wasn't over them?
   - can it catch if the mouse motion was toward an open submenu?
   - submenu has to register its rect with parent
 - test:
