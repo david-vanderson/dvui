@@ -13,6 +13,7 @@ redo menu and menuItem stuff to fix:
   - mousing from a submenuItem to submenu
 - keyboard navigation
 
+update gui-demo and podcast
 
 send updates to tinyvg
 

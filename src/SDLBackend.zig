@@ -1,7 +1,9 @@
+const sdl3 = false;
+
 const std = @import("std");
 const gui = @import("gui");
 pub const c = @cImport({
-    @cInclude("SDL2/SDL.h");
+    @cInclude(if (sdl3) "SDL3/SDL.h" else "SDL2/SDL.h");
 });
 
 const SDLBackend = @This();
@@ -26,17 +28,39 @@ pub fn init(options: initOptions) !SDLBackend {
         return error.BackendError;
     }
 
-    var window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intCast(options.width)), @as(c_int, @intCast(options.height)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
-        std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
-        return error.BackendError;
-    };
+    var window: *c.SDL_Window = undefined;
+    if (sdl3) {
+        window = c.SDL_CreateWindow(options.title, @as(c_int, @intCast(options.width)), @as(c_int, @intCast(options.height)), c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE) orelse {
+            std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
+            return error.BackendError;
+        };
+    } else {
+        window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intCast(options.width)), @as(c_int, @intCast(options.height)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
+            std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
+            return error.BackendError;
+        };
+    }
+
+    if (sdl3) {
+        var scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(window));
+        std.debug.print("sdl3 content scale {d}\n", .{scale});
+        window.content_scale = scale;
+    }
 
     _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
-    var renderer = c.SDL_CreateRenderer(window, -1, if (options.vsync) c.SDL_RENDERER_PRESENTVSYNC else 0) orelse {
-        std.debug.print("Failed to create renderer: {s}\n", .{c.SDL_GetError()});
-        return error.BackendError;
-    };
+    var renderer: *c.SDL_Renderer = undefined;
+    if (sdl3) {
+        renderer = c.SDL_CreateRenderer(window, null, if (options.vsync) c.SDL_RENDERER_PRESENTVSYNC else 0) orelse {
+            std.debug.print("Failed to create renderer: {s}\n", .{c.SDL_GetError()});
+            return error.BackendError;
+        };
+    } else {
+        renderer = c.SDL_CreateRenderer(window, -1, if (options.vsync) c.SDL_RENDERER_PRESENTVSYNC else 0) orelse {
+            std.debug.print("Failed to create renderer: {s}\n", .{c.SDL_GetError()});
+            return error.BackendError;
+        };
+    }
 
     _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_BLEND);
 
@@ -73,9 +97,16 @@ pub fn addAllEvents(self: *SDLBackend, win: *gui.Window) !bool {
     while (c.SDL_PollEvent(&event) != 0) {
         _ = try self.addEvent(win, event);
         switch (event.type) {
-            c.SDL_QUIT => {
+            if (sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT => {
                 return true;
             },
+            // revisit with sdl3
+            //c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
+            //std.debug.print("sdl window scale changed event\n", .{});
+            //},
+            //c.SDL_EVENT_DISPLAY_CONTENT_SCALE_CHANGED => {
+            //std.debug.print("sdl display scale changed event\n", .{});
+            //},
             else => {},
         }
     }
@@ -108,7 +139,11 @@ pub fn setCursor(self: *SDLBackend, cursor: gui.Cursor) void {
         }
 
         if (self.cursor_backing[enum_int]) |cur| {
-            c.SDL_SetCursor(cur);
+            if (sdl3) {
+                _ = c.SDL_SetCursor(cur);
+            } else {
+                c.SDL_SetCursor(cur);
+            }
         } else {
             std.log.warn("SDL_CreateSystemCursor \"{s}\" failed\n", .{@tagName(cursor)});
         }
@@ -118,7 +153,11 @@ pub fn setCursor(self: *SDLBackend, cursor: gui.Cursor) void {
 pub fn deinit(self: *SDLBackend) void {
     for (self.cursor_backing) |cursor| {
         if (cursor) |cur| {
-            c.SDL_FreeCursor(cur);
+            if (sdl3) {
+                c.SDL_DestroyCursor(cur);
+            } else {
+                c.SDL_FreeCursor(cur);
+            }
         }
     }
     c.SDL_DestroyRenderer(self.renderer);
@@ -127,7 +166,11 @@ pub fn deinit(self: *SDLBackend) void {
 }
 
 pub fn renderPresent(self: *SDLBackend) void {
-    c.SDL_RenderPresent(self.renderer);
+    if (sdl3) {
+        _ = c.SDL_RenderPresent(self.renderer);
+    } else {
+        c.SDL_RenderPresent(self.renderer);
+    }
 }
 
 pub fn hasEvent(_: *SDLBackend) bool {
@@ -169,7 +212,11 @@ pub fn end(_: *SDLBackend) void {}
 pub fn pixelSize(self: *SDLBackend) gui.Size {
     var w: i32 = undefined;
     var h: i32 = undefined;
-    _ = c.SDL_GetRendererOutputSize(self.renderer, &w, &h);
+    if (sdl3) {
+        _ = c.SDL_GetCurrentRenderOutputSize(self.renderer, &w, &h);
+    } else {
+        _ = c.SDL_GetRendererOutputSize(self.renderer, &w, &h);
+    }
     return gui.Size{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
 }
 
@@ -198,7 +245,11 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const gui.
     const clip = c.SDL_Rect{ .x = @as(c_int, @intFromFloat(clipr.x)), .y = @as(c_int, @intFromFloat(clipr.y)), .w = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x))))), .h = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.h + clipr.y - @floor(clipr.y))))) };
 
     //std.debug.print("SDL clip {} -> SDL_Rect{{ .x = {d}, .y = {d}, .w = {d}, .h = {d} }}\n", .{ clipr, clip.x, clip.y, clip.w, clip.h });
-    _ = c.SDL_RenderSetClipRect(self.renderer, &clip);
+    if (sdl3) {
+        _ = c.SDL_SetRenderClipRect(self.renderer, &clip);
+    } else {
+        _ = c.SDL_RenderSetClipRect(self.renderer, &clip);
+    }
 
     const tex = @as(?*c.SDL_Texture, @ptrCast(texture));
 
@@ -206,8 +257,19 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const gui.
 }
 
 pub fn textureCreate(self: *SDLBackend, pixels: []u8, width: u32, height: u32) *anyopaque {
-    var surface = c.SDL_CreateRGBSurfaceWithFormatFrom(pixels.ptr, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), 32, @as(c_int, @intCast(4 * width)), c.SDL_PIXELFORMAT_ABGR8888);
-    defer c.SDL_FreeSurface(surface);
+    var surface: *c.SDL_Surface = undefined;
+    if (sdl3) {
+        surface = c.SDL_CreateSurfaceFrom(pixels.ptr, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), @as(c_int, @intCast(4 * width)), c.SDL_PIXELFORMAT_ABGR8888);
+    } else {
+        surface = c.SDL_CreateRGBSurfaceWithFormatFrom(pixels.ptr, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), 32, @as(c_int, @intCast(4 * width)), c.SDL_PIXELFORMAT_ABGR8888);
+    }
+    defer {
+        if (sdl3) {
+            c.SDL_DestroySurface(surface);
+        } else {
+            c.SDL_FreeSurface(surface);
+        }
+    }
 
     const texture = c.SDL_CreateTextureFromSurface(self.renderer, surface) orelse unreachable;
     return texture;
@@ -219,34 +281,38 @@ pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
 
 pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
     switch (event.type) {
-        c.SDL_KEYDOWN => {
+        if (sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
             return try win.addEventKey(.{
                 .code = SDL_keysym_to_gui(event.key.keysym.sym),
                 .action = if (event.key.repeat > 0) .repeat else .down,
                 .mod = SDL_keymod_to_gui(event.key.keysym.mod),
             });
         },
-        c.SDL_KEYUP => {
+        if (sdl3) c.SDL_EVENT_KEY_UP else c.SDL_KEYUP => {
             return try win.addEventKey(.{
                 .code = SDL_keysym_to_gui(event.key.keysym.sym),
                 .action = .up,
                 .mod = SDL_keymod_to_gui(event.key.keysym.mod),
             });
         },
-        c.SDL_TEXTINPUT => {
+        if (sdl3) c.SDL_EVENT_TEXT_INPUT else c.SDL_TEXTINPUT => {
             return try win.addEventText(std.mem.sliceTo(&event.text.text, 0));
         },
-        c.SDL_MOUSEMOTION => {
-            return try win.addEventMouseMotion(@as(f32, @floatFromInt(event.motion.x)), @as(f32, @floatFromInt(event.motion.y)));
+        if (sdl3) c.SDL_EVENT_MOUSE_MOTION else c.SDL_MOUSEMOTION => {
+            if (sdl3) {
+                return try win.addEventMouseMotion(event.motion.x, event.motion.y);
+            } else {
+                return try win.addEventMouseMotion(@as(f32, @floatFromInt(event.motion.x)), @as(f32, @floatFromInt(event.motion.y)));
+            }
         },
-        c.SDL_MOUSEBUTTONDOWN => {
+        if (sdl3) c.SDL_EVENT_MOUSE_BUTTON_DOWN else c.SDL_MOUSEBUTTONDOWN => {
             return try win.addEventMouseButton(.{ .press = SDL_mouse_button_to_gui(event.button.button) });
         },
-        c.SDL_MOUSEBUTTONUP => {
+        if (sdl3) c.SDL_EVENT_MOUSE_BUTTON_UP else c.SDL_MOUSEBUTTONUP => {
             return try win.addEventMouseButton(.{ .release = SDL_mouse_button_to_gui(event.button.button) });
         },
-        c.SDL_MOUSEWHEEL => {
-            const ticks = @as(f32, @floatFromInt(event.wheel.y));
+        if (sdl3) c.SDL_EVENT_MOUSE_WHEEL else c.SDL_MOUSEWHEEL => {
+            const ticks = if (sdl3) event.wheel.y else @as(f32, @floatFromInt(event.wheel.y));
             return try win.addEventMouseWheel(ticks);
         },
         else => {
@@ -271,17 +337,17 @@ pub fn SDL_mouse_button_to_gui(button: u8) gui.enums.Button {
 }
 
 pub fn SDL_keymod_to_gui(keymod: u16) gui.enums.Mod {
-    if (keymod == c.KMOD_NONE) return gui.enums.Mod.none;
+    if (keymod == if (sdl3) c.SDL_KMOD_NONE else c.KMOD_NONE) return gui.enums.Mod.none;
 
     var m: u16 = 0;
-    if (keymod & c.KMOD_LSHIFT > 0) m |= @intFromEnum(gui.enums.Mod.lshift);
-    if (keymod & c.KMOD_RSHIFT > 0) m |= @intFromEnum(gui.enums.Mod.rshift);
-    if (keymod & c.KMOD_LCTRL > 0) m |= @intFromEnum(gui.enums.Mod.lctrl);
-    if (keymod & c.KMOD_RCTRL > 0) m |= @intFromEnum(gui.enums.Mod.rctrl);
-    if (keymod & c.KMOD_LALT > 0) m |= @intFromEnum(gui.enums.Mod.lalt);
-    if (keymod & c.KMOD_RALT > 0) m |= @intFromEnum(gui.enums.Mod.ralt);
-    if (keymod & c.KMOD_LGUI > 0) m |= @intFromEnum(gui.enums.Mod.lgui);
-    if (keymod & c.KMOD_RGUI > 0) m |= @intFromEnum(gui.enums.Mod.rgui);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LSHIFT else c.KMOD_LSHIFT) > 0) m |= @intFromEnum(gui.enums.Mod.lshift);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RSHIFT else c.KMOD_RSHIFT) > 0) m |= @intFromEnum(gui.enums.Mod.rshift);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LCTRL else c.KMOD_LCTRL) > 0) m |= @intFromEnum(gui.enums.Mod.lctrl);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RCTRL else c.KMOD_RCTRL) > 0) m |= @intFromEnum(gui.enums.Mod.rctrl);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LALT else c.KMOD_LALT) > 0) m |= @intFromEnum(gui.enums.Mod.lalt);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RALT else c.KMOD_RALT) > 0) m |= @intFromEnum(gui.enums.Mod.ralt);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LGUI else c.KMOD_LGUI) > 0) m |= @intFromEnum(gui.enums.Mod.lgui);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RGUI else c.KMOD_RGUI) > 0) m |= @intFromEnum(gui.enums.Mod.rgui);
 
     return @as(gui.enums.Mod, @enumFromInt(m));
 }

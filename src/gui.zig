@@ -2271,6 +2271,7 @@ pub const Window = struct {
     wd: WidgetData = undefined,
     rect_pixels: Rect = Rect{}, // pixels
     natural_scale: f32 = 1.0,
+    content_scale: f32 = 1.0, // can set seperately but gets folded into natural_scale
     next_widget_ypos: f32 = 0,
 
     captureID: ?u32 = null,
@@ -2378,7 +2379,8 @@ pub const Window = struct {
     pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) !bool {
         self.positionMouseEventRemove();
 
-        const newpt = (Point{ .x = x, .y = y }).scale(self.natural_scale);
+        const newpt = (Point{ .x = x, .y = y }).scale(self.natural_scale / self.content_scale);
+        //std.debug.print("mouse motion {d} {d} -> {d} {d}\n", .{ x, y, newpt.x, newpt.y });
         const dp = newpt.diff(self.mouse_pt);
         self.mouse_pt = newpt;
         const winId = self.windowFor(self.mouse_pt);
@@ -2721,10 +2723,10 @@ pub const Window = struct {
         self.rect_pixels = self.backend.pixelSize().rect();
         clipSet(self.rect_pixels);
 
-        self.wd.rect = self.backend.windowSize().rect();
+        self.wd.rect = self.backend.windowSize().rect().scale(1.0 / self.content_scale);
         self.natural_scale = self.rect_pixels.w / self.wd.rect.w;
 
-        debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
+        //std.debug.print("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
         try subwindowAdd(self.wd.id, self.wd.rect, false, null);
 
@@ -2816,7 +2818,7 @@ pub const Window = struct {
 
         if (self.inject_motion_event) {
             self.inject_motion_event = false;
-            const pt = self.mouse_pt.scale(1 / self.natural_scale);
+            const pt = self.mouse_pt.scale(self.content_scale / self.natural_scale);
             _ = try self.addEventMouseMotion(pt.x, pt.y);
         }
 
