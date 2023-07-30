@@ -6750,6 +6750,7 @@ pub const MenuWidget = struct {
     box: BoxWidget = undefined,
 
     submenus_activated: bool = false,
+    mouse_over: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, dir: Direction, opts: Options) MenuWidget {
         var self = Self{};
@@ -6779,6 +6780,14 @@ pub const MenuWidget = struct {
         self.parentMenu = menuSet(self);
         try self.wd.register("Menu", null);
         try self.wd.borderAndBackground(.{});
+
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
+                continue;
+
+            self.processEvent(e, false);
+        }
 
         self.box = BoxWidget.init(@src(), self.dir, false, self.wd.options.strip().override(.{ .expand = .both }));
         try self.box.install(.{});
@@ -6814,6 +6823,14 @@ pub const MenuWidget = struct {
     pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
         _ = bubbling;
         switch (e.evt) {
+            .mouse => |me| {
+                if (me.kind == .position) {
+                    // TODO: set this event to handled if there is an existing submenu and motion is towards the popup
+                    if (mouseTotalMotion().nonZero()) {
+                        self.mouse_over = true;
+                    }
+                }
+            },
             .close_popup => {
                 self.submenus_activated = false;
             },
@@ -6903,6 +6920,7 @@ pub const MenuItemWidget = struct {
     init_opts: InitOptions = undefined,
     activated: bool = false,
     show_active: bool = false,
+    mouse_over: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         var self = Self{};
@@ -6934,6 +6952,12 @@ pub const MenuItemWidget = struct {
         var focused: bool = false;
         if (self.wd.id == focusedWidgetId()) {
             focused = true;
+        }
+
+        if (focused and menuGet().?.mouse_over and !self.mouse_over) {
+            // our menu got a mouse over but we didn't even though we were focused
+            focused = false;
+            focusWidget(null, null);
         }
 
         if (focused or ((self.wd.id == focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {
@@ -7012,9 +7036,9 @@ pub const MenuItemWidget = struct {
                 } else if (me.kind == .press and me.kind.press == .left) {
                     e.handled = true;
                     if (self.init_opts.submenu) {
-                        menuGet().?.submenus_activated = !menuGet().?.submenus_activated;
+                        menuGet().?.submenus_activated = true;
                     }
-                } else if (me.kind == .release and me.kind.release == .left) {
+                } else if (me.kind == .release) {
                     e.handled = true;
                     if (!self.init_opts.submenu and (self.wd.id == focusedWidgetIdInCurrentSubwindow())) {
                         self.activated = true;
@@ -7022,15 +7046,19 @@ pub const MenuItemWidget = struct {
                     }
                 } else if (me.kind == .position) {
                     e.handled = true;
-                    self.highlight = true;
 
                     // We get a .position mouse event every frame.  If we
                     // focus the menu item under the mouse even if it's not
                     // moving then it breaks keyboard navigation.
-                    if (self.init_opts.focus_on_hover and mouseTotalMotion().nonZero()) {
-                        // TODO don't do the rest here if the menu has an existing popup and the motion is towards the popup
-                        focusSubwindow(null, null); // focuses the window we are in
-                        focusWidget(self.wd.id, null);
+                    if (mouseTotalMotion().nonZero()) {
+                        self.highlight = true;
+                        self.mouse_over = true;
+                        if (self.init_opts.focus_on_hover) {
+                            // we shouldn't have gotten this event if the motion
+                            // was towards a submenu (caught in MenuWidget)
+                            focusSubwindow(null, null); // focuses the window we are in
+                            focusWidget(self.wd.id, null);
+                        }
                     }
                 }
             },

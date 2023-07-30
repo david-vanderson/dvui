@@ -123,7 +123,7 @@ pub fn build(b: *std.build.Builder) !void {
 
         exe.linkSystemLibrary("SDL2");
         //exe.addIncludePath("/home/dvanderson/SDL/include");
-        //exe.addObjectFile("/home/dvanderson/SDL/build/.libs/libSDL2.a");
+        //exe.addObjectFile("/home/dvanderson/SDL/build/libSDL3.a");
 
         if (target.isDarwin()) {
             exe.linkSystemLibrary("z");
