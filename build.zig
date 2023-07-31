@@ -87,7 +87,7 @@ pub fn build(b: *std.build.Builder) !void {
         }
 
         const compile_step = b.step(ex, "Compile " ++ ex);
-        compile_step.dependOn(&b.addInstallArtifact(exe).step);
+        compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
         b.getInstallStep().dependOn(compile_step);
 
         const run_cmd = b.addRunArtifact(exe);
@@ -153,7 +153,7 @@ pub fn build(b: *std.build.Builder) !void {
         }
 
         const compile_step = b.step("compile-" ++ "sdl-test", "Compile " ++ "sdl-test");
-        compile_step.dependOn(&b.addInstallArtifact(exe).step);
+        compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
         b.getInstallStep().dependOn(compile_step);
 
         const run_cmd = b.addRunArtifact(exe);

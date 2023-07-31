@@ -1,5 +1,5 @@
 .{
-    .name = "gui",
+    .name = "dvui",
     .version = "0.0.1",
     .dependencies = .{
         //.sdl = .{
@@ -7,8 +7,8 @@
             //.hash = "12202047e83332d37477811513bd6446c567efa6f03c4ae5e57585412b4ad8129cae",
         //},
         .freetype = .{
-            .url = "https://github.com/david-vanderson/freetype/archive/09ee107f41722d14a55f1e93699d13502cbeee7d.tar.gz",
-            .hash = "12206093916f783d7b915d8aeb73c83ff26d70f4cd83345e156148353029496522cd",
+            .url = "https://github.com/david-vanderson/freetype/archive/18a1df5a3ef8afa0782c419b153a21e9e160335f.tar.gz",
+            .hash = "1220b305af272ac3026704b8d7e13740350daf59a6a95e45dedb428c55933e3df925",
         },
     },
 }
