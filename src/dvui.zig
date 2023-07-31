@@ -1700,11 +1700,16 @@ pub fn clipSet(r: Rect) void {
     currentWindow().clipRect = r;
 }
 
-pub fn snapToPixels(snap: bool) bool {
+pub fn snapToPixelsSet(snap: bool) bool {
     const cw = currentWindow();
     const old = cw.snap_to_pixels;
     cw.snap_to_pixels = snap;
     return old;
+}
+
+pub fn snapToPixels() bool {
+    const cw = currentWindow();
+    return cw.snap_to_pixels;
 }
 
 pub fn refresh() void {
@@ -3667,6 +3672,10 @@ pub const FloatingWindowWidget = struct {
                 if (self.auto_pos and !self.auto_size) {
                     self.auto_pos = false;
                     self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .{ .x = 0.5, .y = 0.5 });
+                    if (snapToPixels()) {
+                        self.wd.rect.x = @round(self.wd.rect.x);
+                        self.wd.rect.y = @round(self.wd.rect.y);
+                    }
                 }
             }
         }
@@ -3688,6 +3697,10 @@ pub const FloatingWindowWidget = struct {
                 self.auto_pos = false;
 
                 self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .{ .x = 0.5, .y = 0.5 });
+                if (snapToPixels()) {
+                    self.wd.rect.x = @round(self.wd.rect.x);
+                    self.wd.rect.y = @round(self.wd.rect.y);
+                }
 
                 //std.debug.print("autopos to {}\n", .{self.wd.rect});
             }
@@ -3974,9 +3987,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     var over = try dvui.overlay(@src(), .{ .expand = .horizontal });
 
     if (openflag) |of| {
-        const saved = dvui.snapToPixels(false);
-        defer _ = dvui.snapToPixels(saved);
-        if (try dvui.buttonIcon(@src(), 16, "close", dvui.icons.entypo.plus, .{ .gravity_y = 0.5, .corner_radius = Rect.all(16), .padding = Rect.all(0), .margin = Rect.all(2), .rotation = math.pi / 4.0 })) {
+        if (try dvui.buttonIcon(@src(), 16, "close", dvui.icons.entypo.cross, .{ .corner_radius = Rect.all(16), .padding = Rect.all(0), .margin = Rect.all(2) })) {
             of.* = false;
         }
     }
