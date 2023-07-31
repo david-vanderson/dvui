@@ -1,4 +1,6 @@
 
+update gui-demo and podcast
+
 redo menu and menuItem stuff to fix:
   - can it catch if the mouse motion was toward an open submenu?
   - submenu has to register its rect with parent
@@ -6,8 +8,6 @@ redo menu and menuItem stuff to fix:
   - mousing off a menuItem onto a checkbox (non menuItem)
   - mousing from a submenuItem to submenu
 - keyboard navigation
-
-update gui-demo and podcast
 
 send updates to tinyvg
 

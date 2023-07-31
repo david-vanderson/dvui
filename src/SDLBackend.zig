@@ -1,7 +1,7 @@
 const sdl3 = false;
 
 const std = @import("std");
-const gui = @import("gui");
+const dvui = @import("dvui");
 pub const c = @cImport({
     @cInclude(if (sdl3) "SDL3/SDL.h" else "SDL2/SDL.h");
 });
@@ -10,9 +10,9 @@ const SDLBackend = @This();
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
-cursor_last: gui.Cursor = .arrow,
-cursor_backing: [@typeInfo(gui.Cursor).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(gui.Cursor).Enum.fields.len,
-cursor_backing_tried: [@typeInfo(gui.Cursor).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(gui.Cursor).Enum.fields.len,
+cursor_last: dvui.Cursor = .arrow,
+cursor_backing: [@typeInfo(dvui.Cursor).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.Cursor).Enum.fields.len,
+cursor_backing_tried: [@typeInfo(dvui.Cursor).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(dvui.Cursor).Enum.fields.len,
 arena: std.mem.Allocator = undefined,
 
 pub const initOptions = struct {
@@ -88,7 +88,7 @@ pub fn refresh() void {
     _ = c.SDL_PushEvent(&ue);
 }
 
-pub fn addAllEvents(self: *SDLBackend, win: *gui.Window) !bool {
+pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
     //const flags = c.SDL_GetWindowFlags(self.window);
     //if (flags & c.SDL_WINDOW_MOUSE_FOCUS == 0 and flags & c.SDL_WINDOW_INPUT_FOCUS == 0) {
     //std.debug.print("bailing\n", .{});
@@ -114,7 +114,7 @@ pub fn addAllEvents(self: *SDLBackend, win: *gui.Window) !bool {
     return false;
 }
 
-pub fn setCursor(self: *SDLBackend, cursor: gui.Cursor) void {
+pub fn setCursor(self: *SDLBackend, cursor: dvui.Cursor) void {
     if (cursor != self.cursor_last) {
         self.cursor_last = cursor;
 
@@ -182,8 +182,8 @@ pub fn clear(self: *SDLBackend) void {
     _ = c.SDL_RenderClear(self.renderer);
 }
 
-pub fn guiBackend(self: *SDLBackend) gui.Backend {
-    return gui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free);
+pub fn backend(self: *SDLBackend) dvui.Backend {
+    return dvui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free);
 }
 
 pub fn clipboardText(self: *SDLBackend) []u8 {
@@ -209,7 +209,7 @@ pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) void {
 
 pub fn end(_: *SDLBackend) void {}
 
-pub fn pixelSize(self: *SDLBackend) gui.Size {
+pub fn pixelSize(self: *SDLBackend) dvui.Size {
     var w: i32 = undefined;
     var h: i32 = undefined;
     if (sdl3) {
@@ -217,18 +217,18 @@ pub fn pixelSize(self: *SDLBackend) gui.Size {
     } else {
         _ = c.SDL_GetRendererOutputSize(self.renderer, &w, &h);
     }
-    return gui.Size{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
+    return dvui.Size{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
 }
 
-pub fn windowSize(self: *SDLBackend) gui.Size {
+pub fn windowSize(self: *SDLBackend) dvui.Size {
     var w: i32 = undefined;
     var h: i32 = undefined;
     _ = c.SDL_GetWindowSize(self.window, &w, &h);
-    return gui.Size{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
+    return dvui.Size{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
 }
 
-pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const gui.Vertex, idx: []const u32) void {
-    const clipr = gui.windowRectPixels().intersect(gui.clipGet());
+pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
+    const clipr = dvui.windowRectPixels().intersect(dvui.clipGet());
     if (clipr.empty()) {
         return;
     }
@@ -253,7 +253,7 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const gui.
 
     const tex = @as(?*c.SDL_Texture, @ptrCast(texture));
 
-    _ = c.SDL_RenderGeometryRaw(self.renderer, tex, @as(*const f32, @ptrCast(&vtx[0].pos)), @sizeOf(gui.Vertex), @as(*const c.SDL_Color, @ptrCast(@alignCast(&vtx[0].col))), @sizeOf(gui.Vertex), @as(*const f32, @ptrCast(&vtx[0].uv)), @sizeOf(gui.Vertex), @as(c_int, @intCast(vtx.len)), idx.ptr, @as(c_int, @intCast(idx.len)), @sizeOf(u32));
+    _ = c.SDL_RenderGeometryRaw(self.renderer, tex, @as(*const f32, @ptrCast(&vtx[0].pos)), @sizeOf(dvui.Vertex), @as(*const c.SDL_Color, @ptrCast(@alignCast(&vtx[0].col))), @sizeOf(dvui.Vertex), @as(*const f32, @ptrCast(&vtx[0].uv)), @sizeOf(dvui.Vertex), @as(c_int, @intCast(vtx.len)), idx.ptr, @as(c_int, @intCast(idx.len)), @sizeOf(u32));
 }
 
 pub fn textureCreate(self: *SDLBackend, pixels: []u8, width: u32, height: u32) *anyopaque {
@@ -279,20 +279,20 @@ pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
     c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(texture)));
 }
 
-pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
+pub fn addEvent(_: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
     switch (event.type) {
         if (sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
             return try win.addEventKey(.{
-                .code = SDL_keysym_to_gui(event.key.keysym.sym),
+                .code = SDL_keysym_to_dvui(event.key.keysym.sym),
                 .action = if (event.key.repeat > 0) .repeat else .down,
-                .mod = SDL_keymod_to_gui(event.key.keysym.mod),
+                .mod = SDL_keymod_to_dvui(event.key.keysym.mod),
             });
         },
         if (sdl3) c.SDL_EVENT_KEY_UP else c.SDL_KEYUP => {
             return try win.addEventKey(.{
-                .code = SDL_keysym_to_gui(event.key.keysym.sym),
+                .code = SDL_keysym_to_dvui(event.key.keysym.sym),
                 .action = .up,
-                .mod = SDL_keymod_to_gui(event.key.keysym.mod),
+                .mod = SDL_keymod_to_dvui(event.key.keysym.mod),
             });
         },
         if (sdl3) c.SDL_EVENT_TEXT_INPUT else c.SDL_TEXTINPUT => {
@@ -306,10 +306,10 @@ pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
             }
         },
         if (sdl3) c.SDL_EVENT_MOUSE_BUTTON_DOWN else c.SDL_MOUSEBUTTONDOWN => {
-            return try win.addEventMouseButton(.{ .press = SDL_mouse_button_to_gui(event.button.button) });
+            return try win.addEventMouseButton(.{ .press = SDL_mouse_button_to_dvui(event.button.button) });
         },
         if (sdl3) c.SDL_EVENT_MOUSE_BUTTON_UP else c.SDL_MOUSEBUTTONUP => {
-            return try win.addEventMouseButton(.{ .release = SDL_mouse_button_to_gui(event.button.button) });
+            return try win.addEventMouseButton(.{ .release = SDL_mouse_button_to_dvui(event.button.button) });
         },
         if (sdl3) c.SDL_EVENT_MOUSE_WHEEL else c.SDL_MOUSEWHEEL => {
             const ticks = if (sdl3) event.wheel.y else @as(f32, @floatFromInt(event.wheel.y));
@@ -322,7 +322,7 @@ pub fn addEvent(_: *SDLBackend, win: *gui.Window, event: c.SDL_Event) !bool {
     }
 }
 
-pub fn SDL_mouse_button_to_gui(button: u8) gui.enums.Button {
+pub fn SDL_mouse_button_to_dvui(button: u8) dvui.enums.Button {
     return switch (button) {
         c.SDL_BUTTON_LEFT => .left,
         c.SDL_BUTTON_MIDDLE => .middle,
@@ -330,29 +330,29 @@ pub fn SDL_mouse_button_to_gui(button: u8) gui.enums.Button {
         c.SDL_BUTTON_X1 => .four,
         c.SDL_BUTTON_X2 => .five,
         else => blk: {
-            std.debug.print("SDL_mouse_button_to_gui unknown button {d}\n", .{button});
+            std.debug.print("SDL_mouse_button_to_dvui.unknown button {d}\n", .{button});
             break :blk .six;
         },
     };
 }
 
-pub fn SDL_keymod_to_gui(keymod: u16) gui.enums.Mod {
-    if (keymod == if (sdl3) c.SDL_KMOD_NONE else c.KMOD_NONE) return gui.enums.Mod.none;
+pub fn SDL_keymod_to_dvui(keymod: u16) dvui.enums.Mod {
+    if (keymod == if (sdl3) c.SDL_KMOD_NONE else c.KMOD_NONE) return dvui.enums.Mod.none;
 
     var m: u16 = 0;
-    if (keymod & (if (sdl3) c.SDL_KMOD_LSHIFT else c.KMOD_LSHIFT) > 0) m |= @intFromEnum(gui.enums.Mod.lshift);
-    if (keymod & (if (sdl3) c.SDL_KMOD_RSHIFT else c.KMOD_RSHIFT) > 0) m |= @intFromEnum(gui.enums.Mod.rshift);
-    if (keymod & (if (sdl3) c.SDL_KMOD_LCTRL else c.KMOD_LCTRL) > 0) m |= @intFromEnum(gui.enums.Mod.lctrl);
-    if (keymod & (if (sdl3) c.SDL_KMOD_RCTRL else c.KMOD_RCTRL) > 0) m |= @intFromEnum(gui.enums.Mod.rctrl);
-    if (keymod & (if (sdl3) c.SDL_KMOD_LALT else c.KMOD_LALT) > 0) m |= @intFromEnum(gui.enums.Mod.lalt);
-    if (keymod & (if (sdl3) c.SDL_KMOD_RALT else c.KMOD_RALT) > 0) m |= @intFromEnum(gui.enums.Mod.ralt);
-    if (keymod & (if (sdl3) c.SDL_KMOD_LGUI else c.KMOD_LGUI) > 0) m |= @intFromEnum(gui.enums.Mod.lgui);
-    if (keymod & (if (sdl3) c.SDL_KMOD_RGUI else c.KMOD_RGUI) > 0) m |= @intFromEnum(gui.enums.Mod.rgui);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LSHIFT else c.KMOD_LSHIFT) > 0) m |= @intFromEnum(dvui.enums.Mod.lshift);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RSHIFT else c.KMOD_RSHIFT) > 0) m |= @intFromEnum(dvui.enums.Mod.rshift);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LCTRL else c.KMOD_LCTRL) > 0) m |= @intFromEnum(dvui.enums.Mod.lctrl);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RCTRL else c.KMOD_RCTRL) > 0) m |= @intFromEnum(dvui.enums.Mod.rctrl);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LALT else c.KMOD_LALT) > 0) m |= @intFromEnum(dvui.enums.Mod.lalt);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RALT else c.KMOD_RALT) > 0) m |= @intFromEnum(dvui.enums.Mod.ralt);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LGUI else c.KMOD_LGUI) > 0) m |= @intFromEnum(dvui.enums.Mod.lgui);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RGUI else c.KMOD_RGUI) > 0) m |= @intFromEnum(dvui.enums.Mod.rgui);
 
-    return @as(gui.enums.Mod, @enumFromInt(m));
+    return @as(dvui.enums.Mod, @enumFromInt(m));
 }
 
-pub fn SDL_keysym_to_gui(keysym: i32) gui.enums.Key {
+pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
     return switch (keysym) {
         c.SDLK_a => .a,
         c.SDLK_b => .b,
@@ -464,7 +464,7 @@ pub fn SDL_keysym_to_gui(keysym: i32) gui.enums.Key {
         c.SDLK_BACKQUOTE => .grave,
 
         else => blk: {
-            std.debug.print("SDL_keysym_to_gui unknown keysym {d}\n", .{keysym});
+            std.debug.print("SDL_keysym_to_dvui unknown keysym {d}\n", .{keysym});
             break :blk .unknown;
         },
     };

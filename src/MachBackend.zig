@@ -1,5 +1,5 @@
 const std = @import("std");
-const gui = @import("gui.zig");
+const dvui = @import("dvui");
 const mach = @import("mach");
 const gpu = @import("gpu");
 const zm = @import("zmath");
@@ -15,8 +15,8 @@ uniform_buffer_len: u32,
 sampler: *gpu.Sampler,
 
 texture: ?*anyopaque,
-clipr: gui.Rect,
-vtx: std.ArrayList(gui.Vertex),
+clipr: dvui.Rect,
+vtx: std.ArrayList(dvui.Vertex),
 idx: std.ArrayList(u32),
 
 encoder: *gpu.CommandEncoder,
@@ -28,7 +28,7 @@ index_buffer_len: u32,
 vertex_buffer_size: u32,
 index_buffer_size: u32,
 
-cursor_last: gui.Cursor = .arrow,
+cursor_last: dvui.Cursor = .arrow,
 
 pub fn init(core: *mach.Core) !MachBackend {
     var back: MachBackend = undefined;
@@ -50,7 +50,7 @@ pub fn init(core: *mach.Core) !MachBackend {
     });
 
     back.texture = null;
-    back.clipr = gui.Rect{};
+    back.clipr = dvui.Rect{};
     back.vertex_buffer_size = 1000;
     back.index_buffer_size = 1000;
     back.vertex_buffer_len = 0;
@@ -127,7 +127,7 @@ pub fn init(core: *mach.Core) !MachBackend {
     return back;
 }
 
-fn toMachCursor(cursor: gui.Cursor) mach.MouseCursor {
+fn toMachCursor(cursor: dvui.Cursor) mach.MouseCursor {
     return switch (cursor) {
         .arrow => .arrow,
         .ibeam => .ibeam,
@@ -146,7 +146,7 @@ fn toMachCursor(cursor: gui.Cursor) mach.MouseCursor {
     };
 }
 
-pub fn setCursor(self: *MachBackend, cursor: gui.Cursor) void {
+pub fn setCursor(self: *MachBackend, cursor: dvui.Cursor) void {
     if (cursor != self.cursor_last) {
         self.cursor_last = cursor;
         self.core.setMouseCursor(toMachCursor(cursor)) catch unreachable;
@@ -169,28 +169,28 @@ pub const UniformBufferObject = struct {
 };
 
 pub const Vertex = struct {
-    pos: gui.Point,
+    pos: dvui.Point,
     col: @Vector(4, f32),
     uv: @Vector(2, f32),
 };
 
-fn toGUIKey(key: mach.Key) gui.enums.Key {
+fn toDVUIKey(key: mach.Key) dvui.enums.Key {
     return switch (key) {
         .a => .a,
         else => blk: {
-            std.debug.print("toGUIKey unknown key {d}\n", .{key});
+            std.debug.print("todvUIKey unknown key {d}\n", .{key});
             break :blk .unknown;
         },
     };
 }
 
-pub fn addEvent(_: *MachBackend, win: *gui.Window, event: mach.Event) !bool {
+pub fn addEvent(_: *MachBackend, win: *dvui.Window, event: mach.Event) !bool {
     switch (event) {
         .key_press => |ev| {
-            return try win.addEventKey(.{ .down = toGUIKey(ev.key) }, .none);
+            return try win.addEventKey(.{ .down = toDVUIKey(ev.key) }, .none);
         },
         .key_release => |ev| {
-            return try win.addEventKey(.{ .up = toGUIKey(ev.key) }, .none);
+            return try win.addEventKey(.{ .up = toDVUIKey(ev.key) }, .none);
         },
         .mouse_motion => |mm| {
             return try win.addEventMouseMotion(@as(f32, @floatCast(mm.pos.x)), @as(f32, @floatCast(mm.pos.y)));
@@ -222,7 +222,7 @@ pub fn waitEventTimeout(self: *MachBackend, timeout_micros: u32) void {
     self.core.setWaitEvent(@as(f64, @floatFromInt(timeout_micros)) / 1_000_000);
 }
 
-pub fn addAllEvents(self: *MachBackend, win: *gui.Window) !bool {
+pub fn addAllEvents(self: *MachBackend, win: *dvui.Window) !bool {
     while (self.core.pollEvent()) |event| {
         _ = try self.addEvent(win, event);
         switch (event) {
@@ -237,14 +237,14 @@ pub fn addAllEvents(self: *MachBackend, win: *gui.Window) !bool {
     return false;
 }
 
-pub fn guiBackend(self: *MachBackend) gui.Backend {
-    return gui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy);
+pub fn backend(self: *MachBackend) dvui.Backend {
+    return dvui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy);
 }
 
 pub fn begin(self: *MachBackend, arena: std.mem.Allocator) void {
-    self.clipr = gui.Rect{};
+    self.clipr = dvui.Rect{};
     self.texture = null;
-    self.vtx = std.ArrayList(gui.Vertex).init(arena);
+    self.vtx = std.ArrayList(dvui.Vertex).init(arena);
     self.idx = std.ArrayList(u32).init(arena);
 
     self.encoder = self.core.device.createCommandEncoder(null);
@@ -264,18 +264,18 @@ pub fn end(self: *MachBackend) void {
     command.release();
 }
 
-pub fn pixelSize(self: *MachBackend) gui.Size {
+pub fn pixelSize(self: *MachBackend) dvui.Size {
     const psize = self.core.getFramebufferSize();
-    return gui.Size{ .w = @as(f32, @floatFromInt(psize.width)), .h = @as(f32, @floatFromInt(psize.height)) };
+    return dvui.Size{ .w = @as(f32, @floatFromInt(psize.width)), .h = @as(f32, @floatFromInt(psize.height)) };
 }
 
-pub fn windowSize(self: *MachBackend) gui.Size {
+pub fn windowSize(self: *MachBackend) dvui.Size {
     const size = self.core.getWindowSize();
-    return gui.Size{ .w = @as(f32, @floatFromInt(size.width)), .h = @as(f32, @floatFromInt(size.height)) };
+    return dvui.Size{ .w = @as(f32, @floatFromInt(size.width)), .h = @as(f32, @floatFromInt(size.height)) };
 }
 
-pub fn renderGeometry(self: *MachBackend, tex: ?*anyopaque, vtx: []const gui.Vertex, idx: []const u32) void {
-    const clipr = gui.windowRectPixels().intersect(gui.clipGet());
+pub fn renderGeometry(self: *MachBackend, tex: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
+    const clipr = dvui.windowRectPixels().intersect(dvui.clipGet());
     if (clipr.empty()) {
         return;
     }
@@ -374,7 +374,7 @@ pub fn flushRender(self: *MachBackend) void {
         .store_op = .store,
     };
 
-    const default_tex = gui.iconTexture("default_texture", gui.icons.papirus.actions.media_playback_start_symbolic, 1.0) catch |err| {
+    const default_tex = dvui.iconTexture("default_texture", dvui.icons.papirus.actions.media_playback_start_symbolic, 1.0) catch |err| {
         std.debug.print("MachBackend:flushRender: got {!} when doing iconTexture for default texture\n", .{err});
         return;
     };
@@ -386,13 +386,13 @@ pub fn flushRender(self: *MachBackend) void {
     }
 
     {
-        const model = zm.translation(-gui.windowRectPixels().w / 2, gui.windowRectPixels().h / 2, 0);
+        const model = zm.translation(-dvui.windowRectPixels().w / 2, dvui.windowRectPixels().h / 2, 0);
         const view = zm.lookAtLh(
             zm.f32x4(0, 0, 1, 1),
             zm.f32x4(0, 0, 0, 1),
             zm.f32x4(0, -1, 0, 0),
         );
-        const proj = zm.orthographicLh(gui.windowRectPixels().w, gui.windowRectPixels().h, 1, 0);
+        const proj = zm.orthographicLh(dvui.windowRectPixels().w, dvui.windowRectPixels().h, 1, 0);
         const mvp = zm.mul(zm.mul(view, model), proj);
         const ubo = UniformBufferObject{
             .mat = mvp,

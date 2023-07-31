@@ -20,8 +20,8 @@ const c = @cImport({
 
 pub const Error = error{ OutOfMemory, InvalidUtf8, freetypeError, tvgError };
 
-const log = std.log.scoped(.gui);
-const gui = @This();
+const log = std.log.scoped(.dvui);
+const dvui = @This();
 
 var current_window: ?*Window = null;
 
@@ -1796,7 +1796,7 @@ pub fn minSizeSet(id: u32, s: Size) !void {
     var cw = currentWindow();
     if (try cw.min_sizes.fetchPut(id, .{ .size = s })) |ss| {
         if (ss.value.used) {
-            std.debug.print("gui: id {x} was already used this frame (highlighting)\n", .{id});
+            std.debug.print("dvui: id {x} was already used this frame (highlighting)\n", .{id});
             cw.debug_widget_id = id;
         }
     }
@@ -3131,16 +3131,16 @@ pub const Window = struct {
 
     // show any toasts that didn't have a subwindow_id set
     fn toastsShow(self: *Self) !void {
-        var ti = gui.toastsFor(null);
+        var ti = dvui.toastsFor(null);
         if (ti) |*it| {
             var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent = true }, .{ .background = false, .border = .{} });
             defer toast_win.deinit();
 
-            toast_win.data().rect = gui.placeIn(self.wd.rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
+            toast_win.data().rect = dvui.placeIn(self.wd.rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
             toast_win.autoSize();
             try toast_win.install(.{ .process_events = false });
 
-            var vbox = try gui.box(@src(), .vertical, .{});
+            var vbox = try dvui.box(@src(), .vertical, .{});
             defer vbox.deinit();
 
             while (it.next()) |t| {
@@ -3162,49 +3162,49 @@ pub const Window = struct {
         self.debug_under_mouse = false;
         defer self.debug_under_mouse = dum;
 
-        var float = try gui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
+        var float = try dvui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
         defer float.deinit();
 
-        try gui.windowHeader("GUI Debug", "", &self.debug_window_show);
+        try dvui.windowHeader("GUI Debug", "", &self.debug_window_show);
 
         {
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            try gui.labelNoFmt(@src(), "Hex id of widget to highlight:", .{ .gravity_y = 0.5 });
+            try dvui.labelNoFmt(@src(), "Hex id of widget to highlight:", .{ .gravity_y = 0.5 });
 
             var buf = [_]u8{0} ** 20;
             _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
-            try gui.textEntry(@src(), .{ .text = &buf }, .{});
+            try dvui.textEntry(@src(), .{ .text = &buf }, .{});
 
             self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(&buf, 0), 16) catch 0;
         }
 
-        var tl = try gui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
+        var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
         try tl.addText(self.debug_info_name_rect, .{});
         try tl.addText("\n\n", .{});
         try tl.addText(self.debug_info_src_id_extra, .{});
         tl.deinit();
 
-        if (try gui.button(@src(), if (dum) "Stop (Or Left Click)" else "Debug Under Mouse", .{})) {
+        if (try dvui.button(@src(), if (dum) "Stop (Or Left Click)" else "Debug Under Mouse", .{})) {
             dum = !dum;
         }
 
-        var scroll = try gui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
+        var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
         defer scroll.deinit();
 
         var iter = std.mem.split(u8, self.debug_under_mouse_info, "\n");
         var i: usize = 0;
         while (iter.next()) |line| : (i += 1) {
             if (line.len > 0) {
-                var hbox = try gui.box(@src(), .horizontal, .{ .id_extra = i });
+                var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
                 defer hbox.deinit();
 
-                if (try gui.buttonIcon(@src(), 12, "find", gui.icons.entypo.magnifying_glass, .{})) {
+                if (try dvui.buttonIcon(@src(), 12, "find", dvui.icons.entypo.magnifying_glass, .{})) {
                     self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(line, ' '), 16) catch 0;
                 }
 
-                try gui.labelNoFmt(@src(), line, .{ .gravity_y = 0.5 });
+                try dvui.labelNoFmt(@src(), line, .{ .gravity_y = 0.5 });
             }
         }
     }
@@ -3971,18 +3971,18 @@ pub const FloatingWindowWidget = struct {
 };
 
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !void {
-    var over = try gui.overlay(@src(), .{ .expand = .horizontal });
+    var over = try dvui.overlay(@src(), .{ .expand = .horizontal });
 
     if (openflag) |of| {
-        const saved = gui.snapToPixels(false);
-        defer _ = gui.snapToPixels(saved);
-        if (try gui.buttonIcon(@src(), 16, "close", gui.icons.entypo.plus, .{ .gravity_y = 0.5, .corner_radius = Rect.all(16), .padding = Rect.all(0), .margin = Rect.all(2), .rotation = math.pi / 4.0 })) {
+        const saved = dvui.snapToPixels(false);
+        defer _ = dvui.snapToPixels(saved);
+        if (try dvui.buttonIcon(@src(), 16, "close", dvui.icons.entypo.plus, .{ .gravity_y = 0.5, .corner_radius = Rect.all(16), .padding = Rect.all(0), .margin = Rect.all(2), .rotation = math.pi / 4.0 })) {
             of.* = false;
         }
     }
 
-    try gui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading });
-    try gui.labelNoFmt(@src(), right_str, .{ .gravity_x = 1.0 });
+    try dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading });
+    try dvui.labelNoFmt(@src(), right_str, .{ .gravity_x = 1.0 });
 
     var evts = events();
     for (evts) |*e| {
@@ -3996,7 +3996,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
 
     over.deinit();
 
-    try gui.separator(@src(), .{ .expand = .horizontal });
+    try dvui.separator(@src(), .{ .expand = .horizontal });
 }
 
 pub const DialogDisplayFn = *const fn (u32) Error!void;
@@ -4073,45 +4073,45 @@ pub fn dialog(src: std.builtin.SourceLocation, opts: DialogOptions) !void {
 }
 
 pub fn dialogDisplay(id: u32) !void {
-    const modal = gui.dataGet(null, id, "_modal", bool) orelse {
+    const modal = dvui.dataGet(null, id, "_modal", bool) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
-        gui.dialogRemove(id);
+        dvui.dialogRemove(id);
         return;
     };
 
-    const title = gui.dataGet(null, id, "_title", []const u8) orelse {
+    const title = dvui.dataGet(null, id, "_title", []const u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
-        gui.dialogRemove(id);
+        dvui.dialogRemove(id);
         return;
     };
 
-    const message = gui.dataGet(null, id, "_message", []const u8) orelse {
+    const message = dvui.dataGet(null, id, "_message", []const u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
-        gui.dialogRemove(id);
+        dvui.dialogRemove(id);
         return;
     };
 
-    const callafter = gui.dataGet(null, id, "_callafter", DialogCallAfterFn);
+    const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
     var win = try floatingWindow(@src(), .{ .modal = modal }, .{ .id_extra = id });
     defer win.deinit();
 
     var header_openflag = true;
-    try gui.windowHeader(title, "", &header_openflag);
+    try dvui.windowHeader(title, "", &header_openflag);
     if (!header_openflag) {
-        gui.dialogRemove(id);
+        dvui.dialogRemove(id);
         if (callafter) |ca| {
             try ca(id, .closed);
         }
         return;
     }
 
-    var tl = try gui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
+    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
     try tl.addText(message, .{});
     tl.deinit();
 
-    if (try gui.button(@src(), "Ok", .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
-        gui.dialogRemove(id);
+    if (try dvui.button(@src(), "Ok", .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
+        dvui.dialogRemove(id);
         if (callafter) |ca| {
             try ca(id, .ok);
         }
@@ -4161,7 +4161,7 @@ pub fn toastRemove(id: u32) void {
 }
 
 pub fn toastsFor(subwindow_id: ?u32) ?ToastIterator {
-    const cw = gui.currentWindow();
+    const cw = dvui.currentWindow();
     cw.dialog_mutex.lock();
     defer cw.dialog_mutex.unlock();
 
@@ -4221,28 +4221,28 @@ pub const ToastOptions = struct {
 };
 
 pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) !void {
-    const id_mutex = try gui.toastAdd(opts.window, src, opts.id_extra, opts.subwindow_id, opts.displayFn, opts.timeout);
+    const id_mutex = try dvui.toastAdd(opts.window, src, opts.id_extra, opts.subwindow_id, opts.displayFn, opts.timeout);
     const id = id_mutex.id;
-    gui.dataSet(opts.window, id, "_message", opts.message);
+    dvui.dataSet(opts.window, id, "_message", opts.message);
     id_mutex.mutex.unlock();
 }
 
 pub fn toastDisplay(id: u32) !void {
-    const message = gui.dataGet(null, id, "_message", []const u8) orelse {
+    const message = dvui.dataGet(null, id, "_message", []const u8) orelse {
         std.debug.print("Error: lost message for toast {x}\n", .{id});
         return;
     };
 
-    var animator = try gui.animate(@src(), .alpha, 500_000, .{ .id_extra = id });
+    var animator = try dvui.animate(@src(), .alpha, 500_000, .{ .id_extra = id });
     defer animator.deinit();
-    try gui.labelNoFmt(@src(), message, .{ .background = true, .corner_radius = gui.Rect.all(1000) });
+    try dvui.labelNoFmt(@src(), message, .{ .background = true, .corner_radius = dvui.Rect.all(1000) });
 
-    if (gui.timerDone(id)) {
+    if (dvui.timerDone(id)) {
         animator.startEnd();
     }
 
     if (animator.end()) {
-        gui.toastRemove(id);
+        dvui.toastRemove(id);
     }
 }
 
@@ -4279,12 +4279,12 @@ pub const AnimateWidget = struct {
 
         if (firstFrame(self.wd.id)) {
             // start begin animation
-            gui.animation(self.wd.id, "_start", .{ .start_val = 0.0, .end_val = 1.0, .end_time = self.duration });
+            dvui.animation(self.wd.id, "_start", .{ .start_val = 0.0, .end_val = 1.0, .end_time = self.duration });
         }
 
-        if (gui.animationGet(self.wd.id, "_end")) |a| {
+        if (dvui.animationGet(self.wd.id, "_end")) |a| {
             self.val = a.lerp();
-        } else if (gui.animationGet(self.wd.id, "_start")) |a| {
+        } else if (dvui.animationGet(self.wd.id, "_start")) |a| {
             self.val = a.lerp();
         }
 
@@ -4303,11 +4303,11 @@ pub const AnimateWidget = struct {
     }
 
     pub fn startEnd(self: *Self) void {
-        gui.animation(self.wd.id, "_end", .{ .start_val = 1.0, .end_val = 0.0, .end_time = self.duration });
+        dvui.animation(self.wd.id, "_end", .{ .start_val = 1.0, .end_val = 0.0, .end_time = self.duration });
     }
 
     pub fn end(self: *Self) bool {
-        return gui.animationDone(self.wd.id, "_end");
+        return dvui.animationDone(self.wd.id, "_end");
     }
 
     pub fn widget(self: *Self) Widget {
@@ -4370,21 +4370,21 @@ pub var dropdown_defaults: Options = .{
 pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: *usize, opts: Options) !bool {
     const options = dropdown_defaults.override(opts);
 
-    var m = try gui.menu(@src(), .horizontal, options.wrapOuter());
+    var m = try dvui.menu(@src(), .horizontal, options.wrapOuter());
     defer m.deinit();
 
     var b = MenuItemWidget.init(src, .{ .submenu = true, .focus_on_hover = false }, options.wrapInner());
     try b.install(.{ .focus_as_outline = true });
     defer b.deinit();
 
-    var hbox = try gui.box(@src(), .horizontal, .{ .expand = .both });
+    var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both });
     defer hbox.deinit();
 
     var lw = try LabelWidget.initNoFmt(@src(), entries[choice.*], options.strip().override(.{ .gravity_y = 0.5 }));
     const lw_rect = lw.wd.contentRectScale().r.scale(1 / windowNaturalScale());
     try lw.install(.{});
     lw.deinit();
-    try icon(@src(), "dropdown_triangle", gui.icons.entypo.chevron_small_down, options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }));
+    try icon(@src(), "dropdown_triangle", dvui.icons.entypo.chevron_small_down, options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }));
 
     var ret = false;
     if (b.activeRect()) |r| {
@@ -4409,10 +4409,10 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
         defer pop.deinit();
 
         for (entries, 0..) |_, i| {
-            if (try gui.menuItemLabel(@src(), entries[i], .{}, .{ .id_extra = i })) |_| {
+            if (try dvui.menuItemLabel(@src(), entries[i], .{}, .{ .id_extra = i })) |_| {
                 choice.* = i;
                 ret = true;
-                gui.menuGet().?.close();
+                dvui.menuGet().?.close();
             }
         }
     }
@@ -4435,7 +4435,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
     defer bc.deinit();
 
     var expanded: bool = false;
-    if (gui.dataGet(null, bc.wd.id, "_expand", bool)) |e| {
+    if (dvui.dataGet(null, bc.wd.id, "_expand", bool)) |e| {
         expanded = e;
     }
 
@@ -4448,18 +4448,18 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
     try bcbox.install(.{});
     const size = try options.fontGet().lineHeight();
     if (expanded) {
-        try icon(@src(), "down_arrow", gui.icons.entypo.triangle_down, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
+        try icon(@src(), "down_arrow", dvui.icons.entypo.triangle_down, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
     } else {
-        try icon(@src(), "right_arrow", gui.icons.entypo.triangle_right, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
+        try icon(@src(), "right_arrow", dvui.icons.entypo.triangle_right, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
     }
     try labelNoFmt(@src(), label_str, options.strip());
 
-    gui.dataSet(null, bc.wd.id, "_expand", expanded);
+    dvui.dataSet(null, bc.wd.id, "_expand", expanded);
 
     return expanded;
 }
 
-pub fn paned(src: std.builtin.SourceLocation, dir: gui.Direction, collapse_size: f32, opts: Options) !*PanedWidget {
+pub fn paned(src: std.builtin.SourceLocation, dir: dvui.Direction, collapse_size: f32, opts: Options) !*PanedWidget {
     var ret = try currentWindow().arena.create(PanedWidget);
     ret.* = PanedWidget.init(src, dir, collapse_size, opts);
     try ret.install(.{});
@@ -4479,7 +4479,7 @@ pub const PanedWidget = struct {
     wd: WidgetData = undefined,
 
     split_ratio: f32 = undefined,
-    dir: gui.Direction = undefined,
+    dir: dvui.Direction = undefined,
     collapse_size: f32 = 0,
     captured: bool = false,
     hovered: bool = false,
@@ -4487,7 +4487,7 @@ pub const PanedWidget = struct {
     first_side_id: ?u32 = null,
     prevClip: Rect = Rect{},
 
-    pub fn init(src: std.builtin.SourceLocation, dir: gui.Direction, collapse_size: f32, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, dir: dvui.Direction, collapse_size: f32, opts: Options) Self {
         var self = Self{};
         self.wd = WidgetData.init(src, opts);
         self.dir = dir;
@@ -4496,7 +4496,7 @@ pub const PanedWidget = struct {
 
         const rect = self.wd.contentRect();
 
-        if (gui.dataGet(null, self.wd.id, "_data", SavedData)) |d| {
+        if (dvui.dataGet(null, self.wd.id, "_data", SavedData)) |d| {
             self.split_ratio = d.split_ratio;
             switch (self.dir) {
                 .horizontal => {
@@ -4538,7 +4538,7 @@ pub const PanedWidget = struct {
             }
         }
 
-        if (gui.animationGet(self.wd.id, "_split_ratio")) |a| {
+        if (dvui.animationGet(self.wd.id, "_split_ratio")) |a| {
             self.split_ratio = a.lerp();
         }
 
@@ -4610,7 +4610,7 @@ pub const PanedWidget = struct {
     }
 
     fn animate(self: *Self, end_val: f32) void {
-        gui.animation(self.wd.id, "_split_ratio", gui.Animation{ .start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000 });
+        dvui.animation(self.wd.id, "_split_ratio", dvui.Animation{ .start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000 });
     }
 
     pub fn widget(self: *Self) Widget {
@@ -4621,7 +4621,7 @@ pub const PanedWidget = struct {
         return &self.wd;
     }
 
-    pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) gui.Rect {
+    pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) dvui.Rect {
         var r = self.wd.contentRect().justSize();
         if (self.first_side_id == null or self.first_side_id.? == id) {
             self.first_side_id = id;
@@ -4641,7 +4641,7 @@ pub const PanedWidget = struct {
                     .vertical => r.h = r.h * self.split_ratio - handle_size / 2,
                 }
             }
-            return gui.placeIn(r, minSize(id, min_size), e, g);
+            return dvui.placeIn(r, minSize(id, min_size), e, g);
         } else {
             if (self.collapsed()) {
                 if (self.split_ratio == 1.0) {
@@ -4671,7 +4671,7 @@ pub const PanedWidget = struct {
                     },
                 }
             }
-            return gui.placeIn(r, minSize(id, min_size), e, g);
+            return dvui.placeIn(r, minSize(id, min_size), e, g);
         }
     }
 
@@ -4679,7 +4679,7 @@ pub const PanedWidget = struct {
         return self.wd.contentRectScale().rectToScreen(rect);
     }
 
-    pub fn minSizeForChild(self: *Self, s: gui.Size) void {
+    pub fn minSizeForChild(self: *Self, s: dvui.Size) void {
         self.wd.minSizeMax(self.wd.padSize(s));
     }
 
@@ -4742,10 +4742,10 @@ pub const PanedWidget = struct {
 
     pub fn deinit(self: *Self) void {
         clipSet(self.prevClip);
-        gui.dataSet(null, self.wd.id, "_data", SavedData{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
+        dvui.dataSet(null, self.wd.id, "_data", SavedData{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
-        _ = gui.parentSet(self.wd.parent);
+        _ = dvui.parentSet(self.wd.parent);
     }
 };
 
@@ -5206,7 +5206,7 @@ pub const TextLayoutWidget = struct {
 
                     // push to clipboard if done
                     if (sel.end <= self.bytes_seen + end) {
-                        try gui.clipboardTextSet(self.copy_slice.?);
+                        try dvui.clipboardTextSet(self.copy_slice.?);
 
                         self.copy_sel = null;
                         currentWindow().arena.free(self.copy_slice.?);
@@ -5239,7 +5239,7 @@ pub const TextLayoutWidget = struct {
 
         if (self.copy_sel) |_| {
             // we are copying to clipboard and never stopped
-            try gui.clipboardTextSet(self.copy_slice.?);
+            try dvui.clipboardTextSet(self.copy_slice.?);
 
             self.copy_sel = null;
             currentWindow().arena.free(self.copy_slice.?);
@@ -7418,7 +7418,7 @@ pub var slider_defaults: Options = .{
 };
 
 // returns true if percent was changed
-pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32, opts: Options) !bool {
+pub fn slider(src: std.builtin.SourceLocation, dir: dvui.Direction, percent: *f32, opts: Options) !bool {
     const options = slider_defaults.override(opts);
 
     var b = try box(src, dir, options);
@@ -7569,7 +7569,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: gui.Direction, percent: *f32
 }
 
 pub var checkbox_defaults: Options = .{
-    .corner_radius = gui.Rect.all(2),
+    .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(4),
     .color_style = .content,
 };
@@ -7890,8 +7890,8 @@ pub const TextEntryWidget = struct {
                     .v => {
                         if (ke.action == .down and ke.mod.controlGui()) {
                             e.handled = true;
-                            const clip_text = gui.clipboardText();
-                            defer gui.backendFree(clip_text.ptr);
+                            const clip_text = dvui.clipboardText();
+                            defer dvui.backendFree(clip_text.ptr);
                             self.textTyped(clip_text);
                         }
                     },
@@ -9140,26 +9140,26 @@ pub const examples = struct {
     var line_height_factor: f32 = 1.0;
     var animating_window_show: bool = false;
     var animating_window_closing: bool = false;
-    var animating_window_rect = gui.Rect{ .x = 300, .y = 200, .w = 300, .h = 200 };
+    var animating_window_rect = dvui.Rect{ .x = 300, .y = 200, .w = 300, .h = 200 };
 
     const IconBrowser = struct {
         var show: bool = false;
-        var rect = gui.Rect{};
+        var rect = dvui.Rect{};
         var row_height: f32 = 0;
     };
 
     const AnimatingDialog = struct {
         pub fn dialogDisplay(id: u32) !void {
-            const modal = gui.dataGet(null, id, "_modal", bool) orelse unreachable;
-            const title = gui.dataGet(null, id, "_title", []const u8) orelse unreachable;
-            const message = gui.dataGet(null, id, "_message", []const u8) orelse unreachable;
-            const callafter = gui.dataGet(null, id, "_callafter", DialogCallAfterFn);
+            const modal = dvui.dataGet(null, id, "_modal", bool) orelse unreachable;
+            const title = dvui.dataGet(null, id, "_title", []const u8) orelse unreachable;
+            const message = dvui.dataGet(null, id, "_message", []const u8) orelse unreachable;
+            const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
             // once we record a response, refresh it until we close
-            _ = gui.dataGet(null, id, "response", gui.DialogResponse);
+            _ = dvui.dataGet(null, id, "response", dvui.DialogResponse);
 
             var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id });
-            const first_frame = gui.firstFrame(win.data().id);
+            const first_frame = dvui.firstFrame(win.data().id);
 
             // On the first frame the window size will be 0 so you won't see
             // anything, but we need the scaleval to be 1 so the window will
@@ -9168,8 +9168,8 @@ pub const examples = struct {
 
             // To animate a window, we need both a percent and a target window
             // size (see calls to animate below).
-            if (gui.animationGet(win.data().id, "rect_percent")) |a| {
-                if (gui.dataGet(null, win.data().id, "window_size", Size)) |target_size| {
+            if (dvui.animationGet(win.data().id, "rect_percent")) |a| {
+                if (dvui.dataGet(null, win.data().id, "window_size", Size)) |target_size| {
                     scaleval = a.lerp();
 
                     // since the window is animating, calculate the center to
@@ -9189,10 +9189,10 @@ pub const examples = struct {
 
                     if (a.done() and a.end_val == 0) {
                         win.close();
-                        gui.dialogRemove(id);
+                        dvui.dialogRemove(id);
 
                         if (callafter) |ca| {
-                            const response = gui.dataGet(null, id, "response", gui.DialogResponse) orelse {
+                            const response = dvui.dataGet(null, id, "response", dvui.DialogResponse) orelse {
                                 std.debug.print("Error: no response for dialog {x}\n", .{id});
                                 return;
                             };
@@ -9206,26 +9206,26 @@ pub const examples = struct {
 
             try win.install(.{});
 
-            var scaler = try gui.scale(@src(), scaleval, .{ .expand = .horizontal });
+            var scaler = try dvui.scale(@src(), scaleval, .{ .expand = .horizontal });
 
-            var vbox = try gui.box(@src(), .vertical, .{ .expand = .horizontal });
+            var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
 
             var closing: bool = false;
 
             var header_openflag = true;
-            try gui.windowHeader(title, "", &header_openflag);
+            try dvui.windowHeader(title, "", &header_openflag);
             if (!header_openflag) {
                 closing = true;
-                gui.dataSet(null, id, "response", gui.DialogResponse.closed);
+                dvui.dataSet(null, id, "response", dvui.DialogResponse.closed);
             }
 
-            var tl = try gui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
+            var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
             try tl.addText(message, .{});
             tl.deinit();
 
-            if (try gui.button(@src(), "Ok", .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
+            if (try dvui.button(@src(), "Ok", .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
                 closing = true;
-                gui.dataSet(null, id, "response", gui.DialogResponse.ok);
+                dvui.dataSet(null, id, "response", dvui.DialogResponse.ok);
             }
 
             vbox.deinit();
@@ -9236,41 +9236,41 @@ pub const examples = struct {
                 // On the first frame, scaler will have a scale value of 1 so
                 // the min size of the window is our target, which is why we do
                 // this after win.deinit so the min size will be available
-                gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .end_time = 300_000 });
-                gui.dataSet(null, win.data().id, "window_size", win.data().min_size);
+                dvui.animation(win.wd.id, "rect_percent", dvui.Animation{ .start_val = 0, .end_val = 1.0, .end_time = 300_000 });
+                dvui.dataSet(null, win.data().id, "window_size", win.data().min_size);
             }
 
             if (closing) {
                 // If we are closing, start from our current size
-                gui.animation(win.wd.id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .end_time = 300_000 });
-                gui.dataSet(null, win.data().id, "window_size", win.data().rect.size());
+                dvui.animation(win.wd.id, "rect_percent", dvui.Animation{ .start_val = 1.0, .end_val = 0, .end_time = 300_000 });
+                dvui.dataSet(null, win.data().id, "window_size", win.data().rect.size());
             }
         }
 
-        pub fn after(id: u32, response: gui.DialogResponse) gui.Error!void {
+        pub fn after(id: u32, response: dvui.DialogResponse) dvui.Error!void {
             _ = id;
             std.debug.print("You clicked \"{s}\"\n", .{@tagName(response)});
         }
     };
 
     pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_flag: *bool, closing: *bool, opts: Options) FloatingWindowWidget {
-        const fwin_id = gui.parentGet().extendId(src, opts.idExtra());
+        const fwin_id = dvui.parentGet().extendId(src, opts.idExtra());
 
-        if (gui.firstFrame(fwin_id)) {
-            gui.animation(fwin_id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 300_000 });
-            gui.dataSet(null, fwin_id, "size", rect.*.size());
+        if (dvui.firstFrame(fwin_id)) {
+            dvui.animation(fwin_id, "rect_percent", dvui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 300_000 });
+            dvui.dataSet(null, fwin_id, "size", rect.*.size());
         }
 
         if (closing.*) {
             closing.* = false;
-            gui.animation(fwin_id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 300_000 });
-            gui.dataSet(null, fwin_id, "size", rect.*.size());
+            dvui.animation(fwin_id, "rect_percent", dvui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 300_000 });
+            dvui.dataSet(null, fwin_id, "size", rect.*.size());
         }
 
-        var fwin: gui.FloatingWindowWidget = undefined;
+        var fwin: dvui.FloatingWindowWidget = undefined;
 
-        if (gui.animationGet(fwin_id, "rect_percent")) |a| {
-            if (gui.dataGet(null, fwin_id, "size", gui.Size)) |ss| {
+        if (dvui.animationGet(fwin_id, "rect_percent")) |a| {
+            if (dvui.dataGet(null, fwin_id, "size", dvui.Size)) |ss| {
                 var r = rect.*;
                 const dw = ss.w * a.lerp();
                 const dh = ss.h * a.lerp();
@@ -9280,7 +9280,7 @@ pub const examples = struct {
                 r.h = dh;
 
                 // don't pass rect so our animating rect doesn't get saved back
-                fwin = gui.FloatingWindowWidget.init(src, .{ .open_flag = show_flag }, opts.override(.{ .rect = r }));
+                fwin = dvui.FloatingWindowWidget.init(src, .{ .open_flag = show_flag }, opts.override(.{ .rect = r }));
 
                 if (a.done() and r.empty()) {
                     // done with closing animation
@@ -9288,7 +9288,7 @@ pub const examples = struct {
                 }
             }
         } else {
-            fwin = gui.FloatingWindowWidget.init(src, .{ .rect = rect, .open_flag = show_flag }, opts);
+            fwin = dvui.FloatingWindowWidget.init(src, .{ .rect = rect, .open_flag = show_flag }, opts);
         }
 
         return fwin;
@@ -9299,23 +9299,23 @@ pub const examples = struct {
             return;
         }
 
-        var float = try gui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 400, .h = 400 } });
+        var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 400, .h = 400 } });
         defer float.deinit();
 
         var buf: [100]u8 = undefined;
-        const fps_str = std.fmt.bufPrint(&buf, "{d:4.0} fps", .{gui.FPS()}) catch unreachable;
-        try gui.windowHeader("GUI Demo", fps_str, &show_demo_window);
+        const fps_str = std.fmt.bufPrint(&buf, "{d:4.0} fps", .{dvui.FPS()}) catch unreachable;
+        try dvui.windowHeader("GUI Demo", fps_str, &show_demo_window);
 
-        var ti = gui.toastsFor(float.data().id);
+        var ti = dvui.toastsFor(float.data().id);
         if (ti) |*it| {
             var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent = true }, .{ .background = false, .border = .{} });
             defer toast_win.deinit();
 
-            toast_win.data().rect = gui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
+            toast_win.data().rect = dvui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
             toast_win.autoSize();
             try toast_win.install(.{ .process_events = false });
 
-            var vbox = try gui.box(@src(), .vertical, .{});
+            var vbox = try dvui.box(@src(), .vertical, .{});
             defer vbox.deinit();
 
             while (it.next()) |t| {
@@ -9323,74 +9323,74 @@ pub const examples = struct {
             }
         }
 
-        var scroll = try gui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
+        var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
         defer scroll.deinit();
 
-        var scaler = try gui.scale(@src(), scale_val, .{ .expand = .horizontal });
+        var scaler = try dvui.scale(@src(), scale_val, .{ .expand = .horizontal });
         defer scaler.deinit();
 
-        var vbox = try gui.box(@src(), .vertical, .{ .expand = .horizontal });
+        var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
         defer vbox.deinit();
 
-        if (try gui.button(@src(), "Toggle Debug Window", .{})) {
-            gui.toggleDebugWindow();
+        if (try dvui.button(@src(), "Toggle Debug Window", .{})) {
+            dvui.toggleDebugWindow();
         }
 
-        if (try gui.expander(@src(), "Basic Widgets", .{ .expand = .horizontal })) {
+        if (try dvui.expander(@src(), "Basic Widgets", .{ .expand = .horizontal })) {
             try basicWidgets();
         }
 
-        if (try gui.expander(@src(), "Styling", .{ .expand = .horizontal })) {
+        if (try dvui.expander(@src(), "Styling", .{ .expand = .horizontal })) {
             try styling();
         }
 
-        if (try gui.expander(@src(), "Layout", .{ .expand = .horizontal })) {
+        if (try dvui.expander(@src(), "Layout", .{ .expand = .horizontal })) {
             try layout();
         }
 
-        if (try gui.expander(@src(), "Text Layout", .{ .expand = .horizontal })) {
+        if (try dvui.expander(@src(), "Text Layout", .{ .expand = .horizontal })) {
             try layoutText();
         }
 
-        if (try gui.expander(@src(), "Menus", .{ .expand = .horizontal })) {
+        if (try dvui.expander(@src(), "Menus", .{ .expand = .horizontal })) {
             try menus();
         }
 
-        if (try gui.expander(@src(), "Dialogs and Toasts", .{ .expand = .horizontal })) {
+        if (try dvui.expander(@src(), "Dialogs and Toasts", .{ .expand = .horizontal })) {
             try dialogs(float.data().id);
         }
 
-        if (try gui.expander(@src(), "Animations", .{ .expand = .horizontal })) {
+        if (try dvui.expander(@src(), "Animations", .{ .expand = .horizontal })) {
             try animations();
         }
 
-        if (try gui.button(@src(), "Icon Browser", .{})) {
+        if (try dvui.button(@src(), "Icon Browser", .{})) {
             IconBrowser.show = true;
         }
 
-        if (try gui.button(@src(), "Toggle Theme", .{})) {
-            if (gui.themeGet() == &gui.Adwaita.light) {
-                gui.themeSet(&gui.Adwaita.dark);
+        if (try dvui.button(@src(), "Toggle Theme", .{})) {
+            if (dvui.themeGet() == &dvui.Adwaita.light) {
+                dvui.themeSet(&dvui.Adwaita.dark);
             } else {
-                gui.themeSet(&gui.Adwaita.light);
+                dvui.themeSet(&dvui.Adwaita.light);
             }
         }
 
-        if (try gui.button(@src(), "Zoom In", .{})) {
+        if (try dvui.button(@src(), "Zoom In", .{})) {
             scale_val = @round(themeGet().font_body.size * scale_val + 1.0) / themeGet().font_body.size;
 
             //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
         }
 
-        if (try gui.button(@src(), "Zoom Out", .{})) {
+        if (try dvui.button(@src(), "Zoom Out", .{})) {
             scale_val = @round(themeGet().font_body.size * scale_val - 1.0) / themeGet().font_body.size;
 
             //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * themeGet().font_body.size });
         }
 
-        try gui.checkbox(@src(), &gui.currentWindow().snap_to_pixels, "Snap to Pixels (see window title)", .{});
+        try dvui.checkbox(@src(), &dvui.currentWindow().snap_to_pixels, "Snap to Pixels (see window title)", .{});
 
-        if (try gui.expander(@src(), "Show Font Atlases", .{ .expand = .horizontal })) {
+        if (try dvui.expander(@src(), "Show Font Atlases", .{ .expand = .horizontal })) {
             try debugFontAtlases(@src(), .{});
         }
 
@@ -9404,28 +9404,28 @@ pub const examples = struct {
     }
 
     pub fn basicWidgets() !void {
-        var b = try gui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
         {
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            _ = try gui.button(@src(), "Button", .{});
-            _ = try gui.button(@src(), "Multi-line\nButton", .{});
-            _ = try gui.slider(@src(), .vertical, &slider_val, .{ .expand = .vertical, .min_size_content = .{ .w = 10 } });
+            _ = try dvui.button(@src(), "Button", .{});
+            _ = try dvui.button(@src(), "Multi-line\nButton", .{});
+            _ = try dvui.slider(@src(), .vertical, &slider_val, .{ .expand = .vertical, .min_size_content = .{ .w = 10 } });
         }
 
-        _ = try gui.slider(@src(), .horizontal, &slider_val, .{ .expand = .horizontal });
-        try gui.label(@src(), "slider value: {d:2.2}", .{slider_val}, .{});
+        _ = try dvui.slider(@src(), .horizontal, &slider_val, .{ .expand = .horizontal });
+        try dvui.label(@src(), "slider value: {d:2.2}", .{slider_val}, .{});
 
-        try gui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
+        try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
         {
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            try gui.label(@src(), "Text Entry Singleline", .{}, .{ .gravity_y = 0.5 });
-            try gui.textEntry(@src(), .{ .text = &text_entry_buf }, .{});
+            try dvui.label(@src(), "Text Entry Singleline", .{}, .{ .gravity_y = 0.5 });
+            try dvui.textEntry(@src(), .{ .text = &text_entry_buf }, .{});
             // replace newlines with spaces
             for (&text_entry_buf) |*char| {
                 if (char.* == '\n')
@@ -9434,191 +9434,191 @@ pub const examples = struct {
         }
 
         {
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            try gui.label(@src(), "Text Entry Multiline", .{}, .{ .gravity_y = 0.5 });
-            try gui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .scroll_vertical = true, .scroll_horizontal_bar = true }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
+            try dvui.label(@src(), "Text Entry Multiline", .{}, .{ .gravity_y = 0.5 });
+            try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .scroll_vertical = true, .scroll_horizontal_bar = true }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
         }
 
         {
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            try gui.label(@src(), "Dropdown", .{}, .{ .gravity_y = 0.5 });
+            try dvui.label(@src(), "Dropdown", .{}, .{ .gravity_y = 0.5 });
 
             const entries = [_][]const u8{ "First", "Second", "Third is a really long one that doesn't fit" };
 
-            _ = try gui.dropdown(@src(), &entries, &dropdown_val, .{ .min_size_content = .{ .w = 120 } });
+            _ = try dvui.dropdown(@src(), &entries, &dropdown_val, .{ .min_size_content = .{ .w = 120 } });
         }
     }
 
     pub fn styling() !void {
-        try gui.label(@src(), "color style:", .{}, .{});
+        try dvui.label(@src(), "color style:", .{}, .{});
         {
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            _ = try gui.button(@src(), "Accent", .{ .color_style = .accent });
-            _ = try gui.button(@src(), "Success", .{ .color_style = .success });
-            _ = try gui.button(@src(), "Error", .{ .color_style = .err });
-            _ = try gui.button(@src(), "Window", .{ .color_style = .window });
-            _ = try gui.button(@src(), "Content", .{ .color_style = .content });
-            _ = try gui.button(@src(), "Control", .{ .color_style = .control });
+            _ = try dvui.button(@src(), "Accent", .{ .color_style = .accent });
+            _ = try dvui.button(@src(), "Success", .{ .color_style = .success });
+            _ = try dvui.button(@src(), "Error", .{ .color_style = .err });
+            _ = try dvui.button(@src(), "Window", .{ .color_style = .window });
+            _ = try dvui.button(@src(), "Content", .{ .color_style = .content });
+            _ = try dvui.button(@src(), "Control", .{ .color_style = .control });
         }
 
-        try gui.label(@src(), "margin/border/padding:", .{}, .{});
+        try dvui.label(@src(), "margin/border/padding:", .{}, .{});
         {
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .background = true, .gravity_y = 0.5 };
+            const opts: Options = .{ .color_style = .content, .border = dvui.Rect.all(1), .background = true, .gravity_y = 0.5 };
 
-            var o = try gui.overlay(@src(), opts);
-            _ = try gui.button(@src(), "default", .{});
+            var o = try dvui.overlay(@src(), opts);
+            _ = try dvui.button(@src(), "default", .{});
             o.deinit();
 
-            o = try gui.overlay(@src(), opts);
-            _ = try gui.button(@src(), "+border", .{ .border = gui.Rect.all(2) });
+            o = try dvui.overlay(@src(), opts);
+            _ = try dvui.button(@src(), "+border", .{ .border = dvui.Rect.all(2) });
             o.deinit();
 
-            o = try gui.overlay(@src(), opts);
-            _ = try gui.button(@src(), "+padding 10", .{ .border = gui.Rect.all(2), .padding = gui.Rect.all(10) });
+            o = try dvui.overlay(@src(), opts);
+            _ = try dvui.button(@src(), "+padding 10", .{ .border = dvui.Rect.all(2), .padding = dvui.Rect.all(10) });
             o.deinit();
 
-            o = try gui.overlay(@src(), opts);
-            _ = try gui.button(@src(), "+margin 10", .{ .border = gui.Rect.all(2), .margin = gui.Rect.all(10), .padding = gui.Rect.all(10) });
+            o = try dvui.overlay(@src(), opts);
+            _ = try dvui.button(@src(), "+margin 10", .{ .border = dvui.Rect.all(2), .margin = dvui.Rect.all(10), .padding = dvui.Rect.all(10) });
             o.deinit();
         }
 
-        try gui.label(@src(), "corner radius:", .{}, .{});
+        try dvui.label(@src(), "corner radius:", .{}, .{});
         {
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            const opts: Options = .{ .border = gui.Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
+            const opts: Options = .{ .border = dvui.Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
 
-            _ = try gui.button(@src(), "0", opts.override(.{ .corner_radius = gui.Rect.all(0) }));
-            _ = try gui.button(@src(), "2", opts.override(.{ .corner_radius = gui.Rect.all(2) }));
-            _ = try gui.button(@src(), "7", opts.override(.{ .corner_radius = gui.Rect.all(7) }));
-            _ = try gui.button(@src(), "100", opts.override(.{ .corner_radius = gui.Rect.all(100) }));
-            _ = try gui.button(@src(), "mixed", opts.override(.{ .corner_radius = .{ .x = 0, .y = 2, .w = 7, .h = 100 } }));
+            _ = try dvui.button(@src(), "0", opts.override(.{ .corner_radius = dvui.Rect.all(0) }));
+            _ = try dvui.button(@src(), "2", opts.override(.{ .corner_radius = dvui.Rect.all(2) }));
+            _ = try dvui.button(@src(), "7", opts.override(.{ .corner_radius = dvui.Rect.all(7) }));
+            _ = try dvui.button(@src(), "100", opts.override(.{ .corner_radius = dvui.Rect.all(100) }));
+            _ = try dvui.button(@src(), "mixed", opts.override(.{ .corner_radius = .{ .x = 0, .y = 2, .w = 7, .h = 100 } }));
         }
     }
 
     pub fn layout() !void {
-        const opts: Options = .{ .color_style = .content, .border = gui.Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
+        const opts: Options = .{ .color_style = .content, .border = dvui.Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
 
-        try gui.label(@src(), "gravity:", .{}, .{});
+        try dvui.label(@src(), "gravity:", .{}, .{});
         {
-            var o = try gui.overlay(@src(), opts);
+            var o = try dvui.overlay(@src(), opts);
             defer o.deinit();
 
             var buf: [128]u8 = undefined;
 
             inline for ([3]f32{ 0.0, 0.5, 1.0 }, 0..) |horz, hi| {
                 inline for ([3]f32{ 0.0, 0.5, 1.0 }, 0..) |vert, vi| {
-                    _ = try gui.button(@src(), try std.fmt.bufPrint(&buf, "{d},{d}", .{ horz, vert }), .{ .id_extra = hi * 3 + vi, .gravity_x = horz, .gravity_y = vert });
+                    _ = try dvui.button(@src(), try std.fmt.bufPrint(&buf, "{d},{d}", .{ horz, vert }), .{ .id_extra = hi * 3 + vi, .gravity_x = horz, .gravity_y = vert });
                 }
             }
         }
 
-        try gui.label(@src(), "expand:", .{}, .{});
+        try dvui.label(@src(), "expand:", .{}, .{});
         {
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
             {
-                var vbox = try gui.box(@src(), .vertical, opts);
+                var vbox = try dvui.box(@src(), .vertical, opts);
                 defer vbox.deinit();
 
-                _ = try gui.button(@src(), "none", .{ .expand = .none });
-                _ = try gui.button(@src(), "horizontal", .{ .expand = .horizontal });
-                _ = try gui.button(@src(), "vertical", .{ .expand = .vertical });
+                _ = try dvui.button(@src(), "none", .{ .expand = .none });
+                _ = try dvui.button(@src(), "horizontal", .{ .expand = .horizontal });
+                _ = try dvui.button(@src(), "vertical", .{ .expand = .vertical });
             }
             {
-                var vbox = try gui.box(@src(), .vertical, opts);
+                var vbox = try dvui.box(@src(), .vertical, opts);
                 defer vbox.deinit();
 
-                _ = try gui.button(@src(), "both", .{ .expand = .both });
+                _ = try dvui.button(@src(), "both", .{ .expand = .both });
             }
         }
 
-        try gui.label(@src(), "boxes:", .{}, .{});
+        try dvui.label(@src(), "boxes:", .{}, .{});
         {
             const grav: Options = .{ .gravity_x = 0.5, .gravity_y = 0.5 };
 
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
             {
-                var hbox2 = try gui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 200, .h = 140 } });
+                var hbox2 = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 200, .h = 140 } });
                 defer hbox2.deinit();
                 {
-                    var vbox = try gui.box(@src(), .vertical, opts.override(.{ .expand = .both, .min_size_content = .{} }));
+                    var vbox = try dvui.box(@src(), .vertical, opts.override(.{ .expand = .both, .min_size_content = .{} }));
                     defer vbox.deinit();
 
-                    _ = try gui.button(@src(), "vertical", grav);
-                    _ = try gui.button(@src(), "expand", grav.override(.{ .expand = .vertical }));
-                    _ = try gui.button(@src(), "a", grav);
+                    _ = try dvui.button(@src(), "vertical", grav);
+                    _ = try dvui.button(@src(), "expand", grav.override(.{ .expand = .vertical }));
+                    _ = try dvui.button(@src(), "a", grav);
                 }
 
                 {
-                    var vbox = try gui.boxEqual(@src(), .vertical, opts.override(.{ .expand = .both, .min_size_content = .{} }));
+                    var vbox = try dvui.boxEqual(@src(), .vertical, opts.override(.{ .expand = .both, .min_size_content = .{} }));
                     defer vbox.deinit();
 
-                    _ = try gui.button(@src(), "vert equal", grav);
-                    _ = try gui.button(@src(), "expand", grav.override(.{ .expand = .vertical }));
-                    _ = try gui.button(@src(), "a", grav);
+                    _ = try dvui.button(@src(), "vert equal", grav);
+                    _ = try dvui.button(@src(), "expand", grav.override(.{ .expand = .vertical }));
+                    _ = try dvui.button(@src(), "a", grav);
                 }
             }
 
             {
-                var vbox2 = try gui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 140 } });
+                var vbox2 = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 140 } });
                 defer vbox2.deinit();
                 {
-                    var hbox2 = try gui.box(@src(), .horizontal, opts.override(.{ .expand = .both, .min_size_content = .{} }));
+                    var hbox2 = try dvui.box(@src(), .horizontal, opts.override(.{ .expand = .both, .min_size_content = .{} }));
                     defer hbox2.deinit();
 
-                    _ = try gui.button(@src(), "horizontal", grav);
-                    _ = try gui.button(@src(), "expand", grav.override(.{ .expand = .horizontal }));
-                    _ = try gui.button(@src(), "a", grav);
+                    _ = try dvui.button(@src(), "horizontal", grav);
+                    _ = try dvui.button(@src(), "expand", grav.override(.{ .expand = .horizontal }));
+                    _ = try dvui.button(@src(), "a", grav);
                 }
 
                 {
-                    var hbox2 = try gui.boxEqual(@src(), .horizontal, opts.override(.{ .expand = .both, .min_size_content = .{} }));
+                    var hbox2 = try dvui.boxEqual(@src(), .horizontal, opts.override(.{ .expand = .both, .min_size_content = .{} }));
                     defer hbox2.deinit();
 
-                    _ = try gui.button(@src(), "horz\nequal", grav);
-                    _ = try gui.button(@src(), "expand", grav.override(.{ .expand = .horizontal }));
-                    _ = try gui.button(@src(), "a", grav);
+                    _ = try dvui.button(@src(), "horz\nequal", grav);
+                    _ = try dvui.button(@src(), "expand", grav.override(.{ .expand = .horizontal }));
+                    _ = try dvui.button(@src(), "a", grav);
                 }
             }
         }
     }
 
     pub fn layoutText() !void {
-        var b = try gui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
-        try gui.label(@src(), "Title", .{}, .{ .font_style = .title });
-        try gui.label(@src(), "Title-1", .{}, .{ .font_style = .title_1 });
-        try gui.label(@src(), "Title-2", .{}, .{ .font_style = .title_2 });
-        try gui.label(@src(), "Title-3", .{}, .{ .font_style = .title_3 });
-        try gui.label(@src(), "Title-4", .{}, .{ .font_style = .title_4 });
-        try gui.label(@src(), "Heading", .{}, .{ .font_style = .heading });
-        try gui.label(@src(), "Caption-Heading", .{}, .{ .font_style = .caption_heading });
-        try gui.label(@src(), "Caption", .{}, .{ .font_style = .caption });
-        try gui.label(@src(), "Body", .{}, .{});
+        try dvui.label(@src(), "Title", .{}, .{ .font_style = .title });
+        try dvui.label(@src(), "Title-1", .{}, .{ .font_style = .title_1 });
+        try dvui.label(@src(), "Title-2", .{}, .{ .font_style = .title_2 });
+        try dvui.label(@src(), "Title-3", .{}, .{ .font_style = .title_3 });
+        try dvui.label(@src(), "Title-4", .{}, .{ .font_style = .title_4 });
+        try dvui.label(@src(), "Heading", .{}, .{ .font_style = .heading });
+        try dvui.label(@src(), "Caption-Heading", .{}, .{ .font_style = .caption_heading });
+        try dvui.label(@src(), "Caption", .{}, .{ .font_style = .caption });
+        try dvui.label(@src(), "Body", .{}, .{});
 
         {
             var tl = TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
             try tl.install(.{ .process_events = false });
             defer tl.deinit();
 
-            var cbox = try gui.box(@src(), .vertical, .{ .padding = .{ .w = 4 } });
-            if (try gui.buttonIcon(@src(), 18, "play", gui.icons.entypo.controller_play, .{ .padding = gui.Rect.all(6) })) {
-                try gui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
+            var cbox = try dvui.box(@src(), .vertical, .{ .padding = .{ .w = 4 } });
+            if (try dvui.buttonIcon(@src(), 18, "play", dvui.icons.entypo.controller_play, .{ .padding = dvui.Rect.all(6) })) {
+                try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
             }
-            if (try gui.buttonIcon(@src(), 18, "more", gui.icons.entypo.dots_three_vertical, .{ .padding = gui.Rect.all(6) })) {
-                try gui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
+            if (try dvui.buttonIcon(@src(), 18, "more", dvui.icons.entypo.dots_three_vertical, .{ .padding = dvui.Rect.all(6) })) {
+                try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
             }
             cbox.deinit();
 
@@ -9628,21 +9628,21 @@ pub const examples = struct {
             try tl.addText(start, .{ .font_style = .title_4 });
 
             const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-            try tl.addText(lorem, .{ .font = gui.themeGet().font_body.lineHeightFactor(line_height_factor) });
+            try tl.addText(lorem, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
         }
 
         {
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            try gui.label(@src(), "line height factor: {d:0.2}", .{line_height_factor}, .{ .gravity_y = 0.5 });
+            try dvui.label(@src(), "line height factor: {d:0.2}", .{line_height_factor}, .{ .gravity_y = 0.5 });
 
-            if (try gui.button(@src(), "inc", .{})) {
+            if (try dvui.button(@src(), "inc", .{})) {
                 line_height_factor += 0.1;
                 line_height_factor = @min(10, line_height_factor);
             }
 
-            if (try gui.button(@src(), "dec", .{})) {
+            if (try dvui.button(@src(), "dec", .{})) {
                 line_height_factor -= 0.1;
                 line_height_factor = @max(0.1, line_height_factor);
             }
@@ -9650,159 +9650,159 @@ pub const examples = struct {
     }
 
     pub fn menus() !void {
-        const ctext = try gui.context(@src(), .{ .expand = .horizontal });
+        const ctext = try dvui.context(@src(), .{ .expand = .horizontal });
         defer ctext.deinit();
 
         if (ctext.activePoint()) |cp| {
-            var fw2 = try gui.popup(@src(), gui.Rect.fromPoint(cp), .{});
+            var fw2 = try dvui.popup(@src(), dvui.Rect.fromPoint(cp), .{});
             defer fw2.deinit();
 
-            _ = try gui.menuItemLabel(@src(), "Cut", .{}, .{});
-            if ((try gui.menuItemLabel(@src(), "Close", .{}, .{})) != null) {
-                gui.menuGet().?.close();
+            _ = try dvui.menuItemLabel(@src(), "Cut", .{}, .{});
+            if ((try dvui.menuItemLabel(@src(), "Close", .{}, .{})) != null) {
+                dvui.menuGet().?.close();
             }
-            _ = try gui.menuItemLabel(@src(), "Paste", .{}, .{});
+            _ = try dvui.menuItemLabel(@src(), "Paste", .{}, .{});
         }
 
-        var vbox = try gui.box(@src(), .vertical, .{});
+        var vbox = try dvui.box(@src(), .vertical, .{});
         defer vbox.deinit();
 
         {
-            var m = try gui.menu(@src(), .horizontal, .{});
+            var m = try dvui.menu(@src(), .horizontal, .{});
             defer m.deinit();
 
-            if (try gui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
-                var fw = try gui.popup(@src(), gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
+            if (try dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
+                var fw = try dvui.popup(@src(), dvui.Rect.fromPoint(dvui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                 defer fw.deinit();
 
                 try submenus();
 
-                if (try gui.menuItemLabel(@src(), "Close", .{}, .{}) != null) {
-                    gui.menuGet().?.close();
+                if (try dvui.menuItemLabel(@src(), "Close", .{}, .{}) != null) {
+                    dvui.menuGet().?.close();
                 }
 
-                try gui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
+                try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
-                if (try gui.menuItemLabel(@src(), "Dialog", .{}, .{}) != null) {
-                    gui.menuGet().?.close();
+                if (try dvui.menuItemLabel(@src(), "Dialog", .{}, .{}) != null) {
+                    dvui.menuGet().?.close();
                     show_dialog = true;
                 }
             }
 
-            if (try gui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{})) |r| {
-                var fw = try gui.popup(@src(), gui.Rect.fromPoint(gui.Point{ .x = r.x, .y = r.y + r.h }), .{});
+            if (try dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{})) |r| {
+                var fw = try dvui.popup(@src(), dvui.Rect.fromPoint(dvui.Point{ .x = r.x, .y = r.y + r.h }), .{});
                 defer fw.deinit();
-                _ = try gui.menuItemLabel(@src(), "Cut", .{}, .{});
-                _ = try gui.menuItemLabel(@src(), "Copy", .{}, .{});
-                _ = try gui.menuItemLabel(@src(), "Paste", .{}, .{});
+                _ = try dvui.menuItemLabel(@src(), "Cut", .{}, .{});
+                _ = try dvui.menuItemLabel(@src(), "Copy", .{}, .{});
+                _ = try dvui.menuItemLabel(@src(), "Paste", .{}, .{});
             }
         }
 
-        try gui.labelNoFmt(@src(), "Right click for a context menu", .{});
+        try dvui.labelNoFmt(@src(), "Right click for a context menu", .{});
     }
 
     pub fn submenus() !void {
-        if (try gui.menuItemLabel(@src(), "Submenu...", .{ .submenu = true }, .{})) |r| {
+        if (try dvui.menuItemLabel(@src(), "Submenu...", .{ .submenu = true }, .{})) |r| {
             var menu_rect = r;
             menu_rect.x += menu_rect.w;
-            var fw2 = try gui.popup(@src(), menu_rect, .{});
+            var fw2 = try dvui.popup(@src(), menu_rect, .{});
             defer fw2.deinit();
 
             try submenus();
 
-            if (try gui.menuItemLabel(@src(), "Close", .{}, .{}) != null) {
-                gui.menuGet().?.close();
+            if (try dvui.menuItemLabel(@src(), "Close", .{}, .{}) != null) {
+                dvui.menuGet().?.close();
             }
 
-            if (try gui.menuItemLabel(@src(), "Dialog", .{}, .{}) != null) {
-                gui.menuGet().?.close();
+            if (try dvui.menuItemLabel(@src(), "Dialog", .{}, .{}) != null) {
+                dvui.menuGet().?.close();
                 show_dialog = true;
             }
         }
     }
 
     pub fn dialogs(demo_win_id: u32) !void {
-        var b = try gui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
 
-        if (try gui.button(@src(), "Direct Dialog", .{})) {
+        if (try dvui.button(@src(), "Direct Dialog", .{})) {
             show_dialog = true;
         }
 
         {
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            if (try gui.button(@src(), "Ok Dialog", .{})) {
-                try gui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "This is a non modal dialog with no callafter" });
+            if (try dvui.button(@src(), "Ok Dialog", .{})) {
+                try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "This is a non modal dialog with no callafter" });
             }
 
             const dialogsFollowup = struct {
-                fn callafter(id: u32, response: gui.DialogResponse) gui.Error!void {
+                fn callafter(id: u32, response: dvui.DialogResponse) dvui.Error!void {
                     _ = id;
                     var buf: [100]u8 = undefined;
                     const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\"", .{@tagName(response)}) catch unreachable;
-                    try gui.dialog(@src(), .{ .title = "Ok Followup Response", .message = text });
+                    try dvui.dialog(@src(), .{ .title = "Ok Followup Response", .message = text });
                 }
             };
 
-            if (try gui.button(@src(), "Ok Followup", .{})) {
-                try gui.dialog(@src(), .{ .title = "Ok Followup", .message = "This is a modal dialog with modal followup", .callafterFn = dialogsFollowup.callafter });
+            if (try dvui.button(@src(), "Ok Followup", .{})) {
+                try dvui.dialog(@src(), .{ .title = "Ok Followup", .message = "This is a modal dialog with modal followup", .callafterFn = dialogsFollowup.callafter });
             }
         }
 
         {
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            if (try gui.button(@src(), "Toast 1", .{})) {
-                try gui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 1 to demo window" });
+            if (try dvui.button(@src(), "Toast 1", .{})) {
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 1 to demo window" });
             }
 
-            if (try gui.button(@src(), "Toast 2", .{})) {
-                try gui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 2 to demo window" });
+            if (try dvui.button(@src(), "Toast 2", .{})) {
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 2 to demo window" });
             }
 
-            if (try gui.button(@src(), "Toast 3", .{})) {
-                try gui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 3 to demo window" });
+            if (try dvui.button(@src(), "Toast 3", .{})) {
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 3 to demo window" });
             }
 
-            if (try gui.button(@src(), "Toast Main Window", .{})) {
-                try gui.toast(@src(), .{ .message = "Toast to main window" });
+            if (try dvui.button(@src(), "Toast Main Window", .{})) {
+                try dvui.toast(@src(), .{ .message = "Toast to main window" });
             }
         }
     }
 
     pub fn animations() !void {
-        var b = try gui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
         defer b.deinit();
 
         {
-            var hbox = try gui.box(@src(), .horizontal, .{});
+            var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
 
-            _ = gui.spacer(@src(), .{ .w = 20 }, .{});
-            var button_wiggle = gui.ButtonWidget.init(@src(), .{ .tab_index = 10 });
+            _ = dvui.spacer(@src(), .{ .w = 20 }, .{});
+            var button_wiggle = dvui.ButtonWidget.init(@src(), .{ .tab_index = 10 });
             defer button_wiggle.deinit();
 
-            if (gui.animationGet(button_wiggle.data().id, "xoffset")) |a| {
+            if (dvui.animationGet(button_wiggle.data().id, "xoffset")) |a| {
                 button_wiggle.data().rect.x += 20 * (1.0 - a.lerp()) * (1.0 - a.lerp()) * @sin(a.lerp() * std.math.pi * 50);
             }
 
             try button_wiggle.install(.{});
-            try gui.labelNoFmt(@src(), "Wiggle", button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
+            try dvui.labelNoFmt(@src(), "Wiggle", button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
 
             if (button_wiggle.clicked()) {
-                const a = gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 500_000 };
-                gui.animation(button_wiggle.data().id, "xoffset", a);
+                const a = dvui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 500_000 };
+                dvui.animation(button_wiggle.data().id, "xoffset", a);
             }
         }
 
-        if (try gui.button(@src(), "Animating Dialog (Scale)", .{})) {
-            try gui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog (Scale)", .message = "This shows how to animate dialogs and other floating windows by changing the scale", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
+        if (try dvui.button(@src(), "Animating Dialog (Scale)", .{})) {
+            try dvui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog (Scale)", .message = "This shows how to animate dialogs and other floating windows by changing the scale", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
         }
 
-        if (try gui.button(@src(), "Animating Window (Rect)", .{})) {
+        if (try dvui.button(@src(), "Animating Window (Rect)", .{})) {
             if (animating_window_show) {
                 animating_window_closing = true;
             } else {
@@ -9817,34 +9817,34 @@ pub const examples = struct {
             defer win.deinit();
 
             var keep_open = true;
-            try gui.windowHeader("Animating Window (Rect)", "", &keep_open);
+            try dvui.windowHeader("Animating Window (Rect)", "", &keep_open);
             if (!keep_open) {
                 animating_window_closing = true;
             }
 
-            var tl = try gui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+            var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
             try tl.addText("This shows how to animate dialogs and other floating windows by changing the rect", .{});
             tl.deinit();
         }
 
-        if (try gui.expander(@src(), "Spinner", .{ .expand = .horizontal })) {
-            try gui.labelNoFmt(@src(), "Spinner maxes out frame rate", .{});
-            try gui.spinner(@src(), .{ .color_text = .{ .r = 100, .g = 200, .b = 100 } });
+        if (try dvui.expander(@src(), "Spinner", .{ .expand = .horizontal })) {
+            try dvui.labelNoFmt(@src(), "Spinner maxes out frame rate", .{});
+            try dvui.spinner(@src(), .{ .color_text = .{ .r = 100, .g = 200, .b = 100 } });
         }
 
-        if (try gui.expander(@src(), "Clock", .{ .expand = .horizontal })) {
-            try gui.labelNoFmt(@src(), "Schedules a frame at the beginning of each second", .{});
+        if (try dvui.expander(@src(), "Clock", .{ .expand = .horizontal })) {
+            try dvui.labelNoFmt(@src(), "Schedules a frame at the beginning of each second", .{});
 
-            const millis = @divFloor(gui.frameTimeNS(), 1_000_000);
+            const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);
             const left = @as(i32, @intCast(@rem(millis, 1000)));
 
-            var mslabel = try gui.LabelWidget.init(@src(), "{d} ms into second", .{@as(u32, @intCast(left))}, .{});
+            var mslabel = try dvui.LabelWidget.init(@src(), "{d} ms into second", .{@as(u32, @intCast(left))}, .{});
             try mslabel.install(.{});
             mslabel.deinit();
 
-            if (gui.timerDone(mslabel.wd.id) or !gui.timerExists(mslabel.wd.id)) {
+            if (dvui.timerDone(mslabel.wd.id) or !dvui.timerExists(mslabel.wd.id)) {
                 const wait = 1000 * (1000 - left);
-                try gui.timer(mslabel.wd.id, wait);
+                try dvui.timer(mslabel.wd.id, wait);
             }
         }
     }
@@ -9853,43 +9853,43 @@ pub const examples = struct {
         const data = struct {
             var extra_stuff: bool = false;
         };
-        var dialog_win = try gui.floatingWindow(@src(), .{ .modal = true, .open_flag = &show_dialog }, .{ .color_style = .window });
+        var dialog_win = try dvui.floatingWindow(@src(), .{ .modal = true, .open_flag = &show_dialog }, .{ .color_style = .window });
         defer dialog_win.deinit();
 
-        try gui.windowHeader("Modal Dialog", "", &show_dialog);
-        try gui.label(@src(), "Asking a Question", .{}, .{ .font_style = .title_4 });
-        try gui.label(@src(), "This dialog is being shown in a direct style, controlled entirely in user code.", .{}, .{});
+        try dvui.windowHeader("Modal Dialog", "", &show_dialog);
+        try dvui.label(@src(), "Asking a Question", .{}, .{ .font_style = .title_4 });
+        try dvui.label(@src(), "This dialog is being shown in a direct style, controlled entirely in user code.", .{}, .{});
 
-        if (try gui.button(@src(), "Toggle extra stuff and fit window", .{})) {
+        if (try dvui.button(@src(), "Toggle extra stuff and fit window", .{})) {
             data.extra_stuff = !data.extra_stuff;
             dialog_win.autoSize();
         }
 
         if (data.extra_stuff) {
-            try gui.label(@src(), "This is some extra stuff\nwith a multi-line label\nthat has 3 lines", .{}, .{ .background = true });
+            try dvui.label(@src(), "This is some extra stuff\nwith a multi-line label\nthat has 3 lines", .{}, .{ .background = true });
         }
 
         {
-            _ = gui.spacer(@src(), .{}, .{ .expand = .vertical });
-            var hbox = try gui.box(@src(), .horizontal, .{ .gravity_x = 1.0 });
+            _ = dvui.spacer(@src(), .{}, .{ .expand = .vertical });
+            var hbox = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0 });
             defer hbox.deinit();
 
-            if (try gui.button(@src(), "Yes", .{})) {
+            if (try dvui.button(@src(), "Yes", .{})) {
                 dialog_win.close(); // can close the dialog this way
             }
 
-            if (try gui.button(@src(), "No", .{})) {
+            if (try dvui.button(@src(), "No", .{})) {
                 show_dialog = false; // can close by not running this code anymore
             }
         }
     }
 
     pub fn icon_browser() !void {
-        var fwin = try gui.floatingWindow(@src(), .{ .rect = &IconBrowser.rect, .open_flag = &IconBrowser.show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
+        var fwin = try dvui.floatingWindow(@src(), .{ .rect = &IconBrowser.rect, .open_flag = &IconBrowser.show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
         defer fwin.deinit();
-        try gui.windowHeader("Icon Browser", "", &IconBrowser.show);
+        try dvui.windowHeader("Icon Browser", "", &IconBrowser.show);
 
-        const num_icons = @typeInfo(gui.icons.entypo).Struct.decls.len;
+        const num_icons = @typeInfo(dvui.icons.entypo).Struct.decls.len;
         const height = @as(f32, @floatFromInt(num_icons)) * IconBrowser.row_height;
 
         // we won't have the height the first frame, so always set it
@@ -9900,22 +9900,22 @@ pub const examples = struct {
         }
         defer dataSet(null, fwin.wd.id, "scroll_info", scroll_info);
 
-        var scroll = try gui.scrollArea(@src(), .{ .scroll_info = &scroll_info }, .{ .expand = .both });
+        var scroll = try dvui.scrollArea(@src(), .{ .scroll_info = &scroll_info }, .{ .expand = .both });
         defer scroll.deinit();
 
         const visibleRect = scroll.si.viewport;
         var cursor: f32 = 0;
 
-        inline for (@typeInfo(gui.icons.entypo).Struct.decls, 0..) |d, i| {
+        inline for (@typeInfo(dvui.icons.entypo).Struct.decls, 0..) |d, i| {
             if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
-                const r = gui.Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
-                var iconbox = try gui.box(@src(), .horizontal, .{ .id_extra = i, .expand = .horizontal, .rect = r });
+                const r = dvui.Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
+                var iconbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i, .expand = .horizontal, .rect = r });
 
-                if (try gui.buttonIcon(@src(), 20, "gui.icons.entypo." ++ d.name, @field(gui.icons.entypo, d.name), .{})) {
+                if (try dvui.buttonIcon(@src(), 20, "dvui.icons.entypo." ++ d.name, @field(dvui.icons.entypo, d.name), .{})) {
                     // TODO: copy full buttonIcon code line into clipboard and show toast
                 }
-                var tl = try gui.textLayout(@src(), .{ .break_lines = false }, .{});
-                try tl.addText("gui.icons.entypo." ++ d.name, .{});
+                var tl = try dvui.textLayout(@src(), .{ .break_lines = false }, .{});
+                try tl.addText("dvui.icons.entypo." ++ d.name, .{});
                 tl.deinit();
 
                 iconbox.deinit();
