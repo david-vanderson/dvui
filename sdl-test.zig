@@ -1,5 +1,5 @@
 const std = @import("std");
-const gui = @import("gui");
+const dvui = @import("dvui");
 const SDLBackend = @import("SDLBackend");
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
@@ -10,11 +10,11 @@ pub fn main() !void {
         .width = 800,
         .height = 600,
         .vsync = false,
-        .title = "GUI SDL test",
+        .title = "DVUI SDL test",
     });
     defer win_backend.deinit();
 
-    var win = try gui.Window.init(@src(), 0, gpa, win_backend.guiBackend());
+    var win = try dvui.Window.init(@src(), 0, gpa, win_backend.backend());
     defer win.deinit();
 
     const winSize = win_backend.windowSize();
@@ -29,7 +29,7 @@ pub fn main() !void {
     var maxz: usize = 20;
     var floats: [6]bool = [_]bool{false} ** 6;
     var scale_val: f32 = 1.0;
-    var scale_mod: gui.enums.Mod = .none;
+    var scale_mod: dvui.enums.Mod = .none;
 
     //var rng = std.rand.DefaultPrng.init(0);
 
@@ -45,18 +45,18 @@ pub fn main() !void {
         const quit = try win_backend.addAllEvents(&win);
         if (quit) break :main_loop;
 
-        _ = try gui.examples.demo();
+        _ = try dvui.examples.demo();
 
-        var window_box = try gui.box(@src(), .vertical, .{ .expand = .both, .color_style = .window, .background = true });
+        var window_box = try dvui.box(@src(), .vertical, .{ .expand = .both, .color_style = .window, .background = true });
 
         {
-            const oo = gui.Options{ .expand = .both };
-            var overlay = try gui.overlay(@src(), oo);
+            const oo = dvui.Options{ .expand = .both };
+            var overlay = try dvui.overlay(@src(), oo);
             defer overlay.deinit();
 
-            const scale = try gui.scale(@src(), scale_val, oo);
+            const scale = try dvui.scale(@src(), scale_val, oo);
             defer {
-                var evts = gui.events();
+                var evts = dvui.events();
                 for (evts) |*e| {
                     switch (e.evt) {
                         .key => |ke| {
@@ -66,7 +66,7 @@ pub fn main() !void {
                         else => {},
                     }
 
-                    if (!gui.eventMatch(e, .{ .id = scale.wd.id, .r = scale.wd.borderRectScale().r }))
+                    if (!dvui.eventMatch(e, .{ .id = scale.wd.id, .r = scale.wd.borderRectScale().r }))
                         continue;
 
                     switch (e.evt) {
@@ -77,7 +77,7 @@ pub fn main() !void {
                                 const zs = @exp(@log(base) * me.kind.wheel_y);
                                 if (zs != 1.0) {
                                     scale_val *= zs;
-                                    gui.refresh();
+                                    dvui.refresh();
                                 }
                             }
                         },
@@ -88,51 +88,51 @@ pub fn main() !void {
                 scale.deinit();
             }
 
-            const context = try gui.context(@src(), oo);
+            const context = try dvui.context(@src(), oo);
             defer context.deinit();
 
             if (context.activePoint()) |cp| {
                 //std.debug.print("context.rect {}\n", .{context.rect});
-                var fw2 = try gui.popup(@src(), gui.Rect.fromPoint(cp), .{});
+                var fw2 = try dvui.popup(@src(), dvui.Rect.fromPoint(cp), .{});
                 defer fw2.deinit();
 
-                _ = try gui.menuItemLabel(@src(), "Cut", .{}, .{});
-                if ((gui.menuItemLabel(@src(), "Close", .{}, .{}) catch unreachable) != null) {
-                    gui.menuGet().?.close();
+                _ = try dvui.menuItemLabel(@src(), "Cut", .{}, .{});
+                if ((dvui.menuItemLabel(@src(), "Close", .{}, .{}) catch unreachable) != null) {
+                    dvui.menuGet().?.close();
                 }
-                _ = try gui.menuItemLabel(@src(), "Paste", .{}, .{});
+                _ = try dvui.menuItemLabel(@src(), "Paste", .{}, .{});
             }
 
             {
-                var layout = try gui.box(@src(), .vertical, .{});
+                var layout = try dvui.box(@src(), .vertical, .{});
                 defer layout.deinit();
 
                 //{
-                //  //const e2 = gui.Expand(.horizontal);
-                //  //defer _ = gui.Expand(e2);
+                //  //const e2 = dvui.Expand(.horizontal);
+                //  //defer _ = dvui.Expand(e2);
 
-                //  var margin = gui.Margin(gui.Rect{.x = 20, .y = 20, .w = 20, .h = 20});
-                //  defer _ = gui.Margin(margin);
+                //  var margin = dvui.Margin(dvui.Rect{.x = 20, .y = 20, .w = 20, .h = 20});
+                //  defer _ = dvui.Margin(margin);
 
-                //  var box = gui.Box(@src(), .horizontal);
+                //  var box = dvui.Box(@src(), .horizontal);
                 //  defer box.deinit();
                 //
                 //  for (buttons) |*buttoncol, k| {
                 //    if (k != 0) {
-                //      gui.Spacer(@src(), k, 6);
+                //      dvui.Spacer(@src(), k, 6);
                 //    }
                 //    if (buttoncol[0]) {
-                //      var margin2 = gui.Margin(gui.Rect{.x = 4, .y = 4, .w = 4, .h = 4});
-                //      defer _ = gui.Margin(margin2);
+                //      var margin2 = dvui.Margin(dvui.Rect{.x = 4, .y = 4, .w = 4, .h = 4});
+                //      defer _ = dvui.Margin(margin2);
 
-                //      var box2 = gui.Box(@src(), k, .vertical);
+                //      var box2 = dvui.Box(@src(), k, .vertical);
                 //      defer box2.deinit();
 
                 //      for (buttoncol) |b, i| {
                 //        if (b) {
                 //          if (i != 0) {
-                //            gui.Spacer(@src(), i, 6);
-                //            //gui.Label(@src(), i, "Label", .{});
+                //            dvui.Spacer(@src(), i, 6);
+                //            //dvui.Label(@src(), i, "Label", .{});
                 //          }
                 //          var buf: [100:0]u8 = undefined;
                 //          if (k == 0) {
@@ -144,7 +144,7 @@ pub fn main() !void {
                 //          else {
                 //            _ = std.fmt.bufPrintZ(&buf, "bye {d}", .{i}) catch unreachable;
                 //          }
-                //          if (gui.Button(@src(), i, &buf)) {
+                //          if (dvui.Button(@src(), i, &buf)) {
                 //            if (i == 0) {
                 //              buttoncol[0] = false;
                 //            }
@@ -167,17 +167,17 @@ pub fn main() !void {
                 //}
 
                 {
-                    var scroll = try gui.scrollArea(@src(), .{}, .{ .min_size_content = .{ .w = 50, .h = 100 } });
+                    var scroll = try dvui.scrollArea(@src(), .{}, .{ .min_size_content = .{ .w = 50, .h = 100 } });
                     defer scroll.deinit();
 
-                    var vbox = try gui.box(@src(), .vertical, .{ .expand = .both });
+                    var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both });
                     defer vbox.deinit();
 
                     var buf: [100]u8 = undefined;
                     var z: usize = 0;
                     while (z < maxz) : (z += 1) {
                         const buf_slice = std.fmt.bufPrint(&buf, "Button {d:0>2}", .{z}) catch unreachable;
-                        if (try gui.button(@src(), buf_slice, .{ .id_extra = z, .gravity_x = 0.5, .gravity_y = 1.0 })) {
+                        if (try dvui.button(@src(), buf_slice, .{ .id_extra = z, .gravity_x = 0.5, .gravity_y = 1.0 })) {
                             if (z % 2 == 0) {
                                 maxz += 1;
                             } else {
@@ -188,7 +188,7 @@ pub fn main() !void {
                 }
 
                 {
-                    if (try gui.button(@src(), "Stroke Test", .{})) {
+                    if (try dvui.button(@src(), "Stroke Test", .{})) {
                         StrokeTest.show_dialog = !StrokeTest.show_dialog;
                     }
 
@@ -198,77 +198,77 @@ pub fn main() !void {
                 }
 
                 {
-                    try gui.label(@src(), "content_scale {d}", .{win.content_scale}, .{});
+                    try dvui.label(@src(), "content_scale {d}", .{win.content_scale}, .{});
 
-                    if (try gui.button(@src(), "content_scale + .1", .{})) {
+                    if (try dvui.button(@src(), "content_scale + .1", .{})) {
                         win.content_scale += 0.1;
                     }
 
-                    if (try gui.button(@src(), "content_scale - .1", .{})) {
+                    if (try dvui.button(@src(), "content_scale - .1", .{})) {
                         win.content_scale -= 0.1;
                     }
                 }
 
                 {
-                    var box = try gui.box(@src(), .horizontal, .{});
+                    var box = try dvui.box(@src(), .horizontal, .{});
 
-                    _ = try gui.button(@src(), "Accent", .{ .color_style = .accent });
-                    _ = try gui.button(@src(), "Success", .{ .color_style = .success });
-                    _ = try gui.button(@src(), "Error", .{ .color_style = .err });
+                    _ = try dvui.button(@src(), "Accent", .{ .color_style = .accent });
+                    _ = try dvui.button(@src(), "Success", .{ .color_style = .success });
+                    _ = try dvui.button(@src(), "Error", .{ .color_style = .err });
 
                     box.deinit();
 
-                    try gui.label(@src(), "Theme: {s}", .{gui.themeGet().name}, .{});
+                    try dvui.label(@src(), "Theme: {s}", .{dvui.themeGet().name}, .{});
 
-                    if (try gui.button(@src(), "Toggle Theme", .{})) {
-                        if (gui.themeGet() == &gui.Adwaita.light) {
-                            gui.themeSet(&gui.Adwaita.dark);
+                    if (try dvui.button(@src(), "Toggle Theme", .{})) {
+                        if (dvui.themeGet() == &dvui.Adwaita.light) {
+                            dvui.themeSet(&dvui.Adwaita.dark);
                         } else {
-                            gui.themeSet(&gui.Adwaita.light);
+                            dvui.themeSet(&dvui.Adwaita.light);
                         }
                     }
 
-                    if (try gui.button(@src(), if (gui.examples.show_demo_window) "Hide Demo Window" else "Show Demo Window", .{})) {
-                        gui.examples.show_demo_window = !gui.examples.show_demo_window;
+                    if (try dvui.button(@src(), if (dvui.examples.show_demo_window) "Hide Demo Window" else "Show Demo Window", .{})) {
+                        dvui.examples.show_demo_window = !dvui.examples.show_demo_window;
                     }
                 }
 
                 {
                     const Sel = struct {
-                        var sel = gui.TextLayoutWidget.Selection{};
+                        var sel = dvui.TextLayoutWidget.Selection{};
                         var text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
                         var buf = std.mem.zeroes([256]u8);
                     };
                     {
-                        var hbox = try gui.box(@src(), .horizontal, .{ .expand = .horizontal });
+                        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
                         defer hbox.deinit();
-                        try gui.label(@src(), "{d} {d} : {d}", .{ Sel.sel.start, Sel.sel.end, Sel.sel.cursor }, .{});
-                        if (try gui.button(@src(), "Inc Start", .{})) {
+                        try dvui.label(@src(), "{d} {d} : {d}", .{ Sel.sel.start, Sel.sel.end, Sel.sel.cursor }, .{});
+                        if (try dvui.button(@src(), "Inc Start", .{})) {
                             Sel.sel.incStart();
                         }
-                        if (try gui.button(@src(), "Dec Start", .{})) {
+                        if (try dvui.button(@src(), "Dec Start", .{})) {
                             Sel.sel.decStart();
                         }
-                        if (try gui.button(@src(), "Inc End", .{})) {
+                        if (try dvui.button(@src(), "Inc End", .{})) {
                             Sel.sel.incEnd();
                         }
-                        if (try gui.button(@src(), "Dec End", .{})) {
+                        if (try dvui.button(@src(), "Dec End", .{})) {
                             Sel.sel.decEnd();
                         }
-                        if (try gui.button(@src(), "Inc Cur", .{})) {
+                        if (try dvui.button(@src(), "Inc Cur", .{})) {
                             Sel.sel.incCursor();
                         }
-                        if (try gui.button(@src(), "Dec Cur", .{})) {
+                        if (try dvui.button(@src(), "Dec Cur", .{})) {
                             Sel.sel.decCursor();
                         }
                     }
-                    var scroll = try gui.scrollArea(@src(), .{ .horizontal = .auto }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
-                    var tl = try gui.textLayout(@src(), .{ .selection = &Sel.sel, .break_lines = false }, .{ .expand = .both });
+                    var scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
+                    var tl = try dvui.textLayout(@src(), .{ .selection = &Sel.sel, .break_lines = false }, .{ .expand = .both });
                     {
-                        //if (try gui.button(@src(), "Win Up .1", .{})) {
+                        //if (try dvui.button(@src(), "Win Up .1", .{})) {
                         //    fwin.wd.rect.y -= 0.1;
                         //}
-                        //if (try gui.button(@src(), "Win Down .1", .{ .gravity_x = 1.0 })) {
+                        //if (try dvui.button(@src(), "Win Down .1", .{ .gravity_x = 1.0 })) {
                         //    fwin.wd.rect.y += 0.1;
                         //}
                     }
@@ -295,26 +295,26 @@ pub fn main() !void {
                     tl.deinit();
                     scroll.deinit();
 
-                    try gui.textEntry(@src(), .{ .text = &Sel.buf, .scroll_horizontal = false }, .{ .min_size_content = .{ .w = 150, .h = 130 } });
+                    try dvui.textEntry(@src(), .{ .text = &Sel.buf, .scroll_horizontal = false }, .{ .min_size_content = .{ .w = 150, .h = 130 } });
                 }
             }
 
-            const fps = gui.FPS();
+            const fps = dvui.FPS();
             //std.debug.print("fps {d}\n", .{@round(fps)});
-            //gui.render_text = true;
-            try gui.label(@src(), "fps {d:4.2}", .{fps}, .{ .gravity_x = 1.0 });
-            //gui.render_text = false;
+            //dvui.render_text = true;
+            try dvui.label(@src(), "fps {d:4.2}", .{fps}, .{ .gravity_x = 1.0 });
+            //dvui.render_text = false;
         }
 
         {
             const FloatingWindowTest = struct {
                 var show: bool = false;
-                var rect = gui.Rect{ .x = 300, .y = 200, .w = 300, .h = 200 };
+                var rect = dvui.Rect{ .x = 300, .y = 200, .w = 300, .h = 200 };
             };
 
             var start_closing: bool = false;
 
-            if (try gui.button(@src(), "Floating Window", .{})) {
+            if (try dvui.button(@src(), "Floating Window", .{})) {
                 if (FloatingWindowTest.show) {
                     start_closing = true;
                 } else {
@@ -324,15 +324,15 @@ pub fn main() !void {
 
             if (FloatingWindowTest.show) {
                 var fwin = animatingWindow(@src(), false, &FloatingWindowTest.rect, &FloatingWindowTest.show, start_closing, .{});
-                //var fwin = gui.FloatingWindowWidget.init(@src(), false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
+                //var fwin = dvui.FloatingWindowWidget.init(@src(), false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
 
                 try fwin.install(.{});
                 defer fwin.deinit();
-                try gui.labelNoFmt(@src(), "Floating Window", .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+                try dvui.labelNoFmt(@src(), "Floating Window", .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-                try gui.label(@src(), "Pretty Cool", .{}, .{ .font = .{ .name = "VeraMono", .ttf_bytes = gui.fonts.bitstream_vera.VeraMono, .size = 20 } });
+                try dvui.label(@src(), "Pretty Cool", .{}, .{ .font = .{ .name = "VeraMono", .ttf_bytes = dvui.fonts.bitstream_vera.VeraMono, .size = 20 } });
 
-                if (try gui.button(@src(), "button", .{})) {
+                if (try dvui.button(@src(), "button", .{})) {
                     floats[0] = true;
                 }
 
@@ -345,21 +345,21 @@ pub fn main() !void {
                         }
                         var buf = std.mem.zeroes([100]u8);
                         var buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{ fi, name }) catch unreachable;
-                        var fw2 = try gui.floatingWindow(@src(), .{ .modal = modal, .open_flag = f }, .{ .id_extra = fi, .color_style = .window, .min_size_content = .{ .w = 150, .h = 100 } });
+                        var fw2 = try dvui.floatingWindow(@src(), .{ .modal = modal, .open_flag = f }, .{ .id_extra = fi, .color_style = .window, .min_size_content = .{ .w = 150, .h = 100 } });
                         defer fw2.deinit();
-                        try gui.labelNoFmt(@src(), buf_slice, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+                        try dvui.labelNoFmt(@src(), buf_slice, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-                        try gui.label(@src(), "Asking a Question", .{}, .{});
+                        try dvui.label(@src(), "Asking a Question", .{}, .{});
 
-                        const oo = gui.Options{ .margin = gui.Rect.all(4), .expand = .horizontal };
-                        var box = try gui.box(@src(), .horizontal, oo);
+                        const oo = dvui.Options{ .margin = dvui.Rect.all(4), .expand = .horizontal };
+                        var box = try dvui.box(@src(), .horizontal, oo);
 
-                        if (try gui.button(@src(), "Yes", oo)) {
+                        if (try dvui.button(@src(), "Yes", oo)) {
                             std.debug.print("Yes {d}\n", .{fi});
                             floats[fi + 1] = true;
                         }
 
-                        if (try gui.button(@src(), "No", oo)) {
+                        if (try dvui.button(@src(), "No", oo)) {
                             std.debug.print("No {d}\n", .{fi});
                             fw2.close();
                         }
@@ -368,15 +368,15 @@ pub fn main() !void {
                     }
                 }
 
-                var scroll = try gui.scrollArea(@src(), .{}, .{ .expand = .both });
+                var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both });
                 defer scroll.deinit();
-                var tl = gui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .both });
+                var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .both });
                 try tl.install(.{ .process_events = false });
                 {
-                    if (try gui.button(@src(), "Win Up .1", .{})) {
+                    if (try dvui.button(@src(), "Win Up .1", .{})) {
                         fwin.wd.rect.y -= 0.1;
                     }
-                    if (try gui.button(@src(), "Win Down .1", .{ .gravity_x = 1.0 })) {
+                    if (try dvui.button(@src(), "Win Down .1", .{ .gravity_x = 1.0 })) {
                         fwin.wd.rect.y += 0.1;
                     }
                 }
@@ -398,7 +398,7 @@ pub fn main() !void {
         //var mx: c_int = 0;
         //var my: c_int = 0;
         //_ = SDLBackend.c.SDL_GetMouseState(&mx, &my);
-        //try gui.icon(@src(), "mouse", gui.icons.papirus.actions.application_menu_symbolic, .{ .rect = gui.Rect{ .x = @intToFloat(f32, mx), .y = @intToFloat(f32, my), .w = 10, .h = 10 } });
+        //try dvui.icon(@src(), "mouse", dvui.icons.papirus.actions.application_menu_symbolic, .{ .rect = dvui.Rect{ .x = @intToFloat(f32, mx), .y = @intToFloat(f32, my), .w = 10, .h = 10 } });
 
         const end_micros = try win.end(.{ .show_toasts = false });
 
@@ -412,23 +412,23 @@ pub fn main() !void {
     }
 }
 
-fn animatingWindow(src: std.builtin.SourceLocation, modal: bool, rect: *gui.Rect, openflag: *bool, start_closing: bool, opts: gui.Options) gui.FloatingWindowWidget {
-    const fwin_id = gui.parentGet().extendId(src, opts.idExtra());
+fn animatingWindow(src: std.builtin.SourceLocation, modal: bool, rect: *dvui.Rect, openflag: *bool, start_closing: bool, opts: dvui.Options) dvui.FloatingWindowWidget {
+    const fwin_id = dvui.parentGet().extendId(src, opts.idExtra());
 
-    if (gui.firstFrame(fwin_id)) {
-        gui.animation(fwin_id, "rect_percent", gui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
-        gui.dataSet(null, fwin_id, "size", rect.*.size());
+    if (dvui.firstFrame(fwin_id)) {
+        dvui.animation(fwin_id, "rect_percent", dvui.Animation{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 100_000 });
+        dvui.dataSet(null, fwin_id, "size", rect.*.size());
     }
 
     if (start_closing) {
-        gui.animation(fwin_id, "rect_percent", gui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 100_000 });
-        gui.dataSet(null, fwin_id, "size", rect.*.size());
+        dvui.animation(fwin_id, "rect_percent", dvui.Animation{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 100_000 });
+        dvui.dataSet(null, fwin_id, "size", rect.*.size());
     }
 
-    var fwin: gui.FloatingWindowWidget = undefined;
+    var fwin: dvui.FloatingWindowWidget = undefined;
 
-    if (gui.animationGet(fwin_id, "rect_percent")) |a| {
-        if (gui.dataGet(null, fwin_id, "size", gui.Size)) |ss| {
+    if (dvui.animationGet(fwin_id, "rect_percent")) |a| {
+        if (dvui.dataGet(null, fwin_id, "size", dvui.Size)) |ss| {
             var r = rect.*;
             const dw = ss.w * a.lerp();
             const dh = ss.h * a.lerp();
@@ -438,7 +438,7 @@ fn animatingWindow(src: std.builtin.SourceLocation, modal: bool, rect: *gui.Rect
             r.h = dh;
 
             // don't pass rect so our animating rect doesn't get saved back
-            fwin = gui.FloatingWindowWidget.init(src, .{ .modal = modal, .open_flag = openflag }, opts.override(.{ .rect = r }));
+            fwin = dvui.FloatingWindowWidget.init(src, .{ .modal = modal, .open_flag = openflag }, opts.override(.{ .rect = r }));
 
             if (a.done() and r.empty()) {
                 // done with closing animation
@@ -446,18 +446,18 @@ fn animatingWindow(src: std.builtin.SourceLocation, modal: bool, rect: *gui.Rect
             }
         }
     } else {
-        fwin = gui.FloatingWindowWidget.init(src, .{ .modal = modal, .rect = rect, .open_flag = openflag }, opts);
+        fwin = dvui.FloatingWindowWidget.init(src, .{ .modal = modal, .rect = rect, .open_flag = openflag }, opts);
     }
 
     return fwin;
 }
 
 fn show_stroke_test_window() !void {
-    var win = try gui.floatingWindow(@src(), .{ .rect = &StrokeTest.show_rect, .open_flag = &StrokeTest.show_dialog }, .{});
+    var win = try dvui.floatingWindow(@src(), .{ .rect = &StrokeTest.show_rect, .open_flag = &StrokeTest.show_dialog }, .{});
     defer win.deinit();
-    try gui.windowHeader("Stroke Test", "", &StrokeTest.show_dialog);
+    try dvui.windowHeader("Stroke Test", "", &StrokeTest.show_dialog);
 
-    //var scale = gui.scale(@src(), 1, .{.expand = .both});
+    //var scale = dvui.scale(@src(), 1, .{.expand = .both});
     //defer scale.deinit();
 
     var st = StrokeTest{};
@@ -467,23 +467,23 @@ fn show_stroke_test_window() !void {
 pub const StrokeTest = struct {
     const Self = @This();
     var show_dialog: bool = false;
-    var show_rect = gui.Rect{};
-    var pointsArray: [10]gui.Point = [1]gui.Point{.{}} ** 10;
-    var points: []gui.Point = pointsArray[0..0];
+    var show_rect = dvui.Rect{};
+    var pointsArray: [10]dvui.Point = [1]dvui.Point{.{}} ** 10;
+    var points: []dvui.Point = pointsArray[0..0];
     var dragi: ?usize = null;
     var thickness: f32 = 1.0;
 
-    wd: gui.WidgetData = undefined,
+    wd: dvui.WidgetData = undefined,
 
-    pub fn install(self: *Self, src: std.builtin.SourceLocation, options: gui.Options) !void {
-        self.wd = gui.WidgetData.init(src, options);
-        gui.debug("{x} StrokeTest {}", .{ self.wd.id, self.wd.rect });
+    pub fn install(self: *Self, src: std.builtin.SourceLocation, options: dvui.Options) !void {
+        self.wd = dvui.WidgetData.init(src, options);
+        dvui.debug("{x} StrokeTest {}", .{ self.wd.id, self.wd.rect });
 
-        _ = gui.captureMouseMaintain(self.wd.id);
+        _ = dvui.captureMouseMaintain(self.wd.id);
 
-        var evts = gui.events();
+        var evts = dvui.events();
         for (evts) |*e| {
-            if (!gui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
+            if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
                 continue;
 
             self.processEvent(e, false);
@@ -491,55 +491,55 @@ pub const StrokeTest = struct {
 
         try self.wd.borderAndBackground(.{});
 
-        _ = gui.parentSet(self.widget());
+        _ = dvui.parentSet(self.widget());
 
         const rs = self.wd.contentRectScale();
-        const fill_color = gui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
+        const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
         for (points, 0..) |p, i| {
-            var rect = gui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
+            var rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
             const rsrect = rect.scale(rs.s).offset(rs.r);
-            try gui.pathAddRect(rsrect, gui.Rect.all(1));
-            try gui.pathFillConvex(fill_color);
+            try dvui.pathAddRect(rsrect, dvui.Rect.all(1));
+            try dvui.pathFillConvex(fill_color);
 
             _ = i;
-            //_ = try gui.button(@src(), i, "Floating", .{ .rect = gui.Rect.fromPoint(p) });
+            //_ = try dvui.button(@src(), i, "Floating", .{ .rect = dvui.Rect.fromPoint(p) });
         }
 
         for (points) |p| {
             const rsp = rs.pointToScreen(p);
-            try gui.pathAddPoint(rsp);
+            try dvui.pathAddPoint(rsp);
         }
 
-        const stroke_color = gui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
-        try gui.pathStroke(false, rs.s * thickness, .square, stroke_color);
+        const stroke_color = dvui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
+        try dvui.pathStroke(false, rs.s * thickness, .square, stroke_color);
 
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
-        _ = gui.parentSet(self.wd.parent);
+        _ = dvui.parentSet(self.wd.parent);
     }
 
-    pub fn widget(self: *Self) gui.Widget {
-        return gui.Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    pub fn widget(self: *Self) dvui.Widget {
+        return dvui.Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
     }
 
-    pub fn data(self: *Self) *gui.WidgetData {
+    pub fn data(self: *Self) *dvui.WidgetData {
         return &self.wd;
     }
 
-    pub fn rectFor(self: *Self, id: u32, min_size: gui.Size, e: gui.Options.Expand, g: gui.Options.Gravity) gui.Rect {
-        return gui.placeIn(self.wd.contentRect().justSize(), gui.minSize(id, min_size), e, g);
+    pub fn rectFor(self: *Self, id: u32, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
+        return dvui.placeIn(self.wd.contentRect().justSize(), dvui.minSize(id, min_size), e, g);
     }
 
-    pub fn screenRectScale(self: *Self, r: gui.Rect) gui.RectScale {
+    pub fn screenRectScale(self: *Self, r: dvui.Rect) dvui.RectScale {
         const rs = self.wd.contentRectScale();
-        return gui.RectScale{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };
+        return dvui.RectScale{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };
     }
 
-    pub fn minSizeForChild(self: *Self, s: gui.Size) void {
+    pub fn minSizeForChild(self: *Self, s: dvui.Size) void {
         self.wd.minSizeMax(self.wd.padSize(s));
     }
 
-    pub fn processEvent(self: *Self, e: *gui.Event, bubbling: bool) void {
+    pub fn processEvent(self: *Self, e: *dvui.Event, bubbling: bool) void {
         _ = bubbling;
         switch (e.evt) {
             .mouse => |me| {
@@ -552,7 +552,7 @@ pub const StrokeTest = struct {
                             dragi = null;
 
                             for (points, 0..) |p, i| {
-                                const dp = gui.Point.diff(p, mp);
+                                const dp = dvui.Point.diff(p, mp);
                                 if (@fabs(dp.x) < 5 and @fabs(dp.y) < 5) {
                                     dragi = i;
                                     break;
@@ -566,25 +566,25 @@ pub const StrokeTest = struct {
                             }
 
                             if (dragi != null) {
-                                _ = gui.captureMouse(self.wd.id);
-                                gui.dragPreStart(me.p, .crosshair, .{});
+                                _ = dvui.captureMouse(self.wd.id);
+                                dvui.dragPreStart(me.p, .crosshair, .{});
                             }
                         }
                     },
                     .release => |button| {
                         if (button == .left) {
                             e.handled = true;
-                            _ = gui.captureMouse(null);
-                            gui.dragEnd();
+                            _ = dvui.captureMouse(null);
+                            dvui.dragEnd();
                         }
                     },
                     .motion => {
                         e.handled = true;
-                        if (gui.dragging(me.p)) |dps| {
+                        if (dvui.dragging(me.p)) |dps| {
                             const dp = dps.scale(1 / rs.s);
                             points[dragi.?].x += dp.x;
                             points[dragi.?].y += dp.y;
-                            gui.refresh();
+                            dvui.refresh();
                         }
                     },
                     .wheel_y => |ticks| {
@@ -593,7 +593,7 @@ pub const StrokeTest = struct {
                         const zs = @exp(@log(base) * ticks);
                         if (zs != 1.0) {
                             thickness *= zs;
-                            gui.refresh();
+                            dvui.refresh();
                         }
                     },
                     else => {},

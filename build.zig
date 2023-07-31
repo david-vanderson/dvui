@@ -13,15 +13,15 @@ pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const gui_mod = b.addModule("gui", .{
-        .source_file = .{ .path = "src/gui.zig" },
+    const dvui_mod = b.addModule("dvui", .{
+        .source_file = .{ .path = "src/dvui.zig" },
         .dependencies = &.{},
     });
 
     const sdl_mod = b.addModule("SDLBackend", .{
         .source_file = .{ .path = "src/SDLBackend.zig" },
         .dependencies = &.{
-            .{ .name = "gui", .module = gui_mod },
+            .{ .name = "dvui", .module = dvui_mod },
         },
     });
 
@@ -66,7 +66,7 @@ pub fn build(b: *std.build.Builder) !void {
             .optimize = optimize,
         });
 
-        exe.addModule("gui", gui_mod);
+        exe.addModule("dvui", dvui_mod);
         exe.addModule("SDLBackend", sdl_mod);
         const freetype_dep = b.dependency("freetype", .{
             .target = target,
@@ -106,7 +106,7 @@ pub fn build(b: *std.build.Builder) !void {
             .optimize = optimize,
         });
 
-        exe.addModule("gui", gui_mod);
+        exe.addModule("dvui", dvui_mod);
         exe.addModule("SDLBackend", sdl_mod);
 
         const freetype_dep = b.dependency("freetype", .{
