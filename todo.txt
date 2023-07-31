@@ -1,6 +1,4 @@
 
-update gui-demo and podcast
-
 redo menu and menuItem stuff to fix:
   - can it catch if the mouse motion was toward an open submenu?
   - submenu has to register its rect with parent
