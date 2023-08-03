@@ -30,6 +30,7 @@ pub fn main() !void {
     var floats: [6]bool = [_]bool{false} ** 6;
     var scale_val: f32 = 1.0;
     var scale_mod: dvui.enums.Mod = .none;
+    var dropdown_choice: usize = 1;
 
     //var rng = std.rand.DefaultPrng.init(0);
 
@@ -107,64 +108,25 @@ pub fn main() !void {
                 var layout = try dvui.box(@src(), .vertical, .{});
                 defer layout.deinit();
 
-                //{
-                //  //const e2 = dvui.Expand(.horizontal);
-                //  //defer _ = dvui.Expand(e2);
+                const entries = [_][]const u8{
+                    "First 1",
+                    "First 2",
+                    "First 3",
+                    "First 4",
+                    "First 5",
+                    "Second 1",
+                    "Second 2",
+                    "Second 3",
+                    "Second 4",
+                    "Second 5",
+                    "Third 1",
+                    "Third 2",
+                    "Third 3",
+                    "Third 4",
+                    "Third 5",
+                };
 
-                //  var margin = dvui.Margin(dvui.Rect{.x = 20, .y = 20, .w = 20, .h = 20});
-                //  defer _ = dvui.Margin(margin);
-
-                //  var box = dvui.Box(@src(), .horizontal);
-                //  defer box.deinit();
-                //
-                //  for (buttons) |*buttoncol, k| {
-                //    if (k != 0) {
-                //      dvui.Spacer(@src(), k, 6);
-                //    }
-                //    if (buttoncol[0]) {
-                //      var margin2 = dvui.Margin(dvui.Rect{.x = 4, .y = 4, .w = 4, .h = 4});
-                //      defer _ = dvui.Margin(margin2);
-
-                //      var box2 = dvui.Box(@src(), k, .vertical);
-                //      defer box2.deinit();
-
-                //      for (buttoncol) |b, i| {
-                //        if (b) {
-                //          if (i != 0) {
-                //            dvui.Spacer(@src(), i, 6);
-                //            //dvui.Label(@src(), i, "Label", .{});
-                //          }
-                //          var buf: [100:0]u8 = undefined;
-                //          if (k == 0) {
-                //            _ = std.fmt.bufPrintZ(&buf, "HELLO {d}", .{i}) catch unreachable;
-                //          }
-                //          else if (k == 1) {
-                //            _ = std.fmt.bufPrintZ(&buf, "middle {d}", .{i}) catch unreachable;
-                //          }
-                //          else {
-                //            _ = std.fmt.bufPrintZ(&buf, "bye {d}", .{i}) catch unreachable;
-                //          }
-                //          if (dvui.Button(@src(), i, &buf)) {
-                //            if (i == 0) {
-                //              buttoncol[0] = false;
-                //            }
-                //            else if (i == 5) {
-                //              buttons[k+1][0] = true;
-                //            }
-                //            else if (i % 2 == 0) {
-                //              std.debug.print("Adding {d}\n", .{i + 1});
-                //              buttoncol[i+1] = true;
-                //            }
-                //            else {
-                //              std.debug.print("Removing {d}\n", .{i});
-                //              buttoncol[i] = false;
-                //            }
-                //          }
-                //        }
-                //      }
-                //    }
-                //  }
-                //}
+                _ = try dvui.dropdown(@src(), &entries, &dropdown_choice, .{ .min_size_content = .{ .w = 120 } });
 
                 {
                     var scroll = try dvui.scrollArea(@src(), .{}, .{ .min_size_content = .{ .w = 50, .h = 100 } });
