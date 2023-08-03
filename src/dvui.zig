@@ -541,10 +541,24 @@ pub fn placeOnScreen(spawner: Rect, start: Rect) Rect {
         }
     }
 
+    if (r.x < wr.x) {
+        r.x = wr.x;
+    }
+
+    if ((r.x + r.w) > wr.w) {
+        r.w = wr.w - r.x;
+    }
+
     if ((r.y + r.h) > wr.h) {
         r.y = wr.h - r.h;
-    } else if (r.y < wr.y) {
+    }
+
+    if (r.y < wr.y) {
         r.y = wr.y;
+    }
+
+    if ((r.y + r.h) > wr.h) {
+        r.h = wr.h - r.y;
     }
 
     return r;
@@ -2292,6 +2306,7 @@ pub const Window = struct {
     debug_info_name_rect: []u8 = "",
     debug_info_src_id_extra: []u8 = "",
     debug_under_mouse: bool = false,
+    debug_under_mouse_esc_needed: bool = false,
     debug_under_mouse_quitting: bool = false,
     debug_under_mouse_info: []u8 = "",
 
@@ -2350,6 +2365,14 @@ pub const Window = struct {
     }
 
     pub fn addEventKey(self: *Self, event: Event.Key) !bool {
+        if (self.debug_under_mouse and self.debug_under_mouse_esc_needed and event.action == .down and event.code == .escape) {
+            // a left click will stop the debug stuff from following the mouse,
+            // but need to stop it at the end of the frame when we've gotten
+            // the info
+            self.debug_under_mouse_quitting = true;
+            return true;
+        }
+
         self.positionMouseEventRemove();
 
         self.event_num += 1;
@@ -2409,7 +2432,7 @@ pub const Window = struct {
     }
 
     pub fn addEventMouseButton(self: *Self, kind: Event.Mouse.Kind) !bool {
-        if (self.debug_under_mouse and kind == .press and kind.press == .left) {
+        if (self.debug_under_mouse and !self.debug_under_mouse_esc_needed and kind == .press and kind.press == .left) {
             // a left click will stop the debug stuff from following the mouse,
             // but need to stop it at the end of the frame when we've gotten
             // the info
@@ -3191,8 +3214,13 @@ pub const Window = struct {
         try tl.addText(self.debug_info_src_id_extra, .{});
         tl.deinit();
 
-        if (try dvui.button(@src(), if (dum) "Stop (Or Left Click)" else "Debug Under Mouse", .{})) {
+        if (try dvui.button(@src(), if (dum) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{})) {
             dum = !dum;
+        }
+
+        if (try dvui.button(@src(), if (dum) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{})) {
+            dum = !dum;
+            self.debug_under_mouse_esc_needed = dum;
         }
 
         var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
@@ -3392,9 +3420,10 @@ pub const PopupWidget = struct {
     prev_windowId: u32 = 0,
     parent_popup: ?*PopupWidget = null,
     have_popup_child: bool = false,
-    layout: MenuWidget = undefined,
+    menu: MenuWidget = undefined,
     initialRect: Rect = Rect{},
     prevClip: Rect = Rect{},
+    scroll: ScrollAreaWidget = undefined,
 
     pub fn init(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) Self {
         var self = Self{};
@@ -3445,10 +3474,22 @@ pub const PopupWidget = struct {
         self.prevClip = clipGet();
         clipSet(rs.r);
 
-        // we are using MenuWidget to do border/background but floating windows
+        // we are using scroll to do border/background but floating windows
         // don't have margin, so turn that off
-        self.layout = MenuWidget.init(@src(), .vertical, self.options.override(.{ .margin = .{} }));
-        try self.layout.install(.{});
+        self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none }, self.options.override(.{ .margin = .{}, .expand = .both }));
+        try self.scroll.install(.{});
+
+        self.menu = MenuWidget.init(@src(), .vertical, self.options.strip().override(.{ .expand = .both }));
+        self.menu.parentSubwindowId = self.prev_windowId;
+        try self.menu.install(.{});
+
+        // if no widget in this popup has focus, make the menu have focus to handle keyboard events
+        if (focusedWidgetIdInCurrentSubwindow() == null) {
+            const focused_winId = focusedSubwindowId();
+            focusSubwindow(self.wd.id, null);
+            focusWidget(self.menu.wd.id, null);
+            focusSubwindow(focused_winId, null);
+        }
     }
 
     pub fn widget(self: *Self) Widget {
@@ -3521,6 +3562,12 @@ pub const PopupWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        self.menu.deinit();
+        self.scroll.deinit();
+
+        self.options.min_size_content = self.scroll.si.virtual_size;
+        self.wd.minSizeMax(self.options.min_sizeGet());
+
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
         var evts = events();
@@ -3529,37 +3576,9 @@ pub const PopupWidget = struct {
                 continue;
 
             if (e.evt == .mouse) {
-                // mark all events as handled so no mouse events are handled by
-                // windows under us
-                e.handled = true;
                 if (e.evt.mouse.kind == .focus) {
                     // unhandled click, clear focus
                     focusWidget(null, null);
-                }
-            } else if (e.evt == .key) {
-                if (e.evt.key.code == .escape and e.evt.key.action == .down) {
-                    e.handled = true;
-                    var closeE = Event{ .evt = .{ .close_popup = .{} } };
-                    self.processEvent(&closeE, true);
-                } else if (e.evt.key.code == .tab and e.evt.key.action == .down) {
-                    e.handled = true;
-                    if (e.evt.key.mod.shift()) {
-                        tabIndexPrev(e.num);
-                    } else {
-                        tabIndexNext(e.num);
-                    }
-                } else if (e.evt.key.code == .up and e.evt.key.action == .down) {
-                    e.handled = true;
-                    tabIndexPrev(e.num);
-                } else if (e.evt.key.code == .down and e.evt.key.action == .down) {
-                    e.handled = true;
-                    tabIndexNext(e.num);
-                } else if (e.evt.key.code == .left and e.evt.key.action == .down) {
-                    e.handled = true;
-                    if (self.layout.parentMenu) |pm| {
-                        pm.submenus_activated = false;
-                        focusSubwindow(self.prev_windowId, e.num);
-                    }
                 }
             }
         }
@@ -3582,7 +3601,6 @@ pub const PopupWidget = struct {
             self.processEvent(&closeE, true);
         }
 
-        self.layout.deinit();
         self.wd.minSizeSetAndRefresh();
 
         // outside normal layout, don't call minSizeForChild or
@@ -3843,15 +3861,16 @@ pub const FloatingWindowWidget = struct {
             if (!eventMatch(e, .{ .id = self.wd.id, .r = rs.r, .cleanup = true }))
                 continue;
 
-            // mark all events as handled so no mouse events are handled by windows
-            // under us
-            e.handled = true;
             switch (e.evt) {
                 .mouse => |me| {
                     switch (me.kind) {
-                        .focus => focusWidget(null, null),
+                        .focus => {
+                            e.handled = true;
+                            focusWidget(null, null);
+                        },
                         .press => |b| {
                             if (b == .left) {
+                                e.handled = true;
                                 // capture and start drag
                                 self.captured = captureMouse(self.wd.id);
                                 dragPreStart(e.evt.mouse.p, .crosshair, Point{});
@@ -3859,12 +3878,14 @@ pub const FloatingWindowWidget = struct {
                         },
                         .release => |b| {
                             if (b == .left) {
+                                e.handled = true;
                                 // stop drag and capture
                                 self.captured = captureMouse(null);
                                 dragEnd();
                             }
                         },
                         .motion => {
+                            e.handled = true;
                             // move if dragging
                             if (dragging(me.p)) |dps| {
                                 if (cursorGetDragging() == Cursor.crosshair) {
@@ -3881,6 +3902,7 @@ pub const FloatingWindowWidget = struct {
                 .key => |ke| {
                     // catch any tabs that weren't handled by widgets
                     if (ke.code == .tab and ke.action == .down) {
+                        e.handled = true;
                         if (ke.mod.shift()) {
                             tabIndexPrev(e.num);
                         } else {
@@ -5875,15 +5897,15 @@ pub const ScrollAreaWidget = struct {
 
     pub const InitOpts = struct {
         scroll_info: ?*ScrollInfo = null,
-        vertical: ?ScrollInfo.ScrollType = null,
-        vertical_bar: ?bool = null,
-        horizontal: ?ScrollInfo.ScrollType = null,
-        horizontal_bar: ?bool = null,
+        vertical: ?ScrollInfo.ScrollMode = null,
+        vertical_bar: ScrollInfo.ScrollBarMode = .auto,
+        horizontal: ?ScrollInfo.ScrollMode = null,
+        horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
     };
 
     hbox: BoxWidget = undefined,
     vbar: ?ScrollBarWidget = undefined,
-    vbox: ?BoxWidget = undefined,
+    vbox: BoxWidget = undefined,
     hbar: ?ScrollBarWidget = undefined,
     init_opts: InitOpts = undefined,
     si: *ScrollInfo = undefined,
@@ -5929,20 +5951,30 @@ pub const ScrollAreaWidget = struct {
 
         try self.hbox.install(.{});
 
+        // the viewport is also set in ScrollContainer but we need it here in
+        // case the scroll bar modes are auto
+        const crect = self.hbox.wd.contentRect();
+        self.si.viewport.w = crect.w;
+        self.si.viewport.h = crect.h;
+
         const focus_target = opts.focus_id orelse dataGet(null, self.hbox.data().id, "_scroll_id", u32);
 
-        if (self.si.vertical != .none and self.init_opts.vertical_bar != false) {
-            // do the scrollbars first so that they still appear even if there's not enough space
-            self.vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = self.si, .focus_id = focus_target }, .{ .gravity_x = 1.0 });
-            try self.vbar.?.install(.{});
+        if (self.si.vertical != .none) {
+            if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar == .auto and (self.si.virtual_size.h > self.si.viewport.h))) {
+                // do the scrollbars first so that they still appear even if there's not enough space
+                self.vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = self.si, .focus_id = focus_target }, .{ .gravity_x = 1.0 });
+                try self.vbar.?.install(.{});
+            }
         }
 
-        if (self.si.horizontal != .none and self.init_opts.horizontal_bar != false) {
-            self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both }));
-            try self.vbox.?.install(.{});
+        self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "blah" }));
+        try self.vbox.install(.{});
 
-            self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, .{ .expand = .horizontal, .gravity_y = 1.0 });
-            try self.hbar.?.install(.{});
+        if (self.si.horizontal != .none) {
+            if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar == .auto and (self.si.virtual_size.w > self.si.viewport.w))) {
+                self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, .{ .expand = .horizontal, .gravity_y = 1.0 });
+                try self.hbar.?.install(.{});
+            }
         }
 
         var container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
@@ -5957,8 +5989,9 @@ pub const ScrollAreaWidget = struct {
 
         if (self.hbar) |*hbar| {
             hbar.deinit();
-            self.vbox.?.deinit();
         }
+
+        self.vbox.deinit();
 
         if (self.vbar) |*vbar| {
             vbar.deinit();
@@ -5971,14 +6004,20 @@ pub const ScrollAreaWidget = struct {
 };
 
 pub const ScrollInfo = struct {
-    pub const ScrollType = enum {
+    pub const ScrollMode = enum {
         none, // no scrolling
         auto, // virtual size calculated from children
         given, // virtual size left as given
     };
 
-    vertical: ScrollType = .auto,
-    horizontal: ScrollType = .none,
+    pub const ScrollBarMode = enum {
+        hide, // no scrollbar
+        auto, // show scrollbar if viewport is smaller than virtual_size
+        show, // always show scrollbar
+    };
+
+    vertical: ScrollMode = .auto,
+    horizontal: ScrollMode = .none,
     virtual_size: Size = Size{},
     viewport: Rect = Rect{},
 
@@ -6758,6 +6797,7 @@ pub const MenuWidget = struct {
     winId: u32 = undefined,
     dir: Direction = undefined,
     parentMenu: ?*MenuWidget = null,
+    parentSubwindowId: ?u32 = null,
     box: BoxWidget = undefined,
 
     submenus_activated: bool = false,
@@ -6839,6 +6879,34 @@ pub const MenuWidget = struct {
                     // TODO: set this event to handled if there is an existing submenu and motion is towards the popup
                     if (mouseTotalMotion().nonZero()) {
                         self.mouse_over = true;
+                    }
+                }
+            },
+            .key => |ke| {
+                if (ke.code == .escape and ke.action == .down) {
+                    e.handled = true;
+                    var closeE = Event{ .evt = .{ .close_popup = .{} } };
+                    self.processEvent(&closeE, true);
+                } else if (ke.code == .tab and ke.action == .down) {
+                    e.handled = true;
+                    if (ke.mod.shift()) {
+                        tabIndexPrev(e.num);
+                    } else {
+                        tabIndexNext(e.num);
+                    }
+                } else if (ke.code == .up and ke.action == .down) {
+                    e.handled = true;
+                    tabIndexPrev(e.num);
+                } else if (ke.code == .down and ke.action == .down) {
+                    e.handled = true;
+                    tabIndexNext(e.num);
+                } else if (ke.code == .left and ke.action == .down) {
+                    e.handled = true;
+                    if (self.parentMenu) |pm| {
+                        pm.submenus_activated = false;
+                    }
+                    if (self.parentSubwindowId) |sid| {
+                        focusSubwindow(sid, null);
                     }
                 }
             },
@@ -7682,10 +7750,10 @@ pub const TextEntryWidget = struct {
     pub const InitOptions = struct {
         text: []u8,
         break_lines: bool = false,
-        scroll_vertical: bool = false,
-        scroll_vertical_bar: bool = true,
+        scroll_vertical: bool = true,
+        scroll_vertical_bar: ScrollInfo.ScrollBarMode = .auto,
         scroll_horizontal: bool = true,
-        scroll_horizontal_bar: bool = false,
+        scroll_horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
     };
 
     wd: WidgetData = undefined,
@@ -9436,7 +9504,7 @@ pub const examples = struct {
             defer hbox.deinit();
 
             try dvui.label(@src(), "Text Entry Singleline", .{}, .{ .gravity_y = 0.5 });
-            try dvui.textEntry(@src(), .{ .text = &text_entry_buf }, .{});
+            try dvui.textEntry(@src(), .{ .text = &text_entry_buf, .scroll_vertical = false, .scroll_horizontal_bar = .hide }, .{});
             // replace newlines with spaces
             for (&text_entry_buf) |*char| {
                 if (char.* == '\n')
@@ -9449,7 +9517,7 @@ pub const examples = struct {
             defer hbox.deinit();
 
             try dvui.label(@src(), "Text Entry Multiline", .{}, .{ .gravity_y = 0.5 });
-            try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .scroll_vertical = true, .scroll_horizontal_bar = true }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
+            try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
         }
 
         {

@@ -7,6 +7,16 @@ redo menu and menuItem stuff to fix:
   - mousing from a submenuItem to submenu
 - keyboard navigation
 
+keyboard nav for dropdowns
+
+change BoxWidget to take InitOptions
+
+change MenuWidget to take InitOptions
+- also should take parentSubwindowId
+
+popupSet - can this be done as a static var inside PopupWidget?
+
+
 send updates to tinyvg
 
 all widget's sizes should default to theme font size?
