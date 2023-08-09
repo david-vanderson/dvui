@@ -4,7 +4,7 @@ A [Zig](https://ziglang.org/) native GUI toolkit for whole applications or extra
 
 Status: Alpha.  Works well enough for use in real applications, like this [podcast player](https://github.com/david-vanderson/podcast), but not widely used as yet.
 
-Note: This tracks Zig master and won't work with 0.10.x
+Note: This works with Zig 0.11.x
 
 See [gui-demo](https://github.com/david-vanderson/gui-demo) for integration examples.
 
