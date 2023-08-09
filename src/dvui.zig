@@ -6888,7 +6888,7 @@ pub const MenuWidget = struct {
                 }
             },
             .key => |ke| {
-                if (ke.action == .down) {
+                if (ke.action == .down or ke.action == .repeat) {
                     switch (ke.code) {
                         .escape => {
                             e.handled = true;
