@@ -7044,9 +7044,11 @@ pub const MenuItemWidget = struct {
     pub fn install(self: *Self, opts: struct { process_events: bool = true, focus_as_outline: bool = false }) !void {
         try self.wd.register("MenuItem", null);
 
-        if (self.wd.visible()) {
-            try tabIndexSet(self.wd.id, self.wd.options.tab_index);
-        }
+        // For most widgets we only tabIndexSet if they are visible, but menu
+        // items are often in large dropdowns that are scrollable, plus the
+        // up/down arrow keys get used to move between menu items, so you need
+        // to be able to move to the next menu item even if it's not visible
+        try tabIndexSet(self.wd.id, self.wd.options.tab_index);
 
         if (opts.process_events) {
             var evts = events();
@@ -7074,6 +7076,10 @@ pub const MenuItemWidget = struct {
         if (focused or ((self.wd.id == focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {
             if (!self.init_opts.submenu or !menuGet().?.submenus_activated) {
                 self.show_active = true;
+
+                // in case we are in a scrollable dropdown, scroll
+                var scrollto = Event{ .evt = .{ .scroll_to = .{ .screen_rect = self.wd.borderRectScale().r } } };
+                self.wd.parent.processEvent(&scrollto, true);
             }
         }
 
@@ -7144,6 +7150,12 @@ pub const MenuItemWidget = struct {
                     e.handled = true;
                     focusSubwindow(null, null); // focuses the window we are in
                     focusWidget(self.wd.id, e.num);
+                } else if (me.kind == .press and me.kind.press == .left) {
+                    // this is how dropdowns are triggered
+                    e.handled = true;
+                    if (self.init_opts.submenu) {
+                        menuGet().?.submenus_activated = true;
+                    }
                 } else if (me.kind == .release) {
                     e.handled = true;
                     if (!self.init_opts.submenu and (self.wd.id == focusedWidgetIdInCurrentSubwindow())) {
