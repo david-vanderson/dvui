@@ -3580,6 +3580,16 @@ pub const PopupWidget = struct {
                     // unhandled click, clear focus
                     focusWidget(null, null);
                 }
+            } else if (e.evt == .key) {
+                // catch any tabs that weren't handled by widgets
+                if (e.evt.key.code == .tab and e.evt.key.action == .down) {
+                    e.handled = true;
+                    if (e.evt.key.mod.shift()) {
+                        tabIndexPrev(e.num);
+                    } else {
+                        tabIndexNext(e.num);
+                    }
+                }
             }
         }
 
@@ -6815,11 +6825,6 @@ pub const MenuWidget = struct {
             if (opts.debugGet()) {
                 std.debug.print("menu dataGet {x} {}\n", .{ self.wd.id, self.submenus_activated });
             }
-        } else if (menuGet()) |m| {
-            self.submenus_activated = m.submenus_activated;
-            if (opts.debugGet()) {
-                std.debug.print("menu menuGet {x} {}\n", .{ self.wd.id, self.submenus_activated });
-            }
         }
 
         return self;
@@ -6883,30 +6888,57 @@ pub const MenuWidget = struct {
                 }
             },
             .key => |ke| {
-                if (ke.code == .escape and ke.action == .down) {
-                    e.handled = true;
-                    var closeE = Event{ .evt = .{ .close_popup = .{} } };
-                    self.processEvent(&closeE, true);
-                } else if (ke.code == .tab and ke.action == .down) {
-                    e.handled = true;
-                    if (ke.mod.shift()) {
-                        tabIndexPrev(e.num);
-                    } else {
-                        tabIndexNext(e.num);
-                    }
-                } else if (ke.code == .up and ke.action == .down) {
-                    e.handled = true;
-                    tabIndexPrev(e.num);
-                } else if (ke.code == .down and ke.action == .down) {
-                    e.handled = true;
-                    tabIndexNext(e.num);
-                } else if (ke.code == .left and ke.action == .down) {
-                    e.handled = true;
-                    if (self.parentMenu) |pm| {
-                        pm.submenus_activated = false;
-                    }
-                    if (self.parentSubwindowId) |sid| {
-                        focusSubwindow(sid, null);
+                if (ke.action == .down) {
+                    switch (ke.code) {
+                        .escape => {
+                            e.handled = true;
+                            var closeE = Event{ .evt = .{ .close_popup = .{} } };
+                            self.processEvent(&closeE, true);
+                        },
+                        .up => {
+                            if (self.dir == .vertical) {
+                                e.handled = true;
+                                // FIXME: don't do this if focus would move outside the menu
+                                tabIndexPrev(e.num);
+                            }
+                        },
+                        .down => {
+                            if (self.dir == .vertical) {
+                                e.handled = true;
+                                // FIXME: don't do this if focus would move outside the menu
+                                tabIndexNext(e.num);
+                            }
+                        },
+                        .left => {
+                            if (self.dir == .vertical) {
+                                e.handled = true;
+                                if (self.parentMenu) |pm| {
+                                    pm.submenus_activated = false;
+                                }
+                                if (self.parentSubwindowId) |sid| {
+                                    focusSubwindow(sid, null);
+                                }
+                            } else {
+                                // FIXME: don't do this if focus would move outside the menu
+                                tabIndexPrev(e.num);
+                            }
+                        },
+                        .right => {
+                            if (self.dir == .vertical) {
+                                e.handled = true;
+                                if (self.parentMenu) |pm| {
+                                    pm.submenus_activated = false;
+                                }
+                                if (self.parentSubwindowId) |sid| {
+                                    focusSubwindow(sid, null);
+                                }
+                            } else {
+                                e.handled = true;
+                                // FIXME: don't do this if focus would move outside the menu
+                                tabIndexNext(e.num);
+                            }
+                        },
+                        else => {},
                     }
                 }
             },
@@ -7112,11 +7144,6 @@ pub const MenuItemWidget = struct {
                     e.handled = true;
                     focusSubwindow(null, null); // focuses the window we are in
                     focusWidget(self.wd.id, e.num);
-                } else if (me.kind == .press and me.kind.press == .left) {
-                    e.handled = true;
-                    if (self.init_opts.submenu) {
-                        menuGet().?.submenus_activated = true;
-                    }
                 } else if (me.kind == .release) {
                     e.handled = true;
                     if (!self.init_opts.submenu and (self.wd.id == focusedWidgetIdInCurrentSubwindow())) {
@@ -7137,6 +7164,10 @@ pub const MenuItemWidget = struct {
                             // was towards a submenu (caught in MenuWidget)
                             focusSubwindow(null, null); // focuses the window we are in
                             focusWidget(self.wd.id, null);
+
+                            if (self.init_opts.submenu) {
+                                menuGet().?.submenus_activated = true;
+                            }
                         }
                     }
                 }
@@ -7151,8 +7182,13 @@ pub const MenuItemWidget = struct {
                         refresh();
                     }
                 } else if (ke.code == .right and ke.action == .down) {
-                    e.handled = true;
-                    if (self.init_opts.submenu) {
+                    if (self.init_opts.submenu and menuGet().?.dir == .vertical) {
+                        e.handled = true;
+                        menuGet().?.submenus_activated = true;
+                    }
+                } else if (ke.code == .down and ke.action == .down) {
+                    if (self.init_opts.submenu and menuGet().?.dir == .horizontal) {
+                        e.handled = true;
                         menuGet().?.submenus_activated = true;
                     }
                 }

@@ -1,9 +1,4 @@
 
-keyboard nav for menus:
-- if opening a submenu by keyboard, submenus_activated should be false
-- keyboard arrow keys should obey orientation of menu (vertical or horizontal)
-  - arrow keys should do tab navigation but not move you outside the menu
-
 menu mouse motion towards open submenu
   - submenu has to register its rect with parent
 
