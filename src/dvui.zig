@@ -4432,6 +4432,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
     var ret = false;
     if (b.activeRect()) |r| {
         var pop = PopupWidget.init(@src(), lw_rect, .{ .min_size_content = r.size() });
+        var first_frame = firstFrame(pop.wd.id);
 
         // move popup to align first item with b
         pop.initialRect.x -= MenuItemWidget.defaults.borderGet().x;
@@ -4451,11 +4452,44 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
         try pop.install(.{});
         defer pop.deinit();
 
+        // only want a mouse-up to choose something if the mouse has moved in the popup
+        var mouse_moved: bool = false;
+        if (dataGet(null, pop.wd.id, "_mouse_moved", bool)) |_| {
+            mouse_moved = true;
+        }
+
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, .{ .id = pop.data().id, .r = pop.data().rect }))
+                continue;
+
+            if (e.evt == .mouse and (mouseTotalMotion().nonZero() or (e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left))) {
+                mouse_moved = true;
+                dataSet(null, pop.wd.id, "_mouse_moved", true);
+            }
+        }
+
         for (entries, 0..) |_, i| {
-            if (try dvui.menuItemLabel(@src(), entries[i], .{}, .{ .id_extra = i })) |_| {
-                choice.* = i;
-                ret = true;
-                dvui.menuGet().?.close();
+            var mi = try menuItem(@src(), .{}, .{ .id_extra = i });
+            if (first_frame and (i == choice.*)) {
+                focusWidget(mi.wd.id, null);
+            }
+            defer mi.deinit();
+
+            var labelopts = options.strip();
+
+            if (mi.show_active) {
+                labelopts = labelopts.override(.{ .color_style = .accent });
+            }
+
+            try labelNoFmt(@src(), entries[i], labelopts);
+
+            if (mi.activeRect()) |_| {
+                if (mouse_moved) {
+                    choice.* = i;
+                    ret = true;
+                    dvui.menuGet().?.close();
+                }
             }
         }
     }
