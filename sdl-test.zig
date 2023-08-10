@@ -47,14 +47,11 @@ pub fn main() !void {
 
         _ = try dvui.examples.demo();
 
-        var window_box = try dvui.box(@src(), .vertical, .{ .expand = .both, .color_style = .window, .background = true });
-
         {
-            const oo = dvui.Options{ .expand = .both };
-            var overlay = try dvui.overlay(@src(), oo);
+            var overlay = try dvui.overlay(@src(), .{ .expand = .both });
             defer overlay.deinit();
 
-            const scale = try dvui.scale(@src(), scale_val, oo);
+            const scale = try dvui.scale(@src(), scale_val, .{ .expand = .both });
             defer {
                 var evts = dvui.events();
                 for (evts) |*e| {
@@ -88,7 +85,7 @@ pub fn main() !void {
                 scale.deinit();
             }
 
-            const context = try dvui.context(@src(), oo);
+            const context = try dvui.context(@src(), .{ .expand = .both });
             defer context.deinit();
 
             if (context.activePoint()) |cp| {
@@ -104,28 +101,30 @@ pub fn main() !void {
             }
 
             {
-                var layout = try dvui.box(@src(), .vertical, .{});
-                defer layout.deinit();
+                var win_scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_style = .window });
+                defer win_scroll.deinit();
 
-                const entries = [_][]const u8{
-                    "First 1",
-                    "First 2",
-                    "First 3",
-                    "First 4",
-                    "First 5",
-                    "Second 1",
-                    "Second 2",
-                    "Second 3",
-                    "Second 4",
-                    "Second 5",
-                    "Third 1",
-                    "Third 2",
-                    "Third 3",
-                    "Third 4",
-                    "Third 5",
-                };
+                {
+                    const entries = [_][]const u8{
+                        "First 1",
+                        "First 2",
+                        "First 3",
+                        "First 4",
+                        "First 5",
+                        "Second 1",
+                        "Second 2",
+                        "Second 3",
+                        "Second 4",
+                        "Second 5",
+                        "Third 1",
+                        "Third 2",
+                        "Third 3",
+                        "Third 4",
+                        "Third 5",
+                    };
 
-                _ = try dvui.dropdown(@src(), &entries, &dropdown_choice, .{ .min_size_content = .{ .w = 120 } });
+                    _ = try dvui.dropdown(@src(), &entries, &dropdown_choice, .{ .min_size_content = .{ .w = 120 } });
+                }
 
                 {
                     if (try dvui.button(@src(), "Stroke Test", .{})) {
@@ -218,107 +217,105 @@ pub fn main() !void {
             }
 
             const fps = dvui.FPS();
-            //std.debug.print("fps {d}\n", .{@round(fps)});
-            //dvui.render_text = true;
             try dvui.label(@src(), "fps {d:4.2}", .{fps}, .{ .gravity_x = 1.0 });
-            //dvui.render_text = false;
-        }
 
-        {
-            const FloatingWindowTest = struct {
-                var show: bool = false;
-                var rect = dvui.Rect{ .x = 300, .y = 200, .w = 300, .h = 200 };
-            };
+            {
+                const FloatingWindowTest = struct {
+                    var show: bool = false;
+                    var rect = dvui.Rect{ .x = 300, .y = 200, .w = 300, .h = 200 };
+                };
 
-            var start_closing: bool = false;
+                var start_closing: bool = false;
 
-            if (try dvui.button(@src(), "Floating Window", .{})) {
+                if (try dvui.button(@src(), "Floating Window", .{ .gravity_x = 1.0, .gravity_y = 1.0, .margin = dvui.Rect.all(10) })) {
+                    if (FloatingWindowTest.show) {
+                        start_closing = true;
+                    } else {
+                        FloatingWindowTest.show = true;
+                    }
+                }
+
                 if (FloatingWindowTest.show) {
-                    start_closing = true;
-                } else {
-                    FloatingWindowTest.show = true;
-                }
-            }
+                    var fwin = animatingWindow(@src(), false, &FloatingWindowTest.rect, &FloatingWindowTest.show, start_closing, .{});
+                    //var fwin = dvui.FloatingWindowWidget.init(@src(), false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
 
-            if (FloatingWindowTest.show) {
-                var fwin = animatingWindow(@src(), false, &FloatingWindowTest.rect, &FloatingWindowTest.show, start_closing, .{});
-                //var fwin = dvui.FloatingWindowWidget.init(@src(), false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
+                    try fwin.install(.{});
+                    defer fwin.deinit();
+                    try dvui.labelNoFmt(@src(), "Floating Window", .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-                try fwin.install(.{});
-                defer fwin.deinit();
-                try dvui.labelNoFmt(@src(), "Floating Window", .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+                    try dvui.label(@src(), "Pretty Cool", .{}, .{ .font = .{ .name = "VeraMono", .ttf_bytes = dvui.fonts.bitstream_vera.VeraMono, .size = 20 } });
 
-                try dvui.label(@src(), "Pretty Cool", .{}, .{ .font = .{ .name = "VeraMono", .ttf_bytes = dvui.fonts.bitstream_vera.VeraMono, .size = 20 } });
-
-                if (try dvui.button(@src(), "button", .{})) {
-                    floats[0] = true;
-                }
-
-                for (&floats, 0..) |*f, fi| {
-                    if (f.*) {
-                        const modal = if (fi % 2 == 0) true else false;
-                        var name: []const u8 = "";
-                        if (modal) {
-                            name = "Modal";
-                        }
-                        var buf = std.mem.zeroes([100]u8);
-                        var buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{ fi, name }) catch unreachable;
-                        var fw2 = try dvui.floatingWindow(@src(), .{ .modal = modal, .open_flag = f }, .{ .id_extra = fi, .color_style = .window, .min_size_content = .{ .w = 150, .h = 100 } });
-                        defer fw2.deinit();
-                        try dvui.labelNoFmt(@src(), buf_slice, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
-
-                        try dvui.label(@src(), "Asking a Question", .{}, .{});
-
-                        const oo = dvui.Options{ .margin = dvui.Rect.all(4), .expand = .horizontal };
-                        var box = try dvui.box(@src(), .horizontal, oo);
-
-                        if (try dvui.button(@src(), "Yes", oo)) {
-                            std.debug.print("Yes {d}\n", .{fi});
-                            floats[fi + 1] = true;
-                        }
-
-                        if (try dvui.button(@src(), "No", oo)) {
-                            std.debug.print("No {d}\n", .{fi});
-                            fw2.close();
-                        }
-
-                        box.deinit();
+                    if (try dvui.button(@src(), "button", .{})) {
+                        floats[0] = true;
                     }
-                }
 
-                var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both });
-                defer scroll.deinit();
-                var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .both });
-                try tl.install(.{ .process_events = false });
-                {
-                    if (try dvui.button(@src(), "Win Up .1", .{})) {
-                        fwin.wd.rect.y -= 0.1;
+                    for (&floats, 0..) |*f, fi| {
+                        if (f.*) {
+                            const modal = if (fi % 2 == 0) true else false;
+                            var name: []const u8 = "";
+                            if (modal) {
+                                name = "Modal";
+                            }
+                            var buf = std.mem.zeroes([100]u8);
+                            var buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{ fi, name }) catch unreachable;
+                            var fw2 = try dvui.floatingWindow(@src(), .{ .modal = modal, .open_flag = f }, .{ .id_extra = fi, .color_style = .window, .min_size_content = .{ .w = 150, .h = 100 } });
+                            defer fw2.deinit();
+                            try dvui.labelNoFmt(@src(), buf_slice, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+
+                            try dvui.label(@src(), "Asking a Question", .{}, .{});
+
+                            const oo = dvui.Options{ .margin = dvui.Rect.all(4), .expand = .horizontal };
+                            var box = try dvui.box(@src(), .horizontal, oo);
+
+                            if (try dvui.button(@src(), "Yes", oo)) {
+                                std.debug.print("Yes {d}\n", .{fi});
+                                floats[fi + 1] = true;
+                            }
+
+                            if (try dvui.button(@src(), "No", oo)) {
+                                std.debug.print("No {d}\n", .{fi});
+                                fw2.close();
+                            }
+
+                            box.deinit();
+                        }
                     }
-                    if (try dvui.button(@src(), "Win Down .1", .{ .gravity_x = 1.0 })) {
-                        fwin.wd.rect.y += 0.1;
+
+                    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+                    defer scroll.deinit();
+                    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .both });
+                    try tl.install(.{ .process_events = false });
+                    {
+                        if (try dvui.button(@src(), "Win Up .1", .{})) {
+                            fwin.wd.rect.y -= 0.1;
+                        }
+                        if (try dvui.button(@src(), "Win Down .1", .{ .gravity_x = 1.0 })) {
+                            fwin.wd.rect.y += 0.1;
+                        }
                     }
+                    tl.processEvents();
+                    const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+                    //const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore";
+                    try tl.addText(lorem, .{});
+                    //var it = std.mem.split(u8, lorem, " ");
+                    //while (it.next()) |word| {
+                    //  tl.addText(word);
+                    //  tl.addText(" ");
+                    //}
+                    tl.deinit();
                 }
-                tl.processEvents();
-                const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-                //const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore";
-                try tl.addText(lorem, .{});
-                //var it = std.mem.split(u8, lorem, " ");
-                //while (it.next()) |word| {
-                //  tl.addText(word);
-                //  tl.addText(" ");
-                //}
-                tl.deinit();
             }
         }
 
-        window_box.deinit();
+        //window_box.deinit();
+        //var window_box = try dvui.box(@src(), .vertical, .{ .expand = .both, .color_style = .window, .background = true });
 
         //var mx: c_int = 0;
         //var my: c_int = 0;
         //_ = SDLBackend.c.SDL_GetMouseState(&mx, &my);
         //try dvui.icon(@src(), "mouse", dvui.icons.papirus.actions.application_menu_symbolic, .{ .rect = dvui.Rect{ .x = @intToFloat(f32, mx), .y = @intToFloat(f32, my), .w = 10, .h = 10 } });
 
-        const end_micros = try win.end(.{ .show_toasts = false });
+        const end_micros = try win.end(.{});
 
         win_backend.setCursor(win.cursorRequested());
 
