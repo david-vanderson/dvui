@@ -26,7 +26,6 @@ pub fn main() !void {
         b.* = [_]bool{true} ** 6;
     }
 
-    var maxz: usize = 20;
     var floats: [6]bool = [_]bool{false} ** 6;
     var scale_val: f32 = 1.0;
     var scale_mod: dvui.enums.Mod = .none;
@@ -129,27 +128,6 @@ pub fn main() !void {
                 _ = try dvui.dropdown(@src(), &entries, &dropdown_choice, .{ .min_size_content = .{ .w = 120 } });
 
                 {
-                    var scroll = try dvui.scrollArea(@src(), .{}, .{ .min_size_content = .{ .w = 50, .h = 100 } });
-                    defer scroll.deinit();
-
-                    var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both });
-                    defer vbox.deinit();
-
-                    var buf: [100]u8 = undefined;
-                    var z: usize = 0;
-                    while (z < maxz) : (z += 1) {
-                        const buf_slice = std.fmt.bufPrint(&buf, "Button {d:0>2}", .{z}) catch unreachable;
-                        if (try dvui.button(@src(), buf_slice, .{ .id_extra = z, .gravity_x = 0.5, .gravity_y = 1.0 })) {
-                            if (z % 2 == 0) {
-                                maxz += 1;
-                            } else {
-                                maxz -= 1;
-                            }
-                        }
-                    }
-                }
-
-                {
                     if (try dvui.button(@src(), "Stroke Test", .{})) {
                         StrokeTest.show_dialog = !StrokeTest.show_dialog;
                     }
@@ -160,7 +138,8 @@ pub fn main() !void {
                 }
 
                 {
-                    try dvui.label(@src(), "content_scale {d}", .{win.content_scale}, .{});
+                    var box = try dvui.box(@src(), .horizontal, .{});
+                    defer box.deinit();
 
                     if (try dvui.button(@src(), "content_scale + .1", .{})) {
                         win.content_scale += 0.1;
@@ -169,17 +148,11 @@ pub fn main() !void {
                     if (try dvui.button(@src(), "content_scale - .1", .{})) {
                         win.content_scale -= 0.1;
                     }
+
+                    try dvui.label(@src(), "content_scale {d}", .{win.content_scale}, .{});
                 }
 
                 {
-                    var box = try dvui.box(@src(), .horizontal, .{});
-
-                    _ = try dvui.button(@src(), "Accent", .{ .color_style = .accent });
-                    _ = try dvui.button(@src(), "Success", .{ .color_style = .success });
-                    _ = try dvui.button(@src(), "Error", .{ .color_style = .err });
-
-                    box.deinit();
-
                     try dvui.label(@src(), "Theme: {s}", .{dvui.themeGet().name}, .{});
 
                     if (try dvui.button(@src(), "Toggle Theme", .{})) {
@@ -226,14 +199,6 @@ pub fn main() !void {
                     }
                     var scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
                     var tl = try dvui.textLayout(@src(), .{ .selection = &Sel.sel, .break_lines = false }, .{ .expand = .both });
-                    {
-                        //if (try dvui.button(@src(), "Win Up .1", .{})) {
-                        //    fwin.wd.rect.y -= 0.1;
-                        //}
-                        //if (try dvui.button(@src(), "Win Down .1", .{ .gravity_x = 1.0 })) {
-                        //    fwin.wd.rect.y += 0.1;
-                        //}
-                    }
                     const lorem =
                         \\Lorem ipsum dolor sit amet, consectetur adipiscing elit,
                         \\sed do eiusmod tempor incididunt ut labore et dolore
@@ -246,18 +211,9 @@ pub fn main() !void {
                         \\deserunt mollit anim id est laborum."
                     ;
                     try tl.addText(lorem, .{});
-                    //const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore";
-                    //try tl.addText(Sel.text, .{});
-                    //var it = std.mem.split(u8, lorem, " ");
-                    //while (it.next()) |word| {
-                    //  tl.addText(word);
-                    //  tl.addText(" ");
-                    //}
                     try tl.addTextDone(.{});
                     tl.deinit();
                     scroll.deinit();
-
-                    try dvui.textEntry(@src(), .{ .text = &Sel.buf, .scroll_horizontal = false }, .{ .min_size_content = .{ .w = 150, .h = 130 } });
                 }
             }
 
