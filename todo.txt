@@ -1,8 +1,8 @@
 
+can dropdown pre-select the chosen choice?
+
 menu mouse motion towards open submenu
   - submenu has to register its rect with parent
-
-keyboard nav for dropdowns
 
 change BoxWidget to take InitOptions
 

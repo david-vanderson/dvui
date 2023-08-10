@@ -4416,7 +4416,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
     var m = try dvui.menu(@src(), .horizontal, options.wrapOuter());
     defer m.deinit();
 
-    var b = MenuItemWidget.init(src, .{ .submenu = true, .focus_on_hover = false }, options.wrapInner());
+    var b = MenuItemWidget.init(src, .{ .submenu = true }, options.wrapInner());
     try b.install(.{ .focus_as_outline = true });
     defer b.deinit();
 
@@ -6810,7 +6810,11 @@ pub const MenuWidget = struct {
     parentSubwindowId: ?u32 = null,
     box: BoxWidget = undefined,
 
+    // whether submenus should be open
     submenus_activated: bool = false,
+
+    // whether submenus in a child menu should default to open (for mouse interactions, not for keyboard)
+    submenus_in_child: bool = false,
     mouse_over: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, dir: Direction, opts: Options) MenuWidget {
@@ -6822,9 +6826,8 @@ pub const MenuWidget = struct {
         self.dir = dir;
         if (dataGet(null, self.wd.id, "_sub_act", bool)) |a| {
             self.submenus_activated = a;
-            if (opts.debugGet()) {
-                std.debug.print("menu dataGet {x} {}\n", .{ self.wd.id, self.submenus_activated });
-            }
+        } else if (menuGet()) |pm| {
+            self.submenus_activated = pm.submenus_in_child;
         }
 
         return self;
@@ -7023,7 +7026,6 @@ pub const MenuItemWidget = struct {
 
     pub const InitOptions = struct {
         submenu: bool = false,
-        focus_on_hover: bool = true,
     };
 
     wd: WidgetData = undefined,
@@ -7155,6 +7157,7 @@ pub const MenuItemWidget = struct {
                     e.handled = true;
                     if (self.init_opts.submenu) {
                         menuGet().?.submenus_activated = true;
+                        menuGet().?.submenus_in_child = true;
                     }
                 } else if (me.kind == .release) {
                     e.handled = true;
@@ -7171,14 +7174,14 @@ pub const MenuItemWidget = struct {
                     if (mouseTotalMotion().nonZero()) {
                         self.highlight = true;
                         self.mouse_over = true;
-                        if (self.init_opts.focus_on_hover) {
+                        if (menuGet().?.submenus_activated) {
                             // we shouldn't have gotten this event if the motion
                             // was towards a submenu (caught in MenuWidget)
                             focusSubwindow(null, null); // focuses the window we are in
                             focusWidget(self.wd.id, null);
 
                             if (self.init_opts.submenu) {
-                                menuGet().?.submenus_activated = true;
+                                menuGet().?.submenus_in_child = true;
                             }
                         }
                     }
