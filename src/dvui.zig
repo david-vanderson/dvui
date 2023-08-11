@@ -4436,12 +4436,16 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
         try pop.install(.{});
         defer pop.deinit();
 
+        // without this, if you trigger the dropdown with the keyboard and then
+        // move the mouse, the entries are highlighted but not focused
+        pop.menu.submenus_activated = true;
+
         // only want a mouse-up to choose something if the mouse has moved in the popup
         var eat_mouse_up = dataGet(null, pop.wd.id, "_eat_mouse_up", bool) orelse true;
 
         var evts = events();
         for (evts) |*e| {
-            if (!eventMatch(e, .{ .id = pop.data().id, .r = pop.data().rect })) // FIXME: this rect is wrong on dpi or when content_scale is not 1
+            if (!eventMatch(e, .{ .id = pop.data().id, .r = pop.data().rectScale().r }))
                 continue;
 
             if (eat_mouse_up and e.evt == .mouse) {
@@ -4449,7 +4453,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
                     e.handled = true;
                     eat_mouse_up = false;
                     dataSet(null, pop.wd.id, "_eat_mouse_up", eat_mouse_up);
-                } else if (e.evt.mouse.kind == .motion) {
+                } else if (e.evt.mouse.kind == .motion or (e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left)) {
                     eat_mouse_up = false;
                     dataSet(null, pop.wd.id, "_eat_mouse_up", eat_mouse_up);
                 }
