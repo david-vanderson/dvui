@@ -1,5 +1,7 @@
 
-can dropdown pre-select the chosen choice?
+need a better way to always get a rect to pass to eventMatch, even if getting it from a floating/popup where wd.borderRectScale() doesn't work because it always calls the parent - maybe something passed to WidgetData?
+
+fix arena stuff (see gui-demo issue)
 
 menu mouse motion towards open submenu
   - submenu has to register its rect with parent
