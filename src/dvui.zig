@@ -4453,19 +4453,22 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
         defer pop.deinit();
 
         // only want a mouse-up to choose something if the mouse has moved in the popup
-        var mouse_moved: bool = false;
-        if (dataGet(null, pop.wd.id, "_mouse_moved", bool)) |_| {
-            mouse_moved = true;
-        }
+        var eat_mouse_up = dataGet(null, pop.wd.id, "_eat_mouse_up", bool) orelse true;
 
         var evts = events();
         for (evts) |*e| {
-            if (!eventMatch(e, .{ .id = pop.data().id, .r = pop.data().rect }))
+            if (!eventMatch(e, .{ .id = pop.data().id, .r = pop.data().rect })) // FIXME: this rect is wrong on dpi or when content_scale is not 1
                 continue;
 
-            if (e.evt == .mouse and (mouseTotalMotion().nonZero() or (e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left))) {
-                mouse_moved = true;
-                dataSet(null, pop.wd.id, "_mouse_moved", true);
+            if (eat_mouse_up and e.evt == .mouse) {
+                if (e.evt.mouse.kind == .release and e.evt.mouse.kind.release == .left) {
+                    e.handled = true;
+                    eat_mouse_up = false;
+                    dataSet(null, pop.wd.id, "_eat_mouse_up", eat_mouse_up);
+                } else if (e.evt.mouse.kind == .motion) {
+                    eat_mouse_up = false;
+                    dataSet(null, pop.wd.id, "_eat_mouse_up", eat_mouse_up);
+                }
             }
         }
 
@@ -4485,11 +4488,9 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
             try labelNoFmt(@src(), entries[i], labelopts);
 
             if (mi.activeRect()) |_| {
-                if (mouse_moved) {
-                    choice.* = i;
-                    ret = true;
-                    dvui.menuGet().?.close();
-                }
+                choice.* = i;
+                ret = true;
+                dvui.menuGet().?.close();
             }
         }
     }
@@ -7063,6 +7064,7 @@ pub const MenuItemWidget = struct {
     };
 
     wd: WidgetData = undefined,
+    focused_last_frame: bool = undefined,
     highlight: bool = false,
     init_opts: InitOptions = undefined,
     activated: bool = false,
@@ -7074,6 +7076,7 @@ pub const MenuItemWidget = struct {
         const options = defaults.override(opts);
         self.wd = WidgetData.init(src, options);
         self.init_opts = init_opts;
+        self.focused_last_frame = dataGet(null, self.wd.id, "_focus_last", bool) orelse false;
         return self;
     }
 
@@ -7113,11 +7116,15 @@ pub const MenuItemWidget = struct {
             if (!self.init_opts.submenu or !menuGet().?.submenus_activated) {
                 self.show_active = true;
 
-                // in case we are in a scrollable dropdown, scroll
-                var scrollto = Event{ .evt = .{ .scroll_to = .{ .screen_rect = self.wd.borderRectScale().r } } };
-                self.wd.parent.processEvent(&scrollto, true);
+                if (!self.focused_last_frame) {
+                    // in case we are in a scrollable dropdown, scroll
+                    var scrollto = Event{ .evt = .{ .scroll_to = .{ .screen_rect = self.wd.borderRectScale().r } } };
+                    self.wd.parent.processEvent(&scrollto, true);
+                }
             }
         }
+
+        self.focused_last_frame = focused;
 
         if (self.show_active) {
             if (opts.focus_as_outline) {
@@ -7251,6 +7258,7 @@ pub const MenuItemWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        dataSet(null, self.wd.id, "_focus_last", self.focused_last_frame);
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
