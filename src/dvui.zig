@@ -1558,6 +1558,11 @@ pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: ?u32) !
             sw.rect = rect;
             sw.modal = modal;
             sw.stay_above_parent = stay_above_parent;
+
+            if (sw.render_cmds.items.len > 0 or sw.render_cmds_after.items.len > 0) {
+                std.debug.print("dvui: subwindowAdd {x} is clearing some drawing commands (did you try to draw between subwindowCurrentSet and subwindowAdd?)\n", .{id});
+            }
+
             sw.render_cmds = std.ArrayList(RenderCmd).init(cw.arena);
             sw.render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena);
             return;
