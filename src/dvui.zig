@@ -2336,7 +2336,7 @@ pub const Window = struct {
             .dialog_mutex = std.Thread.Mutex{},
             .dialogs = std.ArrayList(Dialog).init(gpa),
             .toasts = std.ArrayList(Toast).init(gpa),
-            .wd = WidgetData{ .id = hashval },
+            .wd = WidgetData{ .id = hashval, .init_options = .{ .subwindow = true }, .options = .{} },
             .backend = backend,
         };
 
@@ -3372,7 +3372,6 @@ pub const Window = struct {
     }
 
     pub fn screenRectScale(self: *Self, r: Rect) RectScale {
-        // can't use WidgetData helper functions because our parent is undefined
         const scaled = r.scale(self.natural_scale);
         return RectScale{ .r = scaled.offset(self.rect_pixels), .s = self.natural_scale };
     }
@@ -3442,7 +3441,7 @@ pub const PopupWidget = struct {
         // passing options.rect will stop WidgetData.init from calling
         // rectFor/minSizeForChild which is important because we are outside
         // normal layout
-        self.wd = WidgetData.init(src, .{ .id_extra = opts.id_extra, .rect = .{} });
+        self.wd = WidgetData.init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{} });
 
         self.initialRect = initialRect;
         return self;
@@ -3470,8 +3469,8 @@ pub const PopupWidget = struct {
             refresh();
         }
 
-        // outside normal flow, so don't get rect from parent
-        const rs = self.ownScreenRectScale();
+        const rs = self.wd.rectScale();
+
         try subwindowAdd(self.wd.id, rs.r, false, null);
         try self.wd.register("Popup", rs);
 
@@ -3510,14 +3509,7 @@ pub const PopupWidget = struct {
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        // outside normal flow, so don't get rect from parent
-        return self.ownScreenRectScale().rectToScreen(rect);
-    }
-
-    pub fn ownScreenRectScale(self: *const Self) RectScale {
-        const s = windowNaturalScale();
-        const scaled = self.wd.rect.scale(s);
-        return RectScale{ .r = scaled.offset(windowRectPixels()), .s = s };
+        return self.wd.contentRectScale().rectToScreen(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -3573,8 +3565,7 @@ pub const PopupWidget = struct {
         self.options.min_size_content = self.scroll.si.virtual_size;
         self.wd.minSizeMax(self.options.min_sizeGet());
 
-        // outside normal flow, so don't get rect from parent
-        const rs = self.ownScreenRectScale();
+        const rs = self.wd.rectScale();
         var evts = events();
         for (evts) |*e| {
             if (!eventMatch(e, .{ .id = self.wd.id, .r = rs.r, .cleanup = true }))
@@ -3618,8 +3609,7 @@ pub const PopupWidget = struct {
 
         self.wd.minSizeSetAndRefresh();
 
-        // outside normal layout, don't call minSizeForChild or
-        // self.wd.minSizeReportToParent();
+        // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();
 
         _ = popupSet(self.parent_popup);
         _ = parentSet(self.wd.parent);
@@ -3674,7 +3664,7 @@ pub const FloatingWindowWidget = struct {
         // the embedded BoxWidget
         // passing options.rect will stop WidgetData.init from calling rectFor
         // which is important because we are outside normal layout
-        self.wd = WidgetData.init(src, .{ .id_extra = opts.id_extra, .rect = .{} });
+        self.wd = WidgetData.init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{} });
 
         self.init_options = init_opts;
 
@@ -3783,8 +3773,7 @@ pub const FloatingWindowWidget = struct {
             self.processEventsBefore();
         }
 
-        // outside normal flow, so don't get rect from parent
-        const rs = self.ownScreenRectScale();
+        const rs = self.wd.rectScale();
         try subwindowAdd(self.wd.id, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent) self.prev_windowId else null);
         try self.wd.register("FloatingWindow", rs);
 
@@ -3806,8 +3795,7 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn processEventsBefore(self: *Self) void {
-        // outside normal flow, so don't get rect from parent
-        const rs = self.ownScreenRectScale();
+        const rs = self.wd.rectScale();
         var evts = events();
         for (evts) |*e| {
             if (!eventMatch(e, .{ .id = self.wd.id, .r = rs.r }))
@@ -3866,8 +3854,7 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn processEventsAfter(self: *Self) void {
-        // outside normal flow, so don't get rect from parent
-        const rs = self.ownScreenRectScale();
+        const rs = self.wd.rectScale();
         // duplicate processEventsBefore (minus corner stuff) because you could
         // have a click down, motion, and up in same frame and you wouldn't know
         // you needed to do anything until you got capture here
@@ -3958,14 +3945,7 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
-        // outside normal flow, so don't get rect from parent
-        return self.ownScreenRectScale().rectToScreen(rect);
-    }
-
-    pub fn ownScreenRectScale(self: *const Self) RectScale {
-        const s = windowNaturalScale();
-        const scaled = self.wd.rect.scale(s);
-        return RectScale{ .r = scaled.offset(windowRectPixels()), .s = s };
+        return self.wd.contentRectScale().rectToScreen(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
@@ -4011,8 +3991,7 @@ pub const FloatingWindowWidget = struct {
         dataSet(null, self.wd.id, "_auto_size", self.auto_size);
         self.wd.minSizeSetAndRefresh();
 
-        // outside normal layout, don't call minSizeForChild or
-        // self.wd.minSizeReportToParent();
+        // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();
 
         _ = parentSet(self.wd.parent);
         _ = subwindowCurrentSet(self.prev_windowId);
@@ -4317,7 +4296,7 @@ pub const AnimateWidget = struct {
     prev_alpha: f32 = 1.0,
 
     pub fn init(src: std.builtin.SourceLocation, kind: Kind, duration_micros: i32, opts: Options) Self {
-        return Self{ .wd = WidgetData.init(src, opts), .kind = kind, .duration = duration_micros };
+        return Self{ .wd = WidgetData.init(src, .{}, opts), .kind = kind, .duration = duration_micros };
     }
 
     pub fn install(self: *Self, opts: struct {}) !void {
@@ -4572,7 +4551,7 @@ pub const PanedWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, dir: dvui.Direction, collapse_size: f32, opts: Options) Self {
         var self = Self{};
-        self.wd = WidgetData.init(src, opts);
+        self.wd = WidgetData.init(src, .{}, opts);
         self.dir = dir;
         self.collapse_size = collapse_size;
         self.captured = captureMouseMaintain(self.wd.id);
@@ -4933,7 +4912,7 @@ pub const TextLayoutWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         const options = defaults.override(opts);
-        var self = Self{ .wd = WidgetData.init(src, options), .selection_in = init_opts.selection };
+        var self = Self{ .wd = WidgetData.init(src, .{}, options), .selection_in = init_opts.selection };
         self.break_lines = init_opts.break_lines;
 
         return self;
@@ -5552,7 +5531,7 @@ pub const ContextWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, opts: Options) Self {
         var self = Self{};
-        self.wd = WidgetData.init(src, opts);
+        self.wd = WidgetData.init(src, .{}, opts);
         self.winId = subwindowCurrentId();
         if (focusedWidgetIdInCurrentSubwindow()) |fid| {
             if (fid == self.wd.id) {
@@ -5678,7 +5657,7 @@ pub const OverlayWidget = struct {
     wd: WidgetData = undefined,
 
     pub fn init(src: std.builtin.SourceLocation, opts: Options) Self {
-        return Self{ .wd = WidgetData.init(src, opts) };
+        return Self{ .wd = WidgetData.init(src, .{}, opts) };
     }
 
     pub fn install(self: *Self, opts: struct {}) !void {
@@ -5761,7 +5740,7 @@ pub const BoxWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, dir: Direction, equal_space: bool, opts: Options) BoxWidget {
         var self = Self{};
-        self.wd = WidgetData.init(src, opts);
+        self.wd = WidgetData.init(src, .{}, opts);
         self.dir = dir;
         self.equal_space = equal_space;
         if (dataGet(null, self.wd.id, "_data", Data)) |d| {
@@ -6177,7 +6156,7 @@ pub const ScrollContainerWidget = struct {
         var self = Self{};
         const options = defaults.override(opts);
 
-        self.wd = WidgetData.init(src, options);
+        self.wd = WidgetData.init(src, .{}, options);
 
         self.si = io_scroll_info;
 
@@ -6543,7 +6522,7 @@ pub const ScrollBarWidget = struct {
             options.min_size_content = .{ .w = 5, .h = 5 };
             options.rect = placeIn(parentGet().data().contentRect().justSize(), options.min_sizeGet(), opts.expandGet(), opts.gravityGet());
         }
-        self.wd = WidgetData.init(src, options);
+        self.wd = WidgetData.init(src, .{}, options);
 
         return self;
     }
@@ -6701,7 +6680,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) !void {
         .color_style = .content,
     };
 
-    var wd = WidgetData.init(src, defaults.override(opts));
+    var wd = WidgetData.init(src, .{}, defaults.override(opts));
     try wd.register("Separator", null);
     try wd.borderAndBackground(.{});
     wd.minSizeSetAndRefresh();
@@ -6712,7 +6691,7 @@ pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) Widget
     if (opts.min_size_content != null) {
         std.debug.print("warning: spacer options had min_size but is being overwritten\n", .{});
     }
-    var wd = WidgetData.init(src, opts.override(.{ .min_size_content = size }));
+    var wd = WidgetData.init(src, .{}, opts.override(.{ .min_size_content = size }));
     wd.register("Spacer", null) catch {};
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
@@ -6724,7 +6703,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
         .min_size_content = .{ .w = 50, .h = 50 },
     };
     const options = defaults.override(opts);
-    var wd = WidgetData.init(src, options);
+    var wd = WidgetData.init(src, .{}, options);
     try wd.register("Spinner", null);
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
@@ -6773,7 +6752,7 @@ pub const ScaleWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, scale_in: f32, opts: Options) Self {
         var self = Self{};
-        self.wd = WidgetData.init(src, opts);
+        self.wd = WidgetData.init(src, .{}, opts);
         self.scale = scale_in;
         return self;
     }
@@ -6860,7 +6839,7 @@ pub const MenuWidget = struct {
     pub fn init(src: std.builtin.SourceLocation, dir: Direction, opts: Options) MenuWidget {
         var self = Self{};
         const options = defaults.override(opts);
-        self.wd = WidgetData.init(src, options);
+        self.wd = WidgetData.init(src, .{}, options);
 
         self.winId = subwindowCurrentId();
         self.dir = dir;
@@ -7079,7 +7058,7 @@ pub const MenuItemWidget = struct {
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         var self = Self{};
         const options = defaults.override(opts);
-        self.wd = WidgetData.init(src, options);
+        self.wd = WidgetData.init(src, .{}, options);
         self.init_opts = init_opts;
         self.focused_last_frame = dataGet(null, self.wd.id, "_focus_last", bool) orelse false;
         return self;
@@ -7292,7 +7271,7 @@ pub const LabelWidget = struct {
         var size = try options.fontGet().textSize(self.label_str);
         size = Size.max(size, options.min_size_contentGet());
 
-        self.wd = WidgetData.init(src, options.override(.{ .min_size_content = size }));
+        self.wd = WidgetData.init(src, .{}, options.override(.{ .min_size_content = size }));
 
         return self;
     }
@@ -7367,7 +7346,7 @@ pub const IconWidget = struct {
             size = Size{ .w = iconWidth(name, tvg_bytes, h) catch h, .h = h };
         }
 
-        self.wd = WidgetData.init(src, options.override(.{ .min_size_content = size }));
+        self.wd = WidgetData.init(src, .{}, options.override(.{ .min_size_content = size }));
 
         return self;
     }
@@ -7412,7 +7391,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
     const ss = parentGet().screenRectScale(Rect{}).s;
     size = size.scale(1.0 / ss);
 
-    var wd = WidgetData.init(src, opts.override(.{ .min_size_content = size }));
+    var wd = WidgetData.init(src, .{}, opts.override(.{ .min_size_content = size }));
     try wd.register("debugFontAtlases", null);
 
     try wd.borderAndBackground(.{});
@@ -7441,7 +7420,7 @@ pub const ButtonWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, opts: Options) Self {
         var self = Self{};
-        self.wd = WidgetData.init(src, defaults.override(opts));
+        self.wd = WidgetData.init(src, .{}, defaults.override(opts));
         self.capture = captureMouseMaintain(self.wd.id);
         return self;
     }
@@ -7879,7 +7858,7 @@ pub const TextEntryWidget = struct {
         options.min_size_content.?.w += self.padding.x + self.padding.w;
         options.min_size_content.?.h += self.padding.y + self.padding.h;
 
-        self.wd = WidgetData.init(src, options);
+        self.wd = WidgetData.init(src, .{}, options);
 
         self.len = std.mem.indexOfScalar(u8, self.init_opts.text, 0) orelse self.init_opts.text.len;
         return self;
@@ -8323,6 +8302,10 @@ pub const Rect = struct {
 
     pub fn offset(self: *const Self, r: Rect) Self {
         return Self{ .x = self.x + r.x, .y = self.y + r.y, .w = self.w, .h = self.h };
+    }
+
+    pub fn offsetNeg(self: *const Self, r: Rect) Self {
+        return Self{ .x = self.x - r.x, .y = self.y - r.y, .w = self.w, .h = self.h };
     }
 
     pub fn intersect(a: Self, b: Self) Self {
@@ -8878,14 +8861,21 @@ pub const Event = struct {
 };
 
 pub const WidgetData = struct {
+    pub const InitOptions = struct {
+        // if true, don't send our rect through our parent because we aren't located inside our parent
+        subwindow: bool = false,
+    };
+
     id: u32 = undefined,
     parent: Widget = undefined,
+    init_options: InitOptions = undefined,
     rect: Rect = Rect{},
     min_size: Size = Size{},
     options: Options = undefined,
 
-    pub fn init(src: std.builtin.SourceLocation, opts: Options) WidgetData {
+    pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
         var self = WidgetData{};
+        self.init_options = init_options;
         self.options = opts;
 
         self.parent = parentGet();
@@ -8986,6 +8976,12 @@ pub const WidgetData = struct {
     }
 
     pub fn rectScale(self: *const WidgetData) RectScale {
+        if (self.init_options.subwindow) {
+            const s = windowNaturalScale();
+            const scaled = self.rect.scale(s);
+            return RectScale{ .r = scaled.offset(windowRectPixels()), .s = s };
+        }
+
         return self.parent.screenRectScale(self.rect);
     }
 
@@ -8994,7 +8990,8 @@ pub const WidgetData = struct {
     }
 
     pub fn borderRectScale(self: *const WidgetData) RectScale {
-        return self.parent.screenRectScale(self.borderRect());
+        const r = self.borderRect().offsetNeg(self.rect);
+        return self.rectScale().rectToScreen(r);
     }
 
     pub fn backgroundRect(self: *const WidgetData) Rect {
@@ -9002,7 +8999,8 @@ pub const WidgetData = struct {
     }
 
     pub fn backgroundRectScale(self: *const WidgetData) RectScale {
-        return self.parent.screenRectScale(self.backgroundRect());
+        const r = self.backgroundRect().offsetNeg(self.rect);
+        return self.rectScale().rectToScreen(r);
     }
 
     pub fn contentRect(self: *const WidgetData) Rect {
@@ -9010,7 +9008,8 @@ pub const WidgetData = struct {
     }
 
     pub fn contentRectScale(self: *const WidgetData) RectScale {
-        return self.parent.screenRectScale(self.contentRect());
+        const r = self.contentRect().offsetNeg(self.rect);
+        return self.rectScale().rectToScreen(r);
     }
 
     pub fn padSize(self: *const WidgetData, s: Size) Size {
