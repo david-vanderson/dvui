@@ -391,7 +391,7 @@ pub const StrokeTest = struct {
     wd: dvui.WidgetData = undefined,
 
     pub fn install(self: *Self, src: std.builtin.SourceLocation, options: dvui.Options) !void {
-        self.wd = dvui.WidgetData.init(src, options);
+        self.wd = dvui.WidgetData.init(src, .{}, options);
         dvui.debug("{x} StrokeTest {}", .{ self.wd.id, self.wd.rect });
 
         _ = dvui.captureMouseMaintain(self.wd.id);
