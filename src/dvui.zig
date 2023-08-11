@@ -1548,7 +1548,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     cw.path.clearAndFree();
 }
 
-pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: ?u32) !void {
+pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: ?u32) !u32 {
     const cw = currentWindow();
 
     for (cw.subwindows.items) |*sw| {
@@ -1560,7 +1560,7 @@ pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: ?u32) !
             sw.stay_above_parent = stay_above_parent;
             sw.render_cmds = std.ArrayList(RenderCmd).init(cw.arena);
             sw.render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena);
-            return;
+            return subwindowCurrentSet(id);
         }
     }
 
@@ -1588,6 +1588,8 @@ pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: ?u32) !
         // just put it on the top
         try cw.subwindows.append(sw);
     }
+
+    return subwindowCurrentSet(id);
 }
 
 pub fn subwindowCurrentSet(id: u32) u32 {
@@ -2756,9 +2758,7 @@ pub const Window = struct {
 
         //std.debug.print("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
-        try subwindowAdd(self.wd.id, self.wd.rect, false, null);
-
-        _ = subwindowCurrentSet(self.wd.id);
+        _ = try subwindowAdd(self.wd.id, self.rect_pixels, false, null);
 
         self.extra_frames_needed -|= 1;
         self.rate = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
@@ -3446,8 +3446,6 @@ pub const PopupWidget = struct {
     pub fn install(self: *Self, opts: struct {}) !void {
         _ = opts;
         _ = parentSet(self.widget());
-
-        self.prev_windowId = subwindowCurrentSet(self.wd.id);
         self.parent_popup = popupSet(self);
 
         if (minSizeGet(self.wd.id)) |_| {
@@ -3467,7 +3465,7 @@ pub const PopupWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        try subwindowAdd(self.wd.id, rs.r, false, null);
+        self.prev_windowId = try subwindowAdd(self.wd.id, rs.r, false, null);
         try self.wd.register("Popup", rs);
 
         // clip to just our window (using clipSet since we are not inside our parent)
@@ -3763,7 +3761,6 @@ pub const FloatingWindowWidget = struct {
         }
 
         _ = parentSet(self.widget());
-        self.prev_windowId = subwindowCurrentSet(self.wd.id);
 
         // reset clip to whole OS window
         // - if modal fade everything below us
@@ -3780,7 +3777,7 @@ pub const FloatingWindowWidget = struct {
 
         // outside normal flow, so don't get rect from parent
         const rs = self.ownScreenRectScale();
-        try subwindowAdd(self.wd.id, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent) self.prev_windowId else null);
+        self.prev_windowId = try subwindowAdd(self.wd.id, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent) self.prev_windowId else null);
         try self.wd.register("FloatingWindow", rs);
 
         if (self.init_options.modal) {
