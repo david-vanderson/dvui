@@ -33,10 +33,11 @@ pub fn main() !void {
 
     //var rng = std.rand.DefaultPrng.init(0);
 
+    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const arena = arena_allocator.allocator();
+
     main_loop: while (true) {
-        var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-        defer arena_allocator.deinit();
-        const arena = arena_allocator.allocator();
+        defer _ = arena_allocator.reset(.free_all);
 
         var nstime = win.beginWait(win_backend.hasEvent());
         try win.begin(arena, nstime);

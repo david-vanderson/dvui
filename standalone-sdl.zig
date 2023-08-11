@@ -26,10 +26,11 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
     defer win.deinit();
 
+    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const arena = arena_allocator.allocator();
+
     main_loop: while (true) {
-        var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-        defer arena_allocator.deinit();
-        var arena = arena_allocator.allocator();
+        defer _ = arena_allocator.reset(.free_all);
 
         // beginWait coordinates with waitTime below to run frames only when needed
         var nstime = win.beginWait(backend.hasEvent());
