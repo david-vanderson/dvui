@@ -3483,6 +3483,10 @@ pub const PopupWidget = struct {
         self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none }, self.options.override(.{ .margin = .{}, .expand = .both }));
         try self.scroll.install(.{});
 
+        if (menuGet()) |pm| {
+            pm.child_popup_rect = rs.r;
+        }
+
         self.menu = MenuWidget.init(@src(), .vertical, self.options.strip().override(.{ .expand = .both }));
         self.menu.parentSubwindowId = self.prev_windowId;
         try self.menu.install(.{});
@@ -6840,6 +6844,10 @@ pub const MenuWidget = struct {
     submenus_in_child: bool = false,
     mouse_over: bool = false,
 
+    // if we have a child popup menu, save it's rect for next frame
+    // supports mouse skipping over menu items if towards the submenu
+    child_popup_rect: ?Rect = null,
+
     pub fn init(src: std.builtin.SourceLocation, dir: Direction, opts: Options) MenuWidget {
         var self = Self{};
         const options = defaults.override(opts);
@@ -6907,9 +6915,25 @@ pub const MenuWidget = struct {
         switch (e.evt) {
             .mouse => |me| {
                 if (me.kind == .position) {
-                    // TODO: set this event to handled if there is an existing submenu and motion is towards the popup
                     if (mouseTotalMotion().nonZero()) {
-                        self.mouse_over = true;
+                        if (dataGet(null, self.wd.id, "_child_popup", Rect)) |r| {
+                            const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
+                            const cw = currentWindow();
+                            const to_center = Point.diff(center, cw.mouse_pt_prev);
+                            const movement = Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
+                            const dot_prod = movement.x * to_center.x + movement.y * to_center.y;
+                            const cos = dot_prod / (to_center.length() * movement.length());
+                            if (std.math.acos(cos) < std.math.pi / 3.0) {
+                                // there is an existing submenu and motion is
+                                // towards the popup, so eat this event to
+                                // prevent any menu items from focusing
+                                e.handled = true;
+                            }
+                        }
+
+                        if (!e.handled) {
+                            self.mouse_over = true;
+                        }
                     }
                 }
             },
@@ -6924,14 +6948,14 @@ pub const MenuWidget = struct {
                         .up => {
                             if (self.dir == .vertical) {
                                 e.handled = true;
-                                // FIXME: don't do this if focus would move outside the menu
+                                // TODO: don't do this if focus would move outside the menu
                                 tabIndexPrev(e.num);
                             }
                         },
                         .down => {
                             if (self.dir == .vertical) {
                                 e.handled = true;
-                                // FIXME: don't do this if focus would move outside the menu
+                                // TODO: don't do this if focus would move outside the menu
                                 tabIndexNext(e.num);
                             }
                         },
@@ -6945,7 +6969,7 @@ pub const MenuWidget = struct {
                                     focusSubwindow(sid, null);
                                 }
                             } else {
-                                // FIXME: don't do this if focus would move outside the menu
+                                // TODO: don't do this if focus would move outside the menu
                                 tabIndexPrev(e.num);
                             }
                         },
@@ -6960,7 +6984,7 @@ pub const MenuWidget = struct {
                                 }
                             } else {
                                 e.handled = true;
-                                // FIXME: don't do this if focus would move outside the menu
+                                // TODO: don't do this if focus would move outside the menu
                                 tabIndexNext(e.num);
                             }
                         },
@@ -6982,6 +7006,9 @@ pub const MenuWidget = struct {
     pub fn deinit(self: *Self) void {
         self.box.deinit();
         dataSet(null, self.wd.id, "_sub_act", self.submenus_activated);
+        if (self.child_popup_rect) |r| {
+            dataSet(null, self.wd.id, "_child_popup", r);
+        }
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = menuSet(self.parentMenu);
@@ -8174,10 +8201,6 @@ pub const Point = struct {
 
     pub fn nonZero(self: *const Self) bool {
         return (self.x != 0 or self.y != 0);
-    }
-
-    pub fn inRectScale(self: *const Self, rs: RectScale) Self {
-        return Self{ .x = (self.x - rs.r.x) / rs.s, .y = (self.y - rs.r.y) / rs.s };
     }
 
     pub fn plus(self: *const Self, b: Self) Self {
