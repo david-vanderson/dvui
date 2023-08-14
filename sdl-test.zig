@@ -460,7 +460,7 @@ pub const StrokeTest = struct {
         switch (e.evt) {
             .mouse => |me| {
                 const rs = self.wd.contentRectScale();
-                const mp = me.p.inRectScale(rs);
+                const mp = rs.pointFromScreen(me.p);
                 switch (me.kind) {
                     .press => |button| {
                         if (button == .left) {

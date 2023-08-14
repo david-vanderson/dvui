@@ -1,7 +1,4 @@
 
-menu mouse motion towards open submenu
-  - submenu has to register its rect with parent
-
 change BoxWidget to take InitOptions
 
 change MenuWidget to take InitOptions
@@ -10,6 +7,7 @@ change MenuWidget to take InitOptions
 popupSet - can this be done as a static var inside PopupWidget?
 
 remove the color_style error?
+- success and error styles are only used on buttons, so maybe special case them
 
 
 send updates to tinyvg
