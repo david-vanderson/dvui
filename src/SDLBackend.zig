@@ -42,26 +42,6 @@ pub fn init(options: initOptions) !SDLBackend {
         };
     }
 
-    var scale: f32 = 1.0;
-
-    if (sdl3) {
-        scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(window));
-        std.debug.print("SDL3 backend scale {d}\n", .{scale});
-    } else {
-        const display_num = c.SDL_GetWindowDisplayIndex(window);
-        var hdpi: f32 = undefined;
-        var vdpi: f32 = undefined;
-        _ = c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi);
-        const dpi = @max(hdpi, vdpi);
-        if (dpi > 200) {
-            scale = 4.0;
-        } else if (dpi > 100) {
-            scale = 2.0;
-        }
-        std.debug.print("SDL2 dpi {d} guessing backend scale {d}\n", .{ dpi, scale });
-        _ = c.SDL_SetWindowSize(window, @as(c_int, @intFromFloat(scale * @as(f32, @floatFromInt(options.width)))), @as(c_int, @intFromFloat(scale * @as(f32, @floatFromInt(options.height)))));
-    }
-
     _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
     var renderer: *c.SDL_Renderer = undefined;
@@ -79,7 +59,30 @@ pub fn init(options: initOptions) !SDLBackend {
 
     _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_BLEND);
 
-    var back = SDLBackend{ .window = window, .renderer = renderer, .initial_scale = scale };
+    var back = SDLBackend{ .window = window, .renderer = renderer };
+
+    if (sdl3) {
+        back.initial_scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(window));
+        std.debug.print("SDL3 backend scale {d}\n", .{back.initial_scale});
+    } else {
+        const winSize = back.windowSize();
+        const pxSize = back.pixelSize();
+        const nat_scale = pxSize.w / winSize.w;
+        if (nat_scale == 1.0) {
+            const display_num = c.SDL_GetWindowDisplayIndex(window);
+            var hdpi: f32 = undefined;
+            var vdpi: f32 = undefined;
+            _ = c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi);
+            const dpi = @max(hdpi, vdpi);
+            if (dpi > 200) {
+                back.initial_scale = 4.0;
+            } else if (dpi > 100) {
+                back.initial_scale = 2.0;
+            }
+            std.debug.print("SDL2 dpi {d} guessing backend scale {d}\n", .{ dpi, back.initial_scale });
+            _ = c.SDL_SetWindowSize(window, @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(options.width)))), @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(options.height)))));
+        }
+    }
 
     return back;
 }
