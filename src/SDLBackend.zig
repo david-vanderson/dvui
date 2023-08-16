@@ -10,6 +10,7 @@ const SDLBackend = @This();
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
+initial_scale: f32 = 1.0,
 cursor_last: dvui.Cursor = .arrow,
 cursor_backing: [@typeInfo(dvui.Cursor).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.Cursor).Enum.fields.len,
 cursor_backing_tried: [@typeInfo(dvui.Cursor).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(dvui.Cursor).Enum.fields.len,
@@ -41,10 +42,24 @@ pub fn init(options: initOptions) !SDLBackend {
         };
     }
 
+    var scale: f32 = 1.0;
+
     if (sdl3) {
-        var scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(window));
-        std.debug.print("sdl3 content scale {d}\n", .{scale});
-        window.content_scale = scale;
+        scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(window));
+        std.debug.print("SDL3 backend scale {d}\n", .{scale});
+    } else {
+        const display_num = c.SDL_GetWindowDisplayIndex(window);
+        var hdpi: f32 = undefined;
+        var vdpi: f32 = undefined;
+        _ = c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi);
+        const dpi = @max(hdpi, vdpi);
+        if (dpi > 200) {
+            scale = 4.0;
+        } else if (dpi > 100) {
+            scale = 2.0;
+        }
+        std.debug.print("SDL2 dpi {d} guessing backend scale {d}\n", .{ dpi, scale });
+        _ = c.SDL_SetWindowSize(window, @as(c_int, @intFromFloat(scale * @as(f32, @floatFromInt(options.width)))), @as(c_int, @intFromFloat(scale * @as(f32, @floatFromInt(options.height)))));
     }
 
     _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
@@ -64,7 +79,7 @@ pub fn init(options: initOptions) !SDLBackend {
 
     _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_BLEND);
 
-    var back = SDLBackend{ .window = window, .renderer = renderer };
+    var back = SDLBackend{ .window = window, .renderer = renderer, .initial_scale = scale };
 
     return back;
 }
