@@ -3199,7 +3199,7 @@ pub const Window = struct {
         var float = try dvui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
         defer float.deinit();
 
-        try dvui.windowHeader("GUI Debug", "", &self.debug_window_show);
+        try dvui.windowHeader("DVUI Debug", "", &self.debug_window_show);
 
         {
             var hbox = try dvui.box(@src(), .horizontal, .{});
@@ -3208,7 +3208,9 @@ pub const Window = struct {
             try dvui.labelNoFmt(@src(), "Hex id of widget to highlight:", .{ .gravity_y = 0.5 });
 
             var buf = [_]u8{0} ** 20;
-            _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
+            if (self.debug_widget_id != 0) {
+                _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
+            }
             try dvui.textEntry(@src(), .{ .text = &buf }, .{});
 
             self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(&buf, 0), 16) catch 0;
@@ -9516,7 +9518,7 @@ pub const examples = struct {
 
         var buf: [100]u8 = undefined;
         const fps_str = std.fmt.bufPrint(&buf, "{d:4.0} fps", .{dvui.FPS()}) catch unreachable;
-        try dvui.windowHeader("GUI Demo", fps_str, &show_demo_window);
+        try dvui.windowHeader("DVUI Demo", fps_str, &show_demo_window);
 
         var ti = dvui.toastsFor(float.data().id);
         if (ti) |*it| {
