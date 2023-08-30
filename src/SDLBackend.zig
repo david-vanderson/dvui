@@ -10,6 +10,8 @@ const SDLBackend = @This();
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
+touch_mouse_events: bool = true,
+log_events: bool = false,
 initial_scale: f32 = 1.0,
 cursor_last: dvui.Cursor = .arrow,
 cursor_backing: [@typeInfo(dvui.Cursor).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.Cursor).Enum.fields.len,
@@ -297,9 +299,13 @@ pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
     c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(texture)));
 }
 
-pub fn addEvent(_: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
+pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
     switch (event.type) {
         if (sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
+            if (self.log_events) {
+                std.debug.print("sdl event KEYDOWN {d}\n", .{event.key.keysym.sym});
+            }
+
             return try win.addEventKey(.{
                 .code = SDL_keysym_to_dvui(event.key.keysym.sym),
                 .action = if (event.key.repeat > 0) .repeat else .down,
@@ -307,6 +313,10 @@ pub fn addEvent(_: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
             });
         },
         if (sdl3) c.SDL_EVENT_KEY_UP else c.SDL_KEYUP => {
+            if (self.log_events) {
+                std.debug.print("sdl event KEYUP {d}\n", .{event.key.keysym.sym});
+            }
+
             return try win.addEventKey(.{
                 .code = SDL_keysym_to_dvui(event.key.keysym.sym),
                 .action = .up,
@@ -314,9 +324,25 @@ pub fn addEvent(_: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
             });
         },
         if (sdl3) c.SDL_EVENT_TEXT_INPUT else c.SDL_TEXTINPUT => {
+            if (self.log_events) {
+                std.debug.print("sdl event TEXTINPUT {s}\n", .{event.text.text});
+            }
+
             return try win.addEventText(std.mem.sliceTo(&event.text.text, 0));
         },
         if (sdl3) c.SDL_EVENT_MOUSE_MOTION else c.SDL_MOUSEMOTION => {
+            const touch = event.motion.which == c.SDL_TOUCH_MOUSEID;
+            if (self.log_events) {
+                var touch_str: []const u8 = " ";
+                if (touch) touch_str = " touch ";
+                if (touch and !self.touch_mouse_events) touch_str = " touch ignored ";
+                std.debug.print("sdl event{s}MOUSEMOTION {d} {d}\n", .{ touch_str, event.motion.x, event.motion.y });
+            }
+
+            if (touch and !self.touch_mouse_events) {
+                return false;
+            }
+
             if (sdl3) {
                 return try win.addEventMouseMotion(event.motion.x, event.motion.y);
             } else {
@@ -324,17 +350,69 @@ pub fn addEvent(_: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
             }
         },
         if (sdl3) c.SDL_EVENT_MOUSE_BUTTON_DOWN else c.SDL_MOUSEBUTTONDOWN => {
+            const touch = event.motion.which == c.SDL_TOUCH_MOUSEID;
+            if (self.log_events) {
+                var touch_str: []const u8 = " ";
+                if (touch) touch_str = " touch ";
+                if (touch and !self.touch_mouse_events) touch_str = " touch ignored ";
+                std.debug.print("sdl event{s}MOUSEBUTTONDOWN {d}\n", .{ touch_str, event.button.button });
+            }
+
+            if (touch and !self.touch_mouse_events) {
+                return false;
+            }
+
             return try win.addEventMouseButton(.{ .press = SDL_mouse_button_to_dvui(event.button.button) });
         },
         if (sdl3) c.SDL_EVENT_MOUSE_BUTTON_UP else c.SDL_MOUSEBUTTONUP => {
+            const touch = event.motion.which == c.SDL_TOUCH_MOUSEID;
+            if (self.log_events) {
+                var touch_str: []const u8 = " ";
+                if (touch) touch_str = " touch ";
+                if (touch and !self.touch_mouse_events) touch_str = " touch ignored ";
+                std.debug.print("sdl event{s}MOUSEBUTTONUP {d}\n", .{ touch_str, event.button.button });
+            }
+
+            if (touch and !self.touch_mouse_events) {
+                return false;
+            }
+
             return try win.addEventMouseButton(.{ .release = SDL_mouse_button_to_dvui(event.button.button) });
         },
         if (sdl3) c.SDL_EVENT_MOUSE_WHEEL else c.SDL_MOUSEWHEEL => {
+            if (self.log_events) {
+                std.debug.print("sdl event MOUSEWHEEL {d}\n", .{event.wheel.y});
+            }
+
             const ticks = if (sdl3) event.wheel.y else @as(f32, @floatFromInt(event.wheel.y));
             return try win.addEventMouseWheel(ticks);
         },
+        if (sdl3) c.SDL_FINGERDOWN else c.SDL_FINGERDOWN => {
+            if (self.log_events) {
+                std.debug.print("sdl event FINGERDOWN {d} {d} {d} {d} {d}\n", .{ event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy });
+            }
+
+            return true;
+            //try win.addEventFinger(.{ .press = SDL_mouse_button_to_dvui(event.button.button) });
+        },
+        if (sdl3) c.SDL_FINGERUP else c.SDL_FINGERUP => {
+            if (self.log_events) {
+                std.debug.print("sdl event FINGERUP {d} {d} {d} {d} {d}\n", .{ event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy });
+            }
+
+            return true;
+        },
+        if (sdl3) c.SDL_FINGERMOTION else c.SDL_FINGERMOTION => {
+            if (self.log_events) {
+                std.debug.print("sdl event FINGERMOTION {d} {d} {d} {d} {d}\n", .{ event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy });
+            }
+
+            return true;
+        },
         else => {
-            //std.debug.print("unhandled SDL event type {}\n", .{event.type});
+            if (self.log_events) {
+                std.debug.print("unhandled SDL event type {}\n", .{event.type});
+            }
             return false;
         },
     }
