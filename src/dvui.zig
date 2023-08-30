@@ -3488,7 +3488,7 @@ pub const PopupWidget = struct {
             pm.child_popup_rect = rs.r;
         }
 
-        self.menu = MenuWidget.init(@src(), .vertical, self.options.strip().override(.{ .expand = .both }));
+        self.menu = MenuWidget.init(@src(), .vertical, self.options.strip().override(.{ .expand = .horizontal }));
         self.menu.parentSubwindowId = self.prev_windowId;
         try self.menu.install(.{});
 
@@ -5935,9 +5935,9 @@ pub const ScrollAreaWidget = struct {
 
     pub const InitOpts = struct {
         scroll_info: ?*ScrollInfo = null,
-        vertical: ?ScrollInfo.ScrollMode = null,
+        vertical: ScrollInfo.ScrollMode = .auto,
         vertical_bar: ScrollInfo.ScrollBarMode = .auto,
-        horizontal: ?ScrollInfo.ScrollMode = null,
+        horizontal: ScrollInfo.ScrollMode = .none,
         horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
     };
 
@@ -5963,28 +5963,19 @@ pub const ScrollAreaWidget = struct {
     pub fn install(self: *Self, opts: struct { process_events: bool = true, focus_id: ?u32 = null }) !void {
         if (self.init_opts.scroll_info) |si| {
             self.si = si;
-            if (self.init_opts.vertical) |_| {
-                std.debug.print("gui: ScrollAreaWidget {x} init_opts.vertical ignored because given init_opts.scroll_info\n", .{self.hbox.wd.id});
+            if (self.init_opts.vertical != si.vertical) {
+                std.debug.print("dvui: ScrollAreaWidget {x} init_opts.vertical {} ignored because given init_opts.scroll_info.vertical {}\n", .{ self.hbox.wd.id, self.init_opts.vertical, si.vertical });
             }
-            if (self.init_opts.horizontal) |_| {
-                std.debug.print("gui: ScrollAreaWidget {x} init_opts.horizontal ignored because given init_opts.scroll_info\n", .{self.hbox.wd.id});
+            if (self.init_opts.horizontal != si.horizontal) {
+                std.debug.print("dvui: ScrollAreaWidget {x} init_opts.horizontal {} ignored because given init_opts.scroll_info.horizontal {}\n", .{ self.hbox.wd.id, self.init_opts.horizontal, si.horizontal });
             }
         } else if (dataGet(null, self.hbox.data().id, "_scroll_info", ScrollInfo)) |si| {
             self.si_store = si;
             self.si = &self.si_store; // can't take pointer to self in init, so we do it in install
         } else {
             self.si = &self.si_store; // can't take pointer to self in init, so we do it in install
-            if (self.init_opts.vertical) |iov| {
-                self.si.vertical = iov;
-            } else {
-                self.si.vertical = .auto;
-            }
-
-            if (self.init_opts.horizontal) |ioh| {
-                self.si.horizontal = ioh;
-            } else {
-                self.si.horizontal = .none;
-            }
+            self.si.vertical = self.init_opts.vertical;
+            self.si.horizontal = self.init_opts.horizontal;
         }
 
         try self.hbox.install(.{});
@@ -6005,7 +5996,7 @@ pub const ScrollAreaWidget = struct {
             }
         }
 
-        self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "blah" }));
+        self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "ScrollAreaWidget vbox" }));
         try self.vbox.install(.{});
 
         if (self.si.horizontal != .none) {
@@ -6260,12 +6251,22 @@ pub const ScrollContainerWidget = struct {
         const h = self.si.virtual_size.h - y;
         switch (self.si.horizontal) {
             .none => {},
-            .auto => expand = expand.removeHorizontal(), // can't expand when virtual size depends on child size
+            .auto => {
+                if (expand.horizontal()) {
+                    std.debug.print("dvui: scroll child {x} trying to expand .horizontal but scroll container is .auto horizontally\n", .{id});
+                    expand = expand.removeHorizontal();
+                }
+            },
             .given => {},
         }
         switch (self.si.vertical) {
             .none => {},
-            .auto => expand = expand.removeVertical(), // can't expand when virtual size depends on child size
+            .auto => {
+                if (expand.vertical()) {
+                    std.debug.print("dvui: scroll child {x} trying to expand .vertical but scroll container is .auto vertically\n", .{id});
+                    expand = expand.removeVertical();
+                }
+            },
             .given => {},
         }
         const rect = Rect{ .x = 0, .y = y, .w = self.si.virtual_size.w, .h = h };
@@ -7920,7 +7921,14 @@ pub const TextEntryWidget = struct {
 
         const scrollclip = clipGet();
 
-        self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding }));
+        var layout_expand: Options.Expand = .both;
+        if (self.scroll.init_opts.vertical == .auto) {
+            layout_expand = layout_expand.removeVertical();
+        }
+        if (self.scroll.init_opts.horizontal == .auto) {
+            layout_expand = layout_expand.removeHorizontal();
+        }
+        self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines }, self.wd.options.strip().override(.{ .expand = layout_expand, .padding = self.padding }));
         try self.textLayout.install(.{ .process_events = false });
 
         // textLayout clips to its content, but we need to get events out to our border
@@ -8963,7 +8971,7 @@ pub const WidgetData = struct {
             }
 
             if (self.id == cw.debug_widget_id) {
-                cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x} {s}\n\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{ self.id, name, rs.r, rs.s, self.options.paddingGet().scale(rs.s), self.options.borderGet().scale(rs.s), self.options.marginGet().scale(rs.s) });
+                cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x} {s}\n\n{}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{ self.id, name, rs.r, self.options.expandGet(), rs.s, self.options.paddingGet().scale(rs.s), self.options.borderGet().scale(rs.s), self.options.marginGet().scale(rs.s) });
                 try pathAddRect(rs.r.insetAll(0), .{});
                 var color = (Options{ .color_style = .err }).color(.fill);
                 try pathStrokeAfter(true, true, 3 * rs.s, .none, color);
