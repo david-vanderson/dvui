@@ -199,7 +199,7 @@ pub fn main() !void {
                         }
                     }
                     var scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
-                    var tl = try dvui.textLayout(@src(), .{ .selection = &Sel.sel, .break_lines = false }, .{ .expand = .both });
+                    var tl = try dvui.textLayout(@src(), .{ .selection = &Sel.sel, .break_lines = false }, .{});
                     const lorem =
                         \\Lorem ipsum dolor sit amet, consectetur adipiscing elit,
                         \\sed do eiusmod tempor incididunt ut labore et dolore
@@ -285,7 +285,7 @@ pub fn main() !void {
 
                     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both });
                     defer scroll.deinit();
-                    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .both });
+                    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
                     try tl.install(.{ .process_events = false });
                     {
                         if (try dvui.button(@src(), "Win Up .1", .{})) {
