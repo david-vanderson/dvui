@@ -4841,7 +4841,7 @@ pub const TextLayoutWidget = struct {
         .padding = Rect.all(4),
         .background = true,
         .color_style = .content,
-        .min_size_content = .{ .w = 25 },
+        .min_size_content = .{ .w = 10, .h = 10 },
     };
 
     pub const InitOptions = struct {
@@ -4985,17 +4985,21 @@ pub const TextLayoutWidget = struct {
 
         const rect = self.wd.contentRect();
         var container_width = rect.w;
-        if (self.screenRectScale(rect).r.empty()) {
-            // if we are not being shown at all, probably this is the first
-            // frame for us and we should calculate our min height assuming we
-            // get at least our min width
+        if (container_width == 0) {
+            // Probably this is the first frame for us and we need to choose a
+            // width so that our min height calculation isn't horrible.
+            //
+            // If we pick a small value (like our min width), then we'll have a
+            // large min height, so next frame (when we get a real width) we
+            // are likely to paint a large area that's mostly unused.  The
+            // frame after will look okay, but it looks like flickering.
+            //
+            // If we pick a large value, we'll have a min height that's
+            // probably a single line of text, so the next frame we'll draw too
+            // short, and the frame after will be okay.  This seems to look
+            // better in practice.
 
-            // do this dance so we aren't repeating the contentRect
-            // calculations here
-            const given_width = self.wd.rect.w;
-            self.wd.rect.w = @max(given_width, self.wd.min_size.w);
-            container_width = self.wd.contentRect().w;
-            self.wd.rect.w = given_width;
+            container_width = 1000;
         }
 
         while (txt.len > 0) {
