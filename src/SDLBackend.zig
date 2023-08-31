@@ -362,7 +362,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 return false;
             }
 
-            return try win.addEventMouseButton(.{ .press = SDL_mouse_button_to_dvui(event.button.button) });
+            return try win.addEventMouseButton(SDL_mouse_button_to_dvui(event.button.button), .press);
         },
         if (sdl3) c.SDL_EVENT_MOUSE_BUTTON_UP else c.SDL_MOUSEBUTTONUP => {
             const touch = event.motion.which == c.SDL_TOUCH_MOUSEID;
@@ -377,7 +377,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 return false;
             }
 
-            return try win.addEventMouseButton(.{ .release = SDL_mouse_button_to_dvui(event.button.button) });
+            return try win.addEventMouseButton(SDL_mouse_button_to_dvui(event.button.button), .release);
         },
         if (sdl3) c.SDL_EVENT_MOUSE_WHEEL else c.SDL_MOUSEWHEEL => {
             if (self.log_events) {
@@ -389,25 +389,24 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
         },
         if (sdl3) c.SDL_FINGERDOWN else c.SDL_FINGERDOWN => {
             if (self.log_events) {
-                std.debug.print("sdl event FINGERDOWN {d} {d} {d} {d} {d}\n", .{ event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy });
+                std.debug.print("sdl event FINGERDOWN {d} {d} {d}\n", .{ event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
             }
 
-            return true;
-            //try win.addEventFinger(.{ .press = SDL_mouse_button_to_dvui(event.button.button) });
+            return try win.addEventPointer(.touch0, .press, .{ .x = event.tfinger.x, .y = event.tfinger.y });
         },
         if (sdl3) c.SDL_FINGERUP else c.SDL_FINGERUP => {
             if (self.log_events) {
-                std.debug.print("sdl event FINGERUP {d} {d} {d} {d} {d}\n", .{ event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy });
+                std.debug.print("sdl event FINGERUP {d} {d} {d}\n", .{ event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
             }
 
-            return true;
+            return try win.addEventPointer(.touch0, .release, .{ .x = event.tfinger.x, .y = event.tfinger.y });
         },
         if (sdl3) c.SDL_FINGERMOTION else c.SDL_FINGERMOTION => {
             if (self.log_events) {
                 std.debug.print("sdl event FINGERMOTION {d} {d} {d} {d} {d}\n", .{ event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy });
             }
 
-            return true;
+            return try win.addEventTouchMotion(.touch0, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy);
         },
         else => {
             if (self.log_events) {

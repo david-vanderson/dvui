@@ -1,4 +1,14 @@
 
+test that touch stuff is working on phone
+
+implement touch-based scrolling with inertia and overscroll
+
+
+scaling:
+- when we are at 125% on linux x11 gnome, then the fonts look bad?
+- test on Windows
+- test on Mac
+
 change BoxWidget to take InitOptions
 
 change MenuWidget to take InitOptions
@@ -11,10 +21,6 @@ remove the color_style error?
 
 
 send updates to tinyvg
-
-all widget's sizes should default to theme font size?
-
-text on phone seems blurry?
 
 entypo cc.svg is weird - flip ccw.svg?
 

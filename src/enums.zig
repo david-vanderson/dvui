@@ -1,6 +1,9 @@
 const builtin = @import("builtin");
 
 pub const Button = enum {
+    // used for mouse motion events
+    none,
+
     left,
     right,
     middle,
@@ -9,6 +12,28 @@ pub const Button = enum {
     six,
     seven,
     eight,
+
+    touch0,
+    touch1,
+    touch2,
+    touch3,
+    touch4,
+    touch5,
+    touch6,
+    touch7,
+    touch8,
+    touch9,
+
+    pub fn touch(self: Button) bool {
+        const s = @intFromEnum(self);
+        const start = @intFromEnum(Button.touch0);
+        const end = @intFromEnum(Button.touch9);
+        return (s >= start and s <= end);
+    }
+
+    pub fn pointer(self: Button) bool {
+        return (self == .left or self.touch());
+    }
 };
 
 pub const Mod = enum(u16) {
