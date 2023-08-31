@@ -3854,8 +3854,9 @@ pub const FloatingWindowWidget = struct {
             if (e.evt == .mouse) {
                 const me = e.evt.mouse;
                 var corner: bool = false;
-                if (me.p.x > rs.r.x + rs.r.w - 15 * rs.s and
-                    me.p.y > rs.r.y + rs.r.h - 15 * rs.s)
+                const corner_size: f32 = if (me.button.touch()) 30 else 15;
+                if (me.p.x > rs.r.x + rs.r.w - corner_size * rs.s and
+                    me.p.y > rs.r.y + rs.r.h - corner_size * rs.s)
                 {
                     // we are over the bottom-right resize corner
                     corner = true;
@@ -6499,6 +6500,19 @@ pub const ScrollContainerWidget = struct {
                             self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
                         }
                         refresh();
+                    } else if (me.action == .press and me.button.touch()) {
+                        // don't let this event go through to floating window
+                        // which would capture the mouse preventing scrolling
+                        e.handled = true;
+                    } else if (me.action == .motion and me.button.touch()) {
+                        e.handled = true;
+                        if (self.si.vertical != .none) {
+                            self.si.viewport.y -= me.data.motion.y / rs.s;
+                        }
+                        if (self.si.horizontal != .none) {
+                            self.si.viewport.x -= me.data.motion.x / rs.s;
+                        }
+                        refresh();
                     }
                 },
                 else => {},
@@ -7595,6 +7609,9 @@ pub const ButtonWidget = struct {
                 } else if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
                     self.capture = captureMouse(self.wd.id);
+
+                    // drag prestart is just for touch events
+                    dragPreStart(me.p, .arrow_all, Point{});
                 } else if (me.action == .release and me.button.pointer()) {
                     e.handled = true;
                     if (self.capture) {
@@ -7602,6 +7619,16 @@ pub const ButtonWidget = struct {
                         if (self.data().borderRectScale().r.contains(me.p)) {
                             self.click = true;
                             refresh();
+                        }
+                    }
+                } else if (me.action == .motion and me.button.touch()) {
+                    if (self.capture) {
+                        if (dragging(me.p)) |_| {
+                            // if we overcame the drag threshold, then that
+                            // means the person probably didn't want to touch
+                            // this button, maybe they were trying to scroll
+                            self.capture = captureMouse(null);
+                            dragEnd();
                         }
                     }
                 } else if (me.action == .position) {

@@ -198,7 +198,7 @@ pub fn main() !void {
                             Sel.sel.decCursor();
                         }
                     }
-                    var scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
+                    var scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{ .min_size_content = .{ .w = 150, .h = 100 }, .margin = dvui.Rect.all(4) });
                     var tl = try dvui.textLayout(@src(), .{ .selection = &Sel.sel, .break_lines = false }, .{});
                     const lorem =
                         \\Lorem ipsum dolor sit amet, consectetur adipiscing elit,

@@ -10,7 +10,7 @@ const SDLBackend = @This();
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
-touch_mouse_events: bool = true,
+touch_mouse_events: bool = false,
 log_events: bool = false,
 initial_scale: f32 = 1.0,
 cursor_last: dvui.Cursor = .arrow,
