@@ -1976,7 +1976,7 @@ pub fn eventMatch(e: *Event, opts: eventMatchOptions) bool {
         .text => {},
         .mouse => |me| {
             const capture_id = captureMouseId();
-            if (capture_id != null and me.kind != .wheel_y) {
+            if (capture_id != null and me.action != .wheel_y) {
                 if (capture_id.? != (opts.id_capture orelse opts.id)) {
                     // mouse is captured by a different widget
                     return false;
@@ -2245,8 +2245,8 @@ pub const Window = struct {
     event_num: u16 = 0,
     // mouse_pt tracks the last position we got a mouse event for
     // 1) used to add position info to mouse wheel events
-    // 2) used to highlight the widget under the mouse (MouseEvent.Kind.position event)
-    // 3) used to change the cursor (MouseEvent.Kind.position event)
+    // 2) used to highlight the widget under the mouse (Event.Mouse.Action.position event)
+    // 3) used to change the cursor (Event.Mouse.Action.position event)
     // Start off screen so nothing is highlighted on the first frame
     mouse_pt: Point = Point{ .x = -1, .y = -1 },
     mouse_pt_prev: Point = Point{ .x = -1, .y = -1 },
@@ -2425,9 +2425,11 @@ pub const Window = struct {
         self.event_num += 1;
         try self.events.append(Event{ .num = self.event_num, .evt = .{
             .mouse = .{
-                .kind = .{ .motion = dp },
+                .action = .motion,
+                .button = .none,
                 .p = self.mouse_pt,
                 .floating_win = winId,
+                .data = .{ .motion = dp },
             },
         } });
 
@@ -2436,20 +2438,29 @@ pub const Window = struct {
         return ret;
     }
 
-    pub fn addEventMouseButton(self: *Self, kind: Event.Mouse.Kind) !bool {
-        if (self.debug_under_mouse and !self.debug_under_mouse_esc_needed and kind == .press and kind.press == .left) {
-            // a left click will stop the debug stuff from following the mouse,
-            // but need to stop it at the end of the frame when we've gotten
-            // the info
+    pub fn addEventMouseButton(self: *Self, b: enums.Button, action: Event.Mouse.Action) !bool {
+        return addEventPointer(self, b, action, null);
+    }
+
+    pub fn addEventPointer(self: *Self, b: enums.Button, action: Event.Mouse.Action, xynorm: ?Point) !bool {
+        if (self.debug_under_mouse and !self.debug_under_mouse_esc_needed and action == .press and b.pointer()) {
+            // a left click or touch will stop the debug stuff from following
+            // the mouse, but need to stop it at the end of the frame when
+            // we've gotten the info
             self.debug_under_mouse_quitting = true;
             return true;
         }
 
         self.positionMouseEventRemove();
 
+        if (xynorm) |xyn| {
+            const newpt = (Point{ .x = xyn.x * self.wd.rect.w, .y = xyn.y * self.wd.rect.h }).scale(self.natural_scale / self.content_scale);
+            self.mouse_pt = newpt;
+        }
+
         const winId = self.windowFor(self.mouse_pt);
 
-        if (kind == .press and (kind.press == .left or kind.press == .right)) {
+        if (action == .press and b.pointer()) {
             // normally the focus event is what focuses windows, but since the
             // base window is instantiated before events are added, it has to
             // do any event processing as the events come in, right now
@@ -2459,11 +2470,12 @@ pub const Window = struct {
                 focusSubwindow(self.wd.id, null);
             }
 
-            // add mouse focus event
+            // add focus event
             self.event_num += 1;
             try self.events.append(Event{ .num = self.event_num, .evt = .{
                 .mouse = .{
-                    .kind = .{ .focus = kind.press },
+                    .action = .focus,
+                    .button = b,
                     .p = self.mouse_pt,
                     .floating_win = winId,
                 },
@@ -2473,7 +2485,8 @@ pub const Window = struct {
         self.event_num += 1;
         try self.events.append(Event{ .num = self.event_num, .evt = .{
             .mouse = .{
-                .kind = kind,
+                .action = action,
+                .button = b,
                 .p = self.mouse_pt,
                 .floating_win = winId,
             },
@@ -2499,9 +2512,38 @@ pub const Window = struct {
         self.event_num += 1;
         try self.events.append(Event{ .num = self.event_num, .evt = .{
             .mouse = .{
-                .kind = .{ .wheel_y = ticks_adj },
+                .action = .wheel_y,
+                .button = .none,
                 .p = self.mouse_pt,
                 .floating_win = winId,
+                .data = .{ .wheel_y = ticks_adj },
+            },
+        } });
+
+        const ret = (self.wd.id != winId);
+        try self.positionMouseEventAdd();
+        return ret;
+    }
+
+    pub fn addEventTouchMotion(self: *Self, finger: enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) !bool {
+        self.positionMouseEventRemove();
+
+        const newpt = (Point{ .x = xnorm * self.wd.rect.w, .y = ynorm * self.wd.rect.h }).scale(self.natural_scale / self.content_scale);
+        //std.debug.print("touch motion {} {d} {d}\n", .{ finger, newpt.x, newpt.y });
+        self.mouse_pt = newpt;
+
+        const dp = (Point{ .x = dxnorm * self.wd.rect.w, .y = dynorm * self.wd.rect.h }).scale(self.natural_scale / self.content_scale);
+
+        const winId = self.windowFor(self.mouse_pt);
+
+        self.event_num += 1;
+        try self.events.append(Event{ .num = self.event_num, .evt = .{
+            .mouse = .{
+                .action = .motion,
+                .button = finger,
+                .p = self.mouse_pt,
+                .floating_win = winId,
+                .data = .{ .motion = dp },
             },
         } });
 
@@ -2861,7 +2903,8 @@ pub const Window = struct {
 
     fn positionMouseEventAdd(self: *Self) !void {
         try self.events.append(.{ .evt = .{ .mouse = .{
-            .kind = .position,
+            .action = .position,
+            .button = .none,
             .p = self.mouse_pt,
             .floating_win = self.windowFor(self.mouse_pt),
         } } });
@@ -2869,8 +2912,8 @@ pub const Window = struct {
 
     fn positionMouseEventRemove(self: *Self) void {
         const e = self.events.pop();
-        if (e.evt != .mouse or e.evt.mouse.kind != .position) {
-            // std.debug.print("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
+        if (e.evt != .mouse or e.evt.mouse.action != .position) {
+            std.debug.print("dvui: positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
         }
     }
 
@@ -3288,7 +3331,7 @@ pub const Window = struct {
             // doesn't matter if we mark events has handled or not because this is
             // the end of the line for all events
             if (e.evt == .mouse) {
-                if (e.evt.mouse.kind == .focus) {
+                if (e.evt.mouse.action == .focus) {
                     // unhandled click, clear focus
                     focusWidget(null, null);
                 }
@@ -3579,7 +3622,7 @@ pub const PopupWidget = struct {
                 continue;
 
             if (e.evt == .mouse) {
-                if (e.evt.mouse.kind == .focus) {
+                if (e.evt.mouse.action == .focus) {
                     // unhandled click, clear focus
                     focusWidget(null, null);
                 }
@@ -3598,7 +3641,7 @@ pub const PopupWidget = struct {
 
         // check if a focus event is happening outside our window
         for (evts) |e| {
-            if (!e.handled and e.evt == .mouse and e.evt.mouse.kind == .focus) {
+            if (!e.handled and e.evt == .mouse and e.evt.mouse.action == .focus) {
                 var closeE = Event{ .evt = .{ .close_popup = .{} } };
                 self.processEvent(&closeE, true);
             }
@@ -3818,23 +3861,23 @@ pub const FloatingWindowWidget = struct {
                     corner = true;
                 }
 
-                if (me.kind == .focus) {
+                if (me.action == .focus) {
                     // focus but let the focus event propagate to widgets
                     focusSubwindow(self.wd.id, e.num);
                 }
 
                 if (self.captured or corner) {
-                    if (me.kind == .press and me.kind.press == .left) {
+                    if (me.action == .press and me.button.pointer()) {
                         // capture and start drag
                         self.captured = captureMouse(self.wd.id);
                         dragStart(me.p, .arrow_all, Point.diff(rs.r.bottomRight(), me.p));
                         e.handled = true;
-                    } else if (me.kind == .release and me.kind.release == .left) {
+                    } else if (me.action == .release and me.button.pointer()) {
                         // stop drag and capture
                         self.captured = captureMouse(null);
                         dragEnd();
                         e.handled = true;
-                    } else if (me.kind == .motion) {
+                    } else if (me.action == .motion) {
                         // move if dragging
                         if (dragging(me.p)) |dps| {
                             if (cursorGetDragging() == Cursor.crosshair) {
@@ -3849,7 +3892,7 @@ pub const FloatingWindowWidget = struct {
                             // don't need refresh() because we're before drawing
                             e.handled = true;
                         }
-                    } else if (me.kind == .position) {
+                    } else if (me.action == .position) {
                         if (corner) {
                             cursorSet(.arrow_all);
                             e.handled = true;
@@ -3872,21 +3915,21 @@ pub const FloatingWindowWidget = struct {
 
             switch (e.evt) {
                 .mouse => |me| {
-                    switch (me.kind) {
+                    switch (me.action) {
                         .focus => {
                             e.handled = true;
                             focusWidget(null, null);
                         },
-                        .press => |b| {
-                            if (b == .left) {
+                        .press => {
+                            if (me.button.pointer()) {
                                 e.handled = true;
                                 // capture and start drag
                                 self.captured = captureMouse(self.wd.id);
                                 dragPreStart(e.evt.mouse.p, .crosshair, Point{});
                             }
                         },
-                        .release => |b| {
-                            if (b == .left) {
+                        .release => {
+                            if (me.button.pointer()) {
                                 e.handled = true;
                                 // stop drag and capture
                                 self.captured = captureMouse(null);
@@ -4023,7 +4066,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
         if (!eventMatch(e, .{ .id = over.wd.id, .r = over.wd.contentRectScale().r }))
             continue;
 
-        if (e.evt == .mouse and e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left) {
+        if (e.evt == .mouse and e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
             raiseSubwindow(subwindowCurrentId());
         }
     }
@@ -4456,11 +4499,11 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
                 continue;
 
             if (eat_mouse_up and e.evt == .mouse) {
-                if (e.evt.mouse.kind == .release and e.evt.mouse.kind.release == .left) {
+                if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                     e.handled = true;
                     eat_mouse_up = false;
                     dataSet(null, pop.wd.id, "_eat_mouse_up", eat_mouse_up);
-                } else if (e.evt.mouse.kind == .motion or (e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left)) {
+                } else if (e.evt.mouse.action == .motion or (e.evt.mouse.action == .press and e.evt.mouse.button.pointer())) {
                     eat_mouse_up = false;
                     dataSet(null, pop.wd.id, "_eat_mouse_up", eat_mouse_up);
                 }
@@ -4779,15 +4822,15 @@ pub const PanedWidget = struct {
             if (self.captured or @fabs(mouse - target) < (5 * rs.s)) {
                 self.hovered = true;
                 e.handled = true;
-                if (e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left) {
+                if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
                     // capture and start drag
                     self.captured = captureMouse(self.wd.id);
                     dragPreStart(e.evt.mouse.p, cursor, Point{});
-                } else if (e.evt.mouse.kind == .release and e.evt.mouse.kind.release == .left) {
+                } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                     // stop possible drag and capture
                     self.captured = captureMouse(null);
                     dragEnd();
-                } else if (e.evt.mouse.kind == .motion) {
+                } else if (e.evt.mouse.action == .motion) {
                     // move if dragging
                     if (dragging(e.evt.mouse.p)) |dps| {
                         _ = dps;
@@ -4802,7 +4845,7 @@ pub const PanedWidget = struct {
 
                         self.split_ratio = @max(0.0, @min(1.0, self.split_ratio));
                     }
-                } else if (e.evt.mouse.kind == .position) {
+                } else if (e.evt.mouse.action == .position) {
                     cursorSet(cursor);
                 }
             }
@@ -5425,11 +5468,11 @@ pub const TextLayoutWidget = struct {
     pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
         _ = bubbling;
         if (e.evt == .mouse) {
-            if (e.evt.mouse.kind == .focus) {
+            if (e.evt.mouse.action == .focus) {
                 e.handled = true;
                 // focus so that we can receive keyboard input
                 focusWidget(self.wd.id, e.num);
-            } else if (e.evt.mouse.kind == .press and e.evt.mouse.kind.press == .left) {
+            } else if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
                 e.handled = true;
                 // capture and start drag
                 self.captured = captureMouse(self.wd.id);
@@ -5438,12 +5481,12 @@ pub const TextLayoutWidget = struct {
                 self.sel_mouse_drag_pt = null;
                 self.cursor_updown = 0;
                 self.cursor_updown_pt = null;
-            } else if (e.evt.mouse.kind == .release and e.evt.mouse.kind.release == .left) {
+            } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                 e.handled = true;
                 // stop possible drag and capture
                 self.captured = captureMouse(null);
                 dragEnd();
-            } else if (e.evt.mouse.kind == .motion) {
+            } else if (e.evt.mouse.action == .motion) {
                 e.handled = true;
                 // move if dragging
                 if (dragging(e.evt.mouse.p)) |dps| {
@@ -5624,13 +5667,13 @@ pub const ContextWidget = struct {
 
             switch (e.evt) {
                 .mouse => |me| {
-                    if (me.kind == .focus and me.kind.focus == .right) {
+                    if (me.action == .focus and me.button == .right) {
                         // eat any right button focus events so they don't get
                         // caught by the containing window cleanup and cause us
                         // to lose the focus we are about to get from the right
                         // press below
                         e.handled = true;
-                    } else if (me.kind == .press and me.kind.press == .right) {
+                    } else if (me.action == .press and me.button == .right) {
                         e.handled = true;
                         focusSubwindow(null, null); // focuses the window we are in
                         focusWidget(self.wd.id, e.num);
@@ -6445,14 +6488,14 @@ pub const ScrollContainerWidget = struct {
 
             switch (e.evt) {
                 .mouse => |me| {
-                    if (me.kind == .focus) {
+                    if (me.action == .focus) {
                         e.handled = true;
                         // focus so that we can receive keyboard input
                         focusWidget(self.wd.id, e.num);
-                    } else if (me.kind == .wheel_y) {
+                    } else if (me.action == .wheel_y) {
                         e.handled = true;
                         if (self.si.vertical != .none) {
-                            self.si.viewport.y -= me.kind.wheel_y;
+                            self.si.viewport.y -= me.data.wheel_y;
                             self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
                         }
                         refresh();
@@ -6584,7 +6627,7 @@ pub const ScrollBarWidget = struct {
 
             switch (e.evt) {
                 .mouse => |me| {
-                    switch (me.kind) {
+                    switch (me.action) {
                         .focus => {
                             if (self.focus_id) |fid| {
                                 e.handled = true;
@@ -6592,14 +6635,14 @@ pub const ScrollBarWidget = struct {
                             }
                         },
                         .press => {
-                            if (e.evt.mouse.kind.press == .left) {
+                            if (me.button.pointer()) {
                                 e.handled = true;
-                                if (grabrs.contains(e.evt.mouse.p)) {
+                                if (grabrs.contains(me.p)) {
                                     // capture and start drag
                                     _ = captureMouse(self.data().id);
                                     switch (self.dir) {
-                                        .vertical => dragPreStart(e.evt.mouse.p, .arrow, .{ .y = e.evt.mouse.p.y - (grabrs.y + grabrs.h / 2) }),
-                                        .horizontal => dragPreStart(e.evt.mouse.p, .arrow, .{ .x = e.evt.mouse.p.x - (grabrs.x + grabrs.w / 2) }),
+                                        .vertical => dragPreStart(me.p, .arrow, .{ .y = me.p.y - (grabrs.y + grabrs.h / 2) }),
+                                        .horizontal => dragPreStart(me.p, .arrow, .{ .x = me.p.x - (grabrs.x + grabrs.w / 2) }),
                                     }
                                 } else {
                                     var fi = self.si.fraction_visible(self.dir);
@@ -6607,7 +6650,7 @@ pub const ScrollBarWidget = struct {
                                     // one less scroll position between 0 and 1.0
                                     fi = 1.0 / ((1.0 / fi) - 1);
                                     var f: f32 = undefined;
-                                    if (if (self.dir == .vertical) (e.evt.mouse.p.y < grabrs.y) else (e.evt.mouse.p.x < grabrs.x)) {
+                                    if (if (self.dir == .vertical) (me.p.y < grabrs.y) else (me.p.x < grabrs.x)) {
                                         // clicked above grab
                                         f = self.si.scroll_fraction(self.dir) - fi;
                                     } else {
@@ -6620,7 +6663,7 @@ pub const ScrollBarWidget = struct {
                             }
                         },
                         .release => {
-                            if (e.evt.mouse.kind.release == .left) {
+                            if (me.button.pointer()) {
                                 e.handled = true;
                                 // stop possible drag and capture
                                 _ = captureMouse(null);
@@ -6630,7 +6673,7 @@ pub const ScrollBarWidget = struct {
                         .motion => {
                             e.handled = true;
                             // move if dragging
-                            if (dragging(e.evt.mouse.p)) |dps| {
+                            if (dragging(me.p)) |dps| {
                                 _ = dps;
                                 const min = switch (self.dir) {
                                     .vertical => rs.r.y + grabrs.h / 2,
@@ -6641,8 +6684,8 @@ pub const ScrollBarWidget = struct {
                                     .horizontal => rs.r.x + rs.r.w - grabrs.w / 2,
                                 };
                                 const grabmid = switch (self.dir) {
-                                    .vertical => e.evt.mouse.p.y - dragOffset().y,
-                                    .horizontal => e.evt.mouse.p.x - dragOffset().x,
+                                    .vertical => me.p.y - dragOffset().y,
+                                    .horizontal => me.p.x - dragOffset().x,
                                 };
                                 var f: f32 = 0;
                                 if (max > min) {
@@ -6656,11 +6699,11 @@ pub const ScrollBarWidget = struct {
                             e.handled = true;
                             self.highlight = true;
                         },
-                        .wheel_y => |ticks| {
+                        .wheel_y => {
                             e.handled = true;
                             switch (self.dir) {
-                                .vertical => self.si.viewport.y -= ticks,
-                                .horizontal => self.si.viewport.x -= ticks,
+                                .vertical => self.si.viewport.y -= me.data.wheel_y,
+                                .horizontal => self.si.viewport.x -= me.data.wheel_y,
                             }
                             refresh();
                         },
@@ -6930,7 +6973,7 @@ pub const MenuWidget = struct {
         _ = bubbling;
         switch (e.evt) {
             .mouse => |me| {
-                if (me.kind == .position) {
+                if (me.action == .position) {
                     if (mouseTotalMotion().nonZero()) {
                         if (dataGet(null, self.wd.id, "_child_popup", Rect)) |r| {
                             const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
@@ -7220,24 +7263,24 @@ pub const MenuItemWidget = struct {
         _ = bubbling;
         switch (e.evt) {
             .mouse => |me| {
-                if (me.kind == .focus) {
+                if (me.action == .focus) {
                     e.handled = true;
                     focusSubwindow(null, null); // focuses the window we are in
                     focusWidget(self.wd.id, e.num);
-                } else if (me.kind == .press and me.kind.press == .left) {
+                } else if (me.action == .press and me.button.pointer()) {
                     // this is how dropdowns are triggered
                     e.handled = true;
                     if (self.init_opts.submenu) {
                         menuGet().?.submenus_activated = true;
                         menuGet().?.submenus_in_child = true;
                     }
-                } else if (me.kind == .release) {
+                } else if (me.action == .release) {
                     e.handled = true;
                     if (!self.init_opts.submenu and (self.wd.id == focusedWidgetIdInCurrentSubwindow())) {
                         self.activated = true;
                         refresh();
                     }
-                } else if (me.kind == .position) {
+                } else if (me.action == .position) {
                     e.handled = true;
 
                     // We get a .position mouse event every frame.  If we
@@ -7546,13 +7589,13 @@ pub const ButtonWidget = struct {
         _ = bubbling;
         switch (e.evt) {
             .mouse => |me| {
-                if (me.kind == .focus) {
+                if (me.action == .focus) {
                     e.handled = true;
                     focusWidget(self.wd.id, e.num);
-                } else if (me.kind == .press and me.kind.press == .left) {
+                } else if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
                     self.capture = captureMouse(self.wd.id);
-                } else if (me.kind == .release and me.kind.release == .left) {
+                } else if (me.action == .release and me.button.pointer()) {
                     e.handled = true;
                     if (self.capture) {
                         self.capture = captureMouse(null);
@@ -7561,7 +7604,7 @@ pub const ButtonWidget = struct {
                             refresh();
                         }
                     }
-                } else if (me.kind == .position) {
+                } else if (me.action == .position) {
                     e.handled = true;
                     self.hover = true;
                 }
@@ -7653,23 +7696,23 @@ pub fn slider(src: std.builtin.SourceLocation, dir: dvui.Direction, percent: *f3
         switch (e.evt) {
             .mouse => |me| {
                 var p: ?Point = null;
-                if (me.kind == .focus) {
+                if (me.action == .focus) {
                     e.handled = true;
                     focusWidget(b.data().id, e.num);
-                } else if (me.kind == .press and me.kind.press == .left) {
+                } else if (me.action == .press and me.button.pointer()) {
                     // capture
                     captured = captureMouse(b.data().id);
                     e.handled = true;
                     p = me.p;
-                } else if (me.kind == .release and me.kind.release == .left) {
+                } else if (me.action == .release and me.button.pointer()) {
                     // stop capture
                     captured = captureMouse(null);
                     e.handled = true;
-                } else if (me.kind == .motion and captureMouseId() == b.data().id) {
+                } else if (me.action == .motion and captureMouseId() == b.data().id) {
                     // handle only if we have capture
                     e.handled = true;
                     p = me.p;
-                } else if (me.kind == .position) {
+                } else if (me.action == .position) {
                     e.handled = true;
                     hovered = true;
                 }
@@ -8139,7 +8182,7 @@ pub const TextEntryWidget = struct {
                 self.textTyped(new);
             },
             .mouse => |me| {
-                if (me.kind == .focus) {
+                if (me.action == .focus) {
                     e.handled = true;
                     focusWidget(self.wd.id, e.num);
                 }
@@ -8858,30 +8901,42 @@ pub const Event = struct {
     };
 
     pub const Mouse = struct {
-        pub const Kind = union(enum) {
-            // Focus events come right before their associated mouse event, usually
+        pub const Action = enum {
+            // Focus events come right before their associated pointer event, usually
             // leftdown/rightdown or motion. Separated to enable changing what
             // causes focus changes.
-            focus: enums.Button,
-            press: enums.Button,
-            release: enums.Button,
-            wheel_y: f32,
+            focus,
+            press,
+            release,
+
+            wheel_y,
 
             // motion Point is the change in position
             // if you just want to react to the current mouse position if it got
             // moved at all, use the .position event with mouseTotalMotion()
-            motion: Point,
+            motion,
 
             // only one position event per frame, and it's always after all other
             // mouse events, used to change mouse cursor and do widget highlighting
             // - also useful with mouseTotalMotion() to respond to mouse motion but
             // only at the final location
-            position: void,
+            position,
         };
+
+        action: Action,
+
+        // This distinguishes between mouse and touch events.
+        // .none is used for mouse motion, wheel, and position
+        button: enums.Button,
 
         p: Point,
         floating_win: u32,
-        kind: Kind,
+
+        data: union {
+            none: void,
+            motion: Point,
+            wheel_y: f32,
+        } = .{ .none = {} },
     };
 
     pub const ClosePopup = struct {

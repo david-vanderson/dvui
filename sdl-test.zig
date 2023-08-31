@@ -70,10 +70,10 @@ pub fn main() !void {
 
                     switch (e.evt) {
                         .mouse => |me| {
-                            if (me.kind == .wheel_y and scale_mod.ctrl()) {
+                            if (me.action == .wheel_y and scale_mod.ctrl()) {
                                 e.handled = true;
                                 var base: f32 = 1.01;
-                                const zs = @exp(@log(base) * me.kind.wheel_y);
+                                const zs = @exp(@log(base) * me.data.wheel_y);
                                 if (zs != 1.0) {
                                     scale_val *= zs;
                                     dvui.refresh();
@@ -462,9 +462,9 @@ pub const StrokeTest = struct {
             .mouse => |me| {
                 const rs = self.wd.contentRectScale();
                 const mp = rs.pointFromScreen(me.p);
-                switch (me.kind) {
-                    .press => |button| {
-                        if (button == .left) {
+                switch (me.action) {
+                    .press => {
+                        if (me.button == .left) {
                             e.handled = true;
                             dragi = null;
 
@@ -488,8 +488,8 @@ pub const StrokeTest = struct {
                             }
                         }
                     },
-                    .release => |button| {
-                        if (button == .left) {
+                    .release => {
+                        if (me.button == .left) {
                             e.handled = true;
                             _ = dvui.captureMouse(null);
                             dvui.dragEnd();
@@ -504,10 +504,10 @@ pub const StrokeTest = struct {
                             dvui.refresh();
                         }
                     },
-                    .wheel_y => |ticks| {
+                    .wheel_y => {
                         e.handled = true;
                         var base: f32 = 1.05;
-                        const zs = @exp(@log(base) * ticks);
+                        const zs = @exp(@log(base) * me.data.wheel_y);
                         if (zs != 1.0) {
                             thickness *= zs;
                             dvui.refresh();
