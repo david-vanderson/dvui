@@ -3490,7 +3490,7 @@ pub const PopupWidget = struct {
             pm.child_popup_rect = rs.r;
         }
 
-        self.menu = MenuWidget.init(@src(), .vertical, self.options.strip().override(.{ .expand = .horizontal }));
+        self.menu = MenuWidget.init(@src(), .{ .dir = .vertical, .submenus_activated_by_default = true }, self.options.strip().override(.{ .expand = .horizontal }));
         self.menu.parentSubwindowId = self.prev_windowId;
         try self.menu.install(.{});
 
@@ -5632,6 +5632,7 @@ pub const ContextWidget = struct {
                         e.handled = true;
                     } else if (me.kind == .press and me.kind.press == .right) {
                         e.handled = true;
+                        focusSubwindow(null, null); // focuses the window we are in
                         focusWidget(self.wd.id, e.num);
                         self.focused = true;
 
@@ -6826,7 +6827,7 @@ pub const ScaleWidget = struct {
 
 pub fn menu(src: std.builtin.SourceLocation, dir: Direction, opts: Options) !*MenuWidget {
     var ret = try currentWindow().arena.create(MenuWidget);
-    ret.* = MenuWidget.init(src, dir, opts);
+    ret.* = MenuWidget.init(src, .{ .dir = dir }, opts);
     try ret.install(.{});
     return ret;
 }
@@ -6837,10 +6838,15 @@ pub const MenuWidget = struct {
         .color_style = .window,
     };
 
+    pub const InitOptions = struct {
+        dir: Direction = undefined,
+        submenus_activated_by_default: bool = false,
+    };
+
     wd: WidgetData = undefined,
 
+    init_opts: InitOptions = undefined,
     winId: u32 = undefined,
-    dir: Direction = undefined,
     parentMenu: ?*MenuWidget = null,
     parentSubwindowId: ?u32 = null,
     box: BoxWidget = undefined,
@@ -6856,17 +6862,19 @@ pub const MenuWidget = struct {
     // supports mouse skipping over menu items if towards the submenu
     child_popup_rect: ?Rect = null,
 
-    pub fn init(src: std.builtin.SourceLocation, dir: Direction, opts: Options) MenuWidget {
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuWidget {
         var self = Self{};
         const options = defaults.override(opts);
         self.wd = WidgetData.init(src, .{}, options);
+        self.init_opts = init_opts;
 
         self.winId = subwindowCurrentId();
-        self.dir = dir;
         if (dataGet(null, self.wd.id, "_sub_act", bool)) |a| {
             self.submenus_activated = a;
         } else if (menuGet()) |pm| {
             self.submenus_activated = pm.submenus_in_child;
+        } else {
+            self.submenus_activated = init_opts.submenus_activated_by_default;
         }
 
         return self;
@@ -6887,7 +6895,7 @@ pub const MenuWidget = struct {
             self.processEvent(e, false);
         }
 
-        self.box = BoxWidget.init(@src(), self.dir, false, self.wd.options.strip().override(.{ .expand = .both }));
+        self.box = BoxWidget.init(@src(), self.init_opts.dir, false, self.wd.options.strip().override(.{ .expand = .both }));
         try self.box.install(.{});
     }
 
@@ -6954,21 +6962,21 @@ pub const MenuWidget = struct {
                             self.processEvent(&closeE, true);
                         },
                         .up => {
-                            if (self.dir == .vertical) {
+                            if (self.init_opts.dir == .vertical) {
                                 e.handled = true;
                                 // TODO: don't do this if focus would move outside the menu
                                 tabIndexPrev(e.num);
                             }
                         },
                         .down => {
-                            if (self.dir == .vertical) {
+                            if (self.init_opts.dir == .vertical) {
                                 e.handled = true;
                                 // TODO: don't do this if focus would move outside the menu
                                 tabIndexNext(e.num);
                             }
                         },
                         .left => {
-                            if (self.dir == .vertical) {
+                            if (self.init_opts.dir == .vertical) {
                                 e.handled = true;
                                 if (self.parentMenu) |pm| {
                                     pm.submenus_activated = false;
@@ -6982,7 +6990,7 @@ pub const MenuWidget = struct {
                             }
                         },
                         .right => {
-                            if (self.dir == .vertical) {
+                            if (self.init_opts.dir == .vertical) {
                                 e.handled = true;
                                 if (self.parentMenu) |pm| {
                                     pm.submenus_activated = false;
@@ -7261,12 +7269,12 @@ pub const MenuItemWidget = struct {
                         refresh();
                     }
                 } else if (ke.code == .right and ke.action == .down) {
-                    if (self.init_opts.submenu and menuGet().?.dir == .vertical) {
+                    if (self.init_opts.submenu and menuGet().?.init_opts.dir == .vertical) {
                         e.handled = true;
                         menuGet().?.submenus_activated = true;
                     }
                 } else if (ke.code == .down and ke.action == .down) {
-                    if (self.init_opts.submenu and menuGet().?.dir == .horizontal) {
+                    if (self.init_opts.submenu and menuGet().?.init_opts.dir == .horizontal) {
                         e.handled = true;
                         menuGet().?.submenus_activated = true;
                     }
