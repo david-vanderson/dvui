@@ -1,8 +1,8 @@
 
-add inertia to touch scrolling
-
 what to do about trying to touch-scroll while on top of a textLayout?
-- textLayout also needs to allow motion events past if it doesn't have capture
+
+add inertia to touch scrolling
+- if the scrollContainer has more intertia scrolling to do, then it should eat all pointer events, because we don't want any pointer events going to children if the scrolling is still happening
 
 scaling:
 - when we are at 125% on linux x11 gnome, then the fonts look bad?
