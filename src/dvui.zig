@@ -6253,6 +6253,8 @@ pub const ScrollContainerWidget = struct {
         self.process_events = opts.process_events;
         try self.wd.register("ScrollContainer", null);
 
+        captureMouseMaintain(self.wd.id);
+
         // user code might have changed our rect
         const crect = self.wd.contentRect();
         self.si.viewport.w = crect.w;
@@ -6534,15 +6536,41 @@ pub const ScrollContainerWidget = struct {
                         // don't let this event go through to floating window
                         // which would capture the mouse preventing scrolling
                         e.handled = true;
-                    } else if (me.action == .motion and me.button.touch()) {
+                    } else if (me.action == .release and captured(self.wd.id)) {
                         e.handled = true;
+                        captureMouse(null);
+                    } else if (me.action == .motion and me.button.touch()) {
+                        // Whether to propogate out to any containing scroll
+                        // containers. Propogate if we run off the edge of this
+                        // container in the main direction of movement.
+                        //
+                        // This helps prevent spurious propogation from a text
+                        // entry box where you are trying to scroll vertically
+                        // but the motion event has a small amount of
+                        // horizontal.
+                        var propogate: bool = false;
+
                         if (self.si.vertical != .none) {
                             self.si.viewport.y -= me.data.motion.y / rs.s;
+                            refresh();
+                            if (@fabs(me.data.motion.y) > @fabs(me.data.motion.x) and (self.si.viewport.y < 0 or self.si.viewport.y > self.si.scroll_max(.vertical))) {
+                                propogate = true;
+                            }
                         }
                         if (self.si.horizontal != .none) {
                             self.si.viewport.x -= me.data.motion.x / rs.s;
+                            refresh();
+                            if (@fabs(me.data.motion.x) > @fabs(me.data.motion.y) and (self.si.viewport.x < -1 or self.si.viewport.x > self.si.scroll_max(.horizontal))) {
+                                propogate = true;
+                            }
                         }
-                        refresh();
+
+                        if (propogate) {
+                            captureMouse(null);
+                        } else {
+                            e.handled = true;
+                            captureMouse(self.wd.id);
+                        }
                     }
                 },
                 else => {},
