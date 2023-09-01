@@ -5507,6 +5507,7 @@ pub const TextLayoutWidget = struct {
                         self.selection.cursor = 0;
                         self.selection.end = std.math.maxInt(usize);
                     }
+                    self.touch_selection = false;
                     captureMouse(null); // stop possible drag and capture
                 }
             } else if (e.evt.mouse.action == .motion and captured(self.wd.id)) {
