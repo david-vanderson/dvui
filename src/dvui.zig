@@ -4896,6 +4896,10 @@ pub const TextLayoutWidget = struct {
         start: usize = 0,
         end: usize = 0,
 
+        pub fn empty(self: *Selection) bool {
+            return self.start == self.end;
+        }
+
         pub fn incCursor(self: *Selection) void {
             self.cursor += 1;
         }
@@ -4949,6 +4953,7 @@ pub const TextLayoutWidget = struct {
     sel_mouse_down_pt: ?Point = null,
     sel_mouse_down_bytes: ?usize = null,
     sel_mouse_drag_pt: ?Point = null,
+    touch_selection: bool = false,
 
     cursor_seen: bool = false,
     cursor_rect: ?Rect = null,
@@ -4981,6 +4986,10 @@ pub const TextLayoutWidget = struct {
                 self.selection_store = s;
             }
             self.selection = &self.selection_store;
+        }
+
+        if (dataGet(null, self.wd.id, "_touch_selection", bool)) |ts| {
+            self.touch_selection = ts;
         }
 
         captureMouseMaintain(self.wd.id);
@@ -5475,28 +5484,50 @@ pub const TextLayoutWidget = struct {
                 // capture and start drag
                 captureMouse(self.wd.id);
                 dragPreStart(e.evt.mouse.p, .ibeam, Point{});
-                self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-                self.sel_mouse_drag_pt = null;
-                self.cursor_updown = 0;
-                self.cursor_updown_pt = null;
-            } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
-                e.handled = true;
-                // stop possible drag and capture
-                captureMouse(null);
-            } else if (e.evt.mouse.action == .motion and captured(self.wd.id)) {
-                e.handled = true;
-                // move if dragging
-                if (dragging(e.evt.mouse.p)) |dps| {
-                    self.sel_mouse_drag_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+
+                // Normally a touch-motion-release over text will cause a
+                // scroll. To support selection with touch, first you
+                // touch-release (without crossing the drag threshold) which
+                // does a select-all, then you can select a subset.  If you
+                // select an empty selection (touch-release without drag) then
+                // you go back to normal scroll behavior.
+                if (!e.evt.mouse.button.touch() or !self.selection.empty()) {
+                    self.touch_selection = true;
+                    self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                    self.sel_mouse_drag_pt = null;
                     self.cursor_updown = 0;
                     self.cursor_updown_pt = null;
-                    var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
-                        .mouse_pt = e.evt.mouse.p,
-                        .screen_rect = self.wd.rectScale().r,
-                        .capture_id = self.wd.id,
-                        .injected = (dps.x == 0 and dps.y == 0),
-                    } } };
-                    self.processEvent(&scrolldrag, true);
+                }
+            } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
+                e.handled = true;
+                if (captured(self.wd.id)) {
+                    if (e.evt.mouse.button.touch() and !self.touch_selection) {
+                        // select all text
+                        self.selection.start = 0;
+                        self.selection.cursor = 0;
+                        self.selection.end = std.math.maxInt(usize);
+                    }
+                    captureMouse(null); // stop possible drag and capture
+                }
+            } else if (e.evt.mouse.action == .motion and captured(self.wd.id)) {
+                // move if dragging
+                if (dragging(e.evt.mouse.p)) |dps| {
+                    if (self.touch_selection) {
+                        e.handled = true;
+                        self.sel_mouse_drag_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                        self.cursor_updown = 0;
+                        self.cursor_updown_pt = null;
+                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                            .mouse_pt = e.evt.mouse.p,
+                            .screen_rect = self.wd.rectScale().r,
+                            .capture_id = self.wd.id,
+                            .injected = (dps.x == 0 and dps.y == 0),
+                        } } };
+                        self.processEvent(&scrolldrag, true);
+                    } else {
+                        // user intended to scroll with a finger swipe
+                        captureMouse(null); // stop possible drag and capture
+                    }
                 }
             }
         } else if (e.evt == .key and e.evt.key.mod.shift()) {
@@ -5539,7 +5570,7 @@ pub const TextLayoutWidget = struct {
             // copy
             e.handled = true;
             if (self.selectionGet(.{})) |sel| {
-                if (sel.end > sel.start) {
+                if (!sel.empty()) {
                     self.copy_sel = sel.*;
                 }
             }
@@ -5555,6 +5586,7 @@ pub const TextLayoutWidget = struct {
             self.addTextDone(.{}) catch {};
         }
         dataSet(null, self.wd.id, "_selection", self.selection.*);
+        dataSet(null, self.wd.id, "_touch_selection", self.touch_selection);
         if (captured(self.wd.id)) {
             dataSet(null, self.wd.id, "_sel_mouse_down_bytes", self.sel_mouse_down_bytes);
         }
@@ -8087,7 +8119,7 @@ pub const TextEntryWidget = struct {
 
     pub fn textTyped(self: *Self, new: []const u8) void {
         if (self.textLayout.selectionGet(.{})) |sel| {
-            if (sel.start != sel.end) {
+            if (!sel.empty()) {
                 // delete selection
                 std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
                 self.len -= (sel.end - sel.start);
@@ -8126,7 +8158,7 @@ pub const TextEntryWidget = struct {
                         if (ke.action == .down or ke.action == .repeat) {
                             e.handled = true;
                             if (self.textLayout.selectionGet(.{})) |sel| {
-                                if (sel.start != sel.end) {
+                                if (!sel.empty()) {
                                     // just delete selection
                                     std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
                                     self.len -= (sel.end - sel.start);
