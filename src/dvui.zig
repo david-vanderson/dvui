@@ -4829,7 +4829,7 @@ pub const PanedWidget = struct {
                 } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                     // stop possible drag and capture
                     captureMouse(null);
-                } else if (e.evt.mouse.action == .motion) {
+                } else if (e.evt.mouse.action == .motion and captured(self.wd.id)) {
                     // move if dragging
                     if (dragging(e.evt.mouse.p)) |dps| {
                         _ = dps;
@@ -5483,7 +5483,7 @@ pub const TextLayoutWidget = struct {
                 e.handled = true;
                 // stop possible drag and capture
                 captureMouse(null);
-            } else if (e.evt.mouse.action == .motion) {
+            } else if (e.evt.mouse.action == .motion and captured(self.wd.id)) {
                 e.handled = true;
                 // move if dragging
                 if (dragging(e.evt.mouse.p)) |dps| {
@@ -5537,6 +5537,7 @@ pub const TextLayoutWidget = struct {
             }
         } else if (e.evt == .key and e.evt.key.mod.controlGui() and e.evt.key.code == .c) {
             // copy
+            e.handled = true;
             if (self.selectionGet(.{})) |sel| {
                 if (sel.end > sel.start) {
                     self.copy_sel = sel.*;
@@ -6679,28 +6680,30 @@ pub const ScrollBarWidget = struct {
                             }
                         },
                         .motion => {
-                            e.handled = true;
-                            // move if dragging
-                            if (dragging(me.p)) |dps| {
-                                _ = dps;
-                                const min = switch (self.dir) {
-                                    .vertical => rs.r.y + grabrs.h / 2,
-                                    .horizontal => rs.r.x + grabrs.w / 2,
-                                };
-                                const max = switch (self.dir) {
-                                    .vertical => rs.r.y + rs.r.h - grabrs.h / 2,
-                                    .horizontal => rs.r.x + rs.r.w - grabrs.w / 2,
-                                };
-                                const grabmid = switch (self.dir) {
-                                    .vertical => me.p.y - dragOffset().y,
-                                    .horizontal => me.p.x - dragOffset().x,
-                                };
-                                var f: f32 = 0;
-                                if (max > min) {
-                                    f = (grabmid - min) / (max - min);
+                            if (captured(self.data().id)) {
+                                e.handled = true;
+                                // move if dragging
+                                if (dragging(me.p)) |dps| {
+                                    _ = dps;
+                                    const min = switch (self.dir) {
+                                        .vertical => rs.r.y + grabrs.h / 2,
+                                        .horizontal => rs.r.x + grabrs.w / 2,
+                                    };
+                                    const max = switch (self.dir) {
+                                        .vertical => rs.r.y + rs.r.h - grabrs.h / 2,
+                                        .horizontal => rs.r.x + rs.r.w - grabrs.w / 2,
+                                    };
+                                    const grabmid = switch (self.dir) {
+                                        .vertical => me.p.y - dragOffset().y,
+                                        .horizontal => me.p.x - dragOffset().x,
+                                    };
+                                    var f: f32 = 0;
+                                    if (max > min) {
+                                        f = (grabmid - min) / (max - min);
+                                    }
+                                    self.si.scrollToFraction(self.dir, f);
+                                    refresh();
                                 }
-                                self.si.scrollToFraction(self.dir, f);
-                                refresh();
                             }
                         },
                         .position => {
