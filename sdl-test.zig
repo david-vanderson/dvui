@@ -12,6 +12,7 @@ pub fn main() !void {
         .vsync = false,
         .title = "DVUI SDL test",
     });
+    win_backend.log_events = false;
     defer win_backend.deinit();
 
     var win = try dvui.Window.init(@src(), 0, gpa, win_backend.backend());

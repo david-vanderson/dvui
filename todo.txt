@@ -1,8 +1,8 @@
 
-test that touch stuff is working on phone
+add inertia to touch scrolling
 
-implement touch-based scrolling with inertia and overscroll
-
+what to do about trying to touch-scroll while on top of a textLayout?
+- textLayout also needs to allow motion events past if it doesn't have capture
 
 scaling:
 - when we are at 125% on linux x11 gnome, then the fonts look bad?
@@ -41,9 +41,6 @@ typing into the debug widget id can cause a crash?
 - maybe non hex stuff?
 
 maybe focusWidget should default to focusing it in the current subwindow?
-
-gui is getting mouse events even when the window is not focused?
-- is that a SDL option?
 
 podcast needs:
 - update gui to be able to paste urls into the rss textEntry
@@ -222,24 +219,10 @@ punchlist for podcast app:
 some visual indication of non-focused windows
 - maybe change focus color inside?
 
-debugging:
-- highlight widgets that are causing cueFrames?
-- show layout somehow (mouseover?)
-- maybe just a separate floating window that shows a tree-view of all the widgets
-  - mouseover to highlight the widget?
+debugging - highlight widgets that are causing cueFrames?
 
 hover and highlight properties need to propogate down to children so that icons can draw properly in buttons where the button is highlighted but not the icon directly?
   - maybe as part of the Options struct?
-
-
-PathStroking with thickness
-- endcaps?
-- need to adjust points if they are too close together or angle is too acute
-  - on acute angle side and do line intersection
-    - so we have points a,b,c where b is the current intersection point above p
-    - if the angle from p to a is on the wrong side of b, then project a onto the line from p to b to ensure convexness
-  - on other side, do line intersection
-    - but set some maximum on the length of the point from p
 
 
 dialog
@@ -248,11 +231,7 @@ dialog
   - always call in deinit, but also user can call that and get result if the user pressed esc
   - are there other things a user could press?
 - rss textentry should bubble up the enter that it doesn't process so the dialog can record that it should "submit"
-
-popups need to have a scrollarea
-- scrollarea needs to not show the scrollbar if no need
-- also main window and floating windows
-- probably default layouts for those should be a vertical scrollarea with showing the scrollbar only when needed (and when not showing it don't scroll past the beginning or end)
+ - maybe always bubble up dialog-related key presses?
 
 maybe use stb_truetype or whatever so we don't need sdl_ttf?
 - translate-c is failing for a few of the functions

@@ -1607,7 +1607,7 @@ pub fn subwindowCurrentId() u32 {
     return cw.subwindow_currentId;
 }
 
-pub fn dragPreStart(p: Point, cursor: Cursor, offset: Point) void {
+pub fn dragPreStart(p: Point, cursor: ?Cursor, offset: Point) void {
     const cw = currentWindow();
     cw.drag_state = .prestart;
     cw.drag_pt = p;
@@ -1615,7 +1615,7 @@ pub fn dragPreStart(p: Point, cursor: Cursor, offset: Point) void {
     cw.cursor_dragging = cursor;
 }
 
-pub fn dragStart(p: Point, cursor: Cursor, offset: Point) void {
+pub fn dragStart(p: Point, cursor: ?Cursor, offset: Point) void {
     const cw = currentWindow();
     cw.drag_state = .dragging;
     cw.drag_pt = p;
@@ -1661,17 +1661,17 @@ pub fn mouseTotalMotion() Point {
     return Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
 }
 
-pub fn captureMouse(id: ?u32) bool {
+pub fn captureMouse(id: ?u32) void {
     const cw = currentWindow();
     cw.captureID = id;
     if (id != null) {
         cw.captured_last_frame = true;
-        return true;
+    } else {
+        dragEnd();
     }
-    return false;
 }
 
-pub fn captureMouseMaintain(id: u32) bool {
+pub fn captureMouseMaintain(id: u32) void {
     const cw = currentWindow();
     if (cw.captureID == id) {
         // to maintain capture, we must be on or above the
@@ -1681,23 +1681,23 @@ pub fn captureMouseMaintain(id: u32) bool {
             const sw = &cw.subwindows.items[i - 1];
             if (sw.id == cw.subwindow_currentId) {
                 // maintaining capture
-                break;
+                // either our floating window is above the top modal
+                // or there are no floating modal windows
+                cw.captured_last_frame = true;
+                return;
             } else if (sw.modal) {
                 // found modal before we found current
                 // cancel the capture, and cancel
                 // any drag being done
-                dragEnd();
-                return false;
+                captureMouse(null);
+                return;
             }
         }
-
-        // either our floating window is above the top modal
-        // or there are no floating modal windows
-        cw.captured_last_frame = true;
-        return true;
     }
+}
 
-    return false;
+pub fn captured(id: u32) bool {
+    return id == captureMouseId();
 }
 
 pub fn captureMouseId() ?u32 {
@@ -2290,7 +2290,7 @@ pub const Window = struct {
     ft2lib: c.FT_Library = undefined,
 
     cursor_requested: Cursor = .arrow,
-    cursor_dragging: Cursor = .arrow,
+    cursor_dragging: ?Cursor = null,
 
     wd: WidgetData = undefined,
     rect_pixels: Rect = Rect{}, // pixels
@@ -2876,7 +2876,10 @@ pub const Window = struct {
         }
 
         if (!self.captured_last_frame) {
+            // widget that had capture went away, also end any drag that might
+            // have been happening
             self.captureID = null;
+            self.drag_state = .none;
         }
         self.captured_last_frame = false;
 
@@ -2958,8 +2961,8 @@ pub const Window = struct {
     // Return the cursor the gui wants.  Client code should cache this if
     // switching the platform's cursor is expensive.
     pub fn cursorRequested(self: *const Self) Cursor {
-        if (self.drag_state == .dragging) {
-            return self.cursor_dragging;
+        if (self.drag_state == .dragging and self.cursor_dragging != null) {
+            return self.cursor_dragging.?;
         } else {
             return self.cursor_requested;
         }
@@ -3695,7 +3698,6 @@ pub const FloatingWindowWidget = struct {
     init_options: InitOptions = undefined,
     options: Options = undefined,
     process_events: bool = true,
-    captured: bool = false,
     prev_windowId: u32 = 0,
     layout: BoxWidget = undefined,
     prevClip: Rect = Rect{},
@@ -3816,7 +3818,7 @@ pub const FloatingWindowWidget = struct {
         self.prevClip = clipGet();
         clipSet(windowRectPixels());
 
-        self.captured = captureMouseMaintain(self.wd.id);
+        captureMouseMaintain(self.wd.id);
 
         if (self.process_events) {
             // processEventsBefore can change self.wd.rect
@@ -3867,18 +3869,16 @@ pub const FloatingWindowWidget = struct {
                     focusSubwindow(self.wd.id, e.num);
                 }
 
-                if (self.captured or corner) {
+                if (captured(self.wd.id) or corner) {
                     if (me.action == .press and me.button.pointer()) {
                         // capture and start drag
-                        self.captured = captureMouse(self.wd.id);
+                        captureMouse(self.wd.id);
                         dragStart(me.p, .arrow_all, Point.diff(rs.r.bottomRight(), me.p));
                         e.handled = true;
                     } else if (me.action == .release and me.button.pointer()) {
-                        // stop drag and capture
-                        self.captured = captureMouse(null);
-                        dragEnd();
+                        captureMouse(null); // stop drag and capture
                         e.handled = true;
-                    } else if (me.action == .motion) {
+                    } else if (me.action == .motion and captured(self.wd.id)) {
                         // move if dragging
                         if (dragging(me.p)) |dps| {
                             if (cursorGetDragging() == Cursor.crosshair) {
@@ -3925,28 +3925,28 @@ pub const FloatingWindowWidget = struct {
                             if (me.button.pointer()) {
                                 e.handled = true;
                                 // capture and start drag
-                                self.captured = captureMouse(self.wd.id);
+                                captureMouse(self.wd.id);
                                 dragPreStart(e.evt.mouse.p, .crosshair, Point{});
                             }
                         },
                         .release => {
                             if (me.button.pointer()) {
                                 e.handled = true;
-                                // stop drag and capture
-                                self.captured = captureMouse(null);
-                                dragEnd();
+                                captureMouse(null); // stop drag and capture
                             }
                         },
                         .motion => {
-                            e.handled = true;
-                            // move if dragging
-                            if (dragging(me.p)) |dps| {
-                                if (cursorGetDragging() == Cursor.crosshair) {
-                                    const dp = dps.scale(1 / rs.s);
-                                    self.wd.rect.x += dp.x;
-                                    self.wd.rect.y += dp.y;
+                            if (captured(self.wd.id)) {
+                                e.handled = true;
+                                // move if dragging
+                                if (dragging(me.p)) |dps| {
+                                    if (cursorGetDragging() == Cursor.crosshair) {
+                                        const dp = dps.scale(1 / rs.s);
+                                        self.wd.rect.x += dp.x;
+                                        self.wd.rect.y += dp.y;
+                                    }
+                                    refresh();
                                 }
-                                refresh();
                             }
                         },
                         else => {},
@@ -4598,7 +4598,6 @@ pub const PanedWidget = struct {
     split_ratio: f32 = undefined,
     dir: dvui.Direction = undefined,
     collapse_size: f32 = 0,
-    captured: bool = false,
     hovered: bool = false,
     saved_data: SavedData = undefined,
     first_side_id: ?u32 = null,
@@ -4609,7 +4608,7 @@ pub const PanedWidget = struct {
         self.wd = WidgetData.init(src, .{}, opts);
         self.dir = dir;
         self.collapse_size = collapse_size;
-        self.captured = captureMouseMaintain(self.wd.id);
+        captureMouseMaintain(self.wd.id);
 
         const rect = self.wd.contentRect();
 
@@ -4820,17 +4819,16 @@ pub const PanedWidget = struct {
                 },
             }
 
-            if (self.captured or @fabs(mouse - target) < (5 * rs.s)) {
+            if (captured(self.wd.id) or @fabs(mouse - target) < (5 * rs.s)) {
                 self.hovered = true;
                 e.handled = true;
                 if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
                     // capture and start drag
-                    self.captured = captureMouse(self.wd.id);
+                    captureMouse(self.wd.id);
                     dragPreStart(e.evt.mouse.p, cursor, Point{});
                 } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                     // stop possible drag and capture
-                    self.captured = captureMouse(null);
-                    dragEnd();
+                    captureMouse(null);
                 } else if (e.evt.mouse.action == .motion) {
                     // move if dragging
                     if (dragging(e.evt.mouse.p)) |dps| {
@@ -4945,7 +4943,6 @@ pub const TextLayoutWidget = struct {
     break_lines: bool = undefined,
 
     bytes_seen: usize = 0,
-    captured: bool = false,
     selection_in: ?*Selection = null,
     selection: *Selection = undefined,
     selection_store: Selection = .{},
@@ -4986,9 +4983,9 @@ pub const TextLayoutWidget = struct {
             self.selection = &self.selection_store;
         }
 
-        self.captured = captureMouseMaintain(self.wd.id);
+        captureMouseMaintain(self.wd.id);
 
-        if (self.captured) {
+        if (captured(self.wd.id)) {
             if (dataGet(null, self.wd.id, "_sel_mouse_down_bytes", usize)) |p| {
                 self.sel_mouse_down_bytes = p;
             }
@@ -5476,7 +5473,7 @@ pub const TextLayoutWidget = struct {
             } else if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
                 e.handled = true;
                 // capture and start drag
-                self.captured = captureMouse(self.wd.id);
+                captureMouse(self.wd.id);
                 dragPreStart(e.evt.mouse.p, .ibeam, Point{});
                 self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
                 self.sel_mouse_drag_pt = null;
@@ -5485,8 +5482,7 @@ pub const TextLayoutWidget = struct {
             } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                 e.handled = true;
                 // stop possible drag and capture
-                self.captured = captureMouse(null);
-                dragEnd();
+                captureMouse(null);
             } else if (e.evt.mouse.action == .motion) {
                 e.handled = true;
                 // move if dragging
@@ -5558,7 +5554,7 @@ pub const TextLayoutWidget = struct {
             self.addTextDone(.{}) catch {};
         }
         dataSet(null, self.wd.id, "_selection", self.selection.*);
-        if (self.captured) {
+        if (captured(self.wd.id)) {
             dataSet(null, self.wd.id, "_sel_mouse_down_bytes", self.sel_mouse_down_bytes);
         }
         if (self.cursor_updown != 0) {
@@ -6581,7 +6577,6 @@ pub const ScrollBarWidget = struct {
     dir: Direction = undefined,
     overlay: bool = false,
     highlight: bool = false,
-    captured: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         var self = Self{};
@@ -6606,7 +6601,7 @@ pub const ScrollBarWidget = struct {
         try self.wd.register("ScrollBar", null);
         try self.wd.borderAndBackground(.{});
 
-        self.captured = captureMouseMaintain(self.wd.id);
+        captureMouseMaintain(self.wd.id);
 
         self.grabRect = self.wd.contentRect();
         switch (self.dir) {
@@ -6680,8 +6675,7 @@ pub const ScrollBarWidget = struct {
                             if (me.button.pointer()) {
                                 e.handled = true;
                                 // stop possible drag and capture
-                                _ = captureMouse(null);
-                                dragEnd();
+                                captureMouse(null);
                             }
                         },
                         .motion => {
@@ -6734,7 +6728,7 @@ pub const ScrollBarWidget = struct {
 
     pub fn deinit(self: *Self) void {
         var fill = self.wd.options.color(.text).transparent(0.5);
-        if (self.captured or self.highlight) {
+        if (captured(self.wd.id) or self.highlight) {
             fill = self.wd.options.color(.text).transparent(0.3);
         }
         self.grabRect = self.grabRect.insetAll(2);
@@ -7518,14 +7512,13 @@ pub const ButtonWidget = struct {
     };
     wd: WidgetData = undefined,
     hover: bool = false,
-    capture: bool = false,
     focus: bool = false,
     click: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, opts: Options) Self {
         var self = Self{};
         self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-        self.capture = captureMouseMaintain(self.wd.id);
+        captureMouseMaintain(self.wd.id);
         return self;
     }
 
@@ -7550,7 +7543,7 @@ pub const ButtonWidget = struct {
         self.focus = (self.wd.id == focusedWidgetId());
 
         var fill_color: ?Color = null;
-        if (self.capture) {
+        if (captured(self.wd.id)) {
             fill_color = self.wd.options.color(.press);
         } else if (self.hover) {
             fill_color = self.wd.options.color(.hover);
@@ -7571,8 +7564,8 @@ pub const ButtonWidget = struct {
         return self.hover;
     }
 
-    pub fn captured(self: *Self) bool {
-        return self.capture;
+    pub fn capture(self: *Self) bool {
+        return captured(self.wd.id);
     }
 
     pub fn clicked(self: *Self) bool {
@@ -7608,27 +7601,26 @@ pub const ButtonWidget = struct {
                     focusWidget(self.wd.id, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
-                    self.capture = captureMouse(self.wd.id);
+                    captureMouse(self.wd.id);
 
                     // drag prestart is just for touch events
-                    dragPreStart(me.p, .arrow_all, Point{});
+                    dragPreStart(me.p, null, Point{});
                 } else if (me.action == .release and me.button.pointer()) {
-                    e.handled = true;
-                    if (self.capture) {
-                        self.capture = captureMouse(null);
+                    if (captured(self.wd.id)) {
+                        e.handled = true;
+                        captureMouse(null);
                         if (self.data().borderRectScale().r.contains(me.p)) {
                             self.click = true;
                             refresh();
                         }
                     }
                 } else if (me.action == .motion and me.button.touch()) {
-                    if (self.capture) {
+                    if (captured(self.wd.id)) {
                         if (dragging(me.p)) |_| {
                             // if we overcame the drag threshold, then that
                             // means the person probably didn't want to touch
                             // this button, maybe they were trying to scroll
-                            self.capture = captureMouse(null);
-                            dragEnd();
+                            captureMouse(null);
                         }
                     }
                 } else if (me.action == .position) {
@@ -7701,7 +7693,6 @@ pub fn slider(src: std.builtin.SourceLocation, dir: dvui.Direction, percent: *f3
         try tabIndexSet(b.data().id, options.tab_index);
     }
 
-    var captured = captureMouseMaintain(b.data().id);
     var hovered: bool = false;
     var ret = false;
 
@@ -7728,14 +7719,14 @@ pub fn slider(src: std.builtin.SourceLocation, dir: dvui.Direction, percent: *f3
                     focusWidget(b.data().id, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     // capture
-                    captured = captureMouse(b.data().id);
+                    captureMouse(b.data().id);
                     e.handled = true;
                     p = me.p;
                 } else if (me.action == .release and me.button.pointer()) {
                     // stop capture
-                    captured = captureMouse(null);
+                    captureMouse(null);
                     e.handled = true;
-                } else if (me.action == .motion and captureMouseId() == b.data().id) {
+                } else if (me.action == .motion and captured(b.data().id)) {
                     // handle only if we have capture
                     e.handled = true;
                     p = me.p;
@@ -7820,7 +7811,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: dvui.Direction, percent: *f3
     };
 
     var fill_color: Color = undefined;
-    if (captured) {
+    if (captured(b.data().id)) {
         fill_color = options.color(.press);
     } else if (hovered) {
         fill_color = options.color(.hover);
@@ -7869,7 +7860,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     var rs = s.borderRectScale();
     rs.r = rs.r.insetAll(0.5 * rs.s);
 
-    try checkmark(target.*, bw.focused(), rs, bw.captured(), bw.hovered(), options);
+    try checkmark(target.*, bw.focused(), rs, bw.capture(), bw.hovered(), options);
 
     if (label_str) |str| {
         _ = spacer(@src(), .{ .w = checkbox_defaults.paddingGet().w }, .{});
