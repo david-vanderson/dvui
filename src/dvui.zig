@@ -2702,7 +2702,15 @@ pub const Window = struct {
         var micros_since_last: u32 = 1;
         if (time_ns > self.frame_time_ns) {
             // enforce monotinicity
-            const nanos_since_last = time_ns - self.frame_time_ns;
+            var nanos_since_last = time_ns - self.frame_time_ns;
+
+            // r4gus TESTING:
+            //nanos_since_last = std.math.maxInt(u32) * std.time.ns_per_us;
+
+            // make sure the @intCast below doesn't panic
+            const max_nanos_since_last: i128 = std.math.maxInt(u32) * std.time.ns_per_us;
+            nanos_since_last = @min(nanos_since_last, max_nanos_since_last);
+
             micros_since_last = @as(u32, @intCast(@divFloor(nanos_since_last, std.time.ns_per_us)));
             micros_since_last = @max(1, micros_since_last);
             self.frame_time_ns = time_ns;
@@ -2746,7 +2754,7 @@ pub const Window = struct {
             if (i == (self.frame_times.len - 1)) {
                 self.frame_times[i] = 0;
             } else {
-                self.frame_times[i] = self.frame_times[i + 1] + micros_since_last;
+                self.frame_times[i] = self.frame_times[i + 1] +| micros_since_last;
             }
         }
 
