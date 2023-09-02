@@ -4888,7 +4888,7 @@ pub const TextLayoutWidget = struct {
         .padding = Rect.all(4),
         .background = true,
         .color_style = .content,
-        .min_size_content = .{ .w = 25 },
+        .min_size_content = .{ .w = 250 },
     };
 
     pub const InitOptions = struct {
@@ -5040,7 +5040,7 @@ pub const TextLayoutWidget = struct {
 
         const rect = self.wd.contentRect();
         var container_width = rect.w;
-        if (self.screenRectScale(rect).r.empty()) {
+        if (container_width == 0) {
             // if we are not being shown at all, probably this is the first
             // frame for us and we should calculate our min height assuming we
             // get at least our min width
