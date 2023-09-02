@@ -2704,9 +2704,6 @@ pub const Window = struct {
             // enforce monotinicity
             var nanos_since_last = time_ns - self.frame_time_ns;
 
-            // r4gus TESTING:
-            //nanos_since_last = std.math.maxInt(u32) * std.time.ns_per_us;
-
             // make sure the @intCast below doesn't panic
             const max_nanos_since_last: i128 = std.math.maxInt(u32) * std.time.ns_per_us;
             nanos_since_last = @min(nanos_since_last, max_nanos_since_last);
