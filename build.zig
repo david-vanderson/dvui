@@ -56,12 +56,13 @@ pub fn build(b: *std.build.Builder) !void {
     const examples = [_][]const u8{
         "standalone-sdl",
         "ontop-sdl",
+        "password",
     };
 
     inline for (examples) |ex| {
         const exe = b.addExecutable(.{
             .name = ex,
-            .root_source_file = .{ .path = ex ++ ".zig" },
+            .root_source_file = .{ .path = "examples/" ++ ex ++ ".zig" },
             .target = target,
             .optimize = optimize,
         });
@@ -101,7 +102,7 @@ pub fn build(b: *std.build.Builder) !void {
     {
         const exe = b.addExecutable(.{
             .name = "sdl-test",
-            .root_source_file = .{ .path = "sdl-test" ++ ".zig" },
+            .root_source_file = .{ .path = "examples/" ++ "sdl-test" ++ ".zig" },
             .target = target,
             .optimize = optimize,
         });
