@@ -8243,11 +8243,21 @@ pub const TextEntryWidget = struct {
                             e.handled = true;
                             if (self.textLayout.selectionGet(.{})) |sel| {
                                 if (code == .left) {
-                                    sel.cursor -|= 1;
+                                    // If the cursor is at position 0 do nothing...
+                                    if (sel.cursor > 0) {
+                                        // ... otherwise, "jump over" the utf8 char to the
+                                        // left of the cursor.
+                                        var i: usize = 1;
+                                        while (sel.cursor - i > 0 and self.init_opts.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
+                                        sel.cursor -= i;
+                                    }
                                 } else {
-                                    sel.cursor += 1;
+                                    // Get the number of bytes of the current code point and
+                                    // "jump" to the next code point to the right of the cursor.
+                                    sel.cursor += std.unicode.utf8ByteSequenceLength(self.init_opts.text[sel.cursor]) catch 1;
                                     sel.cursor = @min(sel.cursor, self.len);
                                 }
+
                                 sel.start = sel.cursor;
                                 sel.end = sel.cursor;
                                 self.scroll_to_cursor = true;
