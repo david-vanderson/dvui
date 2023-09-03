@@ -3262,7 +3262,8 @@ pub const Window = struct {
             if (self.debug_widget_id != 0) {
                 _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
             }
-            try dvui.textEntry(@src(), .{ .text = &buf }, .{});
+            var te = try dvui.textEntry(@src(), .{ .text = &buf }, .{});
+            te.deinit();
 
             self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(&buf, 0), 16) catch 0;
         }
@@ -8030,13 +8031,13 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     }
 }
 
-pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) !void {
+pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) !*TextEntryWidget {
     const cw = currentWindow();
     var ret = try cw.arena.create(TextEntryWidget);
     ret.* = TextEntryWidget.init(src, init_opts, opts);
     ret.allocator = cw.arena;
     try ret.install(.{});
-    ret.deinit();
+    return ret;
 }
 
 pub const TextEntryWidget = struct {
@@ -9858,7 +9859,8 @@ pub const examples = struct {
             defer hbox.deinit();
 
             try dvui.label(@src(), "Text Entry Singleline", .{}, .{ .gravity_y = 0.5 });
-            try dvui.textEntry(@src(), .{ .text = &text_entry_buf, .scroll_vertical = false, .scroll_horizontal_bar = .hide }, .{});
+            var te = try dvui.textEntry(@src(), .{ .text = &text_entry_buf, .scroll_vertical = false, .scroll_horizontal_bar = .hide }, .{});
+            te.deinit();
             // replace newlines with spaces
             for (&text_entry_buf) |*char| {
                 if (char.* == '\n')
@@ -9871,7 +9873,8 @@ pub const examples = struct {
             defer hbox.deinit();
 
             try dvui.label(@src(), "Text Entry Multiline", .{}, .{ .gravity_y = 0.5 });
-            try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
+            var te = try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
+            te.deinit();
         }
 
         {
