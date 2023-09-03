@@ -8197,11 +8197,17 @@ pub const TextEntryWidget = struct {
                                     sel.end = sel.start;
                                     sel.cursor = sel.start;
                                 } else if (sel.cursor > 0) {
+                                    // A utf8 char might consist of more than one byte.
+                                    // Find the beginning of the last byte by iterating over
+                                    // the string backwards. The first byte of a utf8 char
+                                    // does not have the pattern 10xxxxxx.
+                                    var i: usize = 1;
+                                    while (self.init_opts.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
                                     // delete character just before cursor
-                                    std.mem.copy(u8, self.init_opts.text[sel.cursor - 1 ..], self.init_opts.text[sel.cursor..self.len]);
-                                    self.len -= 1;
+                                    std.mem.copy(u8, self.init_opts.text[sel.cursor - i ..], self.init_opts.text[sel.cursor..self.len]);
+                                    self.len -= i;
                                     self.init_opts.text[self.len] = 0;
-                                    sel.cursor -= 1;
+                                    sel.cursor -= i;
                                     sel.start = sel.cursor;
                                     sel.end = sel.cursor;
                                 }
