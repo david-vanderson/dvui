@@ -4958,6 +4958,7 @@ pub const TextLayoutWidget = struct {
     sel_mouse_down_pt: ?Point = null,
     sel_mouse_down_bytes: ?usize = null,
     sel_mouse_drag_pt: ?Point = null,
+    sel_left_right: i32 = 0,
     touch_selection: bool = false,
 
     cursor_seen: bool = false,
@@ -4995,6 +4996,10 @@ pub const TextLayoutWidget = struct {
 
         if (dataGet(null, self.wd.id, "_touch_selection", bool)) |ts| {
             self.touch_selection = ts;
+        }
+
+        if (dataGet(null, self.wd.id, "_sel_left_right", i32)) |slf| {
+            self.sel_left_right = slf;
         }
 
         captureMouseMaintain(self.wd.id);
@@ -5082,7 +5087,7 @@ pub const TextLayoutWidget = struct {
 
             // ensure we always get at least 1 codepoint so we make progress
             if (end == 0) {
-                end = std.unicode.utf8ByteSequenceLength(txt[0]) catch return error.InvalidUtf8;
+                end = std.unicode.utf8ByteSequenceLength(txt[0]) catch 1;
                 s = try options.fontGet().textSize(txt[0..end]);
             }
 
@@ -5117,7 +5122,57 @@ pub const TextLayoutWidget = struct {
                 }
             }
 
+            // now we know the line of text we are about to render
             // see if selection needs to be updated
+
+            if (self.sel_left_right != 0 and !self.cursor_seen and self.selection.cursor <= self.bytes_seen + end) {
+                while (self.sel_left_right < 0 and self.selection.cursor > self.bytes_seen) {
+                    var move_start: bool = undefined;
+                    if (self.selection.cursor == self.selection.start) {
+                        move_start = true;
+                    } else {
+                        move_start = false;
+                    }
+
+                    // move cursor one utf8 char left
+                    self.selection.cursor -|= 1;
+                    while (self.selection.cursor > self.bytes_seen and txt[self.selection.cursor - self.bytes_seen] & 0xc0 == 0x80) {
+                        // in the middle of a multibyte char
+                        self.selection.cursor -|= 1;
+                    }
+
+                    if (move_start) {
+                        self.selection.start = self.selection.cursor;
+                    } else {
+                        self.selection.end = self.selection.cursor;
+                    }
+                    self.sel_left_right += 1;
+                }
+
+                if (self.sel_left_right < 0 and self.selection.cursor == 0) {
+                    self.sel_left_right = 0;
+                }
+
+                while (self.sel_left_right > 0 and self.selection.cursor < (self.bytes_seen + end)) {
+                    var move_start: bool = undefined;
+                    if (self.selection.cursor == self.selection.end) {
+                        move_start = false;
+                    } else {
+                        move_start = true;
+                    }
+
+                    // move cursor one utf8 char right
+                    self.selection.cursor += std.unicode.utf8ByteSequenceLength(txt[self.selection.cursor - self.bytes_seen]) catch 1;
+
+                    if (move_start) {
+                        self.selection.start = self.selection.cursor;
+                    } else {
+                        self.selection.end = self.selection.cursor;
+                    }
+                    self.sel_left_right -= 1;
+                }
+            }
+
             if (self.sel_mouse_down_pt) |p| {
                 const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
                 if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
@@ -5378,6 +5433,10 @@ pub const TextLayoutWidget = struct {
         self.selection.start = @min(self.selection.start, self.bytes_seen);
         self.selection.end = @min(self.selection.end, self.bytes_seen);
 
+        if (self.sel_left_right > 0 and self.selection.cursor == self.bytes_seen) {
+            self.sel_left_right = 0;
+        }
+
         if (!self.cursor_seen) {
             self.cursor_seen = true;
             self.selection.cursor = self.bytes_seen;
@@ -5532,18 +5591,13 @@ pub const TextLayoutWidget = struct {
                     }
                 }
             }
-        } else if (e.evt == .key and e.evt.key.mod.shift()) {
+        } else if (e.evt == .key and (e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.mod.shift()) {
             switch (e.evt.key.code) {
                 .left => {
                     e.handled = true;
                     if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null and self.cursor_updown == 0) {
                         // only change selection if mouse isn't trying to change it
-                        if (self.selection.cursor == self.selection.start) {
-                            self.selection.start -|= 1;
-                        } else {
-                            self.selection.end -|= 1;
-                        }
-                        self.selection.cursor -|= 1;
+                        self.sel_left_right -= 1;
                         self.scroll_to_cursor = true;
                     }
                 },
@@ -5551,12 +5605,7 @@ pub const TextLayoutWidget = struct {
                     e.handled = true;
                     if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null and self.cursor_updown == 0) {
                         // only change selection if mouse isn't trying to change it
-                        if (self.selection.cursor == self.selection.end) {
-                            self.selection.end += 1;
-                        } else {
-                            self.selection.start += 1;
-                        }
-                        self.selection.cursor += 1;
+                        self.sel_left_right += 1;
                         self.scroll_to_cursor = true;
                     }
                 },
@@ -5589,6 +5638,10 @@ pub const TextLayoutWidget = struct {
         }
         dataSet(null, self.wd.id, "_selection", self.selection.*);
         dataSet(null, self.wd.id, "_touch_selection", self.touch_selection);
+        if (self.sel_left_right != 0) {
+            dataSet(null, self.wd.id, "_sel_left_right", self.sel_left_right);
+            refresh();
+        }
         if (captured(self.wd.id)) {
             dataSet(null, self.wd.id, "_sel_mouse_down_bytes", self.sel_mouse_down_bytes);
         }

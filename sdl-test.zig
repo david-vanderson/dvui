@@ -202,7 +202,7 @@ pub fn main() !void {
                     var scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{ .min_size_content = .{ .w = 150, .h = 100 }, .margin = dvui.Rect.all(4) });
                     var tl = try dvui.textLayout(@src(), .{ .selection = &Sel.sel, .break_lines = false }, .{});
                     const lorem =
-                        \\Lorem ipsum dolor sit amet, consectetur adipiscing elit,
+                        \\Lorem € ipsum dolor sit amet, consectetur adipiscing elit,
                         \\sed do eiusmod tempor incididunt ut labore et dolore
                         \\magna aliqua. Ut enim ad minim veniam, quis nostrud
                         \\exercitation ullamco laboris nisi ut aliquip ex ea
