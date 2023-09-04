@@ -9646,6 +9646,7 @@ pub const examples = struct {
     var slider_val: f32 = 0.0;
     var text_entry_buf = std.mem.zeroes([30]u8);
     var text_entry_password_buf = std.mem.zeroes([30]u8);
+    var text_entry_password_buf_obf_enable: bool = true;
     var text_entry_multiline_buf = std.mem.zeroes([500]u8);
     var dropdown_val: usize = 1;
     var show_dialog: bool = false;
@@ -9952,8 +9953,24 @@ pub const examples = struct {
             defer hbox.deinit();
 
             try dvui.label(@src(), "Text Entry Password", .{}, .{ .gravity_y = 0.5 });
-            var te = try dvui.textEntry(@src(), .{ .text = &text_entry_password_buf, .password_char = "*", .scroll_vertical = false, .scroll_horizontal_bar = .hide }, .{});
+            var te = try dvui.textEntry(@src(), .{
+                .text = &text_entry_password_buf,
+                .password_char = if (text_entry_password_buf_obf_enable) "*" else null,
+                .scroll_vertical = false,
+                .scroll_horizontal_bar = .hide,
+            }, .{});
             te.deinit();
+
+            if (try dvui.buttonIcon(
+                @src(),
+                12,
+                "toggle",
+                if (text_entry_password_buf_obf_enable) dvui.icons.entypo.eye_with_line else dvui.icons.entypo.eye,
+                .{ .gravity_y = 0.5 },
+            )) {
+                text_entry_password_buf_obf_enable = !text_entry_password_buf_obf_enable;
+            }
+
             // replace newlines with spaces
             for (&text_entry_buf) |*char| {
                 if (char.* == '\n')
