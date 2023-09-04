@@ -5352,7 +5352,7 @@ pub const TextLayoutWidget = struct {
 
                 if (self.scroll_to_cursor) {
                     var scrollto = Event{ .evt = .{ .scroll_to = .{
-                        .screen_rect = self.screenRectScale(cr).r,
+                        .screen_rect = self.screenRectScale(cr.outset(self.wd.options.paddingGet())).r,
                     } } };
                     self.processEvent(&scrollto, true);
                 }
@@ -5461,7 +5461,7 @@ pub const TextLayoutWidget = struct {
 
             if (self.scroll_to_cursor) {
                 var scrollto = Event{ .evt = .{ .scroll_to = .{
-                    .screen_rect = self.screenRectScale(cr).r,
+                    .screen_rect = self.screenRectScale(cr.outset(self.wd.options.paddingGet())).r,
                 } } };
                 self.processEvent(&scrollto, true);
             }
@@ -8308,6 +8308,7 @@ pub const TextEntryWidget = struct {
                                     self.init_opts.text[self.len] = 0;
                                     sel.end = sel.start;
                                     sel.cursor = sel.start;
+                                    self.scroll_to_cursor = true;
                                 } else if (sel.cursor > 0) {
                                     // A utf8 char might consist of more than one byte.
                                     // Find the beginning of the last byte by iterating over
@@ -8322,6 +8323,7 @@ pub const TextEntryWidget = struct {
                                     sel.cursor -= i;
                                     sel.start = sel.cursor;
                                     sel.end = sel.cursor;
+                                    self.scroll_to_cursor = true;
                                 }
                             }
                         }
