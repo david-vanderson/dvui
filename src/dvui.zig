@@ -8364,10 +8364,12 @@ pub const TextEntryWidget = struct {
                                         sel.cursor -= i;
                                     }
                                 } else {
-                                    // Get the number of bytes of the current code point and
-                                    // "jump" to the next code point to the right of the cursor.
-                                    sel.cursor += std.unicode.utf8ByteSequenceLength(self.init_opts.text[sel.cursor]) catch 1;
-                                    sel.cursor = @min(sel.cursor, self.len);
+                                    if (sel.cursor < self.len) {
+                                        // Get the number of bytes of the current code point and
+                                        // "jump" to the next code point to the right of the cursor.
+                                        sel.cursor += std.unicode.utf8ByteSequenceLength(self.init_opts.text[sel.cursor]) catch 1;
+                                        sel.cursor = @min(sel.cursor, self.len);
+                                    }
                                 }
 
                                 sel.start = sel.cursor;
