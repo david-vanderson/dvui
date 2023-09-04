@@ -8058,6 +8058,9 @@ pub const TextEntryWidget = struct {
         scroll_vertical_bar: ScrollInfo.ScrollBarMode = .auto,
         scroll_horizontal: bool = true,
         scroll_horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
+
+        // must be a single utf8 character
+        password_char: ?[]const u8 = null,
     };
 
     wd: WidgetData = undefined,
@@ -8144,8 +8147,64 @@ pub const TextEntryWidget = struct {
         // set clip back to what textLayout expects
         clipSet(textclip);
 
-        try self.textLayout.addText(self.init_opts.text[0..self.len], self.wd.options.strip());
+        if (self.init_opts.password_char) |pc| {
+            var count: usize = 0;
+            var bytes: usize = 0;
+            var sel = self.textLayout.selection;
+            var sstart: ?usize = null;
+            var scursor: ?usize = null;
+            var send: ?usize = null;
+            var utf8it = (try std.unicode.Utf8View.init(self.init_opts.text[0..self.len])).iterator();
+            while (utf8it.nextCodepoint()) |codepoint| {
+                if (sstart == null and sel.start == bytes) sstart = count * pc.len;
+                if (scursor == null and sel.cursor == bytes) scursor = count * pc.len;
+                if (send == null and sel.end == bytes) send = count * pc.len;
+                count += 1;
+                bytes += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+            } else {
+                if (sstart == null and sel.start == bytes) sstart = count * pc.len;
+                if (scursor == null and sel.cursor == bytes) scursor = count * pc.len;
+                if (send == null and sel.end == bytes) send = count * pc.len;
+            }
+            sel.start = sstart.?;
+            sel.cursor = scursor.?;
+            sel.end = send.?;
+            var password_str: []u8 = try currentWindow().arena.alloc(u8, count * pc.len);
+            for (0..count) |i| {
+                for (0..pc.len) |pci| {
+                    password_str[i * pc.len + pci] = pc[pci];
+                }
+            }
+            try self.textLayout.addText(password_str, self.wd.options.strip());
+        } else {
+            try self.textLayout.addText(self.init_opts.text[0..self.len], self.wd.options.strip());
+        }
+
         try self.textLayout.addTextDone(self.wd.options.strip());
+
+        if (self.init_opts.password_char) |pc| {
+            var count: usize = 0;
+            var bytes: usize = 0;
+            var sel = self.textLayout.selection;
+            var sstart: ?usize = null;
+            var scursor: ?usize = null;
+            var send: ?usize = null;
+            var utf8it = (try std.unicode.Utf8View.init(self.init_opts.text[0..self.len])).iterator();
+            while (utf8it.nextCodepoint()) |codepoint| {
+                if (sstart == null and sel.start == count * pc.len) sstart = bytes;
+                if (scursor == null and sel.cursor == count * pc.len) scursor = bytes;
+                if (send == null and sel.end == count * pc.len) send = bytes;
+                count += 1;
+                bytes += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+            } else {
+                if (sstart == null and sel.start == count * pc.len) sstart = bytes;
+                if (scursor == null and sel.cursor == count * pc.len) scursor = bytes;
+                if (send == null and sel.end == count * pc.len) send = bytes;
+            }
+            sel.start = sstart.?;
+            sel.cursor = scursor.?;
+            sel.end = send.?;
+        }
 
         if (focused) {
             if (self.textLayout.cursor_rect) |cr| {
@@ -9567,6 +9626,7 @@ pub const examples = struct {
     var checkbox_bool: bool = false;
     var slider_val: f32 = 0.0;
     var text_entry_buf = std.mem.zeroes([30]u8);
+    var text_entry_password_buf = std.mem.zeroes([30]u8);
     var text_entry_multiline_buf = std.mem.zeroes([500]u8);
     var dropdown_val: usize = 1;
     var show_dialog: bool = false;
@@ -9867,6 +9927,22 @@ pub const examples = struct {
                     char.* = ' ';
             }
         }
+
+        {
+            var hbox = try dvui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
+
+            try dvui.label(@src(), "Text Entry Password", .{}, .{ .gravity_y = 0.5 });
+            var te = try dvui.textEntry(@src(), .{ .text = &text_entry_password_buf, .password_char = "*", .scroll_vertical = false, .scroll_horizontal_bar = .hide }, .{});
+            te.deinit();
+            // replace newlines with spaces
+            for (&text_entry_buf) |*char| {
+                if (char.* == '\n')
+                    char.* = ' ';
+            }
+        }
+
+        try dvui.label(@src(), "Password is \"{s}\"", .{std.mem.sliceTo(&text_entry_password_buf, 0)}, .{ .gravity_y = 0.5 });
 
         {
             var hbox = try dvui.box(@src(), .horizontal, .{});
