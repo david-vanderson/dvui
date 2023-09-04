@@ -8269,7 +8269,22 @@ pub const TextEntryWidget = struct {
                 sel.end = sel.start;
                 sel.cursor = sel.start;
             }
-            const new_len = @min(new.len, self.init_opts.text.len - self.len);
+
+            var new_len = @min(new.len, self.init_opts.text.len - self.len);
+
+            // find start of last utf8 char
+            var last: usize = new_len -| 1;
+            while (last >= 0 and last < new_len and new[last] & 0xc0 == 0x80) {
+                last -|= 1;
+            }
+
+            // if the last utf8 char can't fit, don't include it
+            if (last >= 0 and last < new_len) {
+                const utf8_size = std.unicode.utf8ByteSequenceLength(new[last]) catch 0;
+                if (utf8_size != (new_len - last)) {
+                    new_len = last;
+                }
+            }
 
             // make room if we can
             if (sel.cursor + new_len < self.init_opts.text.len) {
