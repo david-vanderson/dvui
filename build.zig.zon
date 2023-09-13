@@ -2,10 +2,10 @@
     .name = "dvui",
     .version = "0.0.1",
     .dependencies = .{
-        //.sdl = .{
-            //.url = "https://github.com/andrewrk/SDL/archive/73c38318443a98b80d7cd0cd1e18a190a85e842f.tar.gz",
-            //.hash = "12202047e83332d37477811513bd6446c567efa6f03c4ae5e57585412b4ad8129cae",
-        //},
+        .sdl = .{
+            .url = "https://github.com/Beyley/SDL/archive/587205c11bfd88d515408209ca4b1c271e9f5db9.tar.gz",
+            .hash = "1220da316edbe998b3ae807af6b22b4f8c713c0b77b72275a5bc358b115ee3ecec14",
+        },
         .freetype = .{
             .url = "https://github.com/david-vanderson/freetype/archive/18a1df5a3ef8afa0782c419b153a21e9e160335f.tar.gz",
             .hash = "1220b305af272ac3026704b8d7e13740350daf59a6a95e45dedb428c55933e3df925",
