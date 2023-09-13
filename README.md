@@ -6,7 +6,7 @@ Status: Alpha.  Works well enough for use in real applications, like this [podca
 
 Note: This works with Zig 0.11.x
 
-See [gui-demo](https://github.com/david-vanderson/gui-demo) for integration examples.
+See [dvui-demo](https://github.com/david-vanderson/dvui-demo) for integration examples.
 
 Examples:
 - ```zig build run-standalone-sdl```
@@ -95,7 +95,7 @@ In the same frame these can all happen:
 Because everything is in a single pass, this works in the normal case where widget A is `install()`ed before widget B.  If keyboard focus moves to a previously installed widget, it can't process further key events this frame.
 
 ### Event Propagation
-`gui.eventMatch()` helps widgets process events.  It takes the widget id (for focus and mouse capture) and a rect (for mouse events) and is meant to be used like:
+`dvui.eventMatch()` helps widgets process events.  It takes the widget id (for focus and mouse capture) and a rect (for mouse events) and is meant to be used like:
 ```
 var evts = events();
 for (evts) |*e| {
