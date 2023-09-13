@@ -115,15 +115,17 @@ pub fn build(b: *std.build.Builder) !void {
         });
         exe.linkLibrary(freetype_dep.artifact("freetype"));
 
-        //const sdl_dep = b.dependency("sdl", .{
-        //.target = target,
-        //.optimize = optimize,
-        //});
-        //exe.linkLibrary(sdl_dep.artifact("SDL2"));
-
-        exe.linkSystemLibrary("SDL2");
-        //exe.addIncludePath("/home/dvanderson/SDL/include");
-        //exe.addObjectFile("/home/dvanderson/SDL/build/libSDL3.a");
+        if (target.isLinux()) {
+            exe.linkSystemLibrary("SDL2");
+            //exe.addIncludePath("/home/dvanderson/SDL/include");
+            //exe.addObjectFile("/home/dvanderson/SDL/build/libSDL3.a");
+        } else {
+            const sdl_dep = b.dependency("sdl", .{
+                .target = target,
+                .optimize = optimize,
+            });
+            exe.linkLibrary(sdl_dep.artifact("SDL2"));
+        }
 
         if (target.isDarwin()) {
             exe.linkSystemLibrary("z");
