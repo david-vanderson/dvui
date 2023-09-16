@@ -6582,9 +6582,14 @@ pub const ScrollContainerWidget = struct {
                         focusWidget(self.wd.id, e.num);
                     } else if (me.action == .wheel_y) {
                         e.handled = true;
+
+                        // scroll vertically if we can, otherwise try horizontal
                         if (self.si.vertical != .none) {
                             self.si.viewport.y -= me.data.wheel_y;
                             self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
+                        } else if (self.si.horizontal != .none) {
+                            self.si.viewport.x -= me.data.wheel_y;
+                            self.si.viewport.x = math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
                         }
                         refresh();
                     } else if (me.action == .press and me.button.touch()) {
@@ -6829,8 +6834,14 @@ pub const ScrollBarWidget = struct {
                         .wheel_y => {
                             e.handled = true;
                             switch (self.dir) {
-                                .vertical => self.si.viewport.y -= me.data.wheel_y,
-                                .horizontal => self.si.viewport.x -= me.data.wheel_y,
+                                .vertical => {
+                                    self.si.viewport.y -= me.data.wheel_y;
+                                    self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
+                                },
+                                .horizontal => {
+                                    self.si.viewport.x -= me.data.wheel_y;
+                                    self.si.viewport.x = math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
+                                },
                             }
                             refresh();
                         },
