@@ -2354,6 +2354,9 @@ pub const Window = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        var it = self.datas.iterator();
+        while (it.next()) |item| self.gpa.free(item.value_ptr.data);
+
         self.subwindows.deinit();
         self.min_sizes.deinit();
         self.datas.deinit();
