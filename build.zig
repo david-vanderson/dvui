@@ -1,15 +1,16 @@
 const std = @import("std");
-const Pkg = std.build.Pkg;
+const Pkg = std.Build.Pkg;
+const Compile = std.Build.Step.Compile;
 
 const Packages = struct {
     // Declared here because submodule may not be cloned at the time build.zig runs.
-    const zmath = std.build.Pkg{
+    const zmath = Pkg{
         .name = "zmath",
         .source = .{ .path = "libs/zmath/src/zmath.zig" },
     };
 };
 
-pub fn build(b: *std.build.Builder) !void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -68,23 +69,8 @@ pub fn build(b: *std.build.Builder) !void {
 
         exe.addModule("dvui", dvui_mod);
         exe.addModule("SDLBackend", sdl_mod);
-        const freetype_dep = b.dependency("freetype", .{
-            .target = target,
-            .optimize = optimize,
-        });
-        exe.linkLibrary(freetype_dep.artifact("freetype"));
 
-        exe.linkSystemLibrary("SDL2");
-        exe.linkLibC();
-        if (target.isWindows()) {
-            exe.linkSystemLibrary("setupapi");
-            exe.linkSystemLibrary("winmm");
-            exe.linkSystemLibrary("gdi32");
-            exe.linkSystemLibrary("imm32");
-            exe.linkSystemLibrary("version");
-            exe.linkSystemLibrary("oleaut32");
-            exe.linkSystemLibrary("ole32");
-        }
+        link_deps(exe, b);
 
         const compile_step = b.step(ex, "Compile " ++ ex);
         compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
@@ -109,50 +95,7 @@ pub fn build(b: *std.build.Builder) !void {
         exe.addModule("dvui", dvui_mod);
         exe.addModule("SDLBackend", sdl_mod);
 
-        const freetype_dep = b.dependency("freetype", .{
-            .target = target,
-            .optimize = optimize,
-        });
-        exe.linkLibrary(freetype_dep.artifact("freetype"));
-
-        if (target.isLinux()) {
-            exe.linkSystemLibrary("SDL2");
-            //exe.addIncludePath("/home/dvanderson/SDL/include");
-            //exe.addObjectFile("/home/dvanderson/SDL/build/libSDL3.a");
-        } else {
-            const sdl_dep = b.dependency("sdl", .{
-                .target = target,
-                .optimize = optimize,
-            });
-            exe.linkLibrary(sdl_dep.artifact("SDL2"));
-        }
-
-        if (target.isDarwin()) {
-            exe.linkSystemLibrary("z");
-            exe.linkSystemLibrary("bz2");
-            exe.linkSystemLibrary("iconv");
-            exe.linkFramework("AppKit");
-            exe.linkFramework("AudioToolbox");
-            exe.linkFramework("Carbon");
-            exe.linkFramework("Cocoa");
-            exe.linkFramework("CoreAudio");
-            exe.linkFramework("CoreFoundation");
-            exe.linkFramework("CoreGraphics");
-            exe.linkFramework("CoreHaptics");
-            exe.linkFramework("CoreVideo");
-            exe.linkFramework("ForceFeedback");
-            exe.linkFramework("GameController");
-            exe.linkFramework("IOKit");
-            exe.linkFramework("Metal");
-        } else if (target.isWindows()) {
-            exe.linkSystemLibrary("setupapi");
-            exe.linkSystemLibrary("winmm");
-            exe.linkSystemLibrary("gdi32");
-            exe.linkSystemLibrary("imm32");
-            exe.linkSystemLibrary("version");
-            exe.linkSystemLibrary("oleaut32");
-            exe.linkSystemLibrary("ole32");
-        }
+        link_deps(exe, b);
 
         const compile_step = b.step("compile-" ++ "sdl-test", "Compile " ++ "sdl-test");
         compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
@@ -163,5 +106,32 @@ pub fn build(b: *std.build.Builder) !void {
 
         const run_step = b.step("sdl-test", "Run " ++ "sdl-test");
         run_step.dependOn(&run_cmd.step);
+    }
+}
+
+fn link_deps(exe: *std.Build.Step.Compile, b: *std.Build) void {
+    const freetype_dep = b.dependency("freetype", .{
+        .target = exe.target,
+        .optimize = exe.optimize,
+    });
+    exe.linkLibrary(freetype_dep.artifact("freetype"));
+    exe.linkLibC();
+
+    if (exe.target.isWindows()) {
+        const sdl_dep = b.dependency("sdl", .{
+            .target = exe.target,
+            .optimize = exe.optimize,
+        });
+        exe.linkLibrary(sdl_dep.artifact("SDL2"));
+
+        exe.linkSystemLibrary("setupapi");
+        exe.linkSystemLibrary("winmm");
+        exe.linkSystemLibrary("gdi32");
+        exe.linkSystemLibrary("imm32");
+        exe.linkSystemLibrary("version");
+        exe.linkSystemLibrary("oleaut32");
+        exe.linkSystemLibrary("ole32");
+    } else {
+        exe.linkSystemLibrary("SDL2");
     }
 }

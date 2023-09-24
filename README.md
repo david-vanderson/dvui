@@ -2,9 +2,9 @@
 
 A [Zig](https://ziglang.org/) native GUI toolkit for whole applications or extra debugging windows in an existing application.
 
-Status: Alpha.  Works well enough for use in real applications, like this [podcast player](https://github.com/david-vanderson/podcast), but not widely used as yet.
+Status: Alpha. Works well enough for use in real applications, like this [podcast player](https://github.com/david-vanderson/podcast), but not widely used as yet.
 
-Note: This works with Zig 0.11.x
+Note: This works with Zig 0.11.x.
 
 See [dvui-demo](https://github.com/david-vanderson/dvui-demo) for integration examples.
 
