@@ -6950,6 +6950,7 @@ pub const ScaleWidget = struct {
     const Self = @This();
     wd: WidgetData = undefined,
     scale: f32 = undefined,
+    box: BoxWidget = undefined,
 
     pub fn init(src: std.builtin.SourceLocation, scale_in: f32, opts: Options) Self {
         var self = Self{};
@@ -6963,6 +6964,9 @@ pub const ScaleWidget = struct {
         _ = parentSet(self.widget());
         try self.wd.register("Scale", null);
         try self.wd.borderAndBackground(.{});
+
+        self.box = BoxWidget.init(@src(), .vertical, false, self.wd.options.strip().override(.{ .expand = .both }));
+        try self.box.install(.{});
     }
 
     pub fn widget(self: *Self) Widget {
@@ -7003,6 +7007,7 @@ pub const ScaleWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        self.box.deinit();
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
