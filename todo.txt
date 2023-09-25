@@ -1,8 +1,7 @@
 
-TextLayoutWidget needs to be robust against bad selection data (selection start/cursor/end in the middle of a utf8 codepoint)
-- have button that randomizes the bytes?  Need to produce random valid utf8
-
 fix nested scroll for wheel_y
+
+switch from my freetype fork to Mach's
 
 
 add inertia to touch scrolling
