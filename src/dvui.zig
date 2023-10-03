@@ -6091,9 +6091,9 @@ pub const ScrollAreaWidget = struct {
 
     pub const InitOpts = struct {
         scroll_info: ?*ScrollInfo = null,
-        vertical: ScrollInfo.ScrollMode = .auto,
+        vertical: ?ScrollInfo.ScrollMode = null, // .auto is default
         vertical_bar: ScrollInfo.ScrollBarMode = .auto,
-        horizontal: ScrollInfo.ScrollMode = .none,
+        horizontal: ?ScrollInfo.ScrollMode = null, // .none is default
         horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
     };
 
@@ -6119,19 +6119,19 @@ pub const ScrollAreaWidget = struct {
     pub fn install(self: *Self, opts: struct { process_events: bool = true, focus_id: ?u32 = null }) !void {
         if (self.init_opts.scroll_info) |si| {
             self.si = si;
-            if (self.init_opts.vertical != si.vertical) {
-                std.debug.print("dvui: ScrollAreaWidget {x} init_opts.vertical {} ignored because given init_opts.scroll_info.vertical {}\n", .{ self.hbox.wd.id, self.init_opts.vertical, si.vertical });
+            if (self.init_opts.vertical != null) {
+                std.debug.print("dvui: ScrollAreaWidget {x} init_opts.vertical .{s} overridden by init_opts.scroll_info.vertical .{s}\n", .{ self.hbox.wd.id, @tagName(self.init_opts.vertical.?), @tagName(si.vertical) });
             }
-            if (self.init_opts.horizontal != si.horizontal) {
-                std.debug.print("dvui: ScrollAreaWidget {x} init_opts.horizontal {} ignored because given init_opts.scroll_info.horizontal {}\n", .{ self.hbox.wd.id, self.init_opts.horizontal, si.horizontal });
+            if (self.init_opts.horizontal != null) {
+                std.debug.print("dvui: ScrollAreaWidget {x} init_opts.horizontal .{s} overridden by init_opts.scroll_info.horizontal .{s}\n", .{ self.hbox.wd.id, @tagName(self.init_opts.horizontal.?), @tagName(si.horizontal) });
             }
         } else if (dataGet(null, self.hbox.data().id, "_scroll_info", ScrollInfo)) |si| {
             self.si_store = si;
             self.si = &self.si_store; // can't take pointer to self in init, so we do it in install
         } else {
             self.si = &self.si_store; // can't take pointer to self in init, so we do it in install
-            self.si.vertical = self.init_opts.vertical;
-            self.si.horizontal = self.init_opts.horizontal;
+            self.si.vertical = self.init_opts.vertical orelse .auto;
+            self.si.horizontal = self.init_opts.horizontal orelse .none;
         }
 
         try self.hbox.install(.{});
