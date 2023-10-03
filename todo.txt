@@ -29,27 +29,14 @@ entypo cc.svg is weird - flip ccw.svg?
 
 refresh should be thread-safe (to support progress bars updating from other threads)
 - accept a *Window arg like dialog?
-
-review uses of refresh while holding dialog_mutex, they probably don't work
-
-need to get touch events working at least for swipe up/down for scroll
-- need some kind of inertia?
+- review uses of refresh while holding dialog_mutex, they probably don't work
 
 maybe builtin button should record multiple clicks?
 - helps in low framerate situations
 
 can't debug mouse over spacers?
 
-typing into the debug widget id can cause a crash?
-- maybe non hex stuff?
-
 maybe focusWidget should default to focusing it in the current subwindow?
-
-podcast needs:
-- update gui to be able to paste urls into the rss textEntry
-- dropdown for speed selection
-- progress bar for downloads
-- image support for podcast/episode images
 
 demo:
 - add uses of animate
