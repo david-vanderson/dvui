@@ -2963,7 +2963,11 @@ pub const Window = struct {
             if (self.debug_widget_id != 0) {
                 _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
             }
-            var te = try dvui.textEntry(@src(), .{ .text = &buf }, .{});
+            var te = try dvui.textEntry(@src(), .{
+                .text = &buf,
+                .scroll_vertical = false,
+                .scroll_horizontal_bar = .hide,
+            }, .{});
             te.deinit();
 
             self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(&buf, 0), 16) catch 0;
@@ -3891,7 +3895,7 @@ pub fn dialogDisplay(id: u32) !void {
         return;
     }
 
-    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
+    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
     try tl.addText(message, .{});
     tl.deinit();
 
@@ -4826,6 +4830,19 @@ pub const TextLayoutWidget = struct {
 
             // now we know the line of text we are about to render
             // see if selection needs to be updated
+
+            // if the text changed our selection might be in the middle of utf8 chars, so fix it up
+            while (self.selection.start >= self.bytes_seen and self.selection.start < self.bytes_seen + end and txt[self.selection.start - self.bytes_seen] & 0xc0 == 0x80) {
+                self.selection.start += 1;
+            }
+
+            while (self.selection.cursor >= self.bytes_seen and self.selection.cursor < self.bytes_seen + end and txt[self.selection.cursor - self.bytes_seen] & 0xc0 == 0x80) {
+                self.selection.cursor += 1;
+            }
+
+            while (self.selection.end >= self.bytes_seen and self.selection.end < self.bytes_seen + end and txt[self.selection.end - self.bytes_seen] & 0xc0 == 0x80) {
+                self.selection.end += 1;
+            }
 
             if (self.sel_left_right != 0 and !self.cursor_seen and self.selection.cursor <= self.bytes_seen + end) {
                 while (self.sel_left_right < 0 and self.selection.cursor > self.bytes_seen) {
@@ -5772,9 +5789,9 @@ pub const ScrollAreaWidget = struct {
 
     pub const InitOpts = struct {
         scroll_info: ?*ScrollInfo = null,
-        vertical: ScrollInfo.ScrollMode = .auto,
+        vertical: ?ScrollInfo.ScrollMode = null, // .auto is default
         vertical_bar: ScrollInfo.ScrollBarMode = .auto,
-        horizontal: ScrollInfo.ScrollMode = .none,
+        horizontal: ?ScrollInfo.ScrollMode = null, // .none is default
         horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
     };
 
@@ -5800,19 +5817,19 @@ pub const ScrollAreaWidget = struct {
     pub fn install(self: *Self, opts: struct { process_events: bool = true, focus_id: ?u32 = null }) !void {
         if (self.init_opts.scroll_info) |si| {
             self.si = si;
-            if (self.init_opts.vertical != si.vertical) {
-                std.debug.print("dvui: ScrollAreaWidget {x} init_opts.vertical {} ignored because given init_opts.scroll_info.vertical {}\n", .{ self.hbox.wd.id, self.init_opts.vertical, si.vertical });
+            if (self.init_opts.vertical != null) {
+                std.debug.print("dvui: ScrollAreaWidget {x} init_opts.vertical .{s} overridden by init_opts.scroll_info.vertical .{s}\n", .{ self.hbox.wd.id, @tagName(self.init_opts.vertical.?), @tagName(si.vertical) });
             }
-            if (self.init_opts.horizontal != si.horizontal) {
-                std.debug.print("dvui: ScrollAreaWidget {x} init_opts.horizontal {} ignored because given init_opts.scroll_info.horizontal {}\n", .{ self.hbox.wd.id, self.init_opts.horizontal, si.horizontal });
+            if (self.init_opts.horizontal != null) {
+                std.debug.print("dvui: ScrollAreaWidget {x} init_opts.horizontal .{s} overridden by init_opts.scroll_info.horizontal .{s}\n", .{ self.hbox.wd.id, @tagName(self.init_opts.horizontal.?), @tagName(si.horizontal) });
             }
         } else if (dataGet(null, self.hbox.data().id, "_scroll_info", ScrollInfo)) |si| {
             self.si_store = si;
             self.si = &self.si_store; // can't take pointer to self in init, so we do it in install
         } else {
             self.si = &self.si_store; // can't take pointer to self in init, so we do it in install
-            self.si.vertical = self.init_opts.vertical;
-            self.si.horizontal = self.init_opts.horizontal;
+            self.si.vertical = self.init_opts.vertical orelse .auto;
+            self.si.horizontal = self.init_opts.horizontal orelse .none;
         }
 
         try self.hbox.install(.{});
@@ -6661,6 +6678,9 @@ pub const ScaleWidget = struct {
         _ = parentSet(self.widget());
         try self.wd.register("Scale", null);
         try self.wd.borderAndBackground(.{});
+
+        self.box = BoxWidget.init(@src(), .vertical, false, self.wd.options.strip().override(.{ .expand = .both }));
+        try self.box.install(.{});
     }
 
     pub fn widget(self: *Self) Widget {
@@ -6701,6 +6721,7 @@ pub const ScaleWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        self.box.deinit();
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
@@ -7743,6 +7764,28 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     }
 }
 
+// pos is clamped to [0, text.len] then if it is in the middle of a multibyte
+// utf8 char, we move it back to the beginning
+pub fn findUtf8Start(text: []const u8, pos: usize) usize {
+    var p = pos;
+    p = @min(p, text.len);
+
+    // find start of previous utf8 char
+    var start = p -| 1;
+    while (start < p and text[start] & 0xc0 == 0x80) {
+        start -|= 1;
+    }
+
+    if (start < p) {
+        const utf8_size = std.unicode.utf8ByteSequenceLength(text[start]) catch 0;
+        if (utf8_size != (p - start)) {
+            p = start;
+        }
+    }
+
+    return p;
+}
+
 pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) !*TextEntryWidget {
     const cw = currentWindow();
     var ret = try cw.arena.create(TextEntryWidget);
@@ -7803,6 +7846,7 @@ pub const TextEntryWidget = struct {
         self.wd = WidgetData.init(src, .{}, options);
 
         self.len = std.mem.indexOfScalar(u8, self.init_opts.text, 0) orelse self.init_opts.text.len;
+        self.len = findUtf8Start(self.init_opts.text[0..self.len], self.len);
         return self;
     }
 
@@ -7837,8 +7881,16 @@ pub const TextEntryWidget = struct {
         if (self.scroll.init_opts.horizontal == .auto) {
             layout_expand = layout_expand.removeHorizontal();
         }
-        self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines }, self.wd.options.strip().override(.{ .expand = layout_expand, .padding = self.padding }));
+        self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines }, self.wd.options.strip().override(.{ .expand = layout_expand, .padding = self.padding, .min_size_content = .{} }));
         try self.textLayout.install(.{ .process_events = false });
+
+        // textLayout is maintaining the selection for us, but if the text
+        // changed, we need to update the selection to be valid before we
+        // process any events
+        var sel = self.textLayout.selection;
+        sel.start = findUtf8Start(self.init_opts.text[0..self.len], sel.start);
+        sel.cursor = findUtf8Start(self.init_opts.text[0..self.len], sel.cursor);
+        sel.end = findUtf8Start(self.init_opts.text[0..self.len], sel.end);
 
         // textLayout clips to its content, but we need to get events out to our border
         const textclip = clipGet();
@@ -7860,9 +7912,10 @@ pub const TextEntryWidget = struct {
         clipSet(textclip);
 
         if (self.init_opts.password_char) |pc| {
+            // adjust selection for obfuscation
             var count: usize = 0;
             var bytes: usize = 0;
-            var sel = self.textLayout.selection;
+            sel = self.textLayout.selection;
             var sstart: ?usize = null;
             var scursor: ?usize = null;
             var send: ?usize = null;
@@ -7895,9 +7948,10 @@ pub const TextEntryWidget = struct {
         try self.textLayout.addTextDone(self.wd.options.strip());
 
         if (self.init_opts.password_char) |pc| {
+            // reset selection
             var count: usize = 0;
             var bytes: usize = 0;
-            var sel = self.textLayout.selection;
+            sel = self.textLayout.selection;
             var sstart: ?usize = null;
             var scursor: ?usize = null;
             var send: ?usize = null;
@@ -7986,12 +8040,12 @@ pub const TextEntryWidget = struct {
 
             // find start of last utf8 char
             var last: usize = new_len -| 1;
-            while (last >= 0 and last < new_len and new[last] & 0xc0 == 0x80) {
+            while (last < new_len and new[last] & 0xc0 == 0x80) {
                 last -|= 1;
             }
 
             // if the last utf8 char can't fit, don't include it
-            if (last >= 0 and last < new_len) {
+            if (last < new_len) {
                 const utf8_size = std.unicode.utf8ByteSequenceLength(new[last]) catch 0;
                 if (utf8_size != (new_len - last)) {
                     new_len = last;
@@ -8089,8 +8143,8 @@ pub const TextEntryWidget = struct {
                                         // ... otherwise, "jump over" the utf8 char to the
                                         // left of the cursor.
                                         var i: usize = 1;
-                                        while (sel.cursor - i > 0 and self.init_opts.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
-                                        sel.cursor -= i;
+                                        while (sel.cursor -| i > 0 and self.init_opts.text[sel.cursor -| i] & 0xc0 == 0x80) : (i += 1) {}
+                                        sel.cursor -|= i;
                                     }
                                 } else {
                                     if (sel.cursor < self.len) {
