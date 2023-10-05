@@ -110,7 +110,7 @@ const AnimatingDialog = struct {
             dvui.dataSet(null, id, "response", DialogResponse.closed);
         }
 
-        var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .w = 250 }, .background = false });
+        var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
         try tl.addText(message, .{});
         tl.deinit();
 

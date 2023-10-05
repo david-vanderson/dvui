@@ -24,6 +24,7 @@ pub fn main() !void {
 
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
+    win.content_scale = backend.initial_scale;
     defer win.deinit();
 
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
