@@ -6665,6 +6665,7 @@ pub const ScaleWidget = struct {
     const Self = @This();
     wd: WidgetData = undefined,
     scale: f32 = undefined,
+    box: BoxWidget = undefined,
 
     pub fn init(src: std.builtin.SourceLocation, scale_in: f32, opts: Options) Self {
         var self = Self{};
