@@ -48,7 +48,7 @@ pub fn main() !void {
         const quit = try win_backend.addAllEvents(&win);
         if (quit) break :main_loop;
 
-        _ = try dvui.examples.demo();
+        _ = try dvui.Examples.demo();
 
         {
             var overlay = try dvui.overlay(@src(), .{ .expand = .both });
@@ -165,8 +165,8 @@ pub fn main() !void {
                         }
                     }
 
-                    if (try dvui.button(@src(), if (dvui.examples.show_demo_window) "Hide Demo Window" else "Show Demo Window", .{})) {
-                        dvui.examples.show_demo_window = !dvui.examples.show_demo_window;
+                    if (try dvui.button(@src(), if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window", .{})) {
+                        dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
                     }
                 }
 
@@ -246,7 +246,7 @@ pub fn main() !void {
                     defer fwin.deinit();
                     try dvui.labelNoFmt(@src(), "Floating Window", .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-                    try dvui.label(@src(), "Pretty Cool", .{}, .{ .font = .{ .name = "VeraMono", .ttf_bytes = dvui.fonts.bitstream_vera.VeraMono, .size = 20 } });
+                    try dvui.label(@src(), "Pretty Cool", .{}, .{ .font = .{ .name = "VeraMono", .ttf_bytes = dvui.bitstream_vera.VeraMono, .size = 20 } });
 
                     if (try dvui.button(@src(), "button", .{})) {
                         floats[0] = true;

@@ -2,6 +2,7 @@ const sdl3 = false;
 
 const std = @import("std");
 const dvui = @import("dvui");
+
 pub const c = @cImport({
     @cInclude(if (sdl3) "SDL3/SDL.h" else "SDL2/SDL.h");
 });

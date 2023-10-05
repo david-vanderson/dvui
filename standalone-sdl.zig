@@ -117,13 +117,13 @@ fn dvui_frame() !void {
     try tl2.addText("Cursor is always being set by dvui.", .{});
     tl2.deinit();
 
-    if (dvui.examples.show_demo_window) {
+    if (dvui.Examples.show_demo_window) {
         if (try dvui.button(@src(), "Hide Demo Window", .{})) {
-            dvui.examples.show_demo_window = false;
+            dvui.Examples.show_demo_window = false;
         }
     } else {
         if (try dvui.button(@src(), "Show Demo Window", .{})) {
-            dvui.examples.show_demo_window = true;
+            dvui.Examples.show_demo_window = true;
         }
     }
 
@@ -132,5 +132,5 @@ fn dvui_frame() !void {
     }
 
     // look at demo() for examples of dvui widgets, shows in a floating window
-    try dvui.examples.demo();
+    try dvui.Examples.demo();
 }
