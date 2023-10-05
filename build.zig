@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const sdl_mod = b.addModule("SDLBackend", .{
-        .source_file = .{ .path = "src/SDLBackend.zig" },
+        .source_file = .{ .path = "src/backends/SDLBackend.zig" },
         .dependencies = &.{
             .{ .name = "dvui", .module = dvui_mod },
         },
@@ -87,7 +87,7 @@ pub fn build(b: *std.Build) !void {
     {
         const exe = b.addExecutable(.{
             .name = "sdl-test",
-            .root_source_file = .{ .path = "sdl-test" ++ ".zig" },
+            .root_source_file = .{ .path = "sdl-test.zig" },
             .target = target,
             .optimize = optimize,
         });
@@ -97,14 +97,14 @@ pub fn build(b: *std.Build) !void {
 
         link_deps(exe, b);
 
-        const compile_step = b.step("compile-" ++ "sdl-test", "Compile " ++ "sdl-test");
+        const compile_step = b.step("compile-sdl-test", "Compile the SDL test");
         compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
         b.getInstallStep().dependOn(compile_step);
 
         const run_cmd = b.addRunArtifact(exe);
         run_cmd.step.dependOn(compile_step);
 
-        const run_step = b.step("sdl-test", "Run " ++ "sdl-test");
+        const run_step = b.step("sdl-test", "Run the SDL test");
         run_step.dependOn(&run_cmd.step);
     }
 }
