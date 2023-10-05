@@ -6299,17 +6299,26 @@ pub const ScrollContainerWidget = struct {
                         // focus so that we can receive keyboard input
                         focusWidget(self.wd.id, e.num);
                     } else if (me.action == .wheel_y) {
-                        e.handled = true;
-
                         // scroll vertically if we can, otherwise try horizontal
                         if (self.si.vertical != .none) {
-                            self.si.viewport.y -= me.data.wheel_y;
-                            self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
+                            if ((me.data.wheel_y > 0 and self.si.viewport.y <= 0) or (me.data.wheel_y < 0 and self.si.viewport.y >= self.si.scroll_max(.vertical))) {
+                                // propogate the scroll event because we are already maxxed out
+                            } else {
+                                e.handled = true;
+                                self.si.viewport.y -= me.data.wheel_y;
+                                self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
+                                refresh();
+                            }
                         } else if (self.si.horizontal != .none) {
+                            // don't test for propogation here because it's
+                            // weird to be scrolling horizontally and then when
+                            // you hit the edge suddenly the parent scroll
+                            // container scrolls vertically
+                            e.handled = true;
                             self.si.viewport.x -= me.data.wheel_y;
                             self.si.viewport.x = math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
+                            refresh();
                         }
-                        refresh();
                     } else if (me.action == .press and me.button.touch()) {
                         // don't let this event go through to floating window
                         // which would capture the mouse preventing scrolling
