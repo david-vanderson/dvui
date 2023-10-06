@@ -1454,8 +1454,8 @@ pub fn backendFree(p: *anyopaque) void {
     cw.backend.free(p);
 }
 
-pub fn animationRate() f32 {
-    return currentWindow().rate;
+pub fn seconds_since_last_frame() f32 {
+    return currentWindow().secs_since_last_frame;
 }
 
 pub fn FPS() f32 {
@@ -1965,7 +1965,7 @@ pub const Window = struct {
     loop_target_slop_frames: i32 = 0,
     frame_times: [30]u32 = [_]u32{0} ** 30,
 
-    rate: f32 = 0,
+    secs_since_last_frame: f32 = 0,
     extra_frames_needed: u8 = 0,
     clipRect: Rect = Rect{},
 
@@ -2515,7 +2515,7 @@ pub const Window = struct {
         _ = subwindowCurrentSet(self.wd.id);
 
         self.extra_frames_needed -|= 1;
-        self.rate = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
+        self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
 
         {
             const micros: i32 = if (micros_since_last > math.maxInt(i32)) math.maxInt(i32) else @as(i32, @intCast(micros_since_last));
@@ -5914,6 +5914,7 @@ pub const ScrollInfo = struct {
     horizontal: ScrollMode = .none,
     virtual_size: Size = Size{},
     viewport: Rect = Rect{},
+    velocity: Point = Point{},
 
     pub fn scroll_max(self: ScrollInfo, dir: Direction) f32 {
         switch (dir) {
@@ -6068,12 +6069,12 @@ pub const ScrollContainerWidget = struct {
         {
             const max_scroll = self.si.scroll_max(.horizontal);
             if (self.si.viewport.x < 0) {
-                self.si.viewport.x = @min(0, @max(-20, self.si.viewport.x + 250 * animationRate()));
+                self.si.viewport.x = @min(0, @max(-20, self.si.viewport.x + 250 * seconds_since_last_frame()));
                 if (self.si.viewport.x < 0) {
                     refresh();
                 }
             } else if (self.si.viewport.x > max_scroll) {
-                self.si.viewport.x = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.x - 250 * animationRate()));
+                self.si.viewport.x = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.x - 250 * seconds_since_last_frame()));
                 if (self.si.viewport.x > max_scroll) {
                     refresh();
                 }
@@ -6082,13 +6083,24 @@ pub const ScrollContainerWidget = struct {
 
         {
             const max_scroll = self.si.scroll_max(.vertical);
+            self.si.velocity.y *= @exp(@log(0.0001) * seconds_since_last_frame());
+            if (@fabs(self.si.velocity.y) > 1) {
+                std.debug.print("vel {d}\n", .{self.si.velocity.y});
+                self.si.viewport.y += self.si.velocity.y;
+                refresh();
+            } else {
+                self.si.velocity.y = 0;
+            }
+
             if (self.si.viewport.y < 0) {
-                self.si.viewport.y = @min(0, @max(-20, self.si.viewport.y + 250 * animationRate()));
+                self.si.velocity.y = 0;
+                self.si.viewport.y = @min(0, @max(-20, self.si.viewport.y + 250 * seconds_since_last_frame()));
                 if (self.si.viewport.y < 0) {
                     refresh();
                 }
             } else if (self.si.viewport.y > max_scroll) {
-                self.si.viewport.y = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.y - 250 * animationRate()));
+                self.si.velocity.y = 0;
+                self.si.viewport.y = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.y - 250 * seconds_since_last_frame()));
                 if (self.si.viewport.y > max_scroll) {
                     refresh();
                 }
@@ -6207,14 +6219,14 @@ pub const ScrollContainerWidget = struct {
                     sd.screen_rect.y < rs.r.y and // scrolling would show more of child
                     self.si.viewport.y > 0) // can scroll up
                 {
-                    scrolly = if (sd.injected) -200 * animationRate() else -5;
+                    scrolly = if (sd.injected) -200 * seconds_since_last_frame() else -5;
                 }
 
                 if (sd.mouse_pt.y >= (rs.r.y + rs.r.h) and
                     (sd.screen_rect.y + sd.screen_rect.h) > (rs.r.y + rs.r.h) and
                     self.si.viewport.y < self.si.scroll_max(.vertical))
                 {
-                    scrolly = if (sd.injected) 200 * animationRate() else 5;
+                    scrolly = if (sd.injected) 200 * seconds_since_last_frame() else 5;
                 }
 
                 var scrollx: f32 = 0;
@@ -6222,14 +6234,14 @@ pub const ScrollContainerWidget = struct {
                     sd.screen_rect.x < rs.r.x and // scrolling would show more of child
                     self.si.viewport.x > 0) // can scroll left
                 {
-                    scrollx = if (sd.injected) -200 * animationRate() else -5;
+                    scrollx = if (sd.injected) -200 * seconds_since_last_frame() else -5;
                 }
 
                 if (sd.mouse_pt.x >= (rs.r.x + rs.r.w) and
                     (sd.screen_rect.x + sd.screen_rect.w) > (rs.r.x + rs.r.w) and
                     self.si.viewport.x < self.si.scroll_max(.horizontal))
                 {
-                    scrollx = if (sd.injected) 200 * animationRate() else 5;
+                    scrollx = if (sd.injected) 200 * seconds_since_last_frame() else 5;
                 }
 
                 if (scrolly != 0 or scrollx != 0) {
@@ -6317,6 +6329,7 @@ pub const ScrollContainerWidget = struct {
                             } else {
                                 e.handled = true;
                                 self.si.viewport.y -= me.data.wheel_y;
+                                self.si.velocity.y = -me.data.wheel_y;
                                 self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
                                 refresh();
                             }
@@ -6350,6 +6363,7 @@ pub const ScrollContainerWidget = struct {
 
                         if (self.si.vertical != .none) {
                             self.si.viewport.y -= me.data.motion.y / rs.s;
+                            self.si.velocity.y = -me.data.motion.y / rs.s;
                             refresh();
                             if (@fabs(me.data.motion.y) > @fabs(me.data.motion.x) and (self.si.viewport.y < 0 or self.si.viewport.y > self.si.scroll_max(.vertical))) {
                                 propogate = true;
