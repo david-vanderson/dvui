@@ -1,8 +1,5 @@
 
-fix nested scroll for wheel_y
-
 switch from my freetype fork to Mach's
-
 
 add inertia to touch scrolling
 - if the scrollContainer has more intertia scrolling to do, then it should eat all pointer events, because we don't want any pointer events going to children if the scrolling is still happening

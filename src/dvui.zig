@@ -5133,6 +5133,17 @@ pub const TextLayoutWidget = struct {
                     self.wd.min_size.h = @max(self.wd.min_size.h, self.wd.padSize(newline_size).h);
                 }
             }
+
+            if (self.wd.options.rect != null) {
+                // we were given a rect, so don't need to calculate our min height,
+                // so stop as soon as we run off the end of the clipping region
+                // this helps for performance
+                const nextrs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y });
+                if (nextrs.r.y > (clipGet().y + clipGet().h)) {
+                    //std.debug.print("stopping after: {s}\n", .{rtxt});
+                    break;
+                }
+            }
         }
     }
 
