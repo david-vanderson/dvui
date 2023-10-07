@@ -6090,11 +6090,13 @@ pub const ScrollContainerWidget = struct {
 
             const max_scroll = self.si.scroll_max(.horizontal);
             if (self.si.viewport.x < 0) {
+                self.si.velocity.x = 0;
                 self.si.viewport.x = @min(0, @max(-20, self.si.viewport.x + 250 * seconds_since_last_frame()));
                 if (self.si.viewport.x < 0) {
                     refresh();
                 }
             } else if (self.si.viewport.x > max_scroll) {
+                self.si.velocity.x = 0;
                 self.si.viewport.x = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.x - 250 * seconds_since_last_frame()));
                 if (self.si.viewport.x > max_scroll) {
                     refresh();
