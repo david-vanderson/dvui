@@ -6358,14 +6358,14 @@ pub const ScrollContainerWidget = struct {
                                 refresh();
                             }
                         } else if (self.si.horizontal != .none) {
-                            // don't test for propogation here because it's
-                            // weird to be scrolling horizontally and then when
-                            // you hit the edge suddenly the parent scroll
-                            // container scrolls vertically
-                            e.handled = true;
-                            self.si.viewport.x -= me.data.wheel_y;
-                            self.si.viewport.x = math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
-                            refresh();
+                            if ((me.data.wheel_y > 0 and self.si.viewport.x <= 0) or (me.data.wheel_y < 0 and self.si.viewport.x >= self.si.scroll_max(.horizontal))) {
+                                // propogate the scroll event because we are already maxxed out
+                            } else {
+                                e.handled = true;
+                                self.si.viewport.x -= me.data.wheel_y;
+                                self.si.viewport.x = math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
+                                refresh();
+                            }
                         }
                     } else if (me.action == .press and me.button.touch()) {
                         // don't let this event go through to floating window
@@ -6376,29 +6376,29 @@ pub const ScrollContainerWidget = struct {
                         captureMouse(null);
                     } else if (me.action == .motion and me.button.touch()) {
                         // Whether to propogate out to any containing scroll
-                        // containers. Propogate if we run off the edge of this
-                        // container in the main direction of movement.
+                        // containers. Propogate unless we did the whole scroll
+                        // in the main direction of movement.
                         //
                         // This helps prevent spurious propogation from a text
                         // entry box where you are trying to scroll vertically
                         // but the motion event has a small amount of
                         // horizontal.
-                        var propogate: bool = false;
+                        var propogate: bool = true;
 
                         if (self.si.vertical != .none) {
                             self.si.viewport.y -= me.data.motion.y / rs.s;
                             self.si.velocity.y = -me.data.motion.y / rs.s;
                             refresh();
-                            if (@fabs(me.data.motion.y) > @fabs(me.data.motion.x) and (self.si.viewport.y < 0 or self.si.viewport.y > self.si.scroll_max(.vertical))) {
-                                propogate = true;
+                            if (@fabs(me.data.motion.y) > @fabs(me.data.motion.x) and self.si.viewport.y >= 0 and self.si.viewport.y <= self.si.scroll_max(.vertical)) {
+                                propogate = false;
                             }
                         }
                         if (self.si.horizontal != .none) {
                             self.si.viewport.x -= me.data.motion.x / rs.s;
                             self.si.velocity.x = -me.data.motion.x / rs.s;
                             refresh();
-                            if (@fabs(me.data.motion.x) > @fabs(me.data.motion.y) and (self.si.viewport.x < -1 or self.si.viewport.x > self.si.scroll_max(.horizontal))) {
-                                propogate = true;
+                            if (@fabs(me.data.motion.x) > @fabs(me.data.motion.y) and self.si.viewport.x >= 0 or self.si.viewport.x <= self.si.scroll_max(.horizontal)) {
+                                propogate = false;
                             }
                         }
 
