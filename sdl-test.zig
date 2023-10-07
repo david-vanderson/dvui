@@ -16,12 +16,11 @@ pub fn main() !void {
     defer win_backend.deinit();
 
     var win = try dvui.Window.init(@src(), 0, gpa, win_backend.backend());
-    win.content_scale = win_backend.initial_scale;
     defer win.deinit();
 
     const winSize = win_backend.windowSize();
     const pxSize = win_backend.pixelSize();
-    std.debug.print("initial window logical {} pixels {} natural scale {d} initial content scale {d}\n", .{ winSize, pxSize, pxSize.w / winSize.w, win_backend.initial_scale });
+    std.debug.print("initial window logical {} pixels {} natural scale {d} initial content scale {d} snap_to_pixels {}\n", .{ winSize, pxSize, pxSize.w / winSize.w, win_backend.initial_scale, win.snap_to_pixels });
 
     var buttons: [3][6]bool = undefined;
     for (&buttons) |*b| {

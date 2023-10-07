@@ -2038,6 +2038,14 @@ pub const Window = struct {
             .backend = backend,
         };
 
+        const winSize = self.backend.windowSize();
+        const pxSize = self.backend.pixelSize();
+        self.content_scale = self.backend.contentScale();
+        const total_scale = self.content_scale * pxSize.w / winSize.w;
+        if (total_scale >= 2.0) {
+            self.snap_to_pixels = false;
+        }
+
         errdefer self.deinit();
 
         self.focused_subwindowId = self.wd.id;
