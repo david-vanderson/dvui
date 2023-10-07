@@ -6074,7 +6074,20 @@ pub const ScrollContainerWidget = struct {
             }
         }
 
+        // damping is only for touch currently
+        // exponential decay: v *= damping^secs_since
+        // tweak the damping so we brake harder as the velocity slows down
         {
+            const damping = 0.0001 + @min(1.0, @fabs(self.si.velocity.x) / 50.0) * (0.7 - 0.0001);
+            self.si.velocity.x *= @exp(@log(damping) * seconds_since_last_frame());
+            if (@fabs(self.si.velocity.x) > 1) {
+                //std.debug.print("vel x {d}\n", .{self.si.velocity.x});
+                self.si.viewport.x += self.si.velocity.x;
+                refresh();
+            } else {
+                self.si.velocity.x = 0;
+            }
+
             const max_scroll = self.si.scroll_max(.horizontal);
             if (self.si.viewport.x < 0) {
                 self.si.viewport.x = @min(0, @max(-20, self.si.viewport.x + 250 * seconds_since_last_frame()));
@@ -6090,20 +6103,17 @@ pub const ScrollContainerWidget = struct {
         }
 
         {
-            const max_scroll = self.si.scroll_max(.vertical);
-
-            // damping is only for touch currently
-            // exponential decay: vy *= damping^secs_since
-            // tweak the damping so we brake harder as the velocity slows down
             const damping = 0.0001 + @min(1.0, @fabs(self.si.velocity.y) / 50.0) * (0.7 - 0.0001);
             self.si.velocity.y *= @exp(@log(damping) * seconds_since_last_frame());
             if (@fabs(self.si.velocity.y) > 1) {
-                //std.debug.print("vel {d}\n", .{self.si.velocity.y});
+                //std.debug.print("vel y {d}\n", .{self.si.velocity.y});
                 self.si.viewport.y += self.si.velocity.y;
                 refresh();
             } else {
                 self.si.velocity.y = 0;
             }
+
+            const max_scroll = self.si.scroll_max(.vertical);
 
             if (self.si.viewport.y < 0) {
                 self.si.velocity.y = 0;
@@ -6383,6 +6393,7 @@ pub const ScrollContainerWidget = struct {
                         }
                         if (self.si.horizontal != .none) {
                             self.si.viewport.x -= me.data.motion.x / rs.s;
+                            self.si.velocity.x = -me.data.motion.x / rs.s;
                             refresh();
                             if (@fabs(me.data.motion.x) > @fabs(me.data.motion.y) and (self.si.viewport.x < -1 or self.si.viewport.x > self.si.scroll_max(.horizontal))) {
                                 propogate = true;
