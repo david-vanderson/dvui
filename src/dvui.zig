@@ -7987,9 +7987,9 @@ pub const TextEntryWidget = struct {
                 count += 1;
                 bytes += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
             } else {
-                if (sstart == null and sel.start == bytes) sstart = count * pc.len;
-                if (scursor == null and sel.cursor == bytes) scursor = count * pc.len;
-                if (send == null and sel.end == bytes) send = count * pc.len;
+                if (sstart == null and sel.start >= bytes) sstart = count * pc.len;
+                if (scursor == null and sel.cursor >= bytes) scursor = count * pc.len;
+                if (send == null and sel.end >= bytes) send = count * pc.len;
             }
             sel.start = sstart.?;
             sel.cursor = scursor.?;
@@ -8023,9 +8023,9 @@ pub const TextEntryWidget = struct {
                 count += 1;
                 bytes += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
             } else {
-                if (sstart == null and sel.start == count * pc.len) sstart = bytes;
-                if (scursor == null and sel.cursor == count * pc.len) scursor = bytes;
-                if (send == null and sel.end == count * pc.len) send = bytes;
+                if (sstart == null and sel.start >= count * pc.len) sstart = bytes;
+                if (scursor == null and sel.cursor >= count * pc.len) scursor = bytes;
+                if (send == null and sel.end >= count * pc.len) send = bytes;
             }
             sel.start = sstart.?;
             sel.cursor = scursor.?;
