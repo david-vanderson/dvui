@@ -6397,7 +6397,7 @@ pub const ScrollContainerWidget = struct {
                             self.si.viewport.x -= me.data.motion.x / rs.s;
                             self.si.velocity.x = -me.data.motion.x / rs.s;
                             refresh();
-                            if (@fabs(me.data.motion.x) > @fabs(me.data.motion.y) and self.si.viewport.x >= 0 or self.si.viewport.x <= self.si.scroll_max(.horizontal)) {
+                            if (@fabs(me.data.motion.x) > @fabs(me.data.motion.y) and self.si.viewport.x >= 0 and self.si.viewport.x <= self.si.scroll_max(.horizontal)) {
                                 propogate = false;
                             }
                         }
