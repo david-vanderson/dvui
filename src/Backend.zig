@@ -14,6 +14,7 @@ const VTable = struct {
     end: *const fn (ptr: *anyopaque) void,
     pixelSize: *const fn (ptr: *anyopaque) Size,
     windowSize: *const fn (ptr: *anyopaque) Size,
+    contentScale: *const fn (ptr: *anyopaque) f32,
     renderGeometry: *const fn (ptr: *anyopaque, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void,
     textureCreate: *const fn (ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
     textureDestroy: *const fn (ptr: *anyopaque, texture: *anyopaque) void,
@@ -28,6 +29,7 @@ pub fn init(
     comptime endFn: fn (ptr: @TypeOf(pointer)) void,
     comptime pixelSizeFn: fn (ptr: @TypeOf(pointer)) Size,
     comptime windowSizeFn: fn (ptr: @TypeOf(pointer)) Size,
+    comptime contentScaleFn: fn (ptr: @TypeOf(pointer)) f32,
     comptime renderGeometryFn: fn (ptr: @TypeOf(pointer), texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void,
     comptime textureCreateFn: fn (ptr: @TypeOf(pointer), pixels: []u8, width: u32, height: u32) *anyopaque,
     comptime textureDestroyFn: fn (ptr: @TypeOf(pointer), texture: *anyopaque) void,
@@ -59,6 +61,11 @@ pub fn init(
         fn windowSizeImpl(ptr: *anyopaque) Size {
             const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
             return @call(.always_inline, windowSizeFn, .{self});
+        }
+
+        fn contentScaleImpl(ptr: *anyopaque) f32 {
+            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
+            return @call(.always_inline, contentScaleFn, .{self});
         }
 
         fn renderGeometryImpl(ptr: *anyopaque, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void {
@@ -96,6 +103,7 @@ pub fn init(
             .end = endImpl,
             .pixelSize = pixelSizeImpl,
             .windowSize = windowSizeImpl,
+            .contentScale = contentScaleImpl,
             .renderGeometry = renderGeometryImpl,
             .textureCreate = textureCreateImpl,
             .textureDestroy = textureDestroyImpl,
@@ -125,6 +133,10 @@ pub fn pixelSize(self: *Backend) Size {
 
 pub fn windowSize(self: *Backend) Size {
     return self.vtable.windowSize(self.ptr);
+}
+
+pub fn contentScale(self: *Backend) f32 {
+    return self.vtable.contentScale(self.ptr);
 }
 
 pub fn renderGeometry(self: *Backend, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void {

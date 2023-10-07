@@ -204,7 +204,7 @@ pub fn clear(self: *SDLBackend) void {
 }
 
 pub fn backend(self: *SDLBackend) dvui.Backend {
-    return dvui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free);
+    return dvui.Backend.init(self, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free);
 }
 
 pub fn clipboardText(self: *SDLBackend) []u8 {
@@ -246,6 +246,10 @@ pub fn windowSize(self: *SDLBackend) dvui.Size {
     var h: i32 = undefined;
     _ = c.SDL_GetWindowSize(self.window, &w, &h);
     return dvui.Size{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
+}
+
+pub fn contentScale(self: *SDLBackend) f32 {
+    return self.initial_scale;
 }
 
 pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
