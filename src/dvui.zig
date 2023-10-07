@@ -6083,7 +6083,9 @@ pub const ScrollContainerWidget = struct {
 
         {
             const max_scroll = self.si.scroll_max(.vertical);
-            self.si.velocity.y *= @exp(@log(0.0001) * seconds_since_last_frame());
+            // use 0.0001 for low values and 0.07 for high
+            const damping = 0.0001 + @min(1.0, @fabs(self.si.velocity.y) / 50.0) * (0.7 - 0.0001);
+            self.si.velocity.y *= @exp(@log(damping) * seconds_since_last_frame());
             if (@fabs(self.si.velocity.y) > 1) {
                 std.debug.print("vel {d}\n", .{self.si.velocity.y});
                 self.si.viewport.y += self.si.velocity.y;
