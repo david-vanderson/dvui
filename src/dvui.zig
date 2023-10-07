@@ -6091,11 +6091,14 @@ pub const ScrollContainerWidget = struct {
 
         {
             const max_scroll = self.si.scroll_max(.vertical);
-            // use 0.0001 for low values and 0.07 for high
+
+            // damping is only for touch currently
+            // exponential decay: vy *= damping^secs_since
+            // tweak the damping so we brake harder as the velocity slows down
             const damping = 0.0001 + @min(1.0, @fabs(self.si.velocity.y) / 50.0) * (0.7 - 0.0001);
             self.si.velocity.y *= @exp(@log(damping) * seconds_since_last_frame());
             if (@fabs(self.si.velocity.y) > 1) {
-                std.debug.print("vel {d}\n", .{self.si.velocity.y});
+                //std.debug.print("vel {d}\n", .{self.si.velocity.y});
                 self.si.viewport.y += self.si.velocity.y;
                 refresh();
             } else {
@@ -6339,7 +6342,6 @@ pub const ScrollContainerWidget = struct {
                             } else {
                                 e.handled = true;
                                 self.si.viewport.y -= me.data.wheel_y;
-                                self.si.velocity.y = -me.data.wheel_y;
                                 self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
                                 refresh();
                             }
