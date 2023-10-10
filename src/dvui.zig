@@ -1439,6 +1439,7 @@ pub fn refresh() void {
     currentWindow().refresh();
 }
 
+// caller responsible for calling backendFree on result.ptr
 pub fn clipboardText() []u8 {
     const cw = currentWindow();
     return cw.backend.clipboardText();
@@ -7859,7 +7860,9 @@ pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Ini
     var ret = try cw.arena.create(TextEntryWidget);
     ret.* = TextEntryWidget.init(src, init_opts, opts);
     ret.allocator = cw.arena;
-    try ret.install(.{});
+    try ret.install();
+    try ret.processEvents();
+    try ret.draw();
     return ret;
 }
 
@@ -7887,6 +7890,7 @@ pub const TextEntryWidget = struct {
     };
 
     wd: WidgetData = undefined,
+    prevClip: Rect = undefined,
     scroll: ScrollAreaWidget = undefined,
     textLayout: TextLayoutWidget = undefined,
     padding: Rect = undefined,
@@ -7918,7 +7922,7 @@ pub const TextEntryWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
+    pub fn install(self: *Self) !void {
         try self.wd.register("TextEntry", null);
 
         if (self.wd.visible()) {
@@ -7929,7 +7933,7 @@ pub const TextEntryWidget = struct {
 
         try self.wd.borderAndBackground(.{});
 
-        const oldclip = clipGet();
+        self.prevClip = clipGet();
 
         self.scroll = ScrollAreaWidget.init(@src(), .{
             .vertical = if (self.init_opts.scroll_vertical) .auto else .none,
@@ -7940,8 +7944,6 @@ pub const TextEntryWidget = struct {
         // scrollbars process mouse events here
         try self.scroll.install(.{ .focus_id = self.wd.id });
 
-        const scrollclip = clipGet();
-
         var layout_expand: Options.Expand = .both;
         if (self.scroll.init_opts.vertical == .auto) {
             layout_expand = layout_expand.removeVertical();
@@ -7949,7 +7951,7 @@ pub const TextEntryWidget = struct {
         if (self.scroll.init_opts.horizontal == .auto) {
             layout_expand = layout_expand.removeHorizontal();
         }
-        self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines }, self.wd.options.strip().override(.{ .expand = layout_expand, .padding = self.padding, .min_size_content = .{} }));
+        self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines }, self.wd.options.strip().override(.{ .expand = layout_expand, .padding = self.padding, .min_size_content = self.scroll.scroll.wd.contentRect().inset(self.padding).size() }));
         try self.textLayout.install(.{ .process_events = false });
 
         // textLayout is maintaining the selection for us, but if the text
@@ -7961,29 +7963,30 @@ pub const TextEntryWidget = struct {
         sel.end = findUtf8Start(self.init_opts.text[0..self.len], sel.end);
 
         // textLayout clips to its content, but we need to get events out to our border
-        const textclip = clipGet();
-        clipSet(oldclip);
+        clipSet(self.prevClip);
+    }
 
-        if (opts.process_events) {
-            var evts = events();
-            for (evts) |*e| {
-                if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r, .id_capture = self.textLayout.data().id }))
-                    continue;
+    pub fn processEvents(self: *Self) !void {
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r, .id_capture = self.textLayout.data().id }))
+                continue;
 
-                self.processEvent(e, false);
-            }
+            self.processEvent(e, false);
         }
+    }
 
+    pub fn draw(self: *Self) !void {
         const focused = (self.wd.id == focusedWidgetId());
 
         // set clip back to what textLayout expects
-        clipSet(textclip);
+        clipSet(self.data().contentRectScale().r);
 
         if (self.init_opts.password_char) |pc| {
             // adjust selection for obfuscation
             var count: usize = 0;
             var bytes: usize = 0;
-            sel = self.textLayout.selection;
+            var sel = self.textLayout.selection;
             var sstart: ?usize = null;
             var scursor: ?usize = null;
             var send: ?usize = null;
@@ -8019,7 +8022,7 @@ pub const TextEntryWidget = struct {
             // reset selection
             var count: usize = 0;
             var bytes: usize = 0;
-            sel = self.textLayout.selection;
+            var sel = self.textLayout.selection;
             var sstart: ?usize = null;
             var scursor: ?usize = null;
             var send: ?usize = null;
@@ -8042,10 +8045,6 @@ pub const TextEntryWidget = struct {
 
         if (focused) {
             if (self.textLayout.cursor_rect) |cr| {
-                // might draw the cursor slightly outside TextLayoutWidget's
-                // clipping, so go back to scroll clipping
-                clipSet(scrollclip);
-
                 var crect = cr.add(.{ .x = -1 });
                 crect.w = 2;
                 try pathAddRect(self.textLayout.screenRectScale(crect).r, Rect.all(0));
@@ -8265,6 +8264,7 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        clipSet(self.prevClip);
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
