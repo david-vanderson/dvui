@@ -27,14 +27,10 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
     defer win.deinit();
 
-    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const arena = arena_allocator.allocator();
-
     main_loop: while (true) {
-        defer _ = arena_allocator.reset(.free_all);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(arena, std.time.nanoTimestamp());
+        try win.begin(std.time.nanoTimestamp());
 
         // send events to dvui if they belong to floating windows
         var event: SDLBackend.c.SDL_Event = undefined;
