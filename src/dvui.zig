@@ -2277,8 +2277,8 @@ pub const Window = struct {
         return fps;
     }
 
-    /// beginWait coordinates with waitTime below to run frames only when needed
-    fn _beginWait(self: *Self, has_event: bool) i128 {
+    /// beginWait coordinates with waitTime() to run frames only when needed
+    pub fn beginWait(self: *Self, has_event: bool) i128 {
         var new_time = @max(self.frame_time_ns, std.time.nanoTimestamp());
 
         if (self.loop_wait_target) |target| {
@@ -2409,19 +2409,10 @@ pub const Window = struct {
         }
     }
 
-    pub const BeginOptions = struct {
-        has_event: ?bool = null,
-    };
-
     pub fn begin(
         self: *Self,
-        options: BeginOptions,
+        time_ns: i128,
     ) !void {
-        const time_ns: i128 = if (options.has_event) |has_event|
-            self._beginWait(has_event)
-        else
-            std.time.nanoTimestamp();
-
         var micros_since_last: u32 = 1;
         if (time_ns > self.frame_time_ns) {
             // enforce monotinicity

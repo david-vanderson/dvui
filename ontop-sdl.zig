@@ -30,7 +30,7 @@ pub fn main() !void {
     main_loop: while (true) {
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(.{});
+        try win.begin(std.time.nanoTimestamp());
 
         // send events to dvui if they belong to floating windows
         var event: SDLBackend.c.SDL_Event = undefined;
