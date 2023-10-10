@@ -26,17 +26,9 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
     defer win.deinit();
 
-    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const arena = arena_allocator.allocator();
-
     main_loop: while (true) {
-        defer _ = arena_allocator.reset(.free_all);
-
-        // beginWait coordinates with waitTime below to run frames only when needed
-        var nstime = win.beginWait(backend.hasEvent());
-
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(arena, nstime);
+        try win.begin(.{ .has_event = backend.hasEvent() });
 
         // send all SDL events to dvui for processing
         const quit = try backend.addAllEvents(&win);
