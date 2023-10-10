@@ -1524,7 +1524,7 @@ pub fn minSizeSet(id: u32, s: Size) !void {
     var cw = currentWindow();
     if (try cw.min_sizes.fetchPut(id, .{ .size = s })) |ss| {
         if (ss.value.used) {
-            std.debug.print("dvui: id {x} was already used this frame (highlighting)\n", .{id});
+            std.debug.print("dvui: id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options\n", .{id});
             cw.debug_widget_id = id;
         }
     }
