@@ -27,8 +27,12 @@ pub fn main() !void {
     defer win.deinit();
 
     main_loop: while (true) {
+
+        // beginWait coordinates with waitTime below to run frames only when needed
+        var nstime = win.beginWait(backend.hasEvent());
+
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(.{ .has_event = backend.hasEvent() });
+        try win.begin(nstime);
 
         // send all SDL events to dvui for processing
         const quit = try backend.addAllEvents(&win);

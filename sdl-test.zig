@@ -35,7 +35,8 @@ pub fn main() !void {
     //var rng = std.rand.DefaultPrng.init(0);
 
     main_loop: while (true) {
-        try win.begin(.{ .has_event = win_backend.hasEvent() });
+        var nstime = win.beginWait(win_backend.hasEvent());
+        try win.begin(nstime);
         win_backend.clear();
 
         const quit = try win_backend.addAllEvents(&win);
