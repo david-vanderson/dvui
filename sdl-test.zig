@@ -34,14 +34,8 @@ pub fn main() !void {
 
     //var rng = std.rand.DefaultPrng.init(0);
 
-    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const arena = arena_allocator.allocator();
-
     main_loop: while (true) {
-        defer _ = arena_allocator.reset(.free_all);
-
-        var nstime = win.beginWait(win_backend.hasEvent());
-        try win.begin(arena, nstime);
+        try win.begin(.{ .has_event = win_backend.hasEvent() });
         win_backend.clear();
 
         const quit = try win_backend.addAllEvents(&win);

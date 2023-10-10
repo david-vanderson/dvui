@@ -1999,7 +1999,8 @@ pub const Window = struct {
     captureID: ?u32 = null,
     captured_last_frame: bool = false,
 
-    gpa: std.mem.Allocator = undefined,
+    gpa: std.mem.Allocator,
+    _arena: std.heap.ArenaAllocator,
     arena: std.mem.Allocator = undefined,
     path: std.ArrayList(Point) = undefined,
     rendering: bool = false,
@@ -2020,8 +2021,11 @@ pub const Window = struct {
         backend: Backend,
     ) !Self {
         const hashval = hashSrc(src, id_extra);
+        const arena = std.heap.ArenaAllocator.init(gpa);
+
         var self = Self{
             .gpa = gpa,
+            ._arena = arena,
             .subwindows = std.ArrayList(Subwindow).init(gpa),
             .min_sizes = std.AutoHashMap(u32, SavedSize).init(gpa),
             .data_mutex = std.Thread.Mutex{},
@@ -2072,6 +2076,7 @@ pub const Window = struct {
         self.font_cache.deinit();
         self.icon_cache.deinit();
         self.dialogs.deinit();
+        self._arena.deinit();
     }
 
     pub fn refresh(self: *Self) void {
@@ -2272,7 +2277,8 @@ pub const Window = struct {
         return fps;
     }
 
-    pub fn beginWait(self: *Self, has_event: bool) i128 {
+    /// beginWait coordinates with waitTime below to run frames only when needed
+    fn _beginWait(self: *Self, has_event: bool) i128 {
         var new_time = @max(self.frame_time_ns, std.time.nanoTimestamp());
 
         if (self.loop_wait_target) |target| {
@@ -2403,11 +2409,19 @@ pub const Window = struct {
         }
     }
 
+    pub const BeginOptions = struct {
+        has_event: ?bool = null,
+    };
+
     pub fn begin(
         self: *Self,
-        arena: std.mem.Allocator,
-        time_ns: i128,
+        options: BeginOptions,
     ) !void {
+        const time_ns: i128 = if (options.has_event) |has_event|
+            self._beginWait(has_event)
+        else
+            std.time.nanoTimestamp();
+
         var micros_since_last: u32 = 1;
         if (time_ns > self.frame_time_ns) {
             // enforce monotinicity
@@ -2437,7 +2451,10 @@ pub const Window = struct {
             self.debug_under_mouse_info = "";
         }
 
+        _ = self._arena.reset(.retain_capacity);
+        const arena = self._arena.allocator();
         self.arena = arena;
+
         self.path = std.ArrayList(Point).init(arena);
 
         {
