@@ -316,12 +316,64 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Text Entry Singleline", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_buf, .scroll_vertical = false, .scroll_horizontal_bar = .hide }, .{});
+        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_buf, .scroll_vertical = false, .scroll_horizontal_bar = .hide }, .{ .debug = true });
+        const teid = te.data().id;
+        try te.install();
+
+        var enter_pressed = false;
+        for (dvui.events()) |*e| {
+            if (!dvui.eventMatch(e, .{ .id = te.data().id, .r = te.data().borderRectScale().r, .id_capture = te.textLayout.data().id }))
+                continue;
+
+            switch (e.evt) {
+                .key => |ke| {
+                    switch (ke.code) {
+                        .enter => {
+                            if (ke.action == .down) {
+                                e.handled = true;
+                                enter_pressed = true;
+                            }
+                        },
+                        .v => {
+                            if (ke.action == .down and ke.mod.controlGui()) {
+                                e.handled = true;
+                                const clip_text = dvui.clipboardText();
+                                for (clip_text) |ch| {
+                                    if (ch != '\n') {
+                                        te.textTyped(&.{ch});
+                                    }
+                                }
+                                dvui.backendFree(clip_text.ptr);
+                            }
+                        },
+                        else => {},
+                    }
+                },
+                .text => |tt| {
+                    e.handled = true;
+                    for (std.mem.sliceTo(tt, 0)) |ch| {
+                        if (ch != '\n') {
+                            te.textTyped(&.{ch});
+                        }
+                    }
+                },
+                else => {},
+            }
+        }
+
+        try te.processEvents();
+        try te.draw();
         te.deinit();
-        // replace newlines with spaces
-        for (&text_entry_buf) |*char| {
-            if (char.* == '\n')
-                char.* = ' ';
+
+        if (enter_pressed) {
+            dvui.animation(teid, "enter_pressed", .{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 500_000 });
+        }
+
+        if (dvui.animationGet(teid, "enter_pressed")) |a| {
+            const prev_alpha = dvui.themeGet().alpha;
+            dvui.themeGet().alpha *= a.lerp();
+            try dvui.label(@src(), "Enter!", .{}, .{ .gravity_y = 0.5 });
+            dvui.themeGet().alpha = prev_alpha;
         }
     }
 
