@@ -1999,7 +1999,8 @@ pub const Window = struct {
     captureID: ?u32 = null,
     captured_last_frame: bool = false,
 
-    gpa: std.mem.Allocator = undefined,
+    gpa: std.mem.Allocator,
+    _arena: std.heap.ArenaAllocator,
     arena: std.mem.Allocator = undefined,
     path: std.ArrayList(Point) = undefined,
     rendering: bool = false,
@@ -2020,8 +2021,11 @@ pub const Window = struct {
         backend: Backend,
     ) !Self {
         const hashval = hashSrc(src, id_extra);
+        const arena = std.heap.ArenaAllocator.init(gpa);
+
         var self = Self{
             .gpa = gpa,
+            ._arena = arena,
             .subwindows = std.ArrayList(Subwindow).init(gpa),
             .min_sizes = std.AutoHashMap(u32, SavedSize).init(gpa),
             .data_mutex = std.Thread.Mutex{},
@@ -2072,6 +2076,7 @@ pub const Window = struct {
         self.font_cache.deinit();
         self.icon_cache.deinit();
         self.dialogs.deinit();
+        self._arena.deinit();
     }
 
     pub fn refresh(self: *Self) void {
@@ -2405,7 +2410,6 @@ pub const Window = struct {
 
     pub fn begin(
         self: *Self,
-        arena: std.mem.Allocator,
         time_ns: i128,
     ) !void {
         var micros_since_last: u32 = 1;
@@ -2437,7 +2441,10 @@ pub const Window = struct {
             self.debug_under_mouse_info = "";
         }
 
+        _ = self._arena.reset(.retain_capacity);
+        const arena = self._arena.allocator();
         self.arena = arena;
+
         self.path = std.ArrayList(Point).init(arena);
 
         {
