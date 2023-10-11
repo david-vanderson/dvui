@@ -5364,7 +5364,7 @@ pub const TextLayoutWidget = struct {
                 },
                 else => {},
             }
-        } else if (e.evt == .key and e.evt.key.mod.controlGui() and e.evt.key.code == .c and e.evt.key.action == .down) {
+        } else if (e.evt == .key and e.evt.key.mod.controlCommand() and e.evt.key.code == .c and e.evt.key.action == .down) {
             // copy
             e.handled = true;
             if (self.selectionGet(.{})) |sel| {
@@ -8218,7 +8218,7 @@ pub const TextEntryWidget = struct {
                         }
                     },
                     .v => {
-                        if (ke.action == .down and ke.mod.controlGui()) {
+                        if (ke.action == .down and ke.mod.controlCommand()) {
                             // paste
                             e.handled = true;
                             const clip_text = dvui.clipboardText();
@@ -8227,7 +8227,7 @@ pub const TextEntryWidget = struct {
                         }
                     },
                     .x => {
-                        if (ke.action == .down and ke.mod.controlGui()) {
+                        if (ke.action == .down and ke.mod.controlCommand()) {
                             // cut
                             e.handled = true;
                             if (self.textLayout.selectionGet(.{})) |sel| {

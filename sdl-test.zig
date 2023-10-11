@@ -65,7 +65,7 @@ pub fn main() !void {
 
                     switch (e.evt) {
                         .mouse => |me| {
-                            if (me.action == .wheel_y and scale_mod.ctrl()) {
+                            if (me.action == .wheel_y and scale_mod.controlCommand()) {
                                 e.handled = true;
                                 var base: f32 = 1.01;
                                 const zs = @exp(@log(base) * me.data.wheel_y);

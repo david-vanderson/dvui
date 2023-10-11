@@ -335,7 +335,7 @@ pub fn basicWidgets() !void {
                             }
                         },
                         .v => {
-                            if (ke.action == .down and ke.mod.controlGui()) {
+                            if (ke.action == .down and ke.mod.controlCommand()) {
                                 e.handled = true;
                                 const clip_text = dvui.clipboardText();
                                 for (clip_text) |ch| {
