@@ -5364,7 +5364,7 @@ pub const TextLayoutWidget = struct {
                 },
                 else => {},
             }
-        } else if (e.evt == .key and e.evt.key.mod.controlGui() and e.evt.key.code == .c) {
+        } else if (e.evt == .key and e.evt.key.mod.controlGui() and e.evt.key.code == .c and e.evt.key.action == .down) {
             // copy
             e.handled = true;
             if (self.selectionGet(.{})) |sel| {
@@ -8219,10 +8219,33 @@ pub const TextEntryWidget = struct {
                     },
                     .v => {
                         if (ke.action == .down and ke.mod.controlGui()) {
+                            // paste
                             e.handled = true;
                             const clip_text = dvui.clipboardText();
                             defer dvui.backendFree(clip_text.ptr);
                             self.textTyped(clip_text);
+                        }
+                    },
+                    .x => {
+                        if (ke.action == .down and ke.mod.controlGui()) {
+                            // cut
+                            e.handled = true;
+                            if (self.textLayout.selectionGet(.{})) |sel| {
+                                if (!sel.empty()) {
+                                    // copy selection to clipboard
+                                    clipboardTextSet(self.init_opts.text[sel.start..sel.end]) catch |err| {
+                                        std.debug.print("clipboardTextSet: error {!}\n", .{err});
+                                    };
+
+                                    // delete selection
+                                    std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+                                    self.len -= (sel.end - sel.start);
+                                    self.init_opts.text[self.len] = 0;
+                                    sel.end = sel.start;
+                                    sel.cursor = sel.start;
+                                    self.scroll_to_cursor = true;
+                                }
+                            }
                         }
                     },
                     .left, .right => |code| {
