@@ -443,12 +443,12 @@ pub fn SDL_keymod_to_dvui(keymod: u16) dvui.enums.Mod {
     var m: u16 = 0;
     if (keymod & (if (sdl3) c.SDL_KMOD_LSHIFT else c.KMOD_LSHIFT) > 0) m |= @intFromEnum(dvui.enums.Mod.lshift);
     if (keymod & (if (sdl3) c.SDL_KMOD_RSHIFT else c.KMOD_RSHIFT) > 0) m |= @intFromEnum(dvui.enums.Mod.rshift);
-    if (keymod & (if (sdl3) c.SDL_KMOD_LCTRL else c.KMOD_LCTRL) > 0) m |= @intFromEnum(dvui.enums.Mod.lctrl);
-    if (keymod & (if (sdl3) c.SDL_KMOD_RCTRL else c.KMOD_RCTRL) > 0) m |= @intFromEnum(dvui.enums.Mod.rctrl);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LCTRL else c.KMOD_LCTRL) > 0) m |= @intFromEnum(dvui.enums.Mod.lcontrol);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RCTRL else c.KMOD_RCTRL) > 0) m |= @intFromEnum(dvui.enums.Mod.rcontrol);
     if (keymod & (if (sdl3) c.SDL_KMOD_LALT else c.KMOD_LALT) > 0) m |= @intFromEnum(dvui.enums.Mod.lalt);
     if (keymod & (if (sdl3) c.SDL_KMOD_RALT else c.KMOD_RALT) > 0) m |= @intFromEnum(dvui.enums.Mod.ralt);
-    if (keymod & (if (sdl3) c.SDL_KMOD_LGUI else c.KMOD_LGUI) > 0) m |= @intFromEnum(dvui.enums.Mod.lgui);
-    if (keymod & (if (sdl3) c.SDL_KMOD_RGUI else c.KMOD_RGUI) > 0) m |= @intFromEnum(dvui.enums.Mod.rgui);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LGUI else c.KMOD_LGUI) > 0) m |= @intFromEnum(dvui.enums.Mod.lcommand);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RGUI else c.KMOD_RGUI) > 0) m |= @intFromEnum(dvui.enums.Mod.rcommand);
 
     return @as(dvui.enums.Mod, @enumFromInt(m));
 }
@@ -532,8 +532,8 @@ pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
         c.SDLK_RCTRL => .right_control,
         c.SDLK_LALT => .left_alt,
         c.SDLK_RALT => .right_alt,
-        c.SDLK_LGUI => .left_super,
-        c.SDLK_RGUI => .right_super,
+        c.SDLK_LGUI => .left_command,
+        c.SDLK_RGUI => .right_command,
         c.SDLK_MENU => .menu,
         c.SDLK_NUMLOCKCLEAR => .num_lock,
         c.SDLK_CAPSLOCK => .caps_lock,

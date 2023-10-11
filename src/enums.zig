@@ -42,14 +42,14 @@ pub const Mod = enum(u16) {
     lshift = 0b00000001,
     rshift = 0b00000010,
 
-    lctrl = 0b00000100,
-    rctrl = 0b00001000,
+    lcontrol = 0b00000100,
+    rcontrol = 0b00001000,
 
     lalt = 0b00010000,
     ralt = 0b00100000,
 
-    lgui = 0b01000000,
-    rgui = 0b10000000,
+    lcommand = 0b01000000,
+    rcommand = 0b10000000,
 
     // make non-exhaustive so that we can take combinations of the values
     _,
@@ -64,23 +64,23 @@ pub const Mod = enum(u16) {
         return self.is(.lshift) or self.is(.rshift);
     }
 
-    pub fn ctrl(self: Mod) bool {
-        return self.is(.lctrl) or self.is(.rctrl);
+    pub fn control(self: Mod) bool {
+        return self.is(.lcontrol) or self.is(.rcontrol);
     }
 
     pub fn alt(self: Mod) bool {
         return self.is(.lalt) or self.is(.ralt);
     }
 
-    pub fn gui(self: Mod) bool {
-        return self.is(.lgui) or self.is(.rgui);
+    pub fn command(self: Mod) bool {
+        return self.is(.lcommand) or self.is(.rcommand);
     }
 
-    pub fn controlGui(self: Mod) bool {
+    pub fn controlCommand(self: Mod) bool {
         if (builtin.target.isDarwin()) {
-            return self.gui();
+            return self.command();
         } else {
-            return self.ctrl();
+            return self.control();
         }
     }
 };
@@ -177,8 +177,8 @@ pub const Key = enum {
     right_control,
     left_alt,
     right_alt,
-    left_super,
-    right_super,
+    left_command,
+    right_command,
     menu,
     num_lock,
     caps_lock,
