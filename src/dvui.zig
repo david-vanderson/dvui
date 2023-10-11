@@ -8158,13 +8158,14 @@ pub const TextEntryWidget = struct {
                                     sel.cursor = sel.start;
                                     self.scroll_to_cursor = true;
                                 } else if (sel.cursor > 0) {
+                                    // delete character just before cursor
+                                    //
                                     // A utf8 char might consist of more than one byte.
                                     // Find the beginning of the last byte by iterating over
                                     // the string backwards. The first byte of a utf8 char
                                     // does not have the pattern 10xxxxxx.
                                     var i: usize = 1;
                                     while (self.init_opts.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
-                                    // delete character just before cursor
                                     std.mem.copy(u8, self.init_opts.text[sel.cursor - i ..], self.init_opts.text[sel.cursor..self.len]);
                                     self.len -= i;
                                     self.init_opts.text[self.len] = 0;
@@ -8172,6 +8173,30 @@ pub const TextEntryWidget = struct {
                                     sel.start = sel.cursor;
                                     sel.end = sel.cursor;
                                     self.scroll_to_cursor = true;
+                                }
+                            }
+                        }
+                    },
+                    .delete => {
+                        if (ke.action == .down or ke.action == .repeat) {
+                            e.handled = true;
+                            if (self.textLayout.selectionGet(.{})) |sel| {
+                                if (!sel.empty()) {
+                                    // just delete selection
+                                    std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+                                    self.len -= (sel.end - sel.start);
+                                    self.init_opts.text[self.len] = 0;
+                                    sel.end = sel.start;
+                                    sel.cursor = sel.start;
+                                    self.scroll_to_cursor = true;
+                                } else if (sel.cursor < self.len) {
+                                    // delete the character just after the cursor
+                                    //
+                                    // A utf8 char might consist of more than one byte.
+                                    const i = std.unicode.utf8ByteSequenceLength(self.init_opts.text[sel.cursor]) catch 1;
+                                    std.mem.copy(u8, self.init_opts.text[sel.cursor..], self.init_opts.text[sel.cursor + i .. self.len]);
+                                    self.len -= i;
+                                    self.init_opts.text[self.len] = 0;
                                 }
                             }
                         }
