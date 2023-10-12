@@ -321,8 +321,9 @@ pub fn basicWidgets() !void {
         try te.install();
 
         var enter_pressed = false;
+        const emo = te.eventMatchOptions();
         for (dvui.events()) |*e| {
-            if (!dvui.eventMatch(e, .{ .id = te.data().id, .r = te.data().borderRectScale().r, .id_capture = te.textLayout.data().id }))
+            if (!dvui.eventMatch(e, emo))
                 continue;
 
             switch (e.evt) {
@@ -359,9 +360,12 @@ pub fn basicWidgets() !void {
                 },
                 else => {},
             }
+
+            if (!e.handled) {
+                te.processEvent(e, false);
+            }
         }
 
-        try te.processEvents();
         try te.draw();
         te.deinit();
 
