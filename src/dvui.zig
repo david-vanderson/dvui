@@ -1647,7 +1647,7 @@ pub fn events() []Event {
     return currentWindow().events.items;
 }
 
-pub const eventMatchOptions = struct {
+pub const EventMatchOptions = struct {
     id: u32,
     r: Rect,
     id_capture: ?u32 = null,
@@ -1656,7 +1656,7 @@ pub const eventMatchOptions = struct {
 
 // returns true if the given event should normally be processed according to
 // the options given
-pub fn eventMatch(e: *Event, opts: eventMatchOptions) bool {
+pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     if (e.handled) return false;
 
     if (e.focus_windowId) |wid| {
@@ -7966,10 +7966,15 @@ pub const TextEntryWidget = struct {
         clipSet(self.prevClip);
     }
 
+    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
+        return .{ .id = self.wd.id, .r = self.wd.borderRectScale().r, .id_capture = self.textLayout.data().id };
+    }
+
     pub fn processEvents(self: *Self) !void {
+        const emo = self.eventMatchOptions();
         var evts = events();
         for (evts) |*e| {
-            if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r, .id_capture = self.textLayout.data().id }))
+            if (!eventMatch(e, emo))
                 continue;
 
             self.processEvent(e, false);
