@@ -338,9 +338,6 @@ pub fn basicWidgets() !void {
             }
         }
 
-        // remove newlines before drawing
-        te.filterOut("\n");
-
         try te.draw();
         te.deinit();
 
