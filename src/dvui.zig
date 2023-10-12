@@ -8146,6 +8146,34 @@ pub const TextEntryWidget = struct {
         }
     }
 
+    pub fn filterOut(self: *Self, filter: []const u8) void {
+        if (filter.len == 0) {
+            return;
+        }
+
+        var i: usize = 0;
+        var j: usize = 0;
+        const n = self.len;
+        while (i < n) {
+            if (std.mem.startsWith(u8, self.init_opts.text[i..], filter)) {
+                self.len -= filter.len;
+                var sel = self.textLayout.selection;
+                if (sel.start > i) sel.start -= filter.len;
+                if (sel.cursor > i) sel.cursor -= filter.len;
+                if (sel.end > i) sel.end -= filter.len;
+
+                i += filter.len;
+            } else {
+                self.init_opts.text[j] = self.init_opts.text[i];
+                i += 1;
+                j += 1;
+            }
+        }
+
+        if (j < self.init_opts.text.len)
+            self.init_opts.text[j] = 0;
+    }
+
     pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
         switch (e.evt) {
             .key => |ke| {

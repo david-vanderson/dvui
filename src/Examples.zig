@@ -24,6 +24,8 @@ var slider_val: f32 = 0.0;
 var text_entry_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
+var text_entry_filter_buf = std.mem.zeroes([30]u8);
+var text_entry_filter_out_buf = std.mem.zeroes([30]u8);
 var text_entry_multiline_buf = std.mem.zeroes([500]u8);
 var dropdown_val: usize = 1;
 var show_dialog: bool = false;
@@ -326,45 +328,18 @@ pub fn basicWidgets() !void {
             if (!dvui.eventMatch(e, emo))
                 continue;
 
-            switch (e.evt) {
-                .key => |ke| {
-                    switch (ke.code) {
-                        .enter => {
-                            if (ke.action == .down) {
-                                e.handled = true;
-                                enter_pressed = true;
-                            }
-                        },
-                        .v => {
-                            if (ke.action == .down and ke.mod.controlCommand()) {
-                                e.handled = true;
-                                const clip_text = dvui.clipboardText();
-                                for (clip_text) |ch| {
-                                    if (ch != '\n') {
-                                        te.textTyped(&.{ch});
-                                    }
-                                }
-                                dvui.backendFree(clip_text.ptr);
-                            }
-                        },
-                        else => {},
-                    }
-                },
-                .text => |tt| {
-                    e.handled = true;
-                    for (std.mem.sliceTo(tt, 0)) |ch| {
-                        if (ch != '\n') {
-                            te.textTyped(&.{ch});
-                        }
-                    }
-                },
-                else => {},
+            if (e.evt == .key and e.evt.key.code == .enter and e.evt.key.action == .down) {
+                e.handled = true;
+                enter_pressed = true;
             }
 
             if (!e.handled) {
                 te.processEvent(e, false);
             }
         }
+
+        // remove newlines before drawing
+        te.filterOut("\n");
 
         try te.draw();
         te.deinit();
@@ -403,15 +378,35 @@ pub fn basicWidgets() !void {
         )) {
             text_entry_password_buf_obf_enable = !text_entry_password_buf_obf_enable;
         }
-
-        // replace newlines with spaces
-        for (&text_entry_buf) |*char| {
-            if (char.* == '\n')
-                char.* = ' ';
-        }
     }
 
     try dvui.label(@src(), "Password is \"{s}\"", .{std.mem.sliceTo(&text_entry_password_buf, 0)}, .{ .gravity_y = 0.5 });
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Text Entry Filter", .{}, .{ .gravity_y = 0.5 });
+        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_filter_buf, .scroll_vertical = false, .scroll_horizontal_bar = .hide }, .{ .debug = true });
+        try te.install();
+        try te.processEvents();
+
+        // filter before drawing
+        for (std.mem.sliceTo(&text_entry_filter_out_buf, 0), 0..) |_, i| {
+            te.filterOut(text_entry_filter_out_buf[i .. i + 1]);
+        }
+
+        try te.draw();
+        te.deinit();
+
+        try dvui.label(@src(), "filter", .{}, .{ .gravity_y = 0.5 });
+        var te2 = try dvui.textEntry(@src(), .{
+            .text = &text_entry_filter_out_buf,
+            .scroll_vertical = false,
+            .scroll_horizontal_bar = .hide,
+        }, .{});
+        te2.deinit();
+    }
 
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
