@@ -364,8 +364,6 @@ pub fn basicWidgets() !void {
         var te = try dvui.textEntry(@src(), .{
             .text = &text_entry_password_buf,
             .password_char = if (text_entry_password_buf_obf_enable) "*" else null,
-            .scroll_vertical = false,
-            .scroll_horizontal_bar = .hide,
         }, .{});
         te.deinit();
 
@@ -387,13 +385,13 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Text Entry Filter", .{}, .{ .gravity_y = 0.5 });
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_filter_buf, .scroll_vertical = false, .scroll_horizontal_bar = .hide }, .{ .debug = true });
+        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_filter_buf }, .{ .debug = true });
         try te.install();
         try te.processEvents();
 
         // filter before drawing
         for (std.mem.sliceTo(&text_entry_filter_out_buf, 0), 0..) |_, i| {
-            te.filterOut(text_entry_filter_out_buf[i .. i + 1]);
+            te.filterOut(&.{text_entry_filter_out_buf[i]});
         }
 
         try te.draw();
@@ -402,8 +400,6 @@ pub fn basicWidgets() !void {
         try dvui.label(@src(), "filter", .{}, .{ .gravity_y = 0.5 });
         var te2 = try dvui.textEntry(@src(), .{
             .text = &text_entry_filter_out_buf,
-            .scroll_vertical = false,
-            .scroll_horizontal_bar = .hide,
         }, .{});
         te2.deinit();
     }
@@ -413,7 +409,7 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Text Entry Multiline", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
+        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .multiline = true }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
         te.deinit();
     }
 
