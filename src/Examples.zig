@@ -318,7 +318,7 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Text Entry Singleline", .{}, .{ .gravity_y = 0.5 });
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_buf, .scroll_vertical = false, .scroll_horizontal_bar = .hide }, .{ .debug = true });
+        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_buf }, .{});
         const teid = te.data().id;
         try te.install();
 
