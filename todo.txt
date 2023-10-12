@@ -1,4 +1,14 @@
 
+floating windows overlapping each other?  Maybe position with offset?
+- option to distinguish between persistant windows and popups?
+  - should dialogs center themselves over their parent?
+
+make sure that putting corner widgets in a textEntry works
+- or disable it
+
+add raster image support (like icons) using stb_image
+- can we find another zig project using stb_image?
+
 add inertia to scrolling
 - if the scrollContainer has more intertia scrolling to do, then it should eat all pointer events, because we don't want any pointer events going to children if the scrolling is still happening
 

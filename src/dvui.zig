@@ -2982,8 +2982,6 @@ pub const Window = struct {
             }
             var te = try dvui.textEntry(@src(), .{
                 .text = &buf,
-                .scroll_vertical = false,
-                .scroll_horizontal_bar = .hide,
             }, .{});
             te.deinit();
 
@@ -7880,13 +7878,14 @@ pub const TextEntryWidget = struct {
     pub const InitOptions = struct {
         text: []u8,
         break_lines: bool = false,
-        scroll_vertical: bool = true,
-        scroll_vertical_bar: ScrollInfo.ScrollBarMode = .auto,
-        scroll_horizontal: bool = true,
-        scroll_horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
+        scroll_vertical: ?bool = null, // default is value of multiline
+        scroll_vertical_bar: ?ScrollInfo.ScrollBarMode = null, // default .auto
+        scroll_horizontal: ?bool = null, // default true
+        scroll_horizontal_bar: ?ScrollInfo.ScrollBarMode = null, // default .auto if multiline, .hide if not
 
         // must be a single utf8 character
         password_char: ?[]const u8 = null,
+        multiline: bool = false,
     };
 
     wd: WidgetData = undefined,
@@ -7936,10 +7935,10 @@ pub const TextEntryWidget = struct {
         self.prevClip = clipGet();
 
         self.scroll = ScrollAreaWidget.init(@src(), .{
-            .vertical = if (self.init_opts.scroll_vertical) .auto else .none,
-            .vertical_bar = self.init_opts.scroll_vertical_bar,
-            .horizontal = if (self.init_opts.scroll_horizontal) .auto else .none,
-            .horizontal_bar = self.init_opts.scroll_horizontal_bar,
+            .vertical = if (self.init_opts.scroll_vertical orelse self.init_opts.multiline) .auto else .none,
+            .vertical_bar = self.init_opts.scroll_vertical_bar orelse .auto,
+            .horizontal = if (self.init_opts.scroll_horizontal orelse true) .auto else .none,
+            .horizontal_bar = self.init_opts.scroll_horizontal_bar orelse (if (self.init_opts.multiline) .auto else .hide),
         }, self.wd.options.strip().override(.{ .expand = .both }));
         // scrollbars process mouse events here
         try self.scroll.install(.{ .focus_id = self.wd.id });
@@ -8146,6 +8145,7 @@ pub const TextEntryWidget = struct {
         }
     }
 
+    // Designed to run after event processing and before drawing
     pub fn filterOut(self: *Self, filter: []const u8) void {
         if (filter.len == 0) {
             return;
@@ -8235,7 +8235,7 @@ pub const TextEntryWidget = struct {
                         }
                     },
                     .enter => {
-                        if (ke.action == .down or ke.action == .repeat) {
+                        if (self.init_opts.multiline and ke.action == .down or ke.action == .repeat) {
                             e.handled = true;
                             self.textTyped("\n");
                         }
@@ -8256,7 +8256,20 @@ pub const TextEntryWidget = struct {
                             e.handled = true;
                             const clip_text = dvui.clipboardText();
                             defer dvui.backendFree(clip_text.ptr);
-                            self.textTyped(clip_text);
+                            if (self.init_opts.multiline) {
+                                self.textTyped(clip_text);
+                            } else {
+                                var i: usize = 0;
+                                while (i < clip_text.len) {
+                                    if (std.mem.indexOfScalar(u8, clip_text[i..], '\n')) |idx| {
+                                        self.textTyped(clip_text[i..][0..idx]);
+                                        i += idx + 1;
+                                    } else {
+                                        self.textTyped(clip_text[i..]);
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     },
                     .x => {
@@ -8324,7 +8337,20 @@ pub const TextEntryWidget = struct {
             .text => |te| {
                 e.handled = true;
                 var new = std.mem.sliceTo(te, 0);
-                self.textTyped(new);
+                if (self.init_opts.multiline) {
+                    self.textTyped(new);
+                } else {
+                    var i: usize = 0;
+                    while (i < new.len) {
+                        if (std.mem.indexOfScalar(u8, new[i..], '\n')) |idx| {
+                            self.textTyped(new[i..][0..idx]);
+                            i += idx + 1;
+                        } else {
+                            self.textTyped(new[i..]);
+                            break;
+                        }
+                    }
+                }
             },
             .mouse => |me| {
                 if (me.action == .focus) {
