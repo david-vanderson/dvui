@@ -165,6 +165,17 @@ pub fn main() !void {
                 }
 
                 {
+                    var hbox = try dvui.box(@src(), .horizontal, .{});
+                    defer hbox.deinit();
+                    var buf = dvui.dataGetSliceDefault(null, hbox.wd.id, "data_key", []u8, &(.{0} ** 30));
+
+                    var te = try dvui.textEntry(@src(), .{
+                        .text = buf,
+                    }, .{});
+                    te.deinit();
+                }
+
+                {
                     const Sel = struct {
                         var sel = dvui.TextLayoutWidget.Selection{};
                         var text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
