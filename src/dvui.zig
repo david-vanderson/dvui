@@ -1600,9 +1600,9 @@ pub fn dataSetAdvanced(win: ?*Window, id: u32, key: []const u8, data: anytype, c
 /// If called from non-GUI thread or outside window.begin()/end(), you must
 /// pass a pointer to the Window you want to add the data to.
 ///
-/// If T is a slice, returns slice of internal storage, which will be freed
-/// after a frame where there is no call to any dataGet/dataSet functions for
-/// that id/key combination.
+/// If T is a slice ([]t or [:X]t), the returned slice points to internal
+/// storage, which will be freed after a frame where there is no call to any
+/// dataGet/dataSet functions for that id/key combination.
 ///
 /// Use dataGetPtr to retrieve a pointer to the internal storage for any type.
 pub fn dataGet(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
