@@ -1667,6 +1667,26 @@ pub fn dataGetPtr(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?*T
     }
 }
 
+/// Retrieve value for given key associated with id.  If the value is not
+/// found, store the given default and return a pointer to it.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside window.begin()/end(), you must
+/// pass a pointer to the Window you want to add the data to.
+///
+/// Returns a pointer to internal storage, which will be freed after a frame
+/// where there is no call to any dataGet/dataSet functions for that id/key
+/// combination.
+pub fn dataGetPtrDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: dataGetDefaultType(T)) *T {
+    if (dataGetInternal(win, id, key)) |bytes| {
+        return @as(*T, @alignCast(@ptrCast(bytes.ptr)));
+    } else {
+        dataSetAdvanced(win, id, key, default, false);
+        return dataGetPtr(win, id, key, T).?;
+    }
+}
+
 // returns the backing slice of bytes if we have it
 pub fn dataGetInternal(win: ?*Window, id: u32, key: []const u8) ?[]u8 {
     if (win) |w| {
