@@ -167,7 +167,7 @@ pub fn main() !void {
                 {
                     var hbox = try dvui.box(@src(), .horizontal, .{});
                     defer hbox.deinit();
-                    var buf = dvui.dataGetSliceDefault(null, hbox.wd.id, "data_key", []u8, &(.{0} ** 30));
+                    var buf = dvui.dataGetDefault(null, hbox.wd.id, "data_key", []u8, "hello" ++ [_]u8{0} ** 20);
 
                     var te = try dvui.textEntry(@src(), .{
                         .text = buf,
