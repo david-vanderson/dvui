@@ -1618,37 +1618,6 @@ pub fn dataGet(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
     }
 }
 
-fn dataGetDefaultType(comptime T: type) type {
-    const dt = @typeInfo(T);
-    if (dt == .Pointer and dt.Pointer.size == .Slice) {
-        return []const dt.Pointer.child;
-    } else {
-        return T;
-    }
-}
-
-/// Retrieve value for given key associated with id.  If the value is not
-/// found, store the given default and return it.
-///
-/// Can be called from any thread.
-///
-/// If called from non-GUI thread or outside window.begin()/end(), you must
-/// pass a pointer to the Window you want to add the data to.
-///
-/// If T is a slice, returns slice of internal storage, which will be freed
-/// after a frame where there is no call to any dataGet/dataSet functions for
-/// that id/key combination.
-///
-/// Use dataGetPtr to retrieve a pointer to the internal storage for any type.
-pub fn dataGetDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: dataGetDefaultType(T)) T {
-    if (dataGet(win, id, key, T)) |ret| {
-        return ret;
-    } else {
-        dataSet(win, id, key, default);
-        return dataGet(win, id, key, T).?;
-    }
-}
-
 /// Retrieve a pointer to the value for given key associated with id.
 ///
 /// Can be called from any thread.
@@ -1664,26 +1633,6 @@ pub fn dataGetPtr(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?*T
         return @as(*T, @alignCast(@ptrCast(bytes.ptr)));
     } else {
         return null;
-    }
-}
-
-/// Retrieve value for given key associated with id.  If the value is not
-/// found, store the given default and return a pointer to it.
-///
-/// Can be called from any thread.
-///
-/// If called from non-GUI thread or outside window.begin()/end(), you must
-/// pass a pointer to the Window you want to add the data to.
-///
-/// Returns a pointer to internal storage, which will be freed after a frame
-/// where there is no call to any dataGet/dataSet functions for that id/key
-/// combination.
-pub fn dataGetPtrDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: dataGetDefaultType(T)) *T {
-    if (dataGetInternal(win, id, key)) |bytes| {
-        return @as(*T, @alignCast(@ptrCast(bytes.ptr)));
-    } else {
-        dataSetAdvanced(win, id, key, default, false);
-        return dataGetPtr(win, id, key, T).?;
     }
 }
 

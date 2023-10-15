@@ -167,7 +167,10 @@ pub fn main() !void {
                 {
                     var hbox = try dvui.box(@src(), .horizontal, .{});
                     defer hbox.deinit();
-                    var buf = dvui.dataGetDefault(null, hbox.wd.id, "data_key", []u8, "hello" ++ [_]u8{0} ** 20);
+                    var buf = dvui.dataGet(null, hbox.wd.id, "data_key", []u8) orelse blk: {
+                        dvui.dataSet(null, hbox.wd.id, "data_key", "hello" ++ [_]u8{0} ** 20);
+                        break :blk dvui.dataGet(null, hbox.wd.id, "data_key", []u8).?;
+                    };
 
                     var te = try dvui.textEntry(@src(), .{
                         .text = buf,
