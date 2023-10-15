@@ -132,6 +132,27 @@ fn link_deps(exe: *std.Build.Step.Compile, b: *std.Build) void {
         exe.linkSystemLibrary("oleaut32");
         exe.linkSystemLibrary("ole32");
     } else {
+        if (exe.target.isDarwin()) {
+            exe.linkSystemLibrary("z");
+            exe.linkSystemLibrary("bz2");
+            exe.linkSystemLibrary("iconv");
+            exe.linkFramework("AppKit");
+            exe.linkFramework("AudioToolbox");
+            exe.linkFramework("Carbon");
+            exe.linkFramework("Cocoa");
+            exe.linkFramework("CoreAudio");
+            exe.linkFramework("CoreFoundation");
+            exe.linkFramework("CoreGraphics");
+            exe.linkFramework("CoreHaptics");
+            exe.linkFramework("CoreVideo");
+            exe.linkFramework("ForceFeedback");
+            exe.linkFramework("GameController");
+            exe.linkFramework("IOKit");
+            exe.linkFramework("Metal");
+        }
+
         exe.linkSystemLibrary("SDL2");
+        //exe.addIncludePath(.{.path = "/Users/dvanderson/SDL2-2.24.1/include"});
+        //exe.addObjectFile(.{.path = "/Users/dvanderson/SDL2-2.24.1/build/.libs/libSDL2.a"});
     }
 }
