@@ -1609,7 +1609,11 @@ pub fn dataGet(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
     if (dataGetInternal(win, id, key)) |bytes| {
         const dt = @typeInfo(T);
         if (dt == .Pointer and dt.Pointer.size == .Slice) {
-            return @as([]align(@alignOf(dt.Pointer.child)) dt.Pointer.child, @alignCast(std.mem.bytesAsSlice(dt.Pointer.child, bytes)));
+            if (dt.Pointer.sentinel) |sentinel| {
+                return @as([:@as(*const dt.Pointer.child, @alignCast(@ptrCast(sentinel))).*]align(@alignOf(dt.Pointer.child)) dt.Pointer.child, @alignCast(@ptrCast(std.mem.bytesAsSlice(dt.Pointer.child, bytes[0..bytes.len-@sizeOf(dt.Pointer.child)]))));
+            } else {
+                return @as([]align(@alignOf(dt.Pointer.child)) dt.Pointer.child, @alignCast(std.mem.bytesAsSlice(dt.Pointer.child, bytes)));
+            }
         } else {
             return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
         }
@@ -2809,6 +2813,11 @@ pub const Window = struct {
         var bytes: []const u8 = undefined;
         if (copy_slice) {
             bytes = std.mem.sliceAsBytes(data_in);
+            if (dt.Pointer.size == .Slice and dt.Pointer.sentinel != null) {
+                bytes.len += @sizeOf(dt.Pointer.child);
+            } else if (dt.Pointer.size == .One and @typeInfo(dt.Pointer.child) == .Array and @typeInfo(dt.Pointer.child).Array.sentinel != null) {
+                bytes.len += @sizeOf(@typeInfo(dt.Pointer.child).Array.child);
+            }
         } else {
             bytes = std.mem.asBytes(&data_in);
         }
