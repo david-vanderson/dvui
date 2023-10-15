@@ -379,8 +379,14 @@ pub fn basicWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        var buf = dvui.dataGetDefault(null, hbox.wd.id, "buffer", []u8, &[_]u8{0} ** 30);
-        var filter_buf = dvui.dataGetDefault(null, hbox.wd.id, "filter_buffer", []u8, &[_]u8{0} ** 30);
+        var buf = dvui.dataGet(null, hbox.wd.id, "buffer", []u8) orelse blk: {
+            dvui.dataSet(null, hbox.wd.id, "buffer", &[_]u8{0} ** 30);
+            break :blk dvui.dataGet(null, hbox.wd.id, "buffer", []u8).?;
+        };
+        var filter_buf = dvui.dataGet(null, hbox.wd.id, "filter_buffer", []u8) orelse blk: {
+            dvui.dataSet(null, hbox.wd.id, "filter_buffer", &[_]u8{0} ** 30);
+            break :blk dvui.dataGet(null, hbox.wd.id, "filter_buffer", []u8).?;
+        };
 
         try dvui.label(@src(), "Text Entry Filter", .{}, .{ .gravity_y = 0.5 });
         var te = dvui.TextEntryWidget.init(@src(), .{ .text = buf }, .{ .debug = true });
