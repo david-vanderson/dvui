@@ -1,4 +1,11 @@
 
+when new events come in, we assign the focus id, but probably shouldn't once we see a focus mouse event
+
+need a strategy for activating paste from a menu, because the widget will lose focus when the menu is activated
+- when the menu gets focus, maybe it saves the previous focus id?
+- then when the paste menu item is clicked, it can send focus back to saved id
+  - also need to synthesize an event so that widget processes a paste
+
 floating windows overlapping each other?  Maybe position with offset?
 - option to distinguish between persistant windows and popups?
   - should dialogs center themselves over their parent?

@@ -24,8 +24,6 @@ var slider_val: f32 = 0.0;
 var text_entry_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
-var text_entry_filter_buf = std.mem.zeroes([30]u8);
-var text_entry_filter_out_buf = std.mem.zeroes([30]u8);
 var text_entry_multiline_buf = std.mem.zeroes([500]u8);
 var dropdown_val: usize = 1;
 var show_dialog: bool = false;
@@ -381,14 +379,17 @@ pub fn basicWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
+        var buf = dvui.dataGetDefault(null, hbox.wd.id, "buffer", []u8, &[_]u8{0} ** 30);
+        var filter_buf = dvui.dataGetDefault(null, hbox.wd.id, "filter_buffer", []u8, &[_]u8{0} ** 30);
+
         try dvui.label(@src(), "Text Entry Filter", .{}, .{ .gravity_y = 0.5 });
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_filter_buf }, .{ .debug = true });
+        var te = dvui.TextEntryWidget.init(@src(), .{ .text = buf }, .{ .debug = true });
         try te.install();
         try te.processEvents();
 
         // filter before drawing
-        for (std.mem.sliceTo(&text_entry_filter_out_buf, 0), 0..) |_, i| {
-            te.filterOut(&.{text_entry_filter_out_buf[i]});
+        for (std.mem.sliceTo(filter_buf, 0), 0..) |_, i| {
+            te.filterOut(filter_buf[i..][0..1]);
         }
 
         try te.draw();
@@ -396,7 +397,7 @@ pub fn basicWidgets() !void {
 
         try dvui.label(@src(), "filter", .{}, .{ .gravity_y = 0.5 });
         var te2 = try dvui.textEntry(@src(), .{
-            .text = &text_entry_filter_out_buf,
+            .text = filter_buf,
         }, .{});
         te2.deinit();
     }

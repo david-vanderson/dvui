@@ -1558,23 +1558,35 @@ const DataOffset = struct {
 ///
 /// If called from non-GUI thread or outside window.begin()/end(), you must
 /// pass a pointer to the Window you want to add the data to.
+///
+/// If data is a slice or pointer to array, the contents are copied into
+/// internal storage. Use dataSetAdvanced if you don't want that.
 pub fn dataSet(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
-    dataSetAdvanced(win, id, key, data, false);
+    const dt = @typeInfo(@TypeOf(data));
+    if (dt == .Pointer and (dt.Pointer.size == .Slice or (dt.Pointer.size == .One and @typeInfo(dt.Pointer.child) == .Array))) {
+        dataSetAdvanced(win, id, key, data, true);
+    } else {
+        dataSetAdvanced(win, id, key, data, false);
+    }
 }
 
-// whole slice is copied into internal storage
-pub fn dataSetSlice(win: ?*Window, id: u32, key: []const u8, comptime T: type, data: []const T) void {
-    dataSetAdvanced(win, id, key, data, true);
-}
-
-// data is copied into internal storage
-pub fn dataSetAdvanced(win: ?*Window, id: u32, key: []const u8, data: anytype, comptime slice: bool) void {
+/// Set key/value pair for given id.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside window.begin()/end(), you must
+/// pass a pointer to the Window you want to add the data to.
+///
+/// If copy_slice is true, data must be a slice or pointer to array, and the
+/// contents are copied into internal storage. If false, only the slice itself
+/// (ptr and len) and stored.
+pub fn dataSetAdvanced(win: ?*Window, id: u32, key: []const u8, data: anytype, comptime copy_slice: bool) void {
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
-        w.dataSetAdvanced(id, key, data, slice);
+        w.dataSetAdvanced(id, key, data, copy_slice);
     } else {
         if (current_window) |cw| {
-            cw.dataSetAdvanced(id, key, data, slice);
+            cw.dataSetAdvanced(id, key, data, copy_slice);
         } else {
             @panic("dataSet: current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
         }
@@ -1588,40 +1600,81 @@ pub fn dataSetAdvanced(win: ?*Window, id: u32, key: []const u8, data: anytype, c
 /// If called from non-GUI thread or outside window.begin()/end(), you must
 /// pass a pointer to the Window you want to add the data to.
 ///
-/// If T is a slice, returns slice of internal storage, so need to copy if
-/// keeping the returned slice across frames
+/// If T is a slice, returns slice of internal storage, which will be freed
+/// after a frame where there is no call to any dataGet/dataSet functions for
+/// that id/key combination.
+///
+/// Use dataGetPtr to retrieve a pointer to the internal storage for any type.
 pub fn dataGet(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
-    if (dataGetPtr(win, id, key, T)) |ptr| {
-        return ptr.*;
+    if (dataGetInternal(win, id, key)) |bytes| {
+        const dt = @typeInfo(T);
+        if (dt == .Pointer and dt.Pointer.size == .Slice) {
+            return @as([]align(@alignOf(dt.Pointer.child)) dt.Pointer.child, @alignCast(std.mem.bytesAsSlice(dt.Pointer.child, bytes)));
+        } else {
+            return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
+        }
     } else {
         return null;
     }
 }
 
-pub fn dataGetPtr(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?*T {
-    return dataGetAdvanced(win, id, key, T, false);
-}
-
-pub fn dataGetSlice(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
-    return dataGetAdvanced(win, id, key, T, true);
-}
-
-pub fn dataGetSliceDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: []const @typeInfo(T).Pointer.child) T {
-    if (dataGetSlice(win, id, key, T)) |slice| {
-        return slice;
+fn dataGetDefaultType(comptime T: type) type {
+    const dt = @typeInfo(T);
+    if (dt == .Pointer and dt.Pointer.size == .Slice) {
+        return []const dt.Pointer.child;
     } else {
-        dataSetSlice(win, id, key, @typeInfo(T).Pointer.child, default);
-        return dataGetSlice(win, id, key, T).?;
+        return T;
     }
 }
 
-pub fn dataGetAdvanced(win: ?*Window, id: u32, key: []const u8, comptime T: type, comptime slice: bool) if (slice) ?T else ?*T {
+/// Retrieve value for given key associated with id.  If the value is not
+/// found, store the given default and return it.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside window.begin()/end(), you must
+/// pass a pointer to the Window you want to add the data to.
+///
+/// If T is a slice, returns slice of internal storage, which will be freed
+/// after a frame where there is no call to any dataGet/dataSet functions for
+/// that id/key combination.
+///
+/// Use dataGetPtr to retrieve a pointer to the internal storage for any type.
+pub fn dataGetDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: dataGetDefaultType(T)) T {
+    if (dataGet(win, id, key, T)) |ret| {
+        return ret;
+    } else {
+        dataSet(win, id, key, default);
+        return dataGet(win, id, key, T).?;
+    }
+}
+
+/// Retrieve a pointer to the value for given key associated with id.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside window.begin()/end(), you must
+/// pass a pointer to the Window you want to add the data to.
+///
+/// Returns a pointer to internal storage, which will be freed after a frame
+/// where there is no call to any dataGet/dataSet functions for that id/key
+/// combination.
+pub fn dataGetPtr(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?*T {
+    if (dataGetInternal(win, id, key)) |bytes| {
+        return @as(*T, @alignCast(@ptrCast(bytes.ptr)));
+    } else {
+        return null;
+    }
+}
+
+// returns the backing slice of bytes if we have it
+pub fn dataGetInternal(win: ?*Window, id: u32, key: []const u8) ?[]u8 {
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
-        return w.dataGetAdvanced(id, key, T, slice);
+        return w.dataGetInternal(id, key);
     } else {
         if (current_window) |cw| {
-            return cw.dataGetAdvanced(id, key, T, slice);
+            return cw.dataGetInternal(id, key);
         } else {
             @panic("dataGet: current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
         }
@@ -2780,19 +2833,19 @@ pub const Window = struct {
     }
 
     // data is copied into internal storage
-    pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, comptime slice: bool) void {
+    pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, comptime copy_slice: bool) void {
         const hash = hashIdKey(id, key);
 
         const dt = @typeInfo(@TypeOf(data_in));
-        var byte_slice: []const u8 = undefined;
-        if (slice) {
-            byte_slice = std.mem.sliceAsBytes(data_in);
+        var bytes: []const u8 = undefined;
+        if (copy_slice) {
+            bytes = std.mem.sliceAsBytes(data_in);
         } else {
-            byte_slice = std.mem.asBytes(&data_in);
+            bytes = std.mem.asBytes(&data_in);
         }
 
         const alignment = comptime blk: {
-            if (slice) {
+            if (copy_slice) {
                 break :blk dt.Pointer.alignment;
             } else {
                 break :blk @alignOf(@TypeOf(data_in));
@@ -2803,9 +2856,9 @@ pub const Window = struct {
         defer self.data_mutex.unlock();
 
         if (self.datas.getPtr(hash)) |sd| {
-            if (sd.data.len == byte_slice.len) {
+            if (sd.data.len == bytes.len) {
                 sd.used = true;
-                @memcpy(sd.data, byte_slice);
+                @memcpy(sd.data, bytes);
                 return;
             } else {
                 //std.debug.print("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, key });
@@ -2813,14 +2866,14 @@ pub const Window = struct {
             }
         }
 
-        var sd = SavedData{ .alignment = alignment, .data = self.gpa.allocWithOptions(u8, byte_slice.len, alignment, null) catch |err| switch (err) {
+        var sd = SavedData{ .alignment = alignment, .data = self.gpa.allocWithOptions(u8, bytes.len, alignment, null) catch |err| switch (err) {
             error.OutOfMemory => {
                 std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
                 return;
             },
         } };
 
-        @memcpy(sd.data, byte_slice);
+        @memcpy(sd.data, bytes);
 
         self.datas.put(hash, sd) catch |err| switch (err) {
             error.OutOfMemory => {
@@ -2831,7 +2884,8 @@ pub const Window = struct {
         };
     }
 
-    pub fn dataGetAdvanced(self: *Self, id: u32, key: []const u8, comptime T: type, comptime slice: bool) if (slice) ?T else ?*T {
+    // returns the backing byte slice if we have one
+    pub fn dataGetInternal(self: *Self, id: u32, key: []const u8) ?[]u8 {
         const hash = hashIdKey(id, key);
 
         self.data_mutex.lock();
@@ -2839,16 +2893,7 @@ pub const Window = struct {
 
         if (self.datas.getPtr(hash)) |sd| {
             sd.used = true;
-            const dt = @typeInfo(T);
-            if (slice) {
-                if (dt == .Pointer and dt.Pointer.size == .Slice) {
-                    return sd.data;
-                } else {
-                    @compileError("dataGetAdvanced slice argument was true, but was not passed a slice type");
-                }
-            } else {
-                return @as(*T, @alignCast(@ptrCast(sd.data.ptr)));
-            }
+            return sd.data;
         } else {
             return null;
         }
@@ -3919,8 +3964,8 @@ pub fn dialog(src: std.builtin.SourceLocation, opts: DialogOptions) !void {
     const id_mutex = try dialogAdd(opts.window, src, opts.id_extra, opts.displayFn);
     const id = id_mutex.id;
     dataSet(opts.window, id, "_modal", opts.modal);
-    dataSetSlice(opts.window, id, "_title", u8, opts.title);
-    dataSetSlice(opts.window, id, "_message", u8, opts.message);
+    dataSet(opts.window, id, "_title", opts.title);
+    dataSet(opts.window, id, "_message", opts.message);
     if (opts.callafterFn) |ca| {
         dataSet(opts.window, id, "_callafter", ca);
     }
@@ -3934,13 +3979,13 @@ pub fn dialogDisplay(id: u32) !void {
         return;
     };
 
-    const title = dvui.dataGetSlice(null, id, "_title", []const u8) orelse {
+    const title = dvui.dataGet(null, id, "_title", []const u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
         dvui.dialogRemove(id);
         return;
     };
 
-    const message = dvui.dataGetSlice(null, id, "_message", []const u8) orelse {
+    const message = dvui.dataGet(null, id, "_message", []const u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
         dvui.dialogRemove(id);
         return;
@@ -4078,7 +4123,7 @@ pub const ToastOptions = struct {
 pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) !void {
     const id_mutex = try dvui.toastAdd(opts.window, src, opts.id_extra, opts.subwindow_id, opts.displayFn, opts.timeout);
     const id = id_mutex.id;
-    dvui.dataSetSlice(opts.window, id, "_message", u8, opts.message);
+    dvui.dataSet(opts.window, id, "_message", opts.message);
     id_mutex.mutex.unlock();
 }
 
