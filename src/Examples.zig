@@ -42,8 +42,8 @@ const IconBrowser = struct {
 const AnimatingDialog = struct {
     pub fn dialogDisplay(id: u32) !void {
         const modal = dvui.dataGet(null, id, "_modal", bool) orelse unreachable;
-        const title = dvui.dataGet(null, id, "_title", []const u8) orelse unreachable;
-        const message = dvui.dataGet(null, id, "_message", []const u8) orelse unreachable;
+        const title = dvui.dataGetSlice(null, id, "_title", []const u8) orelse unreachable;
+        const message = dvui.dataGetSlice(null, id, "_message", []const u8) orelse unreachable;
         const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
         // once we record a response, refresh it until we close
@@ -379,13 +379,13 @@ pub fn basicWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        var buf = dvui.dataGet(null, hbox.wd.id, "buffer", []u8) orelse blk: {
-            dvui.dataSet(null, hbox.wd.id, "buffer", &[_]u8{0} ** 30);
-            break :blk dvui.dataGet(null, hbox.wd.id, "buffer", []u8).?;
+        var buf = dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8) orelse blk: {
+            dvui.dataSetSlice(null, hbox.wd.id, "buffer", &[_]u8{0} ** 30);
+            break :blk dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8).?;
         };
-        var filter_buf = dvui.dataGet(null, hbox.wd.id, "filter_buffer", []u8) orelse blk: {
-            dvui.dataSet(null, hbox.wd.id, "filter_buffer", &[_]u8{0} ** 30);
-            break :blk dvui.dataGet(null, hbox.wd.id, "filter_buffer", []u8).?;
+        var filter_buf = dvui.dataGetSlice(null, hbox.wd.id, "filter_buffer", []u8) orelse blk: {
+            dvui.dataSetSlice(null, hbox.wd.id, "filter_buffer", &[_]u8{0} ** 30);
+            break :blk dvui.dataGetSlice(null, hbox.wd.id, "filter_buffer", []u8).?;
         };
 
         try dvui.label(@src(), "Text Entry Filter", .{}, .{ .gravity_y = 0.5 });
