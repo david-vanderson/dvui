@@ -227,6 +227,8 @@ pub fn free(self: *SDLBackend, p: *anyopaque) void {
 
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) void {
     self.arena = arena;
+    const size = self.pixelSize();
+    _ = c.SDL_RenderSetClipRect(self.renderer, &c.SDL_Rect{ .x = 0, .y = 0, .w = @intFromFloat(size.w), .h = @intFromFloat(size.h) });
 }
 
 pub fn end(_: *SDLBackend) void {}
@@ -267,6 +269,13 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui
     //  std.debug.print("  {d} index {d}\n", .{i, id});
     //}
 
+    var oldclip: c.SDL_Rect = undefined;
+    if (sdl3) {
+        _ = c.SDL_GetRenderClipRect(self.renderer, &oldclip);
+    } else {
+        _ = c.SDL_RenderGetClipRect(self.renderer, &oldclip);
+    }
+
     // figure out how much we are losing by truncating x and y, need to add that back to w and h
     const clip = c.SDL_Rect{ .x = @as(c_int, @intFromFloat(clipr.x)), .y = @as(c_int, @intFromFloat(clipr.y)), .w = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x))))), .h = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.h + clipr.y - @floor(clipr.y))))) };
 
@@ -280,6 +289,12 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui
     const tex = @as(?*c.SDL_Texture, @ptrCast(texture));
 
     _ = c.SDL_RenderGeometryRaw(self.renderer, tex, @as(*const f32, @ptrCast(&vtx[0].pos)), @sizeOf(dvui.Vertex), @as(*const c.SDL_Color, @ptrCast(@alignCast(&vtx[0].col))), @sizeOf(dvui.Vertex), @as(*const f32, @ptrCast(&vtx[0].uv)), @sizeOf(dvui.Vertex), @as(c_int, @intCast(vtx.len)), idx.ptr, @as(c_int, @intCast(idx.len)), @sizeOf(u32));
+
+    if (sdl3) {
+        _ = c.SDL_SetRenderClipRect(self.renderer, &oldclip);
+    } else {
+        _ = c.SDL_RenderSetClipRect(self.renderer, &oldclip);
+    }
 }
 
 pub fn textureCreate(self: *SDLBackend, pixels: []u8, width: u32, height: u32) *anyopaque {
