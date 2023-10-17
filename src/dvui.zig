@@ -3911,6 +3911,9 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
 
         if (e.evt == .mouse and e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
             raiseSubwindow(subwindowCurrentId());
+        } else if (e.evt == .mouse and e.evt.mouse.action == .focus) {
+            // our window will already be focused, but this prevents the window from clearing the focused widget
+            e.handled = true;
         }
     }
 

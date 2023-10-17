@@ -2,11 +2,14 @@
 
 textEntry should center text vertically if multiline is false
 
+test raiseSubwindow when all the subwindows have stay_above_parent = true
 
+probably subwindows should be centered on their parent window (not the screen)
+
+if using standalone, should be able to draw using SDL stuff into a widget
+- so base window needs to not delay rendering so you can render ontop of widget backgrounds
 
 file zig pull request for sliceAsBytes/bytesAsSlice to include sentinel
-
-issue:  Window positioning #38
 
 when new events come in, we assign the focus id, but probably shouldn't once we see a focus mouse event
 
@@ -14,13 +17,6 @@ need a strategy for activating paste from a menu, because the widget will lose f
 - when the menu gets focus, maybe it saves the previous focus id?
 - then when the paste menu item is clicked, it can send focus back to saved id
   - also need to synthesize an event so that widget processes a paste
-
-floating windows overlapping each other?  Maybe position with offset?
-- option to distinguish between persistant windows and popups?
-  - should dialogs center themselves over their parent?
-
-make sure that putting corner widgets in a textEntry works
-- or disable it
 
 add raster image support (like icons) using stb_image
 - can we find another zig project using stb_image?
@@ -60,8 +56,6 @@ maybe builtin button should record multiple clicks?
 - helps in low framerate situations
 
 can't debug mouse over spacers?
-
-maybe focusWidget should default to focusing it in the current subwindow?
 
 demo:
 - add uses of animate
