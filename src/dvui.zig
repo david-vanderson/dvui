@@ -358,35 +358,44 @@ pub fn toggleDebugWindow() void {
     cw.debug_window_show = !cw.debug_window_show;
 }
 
-pub fn placeOnScreen(spawner: Rect, start: Rect) Rect {
+pub fn placeOnScreen(screen: Rect, spawner: Rect, start: Rect) Rect {
     var r = start;
-    const wr = windowRect();
-    if ((r.x + r.w) > wr.w) {
+    if ((r.x + r.w) > (screen.x + screen.w)) {
         if (spawner.w == 0) {
-            r.x = wr.w - r.w;
+            // if we were given just point, we can slide just to be on the screen
+            r.x = (screen.x + screen.w) - r.w;
         } else {
+            // if spawner has content, then we want to jump to the other side
             r.x = spawner.x - spawner.w - r.w;
         }
     }
 
-    if (r.x < wr.x) {
-        r.x = wr.x;
+    // if off left, move
+    if (r.x < screen.x) {
+        r.x = screen.x;
     }
 
-    if ((r.x + r.w) > wr.w) {
-        r.w = wr.w - r.x;
+    // if off right, shrink to fit (but not to zero)
+    // - if we went to zero, then a window could get into a state where you can
+    // no longer see it or interact with it (like if you resize the OS window
+    // to zero size and back)
+    if ((r.x + r.w) > (screen.x + screen.w)) {
+        r.w = @max(24, (screen.x + screen.w) - r.x);
     }
 
-    if ((r.y + r.h) > wr.h) {
-        r.y = wr.h - r.h;
+    // if off bottom, first try moving
+    if ((r.y + r.h) > (screen.y + screen.h)) {
+        r.y = (screen.y + screen.h) - r.h;
     }
 
-    if (r.y < wr.y) {
-        r.y = wr.y;
+    // if off top, move
+    if (r.y < screen.y) {
+        r.y = screen.y;
     }
 
-    if ((r.y + r.h) > wr.h) {
-        r.h = wr.h - r.y;
+    // if still off bottom, shrink to fit (but not to zero)
+    if ((r.y + r.h) > (screen.y + screen.h)) {
+        r.h = @max(24, (screen.y + screen.h) - r.y);
     }
 
     return r;
@@ -1698,6 +1707,10 @@ pub fn minSize(id: u32, min_size: Size) Size {
 
 pub fn placeIn(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     var size = min_size;
+
+    // you never get larger than available
+    size.w = @min(size.w, avail.w);
+    size.h = @min(size.h, avail.h);
 
     if (e.horizontal()) {
         size.w = avail.w;
@@ -3318,9 +3331,9 @@ pub const PopupWidget = struct {
             const ms = minSize(self.wd.id, self.options.min_sizeGet());
             self.wd.rect.w = ms.w;
             self.wd.rect.h = ms.h;
-            self.wd.rect = placeOnScreen(self.initialRect, self.wd.rect);
+            self.wd.rect = placeOnScreen(windowRect(), self.initialRect, self.wd.rect);
         } else {
-            self.wd.rect = placeOnScreen(self.initialRect, Rect.fromPoint(self.initialRect.topleft()));
+            self.wd.rect = placeOnScreen(windowRect(), self.initialRect, Rect.fromPoint(self.initialRect.topleft()));
             focusSubwindow(self.wd.id, null);
 
             // need a second frame to fit contents (FocusWindow calls refresh but
@@ -3554,14 +3567,6 @@ pub const FloatingWindowWidget = struct {
                 self.auto_pos = ap;
             } else {
                 self.auto_pos = (self.wd.rect.x == 0 and self.wd.rect.y == 0);
-                if (self.auto_pos and !self.auto_size) {
-                    self.auto_pos = false;
-                    self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .{ .x = 0.5, .y = 0.5 });
-                    if (snapToPixels()) {
-                        self.wd.rect.x = @round(self.wd.rect.x);
-                        self.wd.rect.y = @round(self.wd.rect.y);
-                    }
-                }
             }
         }
 
@@ -3589,6 +3594,16 @@ pub const FloatingWindowWidget = struct {
 
                 //std.debug.print("autopos to {}\n", .{self.wd.rect});
             }
+
+            // always make sure we are on the screen
+            var screen = windowRect();
+            // okay if we are off the left or right but still see some
+            const offleft = self.wd.rect.w - 48;
+            screen.x -= offleft;
+            screen.w += offleft + offleft;
+            // okey if we are off the bottom but still see the top
+            screen.h += self.wd.rect.h - 24;
+            self.wd.rect = placeOnScreen(screen, .{}, self.wd.rect);
         }
 
         return self;
