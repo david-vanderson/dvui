@@ -4700,7 +4700,11 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     const cw = currentWindow();
     var ret = try cw.arena.create(TextLayoutWidget);
     ret.* = TextLayoutWidget.init(src, init_opts, opts);
-    try ret.install(.{});
+    try ret.install();
+    // can install corner widgets here
+    //_ = try dvui.button(@src(), "upright", .{ .gravity_x = 1.0 });
+    ret.processEvents();
+    // now call addText() any number of times
     return ret;
 }
 
@@ -4806,7 +4810,7 @@ pub const TextLayoutWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
+    pub fn install(self: *Self) !void {
         try self.wd.register("TextLayout", null);
         _ = parentSet(self.widget());
 
@@ -4841,10 +4845,6 @@ pub const TextLayoutWidget = struct {
             if (dataGet(null, self.wd.id, "_cursor_updown_drag", bool)) |cud| {
                 self.cursor_updown_drag = cud;
             }
-        }
-
-        if (opts.process_events) {
-            self.processEvents();
         }
 
         const rs = self.wd.contentRectScale();
@@ -5381,10 +5381,15 @@ pub const TextLayoutWidget = struct {
         }
     }
 
+    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
+        return .{ .id = self.data().id, .r = self.data().borderRectScale().r };
+    }
+
     pub fn processEvents(self: *Self) void {
+        const emo = self.eventMatchOptions();
         var evts = events();
         for (evts) |*e| {
-            if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
+            if (!eventMatch(e, emo))
                 continue;
 
             self.processEvent(e, false);
@@ -5509,10 +5514,6 @@ pub const TextLayoutWidget = struct {
             dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
         }
         clipSet(self.prevClip);
-
-        // calculate min size based on text and corners
-        // self.wd.min_size already has the size based on the text, and the
-        // text starts to the right of the widgets on the left
 
         // check if the widgets are taller than the text
         const left_height = (self.corners_min_size[0] orelse Size{}).h + (self.corners_min_size[2] orelse Size{}).h;
@@ -7982,8 +7983,10 @@ pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Ini
     var ret = try cw.arena.create(TextEntryWidget);
     ret.* = TextEntryWidget.init(src, init_opts, opts);
     try ret.install();
-    try ret.processEvents();
-    try ret.draw();
+    // can install corner widgets here
+    //_ = try dvui.button(@src(), "upright", .{ .gravity_x = 1.0 });
+    ret.processEvents();
+    try ret.drawText();
     return ret;
 }
 
@@ -8073,7 +8076,9 @@ pub const TextEntryWidget = struct {
             layout_expand = layout_expand.removeHorizontal();
         }
         self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines }, self.wd.options.strip().override(.{ .expand = layout_expand, .padding = self.padding, .min_size_content = self.scroll.scroll.wd.contentRect().inset(self.padding).size() }));
-        try self.textLayout.install(.{ .process_events = false });
+        try self.textLayout.install();
+
+        // don't call textLayout.processEvents here, we forward events inside our own processEvents
 
         // textLayout is maintaining the selection for us, but if the text
         // changed, we need to update the selection to be valid before we
@@ -8091,7 +8096,7 @@ pub const TextEntryWidget = struct {
         return .{ .id = self.wd.id, .r = self.wd.borderRectScale().r, .id_capture = self.textLayout.data().id };
     }
 
-    pub fn processEvents(self: *Self) !void {
+    pub fn processEvents(self: *Self) void {
         const emo = self.eventMatchOptions();
         var evts = events();
         for (evts) |*e| {
@@ -8102,7 +8107,7 @@ pub const TextEntryWidget = struct {
         }
     }
 
-    pub fn draw(self: *Self) !void {
+    pub fn drawText(self: *Self) !void {
         const focused = (self.wd.id == focusedWidgetId());
 
         // set clip back to what textLayout expects

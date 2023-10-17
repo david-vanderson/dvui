@@ -168,14 +168,39 @@ pub fn main() !void {
                     var hbox = try dvui.box(@src(), .horizontal, .{});
                     defer hbox.deinit();
                     var buf = dvui.dataGetSlice(null, hbox.wd.id, "data_key", []u8) orelse blk: {
-                        dvui.dataSetSlice(null, hbox.wd.id, "data_key", "hello" ++ [_]u8{0} ** 20);
+                        dvui.dataSetSlice(null, hbox.wd.id, "data_key", "hello\n" ** 10);
                         break :blk dvui.dataGetSlice(null, hbox.wd.id, "data_key", []u8).?;
                     };
 
-                    var te = try dvui.textEntry(@src(), .{
+                    //var te = try dvui.textEntry(@src(), .{
+                    var te = dvui.TextEntryWidget.init(@src(), .{
                         .text = buf,
+                        .multiline = true,
+                        .scroll_vertical = false,
+                        .scroll_horizontal = false,
                     }, .{});
+                    try te.install();
+                    _ = try dvui.button(@src(), "upleft", .{});
+                    _ = try dvui.button(@src(), "upright", .{ .gravity_x = 1.0 });
+                    _ = try dvui.button(@src(), "downleft", .{ .gravity_y = 1.0 });
+                    _ = try dvui.button(@src(), "downright", .{ .gravity_x = 1.0, .gravity_y = 1.0 });
+                    te.processEvents();
+                    try te.drawText();
                     te.deinit();
+
+                    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{});
+                    try tl.install();
+
+                    _ = try dvui.button(@src(), "upleft", .{});
+                    _ = try dvui.button(@src(), "upright", .{ .gravity_x = 1.0 });
+                    _ = try dvui.button(@src(), "downleft", .{ .gravity_y = 1.0 });
+                    _ = try dvui.button(@src(), "downright", .{ .gravity_x = 1.0, .gravity_y = 1.0 });
+
+                    tl.processEvents();
+
+                    try tl.addText(std.mem.sliceTo(buf, 0), .{});
+
+                    tl.deinit();
                 }
 
                 {
@@ -295,7 +320,7 @@ pub fn main() !void {
                     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both });
                     defer scroll.deinit();
                     var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
-                    try tl.install(.{ .process_events = false });
+                    try tl.install();
                     {
                         if (try dvui.button(@src(), "Win Up .1", .{})) {
                             fwin.wd.rect.y -= 0.1;
