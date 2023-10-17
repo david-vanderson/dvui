@@ -3515,6 +3515,13 @@ pub const FloatingWindowWidget = struct {
         rect: ?*Rect = null,
         open_flag: ?*bool = null,
         stay_above_parent: bool = false,
+        window_avoid: enum {
+            none,
+
+            // if we would spawn at the same position as an existing window,
+            // move us downright a bit
+            nudge,
+        } = .none,
     };
 
     wd: WidgetData = undefined,
@@ -3590,6 +3597,17 @@ pub const FloatingWindowWidget = struct {
                 if (snapToPixels()) {
                     self.wd.rect.x = @round(self.wd.rect.x);
                     self.wd.rect.y = @round(self.wd.rect.y);
+                }
+
+                if (self.init_options.window_avoid == .nudge) {
+                    const cw = currentWindow();
+                    // don't check against subwindows[0] - that's that main window
+                    for (cw.subwindows.items[1..]) |subw| {
+                        if (subw.rect.topleft().equals(self.wd.rect.topleft())) {
+                            self.wd.rect.x += 24;
+                            self.wd.rect.y += 24;
+                        }
+                    }
                 }
 
                 //std.debug.print("autopos to {}\n", .{self.wd.rect});
