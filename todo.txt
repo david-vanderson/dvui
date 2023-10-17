@@ -1,11 +1,5 @@
 
 
-update dvui-demo repo
-
-
-textEntry is setting the min_size of the textLayout, which prevents it from shrinking
-- only when scrolling is off?
-
 textEntry should center text vertically if multiline is false
 
 

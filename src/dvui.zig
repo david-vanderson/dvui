@@ -63,24 +63,6 @@ pub const Options = struct {
         pub fn vertical(self: Expand) bool {
             return (self == .vertical or self == .both);
         }
-
-        pub fn removeHorizontal(self: Expand) Expand {
-            return switch (self) {
-                .none => .none,
-                .horizontal => .none,
-                .vertical => .vertical,
-                .both => .vertical,
-            };
-        }
-
-        pub fn removeVertical(self: Expand) Expand {
-            return switch (self) {
-                .none => .none,
-                .horizontal => .horizontal,
-                .vertical => .none,
-                .both => .horizontal,
-            };
-        }
     };
 
     pub const Gravity = struct {
@@ -6285,26 +6267,6 @@ pub const ScrollContainerWidget = struct {
         var expand = e;
         const y = self.next_widget_ypos;
         const h = self.si.virtual_size.h - y;
-        switch (self.si.horizontal) {
-            .none => {},
-            .auto => {
-                if (expand.horizontal()) {
-                    std.debug.print("dvui: scroll child {x} trying to expand .horizontal but scroll container is .auto horizontally\n", .{id});
-                    expand = expand.removeHorizontal();
-                }
-            },
-            .given => {},
-        }
-        switch (self.si.vertical) {
-            .none => {},
-            .auto => {
-                if (expand.vertical()) {
-                    std.debug.print("dvui: scroll child {x} trying to expand .vertical but scroll container is .auto vertically\n", .{id});
-                    expand = expand.removeVertical();
-                }
-            },
-            .given => {},
-        }
         const rect = Rect{ .x = 0, .y = y, .w = self.si.virtual_size.w, .h = h };
         const ret = placeIn(rect, minSize(id, min_size), expand, g);
         self.next_widget_ypos = (ret.y + ret.h);
@@ -6561,20 +6523,27 @@ pub const ScrollContainerWidget = struct {
 
         clipSet(self.prevClip);
 
+        const crect = self.wd.contentRect();
         switch (self.si.horizontal) {
             .none => {},
-            .auto => if (self.nextVirtualSize.w != self.si.virtual_size.w) {
-                self.si.virtual_size.w = self.nextVirtualSize.w;
-                refresh();
+            .auto => {
+                self.nextVirtualSize.w = @max(self.nextVirtualSize.w, crect.w);
+                if (self.nextVirtualSize.w != self.si.virtual_size.w) {
+                    self.si.virtual_size.w = self.nextVirtualSize.w;
+                    refresh();
+                }
             },
             .given => {},
         }
 
         switch (self.si.vertical) {
             .none => {},
-            .auto => if (self.nextVirtualSize.h != self.si.virtual_size.h) {
-                self.si.virtual_size.h = self.nextVirtualSize.h;
-                refresh();
+            .auto => {
+                self.nextVirtualSize.h = @max(self.nextVirtualSize.h, crect.h);
+                if (self.nextVirtualSize.h != self.si.virtual_size.h) {
+                    self.si.virtual_size.h = self.nextVirtualSize.h;
+                    refresh();
+                }
             },
             .given => {},
         }
@@ -7999,6 +7968,7 @@ pub const TextEntryWidget = struct {
         .padding = Rect.all(4),
         .background = true,
         .color_style = .content,
+        // min_size_content is calculated in init()
     };
 
     pub const InitOptions = struct {
@@ -8018,6 +7988,7 @@ pub const TextEntryWidget = struct {
     prevClip: Rect = undefined,
     scroll: ScrollAreaWidget = undefined,
     textLayout: TextLayoutWidget = undefined,
+    textClip: Rect = undefined,
     padding: Rect = undefined,
 
     init_opts: InitOptions = undefined,
@@ -8068,15 +8039,9 @@ pub const TextEntryWidget = struct {
         // scrollbars process mouse events here
         try self.scroll.install(.{ .focus_id = self.wd.id });
 
-        var layout_expand: Options.Expand = .both;
-        if (self.scroll.init_opts.vertical == .auto) {
-            layout_expand = layout_expand.removeVertical();
-        }
-        if (self.scroll.init_opts.horizontal == .auto) {
-            layout_expand = layout_expand.removeHorizontal();
-        }
-        self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines }, self.wd.options.strip().override(.{ .expand = layout_expand, .padding = self.padding, .min_size_content = self.scroll.scroll.wd.contentRect().inset(self.padding).size() }));
+        self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding, .min_size_content = .{} }));
         try self.textLayout.install();
+        self.textClip = clipGet();
 
         // don't call textLayout.processEvents here, we forward events inside our own processEvents
 
@@ -8110,8 +8075,8 @@ pub const TextEntryWidget = struct {
     pub fn drawText(self: *Self) !void {
         const focused = (self.wd.id == focusedWidgetId());
 
-        // set clip back to what textLayout expects
-        clipSet(self.data().contentRectScale().r);
+        // set clip back to what textLayout had, so we don't draw over the scrollbars
+        clipSet(self.textClip);
 
         if (self.init_opts.password_char) |pc| {
             // adjust selection for obfuscation
