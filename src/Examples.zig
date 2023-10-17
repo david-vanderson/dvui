@@ -336,7 +336,7 @@ pub fn basicWidgets() !void {
             }
         }
 
-        try te.draw();
+        try te.drawText();
         te.deinit();
 
         if (enter_pressed) {
@@ -391,14 +391,14 @@ pub fn basicWidgets() !void {
         try dvui.label(@src(), "Text Entry Filter", .{}, .{ .gravity_y = 0.5 });
         var te = dvui.TextEntryWidget.init(@src(), .{ .text = buf }, .{ .debug = true });
         try te.install();
-        try te.processEvents();
+        te.processEvents();
 
         // filter before drawing
         for (std.mem.sliceTo(filter_buf, 0), 0..) |_, i| {
             te.filterOut(filter_buf[i..][0..1]);
         }
 
-        try te.draw();
+        try te.drawText();
         te.deinit();
 
         try dvui.label(@src(), "filter", .{}, .{ .gravity_y = 0.5 });
@@ -586,7 +586,7 @@ pub fn layoutText() !void {
 
     {
         var tl = TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
-        try tl.install(.{ .process_events = false });
+        try tl.install();
         defer tl.deinit();
 
         var cbox = try dvui.box(@src(), .vertical, .{ .padding = .{ .w = 4 } });

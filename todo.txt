@@ -3,9 +3,8 @@
 update dvui-demo repo
 
 
-discussion: button in text entry #37
-- sizing of textLayout needs to separately track corner widgets and text?  And then max them?
-- convert install() to processEvents() like textEntry
+textEntry is setting the min_size of the textLayout, which prevents it from shrinking
+- only when scrolling is off?
 
 textEntry should center text vertically if multiline is false
 
