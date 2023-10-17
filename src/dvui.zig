@@ -1659,7 +1659,7 @@ pub fn dataGetSlice(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?
 
     if (dataGetInternal(win, id, key)) |bytes| {
         if (dt.Pointer.sentinel) |sentinel| {
-            return @as([:@as(*const dt.Pointer.child, @alignCast(@ptrCast(sentinel))).*]align(@alignOf(dt.Pointer.child)) dt.Pointer.child, @alignCast(@ptrCast(std.mem.bytesAsSlice(dt.Pointer.child, bytes[0..bytes.len-@sizeOf(dt.Pointer.child)]))));
+            return @as([:@as(*const dt.Pointer.child, @alignCast(@ptrCast(sentinel))).*]align(@alignOf(dt.Pointer.child)) dt.Pointer.child, @alignCast(@ptrCast(std.mem.bytesAsSlice(dt.Pointer.child, bytes[0 .. bytes.len - @sizeOf(dt.Pointer.child)]))));
         } else {
             return @as([]align(@alignOf(dt.Pointer.child)) dt.Pointer.child, @alignCast(std.mem.bytesAsSlice(dt.Pointer.child, bytes)));
         }
