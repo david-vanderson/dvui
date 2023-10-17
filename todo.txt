@@ -1,9 +1,19 @@
 
+
+update dvui-demo repo
+
+
+discussion: button in text entry #37
+- sizing of textLayout needs to separately track corner widgets and text?  And then max them?
+- convert install() to processEvents() like textEntry
+
+textEntry should center text vertically if multiline is false
+
+
+
 file zig pull request for sliceAsBytes/bytesAsSlice to include sentinel
 
 issue:  Window positioning #38
-
-discussion: button in text entry #37
 
 when new events come in, we assign the focus id, but probably shouldn't once we see a focus mouse event
 

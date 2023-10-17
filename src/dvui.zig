@@ -4769,6 +4769,8 @@ pub const TextLayoutWidget = struct {
 
     wd: WidgetData = undefined,
     corners: [4]?Rect = [_]?Rect{null} ** 4,
+    corners_min_size: [4]?Size = [_]?Size{null} ** 4,
+    corners_last_seen: ?u8 = null,
     insert_pt: Point = Point{},
     prevClip: Rect = Rect{},
     first_line: bool = true,
@@ -4885,18 +4887,26 @@ pub const TextLayoutWidget = struct {
             var linestart: f32 = 0;
             var linewidth = container_width;
             var width = linewidth - self.insert_pt.x;
-            for (self.corners) |corner| {
+            var width_after: f32 = 0;
+            for (self.corners, 0..) |corner, i| {
                 if (corner) |cor| {
                     if (@max(cor.y, self.insert_pt.y) < @min(cor.y + cor.h, self.insert_pt.y + line_height)) {
                         linewidth -= cor.w;
                         if (linestart == cor.x) {
+                            // used below - if we moved over for a widget, we
+                            // can drop to the next line expecting more room
+                            // later
                             linestart = (cor.x + cor.w);
                         }
 
                         if (self.insert_pt.x <= (cor.x + cor.w)) {
                             width -= cor.w;
                             if (self.insert_pt.x >= cor.x) {
+                                // widget on left side, skip over it
                                 self.insert_pt.x = (cor.x + cor.w);
+                            } else {
+                                // widget on right side, need to add width to min_size below
+                                width_after = self.corners_min_size[i].?.w;
                             }
                         }
                     }
@@ -5201,11 +5211,11 @@ pub const TextLayoutWidget = struct {
             // like we did because our parent might size based on that (might be in a
             // scroll area)
             self.insert_pt.x += s.w;
-            const size = Size{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h };
+            const size = self.wd.padSize(.{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h });
             if (!self.break_lines) {
-                self.wd.min_size.w = @max(self.wd.min_size.w, self.wd.padSize(size).w);
+                self.wd.min_size.w = @max(self.wd.min_size.w, size.w + width_after);
             }
-            self.wd.min_size.h = @max(self.wd.min_size.h, self.wd.padSize(size).h);
+            self.wd.min_size.h = @max(self.wd.min_size.h, size.h);
 
             if (self.copy_sel) |sel| {
                 // we are copying to clipboard
@@ -5243,11 +5253,11 @@ pub const TextLayoutWidget = struct {
                 self.insert_pt.y += line_height;
                 self.insert_pt.x = 0;
                 if (newline) {
-                    const newline_size = Size{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h };
+                    const newline_size = self.wd.padSize(.{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h });
                     if (!self.break_lines) {
-                        self.wd.min_size.w = @max(self.wd.min_size.w, self.wd.padSize(newline_size).w);
+                        self.wd.min_size.w = @max(self.wd.min_size.w, newline_size.w);
                     }
-                    self.wd.min_size.h = @max(self.wd.min_size.h, self.wd.padSize(newline_size).h);
+                    self.wd.min_size.h = @max(self.wd.min_size.h, newline_size.h);
                 }
             }
 
@@ -5344,6 +5354,7 @@ pub const TextLayoutWidget = struct {
         }
 
         self.corners[i] = ret;
+        self.corners_last_seen = @intCast(i);
         return ret;
     }
 
@@ -5352,9 +5363,10 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn minSizeForChild(self: *Self, s: Size) void {
-        const padded = self.wd.padSize(s);
-        self.wd.min_size.w = @max(self.wd.min_size.w, padded.w);
-        self.wd.min_size.h += padded.h;
+        if (self.corners_last_seen) |ls| {
+            self.corners_min_size[ls] = s;
+        }
+        // we calculate our min size in deinit() after we have seen our text
     }
 
     pub fn selectionGet(self: *Self, opts: struct { check_updown: bool = true }) ?*Selection {
@@ -5497,6 +5509,16 @@ pub const TextLayoutWidget = struct {
             dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
         }
         clipSet(self.prevClip);
+
+        // calculate min size based on text and corners
+        // self.wd.min_size already has the size based on the text, and the
+        // text starts to the right of the widgets on the left
+
+        // check if the widgets are taller than the text
+        const left_height = (self.corners_min_size[0] orelse Size{}).h + (self.corners_min_size[2] orelse Size{}).h;
+        const right_height = (self.corners_min_size[1] orelse Size{}).h + (self.corners_min_size[3] orelse Size{}).h;
+        self.wd.min_size.h = @max(self.wd.min_size.h, self.wd.padSize(.{ .h = @max(left_height, right_height) }).h);
+
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
@@ -7959,7 +7981,6 @@ pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Ini
     const cw = currentWindow();
     var ret = try cw.arena.create(TextEntryWidget);
     ret.* = TextEntryWidget.init(src, init_opts, opts);
-    ret.allocator = cw.arena;
     try ret.install();
     try ret.processEvents();
     try ret.draw();
@@ -7996,7 +8017,6 @@ pub const TextEntryWidget = struct {
     textLayout: TextLayoutWidget = undefined,
     padding: Rect = undefined,
 
-    allocator: ?std.mem.Allocator = null,
     init_opts: InitOptions = undefined,
     len: usize = undefined,
     scroll_to_cursor: bool = false,
@@ -8477,10 +8497,6 @@ pub const TextEntryWidget = struct {
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = parentSet(self.wd.parent);
-
-        if (self.allocator) |a| {
-            a.destroy(self);
-        }
     }
 };
 
