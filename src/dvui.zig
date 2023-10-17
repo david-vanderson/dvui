@@ -807,12 +807,14 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
     return;
 }
 
-// Focus a widget in the focused subwindow.  If you need to focus a widget in
-// an arbitrary subwindow, focus the subwindow first.
-pub fn focusWidget(id: ?u32, event_num: ?u16) void {
+// Focus a widget in the given subwindow (if null, the current subwindow).  If
+// you are focusing in the context of processing events, you can pass the
+// event_num so that remaining events get the new focus.
+pub fn focusWidget(id: ?u32, subwindow_id: ?u32, event_num: ?u16) void {
     const cw = currentWindow();
+    const swid = subwindow_id orelse subwindowCurrentId();
     for (cw.subwindows.items) |*sw| {
-        if (cw.focused_subwindowId == sw.id) {
+        if (swid == sw.id) {
             if (sw.focused_widgetId != id) {
                 sw.focused_widgetId = id;
                 if (event_num) |en| {
@@ -1939,7 +1941,7 @@ pub fn tabIndexNext(event_num: ?u16) void {
         }
     }
 
-    focusWidget(newId, event_num);
+    focusWidget(newId, null, event_num);
 }
 
 pub fn tabIndexPrev(event_num: ?u16) void {
@@ -1980,7 +1982,7 @@ pub fn tabIndexPrev(event_num: ?u16) void {
         }
     }
 
-    focusWidget(newId, event_num);
+    focusWidget(newId, null, event_num);
 }
 
 // maps to OS window
@@ -3159,7 +3161,7 @@ pub const Window = struct {
             if (e.evt == .mouse) {
                 if (e.evt.mouse.action == .focus) {
                     // unhandled click, clear focus
-                    focusWidget(null, null);
+                    focusWidget(null, null, null);
                 }
             } else if (e.evt == .key) {
                 if (e.evt.key.code == .tab and e.evt.key.action == .down) {
@@ -3365,10 +3367,7 @@ pub const PopupWidget = struct {
 
         // if no widget in this popup has focus, make the menu have focus to handle keyboard events
         if (focusedWidgetIdInCurrentSubwindow() == null) {
-            const focused_winId = focusedSubwindowId();
-            focusSubwindow(self.wd.id, null);
-            focusWidget(self.menu.wd.id, null);
-            focusSubwindow(focused_winId, null);
+            focusWidget(self.menu.wd.id, null, null);
         }
     }
 
@@ -3450,7 +3449,7 @@ pub const PopupWidget = struct {
             if (e.evt == .mouse) {
                 if (e.evt.mouse.action == .focus) {
                     // unhandled click, clear focus
-                    focusWidget(null, null);
+                    focusWidget(null, null, null);
                 }
             } else if (e.evt == .key) {
                 // catch any tabs that weren't handled by widgets
@@ -3762,7 +3761,7 @@ pub const FloatingWindowWidget = struct {
                     switch (me.action) {
                         .focus => {
                             e.handled = true;
-                            focusWidget(null, null);
+                            focusWidget(null, null, null);
                         },
                         .press => {
                             if (me.button.pointer()) {
@@ -4357,7 +4356,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
         for (entries, 0..) |_, i| {
             var mi = try menuItem(@src(), .{}, .{ .id_extra = i });
             if (first_frame and (i == choice.*)) {
-                focusWidget(mi.wd.id, null);
+                focusWidget(mi.wd.id, null, null);
             }
             defer mi.deinit();
 
@@ -5417,7 +5416,7 @@ pub const TextLayoutWidget = struct {
             if (e.evt.mouse.action == .focus) {
                 e.handled = true;
                 // focus so that we can receive keyboard input
-                focusWidget(self.wd.id, e.num);
+                focusWidget(self.wd.id, null, e.num);
             } else if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
                 e.handled = true;
                 // capture and start drag
@@ -5614,10 +5613,8 @@ pub const ContextWidget = struct {
         switch (e.evt) {
             .close_popup => {
                 if (self.focused) {
-                    const focused_winId = focusedSubwindowId();
-                    focusSubwindow(self.winId, null);
-                    focusWidget(null, null);
-                    focusSubwindow(focused_winId, null);
+                    // we are getting a bubbled event, so the window we are in is not the current one
+                    focusWidget(null, self.winId, null);
                 }
             },
             else => {},
@@ -5645,8 +5642,8 @@ pub const ContextWidget = struct {
                         e.handled = true;
                     } else if (me.action == .press and me.button == .right) {
                         e.handled = true;
-                        focusSubwindow(null, null); // focuses the window we are in
-                        focusWidget(self.wd.id, e.num);
+
+                        focusWidget(self.wd.id, null, e.num);
                         self.focused = true;
 
                         // scale the point back to natural so we can use it in Popup
@@ -6472,7 +6469,7 @@ pub const ScrollContainerWidget = struct {
                     if (me.action == .focus) {
                         e.handled = true;
                         // focus so that we can receive keyboard input
-                        focusWidget(self.wd.id, e.num);
+                        focusWidget(self.wd.id, null, e.num);
                     } else if (me.action == .wheel_y) {
                         // scroll vertically if we can, otherwise try horizontal
                         if (self.si.vertical != .none) {
@@ -6673,7 +6670,7 @@ pub const ScrollBarWidget = struct {
                         .focus => {
                             if (self.focus_id) |fid| {
                                 e.handled = true;
-                                focusWidget(fid, e.num);
+                                focusWidget(fid, null, e.num);
                             }
                         },
                         .press => {
@@ -7237,7 +7234,7 @@ pub const MenuItemWidget = struct {
         if (focused and menuGet().?.mouse_over and !self.mouse_over) {
             // our menu got a mouse over but we didn't even though we were focused
             focused = false;
-            focusWidget(null, null);
+            focusWidget(null, null, null);
         }
 
         if (focused or ((self.wd.id == focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {
@@ -7319,8 +7316,7 @@ pub const MenuItemWidget = struct {
             .mouse => |me| {
                 if (me.action == .focus) {
                     e.handled = true;
-                    focusSubwindow(null, null); // focuses the window we are in
-                    focusWidget(self.wd.id, e.num);
+                    focusWidget(self.wd.id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     // this is how dropdowns are triggered
                     e.handled = true;
@@ -7347,7 +7343,7 @@ pub const MenuItemWidget = struct {
                             // we shouldn't have gotten this event if the motion
                             // was towards a submenu (caught in MenuWidget)
                             focusSubwindow(null, null); // focuses the window we are in
-                            focusWidget(self.wd.id, null);
+                            focusWidget(self.wd.id, null, null);
 
                             if (self.init_opts.submenu) {
                                 menuGet().?.submenus_in_child = true;
@@ -7644,7 +7640,7 @@ pub const ButtonWidget = struct {
             .mouse => |me| {
                 if (me.action == .focus) {
                     e.handled = true;
-                    focusWidget(self.wd.id, e.num);
+                    focusWidget(self.wd.id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
                     captureMouse(self.wd.id);
@@ -7762,7 +7758,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: dvui.Direction, percent: *f3
                 var p: ?Point = null;
                 if (me.action == .focus) {
                     e.handled = true;
-                    focusWidget(b.data().id, e.num);
+                    focusWidget(b.data().id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     // capture
                     captureMouse(b.data().id);
@@ -8480,7 +8476,7 @@ pub const TextEntryWidget = struct {
             .mouse => |me| {
                 if (me.action == .focus) {
                     e.handled = true;
-                    focusWidget(self.wd.id, e.num);
+                    focusWidget(self.wd.id, null, e.num);
                 }
             },
             else => {},
