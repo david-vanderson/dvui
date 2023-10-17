@@ -8019,6 +8019,7 @@ pub const TextEntryWidget = struct {
     wd: WidgetData = undefined,
     prevClip: Rect = undefined,
     scroll: ScrollAreaWidget = undefined,
+    scrollClip: Rect = undefined,
     textLayout: TextLayoutWidget = undefined,
     textClip: Rect = undefined,
     padding: Rect = undefined,
@@ -8070,6 +8071,8 @@ pub const TextEntryWidget = struct {
         }, self.wd.options.strip().override(.{ .expand = .both }));
         // scrollbars process mouse events here
         try self.scroll.install(.{ .focus_id = self.wd.id });
+
+        self.scrollClip = clipGet();
 
         self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding, .min_size_content = .{} }));
         try self.textLayout.install();
@@ -8173,6 +8176,9 @@ pub const TextEntryWidget = struct {
 
         if (focused) {
             if (self.textLayout.cursor_rect) |cr| {
+                // the cursor can be slightly outside the textLayout clip
+                clipSet(self.scrollClip);
+
                 var crect = cr.add(.{ .x = -1 });
                 crect.w = 2;
                 try pathAddRect(self.textLayout.screenRectScale(crect).r, Rect.all(0));
