@@ -336,7 +336,7 @@ pub fn basicWidgets() !void {
             }
         }
 
-        try te.drawText();
+        try te.draw();
         te.deinit();
 
         if (enter_pressed) {
@@ -398,7 +398,7 @@ pub fn basicWidgets() !void {
             te.filterOut(filter_buf[i..][0..1]);
         }
 
-        try te.drawText();
+        try te.draw();
         te.deinit();
 
         try dvui.label(@src(), "filter", .{}, .{ .gravity_y = 0.5 });
