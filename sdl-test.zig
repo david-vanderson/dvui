@@ -185,7 +185,7 @@ pub fn main() !void {
                     _ = try dvui.button(@src(), "downleft", .{ .gravity_y = 1.0 });
                     _ = try dvui.button(@src(), "downright", .{ .gravity_x = 1.0, .gravity_y = 1.0 });
                     te.processEvents();
-                    try te.drawText();
+                    try te.draw();
                     te.deinit();
 
                     var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{});

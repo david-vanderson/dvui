@@ -7987,7 +7987,7 @@ pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Ini
     // can install corner widgets here
     //_ = try dvui.button(@src(), "upright", .{ .gravity_x = 1.0 });
     ret.processEvents();
-    try ret.drawText();
+    try ret.draw();
     return ret;
 }
 
@@ -8107,7 +8107,7 @@ pub const TextEntryWidget = struct {
         }
     }
 
-    pub fn drawText(self: *Self) !void {
+    pub fn draw(self: *Self) !void {
         const focused = (self.wd.id == focusedWidgetId());
 
         // set clip back to what textLayout had, so we don't draw over the scrollbars
