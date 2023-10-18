@@ -3601,10 +3601,17 @@ pub const FloatingWindowWidget = struct {
                 if (self.init_options.window_avoid == .nudge) {
                     const cw = currentWindow();
                     // don't check against subwindows[0] - that's that main window
-                    for (cw.subwindows.items[1..]) |subw| {
-                        if (subw.rect.topleft().equals(self.wd.rect.topleft())) {
-                            self.wd.rect.x += 24;
-                            self.wd.rect.y += 24;
+
+                    // we might nudge onto another window, so have to keep checking until we don't
+                    var nudge = true;
+                    while (nudge) {
+                        nudge = false;
+                        for (cw.subwindows.items[1..]) |subw| {
+                            if (subw.rect.topleft().equals(self.wd.rect.topleft())) {
+                                self.wd.rect.x += 24;
+                                self.wd.rect.y += 24;
+                                nudge = true;
+                            }
                         }
                     }
                 }
