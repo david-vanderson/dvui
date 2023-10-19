@@ -3592,10 +3592,27 @@ pub const FloatingWindowWidget = struct {
                 // only position ourselves once by default
                 self.auto_pos = false;
 
-                self.wd.rect = placeIn(windowRect(), self.wd.rect.size(), .none, .{ .x = 0.5, .y = 0.5 });
+                var prev_focus = windowRect();
+                var prev_top = prev_focus;
+                if (dataGet(null, self.wd.id, "_prev_focus_rect", Rect)) |r| {
+                    prev_focus = r;
+                    dataRemove(null, self.wd.id, "_prev_focus_rect");
+                    if (dataGet(null, self.wd.id, "_prev_top_rect", Rect)) |rtop| {
+                        prev_top = rtop;
+                        dataRemove(null, self.wd.id, "_prev_top_rect");
+                    }
+                }
+
+                self.wd.rect = placeIn(prev_focus, self.wd.rect.size(), .none, .{ .x = 0.5, .y = 0.5 });
                 if (snapToPixels()) {
                     self.wd.rect.x = @round(self.wd.rect.x);
                     self.wd.rect.y = @round(self.wd.rect.y);
+                }
+
+                while (self.wd.rect.topleft().equals(prev_focus.topleft()) or self.wd.rect.topleft().equals(prev_top.topleft())) {
+                    // if we ended up directly on top, nudge downright a bit
+                    self.wd.rect.x += 24;
+                    self.wd.rect.y += 24;
                 }
 
                 if (self.init_options.window_avoid == .nudge) {
@@ -3643,6 +3660,15 @@ pub const FloatingWindowWidget = struct {
                 // send rect back to user
                 ior.* = self.wd.rect;
             }
+
+            // before we focus ourselves, grab the rect of the focused
+            // subwindow and top subwindow, because if we are doing auto
+            // positioning, we'll center ourselves on the previous focused one
+            // and also nudge away from both
+            const cw = currentWindow();
+            dataSet(null, self.wd.id, "_prev_focus_rect", cw.subwindowFocused().rect);
+            // subwindows always at least has the main window
+            dataSet(null, self.wd.id, "_prev_top_rect", cw.subwindows.items[cw.subwindows.items.len - 1].rect);
 
             // first frame we are being shown
             focusSubwindow(self.wd.id, null);
