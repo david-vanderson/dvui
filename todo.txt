@@ -1,10 +1,10 @@
 
+dataSet/Get should record the typeName and give an error if the name doesn't match
+
 
 textEntry should center text vertically if multiline is false
 
 test raiseSubwindow when all the subwindows have stay_above_parent = true
-
-probably subwindows should be centered on their parent window (not the screen)
 
 if using standalone, should be able to draw using SDL stuff into a widget
 - so base window needs to not delay rendering so you can render ontop of widget backgrounds
