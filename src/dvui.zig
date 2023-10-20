@@ -2768,7 +2768,7 @@ pub const Window = struct {
             }
         }
 
-        std.debug.print("subwindowFocused failed to find the current subwindow, returning base window\n", .{});
+        std.debug.print("subwindowFocused failed to find the focused subwindow, returning base window\n", .{});
         return &self.subwindows.items[0];
     }
 
@@ -3176,11 +3176,17 @@ pub const Window = struct {
 
         self.mouse_pt_prev = self.mouse_pt;
 
-        if (self.focusedSubwindowLost()) {
-            // if the subwindow that was focused went away, focus the highest
-            // one (there is always the base one)
-            const sw = self.subwindows.items[self.subwindows.items.len - 1];
-            focusSubwindow(sw.id, null);
+        if (!self.subwindowFocused().used) {
+            // our focused subwindow didn't show this frame, focus the highest one that did
+            var i = self.subwindows.items.len;
+            while (i > 0) : (i -= 1) {
+                const sw = self.subwindows.items[i - 1];
+                if (sw.used) {
+                    //std.debug.print("focused subwindow lost, focusing {d}\n", .{i - 1});
+                    focusSubwindow(sw.id, null);
+                    break;
+                }
+            }
 
             self.refresh();
         }
@@ -3216,16 +3222,6 @@ pub const Window = struct {
         }
 
         return ret;
-    }
-
-    pub fn focusedSubwindowLost(self: *Self) bool {
-        for (self.subwindows.items) |*sw| {
-            if (sw.id == self.focused_subwindowId) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     pub fn widget(self: *Self) Widget {
@@ -3588,48 +3584,55 @@ pub const FloatingWindowWidget = struct {
                 //std.debug.print("autosize to {}\n", .{self.wd.rect});
             }
 
+            var prev_focus = windowRect();
+            if (dataGet(null, self.wd.id, "_prev_focus_rect", Rect)) |r| {
+                dataRemove(null, self.wd.id, "_prev_focus_rect");
+                prev_focus = r;
+
+                // second frame for us, but since new windows grab the
+                // previously focused window rect, any focused window needs to
+                // have a non-zero size
+                focusSubwindow(self.wd.id, null);
+            }
+
             if (self.auto_pos) {
                 // only position ourselves once by default
                 self.auto_pos = false;
 
-                var prev_focus = windowRect();
-                var prev_top = prev_focus;
-                if (dataGet(null, self.wd.id, "_prev_focus_rect", Rect)) |r| {
-                    prev_focus = r;
-                    dataRemove(null, self.wd.id, "_prev_focus_rect");
-                    if (dataGet(null, self.wd.id, "_prev_top_rect", Rect)) |rtop| {
-                        prev_top = rtop;
-                        dataRemove(null, self.wd.id, "_prev_top_rect");
-                    }
-                }
+                // center on prev_focus
+                self.wd.rect.x = prev_focus.x + (prev_focus.w - self.wd.rect.w) / 2;
+                self.wd.rect.y = prev_focus.y + (prev_focus.h - self.wd.rect.h) / 2;
 
-                self.wd.rect = placeIn(prev_focus, self.wd.rect.size(), .none, .{ .x = 0.5, .y = 0.5 });
                 if (snapToPixels()) {
                     self.wd.rect.x = @round(self.wd.rect.x);
                     self.wd.rect.y = @round(self.wd.rect.y);
                 }
 
-                while (self.wd.rect.topleft().equals(prev_focus.topleft()) or self.wd.rect.topleft().equals(prev_top.topleft())) {
+                while (self.wd.rect.topleft().equals(prev_focus.topleft())) {
                     // if we ended up directly on top, nudge downright a bit
                     self.wd.rect.x += 24;
                     self.wd.rect.y += 24;
                 }
 
-                if (self.init_options.window_avoid == .nudge) {
-                    const cw = currentWindow();
-                    // don't check against subwindows[0] - that's that main window
+                const cw = currentWindow();
 
-                    // we might nudge onto another window, so have to keep checking until we don't
-                    var nudge = true;
-                    while (nudge) {
-                        nudge = false;
-                        for (cw.subwindows.items[1..]) |subw| {
-                            if (subw.rect.topleft().equals(self.wd.rect.topleft())) {
-                                self.wd.rect.x += 24;
-                                self.wd.rect.y += 24;
-                                nudge = true;
-                            }
+                // we might nudge onto another window, so have to keep checking until we don't
+                var nudge = true;
+                while (nudge) {
+                    nudge = false;
+                    // don't check against subwindows[0] - that's that main window
+                    for (cw.subwindows.items[1..]) |subw| {
+                        if (subw.rect.topleft().equals(self.wd.rect.topleft())) {
+                            self.wd.rect.x += 24;
+                            self.wd.rect.y += 24;
+                            nudge = true;
                         }
+                    }
+
+                    if (self.init_options.window_avoid == .nudge) {
+                        continue;
+                    } else {
+                        break;
                     }
                 }
 
@@ -3642,7 +3645,7 @@ pub const FloatingWindowWidget = struct {
             const offleft = self.wd.rect.w - 48;
             screen.x -= offleft;
             screen.w += offleft + offleft;
-            // okey if we are off the bottom but still see the top
+            // okay if we are off the bottom but still see the top
             screen.h += self.wd.rect.h - 24;
             self.wd.rect = placeOnScreen(screen, .{}, self.wd.rect);
         }
@@ -3661,20 +3664,14 @@ pub const FloatingWindowWidget = struct {
                 ior.* = self.wd.rect;
             }
 
-            // before we focus ourselves, grab the rect of the focused
-            // subwindow and top subwindow, because if we are doing auto
-            // positioning, we'll center ourselves on the previous focused one
-            // and also nudge away from both
+            // there might be multiple new windows, so we aren't going to
+            // switch focus until the second frame, which gives all the new
+            // windows a chance to grab the previously focused rect
+
             const cw = currentWindow();
             dataSet(null, self.wd.id, "_prev_focus_rect", cw.subwindowFocused().rect);
-            // subwindows always at least has the main window
-            dataSet(null, self.wd.id, "_prev_top_rect", cw.subwindows.items[cw.subwindows.items.len - 1].rect);
 
-            // first frame we are being shown
-            focusSubwindow(self.wd.id, null);
-
-            // need a second frame to fit contents (FocusWindow calls
-            // refresh but here for clarity)
+            // need a second frame to fit contents
             refresh();
 
             // hide our first frame so the user doesn't see an empty window or
@@ -3851,7 +3848,6 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn close(self: *Self) void {
-        //subwindowClosing(self.wd.id);
         if (self.init_options.open_flag) |of| {
             of.* = false;
         }
