@@ -211,3 +211,8 @@ pub const Key = enum {
 
     unknown,
 };
+
+pub const Direction = enum {
+    horizontal,
+    vertical,
+};
