@@ -216,3 +216,9 @@ pub const Direction = enum {
     horizontal,
     vertical,
 };
+
+pub const DialogResponse = enum(u8) {
+    closed,
+    ok,
+    _,
+};
