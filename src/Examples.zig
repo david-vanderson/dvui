@@ -1,22 +1,23 @@
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
+const DialogCallAfterFn = dvui.DialogCallAfterFn;
 const Error = dvui.Error;
+const Options = dvui.Options;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
+const ScrollInfo = dvui.ScrollInfo;
 const Size = dvui.Size;
 const entypo = dvui.entypo;
 const Adwaita = dvui.Adwaita;
 
+const enums = dvui.enums;
+
 // TODO: Split
-const DialogCallAfterFn = dvui.DialogCallAfterFn;
-const DialogResponse = dvui.DialogResponse;
 const FloatingWindowWidget = dvui.FloatingWindowWidget;
-const Options = dvui.Options;
 const TextLayoutWidget = dvui.TextLayoutWidget;
 const ButtonWidget = dvui.ButtonWidget;
 const LabelWidget = dvui.LabelWidget;
-const ScrollInfo = dvui.ScrollInfo;
 
 pub var show_demo_window: bool = false;
 var checkbox_bool: bool = false;
@@ -47,7 +48,7 @@ const AnimatingDialog = struct {
         const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
         // once we record a response, refresh it until we close
-        _ = dvui.dataGet(null, id, "response", DialogResponse);
+        _ = dvui.dataGet(null, id, "response", enums.DialogResponse);
 
         var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id });
         const first_frame = dvui.firstFrame(win.data().id);
@@ -83,7 +84,7 @@ const AnimatingDialog = struct {
                     dvui.dialogRemove(id);
 
                     if (callafter) |ca| {
-                        const response = dvui.dataGet(null, id, "response", DialogResponse) orelse {
+                        const response = dvui.dataGet(null, id, "response", enums.DialogResponse) orelse {
                             std.debug.print("Error: no response for dialog {x}\n", .{id});
                             return;
                         };
@@ -107,7 +108,7 @@ const AnimatingDialog = struct {
         try dvui.windowHeader(title, "", &header_openflag);
         if (!header_openflag) {
             closing = true;
-            dvui.dataSet(null, id, "response", DialogResponse.closed);
+            dvui.dataSet(null, id, "response", enums.DialogResponse.closed);
         }
 
         var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
@@ -116,7 +117,7 @@ const AnimatingDialog = struct {
 
         if (try dvui.button(@src(), "Ok", .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
             closing = true;
-            dvui.dataSet(null, id, "response", DialogResponse.ok);
+            dvui.dataSet(null, id, "response", enums.DialogResponse.ok);
         }
 
         vbox.deinit();
@@ -138,7 +139,7 @@ const AnimatingDialog = struct {
         }
     }
 
-    pub fn after(id: u32, response: DialogResponse) Error!void {
+    pub fn after(id: u32, response: enums.DialogResponse) Error!void {
         _ = id;
         std.debug.print("You clicked \"{s}\"\n", .{@tagName(response)});
     }
@@ -714,7 +715,7 @@ pub fn dialogs(demo_win_id: u32) !void {
         }
 
         const dialogsFollowup = struct {
-            fn callafter(id: u32, response: DialogResponse) Error!void {
+            fn callafter(id: u32, response: enums.DialogResponse) Error!void {
                 _ = id;
                 var buf: [100]u8 = undefined;
                 const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\"", .{@tagName(response)}) catch unreachable;
