@@ -72,18 +72,61 @@ pub fn init(options: initOptions) !SDLBackend {
         const pxSize = back.pixelSize();
         const nat_scale = pxSize.w / winSize.w;
         if (nat_scale == 1.0) {
-            const display_num = c.SDL_GetWindowDisplayIndex(window);
-            var hdpi: f32 = undefined;
-            var vdpi: f32 = undefined;
-            _ = c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi);
-            const dpi = @max(hdpi, vdpi);
-            if (dpi > 200) {
-                back.initial_scale = 4.0;
-            } else if (dpi > 100) {
-                back.initial_scale = 2.0;
+            var guess_from_dpi = true;
+
+            // first try to inspect environment variables
+            var buf: [1024]u8 = undefined;
+            @memset(&buf, 0);
+            var fba = std.heap.FixedBufferAllocator.init(&buf);
+
+            const qt_auto_str: ?[]u8 = std.process.getEnvVarOwned(fba.allocator(), "QT_AUTO_SCREEN_SCALE_FACTOR") catch |err| switch (err) {
+                error.EnvironmentVariableNotFound => null,
+                else => return err,
+            };
+            if (qt_auto_str != null and std.mem.eql(u8, qt_auto_str.?, "0")) {
+                std.debug.print("QT_AUTO_SCREEN_SCALE_FACTOR is 0, disabling content scale guessing\n", .{});
+                guess_from_dpi = false;
             }
-            std.debug.print("SDL2 dpi {d} guessing backend scale {d}\n", .{ dpi, back.initial_scale });
-            _ = c.SDL_SetWindowSize(window, @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(options.width)))), @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(options.height)))));
+
+            const qt_str: ?[]u8 = std.process.getEnvVarOwned(fba.allocator(), "QT_SCALE_FACTOR") catch |err| switch (err) {
+                error.EnvironmentVariableNotFound => null,
+                else => return err,
+            };
+            const gdk_str: ?[]u8 = std.process.getEnvVarOwned(fba.allocator(), "GDK_SCALE") catch |err| switch (err) {
+                error.EnvironmentVariableNotFound => null,
+                else => return err,
+            };
+
+            if (qt_str) |str| {
+                const qt_scale = std.fmt.parseFloat(f32, str) catch 1.0;
+                std.debug.print("QT_SCALE_FACTOR is {d}, using that for initial content scale\n", .{qt_scale});
+                back.initial_scale = qt_scale;
+                guess_from_dpi = false;
+            } else if (gdk_str) |str| {
+                const gdk_scale = std.fmt.parseFloat(f32, str) catch 1.0;
+                std.debug.print("GDK_SCALE is {d}, using that for initial content scale\n", .{gdk_scale});
+                back.initial_scale = gdk_scale;
+                guess_from_dpi = false;
+            }
+
+            if (guess_from_dpi) {
+                // see if we can guess correctly based on the dpi from SDL2
+                const display_num = c.SDL_GetWindowDisplayIndex(window);
+                var hdpi: f32 = undefined;
+                var vdpi: f32 = undefined;
+                _ = c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi);
+                const dpi = @max(hdpi, vdpi);
+                if (dpi > 200) {
+                    back.initial_scale = 4.0;
+                } else if (dpi > 100) {
+                    back.initial_scale = 2.0;
+                }
+                std.debug.print("SDL2 dpi {d} guessing backend scale {d}\n", .{ dpi, back.initial_scale });
+            }
+
+            if (back.initial_scale != 1.0) {
+                _ = c.SDL_SetWindowSize(window, @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(options.width)))), @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(options.height)))));
+            }
         }
     }
 
