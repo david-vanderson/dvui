@@ -1,8 +1,8 @@
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
-const Size = @import("Size.zig");
-const Vertex = @import("Vertex.zig");
+const Size = dvui.Size;
+const Vertex = dvui.Vertex;
 
 const Backend = @This();
 

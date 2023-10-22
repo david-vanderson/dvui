@@ -1,6 +1,7 @@
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
+const Error = dvui.Error;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
@@ -14,7 +15,6 @@ const FloatingWindowWidget = dvui.FloatingWindowWidget;
 const Options = dvui.Options;
 const TextLayoutWidget = dvui.TextLayoutWidget;
 const ButtonWidget = dvui.ButtonWidget;
-const Error = dvui.Error;
 const LabelWidget = dvui.LabelWidget;
 const ScrollInfo = dvui.ScrollInfo;
 

@@ -1,8 +1,8 @@
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
-const Rect = @import("Rect.zig");
-const Size = @import("Size.zig");
+const Rect = dvui.Rect;
+const Size = dvui.Size;
 
 const Font = @This();
 

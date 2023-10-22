@@ -11,6 +11,7 @@ pub const Examples = @import("Examples.zig");
 pub const Font = @import("Font.zig");
 pub const Point = @import("Point.zig");
 pub const Rect = @import("Rect.zig");
+pub const ScrollInfo = @import("ScrollInfo.zig");
 pub const Size = @import("Size.zig");
 pub const Theme = @import("Theme.zig");
 pub const Vertex = @import("Vertex.zig");
@@ -4450,7 +4451,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
     return expanded;
 }
 
-pub fn paned(src: std.builtin.SourceLocation, dir: dvui.Direction, collapse_size: f32, opts: Options) !*PanedWidget {
+pub fn paned(src: std.builtin.SourceLocation, dir: enums.Direction, collapse_size: f32, opts: Options) !*PanedWidget {
     var ret = try currentWindow().arena.create(PanedWidget);
     ret.* = PanedWidget.init(src, dir, collapse_size, opts);
     try ret.install(.{});
@@ -4470,14 +4471,14 @@ pub const PanedWidget = struct {
     wd: WidgetData = undefined,
 
     split_ratio: f32 = undefined,
-    dir: dvui.Direction = undefined,
+    dir: enums.Direction = undefined,
     collapse_size: f32 = 0,
     hovered: bool = false,
     saved_data: SavedData = undefined,
     first_side_id: ?u32 = null,
     prevClip: Rect = Rect{},
 
-    pub fn init(src: std.builtin.SourceLocation, dir: dvui.Direction, collapse_size: f32, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, collapse_size: f32, opts: Options) Self {
         var self = Self{};
         self.wd = WidgetData.init(src, .{}, opts);
         self.dir = dir;
@@ -5759,19 +5760,14 @@ pub const OverlayWidget = struct {
     }
 };
 
-pub const Direction = enum {
-    horizontal,
-    vertical,
-};
-
-pub fn box(src: std.builtin.SourceLocation, dir: Direction, opts: Options) !*BoxWidget {
+pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena.create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, false, opts);
     try ret.install(.{});
     return ret;
 }
 
-pub fn boxEqual(src: std.builtin.SourceLocation, dir: Direction, opts: Options) !*BoxWidget {
+pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena.create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, true, opts);
     try ret.install(.{});
@@ -5787,7 +5783,7 @@ pub const BoxWidget = struct {
     };
 
     wd: WidgetData = undefined,
-    dir: Direction = undefined,
+    dir: enums.Direction = undefined,
     equal_space: bool = undefined,
     max_thick: f32 = 0,
     data_prev: Data = Data{},
@@ -5796,7 +5792,7 @@ pub const BoxWidget = struct {
     childRect: Rect = Rect{},
     extra_pixels: f32 = 0,
 
-    pub fn init(src: std.builtin.SourceLocation, dir: Direction, equal_space: bool, opts: Options) BoxWidget {
+    pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, equal_space: bool, opts: Options) BoxWidget {
         var self = Self{};
         self.wd = WidgetData.init(src, .{}, opts);
         self.dir = dir;
@@ -6078,100 +6074,6 @@ pub const ScrollAreaWidget = struct {
         dataSet(null, self.hbox.data().id, "_scroll_info", self.si.*);
 
         self.hbox.deinit();
-    }
-};
-
-pub const ScrollInfo = struct {
-    pub const ScrollMode = enum {
-        none, // no scrolling
-        auto, // virtual size calculated from children
-        given, // virtual size left as given
-    };
-
-    pub const ScrollBarMode = enum {
-        hide, // no scrollbar
-        auto, // show scrollbar if viewport is smaller than virtual_size
-        show, // always show scrollbar
-    };
-
-    vertical: ScrollMode = .auto,
-    horizontal: ScrollMode = .none,
-    virtual_size: Size = Size{},
-    viewport: Rect = Rect{},
-    velocity: Point = Point{},
-
-    pub fn scroll_max(self: ScrollInfo, dir: Direction) f32 {
-        switch (dir) {
-            .vertical => return @max(0.0, self.virtual_size.h - self.viewport.h),
-            .horizontal => return @max(0.0, self.virtual_size.w - self.viewport.w),
-        }
-    }
-
-    pub fn fraction_visible(self: ScrollInfo, dir: Direction) f32 {
-        var viewport_start = switch (dir) {
-            .vertical => self.viewport.y,
-            .horizontal => self.viewport.x,
-        };
-        var viewport_size = switch (dir) {
-            .vertical => self.viewport.h,
-            .horizontal => self.viewport.w,
-        };
-        var virtual_size = switch (dir) {
-            .vertical => self.virtual_size.h,
-            .horizontal => self.virtual_size.w,
-        };
-
-        if (viewport_size == 0) return 1.0;
-
-        const max_hard_scroll = self.scroll_max(dir);
-        var length = @max(viewport_size, virtual_size);
-        if (viewport_start < 0) {
-            // temporarily adding the dead space we are showing
-            length += -viewport_start;
-        } else if (viewport_start > max_hard_scroll) {
-            length += (viewport_start - max_hard_scroll);
-        }
-
-        return viewport_size / length; // <= 1
-    }
-
-    pub fn scroll_fraction(self: ScrollInfo, dir: Direction) f32 {
-        var viewport_start = switch (dir) {
-            .vertical => self.viewport.y,
-            .horizontal => self.viewport.x,
-        };
-        var viewport_size = switch (dir) {
-            .vertical => self.viewport.h,
-            .horizontal => self.viewport.w,
-        };
-        var virtual_size = switch (dir) {
-            .vertical => self.virtual_size.h,
-            .horizontal => self.virtual_size.w,
-        };
-
-        if (viewport_size == 0) return 0;
-
-        const max_hard_scroll = self.scroll_max(dir);
-        var length = @max(viewport_size, virtual_size);
-        if (viewport_start < 0) {
-            // temporarily adding the dead space we are showing
-            length += -viewport_start;
-        } else if (viewport_start > max_hard_scroll) {
-            length += (viewport_start - max_hard_scroll);
-        }
-
-        const max_scroll = @max(0, length - viewport_size);
-        if (max_scroll == 0) return 0;
-
-        return @max(0, @min(1.0, viewport_start / max_scroll));
-    }
-
-    pub fn scrollToFraction(self: *ScrollInfo, dir: Direction, fin: f32) void {
-        const f = @max(0, @min(1, fin));
-        switch (dir) {
-            .vertical => self.viewport.y = f * self.scroll_max(dir),
-            .horizontal => self.viewport.x = f * self.scroll_max(dir),
-        }
     }
 };
 
@@ -6626,7 +6528,7 @@ pub const ScrollBarWidget = struct {
 
     pub const InitOptions = struct {
         scroll_info: *ScrollInfo,
-        direction: Direction = .vertical,
+        direction: enums.Direction = .vertical,
         focus_id: ?u32 = null,
         overlay: bool = false,
     };
@@ -6636,7 +6538,7 @@ pub const ScrollBarWidget = struct {
     grabRect: Rect = Rect{},
     si: *ScrollInfo = undefined,
     focus_id: ?u32 = null,
-    dir: Direction = undefined,
+    dir: enums.Direction = undefined,
     overlay: bool = false,
     highlight: bool = false,
 
@@ -6951,7 +6853,7 @@ pub const ScaleWidget = struct {
     }
 };
 
-pub fn menu(src: std.builtin.SourceLocation, dir: Direction, opts: Options) !*MenuWidget {
+pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*MenuWidget {
     var ret = try currentWindow().arena.create(MenuWidget);
     ret.* = MenuWidget.init(src, .{ .dir = dir }, opts);
     try ret.install(.{});
@@ -6965,7 +6867,7 @@ pub const MenuWidget = struct {
     };
 
     pub const InitOptions = struct {
-        dir: Direction = undefined,
+        dir: enums.Direction = undefined,
         submenus_activated_by_default: bool = false,
     };
 
@@ -7757,7 +7659,7 @@ pub var slider_defaults: Options = .{
 };
 
 // returns true if percent was changed
-pub fn slider(src: std.builtin.SourceLocation, dir: dvui.Direction, percent: *f32, opts: Options) !bool {
+pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f32, opts: Options) !bool {
     const options = slider_defaults.override(opts);
 
     var b = try box(src, dir, options);
