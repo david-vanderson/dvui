@@ -7369,6 +7369,8 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
         try tabIndexSet(b.data().id, options.tab_index);
     }
 
+    captureMouseMaintain(b.data().id);
+
     var hovered: bool = false;
     var ret = false;
 
