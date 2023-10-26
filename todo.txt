@@ -1,10 +1,13 @@
 
-dataSet/Get should record the typeName and give an error if the name doesn't match
-
-
 textEntry should center text vertically if multiline is false
+- test with different font sizes
 
 test raiseSubwindow when all the subwindows have stay_above_parent = true
+
+look at spinner code, is the arc code not doing enough points?
+
+add raster image support (like icons) using stb_image
+- can we find another zig project using stb_image?
 
 if using standalone, should be able to draw using SDL stuff into a widget
 - so base window needs to not delay rendering so you can render ontop of widget backgrounds
@@ -18,13 +21,8 @@ need a strategy for activating paste from a menu, because the widget will lose f
 - then when the paste menu item is clicked, it can send focus back to saved id
   - also need to synthesize an event so that widget processes a paste
 
-add raster image support (like icons) using stb_image
-- can we find another zig project using stb_image?
-
 add inertia to scrolling
 - if the scrollContainer has more intertia scrolling to do, then it should eat all pointer events, because we don't want any pointer events going to children if the scrolling is still happening
-
-slider doesn't follow a mouse hold-drag or finger drag
 
 switch from my freetype fork to Mach's
 

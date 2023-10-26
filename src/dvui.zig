@@ -1272,8 +1272,10 @@ pub fn dataSet(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
 /// pass a pointer to the Window you want to add the data to.
 pub fn dataSetSlice(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
     const dt = @typeInfo(@TypeOf(data));
-    if (dt == .Pointer and (dt.Pointer.size == .Slice or (dt.Pointer.size == .One and @typeInfo(dt.Pointer.child) == .Array))) {
+    if (dt == .Pointer and dt.Pointer.size == .Slice) {
         dataSetAdvanced(win, id, key, data, true);
+    } else if (dt == .Pointer and dt.Pointer.size == .One and @typeInfo(dt.Pointer.child) == .Array) {
+        dataSetAdvanced(win, id, key, @as([]@typeInfo(dt.Pointer.child).Array.child, @constCast(data)), true);
     } else {
         @compileError("dataSetSlice needs a slice or pointer to array, given " ++ @typeName(@TypeOf(data)));
     }
@@ -1313,7 +1315,7 @@ pub fn dataSetAdvanced(win: ?*Window, id: u32, key: []const u8, data: anytype, c
 ///
 /// If you want to get the contents of a stored slice, use dataGetSlice().
 pub fn dataGet(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
-    if (dataGetInternal(win, id, key)) |bytes| {
+    if (dataGetInternal(win, id, key, T, false)) |bytes| {
         return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
     } else {
         return null;
@@ -1333,7 +1335,7 @@ pub fn dataGet(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
 ///
 /// If you want to get the contents of a stored slice, use dataGetSlice().
 pub fn dataGetPtr(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?*T {
-    if (dataGetInternal(win, id, key)) |bytes| {
+    if (dataGetInternal(win, id, key, T, false)) |bytes| {
         return @as(*T, @alignCast(@ptrCast(bytes.ptr)));
     } else {
         return null;
@@ -1356,7 +1358,7 @@ pub fn dataGetSlice(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?
         @compileError("dataGetSlice needs a slice, given " ++ @typeName(T));
     }
 
-    if (dataGetInternal(win, id, key)) |bytes| {
+    if (dataGetInternal(win, id, key, T, true)) |bytes| {
         if (dt.Pointer.sentinel) |sentinel| {
             return @as([:@as(*const dt.Pointer.child, @alignCast(@ptrCast(sentinel))).*]align(@alignOf(dt.Pointer.child)) dt.Pointer.child, @alignCast(@ptrCast(std.mem.bytesAsSlice(dt.Pointer.child, bytes[0 .. bytes.len - @sizeOf(dt.Pointer.child)]))));
         } else {
@@ -1368,13 +1370,13 @@ pub fn dataGetSlice(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?
 }
 
 // returns the backing slice of bytes if we have it
-pub fn dataGetInternal(win: ?*Window, id: u32, key: []const u8) ?[]u8 {
+pub fn dataGetInternal(win: ?*Window, id: u32, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
-        return w.dataGetInternal(id, key);
+        return w.dataGetInternal(id, key, T, slice);
     } else {
         if (current_window) |cw| {
-            return cw.dataGetInternal(id, key);
+            return cw.dataGetInternal(id, key, T, slice);
         } else {
             @panic("dataGet: current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
         }
@@ -1715,6 +1717,9 @@ pub const Window = struct {
         used: bool = true,
         alignment: u8,
         data: []u8,
+
+        type_str: (if (std.debug.runtime_safety) []const u8 else void) = undefined,
+        copy_slice: if (std.debug.runtime_safety) bool else void = undefined,
 
         pub fn free(self: *const SavedData, allocator: std.mem.Allocator) void {
             allocator.rawFree(self.data, @ctz(self.alignment), @returnAddress());
@@ -2541,13 +2546,12 @@ pub const Window = struct {
         const hash = hashIdKey(id, key);
 
         const dt = @typeInfo(@TypeOf(data_in));
+        const dt_type_str = @typeName(@TypeOf(data_in));
         var bytes: []const u8 = undefined;
         if (copy_slice) {
             bytes = std.mem.sliceAsBytes(data_in);
-            if (dt.Pointer.size == .Slice and dt.Pointer.sentinel != null) {
+            if (dt.Pointer.sentinel != null) {
                 bytes.len += @sizeOf(dt.Pointer.child);
-            } else if (dt.Pointer.size == .One and @typeInfo(dt.Pointer.child) == .Array and @typeInfo(dt.Pointer.child).Array.sentinel != null) {
-                bytes.len += @sizeOf(@typeInfo(dt.Pointer.child).Array.child);
             }
         } else {
             bytes = std.mem.asBytes(&data_in);
@@ -2567,6 +2571,10 @@ pub const Window = struct {
         if (self.datas.getPtr(hash)) |sd| {
             if (sd.data.len == bytes.len) {
                 sd.used = true;
+                if (std.debug.runtime_safety) {
+                    sd.type_str = dt_type_str;
+                    sd.copy_slice = copy_slice;
+                }
                 @memcpy(sd.data, bytes);
                 return;
             } else {
@@ -2584,6 +2592,11 @@ pub const Window = struct {
 
         @memcpy(sd.data, bytes);
 
+        if (std.debug.runtime_safety) {
+            sd.type_str = dt_type_str;
+            sd.copy_slice = copy_slice;
+        }
+
         self.datas.put(hash, sd) catch |err| switch (err) {
             error.OutOfMemory => {
                 std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
@@ -2594,13 +2607,19 @@ pub const Window = struct {
     }
 
     // returns the backing byte slice if we have one
-    pub fn dataGetInternal(self: *Self, id: u32, key: []const u8) ?[]u8 {
+    pub fn dataGetInternal(self: *Self, id: u32, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
         const hash = hashIdKey(id, key);
 
         self.data_mutex.lock();
         defer self.data_mutex.unlock();
 
         if (self.datas.getPtr(hash)) |sd| {
+            if (std.debug.runtime_safety) {
+                if (!std.mem.eql(u8, sd.type_str, @typeName(T)) or sd.copy_slice != slice) {
+                    std.debug.panic("dataGetInternal: stored type {s} (slice {}) doesn't match asked for type {s} (slice {})", .{ sd.type_str, sd.copy_slice, @typeName(T), slice });
+                }
+            }
+
             sd.used = true;
             return sd.data;
         } else {
@@ -5033,11 +5052,18 @@ pub const TextLayoutWidget = struct {
             self.copy_slice = null;
         }
 
+        // if we had mouse/keyboard interaction, need to handle things if addText never gets called
+        if (self.sel_mouse_down_pt) |_| {
+            self.sel_mouse_down_bytes = self.bytes_seen;
+        }
+
         self.selection.cursor = @min(self.selection.cursor, self.bytes_seen);
         self.selection.start = @min(self.selection.start, self.bytes_seen);
         self.selection.end = @min(self.selection.end, self.bytes_seen);
 
         if (self.sel_left_right > 0 and self.selection.cursor == self.bytes_seen) {
+            self.sel_left_right = 0;
+        } else if (self.sel_left_right < 0 and self.selection.cursor == 0) {
             self.sel_left_right = 0;
         }
 
@@ -5250,13 +5276,22 @@ pub const TextLayoutWidget = struct {
         dataSet(null, self.wd.id, "_selection", self.selection.*);
         dataSet(null, self.wd.id, "_touch_selection", self.touch_selection);
         if (self.sel_left_right != 0) {
+            // user might have pressed left a few times, but we couldn't
+            // process them all this frame because they crossed calls to
+            // addText
             dataSet(null, self.wd.id, "_sel_left_right", self.sel_left_right);
             refresh();
         }
-        if (captured(self.wd.id)) {
-            dataSet(null, self.wd.id, "_sel_mouse_down_bytes", self.sel_mouse_down_bytes);
+        if (captured(self.wd.id) and self.sel_mouse_down_bytes != null) {
+            // once we figure out where the mousedown was, we need to save it
+            // as long as we are dragging
+            dataSet(null, self.wd.id, "_sel_mouse_down_bytes", self.sel_mouse_down_bytes.?);
         }
         if (self.cursor_updown != 0) {
+            // user pressed keys to move the cursor up/down, and on this frame
+            // we figured out the pixel position where the new cursor should
+            // be, but need to save this for next frame to figure out the byte
+            // position based on this pixel position
             dataSet(null, self.wd.id, "_cursor_updown_pt", self.cursor_updown_pt);
             dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
         }
