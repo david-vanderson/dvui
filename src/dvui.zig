@@ -480,11 +480,12 @@ pub fn focusRemainingEvents(event_num: u16, focusWindowId: u32, focusWidgetId: ?
 
 pub fn raiseSubwindow(subwindow_id: u32) void {
     const cw = currentWindow();
-    var items = cw.subwindows.items;
+    // don't check against subwindows[0] - that's that main window
+    var items = cw.subwindows.items[1..];
     for (items, 0..) |sw, i| {
         if (sw.id == subwindow_id) {
             if (sw.stay_above_parent != null) {
-                std.debug.print("raiseSubwindow: tried to raise a subwindow {x} with stay_above_parent set\n", .{subwindow_id});
+                //std.debug.print("raiseSubwindow: tried to raise a subwindow {x} with stay_above_parent set\n", .{subwindow_id});
                 return;
             }
 
@@ -494,7 +495,8 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
             }
 
             // move it to the end, also move any stay_above_parent subwindows
-            // directly on top of it as well
+            // directly on top of it as well - we know from above that the
+            // first window does not have stay_above_parent so this loop ends
             var first = true;
             while (first or items[i].stay_above_parent != null) {
                 first = false;

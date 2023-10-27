@@ -1,11 +1,4 @@
 
-textEntry should center text vertically if multiline is false
-- test with different font sizes
-
-test raiseSubwindow when all the subwindows have stay_above_parent = true
-
-look at spinner code, is the arc code not doing enough points?
-
 add raster image support (like icons) using stb_image
 - can we find another zig project using stb_image?
 
