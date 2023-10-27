@@ -605,12 +605,17 @@ pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool)
         try pathAddPoint(center);
         return;
     }
-    const err = 1.0;
+
+    // how close our points will be to the perfect circle
+    const err = 0.1;
+
     // angle that has err error between circle and segments
-    const theta = math.acos(1.0 - @min(rad, err) / rad);
+    const theta = math.acos(rad / (rad + err));
+
     // make sure we never have less than 4 segments
     // so a full circle can't be less than a diamond
     const num_segments = @max(@ceil((start - end) / theta), 4.0);
+
     const step = (start - end) / num_segments;
 
     const num = @as(u32, @intFromFloat(num_segments));
