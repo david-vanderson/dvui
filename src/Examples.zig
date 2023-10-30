@@ -194,8 +194,10 @@ pub fn demo() !void {
     var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 440, .h = 400 } });
     defer float.deinit();
 
+    // pad the fps label so that it doesn't trigger refresh when the number
+    // changes widths
     var buf: [100]u8 = undefined;
-    const fps_str = std.fmt.bufPrint(&buf, "{d:4.0} fps", .{dvui.FPS()}) catch unreachable;
+    const fps_str = std.fmt.bufPrint(&buf, "{d:0>4.0} fps", .{dvui.FPS()}) catch unreachable;
     try dvui.windowHeader("DVUI Demo", fps_str, &show_demo_window);
 
     var ti = dvui.toastsFor(float.data().id);
@@ -853,9 +855,11 @@ pub fn animations() !void {
         const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);
         const left = @as(i32, @intCast(@rem(millis, 1000)));
 
-        var mslabel = try LabelWidget.init(@src(), "{d} ms into second", .{@as(u32, @intCast(left))}, .{});
+        var mslabel = try dvui.LabelWidget.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{});
         try mslabel.install(.{});
         mslabel.deinit();
+
+        try dvui.label(@src(), "Estimate of frame overhead {d:6}", .{dvui.currentWindow().loop_target_slop}, .{});
 
         if (dvui.timerDone(mslabel.wd.id) or !dvui.timerExists(mslabel.wd.id)) {
             const wait = 1000 * (1000 - left);

@@ -71,7 +71,7 @@ pub fn main() !void {
                                 const zs = @exp(@log(base) * me.data.wheel_y);
                                 if (zs != 1.0) {
                                     scale_val *= zs;
-                                    dvui.refresh();
+                                    dvui.refresh(@src(), scale.wd.id);
                                 }
                             }
                         },
@@ -253,7 +253,7 @@ pub fn main() !void {
             }
 
             const fps = dvui.FPS();
-            try dvui.label(@src(), "fps {d:4.2}", .{fps}, .{ .gravity_x = 1.0 });
+            try dvui.label(@src(), "fps {d:4.2}", .{fps}, .{ .gravity_x = 1.0, .min_size_content = .{ .w = 100 } });
 
             {
                 const FloatingWindowTest = struct {
@@ -535,7 +535,7 @@ pub const StrokeTest = struct {
                             const dp = dps.scale(1 / rs.s);
                             points[dragi.?].x += dp.x;
                             points[dragi.?].y += dp.y;
-                            dvui.refresh();
+                            dvui.refresh(@src(), self.wd.id);
                         }
                     },
                     .wheel_y => {
@@ -544,7 +544,7 @@ pub const StrokeTest = struct {
                         const zs = @exp(@log(base) * me.data.wheel_y);
                         if (zs != 1.0) {
                             thickness *= zs;
-                            dvui.refresh();
+                            dvui.refresh(@src(), self.wd.id);
                         }
                     },
                     else => {},
