@@ -64,6 +64,43 @@ pub fn toggleDebugWindow() void {
     cw.debug_window_show = !cw.debug_window_show;
 }
 
+pub const Alignment = struct {
+    id: u32 = undefined,
+    scale: f32 = undefined,
+    max: ?f32 = undefined,
+    next: f32 = undefined,
+
+    pub fn init() Alignment {
+        const wd = dvui.parentGet().data();
+        return .{
+            .id = wd.id,
+            .scale = wd.rectScale().s,
+            .max = dvui.dataGet(null, wd.id, "_max_align", f32),
+            .next = -1_000_000,
+        };
+    }
+
+    pub fn margin(self: *Alignment, id: u32) Rect {
+        if (self.max) |m| {
+            if (dvui.dataGet(null, id, "_align", f32)) |a| {
+                return .{ .x = @max(0, (m - a) / self.scale) };
+            }
+        }
+
+        return .{};
+    }
+
+    pub fn record(self: *Alignment, id: u32, wd: *WidgetData) void {
+        const x = wd.rectScale().r.x;
+        dvui.dataSet(null, id, "_align", x);
+        self.next = @max(self.next, x);
+    }
+
+    pub fn deinit(self: *Alignment) void {
+        dvui.dataSet(null, self.id, "_max_align", self.next);
+    }
+};
+
 pub fn placeOnScreen(screen: Rect, spawner: Rect, start: Rect) Rect {
     var r = start;
     if ((r.x + r.w) > (screen.x + screen.w)) {
