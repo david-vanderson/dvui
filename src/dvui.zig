@@ -2890,7 +2890,7 @@ pub const Window = struct {
                 var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
                 defer hbox.deinit();
 
-                if (try dvui.buttonIcon(@src(), 12, "find", entypo.magnifying_glass, .{})) {
+                if (try dvui.buttonIcon(@src(), "find", entypo.magnifying_glass, .{ .min_size_content = .{ .h = 12 } })) {
                     self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(line, ' '), 16) catch 0;
                 }
 
@@ -3703,7 +3703,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     var over = try dvui.overlay(@src(), .{ .expand = .horizontal });
 
     if (openflag) |of| {
-        if (try dvui.buttonIcon(@src(), 16, "close", entypo.cross, .{ .corner_radius = Rect.all(16), .padding = Rect.all(0), .margin = Rect.all(2) })) {
+        if (try dvui.buttonIcon(@src(), "close", entypo.cross, .{ .min_size_content = .{ .h = 16 }, .corner_radius = Rect.all(16), .padding = Rect.all(0), .margin = Rect.all(2) })) {
             of.* = false;
         }
     }
@@ -7425,15 +7425,13 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Opti
     return click;
 }
 
-pub fn buttonIcon(src: std.builtin.SourceLocation, height: f32, name: []const u8, tvg_bytes: []const u8, opts: Options) !bool {
-    // since we are given the icon height, we can precalculate our size, which can save a frame
-    const width = iconWidth(name, tvg_bytes, height) catch height;
-    const iconopts = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = .{ .w = width, .h = height } });
-
-    var bw = ButtonWidget.init(src, opts.override(.{ .min_size_content = iconopts.min_sizeGet() }));
+pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, opts: Options) !bool {
+    var bw = ButtonWidget.init(src, opts);
     try bw.install(.{});
 
-    try icon(@src(), name, tvg_bytes, iconopts);
+    // pass min_size_content through to the icon so that it will figure out the
+    // min width based on the height
+    try icon(@src(), name, tvg_bytes, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content }));
 
     var click = bw.clicked();
     bw.deinit();
