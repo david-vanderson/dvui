@@ -859,7 +859,7 @@ pub fn animations() !void {
         try mslabel.install(.{});
         mslabel.deinit();
 
-        try dvui.label(@src(), "Estimate of frame overhead {d:6}", .{dvui.currentWindow().loop_target_slop}, .{});
+        try dvui.label(@src(), "Estimate of frame overhead {d:6} us", .{dvui.currentWindow().loop_target_slop}, .{});
 
         if (dvui.timerDone(mslabel.wd.id) or !dvui.timerExists(mslabel.wd.id)) {
             const wait = 1000 * (1000 - left);

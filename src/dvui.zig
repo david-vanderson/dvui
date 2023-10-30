@@ -2145,11 +2145,11 @@ pub const Window = struct {
             // compensate if we didn't hit our target
             if (new_time > target) {
                 // woke up later than expected
-                self.loop_target_slop_frames = @max(1, self.loop_target_slop_frames + 1);
+                self.loop_target_slop_frames = @max(1, self.loop_target_slop_frames * 2);
                 self.loop_target_slop += self.loop_target_slop_frames;
             } else if (new_time < target) {
                 // woke up sooner than expected
-                self.loop_target_slop_frames = @min(-1, self.loop_target_slop_frames - 1);
+                self.loop_target_slop_frames = @min(-1, self.loop_target_slop_frames * 2);
                 self.loop_target_slop += self.loop_target_slop_frames;
 
                 // since we are early, spin a bit to guarantee that we never run before
