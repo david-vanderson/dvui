@@ -278,10 +278,6 @@ pub fn demo() !void {
         try animations();
     }
 
-    if (try dvui.button(@src(), "Icon Browser", .{})) {
-        IconBrowser.show = true;
-    }
-
     if (try dvui.button(@src(), "Toggle Theme", .{})) {
         if (dvui.themeGet() == &Adwaita.light) {
             dvui.themeSet(&Adwaita.dark);
@@ -357,6 +353,21 @@ pub fn basicWidgets() !void {
 
         _ = try dvui.dropdown(@src(), &entries, &dropdown_val, .{ .min_size_content = .{ .w = 120 } });
     }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Icons", .{}, .{ .gravity_y = 0.5 });
+
+        try dvui.icon(@src(), "cycle", entypo.cycle, .{ .gravity_y = 0.5, .min_size_content = .{ .h = 16 } });
+        try dvui.icon(@src(), "aircraft", entypo.aircraft, .{ .gravity_y = 0.5, .min_size_content = .{ .h = 24 } });
+        try dvui.icon(@src(), "notes", entypo.beamed_note, .{ .gravity_y = 0.5, .min_size_content = .{ .h = 32 } });
+
+        if (try dvui.button(@src(), "Icon Browser", .{ .gravity_y = 0.5 })) {
+            IconBrowser.show = true;
+        }
+    }
 }
 
 pub fn textEntryWidgets() !void {
@@ -424,10 +435,9 @@ pub fn textEntryWidgets() !void {
 
         if (try dvui.buttonIcon(
             @src(),
-            12,
             "toggle",
             if (text_entry_password_buf_obf_enable) entypo.eye_with_line else entypo.eye,
-            .{ .gravity_y = 0.5 },
+            .{ .gravity_y = 0.5, .min_size_content = .{ .h = 12 } },
         )) {
             text_entry_password_buf_obf_enable = !text_entry_password_buf_obf_enable;
         }
@@ -638,10 +648,10 @@ pub fn layoutText() !void {
         defer tl.deinit();
 
         var cbox = try dvui.box(@src(), .vertical, .{ .padding = .{ .w = 4 } });
-        if (try dvui.buttonIcon(@src(), 18, "play", entypo.controller_play, .{ .padding = Rect.all(6) })) {
+        if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{ .padding = Rect.all(6), .min_size_content = .{ .h = 18 } })) {
             try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
         }
-        if (try dvui.buttonIcon(@src(), 18, "more", entypo.dots_three_vertical, .{ .padding = Rect.all(6) })) {
+        if (try dvui.buttonIcon(@src(), "more", entypo.dots_three_vertical, .{ .padding = Rect.all(6), .min_size_content = .{ .h = 18 } })) {
             try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
         }
         cbox.deinit();
@@ -930,7 +940,7 @@ pub fn icon_browser() !void {
             const r = Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
             var iconbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i, .expand = .horizontal, .rect = r });
 
-            if (try dvui.buttonIcon(@src(), 20, "entypo." ++ d.name, @field(entypo, d.name), .{})) {
+            if (try dvui.buttonIcon(@src(), "entypo." ++ d.name, @field(entypo, d.name), .{ .min_size_content = .{ .h = 20 } })) {
                 // TODO: copy full buttonIcon code line into clipboard and show toast
             }
             var tl = try dvui.textLayout(@src(), .{ .break_lines = false }, .{});
