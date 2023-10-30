@@ -191,7 +191,7 @@ pub fn demo() !void {
         return;
     }
 
-    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 400, .h = 400 } });
+    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 440, .h = 400 } });
     defer float.deinit();
 
     var buf: [100]u8 = undefined;
@@ -230,6 +230,10 @@ pub fn demo() !void {
 
     if (try dvui.expander(@src(), "Basic Widgets", .{ .expand = .horizontal })) {
         try basicWidgets();
+    }
+
+    if (try dvui.expander(@src(), "Text Entry", .{ .expand = .horizontal })) {
+        try textEntryWidgets();
     }
 
     if (try dvui.expander(@src(), "Styling", .{ .expand = .horizontal })) {
@@ -304,11 +308,17 @@ pub fn basicWidgets() !void {
 
         _ = try dvui.button(@src(), "Button", .{});
         _ = try dvui.button(@src(), "Multi-line\nButton", .{});
-        _ = try dvui.slider(@src(), .vertical, &slider_val, .{ .expand = .vertical, .min_size_content = .{ .w = 10 } });
     }
 
-    _ = try dvui.slider(@src(), .horizontal, &slider_val, .{ .expand = .horizontal });
-    try dvui.label(@src(), "slider value: {d:2.2}", .{slider_val}, .{});
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Sliders", .{}, .{ .gravity_y = 0.5 });
+        _ = try dvui.slider(@src(), .horizontal, &slider_val, .{ .expand = .horizontal, .gravity_y = 0.5 });
+        _ = try dvui.slider(@src(), .vertical, &slider_val, .{ .expand = .vertical, .min_size_content = .{ .w = 10 } });
+        try dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });
+    }
 
     try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
@@ -316,7 +326,29 @@ pub fn basicWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        try dvui.label(@src(), "Text Entry Singleline", .{}, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "Text Entry", .{}, .{ .gravity_y = 0.5 });
+        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_buf }, .{});
+        te.deinit();
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Dropdown", .{}, .{ .gravity_y = 0.5 });
+
+        const entries = [_][]const u8{ "First", "Second", "Third is a really long one that doesn't fit" };
+
+        _ = try dvui.dropdown(@src(), &entries, &dropdown_val, .{ .min_size_content = .{ .w = 120 } });
+    }
+}
+
+pub fn textEntryWidgets() !void {
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Text Entry", .{}, .{ .gravity_y = 0.5 });
         var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_buf }, .{});
         const teid = te.data().id;
         try te.install();
@@ -339,6 +371,8 @@ pub fn basicWidgets() !void {
 
         try te.draw();
         te.deinit();
+
+        try dvui.label(@src(), "(press enter)", .{}, .{ .gravity_y = 0.5 });
 
         if (enter_pressed) {
             dvui.animation(teid, "enter_pressed", .{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 500_000 });
@@ -374,8 +408,6 @@ pub fn basicWidgets() !void {
         }
     }
 
-    try dvui.label(@src(), "Password is \"{s}\"", .{std.mem.sliceTo(&text_entry_password_buf, 0)}, .{ .gravity_y = 0.5 });
-
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -402,7 +434,7 @@ pub fn basicWidgets() !void {
         try te.draw();
         te.deinit();
 
-        try dvui.label(@src(), "filter", .{}, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "Filter", .{}, .{ .gravity_y = 0.5 });
         var te2 = try dvui.textEntry(@src(), .{
             .text = filter_buf,
         }, .{});
@@ -414,19 +446,8 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Text Entry Multiline", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .multiline = true }, .{ .min_size_content = .{ .w = 150, .h = 100 } });
+        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .multiline = true }, .{ .min_size_content = .{ .w = 150, .h = 80 } });
         te.deinit();
-    }
-
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        try dvui.label(@src(), "Dropdown", .{}, .{ .gravity_y = 0.5 });
-
-        const entries = [_][]const u8{ "First", "Second", "Third is a really long one that doesn't fit" };
-
-        _ = try dvui.dropdown(@src(), &entries, &dropdown_val, .{ .min_size_content = .{ .w = 120 } });
     }
 }
 
