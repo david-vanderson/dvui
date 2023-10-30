@@ -31,6 +31,7 @@ pub fn main() !void {
     var scale_val: f32 = 1.0;
     var scale_mod: dvui.enums.Mod = .none;
     var dropdown_choice: usize = 1;
+    var num_windows: usize = 0;
 
     //var rng = std.rand.DefaultPrng.init(0);
 
@@ -161,6 +162,46 @@ pub fn main() !void {
 
                     if (try dvui.button(@src(), if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window", .{})) {
                         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
+                    }
+                }
+
+                {
+                    if (try dvui.button(@src(), "add window", .{})) {
+                        num_windows += 10;
+                    }
+
+                    for (0..num_windows) |i| {
+                        var open: bool = true;
+                        //var nwin = try dvui.floatingWindow(@src(), .{ .open_flag = &open, .window_avoid = .nudge }, .{ .id_extra = i, .color_style = .window, .min_size_content = .{ .w = 200, .h = 60 } });
+                        var nwin = try dvui.floatingWindow(@src(), .{ .open_flag = &open }, .{ .id_extra = i, .color_style = .window, .min_size_content = .{ .w = 200, .h = 60 } });
+                        //var nwin = dvui.FloatingWindowWidget.init(@src(), .{
+                        //    .open_flag = &open,
+                        //}, .{ .id_extra = i, .color_style = .window, .min_size_content = .{ .w = 200, .h = 60 } });
+
+                        //if (dvui.firstFrame(nwin.wd.id)) {
+                        //    dvui.dataSet(null, nwin.wd.id, "randomize", true);
+                        //} else if (dvui.dataGet(null, nwin.wd.id, "randomize", bool) != null) {
+                        //    dvui.dataRemove(null, nwin.wd.id, "randomize");
+
+                        //    var prng = std.rand.DefaultPrng.init(@truncate(std.math.absCast(dvui.frameTimeNS())));
+                        //    var rand = prng.random();
+                        //    nwin.wd.rect.x = rand.float(f32) * (dvui.windowRect().w - 24);
+                        //    nwin.wd.rect.y = rand.float(f32) * (dvui.windowRect().h - 24);
+                        //}
+
+                        //try nwin.install(.{});
+
+                        defer nwin.deinit();
+
+                        try dvui.windowHeader("Modal Dialog", "", &open);
+
+                        if (try dvui.button(@src(), "add window", .{})) {
+                            num_windows += 3;
+                        }
+
+                        if (!open) {
+                            num_windows = 0;
+                        }
                     }
                 }
 
