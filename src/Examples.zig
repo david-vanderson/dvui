@@ -229,34 +229,50 @@ pub fn demo() !void {
     }
 
     if (try dvui.expander(@src(), "Basic Widgets", .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
         try basicWidgets();
     }
 
     if (try dvui.expander(@src(), "Text Entry", .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
         try textEntryWidgets();
     }
 
     if (try dvui.expander(@src(), "Styling", .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
         try styling();
     }
 
     if (try dvui.expander(@src(), "Layout", .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
         try layout();
     }
 
     if (try dvui.expander(@src(), "Text Layout", .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
         try layoutText();
     }
 
     if (try dvui.expander(@src(), "Menus", .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
         try menus();
     }
 
     if (try dvui.expander(@src(), "Dialogs and Toasts", .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
         try dialogs(float.data().id);
     }
 
     if (try dvui.expander(@src(), "Animations", .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
         try animations();
     }
 
@@ -300,8 +316,6 @@ pub fn demo() !void {
 }
 
 pub fn basicWidgets() !void {
-    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
-    defer b.deinit();
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -344,12 +358,17 @@ pub fn basicWidgets() !void {
 }
 
 pub fn textEntryWidgets() !void {
+    var left_alignment = dvui.Alignment.init();
+    defer left_alignment.deinit();
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        try dvui.label(@src(), "Text Entry", .{}, .{ .gravity_y = 0.5 });
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_buf }, .{});
+        try dvui.label(@src(), "Singleline", .{}, .{ .gravity_y = 0.5 });
+
+        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_buf }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().add(left_alignment.margin(hbox.data().id)) });
+        left_alignment.record(hbox.data().id, te.data());
+
         const teid = te.data().id;
         try te.install();
 
@@ -390,11 +409,15 @@ pub fn textEntryWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        try dvui.label(@src(), "Text Entry Password", .{}, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "Password", .{}, .{ .gravity_y = 0.5 });
+
         var te = try dvui.textEntry(@src(), .{
             .text = &text_entry_password_buf,
             .password_char = if (text_entry_password_buf_obf_enable) "*" else null,
-        }, .{});
+        }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().add(left_alignment.margin(hbox.data().id)) });
+
+        left_alignment.record(hbox.data().id, te.data());
+
         te.deinit();
 
         if (try dvui.buttonIcon(
@@ -421,8 +444,10 @@ pub fn textEntryWidgets() !void {
             break :blk dvui.dataGetSlice(null, hbox.wd.id, "filter_buffer", []u8).?;
         };
 
-        try dvui.label(@src(), "Text Entry Filter", .{}, .{ .gravity_y = 0.5 });
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = buf }, .{ .debug = true });
+        try dvui.label(@src(), "Filtered", .{}, .{ .gravity_y = 0.5 });
+        var te = dvui.TextEntryWidget.init(@src(), .{ .text = buf }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().add(left_alignment.margin(hbox.data().id)) });
+        left_alignment.record(hbox.data().id, te.data());
+
         try te.install();
         te.processEvents();
 
@@ -445,8 +470,9 @@ pub fn textEntryWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        try dvui.label(@src(), "Text Entry Multiline", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .multiline = true }, .{ .min_size_content = .{ .w = 150, .h = 80 } });
+        try dvui.label(@src(), "Multiline", .{}, .{ .gravity_y = 0.5 });
+        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .multiline = true }, .{ .min_size_content = .{ .w = 150, .h = 80 }, .margin = dvui.TextEntryWidget.defaults.marginGet().add(left_alignment.margin(hbox.data().id)) });
+        left_alignment.record(hbox.data().id, te.data());
         te.deinit();
     }
 }
@@ -594,8 +620,6 @@ pub fn layout() !void {
 }
 
 pub fn layoutText() !void {
-    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
-    defer b.deinit();
     try dvui.label(@src(), "Title", .{}, .{ .font_style = .title });
     try dvui.label(@src(), "Title-1", .{}, .{ .font_style = .title_1 });
     try dvui.label(@src(), "Title-2", .{}, .{ .font_style = .title_2 });
@@ -720,9 +744,6 @@ pub fn submenus() !void {
 }
 
 pub fn dialogs(demo_win_id: u32) !void {
-    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
-    defer b.deinit();
-
     if (try dvui.button(@src(), "Direct Dialog", .{})) {
         show_dialog = true;
     }
@@ -772,9 +793,6 @@ pub fn dialogs(demo_win_id: u32) !void {
 }
 
 pub fn animations() !void {
-    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 0, .w = 0, .h = 0 } });
-    defer b.deinit();
-
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
