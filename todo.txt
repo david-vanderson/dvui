@@ -1,4 +1,7 @@
 
+MenuItemWidget should probably not default to horizontal expand
+- ScrollBar is the only other one that has expand as a default
+
 add raster image support (like icons) using stb_image
 - add to Examples some where we bake the image data into the file, then send it through stb_image
 - IconCacheEntry -> TextureCacheEntry

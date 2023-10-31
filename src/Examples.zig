@@ -377,9 +377,6 @@ pub fn basicWidgets() !void {
 
         try dvui.label(@src(), "Raster Images", .{}, .{ .gravity_y = 0.5 });
 
-        const imgsize = try dvui.imageSize("zig favicon", zig_favicon);
-        std.debug.print("zig favicon size {}\n", .{imgsize});
-
         try dvui.image(@src(), "zig favicon", zig_favicon, .{});
     }
 }
