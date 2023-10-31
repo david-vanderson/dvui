@@ -5831,7 +5831,7 @@ pub const ScrollAreaWidget = struct {
         if (self.si.vertical != .none) {
             if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar == .auto and (self.si.virtual_size.h > self.si.viewport.h))) {
                 // do the scrollbars first so that they still appear even if there's not enough space
-                self.vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = self.si, .focus_id = focus_target }, .{ .gravity_x = 1.0 });
+                self.vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = self.si, .focus_id = focus_target }, .{ .gravity_x = 1.0, .expand = .vertical });
                 try self.vbar.?.install(.{});
             }
         }
@@ -6316,7 +6316,6 @@ pub const ScrollContainerWidget = struct {
 pub const ScrollBarWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
-        .expand = .vertical,
         .color_style = .content,
         .min_size_content = .{ .w = 10, .h = 10 },
     };
