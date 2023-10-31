@@ -116,9 +116,11 @@ fn link_deps(exe: *std.Build.Step.Compile, b: *std.Build) void {
     });
     exe.linkLibrary(freetype_dep.artifact("freetype"));
 
-    // stb_image
-    exe.addIncludePath(.{ .path = "src" }); // for src/stb_image.h
-    exe.addCSourceFiles(&.{"src/stb_image_impl.c"}, &.{});
+    const stbi_dep = b.dependency("stb_image", .{
+        .target = exe.target,
+        .optimize = exe.optimize,
+    });
+    exe.linkLibrary(stbi_dep.artifact("stb_image"));
 
     exe.linkLibC();
 
