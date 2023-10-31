@@ -2450,7 +2450,7 @@ pub const Window = struct {
                 self.backend.textureDestroy(ice.value.texture);
             }
 
-            std.debug.print("texture_cache {d}\n", .{self.texture_cache.count()});
+            //std.debug.print("texture_cache {d}\n", .{self.texture_cache.count()});
         }
 
         if (!self.captured_last_frame) {
@@ -8755,20 +8755,20 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
 
     const texture = cw.backend.textureCreate(data, @intCast(w), @intCast(h));
 
-    std.debug.print("created image texture \"{s}\" size {d}x{d}\n", .{ name, w, h });
-    const usizeh: usize = @intCast(h);
-    for (0..@intCast(h)) |hi| {
-        for (0..@intCast(w)) |wi| {
-            std.debug.print("pixel {d} {d} {d}.{d}.{d}.{d}\n", .{
-                hi,
-                wi,
-                data[hi * usizeh * 4 + wi * 4],
-                data[hi * usizeh * 4 + wi * 4 + 1],
-                data[hi * usizeh * 4 + wi * 4 + 2],
-                data[hi * usizeh * 4 + wi * 4 + 3],
-            });
-        }
-    }
+    //std.debug.print("created image texture \"{s}\" size {d}x{d}\n", .{ name, w, h });
+    //const usizeh: usize = @intCast(h);
+    //for (0..@intCast(h)) |hi| {
+    //    for (0..@intCast(w)) |wi| {
+    //        std.debug.print("pixel {d} {d} {d}.{d}.{d}.{d}\n", .{
+    //            hi,
+    //            wi,
+    //            data[hi * usizeh * 4 + wi * 4],
+    //            data[hi * usizeh * 4 + wi * 4 + 1],
+    //            data[hi * usizeh * 4 + wi * 4 + 2],
+    //            data[hi * usizeh * 4 + wi * 4 + 3],
+    //        });
+    //    }
+    //}
 
     const entry = TextureCacheEntry{ .texture = texture, .size = .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) } };
     try cw.texture_cache.put(hash, entry);
