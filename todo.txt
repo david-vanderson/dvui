@@ -1,7 +1,4 @@
 
-MenuItemWidget should probably not default to horizontal expand
-- ScrollBar is the only other one that has expand as a default
-
 add raster image support (like icons) using stb_image
 - add to Examples some where we bake the image data into the file, then send it through stb_image
 - IconCacheEntry -> TextureCacheEntry
@@ -12,6 +9,9 @@ stbi_failure_reason() can be queried for an extremely brief, end-user
 // unfriendly explanation of why the load failed. Define STBI_NO_FAILURE_STRINGS
 // to avoid compiling these strings at all, and STBI_FAILURE_USERMSG to get slightly
 // more user-friendly ones.
+
+need a button for sizing/rotation for icon and raster that works continuously while you hold it down
+- add option to Button where when in the down position it keeps refreshing
 
 add FlexLayoutWidget
 - doesn't have independent min height/width (works like textLayout)
