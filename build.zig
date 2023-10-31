@@ -110,12 +110,17 @@ pub fn build(b: *std.Build) !void {
 }
 
 fn link_deps(exe: *std.Build.Step.Compile, b: *std.Build) void {
+    // TODO: remove this part about freetype (pulling it from the dvui_dep
+    // sub-builder) once https://github.com/ziglang/zig/pull/14731 lands
     const freetype_dep = b.dependency("freetype", .{
         .target = exe.target,
         .optimize = exe.optimize,
     });
     exe.linkLibrary(freetype_dep.artifact("freetype"));
 
+    // TODO: remove this part about stb_image once either:
+    // - zig can successfully cimport stb_image.h
+    // - zig can have a module depend on a c file
     const stbi_dep = b.dependency("stb_image", .{
         .target = exe.target,
         .optimize = exe.optimize,
