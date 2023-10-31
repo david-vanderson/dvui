@@ -16,7 +16,7 @@ const VTable = struct {
     windowSize: *const fn (ptr: *anyopaque) Size,
     contentScale: *const fn (ptr: *anyopaque) f32,
     renderGeometry: *const fn (ptr: *anyopaque, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void,
-    textureCreate: *const fn (ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque,
+    textureCreate: *const fn (ptr: *anyopaque, pixels: [*]u8, width: u32, height: u32) *anyopaque,
     textureDestroy: *const fn (ptr: *anyopaque, texture: *anyopaque) void,
     clipboardText: *const fn (ptr: *anyopaque) []u8,
     clipboardTextSet: *const fn (ptr: *anyopaque, text: []u8) error{OutOfMemory}!void,
@@ -31,7 +31,7 @@ pub fn init(
     comptime windowSizeFn: fn (ptr: @TypeOf(pointer)) Size,
     comptime contentScaleFn: fn (ptr: @TypeOf(pointer)) f32,
     comptime renderGeometryFn: fn (ptr: @TypeOf(pointer), texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void,
-    comptime textureCreateFn: fn (ptr: @TypeOf(pointer), pixels: []u8, width: u32, height: u32) *anyopaque,
+    comptime textureCreateFn: fn (ptr: @TypeOf(pointer), pixels: [*]u8, width: u32, height: u32) *anyopaque,
     comptime textureDestroyFn: fn (ptr: @TypeOf(pointer), texture: *anyopaque) void,
     comptime clipboardTextFn: fn (ptr: @TypeOf(pointer)) []u8,
     comptime clipboardTextSetFn: fn (ptr: @TypeOf(pointer), text: []u8) error{OutOfMemory}!void,
@@ -73,7 +73,7 @@ pub fn init(
             return @call(.always_inline, renderGeometryFn, .{ self, texture, vtx, idx });
         }
 
-        fn textureCreateImpl(ptr: *anyopaque, pixels: []u8, width: u32, height: u32) *anyopaque {
+        fn textureCreateImpl(ptr: *anyopaque, pixels: [*]u8, width: u32, height: u32) *anyopaque {
             const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
             return @call(.always_inline, textureCreateFn, .{ self, pixels, width, height });
         }
@@ -143,7 +143,7 @@ pub fn renderGeometry(self: *Backend, texture: ?*anyopaque, vtx: []const Vertex,
     self.vtable.renderGeometry(self.ptr, texture, vtx, idx);
 }
 
-pub fn textureCreate(self: *Backend, pixels: []u8, width: u32, height: u32) *anyopaque {
+pub fn textureCreate(self: *Backend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
     return self.vtable.textureCreate(self.ptr, pixels, width, height);
 }
 

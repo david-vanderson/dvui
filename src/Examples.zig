@@ -13,6 +13,8 @@ const Adwaita = dvui.Adwaita;
 
 const enums = dvui.enums;
 
+const zig_favicon = @embedFile("zig-favicon.png");
+
 // TODO: Split
 const FloatingWindowWidget = dvui.FloatingWindowWidget;
 const TextLayoutWidget = dvui.TextLayoutWidget;
@@ -367,6 +369,18 @@ pub fn basicWidgets() !void {
         if (try dvui.button(@src(), "Icon Browser", .{ .gravity_y = 0.5 })) {
             IconBrowser.show = true;
         }
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Raster Images", .{}, .{ .gravity_y = 0.5 });
+
+        const imgsize = try dvui.imageSize("zig favicon", zig_favicon);
+        std.debug.print("zig favicon size {}\n", .{imgsize});
+
+        try dvui.image(@src(), "zig favicon", zig_favicon, .{});
     }
 }
 

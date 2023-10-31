@@ -31,9 +31,11 @@ const c = @cImport({
     @cInclude("freetype/ftsizes.h");
     @cInclude("freetype/ftstroke.h");
     @cInclude("freetype/fttrigon.h");
+
+    @cInclude("stb_image.h");
 });
 
-pub const Error = error{ OutOfMemory, InvalidUtf8, freetypeError, tvgError };
+pub const Error = error{ OutOfMemory, InvalidUtf8, freetypeError, tvgError, stbiError };
 
 const log = std.log.scoped(.dvui);
 const dvui = @This();
@@ -380,7 +382,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         .height = @ceil(height),
         .ascent = @floor(ascent),
         .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-        .texture_atlas = cw.backend.textureCreate(pixels, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h))),
+        .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h))),
         .texture_atlas_size = size,
         .texture_atlas_regen = true,
     };
@@ -389,14 +391,14 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     return cw.font_cache.getPtr(fontHash).?;
 }
 
-const IconCacheEntry = struct {
+const TextureCacheEntry = struct {
     texture: *anyopaque,
     size: Size,
     used: bool = true,
 
-    pub fn hash(tvg_bytes: []const u8, height: u32) u32 {
+    pub fn hash(bytes: []const u8, height: u32) u32 {
         var h = fnv.init();
-        h.update(std.mem.asBytes(&tvg_bytes.ptr));
+        h.update(std.mem.asBytes(&bytes.ptr));
         h.update(std.mem.asBytes(&height));
         return h.final();
     }
@@ -414,17 +416,16 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
     return height * @as(f32, @floatFromInt(parser.header.width)) / @as(f32, @floatFromInt(parser.header.height));
 }
 
-pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !IconCacheEntry {
+pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !TextureCacheEntry {
     var cw = currentWindow();
-    const icon_hash = IconCacheEntry.hash(tvg_bytes, height);
+    const icon_hash = TextureCacheEntry.hash(tvg_bytes, height);
 
-    if (cw.icon_cache.getPtr(icon_hash)) |ice| {
-        ice.used = true;
-        return ice.*;
+    if (cw.texture_cache.getPtr(icon_hash)) |tce| {
+        tce.used = true;
+        return tce.*;
     }
 
-    _ = try currentWindow().arena.create(u8);
-    var image = tvg.rendering.renderBuffer(
+    var render = tvg.rendering.renderBuffer(
         cw.arena,
         cw.arena,
         tvg.rendering.SizeHint{ .height = height },
@@ -434,18 +435,14 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !IconCa
         std.debug.print("iconTexture: Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
         return error.tvgError;
     };
-    defer image.deinit(cw.arena);
+    defer render.deinit(cw.arena);
 
-    var pixels: []u8 = undefined;
-    pixels.ptr = @as([*]u8, @ptrCast(image.pixels.ptr));
-    pixels.len = image.pixels.len * 4;
+    const texture = cw.backend.textureCreate(@as([*]u8, @ptrCast(render.pixels.ptr)), render.width, render.height);
 
-    const texture = cw.backend.textureCreate(pixels, image.width, image.height);
+    //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, render.width, render.height });
 
-    //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, image.width, image.height });
-
-    const entry = IconCacheEntry{ .texture = texture, .size = .{ .w = @as(f32, @floatFromInt(image.width)), .h = @as(f32, @floatFromInt(image.height)) } };
-    try cw.icon_cache.put(icon_hash, entry);
+    const entry = TextureCacheEntry{ .texture = texture, .size = .{ .w = @as(f32, @floatFromInt(render.width)), .h = @as(f32, @floatFromInt(render.height)) } };
+    try cw.texture_cache.put(icon_hash, entry);
 
     return entry;
 }
@@ -462,6 +459,13 @@ pub const RenderCmd = struct {
         icon: struct {
             name: []const u8,
             tvg_bytes: []const u8,
+            rs: RectScale,
+            rotation: f32,
+            colormod: Color,
+        },
+        image: struct {
+            name: []const u8,
+            image_bytes: []const u8,
             rs: RectScale,
             rotation: f32,
             colormod: Color,
@@ -1828,7 +1832,7 @@ pub const Window = struct {
     tab_index_prev: std.ArrayList(TabIndex),
     tab_index: std.ArrayList(TabIndex),
     font_cache: std.AutoHashMap(u32, FontCacheEntry),
-    icon_cache: std.AutoHashMap(u32, IconCacheEntry),
+    texture_cache: std.AutoHashMap(u32, TextureCacheEntry),
     dialog_mutex: std.Thread.Mutex,
     dialogs: std.ArrayList(Dialog),
     toasts: std.ArrayList(Toast),
@@ -1883,7 +1887,7 @@ pub const Window = struct {
             .tab_index_prev = std.ArrayList(TabIndex).init(gpa),
             .tab_index = std.ArrayList(TabIndex).init(gpa),
             .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
-            .icon_cache = std.AutoHashMap(u32, IconCacheEntry).init(gpa),
+            .texture_cache = std.AutoHashMap(u32, TextureCacheEntry).init(gpa),
             .dialog_mutex = std.Thread.Mutex{},
             .dialogs = std.ArrayList(Dialog).init(gpa),
             .toasts = std.ArrayList(Toast).init(gpa),
@@ -1923,7 +1927,7 @@ pub const Window = struct {
         self.tab_index_prev.deinit();
         self.tab_index.deinit();
         self.font_cache.deinit();
-        self.icon_cache.deinit();
+        self.texture_cache.deinit();
         self.dialogs.deinit();
         self._arena.deinit();
     }
@@ -2432,7 +2436,7 @@ pub const Window = struct {
         {
             var deadIcons = std.ArrayList(u32).init(arena);
             defer deadIcons.deinit();
-            var it = self.icon_cache.iterator();
+            var it = self.texture_cache.iterator();
             while (it.next()) |kv| {
                 if (kv.value_ptr.used) {
                     kv.value_ptr.used = false;
@@ -2442,11 +2446,11 @@ pub const Window = struct {
             }
 
             for (deadIcons.items) |id| {
-                const ice = self.icon_cache.fetchRemove(id).?;
+                const ice = self.texture_cache.fetchRemove(id).?;
                 self.backend.textureDestroy(ice.value.texture);
             }
 
-            //std.debug.print("icon_cache {d}\n", .{self.icon_cache.count()});
+            std.debug.print("texture_cache {d}\n", .{self.texture_cache.count()});
         }
 
         if (!self.captured_last_frame) {
@@ -2573,6 +2577,9 @@ pub const Window = struct {
                 },
                 .icon => |i| {
                     try renderIcon(i.name, i.tvg_bytes, i.rs, i.rotation, i.colormod);
+                },
+                .image => |i| {
+                    try renderImage(i.name, i.image_bytes, i.rs, i.rotation, i.colormod);
                 },
                 .pathFillConvex => |pf| {
                     try self.path.appendSlice(pf.path.items);
@@ -7239,6 +7246,72 @@ pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []cons
     iw.deinit();
 }
 
+pub fn imageSize(name: []const u8, image_bytes: []const u8) !Size {
+    var w: c_int = undefined;
+    var h: c_int = undefined;
+    var n: c_int = undefined;
+    const ok = c.stbi_info_from_memory(image_bytes.ptr, @as(c_int, @intCast(image_bytes.len)), &w, &h, &n);
+    if (ok == 1) {
+        return .{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
+    } else {
+        std.debug.print("imageSize: stbi_info error parsing image {s}\n", .{name});
+        return Error.stbiError;
+    }
+}
+
+pub fn image(src: std.builtin.SourceLocation, name: []const u8, image_bytes: []const u8, opts: Options) !void {
+    var iw = try ImageWidget.init(src, name, image_bytes, opts);
+    try iw.install(.{});
+    iw.deinit();
+}
+
+pub const ImageWidget = struct {
+    const Self = @This();
+
+    wd: WidgetData = undefined,
+    name: []const u8 = undefined,
+    image_bytes: []const u8 = undefined,
+
+    pub fn init(src: std.builtin.SourceLocation, name: []const u8, image_bytes: []const u8, opts: Options) !Self {
+        var self = Self{};
+        const options = opts;
+        self.name = name;
+        self.image_bytes = image_bytes;
+
+        var size = Size{};
+        if (options.min_size_content) |msc| {
+            // user gave us a min size, use it
+            size = msc;
+        } else {
+            // user didn't give us one, use natural size
+            size = imageSize(name, image_bytes) catch .{ .w = 10, .h = 10 };
+        }
+
+        self.wd = WidgetData.init(src, .{}, options.override(.{ .min_size_content = size }));
+
+        return self;
+    }
+
+    pub fn install(self: *Self, opts: struct {}) !void {
+        _ = opts;
+        try self.wd.register("Image", null);
+        //debug("{x} Icon \"{s:<10}\" {} {d}", .{ self.wd.id, self.name, self.wd.rect, self.wd.options.rotationGet() });
+
+        try self.wd.borderAndBackground(.{});
+
+        var rect = placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
+        var rs = self.wd.parent.screenRectScale(rect);
+        try renderImage(self.name, self.image_bytes, rs, self.wd.options.rotationGet(), .{});
+
+        self.wd.minSizeSetAndRefresh();
+        self.wd.minSizeReportToParent();
+    }
+
+    pub fn deinit(self: *Self) void {
+        _ = self;
+    }
+};
+
 pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
     const cw = currentWindow();
 
@@ -8389,7 +8462,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             }
         }
 
-        fce.texture_atlas = cw.backend.textureCreate(pixels, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)));
+        fce.texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)));
         fce.texture_atlas_size = size;
     }
 
@@ -8569,30 +8642,8 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
     }
 }
 
-pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotation: f32, colormod: Color) !void {
-    if (rs.s == 0) return;
-    if (clipGet().intersect(rs.r).empty()) return;
-
-    //if (true) return;
-
+pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Color) !void {
     var cw = currentWindow();
-
-    if (!cw.rendering) {
-        var name_copy = try cw.arena.dupe(u8, name);
-        var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .rotation = rotation, .colormod = colormod } } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
-
-        return;
-    }
-
-    // Make sure to always ask for a bigger size icon, we'll reduce it down below
-    const target_size = rs.r.h;
-    const ask_height = @ceil(target_size);
-    const target_fraction = target_size / ask_height;
-
-    const ice = iconTexture(name, tvg_bytes, @as(u32, @intFromFloat(ask_height))) catch return;
 
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, 4);
     defer vtx.deinit();
@@ -8602,8 +8653,8 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotati
     var x: f32 = if (cw.snap_to_pixels) @round(rs.r.x) else rs.r.x;
     var y: f32 = if (cw.snap_to_pixels) @round(rs.r.y) else rs.r.y;
 
-    var xw = x + ice.size.w * target_fraction;
-    var yh = y + ice.size.h * target_fraction;
+    var xw = rs.r.x + rs.r.w;
+    var yh = rs.r.y + rs.r.h;
 
     var midx = (x + xw) / 2;
     var midy = (y + yh) / 2;
@@ -8651,7 +8702,100 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotati
     try idx.append(2);
     try idx.append(3);
 
-    cw.backend.renderGeometry(ice.texture, vtx.items, idx.items);
+    cw.backend.renderGeometry(tex, vtx.items, idx.items);
+}
+
+pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotation: f32, colormod: Color) !void {
+    if (rs.s == 0) return;
+    if (clipGet().intersect(rs.r).empty()) return;
+
+    //if (true) return;
+
+    var cw = currentWindow();
+
+    if (!cw.rendering) {
+        var name_copy = try cw.arena.dupe(u8, name);
+        var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .rotation = rotation, .colormod = colormod } } };
+
+        var sw = cw.subwindowCurrent();
+        try sw.render_cmds.append(cmd);
+
+        return;
+    }
+
+    // Ask for an integer size icon, then render it to fit rs
+    const target_size = rs.r.h;
+    const ask_height = @ceil(target_size);
+    //const target_fraction = target_size / ask_height;
+
+    const tce = iconTexture(name, tvg_bytes, @as(u32, @intFromFloat(ask_height))) catch return;
+
+    try renderTexture(tce.texture, rs, rotation, colormod);
+}
+
+pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntry {
+    var cw = currentWindow();
+    const hash = TextureCacheEntry.hash(image_bytes, 0);
+
+    if (cw.texture_cache.getPtr(hash)) |tce| {
+        tce.used = true;
+        return tce.*;
+    }
+
+    var w: c_int = undefined;
+    var h: c_int = undefined;
+    var channels_in_file: c_int = undefined;
+    const data = c.stbi_load_from_memory(image_bytes.ptr, @as(c_int, @intCast(image_bytes.len)), &w, &h, &channels_in_file, 4);
+    if (data == null) {
+        std.debug.print("imageTexture: stbi_info error parsing image {s}\n", .{name});
+        return Error.stbiError;
+    }
+
+    defer c.stbi_image_free(data);
+
+    const texture = cw.backend.textureCreate(data, @intCast(w), @intCast(h));
+
+    std.debug.print("created image texture \"{s}\" size {d}x{d}\n", .{ name, w, h });
+    const usizeh: usize = @intCast(h);
+    for (0..@intCast(h)) |hi| {
+        for (0..@intCast(w)) |wi| {
+            std.debug.print("pixel {d} {d} {d}.{d}.{d}.{d}\n", .{
+                hi,
+                wi,
+                data[hi * usizeh * 4 + wi * 4],
+                data[hi * usizeh * 4 + wi * 4 + 1],
+                data[hi * usizeh * 4 + wi * 4 + 2],
+                data[hi * usizeh * 4 + wi * 4 + 3],
+            });
+        }
+    }
+
+    const entry = TextureCacheEntry{ .texture = texture, .size = .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) } };
+    try cw.texture_cache.put(hash, entry);
+
+    return entry;
+}
+
+pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, rotation: f32, colormod: Color) !void {
+    if (rs.s == 0) return;
+    if (clipGet().intersect(rs.r).empty()) return;
+
+    //if (true) return;
+
+    var cw = currentWindow();
+
+    if (!cw.rendering) {
+        var name_copy = try cw.arena.dupe(u8, name);
+        var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .image = .{ .name = name_copy, .image_bytes = image_bytes, .rs = rs, .rotation = rotation, .colormod = colormod } } };
+
+        var sw = cw.subwindowCurrent();
+        try sw.render_cmds.append(cmd);
+
+        return;
+    }
+
+    const tce = imageTexture(name, image_bytes) catch return;
+    try renderTexture(tce.texture, rs, rotation, colormod);
 }
 
 pub const Event = struct {
