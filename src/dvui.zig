@@ -4166,7 +4166,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
         }
 
         for (entries, 0..) |_, i| {
-            var mi = try menuItem(@src(), .{}, .{ .id_extra = i });
+            var mi = try menuItem(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
             if (first_frame and (i == choice.*)) {
                 focusWidget(mi.wd.id, null, null);
             }
@@ -6879,7 +6879,9 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, ini
 pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) !?Rect {
     var mi = try menuItem(src, init_opts, opts);
 
-    var iconopts = opts.strip();
+    // pass min_size_content through to the icon so that it will figure out the
+    // min width based on the height
+    var iconopts = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content });
 
     var ret: ?Rect = null;
     if (mi.activeRect()) |r| {
@@ -6910,7 +6912,6 @@ pub const MenuItemWidget = struct {
         .color_style = .content,
         .corner_radius = Rect.all(5),
         .padding = Rect.all(4),
-        .expand = .horizontal,
     };
 
     pub const InitOptions = struct {
