@@ -115,6 +115,11 @@ fn link_deps(exe: *std.Build.Step.Compile, b: *std.Build) void {
         .optimize = exe.optimize,
     });
     exe.linkLibrary(freetype_dep.artifact("freetype"));
+
+    // stb_image
+    exe.addIncludePath(.{ .path = "src" }); // for src/stb_image.h
+    exe.addCSourceFiles(&.{"src/stb_image_impl.c"}, &.{});
+
     exe.linkLibC();
 
     if (exe.target.isWindows()) {

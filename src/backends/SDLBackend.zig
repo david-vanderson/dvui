@@ -340,12 +340,12 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui
     }
 }
 
-pub fn textureCreate(self: *SDLBackend, pixels: []u8, width: u32, height: u32) *anyopaque {
+pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
     var surface: *c.SDL_Surface = undefined;
     if (sdl3) {
-        surface = c.SDL_CreateSurfaceFrom(pixels.ptr, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), @as(c_int, @intCast(4 * width)), c.SDL_PIXELFORMAT_ABGR8888);
+        surface = c.SDL_CreateSurfaceFrom(pixels, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), @as(c_int, @intCast(4 * width)), c.SDL_PIXELFORMAT_ABGR8888);
     } else {
-        surface = c.SDL_CreateRGBSurfaceWithFormatFrom(pixels.ptr, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), 32, @as(c_int, @intCast(4 * width)), c.SDL_PIXELFORMAT_ABGR8888);
+        surface = c.SDL_CreateRGBSurfaceWithFormatFrom(pixels, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), 32, @as(c_int, @intCast(4 * width)), c.SDL_PIXELFORMAT_ABGR8888);
     }
     defer {
         if (sdl3) {

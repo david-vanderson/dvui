@@ -1,6 +1,18 @@
 
 add raster image support (like icons) using stb_image
-- can we find another zig project using stb_image?
+- add to Examples some where we bake the image data into the file, then send it through stb_image
+- IconCacheEntry -> TextureCacheEntry
+
+add sizing and rotation to icon and raster examples
+
+stbi_failure_reason() can be queried for an extremely brief, end-user
+// unfriendly explanation of why the load failed. Define STBI_NO_FAILURE_STRINGS
+// to avoid compiling these strings at all, and STBI_FAILURE_USERMSG to get slightly
+// more user-friendly ones.
+
+add FlexLayoutWidget
+- doesn't have independent min height/width (works like textLayout)
+- start with no expand, and only left->right top->bottom
 
 if using standalone, should be able to draw using SDL stuff into a widget
 - so base window needs to not delay rendering so you can render ontop of widget backgrounds
