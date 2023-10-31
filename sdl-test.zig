@@ -91,11 +91,11 @@ pub fn main() !void {
                 var fw2 = try dvui.popup(@src(), dvui.Rect.fromPoint(cp), .{});
                 defer fw2.deinit();
 
-                _ = try dvui.menuItemLabel(@src(), "Cut", .{}, .{});
-                if ((dvui.menuItemLabel(@src(), "Close", .{}, .{}) catch unreachable) != null) {
+                _ = try dvui.menuItemLabel(@src(), "Cut", .{}, .{ .expand = .horizontal });
+                if ((dvui.menuItemLabel(@src(), "Close", .{}, .{ .expand = .horizontal }) catch unreachable) != null) {
                     dvui.menuGet().?.close();
                 }
-                _ = try dvui.menuItemLabel(@src(), "Paste", .{}, .{});
+                _ = try dvui.menuItemLabel(@src(), "Paste", .{}, .{ .expand = .horizontal });
             }
 
             {

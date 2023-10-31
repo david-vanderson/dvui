@@ -702,11 +702,11 @@ pub fn menus() !void {
         var fw2 = try dvui.popup(@src(), Rect.fromPoint(cp), .{});
         defer fw2.deinit();
 
-        _ = try dvui.menuItemLabel(@src(), "Cut", .{}, .{});
-        if ((try dvui.menuItemLabel(@src(), "Close", .{}, .{})) != null) {
+        _ = try dvui.menuItemLabel(@src(), "Cut", .{}, .{ .expand = .horizontal });
+        if ((try dvui.menuItemLabel(@src(), "Close", .{}, .{ .expand = .horizontal })) != null) {
             dvui.menuGet().?.close();
         }
-        _ = try dvui.menuItemLabel(@src(), "Paste", .{}, .{});
+        _ = try dvui.menuItemLabel(@src(), "Paste", .{}, .{ .expand = .horizontal });
     }
 
     var vbox = try dvui.box(@src(), .vertical, .{});
@@ -716,30 +716,30 @@ pub fn menus() !void {
         var m = try dvui.menu(@src(), .horizontal, .{});
         defer m.deinit();
 
-        if (try dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
+        if (try dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
             var fw = try dvui.popup(@src(), Rect.fromPoint(Point{ .x = r.x, .y = r.y + r.h }), .{});
             defer fw.deinit();
 
             try submenus();
 
-            if (try dvui.menuItemLabel(@src(), "Close", .{}, .{}) != null) {
+            if (try dvui.menuItemLabel(@src(), "Close", .{}, .{ .expand = .horizontal }) != null) {
                 dvui.menuGet().?.close();
             }
 
             try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
-            if (try dvui.menuItemLabel(@src(), "Dialog", .{}, .{}) != null) {
+            if (try dvui.menuItemLabel(@src(), "Dialog", .{}, .{ .expand = .horizontal }) != null) {
                 dvui.menuGet().?.close();
                 show_dialog = true;
             }
         }
 
-        if (try dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{})) |r| {
+        if (try dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
             var fw = try dvui.popup(@src(), Rect.fromPoint(Point{ .x = r.x, .y = r.y + r.h }), .{});
             defer fw.deinit();
-            _ = try dvui.menuItemLabel(@src(), "Cut", .{}, .{});
-            _ = try dvui.menuItemLabel(@src(), "Copy", .{}, .{});
-            _ = try dvui.menuItemLabel(@src(), "Paste", .{}, .{});
+            _ = try dvui.menuItemLabel(@src(), "Cut", .{}, .{ .expand = .horizontal });
+            _ = try dvui.menuItemLabel(@src(), "Copy", .{}, .{ .expand = .horizontal });
+            _ = try dvui.menuItemLabel(@src(), "Paste", .{}, .{ .expand = .horizontal });
         }
     }
 
@@ -747,7 +747,7 @@ pub fn menus() !void {
 }
 
 pub fn submenus() !void {
-    if (try dvui.menuItemLabel(@src(), "Submenu...", .{ .submenu = true }, .{})) |r| {
+    if (try dvui.menuItemLabel(@src(), "Submenu...", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
         var menu_rect = r;
         menu_rect.x += menu_rect.w;
         var fw2 = try dvui.popup(@src(), menu_rect, .{});
@@ -755,11 +755,11 @@ pub fn submenus() !void {
 
         try submenus();
 
-        if (try dvui.menuItemLabel(@src(), "Close", .{}, .{}) != null) {
+        if (try dvui.menuItemLabel(@src(), "Close", .{}, .{ .expand = .horizontal }) != null) {
             dvui.menuGet().?.close();
         }
 
-        if (try dvui.menuItemLabel(@src(), "Dialog", .{}, .{}) != null) {
+        if (try dvui.menuItemLabel(@src(), "Dialog", .{}, .{ .expand = .horizontal }) != null) {
             dvui.menuGet().?.close();
             show_dialog = true;
         }
