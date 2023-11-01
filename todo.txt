@@ -1,7 +1,5 @@
 
-add hyperlink functionality (see open issue)
-- add keyboard nav/click at least to the LabelWidget one
-- add to textLayout
+add hyperlink functionality to textLayout
 
 add more keyboard shortcuts to textEntry
 - select all
