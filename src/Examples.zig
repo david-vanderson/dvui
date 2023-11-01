@@ -23,7 +23,7 @@ const LabelWidget = dvui.LabelWidget;
 
 pub var show_demo_window: bool = false;
 var checkbox_bool: bool = false;
-var icon_image_size: f32 = 12;
+var icon_image_size_extra: f32 = 0;
 var icon_image_rotation: f32 = 0;
 var slider_val: f32 = 0.0;
 var text_entry_buf = std.mem.zeroes([30]u8);
@@ -364,21 +364,10 @@ pub fn basicWidgets() !void {
 
         try dvui.label(@src(), "Icons", .{}, .{ .gravity_y = 0.5 });
 
-        try dvui.icon(@src(), "cycle", entypo.cycle, .{
-            .gravity_y = 0.5,
-            .min_size_content = .{ .h = icon_image_size },
-            .rotation = icon_image_rotation,
-        });
-        try dvui.icon(@src(), "aircraft", entypo.aircraft, .{
-            .gravity_y = 0.5,
-            .min_size_content = .{ .h = icon_image_size },
-            .rotation = icon_image_rotation,
-        });
-        try dvui.icon(@src(), "notes", entypo.beamed_note, .{
-            .gravity_y = 0.5,
-            .min_size_content = .{ .h = icon_image_size },
-            .rotation = icon_image_rotation,
-        });
+        const icon_opts = dvui.Options{ .gravity_y = 0.5, .min_size_content = .{ .h = 12 + icon_image_size_extra }, .rotation = icon_image_rotation };
+        try dvui.icon(@src(), "cycle", entypo.cycle, icon_opts);
+        try dvui.icon(@src(), "aircraft", entypo.aircraft, icon_opts);
+        try dvui.icon(@src(), "notes", entypo.beamed_note, icon_opts);
 
         if (try dvui.button(@src(), "Icon Browser", .{ .gravity_y = 0.5 })) {
             IconBrowser.show = true;
@@ -391,9 +380,10 @@ pub fn basicWidgets() !void {
 
         try dvui.label(@src(), "Raster Images", .{}, .{ .gravity_y = 0.5 });
 
+        const imgsize = try dvui.imageSize("zig favicon", zig_favicon);
         try dvui.image(@src(), "zig favicon", zig_favicon, .{
             .gravity_y = 0.5,
-            .min_size_content = Size.all(icon_image_size),
+            .min_size_content = .{ .w = imgsize.w + icon_image_size_extra, .h = imgsize.h + icon_image_size_extra },
             .rotation = icon_image_rotation,
         });
     }
@@ -405,11 +395,11 @@ pub fn basicWidgets() !void {
         try dvui.label(@src(), "Resize Rotate Icons/Images", .{}, .{ .gravity_y = 0.5 });
 
         if (try dvui.buttonIcon(@src(), "plus", entypo.plus, .{ .gravity_y = 0.5 })) {
-            icon_image_size += 1;
+            icon_image_size_extra += 1;
         }
 
         if (try dvui.buttonIcon(@src(), "minus", entypo.minus, .{ .gravity_y = 0.5 })) {
-            icon_image_size = @max(1, icon_image_size - 1);
+            icon_image_size_extra = @max(0, icon_image_size_extra - 1);
         }
 
         if (try dvui.buttonIcon(@src(), "cc", entypo.cc, .{ .gravity_y = 0.5 })) {
