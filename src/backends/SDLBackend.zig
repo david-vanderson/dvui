@@ -1,6 +1,7 @@
 const sdl3 = false;
 
 const std = @import("std");
+const builtin = @import("builtin");
 const dvui = @import("dvui");
 
 pub const c = @cImport({
@@ -110,18 +111,56 @@ pub fn init(options: initOptions) !SDLBackend {
             }
 
             if (guess_from_dpi) {
-                // see if we can guess correctly based on the dpi from SDL2
-                const display_num = c.SDL_GetWindowDisplayIndex(window);
-                var hdpi: f32 = undefined;
-                var vdpi: f32 = undefined;
-                _ = c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi);
-                const dpi = @max(hdpi, vdpi);
-                if (dpi > 200) {
-                    back.initial_scale = 4.0;
-                } else if (dpi > 100) {
-                    back.initial_scale = 2.0;
+                var mdpi: ?f32 = null;
+
+                // for X11, try to grab the output of xrdb -query
+                //*customization:	-color
+                //Xft.dpi:	96
+                //Xft.antialias:	1
+                if (mdpi == null and builtin.os.tag == .linux) {
+                    fba.reset();
+                    var stdout = std.ArrayList(u8).init(fba.allocator());
+                    var stderr = std.ArrayList(u8).init(fba.allocator());
+                    var child = std.process.Child.init(&.{ "xrdb", "-get", "Xft.dpi" }, fba.allocator());
+                    child.stdout_behavior = .Pipe;
+                    child.stderr_behavior = .Pipe;
+                    try child.spawn();
+                    var ok = true;
+                    child.collectOutput(&stdout, &stderr, 100) catch {
+                        ok = false;
+                    };
+                    _ = child.wait() catch {};
+                    if (ok) {
+                        const end_digits = std.mem.indexOfNone(u8, stdout.items, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse stdout.items.len;
+                        const xrdb_dpi = std.fmt.parseInt(u32, stdout.items[0..end_digits], 10) catch null;
+                        if (xrdb_dpi) |dpi| {
+                            mdpi = @floatFromInt(dpi);
+                        }
+
+                        if (mdpi) |dpi| {
+                            std.debug.print("SDLBackend dpi {d} from xrdb -get Xft.dpi\n", .{dpi});
+                        }
+                    }
                 }
-                std.debug.print("SDL2 dpi {d} guessing backend scale {d}\n", .{ dpi, back.initial_scale });
+
+                if (mdpi == null) {
+                    // see if we can guess correctly based on the dpi from SDL2
+                    const display_num = c.SDL_GetWindowDisplayIndex(window);
+                    var hdpi: f32 = undefined;
+                    var vdpi: f32 = undefined;
+                    _ = c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi);
+                    mdpi = @max(hdpi, vdpi);
+                    std.debug.print("SDLBackend dpi {d} from SDL_GetDisplayDPI\n", .{mdpi.?});
+                }
+
+                if (mdpi) |dpi| {
+                    if (dpi > 200) {
+                        back.initial_scale = 4.0;
+                    } else if (dpi > 100) {
+                        back.initial_scale = 2.0;
+                    }
+                    std.debug.print("SDLBackend guessing backend scale {d}\n", .{back.initial_scale});
+                }
             }
 
             if (back.initial_scale != 1.0) {
