@@ -29,7 +29,9 @@ pub const initOptions = struct {
 
 pub fn init(options: initOptions) !SDLBackend {
     _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-    _ = c.SDL_SetHint(c.SDL_HINT_WINDOWS_DPI_SCALING, "1");
+
+    // use the string version instead of the #define so we compile with SDL < 2.24
+    _ = c.SDL_SetHint("SDL_HINT_WINDOWS_DPI_SCALING", "1");
 
     if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
         std.debug.print("Couldn't initialize SDL: {s}\n", .{c.SDL_GetError()});
