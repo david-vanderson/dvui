@@ -146,15 +146,17 @@ pub fn init(options: initOptions) !SDLBackend {
                     }
                 }
 
-                if (mdpi == null) {
-                    // see if we can guess correctly based on the dpi from SDL2
-                    const display_num = c.SDL_GetWindowDisplayIndex(window);
-                    var hdpi: f32 = undefined;
-                    var vdpi: f32 = undefined;
-                    _ = c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi);
-                    mdpi = @max(hdpi, vdpi);
-                    std.debug.print("SDLBackend dpi {d} from SDL_GetDisplayDPI\n", .{mdpi.?});
-                }
+                // This doesn't seem to be helping anybody and sometimes hurts,
+                // so we'll try disabling it for now.
+                //if (mdpi == null) {
+                //    // see if we can guess correctly based on the dpi from SDL2
+                //    const display_num = c.SDL_GetWindowDisplayIndex(window);
+                //    var hdpi: f32 = undefined;
+                //    var vdpi: f32 = undefined;
+                //    _ = c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi);
+                //    mdpi = @max(hdpi, vdpi);
+                //    std.debug.print("SDLBackend dpi {d} from SDL_GetDisplayDPI\n", .{mdpi.?});
+                //}
 
                 if (mdpi) |dpi| {
                     if (dpi > 200) {
