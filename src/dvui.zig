@@ -7254,7 +7254,7 @@ pub fn imageSize(name: []const u8, image_bytes: []const u8) !Size {
     if (ok == 1) {
         return .{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
     } else {
-        std.debug.print("imageSize: stbi_info error parsing image {s}\n", .{name});
+        std.debug.print("imageSize: stbi_info error on image \"{s}\": {s}\n", .{ name, c.stbi_failure_reason() });
         return Error.stbiError;
     }
 }
@@ -8747,7 +8747,7 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
     var channels_in_file: c_int = undefined;
     const data = c.stbi_load_from_memory(image_bytes.ptr, @as(c_int, @intCast(image_bytes.len)), &w, &h, &channels_in_file, 4);
     if (data == null) {
-        std.debug.print("imageTexture: stbi_info error parsing image {s}\n", .{name});
+        std.debug.print("imageTexture: stbi_load error on image \"{s}\": {s}\n", .{ name, c.stbi_failure_reason() });
         return Error.stbiError;
     }
 
