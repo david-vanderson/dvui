@@ -1,12 +1,6 @@
 
 add hyperlink functionality (see open issue)
 
-add raster image support (like icons) using stb_image
-- add to Examples some where we bake the image data into the file, then send it through stb_image
-- IconCacheEntry -> TextureCacheEntry
-
-add sizing and rotation to icon and raster examples
-
 stbi_failure_reason() can be queried for an extremely brief, end-user
 // unfriendly explanation of why the load failed. Define STBI_NO_FAILURE_STRINGS
 // to avoid compiling these strings at all, and STBI_FAILURE_USERMSG to get slightly
