@@ -19,8 +19,9 @@ const VTable = struct {
     textureCreate: *const fn (ptr: *anyopaque, pixels: [*]u8, width: u32, height: u32) *anyopaque,
     textureDestroy: *const fn (ptr: *anyopaque, texture: *anyopaque) void,
     clipboardText: *const fn (ptr: *anyopaque) []u8,
-    clipboardTextSet: *const fn (ptr: *anyopaque, text: []u8) error{OutOfMemory}!void,
+    clipboardTextSet: *const fn (ptr: *anyopaque, text: []const u8) error{OutOfMemory}!void,
     free: *const fn (ptr: *anyopaque, p: *anyopaque) void,
+    openURL: *const fn (ptr: *anyopaque, url: []const u8) error{OutOfMemory}!void,
 };
 
 pub fn init(
@@ -34,8 +35,9 @@ pub fn init(
     comptime textureCreateFn: fn (ptr: @TypeOf(pointer), pixels: [*]u8, width: u32, height: u32) *anyopaque,
     comptime textureDestroyFn: fn (ptr: @TypeOf(pointer), texture: *anyopaque) void,
     comptime clipboardTextFn: fn (ptr: @TypeOf(pointer)) []u8,
-    comptime clipboardTextSetFn: fn (ptr: @TypeOf(pointer), text: []u8) error{OutOfMemory}!void,
+    comptime clipboardTextSetFn: fn (ptr: @TypeOf(pointer), text: []const u8) error{OutOfMemory}!void,
     comptime freeFn: fn (ptr: @TypeOf(pointer), p: *anyopaque) void,
+    comptime openURLFn: fn (ptr: @TypeOf(pointer), url: []const u8) error{OutOfMemory}!void,
 ) Backend {
     const Ptr = @TypeOf(pointer);
     const ptr_info = @typeInfo(Ptr);
@@ -88,7 +90,7 @@ pub fn init(
             return @call(.always_inline, clipboardTextFn, .{self});
         }
 
-        fn clipboardTextSetImpl(ptr: *anyopaque, text: []u8) error{OutOfMemory}!void {
+        fn clipboardTextSetImpl(ptr: *anyopaque, text: []const u8) error{OutOfMemory}!void {
             const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
             try @call(.always_inline, clipboardTextSetFn, .{ self, text });
         }
@@ -96,6 +98,11 @@ pub fn init(
         fn freeImpl(ptr: *anyopaque, p: *anyopaque) void {
             const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
             return @call(.always_inline, freeFn, .{ self, p });
+        }
+
+        fn openURLImpl(ptr: *anyopaque, url: []const u8) error{OutOfMemory}!void {
+            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
+            try @call(.always_inline, openURLFn, .{ self, url });
         }
 
         const vtable = VTable{
@@ -110,6 +117,7 @@ pub fn init(
             .clipboardText = clipboardTextImpl,
             .clipboardTextSet = clipboardTextSetImpl,
             .free = freeImpl,
+            .openURL = openURLImpl,
         };
     };
 
@@ -155,10 +163,14 @@ pub fn clipboardText(self: *Backend) []u8 {
     return self.vtable.clipboardText(self.ptr);
 }
 
-pub fn clipboardTextSet(self: *Backend, text: []u8) error{OutOfMemory}!void {
+pub fn clipboardTextSet(self: *Backend, text: []const u8) error{OutOfMemory}!void {
     try self.vtable.clipboardTextSet(self.ptr, text);
 }
 
 pub fn free(self: *Backend, p: *anyopaque) void {
     return self.vtable.free(self.ptr, p);
+}
+
+pub fn openURL(self: *Backend, url: []const u8) error{OutOfMemory}!void {
+    try self.vtable.openURL(self.ptr, url);
 }

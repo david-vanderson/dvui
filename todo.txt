@@ -1,10 +1,13 @@
 
 add hyperlink functionality (see open issue)
+- add keyboard nav/click at least to the LabelWidget one
+- add to textLayout
 
-stbi_failure_reason() can be queried for an extremely brief, end-user
-// unfriendly explanation of why the load failed. Define STBI_NO_FAILURE_STRINGS
-// to avoid compiling these strings at all, and STBI_FAILURE_USERMSG to get slightly
-// more user-friendly ones.
+add more keyboard shortcuts to textEntry
+- select all
+- home
+- end
+- pgup/pgdown
 
 need a button for sizing/rotation for icon and raster that works continuously while you hold it down
 - add option to Button where when in the down position it keeps refreshing

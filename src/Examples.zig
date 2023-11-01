@@ -322,8 +322,21 @@ pub fn basicWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        _ = try dvui.button(@src(), "Button", .{});
+        try dvui.label(@src(), "Label", .{}, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "Multi-line\nLabel", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+        _ = try dvui.button(@src(), "Button", .{ .gravity_y = 0.5 });
         _ = try dvui.button(@src(), "Multi-line\nButton", .{});
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Link:", .{}, .{ .gravity_y = 0.5 });
+
+        if (try dvui.labelClick(@src(), "https://github.com/david-vanderson/dvui", .{}, .{ .gravity_y = 0.5, .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } })) {
+            try dvui.openURL("https://github.com/david-vanderson/dvui");
+        }
     }
 
     {

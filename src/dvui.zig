@@ -1203,6 +1203,11 @@ pub fn backendFree(p: *anyopaque) void {
     cw.backend.free(p);
 }
 
+pub fn openURL(url: []const u8) !void {
+    const cw = currentWindow();
+    try cw.backend.openURL(url);
+}
+
 pub fn seconds_since_last_frame() f32 {
     return currentWindow().secs_since_last_frame;
 }
@@ -7142,7 +7147,15 @@ pub const LabelWidget = struct {
 
         self.wd = WidgetData.init(src, .{}, options.override(.{ .min_size_content = size }));
 
+        // labels generally don't get mouse capture, but if some code gives us
+        // capture we should maintain it (see labelClick)
+        captureMouseMaintain(self.wd.id);
+
         return self;
+    }
+
+    pub fn data(self: *Self) *WidgetData {
+        return &self.wd;
     }
 
     pub fn install(self: *Self, opts: struct {}) !void {
@@ -7174,10 +7187,98 @@ pub const LabelWidget = struct {
         self.wd.minSizeReportToParent();
     }
 
+    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
+        return .{ .id = self.wd.id, .r = self.wd.borderRectScale().r };
+    }
+
+    pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
+        _ = bubbling;
+
+        if (e.bubbleable()) {
+            self.wd.parent.processEvent(e, true);
+        }
+    }
+
     pub fn deinit(self: *Self) void {
         _ = self;
     }
 };
+
+/// A clickable label.  Good for hyperlinks.
+/// Returns true if it's been clicked.
+pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) !bool {
+    var ret = false;
+
+    var lw = try LabelWidget.init(src, fmt, args, opts);
+
+    if (lw.wd.visible()) {
+        try dvui.tabIndexSet(lw.wd.id, lw.wd.options.tab_index);
+    }
+
+    const emo = lw.eventMatchOptions();
+    for (dvui.events()) |*e| {
+        if (!dvui.eventMatch(e, emo))
+            continue;
+
+        switch (e.evt) {
+            .mouse => |me| {
+                if (me.action == .focus) {
+                    e.handled = true;
+                    dvui.focusWidget(lw.wd.id, null, e.num);
+                } else if (me.action == .press and me.button.pointer()) {
+                    e.handled = true;
+                    dvui.captureMouse(lw.wd.id);
+
+                    // drag prestart is just for touch events
+                    dvui.dragPreStart(me.p, null, Point{});
+                } else if (me.action == .release and me.button.pointer()) {
+                    if (dvui.captured(lw.wd.id)) {
+                        e.handled = true;
+                        dvui.captureMouse(null);
+                        if (lw.data().borderRectScale().r.contains(me.p)) {
+                            ret = true;
+                            dvui.refresh(@src(), lw.wd.id);
+                        }
+                    }
+                } else if (me.action == .motion and me.button.touch()) {
+                    if (dvui.captured(lw.wd.id)) {
+                        if (dvui.dragging(me.p)) |_| {
+                            // if we overcame the drag threshold, then that
+                            // means the person probably didn't want to touch
+                            // this button, maybe they were trying to scroll
+                            dvui.captureMouse(null);
+                        }
+                    }
+                } else if (me.action == .position) {
+                    e.handled = true;
+                    dvui.cursorSet(.hand);
+                }
+            },
+            .key => |ke| {
+                if (ke.code == .space and ke.action == .down) {
+                    e.handled = true;
+                    ret = true;
+                    dvui.refresh(@src(), lw.wd.id);
+                }
+            },
+            else => {},
+        }
+
+        if (!e.handled) {
+            lw.processEvent(e, false);
+        }
+    }
+
+    try lw.install(.{});
+
+    if (lw.wd.id == dvui.focusedWidgetId()) {
+        try lw.wd.focusBorder();
+    }
+
+    lw.deinit();
+
+    return ret;
+}
 
 pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) !void {
     var lw = try LabelWidget.init(src, fmt, args, opts);
