@@ -247,7 +247,7 @@ pub fn clear(self: *SDLBackend) void {
 }
 
 pub fn backend(self: *SDLBackend) dvui.Backend {
-    return dvui.Backend.init(self, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free);
+    return dvui.Backend.init(self, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free, openURL);
 }
 
 // caller responsible for calling free() on returned result.ptr
@@ -256,7 +256,7 @@ pub fn clipboardText(self: *SDLBackend) []u8 {
     return std.mem.sliceTo(c.SDL_GetClipboardText(), 0);
 }
 
-pub fn clipboardTextSet(self: *SDLBackend, text: []u8) !void {
+pub fn clipboardTextSet(self: *SDLBackend, text: []const u8) !void {
     var cstr = try self.arena.alloc(u8, text.len + 1);
     @memcpy(cstr[0..text.len], text);
     cstr[cstr.len - 1] = 0;
@@ -266,6 +266,13 @@ pub fn clipboardTextSet(self: *SDLBackend, text: []u8) !void {
 pub fn free(self: *SDLBackend, p: *anyopaque) void {
     _ = self;
     c.SDL_free(p);
+}
+
+pub fn openURL(self: *SDLBackend, url: []const u8) !void {
+    var cstr = try self.arena.alloc(u8, url.len + 1);
+    @memcpy(cstr[0..url.len], url);
+    cstr[cstr.len - 1] = 0;
+    _ = c.SDL_OpenURL(cstr.ptr);
 }
 
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) void {
