@@ -495,7 +495,7 @@ pub fn focusSubwindow(subwindow_id: ?u32, event_num: ?u16) void {
     const winId = subwindow_id orelse cw.subwindow_currentId;
     if (cw.focused_subwindowId != winId) {
         cw.focused_subwindowId = winId;
-        refresh(@src(), null);
+        refresh(null, @src(), null);
         if (event_num) |en| {
             for (cw.subwindows.items) |*sw| {
                 if (cw.focused_subwindowId == sw.id) {
@@ -569,7 +569,7 @@ pub fn focusWidget(id: ?u32, subwindow_id: ?u32, event_num: ?u16) void {
                 if (event_num) |en| {
                     focusRemainingEvents(en, sw.id, sw.focused_widgetId);
                 }
-                refresh(@src(), null);
+                refresh(null, @src(), null);
             }
             break;
         }
@@ -1182,9 +1182,33 @@ pub fn snapToPixels() bool {
     return cw.snap_to_pixels;
 }
 
-/// src and id are for debugging
-pub fn refresh(src: std.builtin.SourceLocation, id: ?u32) void {
-    currentWindow().refresh(src, id);
+/// Requests another frame to be shown.
+///
+/// This only matters if you are using dvui to manage the framerate (by calling
+/// Window.waitTime() and using the return value in for example
+/// SDLBackend.waitEventTimeout at the end of each frame).
+///
+/// src and id are for debugging, which is enabled by setting
+/// Window.debug_refresh to true while holding Window.debug_refresh_mutex
+/// locked.  The debug window has a toggle button for this.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside window.begin()/end(), you must
+/// pass a pointer to the Window you want to refresh.  In that case dvui will
+/// go through the backend because the gui thread might be waiting.
+pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?u32) void {
+    if (win) |w| {
+        // we are being called from non gui thread, the gui thread might be
+        // sleeping, so need to trigger a wakeup via the backend
+        w.refreshBackend(src, id);
+    } else {
+        if (current_window) |cw| {
+            cw.refreshWindow(src, id);
+        } else {
+            @panic("refresh: current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
+        }
+    }
 }
 
 // caller responsible for calling backendFree on result.ptr
@@ -1870,6 +1894,8 @@ pub const Window = struct {
     debug_under_mouse_esc_needed: bool = false,
     debug_under_mouse_quitting: bool = false,
     debug_under_mouse_info: []u8 = "",
+
+    debug_refresh_mutex: std.Thread.Mutex,
     debug_refresh: bool = false,
 
     pub fn init(
@@ -1896,6 +1922,7 @@ pub const Window = struct {
             .dialog_mutex = std.Thread.Mutex{},
             .dialogs = std.ArrayList(Dialog).init(gpa),
             .toasts = std.ArrayList(Toast).init(gpa),
+            .debug_refresh_mutex = std.Thread.Mutex{},
             .wd = WidgetData{ .id = hashval, .init_options = .{ .subwindow = true }, .options = .{} },
             .backend = backend,
         };
@@ -1937,11 +1964,30 @@ pub const Window = struct {
         self._arena.deinit();
     }
 
-    pub fn refresh(self: *Self, src: std.builtin.SourceLocation, id: ?u32) void {
-        if (self.debug_refresh) {
+    // called from gui thread
+    pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?u32) void {
+        var logit = false;
+        self.debug_refresh_mutex.lock();
+        logit = self.debug_refresh;
+        self.debug_refresh_mutex.unlock();
+
+        if (logit) {
             std.debug.print("refresh: {s}:{d} {?x}\n", .{ src.file, src.line, id });
         }
         self.extra_frames_needed = 1;
+    }
+
+    // called from any thread
+    pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?u32) void {
+        var logit = false;
+        self.debug_refresh_mutex.lock();
+        logit = self.debug_refresh;
+        self.debug_refresh_mutex.unlock();
+
+        if (logit) {
+            std.debug.print("refreshBackend: {s}:{d} {?x}\n", .{ src.file, src.line, id });
+        }
+        self.backend.refresh();
     }
 
     pub fn addEventKey(self: *Self, event: Event.Key) !bool {
@@ -2407,7 +2453,7 @@ pub const Window = struct {
                     kv.value_ptr.start_time -|= micros;
                     kv.value_ptr.end_time -|= micros;
                     if (kv.value_ptr.start_time <= 0 and kv.value_ptr.end_time > 0) {
-                        self.refresh(@src(), null);
+                        refresh(null, @src(), null);
                     }
                 }
             }
@@ -2716,11 +2762,10 @@ pub const Window = struct {
             try self.dialogs.append(Dialog{ .id = id, .display = display });
         }
 
-        self.refresh(@src(), null);
-
         return &self.dialog_mutex;
     }
 
+    // Only called from gui thread.
     pub fn dialogRemove(self: *Self, id: u32) void {
         self.dialog_mutex.lock();
         defer self.dialog_mutex.unlock();
@@ -2728,7 +2773,6 @@ pub const Window = struct {
         for (self.dialogs.items, 0..) |*d, i| {
             if (d.id == id) {
                 _ = self.dialogs.orderedRemove(i);
-                self.refresh(@src(), null);
                 return;
             }
         }
@@ -2799,8 +2843,6 @@ pub const Window = struct {
             self.timerRemove(id);
         }
 
-        self.refresh(@src(), null);
-
         return &self.dialog_mutex;
     }
 
@@ -2811,7 +2853,6 @@ pub const Window = struct {
         for (self.toasts.items, 0..) |*t, i| {
             if (t.id == id) {
                 _ = self.toasts.orderedRemove(i);
-                self.refresh(@src(), null);
                 return;
             }
         }
@@ -2888,8 +2929,16 @@ pub const Window = struct {
             self.debug_under_mouse_esc_needed = dum;
         }
 
-        if (try dvui.button(@src(), if (self.debug_refresh) "Stop Refresh Logging" else "Start Refresh Logging", .{})) {
+        // Can't hold the debug_refresh_mutex while calling dvui.buton because
+        // it will call refresh which will try to lock the mutex.
+        var logit = false;
+        self.debug_refresh_mutex.lock();
+        logit = self.debug_refresh;
+        self.debug_refresh_mutex.unlock();
+        if (try dvui.button(@src(), if (logit) "Stop Refresh Logging" else "Start Refresh Logging", .{})) {
+            self.debug_refresh_mutex.lock();
             self.debug_refresh = !self.debug_refresh;
+            self.debug_refresh_mutex.unlock();
         }
 
         var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
@@ -2978,7 +3027,7 @@ pub const Window = struct {
                 }
             }
 
-            self.refresh(@src(), null);
+            refresh(null, @src(), null);
         }
 
         // Check that the final event was our synthetic mouse position event.
@@ -3126,7 +3175,7 @@ pub const PopupWidget = struct {
 
             // need a second frame to fit contents (FocusWindow calls refresh but
             // here for clarity)
-            refresh(@src(), self.wd.id);
+            refresh(null, @src(), self.wd.id);
         }
 
         const rs = self.wd.rectScale();
@@ -3462,7 +3511,7 @@ pub const FloatingWindowWidget = struct {
             dataSet(null, self.wd.id, "_prev_focus_rect", cw.subwindowFocused().rect);
 
             // need a second frame to fit contents
-            refresh(@src(), self.wd.id);
+            refresh(null, @src(), self.wd.id);
 
             // hide our first frame so the user doesn't see an empty window or
             // jump when we autopos/autosize - do this in install() because
@@ -3607,7 +3656,7 @@ pub const FloatingWindowWidget = struct {
                                         self.wd.rect.x += dp.x;
                                         self.wd.rect.y += dp.y;
                                     }
-                                    refresh(@src(), self.wd.id);
+                                    refresh(null, @src(), self.wd.id);
                                 }
                             }
                         },
@@ -3641,7 +3690,7 @@ pub const FloatingWindowWidget = struct {
         if (self.init_options.open_flag) |of| {
             of.* = false;
         }
-        refresh(@src(), self.wd.id);
+        refresh(null, @src(), self.wd.id);
     }
 
     pub fn widget(self: *Self) Widget {
@@ -3769,12 +3818,14 @@ pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize
         // we are being called from non gui thread
         const id = hashSrc(src, id_extra);
         const mutex = try w.dialogAdd(id, display);
+        refresh(win, @src(), id); // will wake up gui thread
         return .{ .id = id, .mutex = mutex };
     } else {
         if (current_window) |cw| {
             const parent = parentGet();
             const id = parent.extendId(src, id_extra);
             const mutex = try cw.dialogAdd(id, display);
+            refresh(win, @src(), id);
             return .{ .id = id, .mutex = mutex };
         } else {
             @panic("dialogAdd: current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
@@ -3782,9 +3833,11 @@ pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize
     }
 }
 
+/// Only called from gui thread.
 pub fn dialogRemove(id: u32) void {
     const cw = currentWindow();
     cw.dialogRemove(id);
+    refresh(null, @src(), id);
 }
 
 pub const DialogOptions = struct {
@@ -3797,6 +3850,10 @@ pub const DialogOptions = struct {
     callafterFn: ?DialogCallAfterFn = null,
 };
 
+/// Add a dialog to be displayed on the GUI thread during Window.end().
+///
+/// Can be called from any thread, but if calling from a non-GUI thread or
+/// outside window.begin()/end(), you must set opts.window.
 pub fn dialog(src: std.builtin.SourceLocation, opts: DialogOptions) !void {
     const id_mutex = try dialogAdd(opts.window, src, opts.id_extra, opts.displayFn);
     const id = id_mutex.id;
@@ -3879,12 +3936,14 @@ pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize,
         // we are being called from non gui thread
         const id = hashSrc(src, id_extra);
         const mutex = try w.toastAdd(id, subwindow_id, display, timeout);
+        refresh(win, @src(), id);
         return .{ .id = id, .mutex = mutex };
     } else {
         if (current_window) |cw| {
             const parent = parentGet();
             const id = parent.extendId(src, id_extra);
             const mutex = try cw.toastAdd(id, subwindow_id, display, timeout);
+            refresh(win, @src(), id);
             return .{ .id = id, .mutex = mutex };
         } else {
             @panic("toastAdd: current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
@@ -3892,9 +3951,11 @@ pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize,
     }
 }
 
+/// Only called from gui thread.
 pub fn toastRemove(id: u32) void {
     const cw = currentWindow();
     cw.toastRemove(id);
+    refresh(null, @src(), id);
 }
 
 pub fn toastsFor(subwindow_id: ?u32) ?ToastIterator {
@@ -3957,6 +4018,12 @@ pub const ToastOptions = struct {
     displayFn: DialogDisplayFn = toastDisplay,
 };
 
+/// Add a toast.  If opts.subwindow_id is null, the toast will be shown during
+/// Window.end().  If opts.subwindow_id is not null, separate code must call
+/// toastsFor() with that subwindow_id to retrieve this toast and display it.
+///
+/// Can be called from any thread, but if called from a non-GUI thread or
+/// outside window.begin()/end(), you must set opts.window.
 pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) !void {
     const id_mutex = try dvui.toastAdd(opts.window, src, opts.id_extra, opts.subwindow_id, opts.displayFn, opts.timeout);
     const id = id_mutex.id;
@@ -4380,7 +4447,7 @@ pub const PanedWidget = struct {
             self.animate(0.0);
         } else {
             // if we are expanded, then the user means for something to happen
-            refresh(@src(), self.wd.id);
+            refresh(null, @src(), self.wd.id);
         }
     }
 
@@ -5018,7 +5085,7 @@ pub const TextLayoutWidget = struct {
                     self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
 
                     // might have already passed, so need to go again next frame
-                    refresh(@src(), self.wd.id);
+                    refresh(null, @src(), self.wd.id);
 
                     var scrollto = Event{ .evt = .{ .scroll_to = .{
                         .screen_rect = self.screenRectScale(cr_new).r,
@@ -5145,7 +5212,7 @@ pub const TextLayoutWidget = struct {
                 self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
 
                 // might have already passed, so need to go again next frame
-                refresh(@src(), self.wd.id);
+                refresh(null, @src(), self.wd.id);
 
                 var scrollto = Event{ .evt = .{ .scroll_to = .{
                     .screen_rect = self.screenRectScale(cr_new).r,
@@ -5345,7 +5412,7 @@ pub const TextLayoutWidget = struct {
             // process them all this frame because they crossed calls to
             // addText
             dataSet(null, self.wd.id, "_sel_left_right", self.sel_left_right);
-            refresh(@src(), self.wd.id);
+            refresh(null, @src(), self.wd.id);
         }
         if (captured(self.wd.id) and self.sel_mouse_down_bytes != null) {
             // once we figure out where the mousedown was, we need to save it
@@ -5734,7 +5801,7 @@ pub const BoxWidget = struct {
             if (self.total_weight > 0 and self.childRect.w > 0.001) {
                 // we have expanded children, but didn't use all the space, so something has changed
                 // equal_space could mean we don't exactly use all the space (due to floating point)
-                refresh(@src(), self.wd.id);
+                refresh(null, @src(), self.wd.id);
             }
         } else {
             if (self.equal_space) {
@@ -5746,7 +5813,7 @@ pub const BoxWidget = struct {
             if (self.total_weight > 0 and self.childRect.h > 0.001) {
                 // we have expanded children, but didn't use all the space, so something has changed
                 // equal_space could mean we don't exactly use all the space (due to floating point)
-                refresh(@src(), self.wd.id);
+                refresh(null, @src(), self.wd.id);
             }
         }
 
@@ -5961,7 +6028,7 @@ pub const ScrollContainerWidget = struct {
             if (@fabs(self.si.velocity.x) > 1) {
                 //std.debug.print("vel x {d}\n", .{self.si.velocity.x});
                 self.si.viewport.x += self.si.velocity.x;
-                refresh(@src(), self.wd.id);
+                refresh(null, @src(), self.wd.id);
             } else {
                 self.si.velocity.x = 0;
             }
@@ -5971,13 +6038,13 @@ pub const ScrollContainerWidget = struct {
                 self.si.velocity.x = 0;
                 self.si.viewport.x = @min(0, @max(-20, self.si.viewport.x + 250 * seconds_since_last_frame()));
                 if (self.si.viewport.x < 0) {
-                    refresh(@src(), self.wd.id);
+                    refresh(null, @src(), self.wd.id);
                 }
             } else if (self.si.viewport.x > max_scroll) {
                 self.si.velocity.x = 0;
                 self.si.viewport.x = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.x - 250 * seconds_since_last_frame()));
                 if (self.si.viewport.x > max_scroll) {
-                    refresh(@src(), self.wd.id);
+                    refresh(null, @src(), self.wd.id);
                 }
             }
         }
@@ -5988,7 +6055,7 @@ pub const ScrollContainerWidget = struct {
             if (@fabs(self.si.velocity.y) > 1) {
                 //std.debug.print("vel y {d}\n", .{self.si.velocity.y});
                 self.si.viewport.y += self.si.velocity.y;
-                refresh(@src(), self.wd.id);
+                refresh(null, @src(), self.wd.id);
             } else {
                 self.si.velocity.y = 0;
             }
@@ -5999,13 +6066,13 @@ pub const ScrollContainerWidget = struct {
                 self.si.velocity.y = 0;
                 self.si.viewport.y = @min(0, @max(-20, self.si.viewport.y + 250 * seconds_since_last_frame()));
                 if (self.si.viewport.y < 0) {
-                    refresh(@src(), self.wd.id);
+                    refresh(null, @src(), self.wd.id);
                 }
             } else if (self.si.viewport.y > max_scroll) {
                 self.si.velocity.y = 0;
                 self.si.viewport.y = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.y - 250 * seconds_since_last_frame()));
                 if (self.si.viewport.y > max_scroll) {
-                    refresh(@src(), self.wd.id);
+                    refresh(null, @src(), self.wd.id);
                 }
             }
         }
@@ -6069,28 +6136,28 @@ pub const ScrollContainerWidget = struct {
                             self.si.viewport.y -= 10;
                             self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
                         }
-                        refresh(@src(), self.wd.id);
+                        refresh(null, @src(), self.wd.id);
                     } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
                         e.handled = true;
                         if (self.si.vertical != .none) {
                             self.si.viewport.y += 10;
                             self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
                         }
-                        refresh(@src(), self.wd.id);
+                        refresh(null, @src(), self.wd.id);
                     } else if (ke.code == .left and (ke.action == .down or ke.action == .repeat)) {
                         e.handled = true;
                         if (self.si.horizontal != .none) {
                             self.si.viewport.x -= 10;
                             self.si.viewport.x = math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
                         }
-                        refresh(@src(), self.wd.id);
+                        refresh(null, @src(), self.wd.id);
                     } else if (ke.code == .right and (ke.action == .down or ke.action == .repeat)) {
                         e.handled = true;
                         if (self.si.horizontal != .none) {
                             self.si.viewport.x += 10;
                             self.si.viewport.x = math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
                         }
-                        refresh(@src(), self.wd.id);
+                        refresh(null, @src(), self.wd.id);
                     }
                 }
             },
@@ -6135,7 +6202,7 @@ pub const ScrollContainerWidget = struct {
                         self.si.viewport.x = @max(0.0, @min(self.si.scroll_max(.horizontal), self.si.viewport.x + scrollx));
                     }
 
-                    refresh(@src(), self.wd.id);
+                    refresh(null, @src(), self.wd.id);
 
                     // if we are scrolling, then we need a motion event next
                     // frame so that the child widget can adjust selection
@@ -6153,7 +6220,7 @@ pub const ScrollContainerWidget = struct {
                     if (!st.over_scroll) {
                         self.si.viewport.y = @max(0.0, @min(self.si.scroll_max(.vertical), self.si.viewport.y));
                     }
-                    refresh(@src(), self.wd.id);
+                    refresh(null, @src(), self.wd.id);
                 }
 
                 const ypx2 = @max(0.0, (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h));
@@ -6162,7 +6229,7 @@ pub const ScrollContainerWidget = struct {
                     if (!st.over_scroll) {
                         self.si.viewport.y = @max(0.0, @min(self.si.scroll_max(.vertical), self.si.viewport.y));
                     }
-                    refresh(@src(), self.wd.id);
+                    refresh(null, @src(), self.wd.id);
                 }
 
                 const xpx = @max(0.0, rs.r.x - st.screen_rect.x);
@@ -6171,7 +6238,7 @@ pub const ScrollContainerWidget = struct {
                     if (!st.over_scroll) {
                         self.si.viewport.x = @max(0.0, @min(self.si.scroll_max(.horizontal), self.si.viewport.x));
                     }
-                    refresh(@src(), self.wd.id);
+                    refresh(null, @src(), self.wd.id);
                 }
 
                 const xpx2 = @max(0.0, (st.screen_rect.x + st.screen_rect.w) - (rs.r.x + rs.r.w));
@@ -6180,7 +6247,7 @@ pub const ScrollContainerWidget = struct {
                     if (!st.over_scroll) {
                         self.si.viewport.x = @max(0.0, @min(self.si.scroll_max(.horizontal), self.si.viewport.x));
                     }
-                    refresh(@src(), self.wd.id);
+                    refresh(null, @src(), self.wd.id);
                 }
             },
             else => {},
@@ -6213,7 +6280,7 @@ pub const ScrollContainerWidget = struct {
                                 e.handled = true;
                                 self.si.viewport.y -= me.data.wheel_y;
                                 self.si.viewport.y = math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
-                                refresh(@src(), self.wd.id);
+                                refresh(null, @src(), self.wd.id);
                             }
                         } else if (self.si.horizontal != .none) {
                             if ((me.data.wheel_y > 0 and self.si.viewport.x <= 0) or (me.data.wheel_y < 0 and self.si.viewport.x >= self.si.scroll_max(.horizontal))) {
@@ -6222,7 +6289,7 @@ pub const ScrollContainerWidget = struct {
                                 e.handled = true;
                                 self.si.viewport.x -= me.data.wheel_y;
                                 self.si.viewport.x = math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
-                                refresh(@src(), self.wd.id);
+                                refresh(null, @src(), self.wd.id);
                             }
                         }
                     } else if (me.action == .press and me.button.touch()) {
@@ -6246,7 +6313,7 @@ pub const ScrollContainerWidget = struct {
                         if (self.si.vertical != .none) {
                             self.si.viewport.y -= me.data.motion.y / rs.s;
                             self.si.velocity.y = -me.data.motion.y / rs.s;
-                            refresh(@src(), self.wd.id);
+                            refresh(null, @src(), self.wd.id);
                             if (@fabs(me.data.motion.y) > @fabs(me.data.motion.x) and self.si.viewport.y >= 0 and self.si.viewport.y <= self.si.scroll_max(.vertical)) {
                                 propogate = false;
                             }
@@ -6254,7 +6321,7 @@ pub const ScrollContainerWidget = struct {
                         if (self.si.horizontal != .none) {
                             self.si.viewport.x -= me.data.motion.x / rs.s;
                             self.si.velocity.x = -me.data.motion.x / rs.s;
-                            refresh(@src(), self.wd.id);
+                            refresh(null, @src(), self.wd.id);
                             if (@fabs(me.data.motion.x) > @fabs(me.data.motion.y) and self.si.viewport.x >= 0 and self.si.viewport.x <= self.si.scroll_max(.horizontal)) {
                                 propogate = false;
                             }
@@ -6294,7 +6361,7 @@ pub const ScrollContainerWidget = struct {
                 self.nextVirtualSize.w = @max(self.nextVirtualSize.w, crect.w);
                 if (self.nextVirtualSize.w != self.si.virtual_size.w) {
                     self.si.virtual_size.w = self.nextVirtualSize.w;
-                    refresh(@src(), self.wd.id);
+                    refresh(null, @src(), self.wd.id);
                 }
             },
             .given => {},
@@ -6306,7 +6373,7 @@ pub const ScrollContainerWidget = struct {
                 self.nextVirtualSize.h = @max(self.nextVirtualSize.h, crect.h);
                 if (self.nextVirtualSize.h != self.si.virtual_size.h) {
                     self.si.virtual_size.h = self.nextVirtualSize.h;
-                    refresh(@src(), self.wd.id);
+                    refresh(null, @src(), self.wd.id);
                 }
             },
             .given => {},
@@ -6430,7 +6497,7 @@ pub const ScrollBarWidget = struct {
                                         f = self.si.scroll_fraction(self.dir) + fi;
                                     }
                                     self.si.scrollToFraction(self.dir, f);
-                                    refresh(@src(), self.wd.id);
+                                    refresh(null, @src(), self.wd.id);
                                 }
                             }
                         },
@@ -6464,7 +6531,7 @@ pub const ScrollBarWidget = struct {
                                         f = (grabmid - min) / (max - min);
                                     }
                                     self.si.scrollToFraction(self.dir, f);
-                                    refresh(@src(), self.wd.id);
+                                    refresh(null, @src(), self.wd.id);
                                 }
                             }
                         },
@@ -6484,7 +6551,7 @@ pub const ScrollBarWidget = struct {
                                     self.si.viewport.x = math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
                                 },
                             }
-                            refresh(@src(), self.wd.id);
+                            refresh(null, @src(), self.wd.id);
                         },
                     }
                 },
@@ -6730,7 +6797,7 @@ pub const MenuWidget = struct {
         // bubble this event to close all popups that had submenus leading to this
         var e = Event{ .evt = .{ .close_popup = .{} } };
         self.processEvent(&e, true);
-        refresh(@src(), self.wd.id);
+        refresh(null, @src(), self.wd.id);
     }
 
     pub fn widget(self: *Self) Widget {
@@ -7062,7 +7129,7 @@ pub const MenuItemWidget = struct {
                     e.handled = true;
                     if (!self.init_opts.submenu and (self.wd.id == focusedWidgetIdInCurrentSubwindow())) {
                         self.activated = true;
-                        refresh(@src(), self.wd.id);
+                        refresh(null, @src(), self.wd.id);
                     }
                 } else if (me.action == .position) {
                     e.handled = true;
@@ -7093,7 +7160,7 @@ pub const MenuItemWidget = struct {
                         menuGet().?.submenus_activated = true;
                     } else {
                         self.activated = true;
-                        refresh(@src(), self.wd.id);
+                        refresh(null, @src(), self.wd.id);
                     }
                 } else if (ke.code == .right and ke.action == .down) {
                     if (self.init_opts.submenu and menuGet().?.init_opts.dir == .vertical) {
@@ -7237,7 +7304,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
                         dvui.captureMouse(null);
                         if (lw.data().borderRectScale().r.contains(me.p)) {
                             ret = true;
-                            dvui.refresh(@src(), lw.wd.id);
+                            dvui.refresh(null, @src(), lw.wd.id);
                         }
                     }
                 } else if (me.action == .motion and me.button.touch()) {
@@ -7258,7 +7325,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
                 if (ke.code == .space and ke.action == .down) {
                     e.handled = true;
                     ret = true;
-                    dvui.refresh(@src(), lw.wd.id);
+                    dvui.refresh(null, @src(), lw.wd.id);
                 }
             },
             else => {},
@@ -7549,7 +7616,7 @@ pub const ButtonWidget = struct {
                         captureMouse(null);
                         if (self.data().borderRectScale().r.contains(me.p)) {
                             self.click = true;
-                            refresh(@src(), self.wd.id);
+                            refresh(null, @src(), self.wd.id);
                         }
                     }
                 } else if (me.action == .motion and me.button.touch()) {
@@ -7570,7 +7637,7 @@ pub const ButtonWidget = struct {
                 if (ke.code == .space and ke.action == .down) {
                     e.handled = true;
                     self.click = true;
-                    refresh(@src(), self.wd.id);
+                    refresh(null, @src(), self.wd.id);
                 }
             },
             else => {},
@@ -7764,7 +7831,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
     knob.deinit();
 
     if (ret) {
-        refresh(@src(), b.data().id);
+        refresh(null, @src(), b.data().id);
     }
 
     return ret;
@@ -9173,13 +9240,13 @@ pub const WidgetData = struct {
             {
                 //std.debug.print("{x} minSizeSetAndRefresh {} {} {}\n", .{ self.id, self.rect, ms, self.min_size });
 
-                refresh(@src(), self.id);
+                refresh(null, @src(), self.id);
             }
         } else {
             // This is the first frame for this widget.  Almost always need a
             // second frame to appear correctly since nobody knew our min size the
             // first frame.
-            refresh(@src(), self.id);
+            refresh(null, @src(), self.id);
         }
         minSizeSet(self.id, self.min_size) catch |err| switch (err) {
             error.OutOfMemory => {

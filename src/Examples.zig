@@ -857,6 +857,22 @@ pub fn dialogs(demo_win_id: u32) !void {
             try dvui.toast(@src(), .{ .message = "Toast to main window" });
         }
     }
+
+    try dvui.label(@src(), "Example of how to show a dialog/toast from another thread", .{}, .{});
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        if (try dvui.button(@src(), "Dialog after 1 second", .{})) {
+            const bg_thread = try std.Thread.spawn(.{}, background_dialog, .{ dvui.currentWindow(), 1_000_000_000 });
+            bg_thread.detach();
+        }
+
+        if (try dvui.button(@src(), "Toast after 1 second", .{})) {
+            const bg_thread = try std.Thread.spawn(.{}, background_toast, .{ dvui.currentWindow(), 1_000_000_000, demo_win_id });
+            bg_thread.detach();
+        }
+    }
 }
 
 pub fn animations() !void {
@@ -1009,4 +1025,15 @@ pub fn icon_browser() !void {
 
         cursor += IconBrowser.row_height;
     }
+}
+
+fn background_dialog(win: *dvui.Window, delay_ns: u64) !void {
+    std.time.sleep(delay_ns);
+    try dvui.dialog(@src(), .{ .window = win, .modal = false, .title = "Background Dialog", .message = "This non modal dialog was added from a non-GUI thread." });
+}
+
+fn background_toast(win: *dvui.Window, delay_ns: u64, subwindow_id: ?u32) !void {
+    std.time.sleep(delay_ns);
+    dvui.refresh(win, @src(), null);
+    try dvui.toast(@src(), .{ .window = win, .subwindow_id = subwindow_id, .message = "Toast came from a non-GUI thread" });
 }
