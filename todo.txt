@@ -58,8 +58,6 @@ send updates to tinyvg
 maybe builtin button should record multiple clicks?
 - helps in low framerate situations
 
-can't debug mouse over spacers?
-
 demo:
 - add uses of animate
 

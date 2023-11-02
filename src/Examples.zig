@@ -600,7 +600,7 @@ pub fn styling() !void {
 pub fn layout() !void {
     const opts: Options = .{ .color_style = .content, .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
 
-    try dvui.label(@src(), "gravity:", .{}, .{});
+    try dvui.label(@src(), "Gravity", .{}, .{});
     {
         var o = try dvui.overlay(@src(), opts);
         defer o.deinit();
@@ -614,7 +614,7 @@ pub fn layout() !void {
         }
     }
 
-    try dvui.label(@src(), "expand:", .{}, .{});
+    try dvui.label(@src(), "Expand", .{}, .{});
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -634,7 +634,7 @@ pub fn layout() !void {
         }
     }
 
-    try dvui.label(@src(), "boxes:", .{}, .{});
+    try dvui.label(@src(), "Boxes", .{}, .{});
     {
         const grav: Options = .{ .gravity_x = 0.5, .gravity_y = 0.5 };
 
@@ -681,6 +681,36 @@ pub fn layout() !void {
                 _ = try dvui.button(@src(), "horz\nequal", grav);
                 _ = try dvui.button(@src(), "expand", grav.override(.{ .expand = .horizontal }));
                 _ = try dvui.button(@src(), "a", grav);
+            }
+        }
+    }
+
+    try dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{});
+    {
+        const collapse_width: f32 = 400;
+        var paned = try dvui.paned(@src(), .horizontal, collapse_width, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 100 } });
+        defer paned.deinit();
+        const collapsed = paned.collapsed();
+
+        {
+            var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true });
+            defer vbox.deinit();
+
+            try dvui.label(@src(), "Left Side", .{}, .{});
+            try dvui.label(@src(), "collapses when width < {d}", .{collapse_width}, .{});
+            try dvui.label(@src(), "current width {d}", .{paned.wd.rect.w}, .{});
+            if (collapsed and try dvui.button(@src(), "Goto Right", .{})) {
+                paned.animateSplit(0.0);
+            }
+        }
+
+        {
+            var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true });
+            defer vbox.deinit();
+
+            try dvui.label(@src(), "Right Side", .{}, .{});
+            if (collapsed and try dvui.button(@src(), "Goto Left", .{})) {
+                paned.animateSplit(1.0);
             }
         }
     }
