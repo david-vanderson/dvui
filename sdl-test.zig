@@ -72,7 +72,7 @@ pub fn main() !void {
                                 const zs = @exp(@log(base) * me.data.wheel_y);
                                 if (zs != 1.0) {
                                     scale_val *= zs;
-                                    dvui.refresh(@src(), scale.wd.id);
+                                    dvui.refresh(null, @src(), scale.wd.id);
                                 }
                             }
                         },
@@ -576,7 +576,7 @@ pub const StrokeTest = struct {
                             const dp = dps.scale(1 / rs.s);
                             points[dragi.?].x += dp.x;
                             points[dragi.?].y += dp.y;
-                            dvui.refresh(@src(), self.wd.id);
+                            dvui.refresh(null, @src(), self.wd.id);
                         }
                     },
                     .wheel_y => {
@@ -585,7 +585,7 @@ pub const StrokeTest = struct {
                         const zs = @exp(@log(base) * me.data.wheel_y);
                         if (zs != 1.0) {
                             thickness *= zs;
-                            dvui.refresh(@src(), self.wd.id);
+                            dvui.refresh(null, @src(), self.wd.id);
                         }
                     },
                     else => {},

@@ -164,7 +164,7 @@ pub fn init(options: initOptions) !SDLBackend {
                     } else if (dpi > 100) {
                         back.initial_scale = 2.0;
                     }
-                    std.debug.print("SDLBackend guessing backend scale {d}\n", .{back.initial_scale});
+                    std.debug.print("SDLBackend guessing initial backend scale {d}\n", .{back.initial_scale});
                 }
             }
 
@@ -190,7 +190,8 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) void {
     }
 }
 
-pub fn refresh() void {
+pub fn refresh(self: *SDLBackend) void {
+    _ = self;
     var ue = std.mem.zeroes(c.SDL_Event);
     ue.type = c.SDL_USEREVENT;
     _ = c.SDL_PushEvent(&ue);
@@ -291,7 +292,7 @@ pub fn clear(self: *SDLBackend) void {
 }
 
 pub fn backend(self: *SDLBackend) dvui.Backend {
-    return dvui.Backend.init(self, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free, openURL);
+    return dvui.Backend.init(self, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free, openURL, refresh);
 }
 
 // caller responsible for calling free() on returned result.ptr

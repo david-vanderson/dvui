@@ -22,6 +22,7 @@ const VTable = struct {
     clipboardTextSet: *const fn (ptr: *anyopaque, text: []const u8) error{OutOfMemory}!void,
     free: *const fn (ptr: *anyopaque, p: *anyopaque) void,
     openURL: *const fn (ptr: *anyopaque, url: []const u8) error{OutOfMemory}!void,
+    refresh: *const fn (ptr: *anyopaque) void,
 };
 
 pub fn init(
@@ -38,6 +39,7 @@ pub fn init(
     comptime clipboardTextSetFn: fn (ptr: @TypeOf(pointer), text: []const u8) error{OutOfMemory}!void,
     comptime freeFn: fn (ptr: @TypeOf(pointer), p: *anyopaque) void,
     comptime openURLFn: fn (ptr: @TypeOf(pointer), url: []const u8) error{OutOfMemory}!void,
+    comptime refreshFn: fn (ptr: @TypeOf(pointer)) void,
 ) Backend {
     const Ptr = @TypeOf(pointer);
     const ptr_info = @typeInfo(Ptr);
@@ -105,6 +107,11 @@ pub fn init(
             try @call(.always_inline, openURLFn, .{ self, url });
         }
 
+        fn refreshImpl(ptr: *anyopaque) void {
+            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
+            return @call(.always_inline, refreshFn, .{self});
+        }
+
         const vtable = VTable{
             .begin = beginImpl,
             .end = endImpl,
@@ -118,6 +125,7 @@ pub fn init(
             .clipboardTextSet = clipboardTextSetImpl,
             .free = freeImpl,
             .openURL = openURLImpl,
+            .refresh = refreshImpl,
         };
     };
 
@@ -173,4 +181,8 @@ pub fn free(self: *Backend, p: *anyopaque) void {
 
 pub fn openURL(self: *Backend, url: []const u8) error{OutOfMemory}!void {
     try self.vtable.openURL(self.ptr, url);
+}
+
+pub fn refresh(self: *Backend) void {
+    self.vtable.refresh(self.ptr);
 }
