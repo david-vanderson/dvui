@@ -4344,19 +4344,19 @@ pub const PanedWidget = struct {
                 .horizontal => {
                     if (d.rect.w >= self.collapse_size and rect.w < self.collapse_size) {
                         // collapsing
-                        self.animate(1.0);
+                        self.animateSplit(1.0);
                     } else if (d.rect.w < self.collapse_size and rect.w >= self.collapse_size) {
                         // expanding
-                        self.animate(0.5);
+                        self.animateSplit(0.5);
                     }
                 },
                 .vertical => {
                     if (d.rect.w >= self.collapse_size and rect.w < self.collapse_size) {
                         // collapsing
-                        self.animate(1.0);
+                        self.animateSplit(1.0);
                     } else if (d.rect.w < self.collapse_size and rect.w >= self.collapse_size) {
                         // expanding
-                        self.animate(0.5);
+                        self.animateSplit(0.5);
                     }
                 },
             }
@@ -4440,18 +4440,7 @@ pub const PanedWidget = struct {
         }
     }
 
-    pub fn showOther(self: *Self) void {
-        if (self.split_ratio == 0.0) {
-            self.animate(1.0);
-        } else if (self.split_ratio == 1.0) {
-            self.animate(0.0);
-        } else {
-            // if we are expanded, then the user means for something to happen
-            refresh(null, @src(), self.wd.id);
-        }
-    }
-
-    fn animate(self: *Self, end_val: f32) void {
+    pub fn animateSplit(self: *Self, end_val: f32) void {
         dvui.animation(self.wd.id, "_split_ratio", dvui.Animation{ .start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000 });
     }
 
