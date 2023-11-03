@@ -38,6 +38,9 @@ var animating_window_show: bool = false;
 var animating_window_closing: bool = false;
 var animating_window_rect = Rect{ .x = 300, .y = 200, .w = 300, .h = 200 };
 
+var progress_mutex = std.Thread.Mutex{};
+var progress_val: f32 = 0.0;
+
 const IconBrowser = struct {
     var show: bool = false;
     var rect = Rect{};
@@ -344,8 +347,8 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Sliders", .{}, .{ .gravity_y = 0.5 });
-        _ = try dvui.slider(@src(), .horizontal, &slider_val, .{ .expand = .horizontal, .gravity_y = 0.5 });
-        _ = try dvui.slider(@src(), .vertical, &slider_val, .{ .expand = .vertical, .min_size_content = .{ .w = 10 } });
+        _ = try dvui.slider(@src(), .horizontal, &slider_val, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
+        _ = try dvui.slider(@src(), .vertical, &slider_val, .{ .expand = .vertical, .min_size_content = .{ .w = 10 }, .corner_radius = dvui.Rect.all(100) });
         try dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });
     }
 
@@ -903,6 +906,21 @@ pub fn dialogs(demo_win_id: u32) !void {
             bg_thread.detach();
         }
     }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+        defer hbox.deinit();
+
+        if (try dvui.button(@src(), "Show Progress from another Thread", .{})) {
+            progress_mutex.lock();
+            progress_val = 0;
+            progress_mutex.unlock();
+            const bg_thread = try std.Thread.spawn(.{}, background_progress, .{ dvui.currentWindow(), 2_000_000_000 });
+            bg_thread.detach();
+        }
+
+        try dvui.progress(@src(), .{ .percent = progress_val }, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
+    }
 }
 
 pub fn animations() !void {
@@ -1066,4 +1084,16 @@ fn background_toast(win: *dvui.Window, delay_ns: u64, subwindow_id: ?u32) !void 
     std.time.sleep(delay_ns);
     dvui.refresh(win, @src(), null);
     try dvui.toast(@src(), .{ .window = win, .subwindow_id = subwindow_id, .message = "Toast came from a non-GUI thread" });
+}
+
+fn background_progress(win: *dvui.Window, delay_ns: u64) !void {
+    const interval: u64 = 10_000_000;
+    var total_sleep: u64 = 0;
+    while (total_sleep < delay_ns) : (total_sleep += interval) {
+        std.time.sleep(interval);
+        progress_mutex.lock();
+        progress_val = @as(f32, @floatFromInt(total_sleep)) / @as(f32, @floatFromInt(delay_ns));
+        progress_mutex.unlock();
+        dvui.refresh(win, @src(), null);
+    }
 }

@@ -7783,7 +7783,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
             part.h = trackrs.r.h - h;
         },
     }
-    try pathAddRect(part, Rect.all(100).scale(trackrs.s));
+    try pathAddRect(part, options.corner_radiusGet().scale(trackrs.s));
     try pathFillConvex(options.color(.accent));
 
     switch (dir) {
@@ -7796,7 +7796,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
             part.h *= (1 - perc);
         },
     }
-    try pathAddRect(part, Rect.all(100).scale(trackrs.s));
+    try pathAddRect(part, options.corner_radiusGet().scale(trackrs.s));
     try pathFillConvex(options.color(.fill));
 
     var knobRect = switch (dir) {
@@ -7824,6 +7824,45 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
     }
 
     return ret;
+}
+
+pub var progress_defaults: Options = .{
+    .padding = Rect.all(2),
+    .min_size_content = .{ .w = 10, .h = 10 },
+    .color_style = .control,
+};
+
+pub const Progress_InitOptions = struct {
+    dir: enums.Direction = .horizontal,
+    percent: f32,
+};
+
+pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions, opts: Options) !void {
+    const options = progress_defaults.override(opts);
+
+    var b = try box(src, init_opts.dir, options);
+    defer b.deinit();
+
+    const rs = b.data().contentRectScale();
+
+    try pathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
+    try pathFillConvex(options.color(.fill));
+
+    const perc = @max(0, @min(1, init_opts.percent));
+
+    var part = rs.r;
+    switch (init_opts.dir) {
+        .horizontal => {
+            part.w *= perc;
+        },
+        .vertical => {
+            const h = part.h * (1 - perc);
+            part.y += h;
+            part.h = rs.r.h - h;
+        },
+    }
+    try pathAddRect(part, options.corner_radiusGet().scale(rs.s));
+    try pathFillConvex(options.color(.accent));
 }
 
 pub var checkbox_defaults: Options = .{

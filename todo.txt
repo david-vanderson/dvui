@@ -1,5 +1,5 @@
 
-progress bar example from background thread
+slider should have controllable radius for knob
 
 update README and screenshot
 
