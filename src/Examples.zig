@@ -105,7 +105,7 @@ const AnimatingDialog = struct {
 
         try win.install();
         win.processEventsBefore();
-        try win.draw();
+        try win.drawBackground();
 
         var scaler = try dvui.scale(@src(), scaleval, .{ .expand = .horizontal });
 
@@ -217,7 +217,7 @@ pub fn demo() !void {
         toast_win.data().rect = dvui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
         toast_win.autoSize();
         try toast_win.install();
-        try toast_win.draw();
+        try toast_win.drawBackground();
 
         var vbox = try dvui.box(@src(), .vertical, .{});
         defer vbox.deinit();
@@ -932,15 +932,17 @@ pub fn animations() !void {
         defer hbox.deinit();
 
         _ = dvui.spacer(@src(), .{ .w = 20 }, .{});
-        var button_wiggle = ButtonWidget.init(@src(), .{ .tab_index = 10 });
+        var button_wiggle = ButtonWidget.init(@src(), .{}, .{ .tab_index = 10 });
         defer button_wiggle.deinit();
 
         if (dvui.animationGet(button_wiggle.data().id, "xoffset")) |a| {
             button_wiggle.data().rect.x += 20 * (1.0 - a.lerp()) * (1.0 - a.lerp()) * @sin(a.lerp() * std.math.pi * 50);
         }
 
-        try button_wiggle.install(.{});
+        try button_wiggle.install();
+        button_wiggle.processEvents();
         try dvui.labelNoFmt(@src(), "Wiggle", button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
+        try button_wiggle.drawFocus();
 
         if (button_wiggle.clicked()) {
             dvui.animation(button_wiggle.data().id, "xoffset", .{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 500_000 });
@@ -964,7 +966,7 @@ pub fn animations() !void {
         var win = animatingWindowRect(@src(), &animating_window_rect, &animating_window_show, &animating_window_closing, .{});
         try win.install();
         win.processEventsBefore();
-        try win.draw();
+        try win.drawBackground();
         defer win.deinit();
 
         var keep_open = true;
