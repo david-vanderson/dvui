@@ -4186,7 +4186,8 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 
     var lw = try LabelWidget.initNoFmt(@src(), entries[choice.*], options.strip().override(.{ .gravity_y = 0.5 }));
     const lw_rect = lw.wd.contentRectScale().r.scale(1 / windowNaturalScale());
-    try lw.install(.{});
+    try lw.install();
+    try lw.draw();
     lw.deinit();
     try icon(@src(), "dropdown_triangle", entypo.chevron_small_down, options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }));
 
@@ -7214,11 +7215,12 @@ pub const LabelWidget = struct {
         return &self.wd;
     }
 
-    pub fn install(self: *Self, opts: struct {}) !void {
-        _ = opts;
+    pub fn install(self: *Self) !void {
         try self.wd.register("Label", null);
         try self.wd.borderAndBackground(.{});
+    }
 
+    pub fn draw(self: *Self) !void {
         var rect = placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
         var rs = self.wd.parent.screenRectScale(rect);
         const oldclip = clip(rs.r);
@@ -7238,13 +7240,21 @@ pub const LabelWidget = struct {
             rs.r.y += rs.s * try self.wd.options.fontGet().lineHeight();
         }
         clipSet(oldclip);
-
-        self.wd.minSizeSetAndRefresh();
-        self.wd.minSizeReportToParent();
     }
 
     pub fn eventMatchOptions(self: *Self) EventMatchOptions {
         return .{ .id = self.wd.id, .r = self.wd.borderRectScale().r };
+    }
+
+    pub fn processEvents(self: *Self) void {
+        const emo = self.eventMatchOptions();
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, emo))
+                continue;
+
+            self.processEvent(e, false);
+        }
     }
 
     pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
@@ -7256,7 +7266,8 @@ pub const LabelWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        _ = self;
+        self.wd.minSizeSetAndRefresh();
+        self.wd.minSizeReportToParent();
     }
 };
 
@@ -7266,13 +7277,25 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
     var ret = false;
 
     var lw = try LabelWidget.init(src, fmt, args, opts);
+    // Now lw has a Rect from its parent but hasn't processed events or drawn
 
-    if (lw.wd.visible()) {
-        try dvui.tabIndexSet(lw.wd.id, lw.wd.options.tab_index);
+    const lwid = lw.data().id;
+
+    // If lw is visible, we want to be able to keyboard navigate to it
+    if (lw.data().visible()) {
+        try dvui.tabIndexSet(lwid, lw.data().options.tab_index);
     }
 
+    // draw border and background
+    try lw.install();
+
+    // Get lw args for eventMatch
     const emo = lw.eventMatchOptions();
+
+    // Loop over all events this frame in order of arrival
     for (dvui.events()) |*e| {
+
+        // Would lw process this event normally?
         if (!dvui.eventMatch(e, emo))
             continue;
 
@@ -7280,33 +7303,48 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
             .mouse => |me| {
                 if (me.action == .focus) {
                     e.handled = true;
-                    dvui.focusWidget(lw.wd.id, null, e.num);
+
+                    // focus this widget for events after this one (starting with e.num)
+                    dvui.focusWidget(lwid, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
-                    dvui.captureMouse(lw.wd.id);
+                    dvui.captureMouse(lwid);
 
-                    // drag prestart is just for touch events
+                    // for touch events, we want to cancel our click if a drag is started
                     dvui.dragPreStart(me.p, null, Point{});
                 } else if (me.action == .release and me.button.pointer()) {
-                    if (dvui.captured(lw.wd.id)) {
+                    // mouse button was released, do we still have mouse capture?
+                    if (dvui.captured(lwid)) {
                         e.handled = true;
+
+                        // cancel our capture
                         dvui.captureMouse(null);
+
+                        // if the release was within our border, the click is successful
                         if (lw.data().borderRectScale().r.contains(me.p)) {
                             ret = true;
-                            dvui.refresh(null, @src(), lw.wd.id);
+
+                            // if the user interacts successfully with a
+                            // widget, it usually means part of the GUI is
+                            // changing, so the convention is to call refresh
+                            // so the user doesn't have to remember
+                            dvui.refresh(null, @src(), lwid);
                         }
                     }
                 } else if (me.action == .motion and me.button.touch()) {
-                    if (dvui.captured(lw.wd.id)) {
+                    if (dvui.captured(lwid)) {
                         if (dvui.dragging(me.p)) |_| {
-                            // if we overcame the drag threshold, then that
-                            // means the person probably didn't want to touch
-                            // this button, maybe they were trying to scroll
+                            // touch: if we overcame the drag threshold, then
+                            // that means the person probably didn't want to
+                            // touch this button, they were trying to scroll
                             dvui.captureMouse(null);
                         }
                     }
                 } else if (me.action == .position) {
                     e.handled = true;
+
+                    // a single .position mouse event is at the end of each
+                    // frame, so this means the mouse ended above us
                     dvui.cursorSet(.hand);
                 }
             },
@@ -7314,23 +7352,28 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
                 if (ke.code == .space and ke.action == .down) {
                     e.handled = true;
                     ret = true;
-                    dvui.refresh(null, @src(), lw.wd.id);
+                    dvui.refresh(null, @src(), lwid);
                 }
             },
             else => {},
         }
 
+        // if we didn't handle this event, send it to lw - this means we don't
+        // need to call lw.processEvents()
         if (!e.handled) {
             lw.processEvent(e, false);
         }
     }
 
-    try lw.install(.{});
+    // draw text
+    try lw.draw();
 
-    if (lw.wd.id == dvui.focusedWidgetId()) {
-        try lw.wd.focusBorder();
+    // draw an accent border if we are focused
+    if (lwid == dvui.focusedWidgetId()) {
+        try lw.data().focusBorder();
     }
 
+    // done with lw, have it report min size to parent
     lw.deinit();
 
     return ret;
@@ -7338,13 +7381,17 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
 
 pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) !void {
     var lw = try LabelWidget.init(src, fmt, args, opts);
-    try lw.install(.{});
+    try lw.install();
+    lw.processEvents();
+    try lw.draw();
     lw.deinit();
 }
 
 pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, opts: Options) !void {
     var lw = try LabelWidget.initNoFmt(src, str, opts);
-    try lw.install(.{});
+    try lw.install();
+    lw.processEvents();
+    try lw.draw();
     lw.deinit();
 }
 

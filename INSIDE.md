@@ -4,7 +4,7 @@ This document gives technical details and is useful for people extending or writ
 
 ### One Frame At a Time
 
-DVUI is an immediate-mode GUI, so widgets are created on the fly.  We also process the whole list of events that happened since last frame
+DVUI is an immediate-mode GUI, so widgets are created on the fly.  We also process the whole list of events that happened since last frame.
 
 A widget is a block of code that runs every frame.  Generally it follows this pattern:
 
@@ -63,7 +63,7 @@ Each widget keeps a pointer to its parent widget, which forms a chain going back
 * `parent.screenRectScale()` translate from our child Rect (in our parent's coordinate space) to a RectScale (in screen coordinates).
 * `parent.processEvent()` bubble keyboard events, so pressing the "up" key while focused on a button can make the containing scroll area scroll.
 
-- popups/floaters
+TODO: popups/floaters
 
 ### Windows and Subwindows
 `dvui.Window` maps to a single OS window.  All widgets and drawing happen in that window.
@@ -78,7 +78,8 @@ Each widget gets a `u32` id by combining:
 
 The id a widget gets should be the same each frame, even if other widgets are being added or removed.  Mixing in the parent's id also means you can package up a collection of widgets in a function and call that function in many different parents making it easy to replicate parts of the gui.
 
-The extra `usize` is to differentiate many children being added to the same parent in a loop.
+`.id_extra` is to differentiate many children being added to the same parent in a loop.
+
 
 ## BoxWidget vs box()
 
@@ -103,5 +104,6 @@ The extra `usize` is to differentiate many children being added to the same pare
 ## Event Handling
 - mouse vs keyboard
 - how focus works
+- .focus and .position events
 
 ## Mutlithreading

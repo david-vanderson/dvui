@@ -985,7 +985,9 @@ pub fn animations() !void {
         const left = @as(i32, @intCast(@rem(millis, 1000)));
 
         var mslabel = try dvui.LabelWidget.init(@src(), "{d:0>3} ms into second", .{@as(u32, @intCast(left))}, .{});
-        try mslabel.install(.{});
+        try mslabel.install();
+        mslabel.processEvents();
+        try mslabel.draw();
         mslabel.deinit();
 
         try dvui.label(@src(), "Estimate of frame overhead {d:6} us", .{dvui.currentWindow().loop_target_slop}, .{});

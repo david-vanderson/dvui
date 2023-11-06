@@ -1,5 +1,6 @@
 
 update README/INSIDE and screenshot
+- use slider as motivating example
 
 captureMouseMaintain should probably always be called as part of WidgetData.init?
 
