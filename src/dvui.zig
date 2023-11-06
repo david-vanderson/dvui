@@ -3529,8 +3529,6 @@ pub const FloatingWindowWidget = struct {
         self.prevClip = clipGet();
         clipSet(windowRectPixels());
 
-        captureMouseMaintain(self.wd.id);
-
         if (self.process_events) {
             // processEventsBefore can change self.wd.rect
             self.processEventsBefore();
@@ -4335,7 +4333,6 @@ pub const PanedWidget = struct {
         self.wd = WidgetData.init(src, .{}, opts);
         self.dir = dir;
         self.collapse_size = collapse_size;
-        captureMouseMaintain(self.wd.id);
 
         const rect = self.wd.contentRect();
 
@@ -4718,8 +4715,6 @@ pub const TextLayoutWidget = struct {
         if (dataGet(null, self.wd.id, "_sel_left_right", i32)) |slf| {
             self.sel_left_right = slf;
         }
-
-        captureMouseMaintain(self.wd.id);
 
         if (captured(self.wd.id)) {
             if (dataGet(null, self.wd.id, "_sel_mouse_down_bytes", usize)) |p| {
@@ -5981,8 +5976,6 @@ pub const ScrollContainerWidget = struct {
         self.process_events = opts.process_events;
         try self.wd.register("ScrollContainer", null);
 
-        captureMouseMaintain(self.wd.id);
-
         // user code might have changed our rect
         const crect = self.wd.contentRect();
         self.si.viewport.w = crect.w;
@@ -6420,8 +6413,6 @@ pub const ScrollBarWidget = struct {
         self.process_events = opts.process_events;
         try self.wd.register("ScrollBar", null);
         try self.wd.borderAndBackground(.{});
-
-        captureMouseMaintain(self.wd.id);
 
         self.grabRect = self.wd.contentRect();
         switch (self.dir) {
@@ -7204,10 +7195,6 @@ pub const LabelWidget = struct {
 
         self.wd = WidgetData.init(src, .{}, options.override(.{ .min_size_content = size }));
 
-        // labels generally don't get mouse capture, but if some code gives us
-        // capture we should maintain it (see labelClick)
-        captureMouseMaintain(self.wd.id);
-
         return self;
     }
 
@@ -7559,7 +7546,6 @@ pub const ButtonWidget = struct {
     pub fn init(src: std.builtin.SourceLocation, opts: Options) Self {
         var self = Self{};
         self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-        captureMouseMaintain(self.wd.id);
         return self;
     }
 
@@ -7731,8 +7717,6 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
     if (b.data().visible()) {
         try tabIndexSet(b.data().id, options.tab_index);
     }
-
-    captureMouseMaintain(b.data().id);
 
     var hovered: bool = false;
     var ret = false;
@@ -9161,6 +9145,8 @@ pub const WidgetData = struct {
 
         self.parent = parentGet();
         self.id = self.parent.extendId(src, opts.idExtra());
+
+        captureMouseMaintain(self.id);
 
         self.min_size = self.options.min_sizeGet();
 
