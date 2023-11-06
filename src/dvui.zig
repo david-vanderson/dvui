@@ -5420,7 +5420,7 @@ pub const TextLayoutWidget = struct {
             // we figured out the pixel position where the new cursor should
             // be, but need to save this for next frame to figure out the byte
             // position based on this pixel position
-            dataSet(null, self.wd.id, "_cursor_updown_pt", self.cursor_updown_pt);
+            dataSet(null, self.wd.id, "_cursor_updown_pt", self.cursor_updown_pt.?);
             dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
         }
         clipSet(self.prevClip);
