@@ -3191,7 +3191,7 @@ pub const PopupWidget = struct {
         // we are using scroll to do border/background but floating windows
         // don't have margin, so turn that off
         self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none }, self.options.override(.{ .margin = .{}, .expand = .both }));
-        try self.scroll.install(.{});
+        try self.scroll.install();
 
         if (menuGet()) |pm| {
             pm.child_popup_rect = rs.r;
@@ -5820,7 +5820,7 @@ pub const BoxWidget = struct {
 pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) !*ScrollAreaWidget {
     var ret = try currentWindow().arena.create(ScrollAreaWidget);
     ret.* = ScrollAreaWidget.init(src, init_opts, opts);
-    try ret.install(.{});
+    try ret.install();
     return ret;
 }
 
@@ -5841,6 +5841,7 @@ pub const ScrollAreaWidget = struct {
         vertical_bar: ScrollInfo.ScrollBarMode = .auto,
         horizontal: ?ScrollInfo.ScrollMode = null, // .none is default
         horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
+        focus_id: ?u32 = null, // clicking on a scrollbar will focus this id, or the scroll container if null
     };
 
     hbox: BoxWidget = undefined,
@@ -5862,7 +5863,7 @@ pub const ScrollAreaWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct { process_events: bool = true, focus_id: ?u32 = null }) !void {
+    pub fn install(self: *Self) !void {
         if (self.init_opts.scroll_info) |si| {
             self.si = si;
             if (self.init_opts.vertical != null) {
@@ -5888,7 +5889,7 @@ pub const ScrollAreaWidget = struct {
         self.si.viewport.w = crect.w;
         self.si.viewport.h = crect.h;
 
-        const focus_target = opts.focus_id orelse dataGet(null, self.hbox.data().id, "_scroll_id", u32);
+        const focus_target = self.init_opts.focus_id orelse dataGet(null, self.hbox.data().id, "_scroll_id", u32);
 
         if (self.si.vertical != .none) {
             if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar == .auto and (self.si.virtual_size.h > self.si.viewport.h))) {
@@ -5911,7 +5912,8 @@ pub const ScrollAreaWidget = struct {
         var container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
         self.scroll = ScrollContainerWidget.init(@src(), self.si, container_opts);
 
-        try self.scroll.install(.{ .process_events = opts.process_events });
+        try self.scroll.install();
+        self.scroll.processEvents();
     }
 
     pub fn deinit(self: *Self) void {
@@ -5977,8 +5979,7 @@ pub const ScrollContainerWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
-        self.process_events = opts.process_events;
+    pub fn install(self: *Self) !void {
         try self.wd.register("ScrollContainer", null);
 
         // user code might have changed our rect
@@ -5997,14 +5998,27 @@ pub const ScrollContainerWidget = struct {
             .given => {},
         }
 
-        if (opts.process_events) {
-            var evts = events();
-            for (evts) |*e| {
-                if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
-                    continue;
+        try self.wd.borderAndBackground(.{});
 
-                self.processEvent(e, false);
-            }
+        self.prevClip = clip(self.wd.contentRectScale().r);
+
+        self.frame_viewport = self.si.viewport.topleft();
+
+        _ = parentSet(self.widget());
+    }
+
+    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
+        return .{ .id = self.wd.id, .r = self.wd.borderRectScale().r };
+    }
+
+    pub fn processEvents(self: *Self) void {
+        const emo = self.eventMatchOptions();
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, emo))
+                continue;
+
+            self.processEvent(e, false);
         }
 
         // damping is only for touch currently
@@ -6065,13 +6079,8 @@ pub const ScrollContainerWidget = struct {
             }
         }
 
-        try self.wd.borderAndBackground(.{});
-
-        self.prevClip = clip(self.wd.contentRectScale().r);
-
+        // might have changed from events
         self.frame_viewport = self.si.viewport.topleft();
-
-        _ = parentSet(self.widget());
     }
 
     pub fn widget(self: *Self) Widget {
@@ -8120,9 +8129,10 @@ pub const TextEntryWidget = struct {
             .vertical_bar = self.init_opts.scroll_vertical_bar orelse .auto,
             .horizontal = if (self.init_opts.scroll_horizontal orelse true) .auto else .none,
             .horizontal_bar = self.init_opts.scroll_horizontal_bar orelse (if (self.init_opts.multiline) .auto else .hide),
+            .focus_id = self.wd.id,
         }, self.wd.options.strip().override(.{ .expand = .both }));
         // scrollbars process mouse events here
-        try self.scroll.install(.{ .focus_id = self.wd.id });
+        try self.scroll.install();
 
         self.scrollClip = clipGet();
 
