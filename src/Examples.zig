@@ -103,7 +103,9 @@ const AnimatingDialog = struct {
             }
         }
 
-        try win.install(.{});
+        try win.install();
+        win.processEventsBefore();
+        try win.draw();
 
         var scaler = try dvui.scale(@src(), scaleval, .{ .expand = .horizontal });
 
@@ -209,12 +211,13 @@ pub fn demo() !void {
 
     var ti = dvui.toastsFor(float.data().id);
     if (ti) |*it| {
-        var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent = true }, .{ .background = false, .border = .{} });
+        var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent = true, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
         defer toast_win.deinit();
 
         toast_win.data().rect = dvui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
         toast_win.autoSize();
-        try toast_win.install(.{ .process_events = false });
+        try toast_win.install();
+        try toast_win.draw();
 
         var vbox = try dvui.box(@src(), .vertical, .{});
         defer vbox.deinit();
@@ -959,7 +962,9 @@ pub fn animations() !void {
 
     if (animating_window_show) {
         var win = animatingWindowRect(@src(), &animating_window_rect, &animating_window_show, &animating_window_closing, .{});
-        try win.install(.{});
+        try win.install();
+        win.processEventsBefore();
+        try win.draw();
         defer win.deinit();
 
         var keep_open = true;
