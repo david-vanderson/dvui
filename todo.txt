@@ -1,9 +1,14 @@
 
-slider should have controllable radius for knob
+update README/INSIDE and screenshot
 
-update README and screenshot
+captureMouseMaintain should probably always be called as part of WidgetData.init?
+
+SliderFloat/SliderDrag thing (see open issue)
+- any keypress should transition into text editing
 
 file zig pull request for sliceAsBytes/bytesAsSlice to include sentinel
+
+slider should have controllable radius for knob
 
 UI scaling on Windows causes fonts to look blurry, maybe if snap to pixels is true, we round to nearest font size and then don't adjust for target_fraction?
 
