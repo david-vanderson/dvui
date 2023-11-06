@@ -471,8 +471,6 @@ pub const StrokeTest = struct {
         self.wd = dvui.WidgetData.init(src, .{}, options);
         dvui.debug("{x} StrokeTest {}", .{ self.wd.id, self.wd.rect });
 
-        _ = dvui.captureMouseMaintain(self.wd.id);
-
         var evts = dvui.events();
         for (evts) |*e| {
             if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
