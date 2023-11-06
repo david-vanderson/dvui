@@ -2862,12 +2862,13 @@ pub const Window = struct {
     fn toastsShow(self: *Self) !void {
         var ti = dvui.toastsFor(null);
         if (ti) |*it| {
-            var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent = true }, .{ .background = false, .border = .{} });
+            var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent = true, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
             defer toast_win.deinit();
 
             toast_win.data().rect = dvui.placeIn(self.wd.rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
             toast_win.autoSize();
-            try toast_win.install(.{ .process_events = false });
+            try toast_win.install();
+            try toast_win.draw();
 
             var vbox = try dvui.box(@src(), .vertical, .{});
             defer vbox.deinit();
@@ -3181,6 +3182,7 @@ pub const PopupWidget = struct {
         const rs = self.wd.rectScale();
 
         try subwindowAdd(self.wd.id, rs.r, false, null);
+        captureMouseMaintain(self.wd.id);
         try self.wd.register("Popup", rs);
 
         // clip to just our window (using clipSet since we are not inside our parent)
@@ -3331,7 +3333,9 @@ pub const PopupWidget = struct {
 pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) !*FloatingWindowWidget {
     var ret = try currentWindow().arena.create(FloatingWindowWidget);
     ret.* = FloatingWindowWidget.init(src, floating_opts, opts);
-    try ret.install(.{});
+    try ret.install();
+    ret.processEventsBefore();
+    try ret.draw();
     return ret;
 }
 
@@ -3348,6 +3352,7 @@ pub const FloatingWindowWidget = struct {
         modal: bool = false,
         rect: ?*Rect = null,
         open_flag: ?*bool = null,
+        process_events_in_deinit: bool = true,
         stay_above_parent: bool = false,
         window_avoid: enum {
             none,
@@ -3361,7 +3366,6 @@ pub const FloatingWindowWidget = struct {
     wd: WidgetData = undefined,
     init_options: InitOptions = undefined,
     options: Options = undefined,
-    process_events: bool = true,
     prev_windowId: u32 = 0,
     layout: BoxWidget = undefined,
     prevClip: Rect = Rect{},
@@ -3492,9 +3496,7 @@ pub const FloatingWindowWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
-        self.process_events = opts.process_events;
-
+    pub fn install(self: *Self) !void {
         if (firstFrame(self.wd.id)) {
             // write back before we hide ourselves for the first frame
             dataSet(null, self.wd.id, "_rect", self.wd.rect);
@@ -3528,14 +3530,12 @@ pub const FloatingWindowWidget = struct {
         // - gives us all mouse events
         self.prevClip = clipGet();
         clipSet(windowRectPixels());
+    }
 
-        if (self.process_events) {
-            // processEventsBefore can change self.wd.rect
-            self.processEventsBefore();
-        }
-
+    pub fn draw(self: *Self) !void {
         const rs = self.wd.rectScale();
         try subwindowAdd(self.wd.id, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent) self.prev_windowId else null);
+        captureMouseMaintain(self.wd.id);
         try self.wd.register("FloatingWindow", rs);
 
         if (self.init_options.modal) {
@@ -3731,7 +3731,7 @@ pub const FloatingWindowWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        if (self.process_events) {
+        if (self.init_options.process_events_in_deinit) {
             self.processEventsAfter();
         }
 
@@ -9146,7 +9146,11 @@ pub const WidgetData = struct {
         self.parent = parentGet();
         self.id = self.parent.extendId(src, opts.idExtra());
 
-        captureMouseMaintain(self.id);
+        // for normal widgets this is fine, but subwindows have to take care to
+        // call captureMouseMaintain after subwindowCurrentSet and subwindowAdd
+        if (!init_options.subwindow) {
+            captureMouseMaintain(self.id);
+        }
 
         self.min_size = self.options.min_sizeGet();
 

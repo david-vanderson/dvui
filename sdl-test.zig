@@ -316,7 +316,9 @@ pub fn main() !void {
                     var fwin = animatingWindow(@src(), false, &FloatingWindowTest.rect, &FloatingWindowTest.show, start_closing, .{});
                     //var fwin = dvui.FloatingWindowWidget.init(@src(), false, &FloatingWindowTest.rect, &FloatingWindowTest.show, .{});
 
-                    try fwin.install(.{});
+                    try fwin.install();
+                    fwin.processEventsBefore();
+                    try fwin.draw();
                     defer fwin.deinit();
                     try dvui.labelNoFmt(@src(), "Floating Window", .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 

@@ -3,8 +3,6 @@ update README/INSIDE and screenshot
 - use slider as motivating example
   - don't use Box?
 
-captureMouseMaintain should probably always be called as part of WidgetData.init?
-
 SliderFloat/SliderDrag thing (see open issue)
 - any keypress should transition into text editing
 

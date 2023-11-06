@@ -131,6 +131,7 @@ Here the widget has a Rect, but hasn't drawn anything.  Animations (fading in, s
   * `parentSet()` set this widget as the new parent
   * `register()` provides debugging information
   * draws border and background
+  * maybe set the clip rect
 
 Now the widget is the parent widget, so further widgets nested here will be children of this widget.
 
@@ -151,6 +152,7 @@ Layout widgets like `BoxWidget` usually don't process events or draw anything be
   * `dataSet()` store data for next frame
   * `minSizeSetAndRefresh()` store our min size for next frame, refresh if it changed
   * `minSizeReportToParent()` send min size to parent widget for next frame layout
+  * reset the clip rect if set before
   * `parentSet()` set the previous parent back
 
 
