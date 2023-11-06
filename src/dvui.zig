@@ -7277,11 +7277,11 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
     var ret = false;
 
     var lw = try LabelWidget.init(src, fmt, args, opts);
-    // Now lw has a Rect from its parent but hasn't processed events or drawn
+    // now lw has a Rect from its parent but hasn't processed events or drawn
 
     const lwid = lw.data().id;
 
-    // If lw is visible, we want to be able to keyboard navigate to it
+    // if lw is visible, we want to be able to keyboard navigate to it
     if (lw.data().visible()) {
         try dvui.tabIndexSet(lwid, lw.data().options.tab_index);
     }
@@ -7289,13 +7289,13 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
     // draw border and background
     try lw.install();
 
-    // Get lw args for eventMatch
+    // get lw args for eventMatch
     const emo = lw.eventMatchOptions();
 
-    // Loop over all events this frame in order of arrival
+    // loop over all events this frame in order of arrival
     for (dvui.events()) |*e| {
 
-        // Would lw process this event normally?
+        // skip if lw would not normally process this event
         if (!dvui.eventMatch(e, emo))
             continue;
 

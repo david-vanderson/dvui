@@ -2,6 +2,117 @@
 
 This document gives technical details and is useful for people extending or writing new widgets.  See [readme](/README.md) for a broad overview.
 
+### Example: Overriding Events for a Label - labelClick()
+```zig
+/// A clickable label.  Good for hyperlinks.
+/// Returns true if it's been clicked.
+pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) !bool {
+    var ret = false;
+
+    var lw = try LabelWidget.init(src, fmt, args, opts);
+    // now lw has a Rect from its parent but hasn't processed events or drawn
+
+    const lwid = lw.data().id;
+
+    // if lw is visible, we want to be able to keyboard navigate to it
+    if (lw.data().visible()) {
+        try dvui.tabIndexSet(lwid, lw.data().options.tab_index);
+    }
+
+    // draw border and background
+    try lw.install();
+
+    // get lw args for eventMatch
+    const emo = lw.eventMatchOptions();
+
+    // loop over all events this frame in order of arrival
+    for (dvui.events()) |*e| {
+
+        // skip if lw would not normally process this event
+        if (!dvui.eventMatch(e, emo))
+            continue;
+
+        switch (e.evt) {
+            .mouse => |me| {
+                if (me.action == .focus) {
+                    e.handled = true;
+
+                    // focus this widget for events after this one (starting with e.num)
+                    dvui.focusWidget(lwid, null, e.num);
+                } else if (me.action == .press and me.button.pointer()) {
+                    e.handled = true;
+                    dvui.captureMouse(lwid);
+
+                    // for touch events, we want to cancel our click if a drag is started
+                    dvui.dragPreStart(me.p, null, Point{});
+                } else if (me.action == .release and me.button.pointer()) {
+                    // mouse button was released, do we still have mouse capture?
+                    if (dvui.captured(lwid)) {
+                        e.handled = true;
+
+                        // cancel our capture
+                        dvui.captureMouse(null);
+
+                        // if the release was within our border, the click is successful
+                        if (lw.data().borderRectScale().r.contains(me.p)) {
+                            ret = true;
+
+                            // if the user interacts successfully with a
+                            // widget, it usually means part of the GUI is
+                            // changing, so the convention is to call refresh
+                            // so the user doesn't have to remember
+                            dvui.refresh(null, @src(), lwid);
+                        }
+                    }
+                } else if (me.action == .motion and me.button.touch()) {
+                    if (dvui.captured(lwid)) {
+                        if (dvui.dragging(me.p)) |_| {
+                            // touch: if we overcame the drag threshold, then
+                            // that means the person probably didn't want to
+                            // touch this button, they were trying to scroll
+                            dvui.captureMouse(null);
+                        }
+                    }
+                } else if (me.action == .position) {
+                    e.handled = true;
+
+                    // a single .position mouse event is at the end of each
+                    // frame, so this means the mouse ended above us
+                    dvui.cursorSet(.hand);
+                }
+            },
+            .key => |ke| {
+                if (ke.code == .space and ke.action == .down) {
+                    e.handled = true;
+                    ret = true;
+                    dvui.refresh(null, @src(), lwid);
+                }
+            },
+            else => {},
+        }
+
+        // if we didn't handle this event, send it to lw - this means we don't
+        // need to call lw.processEvents()
+        if (!e.handled) {
+            lw.processEvent(e, false);
+        }
+    }
+
+    // draw text
+    try lw.draw();
+
+    // draw an accent border if we are focused
+    if (lwid == dvui.focusedWidgetId()) {
+        try lw.data().focusBorder();
+    }
+
+    // done with lw, have it report min size to parent
+    lw.deinit();
+
+    return ret;
+}
+```
+
 ### One Frame At a Time
 
 DVUI is an immediate-mode GUI, so widgets are created on the fly.  We also process the whole list of events that happened since last frame.
