@@ -3199,7 +3199,7 @@ pub const PopupWidget = struct {
 
         self.menu = MenuWidget.init(@src(), .{ .dir = .vertical, .submenus_activated_by_default = true }, self.options.strip().override(.{ .expand = .horizontal }));
         self.menu.parentSubwindowId = self.prev_windowId;
-        try self.menu.install(.{});
+        try self.menu.install();
 
         // if no widget in this popup has focus, make the menu have focus to handle keyboard events
         if (focusedWidgetIdInCurrentSubwindow() == null) {
@@ -5896,7 +5896,7 @@ pub const ScrollAreaWidget = struct {
             if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar == .auto and (self.si.virtual_size.h > self.si.viewport.h))) {
                 // do the scrollbars first so that they still appear even if there's not enough space
                 self.vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = self.si, .focus_id = focus_target }, .{ .gravity_x = 1.0, .expand = .vertical });
-                try self.vbar.?.install(.{});
+                try self.vbar.?.install();
             }
         }
 
@@ -5906,7 +5906,7 @@ pub const ScrollAreaWidget = struct {
         if (self.si.horizontal != .none) {
             if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar == .auto and (self.si.virtual_size.w > self.si.viewport.w))) {
                 self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, .{ .expand = .horizontal, .gravity_y = 1.0 });
-                try self.hbar.?.install(.{});
+                try self.hbar.?.install();
             }
         }
 
@@ -6398,7 +6398,6 @@ pub const ScrollBarWidget = struct {
     };
 
     wd: WidgetData = undefined,
-    process_events: bool = true,
     grabRect: Rect = Rect{},
     si: *ScrollInfo = undefined,
     focus_id: ?u32 = null,
@@ -6424,8 +6423,7 @@ pub const ScrollBarWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
-        self.process_events = opts.process_events;
+    pub fn install(self: *Self) !void {
         try self.wd.register("ScrollBar", null);
         try self.wd.borderAndBackground(.{});
 
@@ -6443,10 +6441,8 @@ pub const ScrollBarWidget = struct {
             },
         }
 
-        if (opts.process_events) {
-            const grabrs = self.wd.parent.screenRectScale(self.grabRect);
-            self.processEvents(grabrs.r);
-        }
+        const grabrs = self.wd.parent.screenRectScale(self.grabRect);
+        self.processEvents(grabrs.r);
     }
 
     pub fn data(self: *Self) *WidgetData {
@@ -6717,7 +6713,7 @@ pub const ScaleWidget = struct {
 pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*MenuWidget {
     var ret = try currentWindow().arena.create(MenuWidget);
     ret.* = MenuWidget.init(src, .{ .dir = dir }, opts);
-    try ret.install(.{});
+    try ret.install();
     return ret;
 }
 
@@ -6769,8 +6765,7 @@ pub const MenuWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct {}) !void {
-        _ = opts;
+    pub fn install(self: *Self) !void {
         _ = parentSet(self.widget());
         self.parentMenu = menuSet(self);
         try self.wd.register("Menu", null);
