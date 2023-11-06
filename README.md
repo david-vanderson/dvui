@@ -14,6 +14,8 @@ Examples:
 
 Get Started: find the widget you want in the example and copy the code from the `demo()` function in `src/dvui.zig`.
 
+This document is a broad overview.  See [inside](/INSIDE.md) for implementation details and how to write and modify widgets.
+
 ## Screenshot
 
 ![screenshot of demo](/screenshot_demo.png?raw=true)
@@ -61,16 +63,6 @@ if (try dvui.button(@src(), "Ok", .{})) {
 Widgets are not stored between frames like in traditional gui toolkits (gtk, win32, cocoa).  `dvui.button()` processes input events, draws the button on the screen, and returns true if a button click happened this frame.
 
 For an intro to immediate mode guis, see: https://github.com/ocornut/imgui/wiki#about-the-imgui-paradigm
-
-### Widget Ids
-Each widget gets a `u32` id by combining:
-- parent's id
-- @src() passed to widget
-- extra `usize` passed to widget (use in loops, passed through Options)
-
-The id a widget gets should be the same each frame, even if other widgets are being added or removed.  Mixing in the parent's id also means you can package up a collection of widgets in a function and call that function in many different parents making it easy to replicate parts of the gui.
-
-The extra `usize` is to differentiate many children being added to the same parent in a loop.
 
 ### Single Pass
 Widgets handle events and draw themselves in `install()`.  This is before they know of any child widgets, so some information is stored from last frame about minimum sizes.
