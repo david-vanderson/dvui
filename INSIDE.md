@@ -143,8 +143,10 @@ Now the widget is the parent widget, so further widgets nested here will be chil
 
 For mouse events, which are routed by the Rect, this widget can process them either here (before children), or in `deinit()` (after children).  For example, `FloatingWindowWidget` processes some mouse events before children - the lower-right drag-resize handle - and other mouse events after children - dragging anywhere in the background drags the subwindow.
 
-* `draw()`
-  * draw the content of the widget
+* `drawBackground()`, `draw()`, `drawFocus()`
+  * draw parts of the widget, there's some variety here
+  * some widgets (BoxWidget) don't have a draw at all, they only do border/background
+  * some widgets (ButtonWidget) only has drawFocus to maybe draw a focus border
 
 Layout widgets like `BoxWidget` usually don't process events or draw anything besides border and background.
 

@@ -318,7 +318,7 @@ pub fn main() !void {
 
                     try fwin.install();
                     fwin.processEventsBefore();
-                    try fwin.draw();
+                    try fwin.drawBackground();
                     defer fwin.deinit();
                     try dvui.labelNoFmt(@src(), "Floating Window", .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 

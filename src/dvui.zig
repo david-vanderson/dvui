@@ -2868,7 +2868,7 @@ pub const Window = struct {
             toast_win.data().rect = dvui.placeIn(self.wd.rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
             toast_win.autoSize();
             try toast_win.install();
-            try toast_win.draw();
+            try toast_win.drawBackground();
 
             var vbox = try dvui.box(@src(), .vertical, .{});
             defer vbox.deinit();
@@ -3115,7 +3115,7 @@ pub const Window = struct {
 pub fn popup(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) !*PopupWidget {
     var ret = try currentWindow().arena.create(PopupWidget);
     ret.* = PopupWidget.init(src, initialRect, opts);
-    try ret.install(.{});
+    try ret.install();
     return ret;
 }
 
@@ -3157,8 +3157,7 @@ pub const PopupWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct {}) !void {
-        _ = opts;
+    pub fn install(self: *Self) !void {
         _ = parentSet(self.widget());
 
         self.prev_windowId = subwindowCurrentSet(self.wd.id);
@@ -3335,7 +3334,7 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
     ret.* = FloatingWindowWidget.init(src, floating_opts, opts);
     try ret.install();
     ret.processEventsBefore();
-    try ret.draw();
+    try ret.drawBackground();
     return ret;
 }
 
@@ -3532,7 +3531,7 @@ pub const FloatingWindowWidget = struct {
         clipSet(windowRectPixels());
     }
 
-    pub fn draw(self: *Self) !void {
+    pub fn drawBackground(self: *Self) !void {
         const rs = self.wd.rectScale();
         try subwindowAdd(self.wd.id, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent) self.prev_windowId else null);
         captureMouseMaintain(self.wd.id);
@@ -3552,7 +3551,7 @@ pub const FloatingWindowWidget = struct {
         // we are using BoxWidget to do border/background but floating windows
         // don't have margin, so turn that off
         self.layout = BoxWidget.init(@src(), .vertical, false, self.options.override(.{ .margin = .{}, .expand = .both }));
-        try self.layout.install(.{});
+        try self.layout.install();
     }
 
     pub fn processEventsBefore(self: *Self) void {
@@ -4051,7 +4050,7 @@ pub fn toastDisplay(id: u32) !void {
 pub fn animate(src: std.builtin.SourceLocation, kind: AnimateWidget.Kind, duration_micros: i32, opts: Options) !*AnimateWidget {
     var ret = try currentWindow().arena.create(AnimateWidget);
     ret.* = AnimateWidget.init(src, kind, duration_micros, opts);
-    try ret.install(.{});
+    try ret.install();
     return ret;
 }
 
@@ -4074,8 +4073,7 @@ pub const AnimateWidget = struct {
         return Self{ .wd = WidgetData.init(src, .{}, opts), .kind = kind, .duration = duration_micros };
     }
 
-    pub fn install(self: *Self, opts: struct {}) !void {
-        _ = opts;
+    pub fn install(self: *Self) !void {
         _ = parentSet(self.widget());
         try self.wd.register("Animate", null);
 
@@ -4209,7 +4207,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
         const h = pop.wd.contentRect().inset(pop.options.borderGet()).inset(pop.options.paddingGet()).h;
         pop.initialRect.y -= (h / @as(f32, @floatFromInt(entries.len))) * @as(f32, @floatFromInt(choice.*));
 
-        try pop.install(.{});
+        try pop.install();
         defer pop.deinit();
 
         // without this, if you trigger the dropdown with the keyboard and then
@@ -4272,8 +4270,10 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
 
     // Use the ButtonWidget to do margin/border/padding, but use strip so we
     // don't get any of ButtonWidget's defaults
-    var bc = ButtonWidget.init(src, options.strip().override(options));
-    try bc.install(.{});
+    var bc = ButtonWidget.init(src, .{}, options.strip().override(options));
+    try bc.install();
+    bc.processEvents();
+    try bc.drawFocus();
     defer bc.deinit();
 
     var expanded: bool = false;
@@ -4287,7 +4287,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
 
     var bcbox = BoxWidget.init(@src(), .horizontal, false, options.strip());
     defer bcbox.deinit();
-    try bcbox.install(.{});
+    try bcbox.install();
     const size = try options.fontGet().lineHeight();
     if (expanded) {
         try icon(@src(), "down_arrow", entypo.triangle_down, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
@@ -5615,14 +5615,14 @@ pub const OverlayWidget = struct {
 pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena.create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, false, opts);
-    try ret.install(.{});
+    try ret.install();
     return ret;
 }
 
 pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena.create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, true, opts);
-    try ret.install(.{});
+    try ret.install();
     return ret;
 }
 
@@ -5655,8 +5655,7 @@ pub const BoxWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct {}) !void {
-        _ = opts;
+    pub fn install(self: *Self) !void {
         try self.wd.register(self.wd.options.name orelse "Box", null);
         try self.wd.borderAndBackground(.{});
 
@@ -5875,7 +5874,7 @@ pub const ScrollAreaWidget = struct {
             self.si.horizontal = self.init_opts.horizontal orelse .none;
         }
 
-        try self.hbox.install(.{});
+        try self.hbox.install();
 
         // the viewport is also set in ScrollContainer but we need it here in
         // case the scroll bar modes are auto
@@ -5894,7 +5893,7 @@ pub const ScrollAreaWidget = struct {
         }
 
         self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "ScrollAreaWidget vbox" }));
-        try self.vbox.install(.{});
+        try self.vbox.install();
 
         if (self.si.horizontal != .none) {
             if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar == .auto and (self.si.virtual_size.w > self.si.viewport.w))) {
@@ -6652,7 +6651,7 @@ pub const ScaleWidget = struct {
         try self.wd.borderAndBackground(.{});
 
         self.box = BoxWidget.init(@src(), .vertical, false, self.wd.options.strip().override(.{ .expand = .both }));
-        try self.box.install(.{});
+        try self.box.install();
     }
 
     pub fn widget(self: *Self) Widget {
@@ -6771,7 +6770,7 @@ pub const MenuWidget = struct {
         }
 
         self.box = BoxWidget.init(@src(), self.init_opts.dir, false, self.wd.options.strip().override(.{ .expand = .both }));
-        try self.box.install(.{});
+        try self.box.install();
     }
 
     pub fn close(self: *Self) void {
@@ -7538,33 +7537,30 @@ pub const ButtonWidget = struct {
         .padding = Rect.all(4),
         .background = true,
     };
+
+    pub const InitOptions = struct {
+        draw_focus: bool = true,
+    };
+
     wd: WidgetData = undefined,
+    init_options: InitOptions = undefined,
     hover: bool = false,
     focus: bool = false,
     click: bool = false,
 
-    pub fn init(src: std.builtin.SourceLocation, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         var self = Self{};
+        self.init_options = init_opts;
         self.wd = WidgetData.init(src, .{}, defaults.override(opts));
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct { process_events: bool = true, draw_focus: bool = true }) !void {
+    pub fn install(self: *Self) !void {
         try self.wd.register("Button", null);
         _ = parentSet(self.widget());
 
         if (self.wd.visible()) {
             try tabIndexSet(self.wd.id, self.wd.options.tab_index);
-        }
-
-        if (opts.process_events) {
-            var evts = events();
-            for (evts) |*e| {
-                if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
-                    continue;
-
-                self.processEvent(e, false);
-            }
         }
 
         self.focus = (self.wd.id == focusedWidgetId());
@@ -7577,8 +7573,25 @@ pub const ButtonWidget = struct {
         }
 
         try self.wd.borderAndBackground(.{ .fill_color = fill_color });
+    }
 
-        if (opts.draw_focus and self.focus) {
+    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
+        return .{ .id = self.wd.id, .r = self.wd.borderRectScale().r };
+    }
+
+    pub fn processEvents(self: *Self) void {
+        const emo = self.eventMatchOptions();
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, emo))
+                continue;
+
+            self.processEvent(e, false);
+        }
+    }
+
+    pub fn drawFocus(self: *Self) !void {
+        if (self.init_options.draw_focus and self.focus) {
             try self.wd.focusBorder();
         }
     }
@@ -7678,25 +7691,29 @@ pub const ButtonWidget = struct {
 };
 
 pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) !bool {
-    var bw = ButtonWidget.init(src, opts);
-    try bw.install(.{});
+    var bw = ButtonWidget.init(src, .{}, opts);
+    try bw.install();
+    bw.processEvents();
 
     try labelNoFmt(@src(), label_str, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
 
     var click = bw.clicked();
+    try bw.drawFocus();
     bw.deinit();
     return click;
 }
 
 pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, opts: Options) !bool {
-    var bw = ButtonWidget.init(src, opts);
-    try bw.install(.{});
+    var bw = ButtonWidget.init(src, .{}, opts);
+    try bw.install();
+    bw.processEvents();
 
     // pass min_size_content through to the icon so that it will figure out the
     // min width based on the height
     try icon(@src(), name, tvg_bytes, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content }));
 
     var click = bw.clicked();
+    try bw.drawFocus();
     bw.deinit();
     return click;
 }
@@ -7844,7 +7861,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
         fill_color = options.color(.fill);
     }
     var knob = BoxWidget.init(@src(), .horizontal, false, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
-    try knob.install(.{});
+    try knob.install();
     if (b.data().id == focusedWidgetId()) {
         try knob.wd.focusBorder();
     }
@@ -7905,10 +7922,11 @@ pub var checkbox_defaults: Options = .{
 pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, opts: Options) !void {
     const options = checkbox_defaults.override(opts);
 
-    var bw = ButtonWidget.init(src, options.strip().override(options));
+    var bw = ButtonWidget.init(src, .{}, options.strip().override(options));
 
-    // don't want to show a focus ring around the label
-    try bw.install(.{ .draw_focus = false });
+    try bw.install();
+    bw.processEvents();
+    // don't want to show a focus ring around the label, so don't call bw.drawFocus
     defer bw.deinit();
 
     if (bw.clicked()) {
