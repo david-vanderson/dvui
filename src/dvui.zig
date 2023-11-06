@@ -4275,6 +4275,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
     var bc = ButtonWidget.init(src, .{}, options.strip().override(options));
     try bc.install();
     bc.processEvents();
+    try bc.drawBackground();
     try bc.drawFocus();
     defer bc.deinit();
 
@@ -6642,7 +6643,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
 pub fn scale(src: std.builtin.SourceLocation, scale_in: f32, opts: Options) !*ScaleWidget {
     var ret = try currentWindow().arena.create(ScaleWidget);
     ret.* = ScaleWidget.init(src, scale_in, opts);
-    try ret.install(.{});
+    try ret.install();
     return ret;
 }
 
@@ -6659,8 +6660,7 @@ pub const ScaleWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct {}) !void {
-        _ = opts;
+    pub fn install(self: *Self) !void {
         _ = parentSet(self.widget());
         try self.wd.register("Scale", null);
         try self.wd.borderAndBackground(.{});
@@ -7434,29 +7434,27 @@ pub const IconWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct {}) !void {
-        _ = opts;
+    pub fn install(self: *Self) !void {
         try self.wd.register("Icon", null);
-        //debug("{x} Icon \"{s:<10}\" {} {d}", .{ self.wd.id, self.name, self.wd.rect, self.wd.options.rotationGet() });
-
         try self.wd.borderAndBackground(.{});
+    }
 
+    pub fn draw(self: *Self) !void {
         var rect = placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
         var rs = self.wd.parent.screenRectScale(rect);
         try renderIcon(self.name, self.tvg_bytes, rs, self.wd.options.rotationGet(), self.wd.options.color(.text));
-
-        self.wd.minSizeSetAndRefresh();
-        self.wd.minSizeReportToParent();
     }
 
     pub fn deinit(self: *Self) void {
-        _ = self;
+        self.wd.minSizeSetAndRefresh();
+        self.wd.minSizeReportToParent();
     }
 };
 
 pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, opts: Options) !void {
     var iw = try IconWidget.init(src, name, tvg_bytes, opts);
-    try iw.install(.{});
+    try iw.install();
+    try iw.draw();
     iw.deinit();
 }
 
@@ -7475,7 +7473,8 @@ pub fn imageSize(name: []const u8, image_bytes: []const u8) !Size {
 
 pub fn image(src: std.builtin.SourceLocation, name: []const u8, image_bytes: []const u8, opts: Options) !void {
     var iw = try ImageWidget.init(src, name, image_bytes, opts);
-    try iw.install(.{});
+    try iw.install();
+    try iw.draw();
     iw.deinit();
 }
 
@@ -7506,23 +7505,20 @@ pub const ImageWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct {}) !void {
-        _ = opts;
+    pub fn install(self: *Self) !void {
         try self.wd.register("Image", null);
-        //debug("{x} Icon \"{s:<10}\" {} {d}", .{ self.wd.id, self.name, self.wd.rect, self.wd.options.rotationGet() });
-
         try self.wd.borderAndBackground(.{});
+    }
 
+    pub fn draw(self: *Self) !void {
         var rect = placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
         var rs = self.wd.parent.screenRectScale(rect);
         try renderImage(self.name, self.image_bytes, rs, self.wd.options.rotationGet(), .{});
-
-        self.wd.minSizeSetAndRefresh();
-        self.wd.minSizeReportToParent();
     }
 
     pub fn deinit(self: *Self) void {
-        _ = self;
+        self.wd.minSizeSetAndRefresh();
+        self.wd.minSizeReportToParent();
     }
 };
 
@@ -7586,17 +7582,6 @@ pub const ButtonWidget = struct {
         if (self.wd.visible()) {
             try tabIndexSet(self.wd.id, self.wd.options.tab_index);
         }
-
-        self.focus = (self.wd.id == focusedWidgetId());
-
-        var fill_color: ?Color = null;
-        if (captured(self.wd.id)) {
-            fill_color = self.wd.options.color(.press);
-        } else if (self.hover) {
-            fill_color = self.wd.options.color(.hover);
-        }
-
-        try self.wd.borderAndBackground(.{ .fill_color = fill_color });
     }
 
     pub fn eventMatchOptions(self: *Self) EventMatchOptions {
@@ -7614,14 +7599,25 @@ pub const ButtonWidget = struct {
         }
     }
 
+    pub fn drawBackground(self: *Self) !void {
+        var fill_color: ?Color = null;
+        if (captured(self.wd.id)) {
+            fill_color = self.wd.options.color(.press);
+        } else if (self.hover) {
+            fill_color = self.wd.options.color(.hover);
+        }
+
+        try self.wd.borderAndBackground(.{ .fill_color = fill_color });
+    }
+
     pub fn drawFocus(self: *Self) !void {
-        if (self.init_options.draw_focus and self.focus) {
+        if (self.init_options.draw_focus and self.focused()) {
             try self.wd.focusBorder();
         }
     }
 
     pub fn focused(self: *Self) bool {
-        return self.focus;
+        return self.wd.id == focusedWidgetId();
     }
 
     pub fn hovered(self: *Self) bool {
@@ -7718,6 +7714,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Opti
     var bw = ButtonWidget.init(src, .{}, opts);
     try bw.install();
     bw.processEvents();
+    try bw.drawBackground();
 
     try labelNoFmt(@src(), label_str, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
 
@@ -7731,6 +7728,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
     var bw = ButtonWidget.init(src, .{}, opts);
     try bw.install();
     bw.processEvents();
+    try bw.drawBackground();
 
     // pass min_size_content through to the icon so that it will figure out the
     // min width based on the height
@@ -7950,7 +7948,8 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 
     try bw.install();
     bw.processEvents();
-    // don't want to show a focus ring around the label, so don't call bw.drawFocus
+    // don't call button drawBackground(), it wouldn't do anything anyway because we stripped the options so no border/background
+    // don't call button drawFocus(), we don't want a focus ring around the label
     defer bw.deinit();
 
     if (bw.clicked()) {
