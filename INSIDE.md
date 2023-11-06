@@ -117,7 +117,9 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
 
 DVUI is an immediate-mode GUI, so widgets are created on the fly.  We also process the whole list of events that happened since last frame.
 
-A widget is a block of code that runs every frame.  Generally it follows this pattern:
+A widget is a block of code that runs every frame.  For each widget (`ButtonWidget`) there is a higher-level function (`button()`) that shows how to use the widget's functions.  To customize or extend a widget, start with the code in the higher-level functions.  Some functions (`box()`) return a pointer to the widget (`BoxWidget`) to let children widgets run before `deinit()` is called on the result.
+
+Generally it follows this pattern:
 
 * `init()`
   * create the struct representing this widget
@@ -143,12 +145,12 @@ Now the widget is the parent widget, so further widgets nested here will be chil
 
 For mouse events, which are routed by the Rect, this widget can process them either here (before children), or in `deinit()` (after children).  For example, `FloatingWindowWidget` processes some mouse events before children - the lower-right drag-resize handle - and other mouse events after children - dragging anywhere in the background drags the subwindow.
 
+Layout widgets like `BoxWidget` usually don't process events, but will still bubble events through themselves.
+
 * `drawBackground()`, `draw()`, `drawFocus()`
   * draw parts of the widget, there's some variety here
   * some widgets (BoxWidget) don't have a draw at all, they only do border/background
   * some widgets (ButtonWidget) only has drawFocus to maybe draw a focus border
-
-Layout widgets like `BoxWidget` usually don't process events or draw anything besides border and background.
 
 * `deinit()`
   * `dataSet()` store data for next frame

@@ -4174,7 +4174,9 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
     defer m.deinit();
 
     var b = MenuItemWidget.init(src, .{ .submenu = true }, options.wrapInner());
-    try b.install(.{ .focus_as_outline = true });
+    try b.install();
+    b.processEvents();
+    try b.drawBackground(.{ .focus_as_outline = true });
     defer b.deinit();
 
     var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both });
@@ -4304,7 +4306,9 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
 pub fn paned(src: std.builtin.SourceLocation, dir: enums.Direction, collapse_size: f32, opts: Options) !*PanedWidget {
     var ret = try currentWindow().arena.create(PanedWidget);
     ret.* = PanedWidget.init(src, dir, collapse_size, opts);
-    try ret.install(.{});
+    try ret.install();
+    ret.processEvents();
+    try ret.draw();
     return ret;
 }
 
@@ -4385,22 +4389,31 @@ pub const PanedWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
+    pub fn install(self: *Self) !void {
         try self.wd.register("Paned", null);
-
-        if (opts.process_events) {
-            var evts = events();
-            for (evts) |*e| {
-                if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
-                    continue;
-
-                self.processEvent(e, false);
-            }
-        }
 
         try self.wd.borderAndBackground(.{});
         self.prevClip = clip(self.wd.contentRectScale().r);
 
+        _ = parentSet(self.widget());
+    }
+
+    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
+        return .{ .id = self.data().id, .r = self.data().borderRectScale().r };
+    }
+
+    pub fn processEvents(self: *Self) void {
+        const emo = self.eventMatchOptions();
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, emo))
+                continue;
+
+            self.processEvent(e, false);
+        }
+    }
+
+    pub fn draw(self: *Self) !void {
         if (!self.collapsed()) {
             if (self.hovered) {
                 const rs = self.wd.contentRectScale();
@@ -4426,8 +4439,6 @@ pub const PanedWidget = struct {
                 try pathFillConvex(self.wd.options.color(.text).transparent(0.5));
             }
         }
-
-        _ = parentSet(self.widget());
     }
 
     pub fn collapsed(self: *Self) bool {
@@ -5428,7 +5439,7 @@ pub const TextLayoutWidget = struct {
 pub fn context(src: std.builtin.SourceLocation, opts: Options) !*ContextWidget {
     var ret = try currentWindow().arena.create(ContextWidget);
     ret.* = ContextWidget.init(src, opts);
-    try ret.install(.{});
+    try ret.install();
     return ret;
 }
 
@@ -5437,7 +5448,6 @@ pub const ContextWidget = struct {
     wd: WidgetData = undefined,
 
     winId: u32 = undefined,
-    process_events: bool = true,
     focused: bool = false,
     activePt: Point = Point{},
 
@@ -5458,8 +5468,7 @@ pub const ContextWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct { process_events: bool = true }) !void {
-        self.process_events = opts.process_events;
+    pub fn install(self: *Self) !void {
         _ = parentSet(self.widget());
         try self.wd.register("Context", null);
         try self.wd.borderAndBackground(.{});
@@ -5544,9 +5553,7 @@ pub const ContextWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        if (self.process_events) {
-            self.processMouseEventsAfter();
-        }
+        self.processMouseEventsAfter();
         if (self.focused) {
             dataSet(null, self.wd.id, "_activePt", self.activePt);
         }
@@ -5559,7 +5566,7 @@ pub const ContextWidget = struct {
 pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
     var ret = try currentWindow().arena.create(OverlayWidget);
     ret.* = OverlayWidget.init(src, opts);
-    try ret.install(.{});
+    try ret.install();
     return ret;
 }
 
@@ -5571,8 +5578,7 @@ pub const OverlayWidget = struct {
         return Self{ .wd = WidgetData.init(src, .{}, opts) };
     }
 
-    pub fn install(self: *Self, opts: struct {}) !void {
-        _ = opts;
+    pub fn install(self: *Self) !void {
         _ = parentSet(self.widget());
         try self.wd.register("Overlay", null);
         try self.wd.borderAndBackground(.{});
@@ -6953,7 +6959,9 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
 pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: Options) !*MenuItemWidget {
     var ret = try currentWindow().arena.create(MenuItemWidget);
     ret.* = MenuItemWidget.init(src, init_opts, opts);
-    try ret.install(.{});
+    try ret.install();
+    ret.processEvents();
+    try ret.drawBackground(.{});
     return ret;
 }
 
@@ -6986,7 +6994,7 @@ pub const MenuItemWidget = struct {
         return self;
     }
 
-    pub fn install(self: *Self, opts: struct { process_events: bool = true, focus_as_outline: bool = false }) !void {
+    pub fn install(self: *Self) !void {
         try self.wd.register("MenuItem", null);
 
         // For most widgets we only tabIndexSet if they are visible, but menu
@@ -6995,18 +7003,12 @@ pub const MenuItemWidget = struct {
         // to be able to move to the next menu item even if it's not visible
         try tabIndexSet(self.wd.id, self.wd.options.tab_index);
 
-        if (opts.process_events) {
-            var evts = events();
-            for (evts) |*e| {
-                if (!eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
-                    continue;
-
-                self.processEvent(e, false);
-            }
-        }
-
         try self.wd.borderAndBackground(.{});
 
+        _ = parentSet(self.widget());
+    }
+
+    pub fn drawBackground(self: *Self, opts: struct { focus_as_outline: bool = false }) !void {
         var focused: bool = false;
         if (self.wd.id == focusedWidgetId()) {
             focused = true;
@@ -7049,8 +7051,21 @@ pub const MenuItemWidget = struct {
             try pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
             try pathFillConvex(self.wd.options.color(.fill));
         }
+    }
 
-        _ = parentSet(self.widget());
+    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
+        return .{ .id = self.wd.id, .r = self.wd.borderRectScale().r };
+    }
+
+    pub fn processEvents(self: *Self) void {
+        const emo = self.eventMatchOptions();
+        var evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, emo))
+                continue;
+
+            self.processEvent(e, false);
+        }
     }
 
     pub fn activeRect(self: *const Self) ?Rect {
