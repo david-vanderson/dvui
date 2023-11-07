@@ -3,11 +3,11 @@ update README/INSIDE and screenshot
 
 SliderFloat/SliderDrag thing (see open issue)
 - ctrl-click or enter (or any keypress?) should transition into text editing
-- need to show cursor
-- textEntry needs to not be tabbable to or able to get focus
 - min/max vs. continuous change?
 - hover?
 - keyboard left-right
+- esc from entry
+- entry should close when we lose focus
 
 file zig pull request for sliceAsBytes/bytesAsSlice to include sentinel
 

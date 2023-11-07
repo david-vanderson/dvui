@@ -1683,7 +1683,18 @@ const TabIndex = struct {
     tabIndex: u16,
 };
 
+/// Set the tab order for this widget.  Tab_index values are visited starting
+/// with 1 and going up.
+///
+/// A zero tab_index means this function does nothing and the widget is not
+/// added to the tab order.
+///
+/// A null tab_index means it will be visited after all normal values.  All
+/// null widgets are visited in order of calling tabIndexSet.
 pub fn tabIndexSet(widget_id: u32, tab_index: ?u16) !void {
+    if (tab_index != null and tab_index.? == 0)
+        return;
+
     var cw = currentWindow();
     const ti = TabIndex{ .windowId = cw.subwindow_currentId, .widgetId = widget_id, .tabIndex = (tab_index orelse math.maxInt(u16)) };
     try cw.tab_index.append(ti);
@@ -1744,7 +1755,7 @@ pub fn tabIndexPrev(event_num: ?u16) void {
 
     // find the last widget with a tabindex less than oldtab
     // or the last widget with highest tabindex if oldtab is null
-    var newtab: u16 = 0;
+    var newtab: u16 = 1;
     var newId: ?u32 = null;
     var foundFocus = false;
 
@@ -7929,7 +7940,8 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             break :blk dataGetSlice(null, b.data().id, "_buf", []u8).?;
         };
 
-        var te = TextEntryWidget.init(@src(), .{ .text = te_buf }, options.strip().override(.{ .min_size_content = .{}, .expand = .both }));
+        // pass 0 for tab_index so you can't tab to TextEntry
+        var te = TextEntryWidget.init(@src(), .{ .text = te_buf }, options.strip().override(.{ .min_size_content = .{}, .expand = .both, .tab_index = 0 }));
         try te.install();
 
         if (firstFrame(te.wd.id)) {
@@ -7955,12 +7967,19 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                 ret = true;
             }
 
+            // don't want TextEntry to get focus
+            if (e.evt == .mouse and e.evt.mouse.action == .focus) {
+                e.handled = true;
+                focusWidget(b.data().id, null, e.num);
+            }
+
             if (!e.handled) {
                 te.processEvent(e, false);
             }
         }
 
         try te.draw();
+        try te.drawCursor();
         te.deinit();
     } else {
 
@@ -8393,35 +8412,33 @@ pub const TextEntryWidget = struct {
         }
 
         if (focused) {
-            if (self.textLayout.cursor_rect) |cr| {
-                // the cursor can be slightly outside the textLayout clip
-                clipSet(self.scrollClip);
-
-                var crect = cr.add(.{ .x = -1 });
-                crect.w = 2;
-                try pathAddRect(self.textLayout.screenRectScale(crect).r, Rect.all(0));
-                try pathFillConvex(self.wd.options.color(.accent));
-
-                if (self.scroll_to_cursor) {
-                    var scrollto = Event{
-                        .evt = .{
-                            .scroll_to = .{
-                                .screen_rect = self.textLayout.screenRectScale(crect.outset(self.padding)).r,
-                                // cursor might just have transitioned to a new line, so scroll area has not expanded yet
-                                .over_scroll = true,
-                            },
-                        },
-                    };
-                    self.scroll.scroll.processEvent(&scrollto, true);
-                }
-            }
-        }
-
-        self.textLayout.deinit();
-        self.scroll.deinit();
-
-        if (focused) {
+            try self.drawCursor();
             try self.wd.focusBorder();
+        }
+    }
+
+    pub fn drawCursor(self: *Self) !void {
+        if (self.textLayout.cursor_rect) |cr| {
+            // the cursor can be slightly outside the textLayout clip
+            clipSet(self.scrollClip);
+
+            var crect = cr.add(.{ .x = -1 });
+            crect.w = 2;
+            try pathAddRect(self.textLayout.screenRectScale(crect).r, Rect.all(0));
+            try pathFillConvex(self.wd.options.color(.accent));
+
+            if (self.scroll_to_cursor) {
+                var scrollto = Event{
+                    .evt = .{
+                        .scroll_to = .{
+                            .screen_rect = self.textLayout.screenRectScale(crect.outset(self.padding)).r,
+                            // cursor might just have transitioned to a new line, so scroll area has not expanded yet
+                            .over_scroll = true,
+                        },
+                    },
+                };
+                self.scroll.scroll.processEvent(&scrollto, true);
+            }
         }
     }
 
@@ -8719,6 +8736,9 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        self.textLayout.deinit();
+        self.scroll.deinit();
+
         clipSet(self.prevClip);
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();

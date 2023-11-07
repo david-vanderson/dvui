@@ -360,7 +360,8 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
-        _ = try dvui.sliderEntry(@src(), "R: {d:0.2}", &slider_val, .{ .gravity_y = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "val: {d:0.2}", &slider_val, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{ .gravity_y = 0.5 });
     }
 
     try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});

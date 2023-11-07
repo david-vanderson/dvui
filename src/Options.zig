@@ -65,7 +65,7 @@ gravity_x: ?f32 = null,
 gravity_y: ?f32 = null,
 
 // used to override the tab order, lower numbers first, null means highest
-// possible number, same tab_index goes in install() order
+// possible number, same tab_index goes in install() order, 0 disables
 tab_index: ?u16 = null,
 
 // used to override widget and theme defaults
