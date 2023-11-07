@@ -1522,7 +1522,6 @@ pub fn events() []Event {
 pub const EventMatchOptions = struct {
     id: u32,
     r: Rect,
-    id_capture: ?u32 = null,
     cleanup: bool = false,
 };
 
@@ -1554,7 +1553,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
         .mouse => |me| {
             const capture_id = captureMouseId();
             if (capture_id != null and me.action != .wheel_y) {
-                if (capture_id.? != (opts.id_capture orelse opts.id)) {
+                if (capture_id.? != opts.id) {
                     // mouse is captured by a different widget
                     return false;
                 }
@@ -4399,15 +4398,14 @@ pub const PanedWidget = struct {
         _ = parentSet(self.widget());
     }
 
-    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
-        return .{ .id = self.data().id, .r = self.data().borderRectScale().r };
+    pub fn matchEvent(self: *Self, e: *Event) bool {
+        return eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
     }
 
     pub fn processEvents(self: *Self) void {
-        const emo = self.eventMatchOptions();
         var evts = events();
         for (evts) |*e| {
-            if (!eventMatch(e, emo))
+            if (!self.matchEvent(e))
                 continue;
 
             self.processEvent(e, false);
@@ -5283,15 +5281,14 @@ pub const TextLayoutWidget = struct {
         }
     }
 
-    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
-        return .{ .id = self.data().id, .r = self.data().borderRectScale().r };
+    pub fn matchEvent(self: *Self, e: *Event) bool {
+        return eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
     }
 
     pub fn processEvents(self: *Self) void {
-        const emo = self.eventMatchOptions();
         var evts = events();
         for (evts) |*e| {
-            if (!eventMatch(e, emo))
+            if (!self.matchEvent(e))
                 continue;
 
             self.processEvent(e, false);
@@ -6008,15 +6005,14 @@ pub const ScrollContainerWidget = struct {
         _ = parentSet(self.widget());
     }
 
-    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
-        return .{ .id = self.wd.id, .r = self.wd.borderRectScale().r };
+    pub fn matchEvent(self: *Self, e: *Event) bool {
+        return eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
     }
 
     pub fn processEvents(self: *Self) void {
-        const emo = self.eventMatchOptions();
         var evts = events();
         for (evts) |*e| {
-            if (!eventMatch(e, emo))
+            if (!self.matchEvent(e))
                 continue;
 
             self.processEvent(e, false);
@@ -7057,15 +7053,14 @@ pub const MenuItemWidget = struct {
         }
     }
 
-    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
-        return .{ .id = self.wd.id, .r = self.wd.borderRectScale().r };
+    pub fn matchEvent(self: *Self, e: *Event) bool {
+        return eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
     }
 
     pub fn processEvents(self: *Self) void {
-        const emo = self.eventMatchOptions();
         var evts = events();
         for (evts) |*e| {
-            if (!eventMatch(e, emo))
+            if (!self.matchEvent(e))
                 continue;
 
             self.processEvent(e, false);
@@ -7247,15 +7242,14 @@ pub const LabelWidget = struct {
         clipSet(oldclip);
     }
 
-    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
-        return .{ .id = self.wd.id, .r = self.wd.borderRectScale().r };
+    pub fn matchEvent(self: *Self, e: *Event) bool {
+        return eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
     }
 
     pub fn processEvents(self: *Self) void {
-        const emo = self.eventMatchOptions();
         var evts = events();
         for (evts) |*e| {
-            if (!eventMatch(e, emo))
+            if (!self.matchEvent(e))
                 continue;
 
             self.processEvent(e, false);
@@ -7294,14 +7288,11 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
     // draw border and background
     try lw.install();
 
-    // get lw args for eventMatch
-    const emo = lw.eventMatchOptions();
-
     // loop over all events this frame in order of arrival
     for (dvui.events()) |*e| {
 
         // skip if lw would not normally process this event
-        if (!dvui.eventMatch(e, emo))
+        if (!lw.matchEvent(e))
             continue;
 
         switch (e.evt) {
@@ -7579,15 +7570,14 @@ pub const ButtonWidget = struct {
         }
     }
 
-    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
-        return .{ .id = self.wd.id, .r = self.wd.borderRectScale().r };
+    pub fn matchEvent(self: *Self, e: *Event) bool {
+        return eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
     }
 
     pub fn processEvents(self: *Self) void {
-        const emo = self.eventMatchOptions();
         var evts = events();
         for (evts) |*e| {
-            if (!eventMatch(e, emo))
+            if (!self.matchEvent(e))
                 continue;
 
             self.processEvent(e, false);
@@ -8148,15 +8138,14 @@ pub const TextEntryWidget = struct {
         clipSet(self.prevClip);
     }
 
-    pub fn eventMatchOptions(self: *Self) EventMatchOptions {
-        return .{ .id = self.wd.id, .r = self.wd.borderRectScale().r, .id_capture = self.textLayout.data().id };
+    pub fn matchEvent(self: *Self, e: *Event) bool {
+        return eventMatch(e, .{ .id = self.wd.id, .r = self.wd.borderRectScale().r }) or self.textLayout.matchEvent(e);
     }
 
     pub fn processEvents(self: *Self) void {
-        const emo = self.eventMatchOptions();
         var evts = events();
         for (evts) |*e| {
-            if (!eventMatch(e, emo))
+            if (!self.matchEvent(e))
                 continue;
 
             self.processEvent(e, false);

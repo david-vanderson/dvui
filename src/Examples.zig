@@ -447,9 +447,8 @@ pub fn textEntryWidgets() !void {
         try te.install();
 
         var enter_pressed = false;
-        const emo = te.eventMatchOptions();
         for (dvui.events()) |*e| {
-            if (!dvui.eventMatch(e, emo))
+            if (!te.matchEvent(e))
                 continue;
 
             if (e.evt == .key and e.evt.key.code == .enter and e.evt.key.action == .down) {
