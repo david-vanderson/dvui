@@ -355,6 +355,14 @@ pub fn basicWidgets() !void {
         try dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });
     }
 
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "R: {d:0.2}", &slider_val, .{ .gravity_y = 0.5 });
+    }
+
     try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
     {

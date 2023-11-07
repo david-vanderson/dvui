@@ -1,12 +1,17 @@
 
 update README/INSIDE and screenshot
-- use slider as motivating example
-  - don't use Box?
 
 SliderFloat/SliderDrag thing (see open issue)
-- any keypress should transition into text editing
+- ctrl-click or enter (or any keypress?) should transition into text editing
+- need to show cursor
+- textEntry needs to not be tabbable to or able to get focus
+- min/max vs. continuous change?
+- hover?
+- keyboard left-right
 
 file zig pull request for sliceAsBytes/bytesAsSlice to include sentinel
+
+don't use box for slider, use WidgetData directly?  Other widgets?
 
 UI scaling on Windows causes fonts to look blurry, maybe if snap to pixels is true, we round to nearest font size and then don't adjust for target_fraction?
 
