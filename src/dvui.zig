@@ -7881,6 +7881,179 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
     return ret;
 }
 
+pub var slider_entry_defaults: Options = .{
+    .margin = Rect.all(4),
+    .corner_radius = dvui.Rect.all(2),
+    .padding = Rect.all(2),
+    .color_style = .control,
+    .background = true,
+};
+
+/// Combines a slider and a text entry box on key press.  Displays value on top of slider.
+///
+/// Returns true if percent was changed.
+pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const u8, value: *f32, opts: Options) !bool {
+
+    // This widget swaps between either a slider with a label or a text entry.
+    // The tricky part of this is maintaining focus.  Strategy is a containing
+    // box that will keep focus, and forward events to the text entry.
+    //
+    // We are intentinally keeping this simple by only swapping between slider
+    // and textEntry on a frame boundary.
+
+    var options = slider_entry_defaults.override(opts);
+    if (options.min_size_content == null) {
+        const msize = options.fontGet().textSize("M") catch unreachable;
+        options.min_size_content = .{ .w = msize.w * 10, .h = msize.h };
+    }
+    var ret = false;
+    var b = try box(src, .horizontal, options);
+    defer b.deinit();
+
+    if (b.data().visible()) {
+        try tabIndexSet(b.data().id, options.tab_index);
+    }
+
+    const br = b.data().contentRect();
+    const knobsize = @min(br.w, br.h);
+    const rs = b.data().contentRectScale();
+
+    var text_mode = dataGet(null, b.data().id, "_text_mode", bool) orelse false;
+    var ctrl_down = dataGet(null, b.data().id, "_ctrl", bool) orelse false;
+
+    if (text_mode) {
+        var te_buf = dataGetSlice(null, b.data().id, "_buf", []u8) orelse blk: {
+            var buf = [_]u8{0} ** 20;
+            _ = std.fmt.bufPrintZ(&buf, "{d:0.3}", .{value.*}) catch {};
+            dataSetSlice(null, b.data().id, "_buf", &buf);
+            break :blk dataGetSlice(null, b.data().id, "_buf", []u8).?;
+        };
+
+        var te = TextEntryWidget.init(@src(), .{ .text = te_buf }, options.strip().override(.{ .min_size_content = .{}, .expand = .both }));
+        try te.install();
+
+        if (firstFrame(te.wd.id)) {
+            var sel = te.textLayout.selection;
+            sel.start = 0;
+            sel.cursor = 0;
+            sel.end = std.math.maxInt(usize);
+        }
+
+        var evts = events();
+        for (evts) |*e| {
+            if (e.evt == .key) {
+                ctrl_down = e.evt.key.mod.controlCommand();
+            }
+
+            if (!eventMatch(e, .{ .id = b.data().id, .r = rs.r }) and !te.matchEvent(e))
+                continue;
+
+            if (e.evt == .key and e.evt.key.code == .enter and e.evt.key.action == .down) {
+                e.handled = true;
+                text_mode = false;
+                value.* = std.fmt.parseFloat(f32, std.mem.sliceTo(te_buf, 0)) catch 0;
+                ret = true;
+            }
+
+            if (!e.handled) {
+                te.processEvent(e, false);
+            }
+        }
+
+        try te.draw();
+        te.deinit();
+    } else {
+
+        // show slider and label
+        const track = Rect{ .x = knobsize / 2, .y = br.h / 2 - 2, .w = br.w - knobsize, .h = 4 };
+        const trackrs = b.widget().screenRectScale(track);
+        var evts = events();
+        for (evts) |*e| {
+            if (e.evt == .key) {
+                ctrl_down = e.evt.key.mod.controlCommand();
+            }
+
+            if (!eventMatch(e, .{ .id = b.data().id, .r = rs.r }))
+                continue;
+
+            switch (e.evt) {
+                .mouse => |me| {
+                    var p: ?Point = null;
+                    if (me.action == .focus) {
+                        e.handled = true;
+                        focusWidget(b.data().id, null, e.num);
+                    } else if (me.action == .press and me.button.pointer()) {
+                        e.handled = true;
+                        if (ctrl_down) {
+                            text_mode = true;
+                        } else {
+                            captureMouse(b.data().id);
+                            p = me.p;
+                        }
+                    } else if (me.action == .release and me.button.pointer()) {
+                        captureMouse(null);
+                        e.handled = true;
+                    } else if (me.action == .motion and captured(b.data().id)) {
+                        e.handled = true;
+                        p = me.p;
+                    } else if (me.action == .position) {
+                        e.handled = true;
+                        //hovered = true;
+                    }
+
+                    if (p) |pp| {
+                        var min: f32 = trackrs.r.x;
+                        var max: f32 = trackrs.r.x + trackrs.r.w;
+
+                        if (max > min) {
+                            const v = pp.x;
+                            value.* = (v - min) / (max - min);
+                            value.* = @max(0, @min(1, value.*));
+                            ret = true;
+                        }
+                    }
+                },
+                .key => |ke| {
+                    if (ke.code == .enter and ke.action == .down) {
+                        text_mode = true;
+                    } else if (ke.action == .down or ke.action == .repeat) {
+                        switch (ke.code) {
+                            .left => {
+                                e.handled = true;
+                                value.* = @max(0, @min(1, value.* - 0.05));
+                                ret = true;
+                            },
+                            .right => {
+                                e.handled = true;
+                                value.* = @max(0, @min(1, value.* + 0.05));
+                                ret = true;
+                            },
+                            else => {},
+                        }
+                    }
+                },
+                else => {},
+            }
+        }
+
+        const knobRect = Rect{ .x = (br.w - knobsize) * value.*, .w = knobsize, .h = knobsize };
+        const knobrs = b.widget().screenRectScale(knobRect);
+
+        try pathAddRect(knobrs.r, options.corner_radiusGet().scale(knobrs.s));
+        try pathFillConvex(options.color(.press));
+
+        try label(@src(), label_fmt orelse "{d:.3}", .{value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
+    }
+
+    if (b.data().id == focusedWidgetId()) {
+        try b.data().focusBorder();
+    }
+
+    dataSet(null, b.data().id, "_text_mode", text_mode);
+    dataSet(null, b.data().id, "_ctrl", ctrl_down);
+    return ret;
+}
+
 pub var progress_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 10, .h = 10 },
