@@ -7707,16 +7707,34 @@ pub const ButtonWidget = struct {
 };
 
 pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) !bool {
+    // initialize widget and get rectangle from parent
     var bw = ButtonWidget.init(src, .{}, opts);
+
+    // make ourselves the new parent
     try bw.install();
+
+    // process events (mouse and keyboard)
     bw.processEvents();
+
+    // draw background/border
     try bw.drawBackground();
 
+    // this child widget:
+    // - has bw as parent
+    // - gets a rectangle from bw
+    // - draws itself
+    // - reports its min size to bw
     try labelNoFmt(@src(), label_str, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
 
     var click = bw.clicked();
+
+    // draw focus
     try bw.drawFocus();
+
+    // restore previous parent
+    // send our min size to parent
     bw.deinit();
+
     return click;
 }
 
