@@ -134,7 +134,7 @@ The id a widget gets should be the same each frame, even if other widgets are be
 
 ## Event Handling
 
-DVUI provides a time-ordered array of all events since last frame (events()).  Intead of trying to route events to widgets, the widgets are responsible for choosing which events in the array to process.  The function `eventMatch()` provides the normal logic widgets will use.
+DVUI provides a time-ordered array of all events since last frame (`events()`).  Intead of trying to route events to widgets, the widgets are responsible for choosing which events in the array to process.  The function `eventMatch()` provides the normal logic widgets will use.
 
 Most events are either mouse (includes touch) or keyboard:
 * Mouse Events
