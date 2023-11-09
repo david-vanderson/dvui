@@ -960,6 +960,7 @@ pub fn animations() !void {
 
         try button_wiggle.install();
         button_wiggle.processEvents();
+        try button_wiggle.drawBackground();
         try dvui.labelNoFmt(@src(), "Wiggle", button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
         try button_wiggle.drawFocus();
 

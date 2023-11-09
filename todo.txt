@@ -1,5 +1,7 @@
 
 update README/INSIDE and screenshot
+- how to add a link to a specific function (like to sliderEntry?)
+  - add to url  #:~:text=function_name
 
 SliderFloat/SliderDrag thing (see open issue)
 - ctrl-click or enter (or any keypress?) should transition into text editing

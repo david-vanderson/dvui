@@ -3562,6 +3562,7 @@ pub const FloatingWindowWidget = struct {
         // don't have margin, so turn that off
         self.layout = BoxWidget.init(@src(), .vertical, false, self.options.override(.{ .margin = .{}, .expand = .both }));
         try self.layout.install();
+        try self.layout.drawBackground();
     }
 
     pub fn processEventsBefore(self: *Self) void {
@@ -4301,6 +4302,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
     var bcbox = BoxWidget.init(@src(), .horizontal, false, options.strip());
     defer bcbox.deinit();
     try bcbox.install();
+    try bcbox.drawBackground();
     const size = try options.fontGet().lineHeight();
     if (expanded) {
         try icon(@src(), "down_arrow", entypo.triangle_down, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
@@ -5631,6 +5633,7 @@ pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options)
     var ret = try currentWindow().arena.create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, false, opts);
     try ret.install();
+    try ret.drawBackground();
     return ret;
 }
 
@@ -5638,6 +5641,7 @@ pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Opt
     var ret = try currentWindow().arena.create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, true, opts);
     try ret.install();
+    try ret.drawBackground();
     return ret;
 }
 
@@ -5672,7 +5676,6 @@ pub const BoxWidget = struct {
 
     pub fn install(self: *Self) !void {
         try self.wd.register(self.wd.options.name orelse "Box", null);
-        try self.wd.borderAndBackground(.{});
 
         // our rect for children has to start at 0,0
         self.childRect = self.wd.contentRect().justSize();
@@ -5694,6 +5697,10 @@ pub const BoxWidget = struct {
         }
 
         _ = parentSet(self.widget());
+    }
+
+    pub fn drawBackground(self: *Self) !void {
+        try self.wd.borderAndBackground(.{});
     }
 
     pub fn widget(self: *Self) Widget {
@@ -5891,6 +5898,7 @@ pub const ScrollAreaWidget = struct {
         }
 
         try self.hbox.install();
+        try self.hbox.drawBackground();
 
         // the viewport is also set in ScrollContainer but we need it here in
         // case the scroll bar modes are auto
@@ -5910,6 +5918,7 @@ pub const ScrollAreaWidget = struct {
 
         self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "ScrollAreaWidget vbox" }));
         try self.vbox.install();
+        try self.vbox.drawBackground();
 
         if (self.si.horizontal != .none) {
             if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar == .auto and (self.si.virtual_size.w > self.si.viewport.w))) {
@@ -6670,6 +6679,7 @@ pub const ScaleWidget = struct {
 
         self.box = BoxWidget.init(@src(), .vertical, false, self.wd.options.strip().override(.{ .expand = .both }));
         try self.box.install();
+        try self.box.drawBackground();
     }
 
     pub fn widget(self: *Self) Widget {
@@ -6788,6 +6798,7 @@ pub const MenuWidget = struct {
 
         self.box = BoxWidget.init(@src(), self.init_opts.dir, false, self.wd.options.strip().override(.{ .expand = .both }));
         try self.box.install();
+        try self.box.drawBackground();
     }
 
     pub fn close(self: *Self) void {
@@ -7898,6 +7909,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
     }
     var knob = BoxWidget.init(@src(), .horizontal, false, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
     try knob.install();
+    try knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
         try knob.wd.focusBorder();
     }
@@ -7943,7 +7955,9 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         options.min_size_content = .{ .w = msize.w * 10, .h = msize.h };
     }
     var ret = false;
-    var b = try box(src, .horizontal, options);
+    var hover = false;
+    var b = BoxWidget.init(src, .horizontal, false, options);
+    try b.install();
     defer b.deinit();
 
     if (b.data().visible()) {
@@ -8082,7 +8096,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         p = me.p;
                     } else if (me.action == .position) {
                         e.handled = true;
-                        //hovered = true;
+                        hover = true;
                     }
 
                     if (p) |pp| {
@@ -8153,6 +8167,8 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                 else => {},
             }
         }
+
+        try b.wd.borderAndBackground(.{ .fill_color = if (hover) b.wd.options.color(.hover) else b.wd.options.color(.fill) });
 
         // only draw handle if we have a min and max
         if (init_opts.min != null and init_opts.max != null) {

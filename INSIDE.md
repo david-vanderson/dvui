@@ -69,7 +69,6 @@ Here the widget has a rectangle, but hasn't drawn anything.  Animations (fading 
 * `install()`
   * `parentSet()` set this widget as the new parent
   * `register()` provides debugging information
-  * draws border and background
   * some widgets set the clipping rectangle (sometimes called scissor rectangle) to prevent drawing outside its given space
     * this is how a scroll container prevents children that are half-off the scroll viewport from drawing over other widgets
 
