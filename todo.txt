@@ -6,8 +6,6 @@ SliderFloat/SliderDrag thing (see open issue)
 - min/max vs. continuous change?
 - hover?
 - keyboard left-right
-- esc from entry
-- entry should close when we lose focus
 
 file zig pull request for sliceAsBytes/bytesAsSlice to include sentinel
 

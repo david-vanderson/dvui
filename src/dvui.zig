@@ -7927,8 +7927,8 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     // The tricky part of this is maintaining focus.  Strategy is a containing
     // box that will keep focus, and forward events to the text entry.
     //
-    // We are intentinally keeping this simple by only swapping between slider
-    // and textEntry on a frame boundary.
+    // We are keeping this simple by only swapping between slider and textEntry
+    // on a frame boundary.
 
     var options = slider_entry_defaults.override(opts);
     if (options.min_size_content == null) {
@@ -7969,20 +7969,33 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             sel.end = std.math.maxInt(usize);
         }
 
+        var new_val: ?f32 = null;
+
         var evts = events();
         for (evts) |*e| {
             if (e.evt == .key) {
                 ctrl_down = e.evt.key.mod.controlCommand();
             }
 
+            if (!text_mode) {
+                // if we are switching out of text mode, skip processing any
+                // remaining events
+                continue;
+            }
+
             if (!eventMatch(e, .{ .id = b.data().id, .r = rs.r }) and !te.matchEvent(e))
                 continue;
 
-            if (e.evt == .key and e.evt.key.code == .enter and e.evt.key.action == .down) {
+            if (e.evt == .key and e.evt.key.action == .down and e.evt.key.code == .enter) {
                 e.handled = true;
                 text_mode = false;
-                value.* = std.fmt.parseFloat(f32, std.mem.sliceTo(te_buf, 0)) catch 0;
-                ret = true;
+                new_val = std.fmt.parseFloat(f32, te_buf[0..te.len]) catch null;
+            }
+
+            if (e.evt == .key and e.evt.key.action == .down and e.evt.key.code == .escape) {
+                e.handled = true;
+                text_mode = false;
+                // don't set new_val, we are escaping
             }
 
             // don't want TextEntry to get focus
@@ -7993,6 +8006,21 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
             if (!e.handled) {
                 te.processEvent(e, false);
+            }
+        }
+
+        if (b.data().id != focusedWidgetId()) {
+            // we lost focus
+            text_mode = false;
+            new_val = std.fmt.parseFloat(f32, te_buf[0..te.len]) catch null;
+        }
+
+        if (!text_mode) {
+            refresh(null, @src(), b.data().id);
+
+            if (new_val) |nv| {
+                value.* = nv;
+                ret = true;
             }
         }
 
@@ -8088,6 +8116,11 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
     dataSet(null, b.data().id, "_text_mode", text_mode);
     dataSet(null, b.data().id, "_ctrl", ctrl_down);
+
+    if (ret) {
+        refresh(null, @src(), b.data().id);
+    }
+
     return ret;
 }
 
