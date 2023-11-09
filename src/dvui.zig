@@ -8160,20 +8160,38 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                 .key => |ke| {
                     if (ke.code == .enter and ke.action == .down) {
                         text_mode = true;
-                        //} else if (ke.action == .down or ke.action == .repeat) {
-                        //    switch (ke.code) {
-                        //        .left => {
-                        //            e.handled = true;
-                        //            init_opts.value.* = @max(0, @min(1, init_opts.value.* - 0.05));
-                        //            ret = true;
-                        //        },
-                        //        .right => {
-                        //            e.handled = true;
-                        //            init_opts.value.* = @max(0, @min(1, init_opts.value.* + 0.05));
-                        //            ret = true;
-                        //        },
-                        //        else => {},
-                        //    }
+                    } else if (ke.action == .down or ke.action == .repeat) {
+                        var how_far: f32 = 0;
+                        switch (ke.code) {
+                            .left => {
+                                e.handled = true;
+                                how_far = -100;
+                            },
+                            .right => {
+                                e.handled = true;
+                                how_far = 100;
+                            },
+                            else => {},
+                        }
+
+                        if (how_far != 0) {
+                            ret = true;
+                            if (init_opts.interval) |ival| {
+                                init_opts.value.* = init_opts.value.* + (if (how_far < 0) -ival else ival);
+                            } else {
+                                const base = if (init_opts.value.* == 0) 0.01 else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.value.*)))) * 0.01;
+                                const how_much = (@exp(@fabs(how_far) * 0.03) - 1) * base;
+                                init_opts.value.* = if (how_far < 0) init_opts.value.* - how_much else init_opts.value.* + how_much;
+                            }
+
+                            if (init_opts.min) |min| {
+                                init_opts.value.* = @max(min, init_opts.value.*);
+                            }
+
+                            if (init_opts.max) |max| {
+                                init_opts.value.* = @min(max, init_opts.value.*);
+                            }
+                        }
                     }
                 },
                 else => {},
