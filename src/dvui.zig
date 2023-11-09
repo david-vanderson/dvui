@@ -7935,6 +7935,7 @@ pub const SliderEntryInitOptions = struct {
     value: *f32,
     min: ?f32 = null,
     max: ?f32 = null,
+    interval: ?f32 = null,
 };
 
 /// Combines a slider and a text entry box on key press.  Displays value on top of slider.
@@ -8109,6 +8110,9 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                 } else {
                                     const px_lerp = @max(0, @min(1, (pp.x - min_x) / (max_x - min_x)));
                                     init_opts.value.* = init_opts.min.? + px_lerp * (init_opts.max.? - init_opts.min.?);
+                                    if (init_opts.interval) |ival| {
+                                        init_opts.value.* = init_opts.min.? + ival * @round((init_opts.value.* - init_opts.min.?) / ival);
+                                    }
                                 }
                             } else if (init_opts.min != null) {
                                 // only have min, go exponentially to the right
@@ -8119,6 +8123,9 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                     const how_far = @max(0, (pp.x - min_x)) / px_scale;
                                     const how_much = (@exp(how_far * 0.03) - 1) * base;
                                     init_opts.value.* = init_opts.min.? + how_much;
+                                    if (init_opts.interval) |ival| {
+                                        init_opts.value.* = init_opts.min.? + ival * @round((init_opts.value.* - init_opts.min.?) / ival);
+                                    }
                                 }
                             } else if (init_opts.max != null) {
                                 // only have max, go exponentially to the left
@@ -8129,6 +8136,9 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                     const how_far = @max(0, (max_x - pp.x)) / px_scale;
                                     const how_much = (@exp(how_far * 0.03) - 1) * base;
                                     init_opts.value.* = init_opts.max.? - how_much;
+                                    if (init_opts.interval) |ival| {
+                                        init_opts.value.* = init_opts.max.? - ival * @round((init_opts.max.? - init_opts.value.*) / ival);
+                                    }
                                 }
                             } else {
                                 // neither min nor max, go exponentially away from starting value
@@ -8137,8 +8147,10 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                         const base = if (start_v == 0) 0.01 else @exp(math.ln10 * @floor(@log10(@fabs(start_v)))) * 0.01;
                                         const how_far = (pp.x - start_x) / px_scale;
                                         const how_much = (@exp(@fabs(how_far) * 0.03) - 1) * base;
-                                        std.debug.print("{d} {d}\n", .{ how_far, how_much });
                                         init_opts.value.* = if (how_far < 0) start_v - how_much else start_v + how_much;
+                                        if (init_opts.interval) |ival| {
+                                            init_opts.value.* = start_v + ival * @round((init_opts.value.* - start_v) / ival);
+                                        }
                                     }
                                 }
                             }
