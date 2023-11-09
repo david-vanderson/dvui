@@ -7918,10 +7918,16 @@ pub var slider_entry_defaults: Options = .{
     .background = true,
 };
 
+pub const SliderEntryInitOptions = struct {
+    value: *f32,
+    min: ?f32 = null,
+    max: ?f32 = null,
+};
+
 /// Combines a slider and a text entry box on key press.  Displays value on top of slider.
 ///
 /// Returns true if percent was changed.
-pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const u8, value: *f32, opts: Options) !bool {
+pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const u8, init_opts: SliderEntryInitOptions, opts: Options) !bool {
 
     // This widget swaps between either a slider with a label or a text entry.
     // The tricky part of this is maintaining focus.  Strategy is a containing
@@ -7953,7 +7959,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     if (text_mode) {
         var te_buf = dataGetSlice(null, b.data().id, "_buf", []u8) orelse blk: {
             var buf = [_]u8{0} ** 20;
-            _ = std.fmt.bufPrintZ(&buf, "{d:0.3}", .{value.*}) catch {};
+            _ = std.fmt.bufPrintZ(&buf, "{d:0.3}", .{init_opts.value.*}) catch {};
             dataSetSlice(null, b.data().id, "_buf", &buf);
             break :blk dataGetSlice(null, b.data().id, "_buf", []u8).?;
         };
@@ -8019,7 +8025,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             refresh(null, @src(), b.data().id);
 
             if (new_val) |nv| {
-                value.* = nv;
+                init_opts.value.* = nv;
                 ret = true;
             }
         }
@@ -8030,8 +8036,10 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     } else {
 
         // show slider and label
-        const track = Rect{ .x = knobsize / 2, .y = br.h / 2 - 2, .w = br.w - knobsize, .h = 4 };
-        const trackrs = b.widget().screenRectScale(track);
+        const track = b.widget().screenRectScale(.{ .x = knobsize / 2, .w = br.w - knobsize }).r;
+        const min_x = track.x;
+        const max_x = track.x + track.w;
+
         var evts = events();
         for (evts) |*e| {
             if (e.evt == .key) {
@@ -8067,14 +8075,17 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     }
 
                     if (p) |pp| {
-                        var min: f32 = trackrs.r.x;
-                        var max: f32 = trackrs.r.x + trackrs.r.w;
-
-                        if (max > min) {
-                            const v = pp.x;
-                            value.* = (v - min) / (max - min);
-                            value.* = @max(0, @min(1, value.*));
-                            ret = true;
+                        if (max_x > min_x) {
+                            if (init_opts.min != null and init_opts.max != null) {
+                                // lerp but make sure we can hit the max
+                                if (pp.x > max_x) {
+                                    init_opts.value.* = init_opts.max.?;
+                                } else {
+                                    const px_lerp = @max(0, @min(1, (pp.x - min_x) / (max_x - min_x)));
+                                    init_opts.value.* = init_opts.min.? + px_lerp * (init_opts.max.? - init_opts.min.?);
+                                }
+                                ret = true;
+                            } else if (init_opts.min != null) {}
                         }
                     }
                 },
@@ -8085,12 +8096,12 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         switch (ke.code) {
                             .left => {
                                 e.handled = true;
-                                value.* = @max(0, @min(1, value.* - 0.05));
+                                init_opts.value.* = @max(0, @min(1, init_opts.value.* - 0.05));
                                 ret = true;
                             },
                             .right => {
                                 e.handled = true;
-                                value.* = @max(0, @min(1, value.* + 0.05));
+                                init_opts.value.* = @max(0, @min(1, init_opts.value.* + 0.05));
                                 ret = true;
                             },
                             else => {},
@@ -8101,13 +8112,17 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             }
         }
 
-        const knobRect = Rect{ .x = (br.w - knobsize) * value.*, .w = knobsize, .h = knobsize };
-        const knobrs = b.widget().screenRectScale(knobRect);
+        // only draw handle if we have a min and max
+        if (init_opts.min != null and init_opts.max != null) {
+            const how_far = (init_opts.value.* - init_opts.min.?) / (init_opts.max.? - init_opts.min.?);
+            const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
+            const knobrs = b.widget().screenRectScale(knobRect);
 
-        try pathAddRect(knobrs.r, options.corner_radiusGet().scale(knobrs.s));
-        try pathFillConvex(options.color(.press));
+            try pathAddRect(knobrs.r, options.corner_radiusGet().scale(knobrs.s));
+            try pathFillConvex(options.color(.press));
+        }
 
-        try label(@src(), label_fmt orelse "{d:.3}", .{value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
+        try label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
     }
 
     if (b.data().id == focusedWidgetId()) {
