@@ -8196,6 +8196,10 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                 },
                 else => {},
             }
+
+            if (e.bubbleable()) {
+                b.wd.parent.processEvent(e, true);
+            }
         }
 
         try b.wd.borderAndBackground(.{ .fill_color = if (hover) b.wd.options.color(.hover) else b.wd.options.color(.fill) });
