@@ -38,6 +38,15 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Opti
 }
 ```
 
+See the code for [pub fn sliderEntry](https://github.com/david-vanderson/dvui/blob/master/src/dvui.zig#:~:text=pub%20fn%20sliderEntry) for an advanced example that includes:
+* swapping the kind of widget
+* min size calculated from font
+* tab index
+* storing data from frame to frame
+* intercepting events and forwarding to child widgets
+* tracking ctrl key for ctrl-click
+* drawing a rounded rect
+
 ### One Frame At a Time
 
 DVUI is an immediate-mode GUI, so widgets are created on the fly.  We also process the whole list of events that happened since last frame.
