@@ -90,10 +90,9 @@ Now the widget is the parent widget, so further widgets nested here will be chil
 
 See the Event Handling section for details.
 
-* `drawBackground()`, `draw()`, `drawFocus()`
+* `drawBackground()`, `draw()`, `drawFocus()`, `drawCursor()`
   * draw parts of the widget, there's some variety here
-  * some widgets (BoxWidget) don't have a draw at all, they only do border/background
-  * some widgets (ButtonWidget) only have drawFocus to maybe draw a focus border
+  * some widgets (BoxWidget) only do border/background
 
 * `deinit()`
   * some widgets process some events here
