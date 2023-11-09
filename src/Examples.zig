@@ -29,6 +29,7 @@ var slider_val: f32 = 0.0;
 var slider_entry_val: f32 = 0.05;
 var slider_entry_min: bool = true;
 var slider_entry_max: bool = true;
+var slider_entry_interval: bool = true;
 var text_entry_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
@@ -385,16 +386,17 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
-        _ = try dvui.sliderEntry(@src(), "val: {d:0.2}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null) }, .{ .gravity_y = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "val: {d:0.2}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{ .gravity_y = 0.5 });
         try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{ .gravity_y = 0.5 });
     }
 
     {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
+        var hbox = try dvui.box(@src(), .horizontal, .{ .padding = .{ .x = 10 } });
         defer hbox.deinit();
 
-        try dvui.checkbox(@src(), &slider_entry_min, "Slider Entry Min (0)", .{});
-        try dvui.checkbox(@src(), &slider_entry_max, "Slider Entry Max (1)", .{});
+        try dvui.checkbox(@src(), &slider_entry_min, "Min", .{});
+        try dvui.checkbox(@src(), &slider_entry_max, "Max", .{});
+        try dvui.checkbox(@src(), &slider_entry_interval, "Interval", .{});
     }
 
     {
