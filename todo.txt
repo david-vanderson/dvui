@@ -4,6 +4,7 @@ update README/INSIDE and screenshot
 SliderFloat/SliderDrag thing (see open issue)
 - ctrl-click or enter (or any keypress?) should transition into text editing
 - min/max vs. continuous change?
+- interval
 - hover?
 - keyboard left-right
 
