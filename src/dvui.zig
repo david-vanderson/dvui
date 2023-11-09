@@ -7916,6 +7916,7 @@ pub var slider_entry_defaults: Options = .{
     .padding = Rect.all(2),
     .color_style = .control,
     .background = true,
+    // min size calulated from font
 };
 
 pub const SliderEntryInitOptions = struct {
@@ -7955,6 +7956,11 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
     var text_mode = dataGet(null, b.data().id, "_text_mode", bool) orelse false;
     var ctrl_down = dataGet(null, b.data().id, "_ctrl", bool) orelse false;
+
+    // must call dataGet/dataSet on these every frame to prevent them from
+    // getting purged
+    _ = dataGet(null, b.data().id, "_start_x", f32);
+    _ = dataGet(null, b.data().id, "_start_v", f32);
 
     if (text_mode) {
         var te_buf = dataGetSlice(null, b.data().id, "_buf", []u8) orelse blk: {
@@ -8036,9 +8042,10 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     } else {
 
         // show slider and label
-        const track = b.widget().screenRectScale(.{ .x = knobsize / 2, .w = br.w - knobsize }).r;
-        const min_x = track.x;
-        const max_x = track.x + track.w;
+        const trackrs = b.widget().screenRectScale(.{ .x = knobsize / 2, .w = br.w - knobsize });
+        const min_x = trackrs.r.x;
+        const max_x = trackrs.r.x + trackrs.r.w;
+        const px_scale = trackrs.s;
 
         var evts = events();
         for (evts) |*e| {
@@ -8062,10 +8069,14 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         } else {
                             captureMouse(b.data().id);
                             p = me.p;
+                            dataSet(null, b.data().id, "_start_x", me.p.x);
+                            dataSet(null, b.data().id, "_start_v", init_opts.value.*);
                         }
                     } else if (me.action == .release and me.button.pointer()) {
-                        captureMouse(null);
                         e.handled = true;
+                        captureMouse(null);
+                        dataRemove(null, b.data().id, "_start_x");
+                        dataRemove(null, b.data().id, "_start_v");
                     } else if (me.action == .motion and captured(b.data().id)) {
                         e.handled = true;
                         p = me.p;
@@ -8076,6 +8087,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
                     if (p) |pp| {
                         if (max_x > min_x) {
+                            ret = true;
                             if (init_opts.min != null and init_opts.max != null) {
                                 // lerp but make sure we can hit the max
                                 if (pp.x > max_x) {
@@ -8084,28 +8096,58 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                     const px_lerp = @max(0, @min(1, (pp.x - min_x) / (max_x - min_x)));
                                     init_opts.value.* = init_opts.min.? + px_lerp * (init_opts.max.? - init_opts.min.?);
                                 }
-                                ret = true;
-                            } else if (init_opts.min != null) {}
+                            } else if (init_opts.min != null) {
+                                // only have min, go exponentially to the right
+                                if (pp.x < min_x) {
+                                    init_opts.value.* = init_opts.min.?;
+                                } else {
+                                    const base = if (init_opts.min.? == 0) 0.01 else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.min.?)))) * 0.01;
+                                    const how_far = @max(0, (pp.x - min_x)) / px_scale;
+                                    const how_much = (@exp(how_far * 0.03) - 1) * base;
+                                    init_opts.value.* = init_opts.min.? + how_much;
+                                }
+                            } else if (init_opts.max != null) {
+                                // only have max, go exponentially to the left
+                                if (pp.x > max_x) {
+                                    init_opts.value.* = init_opts.max.?;
+                                } else {
+                                    const base = if (init_opts.max.? == 0) 0.01 else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.max.?)))) * 0.01;
+                                    const how_far = @max(0, (max_x - pp.x)) / px_scale;
+                                    const how_much = (@exp(how_far * 0.03) - 1) * base;
+                                    init_opts.value.* = init_opts.max.? - how_much;
+                                }
+                            } else {
+                                // neither min nor max, go exponentially away from starting value
+                                if (dataGet(null, b.data().id, "_start_x", f32)) |start_x| {
+                                    if (dataGet(null, b.data().id, "_start_v", f32)) |start_v| {
+                                        const base = if (start_v == 0) 0.01 else @exp(math.ln10 * @floor(@log10(@fabs(start_v)))) * 0.01;
+                                        const how_far = (pp.x - start_x) / px_scale;
+                                        const how_much = (@exp(@fabs(how_far) * 0.03) - 1) * base;
+                                        std.debug.print("{d} {d}\n", .{ how_far, how_much });
+                                        init_opts.value.* = if (how_far < 0) start_v - how_much else start_v + how_much;
+                                    }
+                                }
+                            }
                         }
                     }
                 },
                 .key => |ke| {
                     if (ke.code == .enter and ke.action == .down) {
                         text_mode = true;
-                    } else if (ke.action == .down or ke.action == .repeat) {
-                        switch (ke.code) {
-                            .left => {
-                                e.handled = true;
-                                init_opts.value.* = @max(0, @min(1, init_opts.value.* - 0.05));
-                                ret = true;
-                            },
-                            .right => {
-                                e.handled = true;
-                                init_opts.value.* = @max(0, @min(1, init_opts.value.* + 0.05));
-                                ret = true;
-                            },
-                            else => {},
-                        }
+                        //} else if (ke.action == .down or ke.action == .repeat) {
+                        //    switch (ke.code) {
+                        //        .left => {
+                        //            e.handled = true;
+                        //            init_opts.value.* = @max(0, @min(1, init_opts.value.* - 0.05));
+                        //            ret = true;
+                        //        },
+                        //        .right => {
+                        //            e.handled = true;
+                        //            init_opts.value.* = @max(0, @min(1, init_opts.value.* + 0.05));
+                        //            ret = true;
+                        //        },
+                        //        else => {},
+                        //    }
                     }
                 },
                 else => {},

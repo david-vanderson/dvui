@@ -26,6 +26,9 @@ var checkbox_bool: bool = false;
 var icon_image_size_extra: f32 = 0;
 var icon_image_rotation: f32 = 0;
 var slider_val: f32 = 0.0;
+var slider_entry_val: f32 = 0.05;
+var slider_entry_min: bool = true;
+var slider_entry_max: bool = true;
 var text_entry_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
@@ -345,25 +348,6 @@ pub fn basicWidgets() !void {
         }
     }
 
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
-        defer hbox.deinit();
-
-        try dvui.label(@src(), "Sliders", .{}, .{ .gravity_y = 0.5 });
-        _ = try dvui.slider(@src(), .horizontal, &slider_val, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
-        _ = try dvui.slider(@src(), .vertical, &slider_val, .{ .expand = .vertical, .min_size_content = .{ .w = 10 }, .corner_radius = dvui.Rect.all(100) });
-        try dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });
-    }
-
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
-        defer hbox.deinit();
-
-        try dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
-        _ = try dvui.sliderEntry(@src(), "val: {d:0.2}", .{ .value = &slider_val, .min = 10, .max = 20 }, .{ .gravity_y = 0.5 });
-        try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{ .gravity_y = 0.5 });
-    }
-
     try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
     {
@@ -384,6 +368,33 @@ pub fn basicWidgets() !void {
         const entries = [_][]const u8{ "First", "Second", "Third is a really long one that doesn't fit" };
 
         _ = try dvui.dropdown(@src(), &entries, &dropdown_val, .{ .min_size_content = .{ .w = 120 } });
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Sliders", .{}, .{ .gravity_y = 0.5 });
+        _ = try dvui.slider(@src(), .horizontal, &slider_val, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
+        _ = try dvui.slider(@src(), .vertical, &slider_val, .{ .expand = .vertical, .min_size_content = .{ .w = 10 }, .corner_radius = dvui.Rect.all(100) });
+        try dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "val: {d:0.2}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null) }, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{ .gravity_y = 0.5 });
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.checkbox(@src(), &slider_entry_min, "Slider Entry Min (0)", .{});
+        try dvui.checkbox(@src(), &slider_entry_max, "Slider Entry Max (1)", .{});
     }
 
     {
