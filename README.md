@@ -12,7 +12,8 @@ Examples:
 - ```zig build run-standalone-sdl```
 - ```zig build run-ontop-sdl```
 
-Get Started: find the widget you want in the example and copy the code from the `demo()` function in `src/dvui.zig`.
+## Get Started
+Find the widget you want in the example and copy the code from `src/Examples.zig`.
 
 This document is a broad overview.  See [inside](/INSIDE.md) for implementation details and how to write and modify widgets.
 
