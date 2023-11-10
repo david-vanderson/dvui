@@ -7950,6 +7950,10 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     // We are keeping this simple by only swapping between slider and textEntry
     // on a frame boundary.
 
+    const exp_min_change = 0.1;
+    const exp_stretch = 0.02;
+    const key_percentage = 0.05;
+
     var options = slider_entry_defaults.override(opts);
     if (options.min_size_content == null) {
         const msize = options.fontGet().textSize("M") catch unreachable;
@@ -8119,9 +8123,9 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                 if (pp.x < min_x) {
                                     init_opts.value.* = init_opts.min.?;
                                 } else {
-                                    const base = if (init_opts.min.? == 0) 0.01 else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.min.?)))) * 0.01;
+                                    const base = if (init_opts.min.? == 0) exp_min_change else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.min.?)))) * exp_min_change;
                                     const how_far = @max(0, (pp.x - min_x)) / px_scale;
-                                    const how_much = (@exp(how_far * 0.03) - 1) * base;
+                                    const how_much = (@exp(how_far * exp_stretch) - 1) * base;
                                     init_opts.value.* = init_opts.min.? + how_much;
                                     if (init_opts.interval) |ival| {
                                         init_opts.value.* = init_opts.min.? + ival * @round((init_opts.value.* - init_opts.min.?) / ival);
@@ -8132,9 +8136,9 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                 if (pp.x > max_x) {
                                     init_opts.value.* = init_opts.max.?;
                                 } else {
-                                    const base = if (init_opts.max.? == 0) 0.01 else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.max.?)))) * 0.01;
+                                    const base = if (init_opts.max.? == 0) exp_min_change else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.max.?)))) * exp_min_change;
                                     const how_far = @max(0, (max_x - pp.x)) / px_scale;
-                                    const how_much = (@exp(how_far * 0.03) - 1) * base;
+                                    const how_much = (@exp(how_far * exp_stretch) - 1) * base;
                                     init_opts.value.* = init_opts.max.? - how_much;
                                     if (init_opts.interval) |ival| {
                                         init_opts.value.* = init_opts.max.? - ival * @round((init_opts.max.? - init_opts.value.*) / ival);
@@ -8144,9 +8148,9 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                 // neither min nor max, go exponentially away from starting value
                                 if (dataGet(null, b.data().id, "_start_x", f32)) |start_x| {
                                     if (dataGet(null, b.data().id, "_start_v", f32)) |start_v| {
-                                        const base = if (start_v == 0) 0.01 else @exp(math.ln10 * @floor(@log10(@fabs(start_v)))) * 0.01;
+                                        const base = if (start_v == 0) exp_min_change else @exp(math.ln10 * @floor(@log10(@fabs(start_v)))) * exp_min_change;
                                         const how_far = (pp.x - start_x) / px_scale;
-                                        const how_much = (@exp(@fabs(how_far) * 0.03) - 1) * base;
+                                        const how_much = (@exp(@fabs(how_far) * exp_stretch) - 1) * base;
                                         init_opts.value.* = if (how_far < 0) start_v - how_much else start_v + how_much;
                                         if (init_opts.interval) |ival| {
                                             init_opts.value.* = start_v + ival * @round((init_opts.value.* - start_v) / ival);
@@ -8161,36 +8165,26 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     if (ke.code == .enter and ke.action == .down) {
                         text_mode = true;
                     } else if (ke.action == .down or ke.action == .repeat) {
-                        var how_far: f32 = 0;
                         switch (ke.code) {
-                            .left => {
+                            .left, .right => {
                                 e.handled = true;
-                                how_far = -100;
-                            },
-                            .right => {
-                                e.handled = true;
-                                how_far = 100;
+                                ret = true;
+                                if (init_opts.interval) |ival| {
+                                    init_opts.value.* = init_opts.value.* + (if (ke.code == .left) -ival else ival);
+                                } else {
+                                    const how_much = @fabs(init_opts.value.*) * key_percentage;
+                                    init_opts.value.* = if (ke.code == .left) init_opts.value.* - how_much else init_opts.value.* + how_much;
+                                }
+
+                                if (init_opts.min) |min| {
+                                    init_opts.value.* = @max(min, init_opts.value.*);
+                                }
+
+                                if (init_opts.max) |max| {
+                                    init_opts.value.* = @min(max, init_opts.value.*);
+                                }
                             },
                             else => {},
-                        }
-
-                        if (how_far != 0) {
-                            ret = true;
-                            if (init_opts.interval) |ival| {
-                                init_opts.value.* = init_opts.value.* + (if (how_far < 0) -ival else ival);
-                            } else {
-                                const base = if (init_opts.value.* == 0) 0.01 else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.value.*)))) * 0.01;
-                                const how_much = (@exp(@fabs(how_far) * 0.03) - 1) * base;
-                                init_opts.value.* = if (how_far < 0) init_opts.value.* - how_much else init_opts.value.* + how_much;
-                            }
-
-                            if (init_opts.min) |min| {
-                                init_opts.value.* = @max(min, init_opts.value.*);
-                            }
-
-                            if (init_opts.max) |max| {
-                                init_opts.value.* = @min(max, init_opts.value.*);
-                            }
                         }
                     }
                 },
