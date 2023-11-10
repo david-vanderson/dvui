@@ -1,13 +1,8 @@
 
 update README/INSIDE and screenshot
-
-SliderFloat/SliderDrag thing (see open issue)
-- ctrl-click or enter (or any keypress?) should transition into text editing
-- min/max vs. continuous change?
-- hover?
-- keyboard left-right
-- esc from entry
-- entry should close when we lose focus
+- tab index of 0
+- how to add a link to a specific function (like to sliderEntry?)
+  - add to url  #:~:text=function_name
 
 file zig pull request for sliceAsBytes/bytesAsSlice to include sentinel
 

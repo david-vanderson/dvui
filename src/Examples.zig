@@ -26,6 +26,10 @@ var checkbox_bool: bool = false;
 var icon_image_size_extra: f32 = 0;
 var icon_image_rotation: f32 = 0;
 var slider_val: f32 = 0.0;
+var slider_entry_val: f32 = 0.05;
+var slider_entry_min: bool = true;
+var slider_entry_max: bool = true;
+var slider_entry_interval: bool = true;
 var slider_vector: @Vector(3, f32) = .{ 1, 2, 3 };
 var text_entry_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
@@ -346,34 +350,6 @@ pub fn basicWidgets() !void {
         }
     }
 
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
-        defer hbox.deinit();
-
-        try dvui.label(@src(), "Sliders", .{}, .{ .gravity_y = 0.5 });
-        _ = try dvui.slider(@src(), .horizontal, &slider_val, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
-        _ = try dvui.slider(@src(), .vertical, &slider_val, .{ .expand = .vertical, .min_size_content = .{ .w = 10 }, .corner_radius = dvui.Rect.all(100) });
-        try dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });
-    }
-
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
-        defer hbox.deinit();
-
-        try dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
-        _ = try dvui.sliderEntry(@src(), "val: {d:0.2}", &slider_val, .{ .gravity_y = 0.5 });
-        try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{ .gravity_y = 0.5 });
-    }
-
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
-        defer hbox.deinit();
-
-        try dvui.label(@src(), "Vector Slider Entry", .{}, .{});
-        _ = try dvui.sliderVector(@src(), "val: {d:0.2}", f32, 3, @as(*[3]f32, @ptrCast(&slider_vector)));
-        try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{});
-    }
-
     try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
     {
@@ -394,6 +370,43 @@ pub fn basicWidgets() !void {
         const entries = [_][]const u8{ "First", "Second", "Third is a really long one that doesn't fit" };
 
         _ = try dvui.dropdown(@src(), &entries, &dropdown_val, .{ .min_size_content = .{ .w = 120 } });
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Sliders", .{}, .{ .gravity_y = 0.5 });
+        _ = try dvui.slider(@src(), .horizontal, &slider_val, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
+        _ = try dvui.slider(@src(), .vertical, &slider_val, .{ .expand = .vertical, .min_size_content = .{ .w = 10 }, .corner_radius = dvui.Rect.all(100) });
+        try dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "val: {d:0.2}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{ .gravity_y = 0.5 });
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .padding = .{ .x = 10 } });
+        defer hbox.deinit();
+
+        try dvui.checkbox(@src(), &slider_entry_min, "Min", .{});
+        try dvui.checkbox(@src(), &slider_entry_max, "Max", .{});
+        try dvui.checkbox(@src(), &slider_entry_interval, "Interval", .{});
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Vector Slider Entry", .{}, .{});
+        _ = try dvui.sliderVector(@src(), "val: {d:0.2}", f32, 3, @as(*[3]f32, @ptrCast(&slider_vector)));
+        try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{});
     }
 
     {
@@ -959,6 +972,7 @@ pub fn animations() !void {
 
         try button_wiggle.install();
         button_wiggle.processEvents();
+        try button_wiggle.drawBackground();
         try dvui.labelNoFmt(@src(), "Wiggle", button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
         try button_wiggle.drawFocus();
 

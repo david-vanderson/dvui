@@ -2,116 +2,50 @@
 
 This document gives technical details and is useful for people extending or writing new widgets.  See [readme](/README.md) for a broad overview.
 
-### Example: Overriding Events for a Label - labelClick()
+### Example: button()
+
 ```zig
-/// A clickable label.  Good for hyperlinks.
-/// Returns true if it's been clicked.
-pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) !bool {
-    var ret = false;
+pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) !bool {
+    // initialize widget and get rectangle from parent
+    var bw = ButtonWidget.init(src, .{}, opts);
 
-    var lw = try LabelWidget.init(src, fmt, args, opts);
-    // now lw has a Rect from its parent but hasn't processed events or drawn
+    // make ourselves the new parent
+    try bw.install();
 
-    const lwid = lw.data().id;
+    // process events (mouse and keyboard)
+    bw.processEvents();
 
-    // if lw is visible, we want to be able to keyboard navigate to it
-    if (lw.data().visible()) {
-        try dvui.tabIndexSet(lwid, lw.data().options.tab_index);
-    }
+    // draw background/border
+    try bw.drawBackground();
 
-    // draw border and background
-    try lw.install();
+    // this child widget:
+    // - has bw as parent
+    // - gets a rectangle from bw
+    // - draws itself
+    // - reports its min size to bw
+    try labelNoFmt(@src(), label_str, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
 
-    // get lw args for eventMatch
-    const emo = lw.eventMatchOptions();
+    var click = bw.clicked();
 
-    // loop over all events this frame in order of arrival
-    for (dvui.events()) |*e| {
+    // draw focus
+    try bw.drawFocus();
 
-        // skip if lw would not normally process this event
-        if (!dvui.eventMatch(e, emo))
-            continue;
+    // restore previous parent
+    // send our min size to parent
+    bw.deinit();
 
-        switch (e.evt) {
-            .mouse => |me| {
-                if (me.action == .focus) {
-                    e.handled = true;
-
-                    // focus this widget for events after this one (starting with e.num)
-                    dvui.focusWidget(lwid, null, e.num);
-                } else if (me.action == .press and me.button.pointer()) {
-                    e.handled = true;
-                    dvui.captureMouse(lwid);
-
-                    // for touch events, we want to cancel our click if a drag is started
-                    dvui.dragPreStart(me.p, null, Point{});
-                } else if (me.action == .release and me.button.pointer()) {
-                    // mouse button was released, do we still have mouse capture?
-                    if (dvui.captured(lwid)) {
-                        e.handled = true;
-
-                        // cancel our capture
-                        dvui.captureMouse(null);
-
-                        // if the release was within our border, the click is successful
-                        if (lw.data().borderRectScale().r.contains(me.p)) {
-                            ret = true;
-
-                            // if the user interacts successfully with a
-                            // widget, it usually means part of the GUI is
-                            // changing, so the convention is to call refresh
-                            // so the user doesn't have to remember
-                            dvui.refresh(null, @src(), lwid);
-                        }
-                    }
-                } else if (me.action == .motion and me.button.touch()) {
-                    if (dvui.captured(lwid)) {
-                        if (dvui.dragging(me.p)) |_| {
-                            // touch: if we overcame the drag threshold, then
-                            // that means the person probably didn't want to
-                            // touch this button, they were trying to scroll
-                            dvui.captureMouse(null);
-                        }
-                    }
-                } else if (me.action == .position) {
-                    e.handled = true;
-
-                    // a single .position mouse event is at the end of each
-                    // frame, so this means the mouse ended above us
-                    dvui.cursorSet(.hand);
-                }
-            },
-            .key => |ke| {
-                if (ke.code == .space and ke.action == .down) {
-                    e.handled = true;
-                    ret = true;
-                    dvui.refresh(null, @src(), lwid);
-                }
-            },
-            else => {},
-        }
-
-        // if we didn't handle this event, send it to lw - this means we don't
-        // need to call lw.processEvents()
-        if (!e.handled) {
-            lw.processEvent(e, false);
-        }
-    }
-
-    // draw text
-    try lw.draw();
-
-    // draw an accent border if we are focused
-    if (lwid == dvui.focusedWidgetId()) {
-        try lw.data().focusBorder();
-    }
-
-    // done with lw, have it report min size to parent
-    lw.deinit();
-
-    return ret;
+    return click;
 }
 ```
+
+See the code for [pub fn sliderEntry](https://github.com/david-vanderson/dvui/blob/master/src/dvui.zig#:~:text=pub%20fn%20sliderEntry) for an advanced example that includes:
+* swapping the kind of widget
+* min size calculated from font
+* tab index
+* storing data from frame to frame
+* intercepting events and forwarding to child widgets
+* tracking ctrl key for ctrl-click
+* drawing a rounded rect
 
 ### One Frame At a Time
 
@@ -119,46 +53,54 @@ DVUI is an immediate-mode GUI, so widgets are created on the fly.  We also proce
 
 A widget is a block of code that runs every frame.  For each widget (`ButtonWidget`) there is a higher-level function (`button()`) that shows how to use the widget's functions.  To customize or extend a widget, start with the code in the higher-level functions.
 
+### Single Pass
+
+Each widget's code is run a single time per frame.  This means a widget must ask for a rectangle, process events, and draw before knowing what child widgets will be inside it.  In particular a widget will only be able to calculate its min size in `deinit()`.
+
+The solution is to save the min size from last frame.  A new widget will typically receive a zero-sized rectangle, draw nothing on the first frame, and draw normally on the second frame.  For smooth UIs a new widget can be animated from zero-sized to normal size.
+
+To store other bits of state from frame to frame, see `dataGet()`/`dataSet()`/`dataGetSlice()`/`dataSetSlice()`.
+
+### Widget Overview
+
 Generally it follows this pattern:
 
 * `init()`
   * create the struct representing this widget
-  * `WidgetData.init()` generate ID and get a Rect from the parent widget (our place on the screen)
+  * `WidgetData.init()` generate ID and get a `Rect` from the parent widget (loads our min size from last frame)
+    * `Rect` is a rectangle in the parent's coordinate space
+    * pass to `parent.screenRectScale()` to get a `RectScale` which is a screen (pixel) rectangle plus scale from logical points to physical pixels
   * `dataGet()` load persisted data from last frame
-  * note: during init() the struct is in temporary memory, so you can't take the address of it or any field yet
+  * note: during `init()` the struct is in temporary memory, so you can't take the address of it or any field yet (including calling `widget()`)
 
-Here the widget has a Rect, but hasn't drawn anything.  Animations (fading in, sliding, growing/shrinking) would be applied here.
+Here the widget has a rectangle, but hasn't drawn anything.  Animations (fading in, sliding, growing/shrinking) would be applied here and could adjust the rectangle (see the animations section of the demo).
 
 * `install()`
   * `parentSet()` set this widget as the new parent
   * `register()` provides debugging information
-  * draws border and background
-  * maybe set the clip rect
+  * some widgets set the clipping rectangle (sometimes called scissor rectangle) to prevent drawing outside its given space
+    * this is how a scroll container prevents children that are half-off the scroll viewport from drawing over other widgets
 
 Now the widget is the parent widget, so further widgets nested here will be children of this widget.
 
 * `processEvents()`
-  * get `EventMatchOptions` for this widget
-  * loop over `events()`, call `eventMatch()` for each
+  * loop over `events()`, call `matchEvent()` for each
   * set `Event.handled` if no other widget should process this event
   * bubble event to parent if `Event.bubbleable()`
 
-For mouse events, which are routed by the Rect, this widget can process them either here (before children), or in `deinit()` (after children).  For example, `FloatingWindowWidget` processes some mouse events before children - the lower-right drag-resize handle - and other mouse events after children - dragging anywhere in the background drags the subwindow.
+See the Event Handling section for details.
 
-Layout widgets like `BoxWidget` usually don't process events, but will still bubble events through themselves.
-
-* `drawBackground()`, `draw()`, `drawFocus()`
+* `drawBackground()`, `draw()`, `drawFocus()`, `drawCursor()`
   * draw parts of the widget, there's some variety here
-  * some widgets (BoxWidget) don't have a draw at all, they only do border/background
-  * some widgets (ButtonWidget) only has drawFocus to maybe draw a focus border
+  * some widgets (BoxWidget) only do border/background
 
 * `deinit()`
+  * some widgets process some events here
   * `dataSet()` store data for next frame
   * `minSizeSetAndRefresh()` store our min size for next frame, refresh if it changed
   * `minSizeReportToParent()` send min size to parent widget for next frame layout
   * reset the clip rect if set before
   * `parentSet()` set the previous parent back
-
 
 ### Parents and Children, Widget and WidgetData
 "widget" is a generic term that refers to everything that goes together to make a UI element.  `dvui.Widget` is the [interface](https://zig.news/david_vanderson/faster-interface-style-2b12) that allows parent and child widgets to communicate.  Every widget has a `widget()` function to produce this interface struct.
@@ -180,7 +122,7 @@ Each widget keeps a pointer to its parent widget, which forms a chain going back
 * `parent.screenRectScale()` translate from our child Rect (in our parent's coordinate space) to a RectScale (in screen coordinates).
 * `parent.processEvent()` bubble keyboard events, so pressing the "up" key while focused on a button can make the containing scroll area scroll.
 
-TODO: popups/floaters
+TODO: floatingWindows/popups
 
 ### Windows and Subwindows
 `dvui.Window` maps to a single OS window.  All widgets and drawing happen in that window.
@@ -197,8 +139,37 @@ The id a widget gets should be the same each frame, even if other widgets are be
 
 `.id_extra` is to differentiate many children being added to the same parent in a loop.
 
+## Event Handling
 
-## BoxWidget vs box()
+DVUI provides a time-ordered array of all events since last frame (`events()`).  Intead of trying to route events to widgets, the widgets are responsible for choosing which events in the array to process.  The function `eventMatch()` provides the normal logic widgets will use.
+
+Most events are either mouse (includes touch) or keyboard:
+* Mouse Events
+  * have a screen position
+  * we want the widget whose screen rectangle contains that position to process the event
+  * there might be multiple overlapping widgets (label inside button inside scroll area)
+  * each widget can either process a mouse event before or after children
+    * before example: `FloatingWindowWidget` lower-right drag-resize - by processing before children, we reserve the lower-right corner for drag-resize, even if there might be a widget (button) in that space that would process the event
+    * after example: `ScrollContainerWidget` mouse-wheel - by processing after children, we only scroll if no child processed the event
+  * widgets can capture the mouse to receive all mouse events until they release capture
+* Keyboard Events
+  * have the id of the last focused widget
+  * have the id of the last focused subwindow (each subwindow has a focused widget)
+  * we want the focused widget to process the event
+  * if it doesn't, it bubbles the event up the parent chain
+    * example: button has focus, pressing the "up" key can bubble to a containing scroll area
+
+Special Events
+* `.focus`
+  * mouse event that DVUI creates that comes just before the user action (currently left-mouse-down or finger-down)
+  * allows separation between focusing a widget and processing mouse-down
+  * example: `windowHeader()` intercepts the `.focus` event to prevent the window from clearing the focused widget, but allows the mouse-down through so the window can do normal click-drag
+* `.position`
+  * mouse event that DVUI creates each frame that comes after all other events
+  * represents the final mouse position for this frame
+  * used to set cursor and sometimes hover state
+
+Sometimes a widget will just want to observe events but not mark them as processed.  An example is how to differentiate ctrl-click from normal click.  In a low framerate situation, we can't rely on checking the current keyboard state when the click happens. This way the widget can watch all keyboard events and keep track of the ctrl state properly interleaved with mouse events.
 
 
 ## Min Size and Layout
@@ -218,9 +189,11 @@ The id a widget gets should be the same each frame, even if other widgets are be
 
 ## Clipping
 
-## Event Handling
-- mouse vs keyboard
-- how focus works
-- .focus and .position events
 
 ## Mutlithreading
+
+## Drawing
+- deferred
+- subwindows
+- pathStrokeAfter for focus outlines
+

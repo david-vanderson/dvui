@@ -3562,6 +3562,7 @@ pub const FloatingWindowWidget = struct {
         // don't have margin, so turn that off
         self.layout = BoxWidget.init(@src(), .vertical, false, self.options.override(.{ .margin = .{}, .expand = .both }));
         try self.layout.install();
+        try self.layout.drawBackground();
     }
 
     pub fn processEventsBefore(self: *Self) void {
@@ -4301,6 +4302,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
     var bcbox = BoxWidget.init(@src(), .horizontal, false, options.strip());
     defer bcbox.deinit();
     try bcbox.install();
+    try bcbox.drawBackground();
     const size = try options.fontGet().lineHeight();
     if (expanded) {
         try icon(@src(), "down_arrow", entypo.triangle_down, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
@@ -5631,6 +5633,7 @@ pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options)
     var ret = try currentWindow().arena.create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, false, opts);
     try ret.install();
+    try ret.drawBackground();
     return ret;
 }
 
@@ -5638,6 +5641,7 @@ pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Opt
     var ret = try currentWindow().arena.create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, true, opts);
     try ret.install();
+    try ret.drawBackground();
     return ret;
 }
 
@@ -5672,7 +5676,6 @@ pub const BoxWidget = struct {
 
     pub fn install(self: *Self) !void {
         try self.wd.register(self.wd.options.name orelse "Box", null);
-        try self.wd.borderAndBackground(.{});
 
         // our rect for children has to start at 0,0
         self.childRect = self.wd.contentRect().justSize();
@@ -5694,6 +5697,10 @@ pub const BoxWidget = struct {
         }
 
         _ = parentSet(self.widget());
+    }
+
+    pub fn drawBackground(self: *Self) !void {
+        try self.wd.borderAndBackground(.{});
     }
 
     pub fn widget(self: *Self) Widget {
@@ -5891,6 +5898,7 @@ pub const ScrollAreaWidget = struct {
         }
 
         try self.hbox.install();
+        try self.hbox.drawBackground();
 
         // the viewport is also set in ScrollContainer but we need it here in
         // case the scroll bar modes are auto
@@ -5910,6 +5918,7 @@ pub const ScrollAreaWidget = struct {
 
         self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "ScrollAreaWidget vbox" }));
         try self.vbox.install();
+        try self.vbox.drawBackground();
 
         if (self.si.horizontal != .none) {
             if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar == .auto and (self.si.virtual_size.w > self.si.viewport.w))) {
@@ -6670,6 +6679,7 @@ pub const ScaleWidget = struct {
 
         self.box = BoxWidget.init(@src(), .vertical, false, self.wd.options.strip().override(.{ .expand = .both }));
         try self.box.install();
+        try self.box.drawBackground();
     }
 
     pub fn widget(self: *Self) Widget {
@@ -6788,6 +6798,7 @@ pub const MenuWidget = struct {
 
         self.box = BoxWidget.init(@src(), self.init_opts.dir, false, self.wd.options.strip().override(.{ .expand = .both }));
         try self.box.install();
+        try self.box.drawBackground();
     }
 
     pub fn close(self: *Self) void {
@@ -7707,16 +7718,34 @@ pub const ButtonWidget = struct {
 };
 
 pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) !bool {
+    // initialize widget and get rectangle from parent
     var bw = ButtonWidget.init(src, .{}, opts);
+
+    // make ourselves the new parent
     try bw.install();
+
+    // process events (mouse and keyboard)
     bw.processEvents();
+
+    // draw background/border
     try bw.drawBackground();
 
+    // this child widget:
+    // - has bw as parent
+    // - gets a rectangle from bw
+    // - draws itself
+    // - reports its min size to bw
     try labelNoFmt(@src(), label_str, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
 
     var click = bw.clicked();
+
+    // draw focus
     try bw.drawFocus();
+
+    // restore previous parent
+    // send our min size to parent
     bw.deinit();
+
     return click;
 }
 
@@ -7880,6 +7909,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
     }
     var knob = BoxWidget.init(@src(), .horizontal, false, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
     try knob.install();
+    try knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
         try knob.wd.focusBorder();
     }
@@ -7898,19 +7928,27 @@ pub var slider_entry_defaults: Options = .{
     .padding = Rect.all(2),
     .color_style = .control,
     .background = true,
+    // min size calulated from font
+};
+
+pub const SliderEntryInitOptions = struct {
+    value: *f32,
+    min: ?f32 = null,
+    max: ?f32 = null,
+    interval: ?f32 = null,
 };
 
 /// Combines a slider and a text entry box on key press.  Displays value on top of slider.
 ///
 /// Returns true if percent was changed.
-pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const u8, value: *f32, opts: Options) !bool {
+pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const u8, init_opts: SliderEntryInitOptions, opts: Options) !bool {
 
     // This widget swaps between either a slider with a label or a text entry.
     // The tricky part of this is maintaining focus.  Strategy is a containing
     // box that will keep focus, and forward events to the text entry.
     //
-    // We are intentinally keeping this simple by only swapping between slider
-    // and textEntry on a frame boundary.
+    // We are keeping this simple by only swapping between slider and textEntry
+    // on a frame boundary.
 
     var options = slider_entry_defaults.override(opts);
     if (options.min_size_content == null) {
@@ -7918,7 +7956,9 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         options.min_size_content = .{ .w = msize.w * 10, .h = msize.h };
     }
     var ret = false;
-    var b = try box(src, .horizontal, options);
+    var hover = false;
+    var b = BoxWidget.init(src, .horizontal, false, options);
+    try b.install();
     defer b.deinit();
 
     if (b.data().visible()) {
@@ -7932,10 +7972,15 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     var text_mode = dataGet(null, b.data().id, "_text_mode", bool) orelse false;
     var ctrl_down = dataGet(null, b.data().id, "_ctrl", bool) orelse false;
 
+    // must call dataGet/dataSet on these every frame to prevent them from
+    // getting purged
+    _ = dataGet(null, b.data().id, "_start_x", f32);
+    _ = dataGet(null, b.data().id, "_start_v", f32);
+
     if (text_mode) {
         var te_buf = dataGetSlice(null, b.data().id, "_buf", []u8) orelse blk: {
             var buf = [_]u8{0} ** 20;
-            _ = std.fmt.bufPrintZ(&buf, "{d:0.3}", .{value.*}) catch {};
+            _ = std.fmt.bufPrintZ(&buf, "{d:0.3}", .{init_opts.value.*}) catch {};
             dataSetSlice(null, b.data().id, "_buf", &buf);
             break :blk dataGetSlice(null, b.data().id, "_buf", []u8).?;
         };
@@ -7951,20 +7996,33 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             sel.end = std.math.maxInt(usize);
         }
 
+        var new_val: ?f32 = null;
+
         var evts = events();
         for (evts) |*e| {
             if (e.evt == .key) {
                 ctrl_down = e.evt.key.mod.controlCommand();
             }
 
+            if (!text_mode) {
+                // if we are switching out of text mode, skip processing any
+                // remaining events
+                continue;
+            }
+
             if (!eventMatch(e, .{ .id = b.data().id, .r = rs.r }) and !te.matchEvent(e))
                 continue;
 
-            if (e.evt == .key and e.evt.key.code == .enter and e.evt.key.action == .down) {
+            if (e.evt == .key and e.evt.key.action == .down and e.evt.key.code == .enter) {
                 e.handled = true;
                 text_mode = false;
-                value.* = std.fmt.parseFloat(f32, std.mem.sliceTo(te_buf, 0)) catch 0;
-                ret = true;
+                new_val = std.fmt.parseFloat(f32, te_buf[0..te.len]) catch null;
+            }
+
+            if (e.evt == .key and e.evt.key.action == .down and e.evt.key.code == .escape) {
+                e.handled = true;
+                text_mode = false;
+                // don't set new_val, we are escaping
             }
 
             // don't want TextEntry to get focus
@@ -7978,14 +8036,32 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             }
         }
 
+        if (b.data().id != focusedWidgetId()) {
+            // we lost focus
+            text_mode = false;
+            new_val = std.fmt.parseFloat(f32, te_buf[0..te.len]) catch null;
+        }
+
+        if (!text_mode) {
+            refresh(null, @src(), b.data().id);
+
+            if (new_val) |nv| {
+                init_opts.value.* = nv;
+                ret = true;
+            }
+        }
+
         try te.draw();
         try te.drawCursor();
         te.deinit();
     } else {
 
         // show slider and label
-        const track = Rect{ .x = knobsize / 2, .y = br.h / 2 - 2, .w = br.w - knobsize, .h = 4 };
-        const trackrs = b.widget().screenRectScale(track);
+        const trackrs = b.widget().screenRectScale(.{ .x = knobsize / 2, .w = br.w - knobsize });
+        const min_x = trackrs.r.x;
+        const max_x = trackrs.r.x + trackrs.r.w;
+        const px_scale = trackrs.s;
+
         var evts = events();
         for (evts) |*e| {
             if (e.evt == .key) {
@@ -8008,27 +8084,76 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         } else {
                             captureMouse(b.data().id);
                             p = me.p;
+                            dataSet(null, b.data().id, "_start_x", me.p.x);
+                            dataSet(null, b.data().id, "_start_v", init_opts.value.*);
                         }
                     } else if (me.action == .release and me.button.pointer()) {
-                        captureMouse(null);
                         e.handled = true;
+                        captureMouse(null);
+                        dataRemove(null, b.data().id, "_start_x");
+                        dataRemove(null, b.data().id, "_start_v");
                     } else if (me.action == .motion and captured(b.data().id)) {
                         e.handled = true;
                         p = me.p;
                     } else if (me.action == .position) {
                         e.handled = true;
-                        //hovered = true;
+                        hover = true;
                     }
 
                     if (p) |pp| {
-                        var min: f32 = trackrs.r.x;
-                        var max: f32 = trackrs.r.x + trackrs.r.w;
-
-                        if (max > min) {
-                            const v = pp.x;
-                            value.* = (v - min) / (max - min);
-                            value.* = @max(0, @min(1, value.*));
+                        if (max_x > min_x) {
                             ret = true;
+                            if (init_opts.min != null and init_opts.max != null) {
+                                // lerp but make sure we can hit the max
+                                if (pp.x > max_x) {
+                                    init_opts.value.* = init_opts.max.?;
+                                } else {
+                                    const px_lerp = @max(0, @min(1, (pp.x - min_x) / (max_x - min_x)));
+                                    init_opts.value.* = init_opts.min.? + px_lerp * (init_opts.max.? - init_opts.min.?);
+                                    if (init_opts.interval) |ival| {
+                                        init_opts.value.* = init_opts.min.? + ival * @round((init_opts.value.* - init_opts.min.?) / ival);
+                                    }
+                                }
+                            } else if (init_opts.min != null) {
+                                // only have min, go exponentially to the right
+                                if (pp.x < min_x) {
+                                    init_opts.value.* = init_opts.min.?;
+                                } else {
+                                    const base = if (init_opts.min.? == 0) 0.01 else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.min.?)))) * 0.01;
+                                    const how_far = @max(0, (pp.x - min_x)) / px_scale;
+                                    const how_much = (@exp(how_far * 0.03) - 1) * base;
+                                    init_opts.value.* = init_opts.min.? + how_much;
+                                    if (init_opts.interval) |ival| {
+                                        init_opts.value.* = init_opts.min.? + ival * @round((init_opts.value.* - init_opts.min.?) / ival);
+                                    }
+                                }
+                            } else if (init_opts.max != null) {
+                                // only have max, go exponentially to the left
+                                if (pp.x > max_x) {
+                                    init_opts.value.* = init_opts.max.?;
+                                } else {
+                                    const base = if (init_opts.max.? == 0) 0.01 else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.max.?)))) * 0.01;
+                                    const how_far = @max(0, (max_x - pp.x)) / px_scale;
+                                    const how_much = (@exp(how_far * 0.03) - 1) * base;
+                                    init_opts.value.* = init_opts.max.? - how_much;
+                                    if (init_opts.interval) |ival| {
+                                        init_opts.value.* = init_opts.max.? - ival * @round((init_opts.max.? - init_opts.value.*) / ival);
+                                    }
+                                }
+                            } else {
+                                // neither min nor max, go exponentially away from starting value
+                                if (dataGet(null, b.data().id, "_start_x", f32)) |start_x| {
+                                    if (dataGet(null, b.data().id, "_start_v", f32)) |start_v| {
+                                        const base = if (start_v == 0) 0.01 else @exp(math.ln10 * @floor(@log10(@fabs(start_v)))) * 0.01;
+                                        const how_far = (pp.x - start_x) / px_scale;
+                                        const how_much = (@exp(@fabs(how_far) * 0.03) - 1) * base;
+                                        init_opts.value.* = if (how_far < 0) start_v - how_much else start_v + how_much;
+                                        if (init_opts.interval) |ival| {
+                                            init_opts.value.* = start_v + ival * @round((init_opts.value.* - start_v) / ival);
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 },
@@ -8036,32 +8161,60 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     if (ke.code == .enter and ke.action == .down) {
                         text_mode = true;
                     } else if (ke.action == .down or ke.action == .repeat) {
+                        var how_far: f32 = 0;
                         switch (ke.code) {
                             .left => {
                                 e.handled = true;
-                                value.* = @max(0, @min(1, value.* - 0.05));
-                                ret = true;
+                                how_far = -100;
                             },
                             .right => {
                                 e.handled = true;
-                                value.* = @max(0, @min(1, value.* + 0.05));
-                                ret = true;
+                                how_far = 100;
                             },
                             else => {},
+                        }
+
+                        if (how_far != 0) {
+                            ret = true;
+                            if (init_opts.interval) |ival| {
+                                init_opts.value.* = init_opts.value.* + (if (how_far < 0) -ival else ival);
+                            } else {
+                                const base = if (init_opts.value.* == 0) 0.01 else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.value.*)))) * 0.01;
+                                const how_much = (@exp(@fabs(how_far) * 0.03) - 1) * base;
+                                init_opts.value.* = if (how_far < 0) init_opts.value.* - how_much else init_opts.value.* + how_much;
+                            }
+
+                            if (init_opts.min) |min| {
+                                init_opts.value.* = @max(min, init_opts.value.*);
+                            }
+
+                            if (init_opts.max) |max| {
+                                init_opts.value.* = @min(max, init_opts.value.*);
+                            }
                         }
                     }
                 },
                 else => {},
             }
+
+            if (e.bubbleable()) {
+                b.wd.parent.processEvent(e, true);
+            }
         }
 
-        const knobRect = Rect{ .x = (br.w - knobsize) * value.*, .w = knobsize, .h = knobsize };
-        const knobrs = b.widget().screenRectScale(knobRect);
+        try b.wd.borderAndBackground(.{ .fill_color = if (hover) b.wd.options.color(.hover) else b.wd.options.color(.fill) });
 
-        try pathAddRect(knobrs.r, options.corner_radiusGet().scale(knobrs.s));
-        try pathFillConvex(options.color(.press));
+        // only draw handle if we have a min and max
+        if (init_opts.min != null and init_opts.max != null) {
+            const how_far = (init_opts.value.* - init_opts.min.?) / (init_opts.max.? - init_opts.min.?);
+            const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
+            const knobrs = b.widget().screenRectScale(knobRect);
 
-        try label(@src(), label_fmt orelse "{d:.3}", .{value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
+            try pathAddRect(knobrs.r, options.corner_radiusGet().scale(knobrs.s));
+            try pathFillConvex(options.color(.press));
+        }
+
+        try label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
     }
 
     if (b.data().id == focusedWidgetId()) {
@@ -8070,6 +8223,11 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
     dataSet(null, b.data().id, "_text_mode", text_mode);
     dataSet(null, b.data().id, "_ctrl", ctrl_down);
+
+    if (ret) {
+        refresh(null, @src(), b.data().id);
+    }
+
     return ret;
 }
 
