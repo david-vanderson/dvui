@@ -26,6 +26,7 @@ var checkbox_bool: bool = false;
 var icon_image_size_extra: f32 = 0;
 var icon_image_rotation: f32 = 0;
 var slider_val: f32 = 0.0;
+var slider_vector: @Vector(3, f32) = .{ 1, 2, 3 };
 var text_entry_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
@@ -362,6 +363,15 @@ pub fn basicWidgets() !void {
         try dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
         _ = try dvui.sliderEntry(@src(), "val: {d:0.2}", &slider_val, .{ .gravity_y = 0.5 });
         try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{ .gravity_y = 0.5 });
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Vector Slider Entry", .{}, .{});
+        _ = try dvui.sliderVector(@src(), "val: {d:0.2}", f32, 3, @as(*[3]f32, @ptrCast(&slider_vector)));
+        try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{});
     }
 
     try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});

@@ -8073,6 +8073,19 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     return ret;
 }
 
+pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, comptime component_type: type, comptime num_components: u32, data: *[num_components]component_type) !bool {
+    var b = try dvui.box(@src(), .horizontal, .{});
+    defer b.deinit();
+
+    var any_changed = false;
+    inline for (0..num_components) |i| {
+        const component_changed = dvui.sliderEntry(line, fmt, &data[i], .{ .id_extra = i }) catch false;
+        any_changed = any_changed or component_changed;
+    }
+
+    return any_changed;
+}
+
 pub var progress_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 10, .h = 10 },
