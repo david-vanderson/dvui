@@ -95,7 +95,7 @@ fn dvui_frame() !void {
 
     var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
     try tl2.addText(
-        \\The dvui
+        \\DVUI
         \\- paints the entire window
         \\- can show floating windows and dialogs
         \\- example menu at the top of the window
