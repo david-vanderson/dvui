@@ -180,19 +180,18 @@ Sometimes a widget will just want to observe events but not mark them as process
 
 ## Animations
 
-## Rect and RectScale
-- also margin/border/padding/content
-
 ## Debugging
 
 ## dataGet/dataSet/dataGetSlice
 
 ## Clipping
 
-
 ## Mutlithreading
 
 ## Drawing
+All drawing happens in pixel space.  A widget can call `parent.screenRectScale()` to get a rectangle in pixel screen coordinates plus the scale from logical points to physical pixels.
+
+- also margin/border/padding/content
 - deferred
 - subwindows
 - pathStrokeAfter for focus outlines
