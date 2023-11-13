@@ -999,7 +999,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     cw.path.clearAndFree();
 }
 
-pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: ?u32) !void {
+pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_above_parent: ?u32) !void {
     const cw = currentWindow();
 
     for (cw.subwindows.items) |*sw| {
@@ -1007,6 +1007,7 @@ pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: ?u32) !
             // this window was here previously, just update data, so it stays in the same place in the stack
             sw.used = true;
             sw.rect = rect;
+            sw.rect_pixels = rect_pixels;
             sw.modal = modal;
             sw.stay_above_parent = stay_above_parent;
 
@@ -1021,7 +1022,7 @@ pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: ?u32) !
     }
 
     // haven't seen this window before
-    const sw = Window.Subwindow{ .id = id, .rect = rect, .modal = modal, .stay_above_parent = stay_above_parent, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena), .render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena) };
+    const sw = Window.Subwindow{ .id = id, .rect = rect, .rect_pixels = rect_pixels, .modal = modal, .stay_above_parent = stay_above_parent, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena), .render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena) };
     if (stay_above_parent) |subwin_id| {
         // it wants to be above subwin_id
         var i: usize = 0;
@@ -1788,6 +1789,7 @@ pub const Window = struct {
     pub const Subwindow = struct {
         id: u32 = 0,
         rect: Rect = Rect{},
+        rect_pixels: Rect = Rect{},
         focused_widgetId: ?u32 = null,
         render_cmds: std.ArrayList(RenderCmd),
         render_cmds_after: std.ArrayList(RenderCmd),
@@ -2438,7 +2440,7 @@ pub const Window = struct {
 
         //std.debug.print("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
-        try subwindowAdd(self.wd.id, self.wd.rect, false, null);
+        try subwindowAdd(self.wd.id, self.wd.rect, self.rect_pixels, false, null);
 
         _ = subwindowCurrentSet(self.wd.id);
 
@@ -2558,7 +2560,7 @@ pub const Window = struct {
         var i = self.subwindows.items.len;
         while (i > 0) : (i -= 1) {
             const sw = &self.subwindows.items[i - 1];
-            if (sw.modal or sw.rect.contains(p)) {
+            if (sw.modal or sw.rect_pixels.contains(p)) {
                 return sw.id;
             }
         }
@@ -3185,7 +3187,7 @@ pub const PopupWidget = struct {
 
         const rs = self.wd.rectScale();
 
-        try subwindowAdd(self.wd.id, rs.r, false, null);
+        try subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, null);
         captureMouseMaintain(self.wd.id);
         try self.wd.register("Popup", rs);
 
@@ -3451,8 +3453,9 @@ pub const FloatingWindowWidget = struct {
                 self.wd.rect.y = prev_focus.y + (prev_focus.h - self.wd.rect.h) / 2;
 
                 if (snapToPixels()) {
-                    self.wd.rect.x = @round(self.wd.rect.x);
-                    self.wd.rect.y = @round(self.wd.rect.y);
+                    const s = self.wd.rectScale().s;
+                    self.wd.rect.x = @round(self.wd.rect.x * s) / s;
+                    self.wd.rect.y = @round(self.wd.rect.y * s) / s;
                 }
 
                 while (self.wd.rect.topleft().equals(prev_focus.topleft())) {
@@ -3538,7 +3541,7 @@ pub const FloatingWindowWidget = struct {
 
     pub fn drawBackground(self: *Self) !void {
         const rs = self.wd.rectScale();
-        try subwindowAdd(self.wd.id, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent) self.prev_windowId else null);
+        try subwindowAdd(self.wd.id, self.wd.rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent) self.prev_windowId else null);
         captureMouseMaintain(self.wd.id);
         try self.wd.register("FloatingWindow", rs);
 
