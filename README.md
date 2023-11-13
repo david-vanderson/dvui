@@ -48,10 +48,9 @@ This document is a broad overview.  See [inside](/INSIDE.md) for implementation 
   - Existing integrations with [Mach](https://machengine.org/) and [SDL](https://libsdl.org/)
 - Icon support via [TinyVG](https://tinyvg.tech/)
 - Font support via [freetype](https://github.com/david-vanderson/freetype/tree/zig-pkg)
-- Support for:
-  - Animations
-  - Themes
-  - FPS throttling
+- Animations
+- Themes
+- FPS throttling
 
 ## Design
 
@@ -64,6 +63,42 @@ if (try dvui.button(@src(), "Ok", .{})) {
 Widgets are not stored between frames like in traditional gui toolkits (gtk, win32, cocoa).  `dvui.button()` processes input events, draws the button on the screen, and returns true if a button click happened this frame.
 
 For an intro to immediate mode guis, see: https://github.com/ocornut/imgui/wiki#about-the-imgui-paradigm
+
+Advantages:
+* Reduce widget state
+  * example: checkbox directly uses your app's bool
+* Reduce gui state
+  * the widgets shown each frame directly reflect the code run each frame
+  * harder to be in a state where the gui is showing one thing but the app thinks it's showing something else
+  * don't have to clean up widgets that aren't needed anymore
+* Functions are the composable building blocks of the gui
+  * since running a widget is a function, you can wrap a widget easily
+```zig
+// Let's wrap the sliderEntry widget so we have 3 that represent a Color
+pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) !void {
+    var hbox = try dvui.box(src, .horizontal, opts);
+    defer hbox.deinit();
+
+    var red: f32 = @floatFromInt(color.r);
+    var green: f32 = @floatFromInt(color.g);
+    var blue: f32 = @floatFromInt(color.b);
+
+    _ = try dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
+    _ = try dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
+    _ = try dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
+
+    color.r = @intFromFloat(red);
+    color.g = @intFromFloat(green);
+    color.b = @intFromFloat(blue);
+}
+```
+
+Drawbacks:
+* Hard to do fire-and-forget
+  * example: show a dialog with an error message from code that won't be run next frame
+  * dvui includes a retained mode space for dialogs and toasts for this
+* Hard to do dialog sequence
+  * retained mode guis can run a modal dialog recursively so that dialog code can only exist in a single function
 
 ### Handle All Events
 DVUI processes every input event, making it useable in low framerate situations.  A button can receive a mouse-down event and a mouse-up event in the same frame and correctly report a click.  A custom button could even report multiple clicks per frame.  (the higher level `dvui.button()` function only reports 1 click per frame)
