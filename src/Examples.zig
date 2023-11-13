@@ -40,7 +40,7 @@ var scale_val: f32 = 1.0;
 var line_height_factor: f32 = 1.0;
 var animating_window_show: bool = false;
 var animating_window_closing: bool = false;
-var animating_window_rect = Rect{ .x = 300, .y = 200, .w = 300, .h = 200 };
+var animating_window_rect = Rect{ .x = 100, .y = 100, .w = 300, .h = 200 };
 
 var progress_mutex = std.Thread.Mutex{};
 var progress_val: f32 = 0.0;
@@ -972,7 +972,7 @@ pub fn animations() !void {
     }
 
     if (try dvui.button(@src(), "Animating Dialog (Scale)", .{})) {
-        try dvui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog (Scale)", .message = "This shows how to animate dialogs and other floating windows by changing the scale", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
+        try dvui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog (Scale)", .message = "This shows how to animate dialogs and other floating windows by changing the scale.", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
     }
 
     if (try dvui.button(@src(), "Animating Window (Rect)", .{})) {
@@ -998,7 +998,7 @@ pub fn animations() !void {
         }
 
         var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-        try tl.addText("This shows how to animate dialogs and other floating windows by changing the rect", .{});
+        try tl.addText("This shows how to animate dialogs and other floating windows by changing the rect.\n\nThis dialog also remembers its position on screen.", .{});
         tl.deinit();
     }
 
