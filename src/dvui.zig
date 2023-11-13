@@ -2133,11 +2133,6 @@ pub const Window = struct {
 
         const winId = self.windowFor(self.mouse_pt);
 
-        var ticks_adj = ticks;
-        // TODO: some real solution to interpreting the mouse wheel across OSes
-        if (builtin.target.os.tag == .linux or builtin.target.os.tag == .windows) {
-            ticks_adj = ticks * 20;
-        }
         //std.debug.print("mouse wheel {d}\n", .{ticks_adj});
 
         self.event_num += 1;
@@ -2147,7 +2142,7 @@ pub const Window = struct {
                 .button = .none,
                 .p = self.mouse_pt,
                 .floating_win = winId,
-                .data = .{ .wheel_y = ticks_adj },
+                .data = .{ .wheel_y = ticks },
             },
         } });
 

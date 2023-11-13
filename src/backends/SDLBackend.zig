@@ -497,11 +497,20 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
         },
         if (sdl3) c.SDL_EVENT_MOUSE_WHEEL else c.SDL_MOUSEWHEEL => {
             if (self.log_events) {
-                std.debug.print("sdl event MOUSEWHEEL {d}\n", .{event.wheel.y});
+                std.debug.print("sdl event MOUSEWHEEL {d} {d}\n", .{event.wheel.y, event.wheel.which});
             }
 
             const ticks = if (sdl3) event.wheel.y else @as(f32, @floatFromInt(event.wheel.y));
-            return try win.addEventMouseWheel(ticks);
+
+            // TODO: some real solution to interpreting the mouse wheel across OSes
+            const ticks_adj = switch (builtin.target.os.tag) {
+                .linux => ticks * 20,
+                .windows => ticks * 20,
+                .macos => ticks * 10,
+                else => ticks,
+            };
+
+            return try win.addEventMouseWheel(ticks_adj);
         },
         if (sdl3) c.SDL_FINGERDOWN else c.SDL_FINGERDOWN => {
             if (self.log_events) {
