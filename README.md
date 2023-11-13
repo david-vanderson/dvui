@@ -64,7 +64,7 @@ Widgets are not stored between frames like in traditional gui toolkits (gtk, win
 
 For an intro to immediate mode guis, see: https://github.com/ocornut/imgui/wiki#about-the-imgui-paradigm
 
-Advantages:
+#### Advantages
 * Reduce widget state
   * example: checkbox directly uses your app's bool
 * Reduce gui state
@@ -93,7 +93,7 @@ pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: O
 }
 ```
 
-Drawbacks:
+#### Drawbacks
 * Hard to do fire-and-forget
   * example: show a dialog with an error message from code that won't be run next frame
   * dvui includes a retained mode space for dialogs and toasts for this
