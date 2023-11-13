@@ -38,6 +38,7 @@ var dropdown_val: usize = 1;
 var show_dialog: bool = false;
 var scale_val: f32 = 1.0;
 var line_height_factor: f32 = 1.0;
+var backbox_color: dvui.Color = .{};
 var animating_window_show: bool = false;
 var animating_window_closing: bool = false;
 var animating_window_rect = Rect{ .x = 100, .y = 100, .w = 300, .h = 200 };
@@ -572,7 +573,7 @@ pub fn textEntryWidgets() !void {
 }
 
 pub fn styling() !void {
-    try dvui.label(@src(), "color style:", .{}, .{});
+    try dvui.label(@src(), "color style", .{}, .{});
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -585,7 +586,7 @@ pub fn styling() !void {
         _ = try dvui.button(@src(), "Control", .{ .color_style = .control });
     }
 
-    try dvui.label(@src(), "margin/border/padding:", .{}, .{});
+    try dvui.label(@src(), "margin/border/padding", .{}, .{});
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -609,7 +610,7 @@ pub fn styling() !void {
         o.deinit();
     }
 
-    try dvui.label(@src(), "corner radius:", .{}, .{});
+    try dvui.label(@src(), "corner radius", .{}, .{});
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -622,6 +623,35 @@ pub fn styling() !void {
         _ = try dvui.button(@src(), "100", opts.override(.{ .corner_radius = Rect.all(100) }));
         _ = try dvui.button(@src(), "mixed", opts.override(.{ .corner_radius = .{ .x = 0, .y = 2, .w = 7, .h = 100 } }));
     }
+
+    try dvui.label(@src(), "directy set colors", .{}, .{});
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{.w = 30, .h = 20}, .background = true, .color_fill = backbox_color, .gravity_y = 0.5 });
+        backbox.deinit();
+
+        try colorSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 });
+    }
+}
+
+// Let's wrap the sliderEntry widget so we have 3 that represent a Color
+pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) !void {
+    var hbox = try dvui.box(src, .horizontal, opts);
+    defer hbox.deinit();
+
+    var red: f32 = @floatFromInt(color.r);
+    var green: f32 = @floatFromInt(color.g);
+    var blue: f32 = @floatFromInt(color.b);
+
+    _ = try dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
+    _ = try dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
+    _ = try dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
+
+    color.r = @intFromFloat(red);
+    color.g = @intFromFloat(green);
+    color.b = @intFromFloat(blue);
 }
 
 pub fn layout() !void {

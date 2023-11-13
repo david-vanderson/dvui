@@ -188,6 +188,9 @@ Sometimes a widget will just want to observe events but not mark them as process
 
 ## Mutlithreading
 
+## Tab Index
+* null vs 0 vs 1-
+
 ## Drawing
 All drawing happens in pixel space.  A widget can call `parent.screenRectScale()` to get a rectangle in pixel screen coordinates plus the scale from logical points to physical pixels.
 
