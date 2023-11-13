@@ -1032,10 +1032,10 @@ pub fn dialogDirect() !void {
     const data = struct {
         var extra_stuff: bool = false;
     };
-    var dialog_win = try dvui.floatingWindow(@src(), .{ .stay_above_parent = true, .modal = false, .open_flag = &show_dialog }, .{});
+    var dialog_win = try dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog }, .{});
     defer dialog_win.deinit();
 
-    try dvui.windowHeader("Modal Dialog", "", &show_dialog);
+    try dvui.windowHeader("Dialog", "", &show_dialog);
     try dvui.label(@src(), "Asking a Question", .{}, .{ .font_style = .title_4 });
     try dvui.label(@src(), "This dialog is being shown in a direct style, controlled entirely in user code.", .{}, .{});
 
