@@ -8223,23 +8223,51 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     return ret;
 }
 
-// TODO: perhaps create an analogous `SliderVectorInitOptions`? Main problem
-// that the value MUST be passed as a `*f32`, need a slice or array for our
-// case. It would also allow for different ranges in different components (low
-// priority)
-// TODO: Perhaps a safer way to pass the data? The main issue is that while
-// vectors coerce to statically sized arrays, their pointers do not. So we'd
-// need to manually cast a vector pointer to an array pointer.
-pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, comptime component_type: type, comptime num_components: u32, data: anytype, opts: Options) !bool {
+pub fn SliderVectorInitOptions(comptime num_components: u32) type {
+    return struct {
+        min: [num_components]?f32 = .{null} ** num_components,
+        max: [num_components]?f32 = .{null} ** num_components,
+        interval: [num_components]?f32 = .{null} ** num_components,
+    };
+}
+
+fn checkAndCastDataPtr(comptime num_components: u32, value: anytype) *[num_components]f32 {
+    switch (@typeInfo(@TypeOf(value))) {
+        .Pointer => |ptr| {
+            const child_info = @typeInfo(ptr.child);
+
+            const data_len = switch (child_info) {
+                .Vector => |vec| vec.len,
+                .Array => |arr| arr.len,
+                else => @compileError("Must supply a pointer to a vector or array!"),
+            };
+
+            if (data_len != num_components) {
+                @compileError("Data and options have different lengths!");
+            }
+
+            return @ptrCast(value);
+        },
+        else => @compileError("Must supply a pointer to a vector or array!"),
+    }
+}
+
+pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, comptime num_components: u32, value: anytype, init_opts: SliderVectorInitOptions(num_components), opts: Options) !bool {
+    var data_arr = checkAndCastDataPtr(num_components, value);
+
     var b = try dvui.box(@src(), .horizontal, opts);
     defer b.deinit();
-
-    var data_arr: *[num_components]component_type = @ptrCast(data);
 
     var any_changed = false;
     inline for (0..num_components) |i| {
         // `catch false` because otherwise (`try`) would cause issues where the (i+1)th, (i+2)th, ... components would not get drawn properly while ith is modified.
-        const component_changed = dvui.sliderEntry(line, fmt, .{ .value = &data_arr[i] }, opts.override(.{ .id_extra = i })) catch false;
+        const component_opts = .{
+            .value = &data_arr[i],
+            .min = init_opts.min[i],
+            .max = init_opts.max[i],
+            .interval = init_opts.interval[i],
+        };
+        const component_changed = dvui.sliderEntry(line, fmt, component_opts, opts.override(.{ .id_extra = i })) catch false;
         any_changed = any_changed or component_changed;
     }
 
