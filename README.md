@@ -133,26 +133,40 @@ If you want to only render frames when needed, add `window.beginWait()` at the s
 
 `window.beginWait()` and `window.waitTime()` maintain an internal estimate of how much time is spent outside of the rendering code.  This is used in the calculation for how long to sleep for the next frame.
 
+The estimate is visible in the demo window Animations > Clock > "Estimate of frame overhead".  The estimate is only updated on frames caused by a timer expiring (like the clock example), so typically you'll see it start at zero.
+
 ### Widget init and deinit
-The easiest way to use widgets is through the functions that create and install them:
+The easiest way to use widgets is through the high-level functions that create and install them:
 ```zig
 {
     var box = try dvui.box(@src(), .vertical, .{.expand = .both});
     defer box.deinit();
+
+    // widgets run here will be children of box
 }
 ```
-These functions allocate memory for the widget onto the arena allocator passed to `window.begin()`.
+These functions allocate memory for the widget onto an internal arena allocator that is flushed each frame.
 
-Instead you can allocate the widget on the stack:
+Instead you can allocate the widget on the stack using the lower-level functions:
 ```zig
 {
     var box = BoxWidget.init(@src(), .vertical, false, .{.expand = .both});
     // box now has an id, can look up animations/timers
-    try box.install(.{});
+
+    try box.install();
+    // box is now parent widget
+
+    try box.drawBackground();
+    // might draw the background in a different way
+
     defer box.deinit();
+
+    // widgets run here will be children of box
 }
 ```
-This also shows how to get a widget's id before install() (processes events and draws).  This is useful for animations and specially handling events.
+The lower-level functions give a lot more customization options including animations, intercepting events, and drawing differently.
+
+Start with the high-level functions, and when needed, copy the body of the high-level function and customize from there.
 
 ### Appearance
 Each widget has the following options that can be changed through the Options struct when creating the widget:
@@ -162,35 +176,20 @@ Each widget has the following options that can be changed through the Options st
 - padding (space inside border)
 - corner_radius (for each corner)
 - color_style (use theme's colors)
-- color_accent (overrides widget and theme defaults)
-- color_text
-- color_fill
-- color_border
-- color_hover
-- color_press
+  - or directly set colors:
+    - color_accent
+    - color_text
+    - color_fill
+    - color_border
+    - color_hover
+    - color_press
 - font_style (use theme's fonts)
-- font (override font_style)
-```zig
-if (try dvui.button(@src(), "Wild", .{
-    .margin = dvui.Rect.all(2),
-    .padding = dvui.Rect.all(8),
-    .color_text = dvui.Color{.r = 0, .g = 255, .b = 0, .a = 150},
-    .color_fill = dvui.Color{.r = 100, .g = 0, .b = 100, .a = 255},
-    })) {
-    // clicked
-}
-```
+  - or directly set font:
+    - font
 
 Each widget has its own default options.  These can be changed directly:
 ```zig
 dvui.ButtonWidget.defaults.background = false;
-```
-
-Colors come in styles (content, accent, control, window, success, err).  Usually you want to use colors from the theme:
-```zig
-if (try dvui.menuItemLabel(@src(), "Cut", false, .{.color_style = .success, .background = true}) != null) {
-    // selected
-}
 ```
 
 Themes can be changed between frames or even within a frame.  The theme controls the fonts and colors referenced by font_style and color_style.
@@ -205,9 +204,15 @@ else {
 The theme's color_accent is also used to show keyboard focus.
 
 ### Layout
-A widget receives its position rectangle from the parent, but can influence layout with Options:
-- `.expand` - whether to take up all the space available (horizontal or vertical)
-- `.gravity_x`, `.gravity_y` - position a non-expanded widget inside a larger rectangle
-- `.min_size` - get at least this much space (unless parent is unable)
-- `.rect` - directly specify position in parent (rarely used)
+A widget receives its position and size from its parent.  The widget sends these fields of the Options struct to the parent:
+- min_size_content - the minimum size requested for this widget's content area
+  - padding/border/margin are automatically added
+- expand - whether to take up all the space available
+  - horizontal or vertical or both
+- gravity_x, gravity_y - position a non-expanded widget inside a larger rectangle
+- rect - directly specify position in parent (rarely used)
+  - a long scrollable list can use this to skip widgets that aren't visible
+  - example is the demo icon browser
+
+See [inside](/INSIDE.md) for more information.
 
