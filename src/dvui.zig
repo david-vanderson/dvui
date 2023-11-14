@@ -8223,6 +8223,29 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     return ret;
 }
 
+// TODO: perhaps create an analogous `SliderVectorInitOptions`? Main problem
+// that the value MUST be passed as a `*f32`, need a slice or array for our
+// case. It would also allow for different ranges in different components (low
+// priority)
+// TODO: Perhaps a safer way to pass the data? The main issue is that while
+// vectors coerce to statically sized arrays, their pointers do not. So we'd
+// need to manually cast a vector pointer to an array pointer.
+pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, comptime component_type: type, comptime num_components: u32, data: anytype, opts: Options) !bool {
+    var b = try dvui.box(@src(), .horizontal, opts);
+    defer b.deinit();
+
+    var data_arr: *[num_components]component_type = @ptrCast(data);
+
+    var any_changed = false;
+    inline for (0..num_components) |i| {
+        // `catch false` because otherwise (`try`) would cause issues where the (i+1)th, (i+2)th, ... components would not get drawn properly while ith is modified.
+        const component_changed = dvui.sliderEntry(line, fmt, .{ .value = &data_arr[i] }, opts.override(.{ .id_extra = i })) catch false;
+        any_changed = any_changed or component_changed;
+    }
+
+    return any_changed;
+}
+
 pub var progress_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 10, .h = 10 },
