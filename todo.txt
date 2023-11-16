@@ -4,9 +4,13 @@ INSIDE
 file zig pull request for sliceAsBytes/bytesAsSlice to include sentinel
 - need to test alignment casting (make a local var of the result type we want?)
 
-debug mode for touch events to test with a mouse
-
 add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEntry
+- 2 states (one where we show the menu and draggable cursor stuff)
+  - single dragless click toggles between
+  - only show the menu/draggables if we are in that state AND have focus
+- popup menu we show wheneverthat eats all focus events, nothing in it can ever get focus by default
+  - also doesn't close by itself, totally dependent on parent widget for whether it is shown or not
+
 
 see if we can get the mach backend working again
 - maybe just use the glfw part of mach?
