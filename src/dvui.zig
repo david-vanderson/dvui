@@ -1352,9 +1352,18 @@ pub fn dataSet(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
 pub fn dataSetSlice(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
     const dt = @typeInfo(@TypeOf(data));
     if (dt == .Pointer and dt.Pointer.size == .Slice) {
-        dataSetAdvanced(win, id, key, data, true);
+        if (dt.Pointer.sentinel) |s| {
+            dataSetAdvanced(win, id, key, @as([:@as(*const dt.Pointer.child, @alignCast(@ptrCast(s))).*]dt.Pointer.child, @constCast(data)), true);
+        } else {
+            dataSetAdvanced(win, id, key, @as([]dt.Pointer.child, @constCast(data)), true);
+        }
     } else if (dt == .Pointer and dt.Pointer.size == .One and @typeInfo(dt.Pointer.child) == .Array) {
-        dataSetAdvanced(win, id, key, @as([]@typeInfo(dt.Pointer.child).Array.child, @constCast(data)), true);
+        const child_type = @typeInfo(dt.Pointer.child);
+        if (child_type.Array.sentinel) |s| {
+            dataSetAdvanced(win, id, key, @as([:@as(*const child_type.Array.child, @alignCast(@ptrCast(s))).*]child_type.Array.child, @constCast(data)), true);
+        } else {
+            dataSetAdvanced(win, id, key, @as([]child_type.Array.child, @constCast(data)), true);
+        }
     } else {
         @compileError("dataSetSlice needs a slice or pointer to array, given " ++ @typeName(@TypeOf(data)));
     }
@@ -1422,6 +1431,9 @@ pub fn dataGetPtr(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?*T
 }
 
 /// Retrieve slice contents for given key associated with id.
+///
+/// dataSetSlice() strips const from the slice type, so always call
+/// dataGetSlice() with a mutable slice type ([]u8, not []const u8).
 ///
 /// Can be called from any thread.
 ///
@@ -3892,13 +3904,13 @@ pub fn dialogDisplay(id: u32) !void {
         return;
     };
 
-    const title = dvui.dataGetSlice(null, id, "_title", []const u8) orelse {
+    const title = dvui.dataGetSlice(null, id, "_title", []u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
         dvui.dialogRemove(id);
         return;
     };
 
-    const message = dvui.dataGetSlice(null, id, "_message", []const u8) orelse {
+    const message = dvui.dataGetSlice(null, id, "_message", []u8) orelse {
         std.debug.print("Error: lost data for dialog {x}\n", .{id});
         dvui.dialogRemove(id);
         return;
@@ -4051,7 +4063,7 @@ pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) !void {
 }
 
 pub fn toastDisplay(id: u32) !void {
-    const message = dvui.dataGetSlice(null, id, "_message", []const u8) orelse {
+    const message = dvui.dataGetSlice(null, id, "_message", []u8) orelse {
         std.debug.print("Error: lost message for toast {x}\n", .{id});
         return;
     };

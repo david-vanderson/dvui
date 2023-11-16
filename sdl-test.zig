@@ -208,9 +208,9 @@ pub fn main() !void {
                 {
                     var hbox = try dvui.box(@src(), .horizontal, .{});
                     defer hbox.deinit();
-                    var buf = dvui.dataGetSlice(null, hbox.wd.id, "data_key", []u8) orelse blk: {
+                    var buf = dvui.dataGetSlice(null, hbox.wd.id, "data_key", [:0]u8) orelse blk: {
                         dvui.dataSetSlice(null, hbox.wd.id, "data_key", "hello\n" ** 10);
-                        break :blk dvui.dataGetSlice(null, hbox.wd.id, "data_key", []u8).?;
+                        break :blk dvui.dataGetSlice(null, hbox.wd.id, "data_key", [:0]u8).?;
                     };
 
                     //var te = try dvui.textEntry(@src(), .{
