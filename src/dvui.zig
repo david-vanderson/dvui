@@ -1910,6 +1910,9 @@ pub const Window = struct {
     debug_refresh_mutex: std.Thread.Mutex,
     debug_refresh: bool = false,
 
+    debug_touch_simulate_events: bool = false, // when true, left mouse button works like a finger
+    debug_touch_simulate_down: bool = false,
+
     pub fn init(
         src: std.builtin.SourceLocation,
         id_extra: usize,
@@ -2059,7 +2062,7 @@ pub const Window = struct {
         try self.events.append(Event{ .num = self.event_num, .evt = .{
             .mouse = .{
                 .action = .motion,
-                .button = .none,
+                .button = if (self.debug_touch_simulate_events and self.debug_touch_simulate_down) .touch0 else .none,
                 .p = self.mouse_pt,
                 .floating_win = winId,
                 .data = .{ .motion = dp },
@@ -2084,6 +2087,16 @@ pub const Window = struct {
             return true;
         }
 
+        var bb = b;
+        if (self.debug_touch_simulate_events and bb == .left) {
+            bb = .touch0;
+            if (action == .press) {
+                self.debug_touch_simulate_down = true;
+            } else if (action == .release) {
+                self.debug_touch_simulate_down = false;
+            }
+        }
+
         self.positionMouseEventRemove();
 
         if (xynorm) |xyn| {
@@ -2093,7 +2106,7 @@ pub const Window = struct {
 
         const winId = self.windowFor(self.mouse_pt);
 
-        if (action == .press and b.pointer()) {
+        if (action == .press and bb.pointer()) {
             // normally the focus event is what focuses windows, but since the
             // base window is instantiated before events are added, it has to
             // do any event processing as the events come in, right now
@@ -2108,7 +2121,7 @@ pub const Window = struct {
             try self.events.append(Event{ .num = self.event_num, .evt = .{
                 .mouse = .{
                     .action = .focus,
-                    .button = b,
+                    .button = bb,
                     .p = self.mouse_pt,
                     .floating_win = winId,
                 },
@@ -2119,7 +2132,7 @@ pub const Window = struct {
         try self.events.append(Event{ .num = self.event_num, .evt = .{
             .mouse = .{
                 .action = action,
-                .button = b,
+                .button = bb,
                 .p = self.mouse_pt,
                 .floating_win = winId,
             },

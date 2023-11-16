@@ -1,7 +1,16 @@
 
-README/INSIDE
+INSIDE
 
 file zig pull request for sliceAsBytes/bytesAsSlice to include sentinel
+- need to test alignment casting (make a local var of the result type we want?)
+
+debug mode for touch events to test with a mouse
+
+add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEntry
+
+see if we can get the mach backend working again
+- maybe just use the glfw part of mach?
+- can we also get it working in a browser?
 
 don't use box for slider, use WidgetData directly?  Other widgets?
 
