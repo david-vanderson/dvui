@@ -1,7 +1,9 @@
 
+zig 0.12:
+- if sliceAsBytes/bytesAsSlice includes sentinel, then need to update our use
 
-file zig pull request for sliceAsBytes/bytesAsSlice to include sentinel
-- need to test alignment casting (make a local var of the result type we want?)
+
+add to readme-implementation
 
 add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEntry
 - 2 states (one where we show the menu and draggable cursor stuff)
@@ -38,6 +40,7 @@ if using standalone, should be able to draw using SDL stuff into a widget
 - so base window needs to not delay rendering so you can render ontop of widget backgrounds
 
 when new events come in, we assign the focus id, but probably shouldn't once we see a focus mouse event
+
 
 need a strategy for activating paste from a menu, because the widget will lose focus when the menu is activated
 - when the menu gets focus, maybe it saves the previous focus id?
