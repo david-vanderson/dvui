@@ -12,7 +12,45 @@ Examples:
 - ```zig build run-standalone-sdl```
 - ```zig build run-ontop-sdl```
 
-## Get Started
+## Use as library
+
+`build.zig`:
+
+```zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    const dep_dvui = b.dependency("dvui", .{ .target = target, .optimize = optimize });
+
+    const exe = ...;
+
+    exe.addModule("dvui", dep_dvui.module("dvui"));
+    exe.addModule("SDLBackend", dep_dvui.module("SDLBackend"));
+    exe.linkLibrary(dep_dvui.artifact("dvui_libs"));
+
+    @import("root").dependencies.imports.dvui.add_include_paths(dep_dvui.builder, exe);
+}
+```
+
+`build.zig.zon`:
+
+```
+.{
+    .name = "your-project-name",
+    .version = "0.0.0",
+    .dependencies = .{
+        .dvui = .{
+            .url = "https://github.com/david-vanderson/dvui/archive/COMMIT_HASH_HERE.tar.gz",
+            // .hash = "",
+        },
+    },
+}
+```
+
+## Hacking this project
 Find the widget you want in the example and copy the code from `src/Examples.zig`.
 
 This document is a broad overview.  See [inside](/INSIDE.md) for implementation details and how to write and modify widgets.
