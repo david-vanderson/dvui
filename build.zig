@@ -14,6 +14,14 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const lib_bundle = b.addStaticLibrary(.{
+        .name = "dvui_libs",
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    link_deps(lib_bundle, b);
+
     const dvui_mod = b.addModule("dvui", .{
         .source_file = .{ .path = "src/dvui.zig" },
         .dependencies = &.{},
@@ -70,7 +78,8 @@ pub fn build(b: *std.Build) !void {
         exe.addModule("dvui", dvui_mod);
         exe.addModule("SDLBackend", sdl_mod);
 
-        link_deps(exe, b);
+        exe.linkLibrary(lib_bundle);
+        add_include_paths(exe);
 
         const compile_step = b.step(ex, "Compile " ++ ex);
         compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
@@ -95,7 +104,8 @@ pub fn build(b: *std.Build) !void {
         exe.addModule("dvui", dvui_mod);
         exe.addModule("SDLBackend", sdl_mod);
 
-        link_deps(exe, b);
+        exe.linkLibrary(lib_bundle);
+        add_include_paths(exe);
 
         const compile_step = b.step("compile-sdl-test", "Compile the SDL test");
         compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
@@ -109,7 +119,7 @@ pub fn build(b: *std.Build) !void {
     }
 }
 
-fn link_deps(exe: *std.Build.Step.Compile, b: *std.Build) void {
+pub fn link_deps(exe: *std.Build.Step.Compile, b: *std.Build) void {
     // TODO: remove this part about freetype (pulling it from the dvui_dep
     // sub-builder) once https://github.com/ziglang/zig/pull/14731 lands
     const freetype_dep = b.dependency("freetype", .{
@@ -167,4 +177,10 @@ fn link_deps(exe: *std.Build.Step.Compile, b: *std.Build) void {
         //exe.addIncludePath(.{.path = "/Users/dvanderson/SDL2-2.24.1/include"});
         //exe.addObjectFile(.{.path = "/Users/dvanderson/SDL2-2.24.1/build/.libs/libSDL2.a"});
     }
+}
+
+pub fn add_include_paths(exe: *std.Build.CompileStep) void {
+    const build_root = @import("root").dependencies.build_root;
+    exe.addIncludePath(.{ .path = build_root.freetype ++ "/include" });
+    exe.addIncludePath(.{ .path = build_root.stb_image ++ "/include" });
 }
