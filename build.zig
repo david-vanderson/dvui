@@ -79,7 +79,7 @@ pub fn build(b: *std.Build) !void {
         exe.addModule("SDLBackend", sdl_mod);
 
         exe.linkLibrary(lib_bundle);
-        add_include_paths(exe);
+        add_include_paths("", exe);
 
         const compile_step = b.step(ex, "Compile " ++ ex);
         compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
@@ -105,7 +105,7 @@ pub fn build(b: *std.Build) !void {
         exe.addModule("SDLBackend", sdl_mod);
 
         exe.linkLibrary(lib_bundle);
-        add_include_paths(exe);
+        add_include_paths("", exe);
 
         const compile_step = b.step("compile-sdl-test", "Compile the SDL test");
         compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
@@ -179,8 +179,9 @@ pub fn link_deps(exe: *std.Build.Step.Compile, b: *std.Build) void {
     }
 }
 
-pub fn add_include_paths(exe: *std.Build.CompileStep) void {
+/// prefix: library prefix. e.g. "dvui."
+pub fn add_include_paths(comptime prefix: []const u8, exe: *std.Build.CompileStep) void {
     const build_root = @import("root").dependencies.build_root;
-    exe.addIncludePath(.{ .path = build_root.freetype ++ "/include" });
-    exe.addIncludePath(.{ .path = build_root.stb_image ++ "/include" });
+    exe.addIncludePath(.{ .path = @field(build_root, prefix ++ "freetype") ++ "/include" });
+    exe.addIncludePath(.{ .path = @field(build_root, prefix ++ "stb_image") ++ "/include" });
 }
