@@ -1,6 +1,6 @@
-# DVUI - Inside Information
+# DVUI - Implementation Details
 
-This document gives technical details and is useful for people extending or writing new widgets.  See [readme](/README.md) for a broad overview.
+This document describes the internals of DVUI and is useful for people extending or writing new widgets.  See [readme](/README.md) for a broad overview.
 
 ### Example: button()
 

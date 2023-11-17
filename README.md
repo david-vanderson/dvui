@@ -10,7 +10,7 @@ Examples:
 - ```zig build run-standalone-sdl```
 - ```zig build run-ontop-sdl```
 
-This document is a broad overview.  See [inside](/INSIDE.md) for implementation details and how to write and modify widgets.
+This document is a broad overview.  See [implementation details](readme-implementation.md) for implementation details and how to write and modify widgets.
 
 ![screenshot of demo](/screenshot_demo.png?raw=true)
 
@@ -249,5 +249,5 @@ A widget receives its position and size from its parent.  The widget sends these
   - a long scrollable list can use this to skip widgets that aren't visible
   - example is the demo icon browser
 
-See [inside](/INSIDE.md) for more information.
+See [implementation details](readme-implementation.md) for more information.
 
