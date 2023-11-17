@@ -5955,6 +5955,7 @@ pub const ScrollAreaWidget = struct {
 
         try self.scroll.install();
         self.scroll.processEvents();
+        self.scroll.processVelocity();
     }
 
     pub fn deinit(self: *Self) void {
@@ -6004,6 +6005,8 @@ pub const ScrollContainerWidget = struct {
     inject_capture_id: ?u32 = null,
     inject_mouse_pt: Point = .{},
 
+    finger_down: bool = false,
+
     pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, opts: Options) Self {
         var self = Self{};
         const options = defaults.override(opts);
@@ -6011,6 +6014,7 @@ pub const ScrollContainerWidget = struct {
         self.wd = WidgetData.init(src, .{}, options);
 
         self.si = io_scroll_info;
+        self.finger_down = dataGet(null, self.wd.id, "_finger_down", bool) orelse false;
 
         const crect = self.wd.contentRect();
         self.si.viewport.w = crect.w;
@@ -6055,26 +6059,61 @@ pub const ScrollContainerWidget = struct {
     pub fn processEvents(self: *Self) void {
         var evts = events();
         for (evts) |*e| {
+            // track finger release even if it doesn't happen in our rect
+            if (e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
+                self.finger_down = false;
+            }
+
             if (!self.matchEvent(e))
                 continue;
 
+            // for finger down we let the event go through but stop any velocity scrolling
+            if (e.evt == .mouse and e.evt.mouse.action == .press and e.evt.mouse.button.touch()) {
+                self.finger_down = true;
+
+                // stop any current scrolling
+                self.si.velocity.x = 0;
+                self.si.velocity.y = 0;
+            }
+
             self.processEvent(e, false);
+        }
+
+        // might have changed from events
+        self.frame_viewport = self.si.viewport.topleft();
+    }
+
+    pub fn processVelocity(self: *Self) void {
+        if (!self.finger_down) {
+            {
+                const damping = 0.0001 + @min(1.0, @fabs(self.si.velocity.x) / 50.0) * (0.7 - 0.0001);
+                self.si.velocity.x *= @exp(@log(damping) * seconds_since_last_frame());
+                if (@fabs(self.si.velocity.x) > 1) {
+                    //std.debug.print("vel x {d}\n", .{self.si.velocity.x});
+                    self.si.viewport.x += self.si.velocity.x;
+                    refresh(null, @src(), self.wd.id);
+                } else {
+                    self.si.velocity.x = 0;
+                }
+            }
+
+            {
+                const damping = 0.0001 + @min(1.0, @fabs(self.si.velocity.y) / 50.0) * (0.7 - 0.0001);
+                self.si.velocity.y *= @exp(@log(damping) * seconds_since_last_frame());
+                if (@fabs(self.si.velocity.y) > 1) {
+                    //std.debug.print("vel y {d}\n", .{self.si.velocity.y});
+                    self.si.viewport.y += self.si.velocity.y;
+                    refresh(null, @src(), self.wd.id);
+                } else {
+                    self.si.velocity.y = 0;
+                }
+            }
         }
 
         // damping is only for touch currently
         // exponential decay: v *= damping^secs_since
         // tweak the damping so we brake harder as the velocity slows down
         {
-            const damping = 0.0001 + @min(1.0, @fabs(self.si.velocity.x) / 50.0) * (0.7 - 0.0001);
-            self.si.velocity.x *= @exp(@log(damping) * seconds_since_last_frame());
-            if (@fabs(self.si.velocity.x) > 1) {
-                //std.debug.print("vel x {d}\n", .{self.si.velocity.x});
-                self.si.viewport.x += self.si.velocity.x;
-                refresh(null, @src(), self.wd.id);
-            } else {
-                self.si.velocity.x = 0;
-            }
-
             const max_scroll = self.si.scroll_max(.horizontal);
             if (self.si.viewport.x < 0) {
                 self.si.velocity.x = 0;
@@ -6092,16 +6131,6 @@ pub const ScrollContainerWidget = struct {
         }
 
         {
-            const damping = 0.0001 + @min(1.0, @fabs(self.si.velocity.y) / 50.0) * (0.7 - 0.0001);
-            self.si.velocity.y *= @exp(@log(damping) * seconds_since_last_frame());
-            if (@fabs(self.si.velocity.y) > 1) {
-                //std.debug.print("vel y {d}\n", .{self.si.velocity.y});
-                self.si.viewport.y += self.si.velocity.y;
-                refresh(null, @src(), self.wd.id);
-            } else {
-                self.si.velocity.y = 0;
-            }
-
             const max_scroll = self.si.scroll_max(.vertical);
 
             if (self.si.viewport.y < 0) {
@@ -6381,6 +6410,8 @@ pub const ScrollContainerWidget = struct {
         if (self.process_events) {
             self.processEventsAfter();
         }
+
+        dataSet(null, self.wd.id, "_finger_down", self.finger_down);
 
         if (self.inject_capture_id) |ci| {
             if (ci == captureMouseId()) {

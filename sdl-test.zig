@@ -18,6 +18,8 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), 0, gpa, win_backend.backend());
     defer win.deinit();
 
+    win.debug_touch_simulate_events = false;
+
     const winSize = win_backend.windowSize();
     const pxSize = win_backend.pixelSize();
     std.debug.print("initial window logical {} pixels {} natural scale {d} initial content scale {d} snap_to_pixels {}\n", .{ winSize, pxSize, pxSize.w / winSize.w, win_backend.initial_scale, win.snap_to_pixels });

@@ -629,7 +629,7 @@ pub fn styling() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{.w = 30, .h = 20}, .background = true, .color_fill = backbox_color, .gravity_y = 0.5 });
+        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = backbox_color, .gravity_y = 0.5 });
         backbox.deinit();
 
         try colorSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 });
