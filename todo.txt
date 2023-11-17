@@ -3,6 +3,9 @@ zig 0.12:
 - if sliceAsBytes/bytesAsSlice includes sentinel, then need to update our use
 
 
+change how matchEvent is used so that widgets can passively listen into events even if they are being wrapped
+- all events should be sent to wrapped widgets but filtered in processEvent
+
 add to readme-implementation
 
 add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEntry
@@ -28,6 +31,8 @@ add more keyboard shortcuts to textEntry
 - home
 - end
 - pgup/pgdown
+
+touch scrolling velocity should be based on how far the finger has moved in the last bit of time (not how much it moved in the last event)
 
 need a button for sizing/rotation for icon and raster that works continuously while you hold it down
 - add option to Button where when in the down position it keeps refreshing
