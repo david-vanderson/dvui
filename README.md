@@ -6,13 +6,15 @@ Status: Alpha. Works well enough for use in real applications, like this [podcas
 
 Note: This works with Zig 0.11.x.
 
-See [dvui-demo](https://github.com/david-vanderson/dvui-demo) for integration examples.
-
 Examples:
 - ```zig build run-standalone-sdl```
 - ```zig build run-ontop-sdl```
 
+This document is a broad overview.  See [inside](/INSIDE.md) for implementation details and how to write and modify widgets.
+
 ## Use as library
+
+See [dvui-demo](https://github.com/david-vanderson/dvui-demo) for working examples.
 
 `build.zig`:
 
@@ -50,10 +52,7 @@ pub fn build(b: *std.Build) void {
 }
 ```
 
-## Hacking this project
-Find the widget you want in the example and copy the code from `src/Examples.zig`.
-
-This document is a broad overview.  See [inside](/INSIDE.md) for implementation details and how to write and modify widgets.
+Find the widget you want in the demo window and copy the code from `src/Examples.zig`.
 
 ## Screenshot
 
