@@ -21,6 +21,7 @@ pub fn build(b: *std.Build) !void {
         .link_libc = true,
     });
     link_deps(b, lib_bundle);
+    b.installArtifact(lib_bundle);
 
     const dvui_mod = b.addModule("dvui", .{
         .source_file = .{ .path = "src/dvui.zig" },
