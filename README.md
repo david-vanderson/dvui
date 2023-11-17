@@ -18,6 +18,8 @@ This document is a broad overview.  See [inside](/INSIDE.md) for implementation 
 
 See [dvui-demo](https://github.com/david-vanderson/dvui-demo) for working examples.
 
+Find the widget you want in the demo window and copy the code from `src/Examples.zig`.
+
 `build.zig`:
 
 ```zig
@@ -53,8 +55,6 @@ pub fn build(b: *std.Build) void {
     },
 }
 ```
-
-Find the widget you want in the demo window and copy the code from `src/Examples.zig`.
 
 ## Widgets
 
