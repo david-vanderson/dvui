@@ -1,24 +1,38 @@
 # DVUI - Easy to Integrate Immediate Mode GUI for Zig
 
-A [Zig](https://ziglang.org/) native GUI toolkit for whole applications or extra debugging windows in an existing application.
+A native Zig GUI toolkit for whole applications or extra debugging windows in an existing application.
 
 Status: Alpha. Works well enough for use in real applications, like this [podcast player](https://github.com/david-vanderson/podcast), but not widely used as yet.
 
-Note: This works with Zig 0.11.x.
+Tested with only [Zig](https://ziglang.org/) 0.11.0.
 
-Examples:
+How to run the built-in examples:
+
 - ```zig build run-standalone-sdl```
 - ```zig build run-ontop-sdl```
 
-This document is a broad overview.  See [implementation details](readme-implementation.md) for implementation details and how to write and modify widgets.
+More example usage of this library can be read at [the demo repo](https://github.com/david-vanderson/dvui-demo).
 
-![screenshot of demo](/screenshot_demo.png?raw=true)
+This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify widgets.
+
+Below is a screenshot of the demo window (perhaps outdated), whose source code can be found at `src/Examples.zig`.
+
+![Screenshot of DVUI Standalone Example (Application Window)](/screenshot_demo.png?raw=true)
+
+## Features
+
+- Immediate Mode Interface
+- Process every input event (suitable for low-fps situations)
+- Use for whole UI or for debugging on top of existing application
+- Integrate with just a few functions
+  - Existing integrations with [Mach](https://machengine.org/) and [SDL](https://libsdl.org/)
+- Icon support via [TinyVG](https://tinyvg.tech/)
+- Font support via [freetype](https://github.com/david-vanderson/freetype/tree/zig-pkg)
+- Animations
+- Themes
+- FPS throttling
 
 ## Use as library
-
-See [dvui-demo](https://github.com/david-vanderson/dvui-demo) for working examples.
-
-Find the widget you want in the demo window and copy the code from `src/Examples.zig`.
 
 `build.zig`:
 
@@ -56,7 +70,7 @@ pub fn build(b: *std.Build) void {
 }
 ```
 
-## Widgets
+## Built-in Widgets
 
   - Text Entry (single and multiline)
   - Floating Window
@@ -73,19 +87,6 @@ pub fn build(b: *std.Build) void {
   - combo box
   - radio button
   - datagrid
-
-## Features
-
-- Immediate Mode Interface
-- Process every input event (suitable for low-fps situations)
-- Use for whole UI or for debugging on top of existing application
-- Integrate with just a few functions
-  - Existing integrations with [Mach](https://machengine.org/) and [SDL](https://libsdl.org/)
-- Icon support via [TinyVG](https://tinyvg.tech/)
-- Font support via [freetype](https://github.com/david-vanderson/freetype/tree/zig-pkg)
-- Animations
-- Themes
-- FPS throttling
 
 ## Design
 
