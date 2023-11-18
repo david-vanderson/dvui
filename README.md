@@ -3,6 +3,7 @@
 A native Zig GUI toolkit for whole applications or extra debugging windows in an existing application.
 
 Projects using DVUI:
+* [Demo](https://github.com/david-vanderson/dvui-demo) - Example project you can start with
 * [Podcast Player](https://github.com/david-vanderson/podcast)
 * [Graphical Janet REPL](https://codeberg.org/iacore/janet-graphical-repl)
 * [FIDO2/ Passkey compatible authenticator implementation for Linux](https://github.com/r4gus/keypass)
@@ -13,8 +14,6 @@ How to run the built-in examples:
 
 - ```zig build run-standalone-sdl```
 - ```zig build run-ontop-sdl```
-
-Example usage of this library can be found at [the demo repo](https://github.com/david-vanderson/dvui-demo).
 
 This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify widgets.
 
