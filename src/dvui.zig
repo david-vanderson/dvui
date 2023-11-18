@@ -4364,9 +4364,9 @@ pub const PanedWidget = struct {
     dir: enums.Direction = undefined,
     collapse_size: f32 = 0,
     hovered: bool = false,
-    saved_data: SavedData = undefined,
     first_side_id: ?u32 = null,
     prevClip: Rect = Rect{},
+    collapsed_state: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, collapse_size: f32, opts: Options) Self {
         var self = Self{};
@@ -4376,25 +4376,48 @@ pub const PanedWidget = struct {
 
         const rect = self.wd.contentRect();
 
+        self.collapsed_state = dvui.dataGet(null, self.wd.id, "_collapsed", bool) orelse switch (self.dir) {
+            .horizontal => (rect.w < self.collapse_size),
+            .vertical => (rect.h < self.collapse_size),
+        };
+
         if (dvui.dataGet(null, self.wd.id, "_data", SavedData)) |d| {
             self.split_ratio = d.split_ratio;
             switch (self.dir) {
                 .horizontal => {
                     if (d.rect.w >= self.collapse_size and rect.w < self.collapse_size) {
                         // collapsing
-                        self.animateSplit(1.0);
+                        if (self.split_ratio >= 0.5) {
+                            self.animateSplit(1.0);
+                        } else {
+                            self.animateSplit(0.0);
+                        }
                     } else if (d.rect.w < self.collapse_size and rect.w >= self.collapse_size) {
                         // expanding
-                        self.animateSplit(0.5);
+                        self.collapsed_state = false;
+                        if (self.split_ratio > 0.5) {
+                            self.animateSplit(0.5);
+                        } else {
+                            self.animateSplit(0.4999);
+                        }
                     }
                 },
                 .vertical => {
                     if (d.rect.w >= self.collapse_size and rect.w < self.collapse_size) {
                         // collapsing
-                        self.animateSplit(1.0);
+                        if (self.split_ratio >= 0.5) {
+                            self.animateSplit(1.0);
+                        } else {
+                            self.animateSplit(0.0);
+                        }
                     } else if (d.rect.w < self.collapse_size and rect.w >= self.collapse_size) {
                         // expanding
-                        self.animateSplit(0.5);
+                        self.collapsed_state = false;
+                        if (self.split_ratio > 0.5) {
+                            self.animateSplit(0.5);
+                        } else {
+                            self.animateSplit(0.4999);
+                        }
                     }
                 },
             }
@@ -4420,6 +4443,13 @@ pub const PanedWidget = struct {
 
         if (dvui.animationGet(self.wd.id, "_split_ratio")) |a| {
             self.split_ratio = a.lerp();
+        }
+
+        if (dvui.animationDone(self.wd.id, "_split_ratio")) {
+            self.collapsed_state = switch (self.dir) {
+                .horizontal => (rect.w < self.collapse_size),
+                .vertical => (rect.h < self.collapse_size),
+            };
         }
 
         return self;
@@ -4477,11 +4507,7 @@ pub const PanedWidget = struct {
     }
 
     pub fn collapsed(self: *Self) bool {
-        const rect = self.wd.contentRect();
-        switch (self.dir) {
-            .horizontal => return (rect.w < self.collapse_size),
-            .vertical => return (rect.h < self.collapse_size),
-        }
+        return self.collapsed_state;
     }
 
     pub fn animateSplit(self: *Self, end_val: f32) void {
@@ -4616,6 +4642,7 @@ pub const PanedWidget = struct {
 
     pub fn deinit(self: *Self) void {
         clipSet(self.prevClip);
+        dvui.dataSet(null, self.wd.id, "_collapsed", self.collapsed_state);
         dvui.dataSet(null, self.wd.id, "_data", SavedData{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
