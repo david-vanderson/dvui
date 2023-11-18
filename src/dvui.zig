@@ -1298,12 +1298,17 @@ pub fn minSizeGet(id: u32) ?Size {
     }
 }
 
-pub fn minSizeSet(src: std.builtin.SourceLocation, id: u32, s: Size) !void {
+pub fn minSizeSet(maybe_src: ?std.builtin.SourceLocation, id: u32, s: Size) !void {
     debug("{x} minSizeSet {}", .{ id, s });
     var cw = currentWindow();
     if (try cw.min_sizes.fetchPut(id, .{ .size = s })) |ss| {
         if (ss.value.used) {
-            std.log.warn("({s}:{}:{}) id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options", .{ src.file, src.line, src.column, id });
+            if (maybe_src) |src| {
+                std.debug.print("({s}:{}:{}) ", .{ src.file, src.line, src.column });
+            } else {
+                std.debug.print("(unknown) ", .{});
+            }
+            std.debug.print("id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options\n", .{id});
             cw.debug_widget_id = id;
         }
     }
@@ -9562,7 +9567,7 @@ pub const WidgetData = struct {
     rect: Rect = Rect{},
     min_size: Size = Size{},
     options: Options = undefined,
-    src: std.builtin.SourceLocation,
+    src: ?std.builtin.SourceLocation,
 
     pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
         var self = WidgetData{ .src = src };
