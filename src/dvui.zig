@@ -46,13 +46,6 @@ pub fn currentWindow() *Window {
     return current_window orelse unreachable;
 }
 
-pub var log_debug: bool = false;
-pub fn debug(comptime str: []const u8, args: anytype) void {
-    if (log_debug) {
-        log.debug(str, args);
-    }
-}
-
 pub fn themeGet() *Theme {
     return currentWindow().theme;
 }
@@ -1290,16 +1283,13 @@ pub fn minSizeGet(id: u32) ?Size {
     var cw = currentWindow();
     const saved_size = cw.min_sizes.getPtr(id);
     if (saved_size) |ss| {
-        debug("{x} minSizeGet {}", .{ id, ss.size });
         return ss.size;
     } else {
-        debug("{x} minSizeGet null", .{id});
         return null;
     }
 }
 
 pub fn minSizeSet(maybe_src: ?std.builtin.SourceLocation, id: u32, s: Size) !void {
-    debug("{x} minSizeSet {}", .{ id, s });
     var cw = currentWindow();
     if (try cw.min_sizes.fetchPut(id, .{ .size = s })) |ss| {
         if (ss.value.used) {
@@ -1955,7 +1945,7 @@ pub const Window = struct {
             .dialogs = std.ArrayList(Dialog).init(gpa),
             .toasts = std.ArrayList(Toast).init(gpa),
             .debug_refresh_mutex = std.Thread.Mutex{},
-            .wd = WidgetData{ .src = if (builtin.mode == .Debug) src else {}, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{} },
+            .wd = WidgetData{ .src = if (builtin.mode == .Debug) src else {}, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{.name = "Window"} },
             .backend = backend,
         };
 
@@ -2550,6 +2540,7 @@ pub const Window = struct {
         self.captured_last_frame = false;
 
         self.wd.parent = self.widget();
+        try self.wd.register();
         self.menu_current = null;
 
         self.next_widget_ypos = self.wd.rect.y;
@@ -3159,6 +3150,7 @@ pub fn popup(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) 
 pub const PopupWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
+        .name = "Popup",
         .corner_radius = Rect.all(5),
         .border = Rect.all(1),
         .padding = Rect.all(4),
@@ -3219,7 +3211,7 @@ pub const PopupWidget = struct {
 
         try subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, null);
         captureMouseMaintain(self.wd.id);
-        try self.wd.register("Popup", rs);
+        try self.wd.register();
 
         // clip to just our window (using clipSet since we are not inside our parent)
         self.prevClip = clipGet();
@@ -3378,6 +3370,7 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 pub const FloatingWindowWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
+        .name = "FloatingWindow",
         .corner_radius = Rect.all(5),
         .border = Rect.all(1),
         .background = true,
@@ -3420,7 +3413,8 @@ pub const FloatingWindowWidget = struct {
         // the embedded BoxWidget
         // passing options.rect will stop WidgetData.init from calling rectFor
         // which is important because we are outside normal layout
-        self.wd = WidgetData.init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{} });
+        self.wd = WidgetData.init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{}, .name = self.options.name });
+        self.options.name = null;  // so our layout Box isn't named FloatingWindow
 
         self.init_options = init_opts;
 
@@ -3573,7 +3567,7 @@ pub const FloatingWindowWidget = struct {
         const rs = self.wd.rectScale();
         try subwindowAdd(self.wd.id, self.wd.rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent) self.prev_windowId else null);
         captureMouseMaintain(self.wd.id);
-        try self.wd.register("FloatingWindow", rs);
+        try self.wd.register();
 
         if (self.init_options.modal) {
             // paint over everything below
@@ -4109,12 +4103,13 @@ pub const AnimateWidget = struct {
     prev_alpha: f32 = 1.0,
 
     pub fn init(src: std.builtin.SourceLocation, kind: Kind, duration_micros: i32, opts: Options) Self {
-        return Self{ .wd = WidgetData.init(src, .{}, opts), .kind = kind, .duration = duration_micros };
+        const defaults = Options{.name = "Animate"};
+        return Self{ .wd = WidgetData.init(src, .{}, defaults.override(opts)), .kind = kind, .duration = duration_micros };
     }
 
     pub fn install(self: *Self) !void {
         _ = parentSet(self.widget());
-        try self.wd.register("Animate", null);
+        try self.wd.register();
 
         if (firstFrame(self.wd.id)) {
             // start begin animation
@@ -4375,7 +4370,8 @@ pub const PanedWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, collapse_size: f32, opts: Options) Self {
         var self = Self{};
-        self.wd = WidgetData.init(src, .{}, opts);
+        const defaults = Options{.name = "Paned"};
+        self.wd = WidgetData.init(src, .{}, defaults.override(opts));
         self.dir = dir;
         self.collapse_size = collapse_size;
 
@@ -4465,7 +4461,7 @@ pub const PanedWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        try self.wd.register("Paned", null);
+        try self.wd.register();
 
         try self.wd.borderAndBackground(.{});
         self.prevClip = clip(self.wd.contentRectScale().r);
@@ -4678,6 +4674,7 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
 pub const TextLayoutWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
+        .name = "TextLayout",
         .margin = Rect.all(4),
         .padding = Rect.all(4),
         .background = true,
@@ -4778,7 +4775,7 @@ pub const TextLayoutWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        try self.wd.register("TextLayout", null);
+        try self.wd.register();
         _ = parentSet(self.widget());
 
         if (self.selection_in) |sel| {
@@ -5523,7 +5520,8 @@ pub const ContextWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, opts: Options) Self {
         var self = Self{};
-        self.wd = WidgetData.init(src, .{}, opts);
+        const defaults = Options{.name = "Context"};
+        self.wd = WidgetData.init(src, .{}, defaults.override(opts));
         self.winId = subwindowCurrentId();
         if (focusedWidgetIdInCurrentSubwindow()) |fid| {
             if (fid == self.wd.id) {
@@ -5540,7 +5538,7 @@ pub const ContextWidget = struct {
 
     pub fn install(self: *Self) !void {
         _ = parentSet(self.widget());
-        try self.wd.register("Context", null);
+        try self.wd.register();
         try self.wd.borderAndBackground(.{});
     }
 
@@ -5645,12 +5643,13 @@ pub const OverlayWidget = struct {
     wd: WidgetData = undefined,
 
     pub fn init(src: std.builtin.SourceLocation, opts: Options) Self {
-        return Self{ .wd = WidgetData.init(src, .{}, opts) };
+        const defaults = Options{.name = "Overlay"};
+        return Self{ .wd = WidgetData.init(src, .{}, defaults.override(opts)) };
     }
 
     pub fn install(self: *Self) !void {
         _ = parentSet(self.widget());
-        try self.wd.register("Overlay", null);
+        try self.wd.register();
         try self.wd.borderAndBackground(.{});
     }
 
@@ -5724,7 +5723,8 @@ pub const BoxWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, equal_space: bool, opts: Options) BoxWidget {
         var self = Self{};
-        self.wd = WidgetData.init(src, .{}, opts);
+        const defaults = Options{.name = "Box"};
+        self.wd = WidgetData.init(src, .{}, defaults.override(opts));
         self.dir = dir;
         self.equal_space = equal_space;
         if (dataGet(null, self.wd.id, "_data", Data)) |d| {
@@ -5734,7 +5734,7 @@ pub const BoxWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        try self.wd.register(self.wd.options.name orelse "Box", null);
+        try self.wd.register();
 
         // our rect for children has to start at 0,0
         self.childRect = self.wd.contentRect().justSize();
@@ -6017,6 +6017,7 @@ pub const ScrollAreaWidget = struct {
 pub const ScrollContainerWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
+        .name = "ScrollContainer",
         // most of the time ScrollContainer is used inside ScrollArea which
         // overrides these
         .background = true,
@@ -6061,7 +6062,7 @@ pub const ScrollContainerWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        try self.wd.register("ScrollContainer", null);
+        try self.wd.register();
 
         // user code might have changed our rect
         const crect = self.wd.contentRect();
@@ -6492,6 +6493,7 @@ pub const ScrollContainerWidget = struct {
 pub const ScrollBarWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
+        .name = "ScrollBar",
         .color_style = .content,
         .min_size_content = .{ .w = 10, .h = 10 },
     };
@@ -6530,7 +6532,7 @@ pub const ScrollBarWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        try self.wd.register("ScrollBar", null);
+        try self.wd.register();
         try self.wd.borderAndBackground(.{});
 
         self.grabRect = self.wd.contentRect();
@@ -6679,13 +6681,14 @@ pub const ScrollBarWidget = struct {
 
 pub fn separator(src: std.builtin.SourceLocation, opts: Options) !void {
     const defaults: Options = .{
+        .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
         .border = .{ .x = 1, .y = 1, .w = 0, .h = 0 },
         .color_style = .content,
     };
 
     var wd = WidgetData.init(src, .{}, defaults.override(opts));
-    try wd.register("Separator", null);
+    try wd.register();
     try wd.borderAndBackground(.{});
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
@@ -6695,8 +6698,9 @@ pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) Widget
     if (opts.min_size_content != null) {
         std.debug.print("warning: spacer options had min_size but is being overwritten\n", .{});
     }
-    var wd = WidgetData.init(src, .{}, opts.override(.{ .min_size_content = size }));
-    wd.register("Spacer", null) catch {};
+    const defaults: Options = .{ .name = "Spacer" };
+    var wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .min_size_content = size }));
+    wd.register() catch {};
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
     return wd;
@@ -6704,11 +6708,12 @@ pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) Widget
 
 pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     var defaults: Options = .{
+        .name = "Spinner",
         .min_size_content = .{ .w = 50, .h = 50 },
     };
     const options = defaults.override(opts);
     var wd = WidgetData.init(src, .{}, options);
-    try wd.register("Spinner", null);
+    try wd.register();
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
 
@@ -6757,14 +6762,15 @@ pub const ScaleWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, scale_in: f32, opts: Options) Self {
         var self = Self{};
-        self.wd = WidgetData.init(src, .{}, opts);
+        const defaults = Options{.name = "Scale"};
+        self.wd = WidgetData.init(src, .{}, defaults.override(opts));
         self.scale = scale_in;
         return self;
     }
 
     pub fn install(self: *Self) !void {
         _ = parentSet(self.widget());
-        try self.wd.register("Scale", null);
+        try self.wd.register();
         try self.wd.borderAndBackground(.{});
 
         self.box = BoxWidget.init(@src(), .vertical, false, self.wd.options.strip().override(.{ .expand = .both }));
@@ -6827,6 +6833,7 @@ pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options
 pub const MenuWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
+        .name = "Menu",
         .color_style = .window,
     };
 
@@ -6875,7 +6882,7 @@ pub const MenuWidget = struct {
     pub fn install(self: *Self) !void {
         _ = parentSet(self.widget());
         self.parentMenu = menuSet(self);
-        try self.wd.register("Menu", null);
+        try self.wd.register();
         try self.wd.borderAndBackground(.{});
 
         var evts = events();
@@ -7080,6 +7087,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 pub const MenuItemWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
+        .name = "MenuItem",
         .color_style = .content,
         .corner_radius = Rect.all(5),
         .padding = Rect.all(4),
@@ -7107,7 +7115,7 @@ pub const MenuItemWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        try self.wd.register("MenuItem", null);
+        try self.wd.register();
 
         // For most widgets we only tabIndexSet if they are visible, but menu
         // items are often in large dropdowns that are scrollable, plus the
@@ -7299,6 +7307,7 @@ pub const MenuItemWidget = struct {
 pub const LabelWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
+        .name = "Label",
         .padding = Rect.all(4),
     };
 
@@ -7328,7 +7337,7 @@ pub const LabelWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        try self.wd.register("Label", null);
+        try self.wd.register();
         try self.wd.borderAndBackground(.{});
     }
 
@@ -7512,7 +7521,7 @@ pub const IconWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, opts: Options) !Self {
         var self = Self{};
-        const options = opts;
+        const options = (Options{.name = "Icon"}).override(opts);
         self.name = name;
         self.tvg_bytes = tvg_bytes;
 
@@ -7533,7 +7542,7 @@ pub const IconWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        try self.wd.register("Icon", null);
+        try self.wd.register();
         try self.wd.borderAndBackground(.{});
     }
 
@@ -7585,7 +7594,7 @@ pub const ImageWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, name: []const u8, image_bytes: []const u8, opts: Options) !Self {
         var self = Self{};
-        const options = opts;
+        const options = (Options{.name = "Image"}).override(opts);
         self.name = name;
         self.image_bytes = image_bytes;
 
@@ -7604,7 +7613,7 @@ pub const ImageWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        try self.wd.register("Image", null);
+        try self.wd.register();
         try self.wd.borderAndBackground(.{});
     }
 
@@ -7634,8 +7643,8 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
     const ss = parentGet().screenRectScale(Rect{}).s;
     size = size.scale(1.0 / ss);
 
-    var wd = WidgetData.init(src, .{}, opts.override(.{ .min_size_content = size }));
-    try wd.register("debugFontAtlases", null);
+    var wd = WidgetData.init(src, .{}, opts.override(.{ .name = "debugFontAtlases", .min_size_content = size }));
+    try wd.register();
 
     try wd.borderAndBackground(.{});
 
@@ -7649,6 +7658,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
 pub const ButtonWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
+        .name = "Button",
         .color_style = .control,
         .margin = Rect.all(4),
         .corner_radius = Rect.all(5),
@@ -7674,7 +7684,7 @@ pub const ButtonWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        try self.wd.register("Button", null);
+        try self.wd.register();
         _ = parentSet(self.widget());
 
         if (self.wd.visible()) {
@@ -8473,6 +8483,7 @@ pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Ini
 pub const TextEntryWidget = struct {
     const Self = @This();
     pub var defaults: Options = .{
+        .name = "TextEntry",
         .margin = Rect.all(4),
         .corner_radius = Rect.all(5),
         .border = Rect.all(1),
@@ -8530,7 +8541,7 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        try self.wd.register("TextEntry", null);
+        try self.wd.register();
 
         if (self.wd.visible()) {
             try tabIndexSet(self.wd.id, self.wd.options.tab_index);
@@ -9598,7 +9609,7 @@ pub const WidgetData = struct {
     rect: Rect = Rect{},
     min_size: Size = Size{},
     options: Options = undefined,
-    src: if (builtin.mode == .Debug) ?std.builtin.SourceLocation else void,
+    src: if (builtin.mode == .Debug) std.builtin.SourceLocation else void,
 
     pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
         var self = WidgetData{ .src = if (builtin.mode == .Debug) src else {} };
@@ -9633,23 +9644,14 @@ pub const WidgetData = struct {
             self.rect = self.parent.rectFor(self.id, self.min_size, self.options.expandGet(), self.options.gravityGet());
         }
 
-        var cw = currentWindow();
-        if (self.id == cw.debug_widget_id) {
-            cw.debug_info_src_id_extra = std.fmt.allocPrint(cw.arena, "{s}:{d}\nid_extra {d}", .{ src.file, src.line, opts.idExtra() }) catch "";
-        }
-
         return self;
     }
 
-    pub fn register(self: *const WidgetData, name: []const u8, rect_scale: ?RectScale) !void {
+    pub fn register(self: *const WidgetData) !void {
         var cw = currentWindow();
+        const name: []const u8 = self.options.name orelse "???";
         if (cw.debug_under_mouse or self.id == cw.debug_widget_id) {
-            var rs: RectScale = undefined;
-            if (rect_scale) |in| {
-                rs = in;
-            } else {
-                rs = self.parent.screenRectScale(self.rect);
-            }
+            var rs = self.rectScale();
 
             if (cw.debug_under_mouse and
                 rs.r.contains(cw.mouse_pt) and
@@ -9668,6 +9670,12 @@ pub const WidgetData = struct {
             }
 
             if (self.id == cw.debug_widget_id) {
+                if (builtin.mode == .Debug) {
+                    cw.debug_info_src_id_extra = try std.fmt.allocPrint(cw.arena, "{s}:{d}\nid_extra {d}", .{ self.src.file, self.src.line, self.options.idExtra() });
+                } else {
+                    cw.debug_info_src_id_extra = try std.fmt.allocPrint(cw.arena, "???:??? (no debug info)\nid_extra ?", .{});
+                }
+
                 cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x} {s}\n\n{}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{ self.id, name, rs.r, self.options.expandGet(), rs.s, self.options.paddingGet().scale(rs.s), self.options.borderGet().scale(rs.s), self.options.marginGet().scale(rs.s) });
                 try pathAddRect(rs.r.insetAll(0), .{});
                 var color = (Options{ .color_style = .err }).color(.fill);

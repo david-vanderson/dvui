@@ -472,8 +472,9 @@ pub const StrokeTest = struct {
     wd: dvui.WidgetData = undefined,
 
     pub fn install(self: *Self, src: std.builtin.SourceLocation, options: dvui.Options) !void {
-        self.wd = dvui.WidgetData.init(src, .{}, options);
-        dvui.debug("{x} StrokeTest {}", .{ self.wd.id, self.wd.rect });
+        const defaults = dvui.Options{.name = "StrokeTest"};
+        self.wd = dvui.WidgetData.init(src, .{}, defaults.override(options));
+        try self.wd.register();
 
         var evts = dvui.events();
         for (evts) |*e| {
