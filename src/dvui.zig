@@ -9570,7 +9570,7 @@ pub const WidgetData = struct {
     src: ?std.builtin.SourceLocation,
 
     pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
-        var self = WidgetData{ .src = src };
+        var self = WidgetData{ .src = if (builtin.mode != .Debug) src else null };
         self.init_options = init_options;
         self.options = opts;
 
