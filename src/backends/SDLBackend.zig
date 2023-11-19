@@ -254,7 +254,7 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.Cursor) void {
                 c.SDL_SetCursor(cur);
             }
         } else {
-            std.log.warn("SDL_CreateSystemCursor \"{s}\" failed\n", .{@tagName(cursor)});
+            dvui.log.err("SDL_CreateSystemCursor \"{s}\" failed\n", .{@tagName(cursor)});
         }
     }
 }
@@ -550,7 +550,7 @@ pub fn SDL_mouse_button_to_dvui(button: u8) dvui.enums.Button {
         c.SDL_BUTTON_X1 => .four,
         c.SDL_BUTTON_X2 => .five,
         else => blk: {
-            std.debug.print("SDL_mouse_button_to_dvui.unknown button {d}\n", .{button});
+            dvui.log.debug("SDL_mouse_button_to_dvui.unknown button {d}\n", .{button});
             break :blk .six;
         },
     };
@@ -684,7 +684,7 @@ pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
         c.SDLK_BACKQUOTE => .grave,
 
         else => blk: {
-            std.debug.print("SDL_keysym_to_dvui unknown keysym {d}\n", .{keysym});
+            dvui.log.debug("SDL_keysym_to_dvui unknown keysym {d}\n", .{keysym});
             break :blk .unknown;
         },
     };
