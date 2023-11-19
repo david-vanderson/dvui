@@ -1955,7 +1955,7 @@ pub const Window = struct {
             .dialogs = std.ArrayList(Dialog).init(gpa),
             .toasts = std.ArrayList(Toast).init(gpa),
             .debug_refresh_mutex = std.Thread.Mutex{},
-            .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{} },
+            .wd = WidgetData{ .src = if (builtin.mode != .Debug) src else null, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{} },
             .backend = backend,
         };
 
