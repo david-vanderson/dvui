@@ -319,6 +319,12 @@ pub fn demo() !void {
         try dvui.debugFontAtlases(@src(), .{});
     }
 
+    if (try dvui.expander(@src(), "(Debug) duplicate id", .{ .expand = .horizontal })) {
+        for (0..2) |_| {
+            try dvui.label(@src(), "i should be highlighted", .{}, .{});
+        }
+    }
+
     if (show_dialog) {
         try dialogDirect();
     }

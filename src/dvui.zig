@@ -1298,12 +1298,17 @@ pub fn minSizeGet(id: u32) ?Size {
     }
 }
 
-pub fn minSizeSet(id: u32, s: Size) !void {
+pub fn minSizeSet(maybe_src: ?std.builtin.SourceLocation, id: u32, s: Size) !void {
     debug("{x} minSizeSet {}", .{ id, s });
     var cw = currentWindow();
     if (try cw.min_sizes.fetchPut(id, .{ .size = s })) |ss| {
         if (ss.value.used) {
-            std.debug.print("dvui: id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options\n", .{id});
+            if (maybe_src) |src| {
+                std.debug.print("({s}:{}:{}) ", .{ src.file, src.line, src.column });
+            } else {
+                std.debug.print("(unknown) ", .{});
+            }
+            std.debug.print("id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options\n", .{id});
             cw.debug_widget_id = id;
         }
     }
@@ -1950,7 +1955,7 @@ pub const Window = struct {
             .dialogs = std.ArrayList(Dialog).init(gpa),
             .toasts = std.ArrayList(Toast).init(gpa),
             .debug_refresh_mutex = std.Thread.Mutex{},
-            .wd = WidgetData{ .id = hashval, .init_options = .{ .subwindow = true }, .options = .{} },
+            .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{} },
             .backend = backend,
         };
 
@@ -9589,9 +9594,10 @@ pub const WidgetData = struct {
     rect: Rect = Rect{},
     min_size: Size = Size{},
     options: Options = undefined,
+    src: ?std.builtin.SourceLocation,
 
     pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
-        var self = WidgetData{};
+        var self = WidgetData{ .src = if (builtin.mode != .Debug) src else null };
         self.init_options = init_options;
         self.options = opts;
 
@@ -9765,7 +9771,7 @@ pub const WidgetData = struct {
             // first frame.
             refresh(null, @src(), self.id);
         }
-        minSizeSet(self.id, self.min_size) catch |err| switch (err) {
+        minSizeSet(self.src, self.id, self.min_size) catch |err| switch (err) {
             error.OutOfMemory => {
                 // returning an error here means that all widgets deinit can return
                 // it, which is very annoying because you can't "defer try
