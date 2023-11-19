@@ -1825,8 +1825,8 @@ pub const Window = struct {
         alignment: u8,
         data: []u8,
 
-        type_str: (if (std.debug.runtime_safety) []const u8 else void) = undefined,
-        copy_slice: if (std.debug.runtime_safety) bool else void = undefined,
+        type_str: if (builtin.mode == .Debug) []const u8 else void = undefined,
+        copy_slice: if (builtin.mode == .Debug) bool else void = undefined,
 
         pub fn free(self: *const SavedData, allocator: std.mem.Allocator) void {
             allocator.rawFree(self.data, @ctz(self.alignment), @returnAddress());
@@ -1955,7 +1955,7 @@ pub const Window = struct {
             .dialogs = std.ArrayList(Dialog).init(gpa),
             .toasts = std.ArrayList(Toast).init(gpa),
             .debug_refresh_mutex = std.Thread.Mutex{},
-            .wd = WidgetData{ .src = if (builtin.mode != .Debug) src else null, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{} },
+            .wd = WidgetData{ .src = if (builtin.mode == .Debug) src else {}, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{} },
             .backend = backend,
         };
 
@@ -2715,7 +2715,7 @@ pub const Window = struct {
         if (self.datas.getPtr(hash)) |sd| {
             if (sd.data.len == bytes.len) {
                 sd.used = true;
-                if (std.debug.runtime_safety) {
+                if (builtin.mode == .Debug) {
                     sd.type_str = dt_type_str;
                     sd.copy_slice = copy_slice;
                 }
@@ -2736,7 +2736,7 @@ pub const Window = struct {
 
         @memcpy(sd.data, bytes);
 
-        if (std.debug.runtime_safety) {
+        if (builtin.mode == .Debug) {
             sd.type_str = dt_type_str;
             sd.copy_slice = copy_slice;
         }
@@ -2758,7 +2758,7 @@ pub const Window = struct {
         defer self.data_mutex.unlock();
 
         if (self.datas.getPtr(hash)) |sd| {
-            if (std.debug.runtime_safety) {
+            if (builtin.mode == .Debug) {
                 if (!std.mem.eql(u8, sd.type_str, @typeName(T)) or sd.copy_slice != slice) {
                     std.debug.panic("dataGetInternal: stored type {s} (slice {}) doesn't match asked for type {s} (slice {})", .{ sd.type_str, sd.copy_slice, @typeName(T), slice });
                 }
@@ -4403,6 +4403,8 @@ pub const PanedWidget = struct {
                         if (self.split_ratio > 0.5) {
                             self.animateSplit(0.5);
                         } else {
+                            // we were on the second widget, this will
+                            // "remember" we were on it
                             self.animateSplit(0.4999);
                         }
                     }
@@ -4421,6 +4423,8 @@ pub const PanedWidget = struct {
                         if (self.split_ratio > 0.5) {
                             self.animateSplit(0.5);
                         } else {
+                            // we were on the second widget, this will
+                            // "remember" we were on it
                             self.animateSplit(0.4999);
                         }
                     }
@@ -9594,10 +9598,10 @@ pub const WidgetData = struct {
     rect: Rect = Rect{},
     min_size: Size = Size{},
     options: Options = undefined,
-    src: ?std.builtin.SourceLocation,
+    src: if (builtin.mode == .Debug) ?std.builtin.SourceLocation else void,
 
     pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
-        var self = WidgetData{ .src = if (builtin.mode != .Debug) src else null };
+        var self = WidgetData{ .src = if (builtin.mode == .Debug) src else {} };
         self.init_options = init_options;
         self.options = opts;
 
@@ -9771,7 +9775,7 @@ pub const WidgetData = struct {
             // first frame.
             refresh(null, @src(), self.id);
         }
-        minSizeSet(self.src, self.id, self.min_size) catch |err| switch (err) {
+        minSizeSet(if (builtin.mode == .Debug) self.src else null, self.id, self.min_size) catch |err| switch (err) {
             error.OutOfMemory => {
                 // returning an error here means that all widgets deinit can return
                 // it, which is very annoying because you can't "defer try
