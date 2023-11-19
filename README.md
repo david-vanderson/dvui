@@ -15,7 +15,8 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 
 ![Screenshot of DVUI Standalone Example (Application Window)](/screenshot_demo.png?raw=true)
 
-Projects using DVUI:
+### Projects using DVUI
+
 * [Podcast Player](https://github.com/david-vanderson/podcast)
 * [Graphical Janet REPL](https://codeberg.org/iacore/janet-graphical-repl)
 * [FIDO2/ Passkey compatible authenticator implementation for Linux](https://github.com/r4gus/keypass)
@@ -33,9 +34,11 @@ Projects using DVUI:
 - Themes
 - FPS throttling
 
-## Use as library
+## Usage
 
 [DVUI Demo](https://github.com/david-vanderson/dvui-demo) is a template project you can use as a starting point.
+
+If you already have a Zig project, you can modify or create the two files listed below to use DVUI.
 
 `build.zig`:
 
