@@ -3,6 +3,12 @@ zig 0.12:
 - if sliceAsBytes/bytesAsSlice includes sentinel, then need to update our use
 
 
+use logging:
+const logger = std.log.scoped(.dvui);
+logger.warn(...);
+logger.info(...);
+logger.debug(...);
+
 change how matchEvent is used so that widgets can passively listen into events even if they are being wrapped
 - all events should be sent to wrapped widgets but filtered in processEvent
 
