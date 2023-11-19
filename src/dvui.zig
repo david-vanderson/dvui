@@ -37,7 +37,7 @@ const c = @cImport({
 
 pub const Error = error{ OutOfMemory, InvalidUtf8, freetypeError, tvgError, stbiError };
 
-const log = std.log.scoped(.dvui);
+pub const log = std.log.scoped(.dvui);
 const dvui = @This();
 
 var current_window: ?*Window = null;
@@ -1956,6 +1956,8 @@ pub const Window = struct {
         if (total_scale >= 2.0) {
             self.snap_to_pixels = false;
         }
+
+        log.info("window logical {} pixels {} natural scale {d} initial content scale {d} snap_to_pixels {}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels });
 
         errdefer self.deinit();
 

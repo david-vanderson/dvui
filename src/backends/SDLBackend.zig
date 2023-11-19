@@ -34,19 +34,19 @@ pub fn init(options: initOptions) !SDLBackend {
     _ = c.SDL_SetHint("SDL_HINT_WINDOWS_DPI_SCALING", "1");
 
     if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
-        std.debug.print("Couldn't initialize SDL: {s}\n", .{c.SDL_GetError()});
+        dvui.log.err("SDL: Couldn't initialize SDL: {s}\n", .{c.SDL_GetError()});
         return error.BackendError;
     }
 
     var window: *c.SDL_Window = undefined;
     if (sdl3) {
         window = c.SDL_CreateWindow(options.title, @as(c_int, @intCast(options.width)), @as(c_int, @intCast(options.height)), c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE) orelse {
-            std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
+            dvui.log.err("SDL: Failed to open window: {s}\n", .{c.SDL_GetError()});
             return error.BackendError;
         };
     } else {
         window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intCast(options.width)), @as(c_int, @intCast(options.height)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
-            std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
+            dvui.log.err("SDL: Failed to open window: {s}\n", .{c.SDL_GetError()});
             return error.BackendError;
         };
     }
@@ -54,12 +54,12 @@ pub fn init(options: initOptions) !SDLBackend {
     var renderer: *c.SDL_Renderer = undefined;
     if (sdl3) {
         renderer = c.SDL_CreateRenderer(window, null, if (options.vsync) c.SDL_RENDERER_PRESENTVSYNC else 0) orelse {
-            std.debug.print("Failed to create renderer: {s}\n", .{c.SDL_GetError()});
+            dvui.log.err("SDL: Failed to create renderer: {s}\n", .{c.SDL_GetError()});
             return error.BackendError;
         };
     } else {
         renderer = c.SDL_CreateRenderer(window, -1, if (options.vsync) c.SDL_RENDERER_PRESENTVSYNC else 0) orelse {
-            std.debug.print("Failed to create renderer: {s}\n", .{c.SDL_GetError()});
+            dvui.log.err("SDL: Failed to create renderer: {s}\n", .{c.SDL_GetError()});
             return error.BackendError;
         };
     }
@@ -70,7 +70,7 @@ pub fn init(options: initOptions) !SDLBackend {
 
     if (sdl3) {
         back.initial_scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(window));
-        std.debug.print("SDL3 backend scale {d}\n", .{back.initial_scale});
+        dvui.log.info("SDL3 backend scale {d}\n", .{back.initial_scale});
     } else {
         const winSize = back.windowSize();
         const pxSize = back.pixelSize();
@@ -88,7 +88,7 @@ pub fn init(options: initOptions) !SDLBackend {
                 else => return err,
             };
             if (qt_auto_str != null and std.mem.eql(u8, qt_auto_str.?, "0")) {
-                std.debug.print("QT_AUTO_SCREEN_SCALE_FACTOR is 0, disabling content scale guessing\n", .{});
+                dvui.log.info("QT_AUTO_SCREEN_SCALE_FACTOR is 0, disabling content scale guessing\n", .{});
                 guess_from_dpi = false;
             }
 
@@ -103,12 +103,12 @@ pub fn init(options: initOptions) !SDLBackend {
 
             if (qt_str) |str| {
                 const qt_scale = std.fmt.parseFloat(f32, str) catch 1.0;
-                std.debug.print("QT_SCALE_FACTOR is {d}, using that for initial content scale\n", .{qt_scale});
+                dvui.log.info("QT_SCALE_FACTOR is {d}, using that for initial content scale\n", .{qt_scale});
                 back.initial_scale = qt_scale;
                 guess_from_dpi = false;
             } else if (gdk_str) |str| {
                 const gdk_scale = std.fmt.parseFloat(f32, str) catch 1.0;
-                std.debug.print("GDK_SCALE is {d}, using that for initial content scale\n", .{gdk_scale});
+                dvui.log.info("GDK_SCALE is {d}, using that for initial content scale\n", .{gdk_scale});
                 back.initial_scale = gdk_scale;
                 guess_from_dpi = false;
             }
@@ -141,7 +141,7 @@ pub fn init(options: initOptions) !SDLBackend {
                         }
 
                         if (mdpi) |dpi| {
-                            std.debug.print("SDLBackend dpi {d} from xrdb -get Xft.dpi\n", .{dpi});
+                            dvui.log.info("dpi {d} from xrdb -get Xft.dpi\n", .{dpi});
                         }
                     }
                 }
@@ -164,7 +164,7 @@ pub fn init(options: initOptions) !SDLBackend {
                     } else if (dpi > 100) {
                         back.initial_scale = 2.0;
                     }
-                    std.debug.print("SDLBackend guessing initial backend scale {d}\n", .{back.initial_scale});
+                    dvui.log.info("SDL2 guessing initial backend scale {d}\n", .{back.initial_scale});
                 }
             }
 
