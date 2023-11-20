@@ -4345,9 +4345,9 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
     return expanded;
 }
 
-pub fn paned(src: std.builtin.SourceLocation, dir: enums.Direction, collapse_size: f32, opts: Options) !*PanedWidget {
+pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) !*PanedWidget {
     var ret = try currentWindow().arena.create(PanedWidget);
-    ret.* = PanedWidget.init(src, dir, collapse_size, opts);
+    ret.* = PanedWidget.init(src, init_opts, opts);
     try ret.install();
     ret.processEvents();
     try ret.draw();
@@ -4356,6 +4356,11 @@ pub fn paned(src: std.builtin.SourceLocation, dir: enums.Direction, collapse_siz
 
 pub const PanedWidget = struct {
     const Self = @This();
+
+    pub const InitOptions = struct {
+        direction: enums.Direction,
+        collapsed_size: f32,
+    };
 
     const SavedData = struct {
         split_ratio: f32,
@@ -4368,38 +4373,38 @@ pub const PanedWidget = struct {
 
     split_ratio: f32 = undefined,
     dir: enums.Direction = undefined,
-    collapse_size: f32 = 0,
+    collapsed_size: f32 = 0,
     hovered: bool = false,
     first_side_id: ?u32 = null,
     prevClip: Rect = Rect{},
     collapsed_state: bool = false,
 
-    pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, collapse_size: f32, opts: Options) Self {
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Self {
         var self = Self{};
         const defaults = Options{ .name = "Paned" };
         self.wd = WidgetData.init(src, .{}, defaults.override(opts));
-        self.dir = dir;
-        self.collapse_size = collapse_size;
+        self.dir = init_opts.direction;
+        self.collapsed_size = init_opts.collapsed_size;
 
         const rect = self.wd.contentRect();
 
         self.collapsed_state = dvui.dataGet(null, self.wd.id, "_collapsed", bool) orelse switch (self.dir) {
-            .horizontal => (rect.w < self.collapse_size),
-            .vertical => (rect.h < self.collapse_size),
+            .horizontal => (rect.w < self.collapsed_size),
+            .vertical => (rect.h < self.collapsed_size),
         };
 
         if (dvui.dataGet(null, self.wd.id, "_data", SavedData)) |d| {
             self.split_ratio = d.split_ratio;
             switch (self.dir) {
                 .horizontal => {
-                    if (d.rect.w >= self.collapse_size and rect.w < self.collapse_size) {
+                    if (d.rect.w >= self.collapsed_size and rect.w < self.collapsed_size) {
                         // collapsing
                         if (self.split_ratio >= 0.5) {
                             self.animateSplit(1.0);
                         } else {
                             self.animateSplit(0.0);
                         }
-                    } else if (d.rect.w < self.collapse_size and rect.w >= self.collapse_size) {
+                    } else if (d.rect.w < self.collapsed_size and rect.w >= self.collapsed_size) {
                         // expanding
                         self.collapsed_state = false;
                         if (self.split_ratio > 0.5) {
@@ -4412,14 +4417,14 @@ pub const PanedWidget = struct {
                     }
                 },
                 .vertical => {
-                    if (d.rect.w >= self.collapse_size and rect.w < self.collapse_size) {
+                    if (d.rect.w >= self.collapsed_size and rect.w < self.collapsed_size) {
                         // collapsing
                         if (self.split_ratio >= 0.5) {
                             self.animateSplit(1.0);
                         } else {
                             self.animateSplit(0.0);
                         }
-                    } else if (d.rect.w < self.collapse_size and rect.w >= self.collapse_size) {
+                    } else if (d.rect.w < self.collapsed_size and rect.w >= self.collapsed_size) {
                         // expanding
                         self.collapsed_state = false;
                         if (self.split_ratio > 0.5) {
@@ -4436,16 +4441,16 @@ pub const PanedWidget = struct {
             // first frame
             switch (self.dir) {
                 .horizontal => {
-                    if (rect.w < self.collapse_size) {
+                    if (rect.w < self.collapsed_size) {
                         self.split_ratio = 1.0;
                     } else {
                         self.split_ratio = 0.5;
                     }
                 },
                 .vertical => {
-                    if (rect.w < self.collapse_size) {
+                    if (rect.w < self.collapsed_size) {
                         self.split_ratio = 1.0;
-                    } else if (rect.w >= self.collapse_size) {
+                    } else if (rect.w >= self.collapsed_size) {
                         self.split_ratio = 0.5;
                     }
                 },
@@ -4458,8 +4463,8 @@ pub const PanedWidget = struct {
 
         if (dvui.animationDone(self.wd.id, "_split_ratio")) {
             self.collapsed_state = switch (self.dir) {
-                .horizontal => (rect.w < self.collapse_size),
-                .vertical => (rect.h < self.collapse_size),
+                .horizontal => (rect.w < self.collapsed_size),
+                .vertical => (rect.h < self.collapsed_size),
             };
         }
 

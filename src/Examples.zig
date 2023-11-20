@@ -750,8 +750,8 @@ pub fn layout() !void {
 
     try dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{});
     {
-        const collapse_width: f32 = 400;
-        var paned = try dvui.paned(@src(), .horizontal, collapse_width, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 100 } });
+        const collapsed_width: f32 = 400;
+        var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = collapsed_width }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 100 } });
         defer paned.deinit();
         const collapsed = paned.collapsed();
 
@@ -760,7 +760,7 @@ pub fn layout() !void {
             defer vbox.deinit();
 
             try dvui.label(@src(), "Left Side", .{}, .{});
-            try dvui.label(@src(), "collapses when width < {d}", .{collapse_width}, .{});
+            try dvui.label(@src(), "collapses when width < {d}", .{collapsed_width}, .{});
             try dvui.label(@src(), "current width {d}", .{paned.wd.rect.w}, .{});
             if (collapsed and try dvui.button(@src(), "Goto Right", .{})) {
                 paned.animateSplit(0.0);
