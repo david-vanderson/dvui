@@ -1,6 +1,6 @@
 # DVUI - Easy to Integrate Immediate Mode GUI for Zig
 
-A native Zig GUI toolkit for whole applications or extra debugging windows in an existing application.
+A Zig GUI toolkit for whole applications or extra debugging windows in an existing application.
 
 Tested with only [Zig](https://ziglang.org/) 0.11.0.
 
