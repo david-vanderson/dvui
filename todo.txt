@@ -3,10 +3,12 @@ zig 0.12:
 - if sliceAsBytes/bytesAsSlice includes sentinel, then need to update our use
 
 
-change how matchEvent is used so that widgets can passively listen into events even if they are being wrapped
-- all events should be sent to wrapped widgets but filtered in processEvent
-
 add to readme-implementation
+
+add warning for widgets where deinit is not called (see issue)
+
+scroll container touch down should set handled if the velocity is non-zero to prevent children widgets from handling it when you are just trying to stop the scrolling
+- also why is it doing it in processEvents rather than processEvent?
 
 add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEntry
 - 2 states (one where we show the menu and draggable cursor stuff)

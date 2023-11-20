@@ -6105,17 +6105,17 @@ pub const ScrollContainerWidget = struct {
     }
 
     pub fn matchEvent(self: *Self, e: *Event) bool {
+        // track finger release even if it doesn't happen in our rect
+        if (e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
+            self.finger_down = false;
+        }
+
         return eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
     }
 
     pub fn processEvents(self: *Self) void {
         var evts = events();
         for (evts) |*e| {
-            // track finger release even if it doesn't happen in our rect
-            if (e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
-                self.finger_down = false;
-            }
-
             if (!self.matchEvent(e))
                 continue;
 
@@ -8129,7 +8129,12 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                 continue;
             }
 
-            if (!eventMatch(e, .{ .id = b.data().id, .r = rs.r }) and !te.matchEvent(e))
+            // te.matchEvent could be passively listening to events, so don't
+            // short-circuit it
+            const match1 = eventMatch(e, .{ .id = b.data().id, .r = rs.r });
+            const match2 = te.matchEvent(e);
+
+            if (!match1 and !match2)
                 continue;
 
             if (e.evt == .key and e.evt.key.action == .down and e.evt.key.code == .enter) {
@@ -8599,7 +8604,11 @@ pub const TextEntryWidget = struct {
     }
 
     pub fn matchEvent(self: *Self, e: *Event) bool {
-        return eventMatch(e, .{ .id = self.wd.id, .r = self.wd.borderRectScale().r }) or self.textLayout.matchEvent(e);
+        // textLayout could be passively listening to events in matchEvent, so
+        // don't short circuit
+        const match1 = eventMatch(e, .{ .id = self.wd.id, .r = self.wd.borderRectScale().r });
+        const match2 = self.textLayout.matchEvent(e);
+        return match1 or match2;
     }
 
     pub fn processEvents(self: *Self) void {
