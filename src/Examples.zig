@@ -245,49 +245,49 @@ pub fn demo() !void {
         dvui.toggleDebugWindow();
     }
 
-    if (try dvui.expander(@src(), "Basic Widgets", .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Basic Widgets", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         try basicWidgets();
     }
 
-    if (try dvui.expander(@src(), "Text Entry", .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Text Entry", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         try textEntryWidgets();
     }
 
-    if (try dvui.expander(@src(), "Styling", .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Styling", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         try styling();
     }
 
-    if (try dvui.expander(@src(), "Layout", .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Layout", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         try layout();
     }
 
-    if (try dvui.expander(@src(), "Text Layout", .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Text Layout", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         try layoutText();
     }
 
-    if (try dvui.expander(@src(), "Menus", .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Menus", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         try menus();
     }
 
-    if (try dvui.expander(@src(), "Dialogs and Toasts", .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Dialogs and Toasts", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         try dialogs(float.data().id);
     }
 
-    if (try dvui.expander(@src(), "Animations", .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Animations", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         try animations();
@@ -315,11 +315,11 @@ pub fn demo() !void {
 
     try dvui.checkbox(@src(), &dvui.currentWindow().snap_to_pixels, "Snap to Pixels (see window title)", .{});
 
-    if (try dvui.expander(@src(), "Show Font Atlases", .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Show Font Atlases", .{}, .{ .expand = .horizontal })) {
         try dvui.debugFontAtlases(@src(), .{});
     }
 
-    if (try dvui.expander(@src(), "(Debug) duplicate id", .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "(Debug) duplicate id", .{}, .{ .expand = .horizontal })) {
         for (0..2) |_| {
             try dvui.label(@src(), "i should be highlighted", .{}, .{});
         }
@@ -1038,12 +1038,12 @@ pub fn animations() !void {
         tl.deinit();
     }
 
-    if (try dvui.expander(@src(), "Spinner", .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Spinner", .{}, .{ .expand = .horizontal })) {
         try dvui.labelNoFmt(@src(), "Spinner maxes out frame rate", .{});
         try dvui.spinner(@src(), .{ .color_text = .{ .r = 100, .g = 200, .b = 100 } });
     }
 
-    if (try dvui.expander(@src(), "Clock", .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Clock", .{}, .{ .expand = .horizontal })) {
         try dvui.labelNoFmt(@src(), "Schedules a frame at the beginning of each second", .{});
 
         const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);

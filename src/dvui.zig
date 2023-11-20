@@ -4307,7 +4307,11 @@ pub var expander_defaults: Options = .{
     .font_style = .heading,
 };
 
-pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) !bool {
+pub const ExpanderOptions = struct {
+    default_expanded: bool = false,
+};
+
+pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ExpanderOptions, opts: Options) !bool {
     const options = expander_defaults.override(opts);
 
     // Use the ButtonWidget to do margin/border/padding, but use strip so we
@@ -4319,7 +4323,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
     try bc.drawFocus();
     defer bc.deinit();
 
-    var expanded: bool = false;
+    var expanded: bool = init_opts.default_expanded;
     if (dvui.dataGet(null, bc.wd.id, "_expand", bool)) |e| {
         expanded = e;
     }
