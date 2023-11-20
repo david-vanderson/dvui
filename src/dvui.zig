@@ -1294,7 +1294,7 @@ pub fn minSizeSet(maybe_src: ?std.builtin.SourceLocation, id: u32, s: Size) !voi
     if (try cw.min_sizes.fetchPut(id, .{ .size = s })) |ss| {
         if (ss.value.used) {
             if (maybe_src) |src| {
-                log.debug("{s}:{d} id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options\n", .{src.file, src.line, id });
+                log.debug("{s}:{d} id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options\n", .{ src.file, src.line, id });
             } else {
                 log.debug("???:??? (no debug info) id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options\n", .{id});
             }
@@ -1944,7 +1944,7 @@ pub const Window = struct {
             .dialogs = std.ArrayList(Dialog).init(gpa),
             .toasts = std.ArrayList(Toast).init(gpa),
             .debug_refresh_mutex = std.Thread.Mutex{},
-            .wd = WidgetData{ .src = if (builtin.mode == .Debug) src else {}, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{.name = "Window"} },
+            .wd = WidgetData{ .src = if (builtin.mode == .Debug) src else {}, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
             .backend = backend,
         };
 
@@ -3315,6 +3315,7 @@ pub const PopupWidget = struct {
             if (e.evt == .mouse) {
                 if (e.evt.mouse.action == .focus) {
                     // unhandled click, clear focus
+                    e.handled = true;
                     focusWidget(null, null, null);
                 }
             } else if (e.evt == .key) {
@@ -3415,7 +3416,7 @@ pub const FloatingWindowWidget = struct {
         // passing options.rect will stop WidgetData.init from calling rectFor
         // which is important because we are outside normal layout
         self.wd = WidgetData.init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{}, .name = self.options.name });
-        self.options.name = null;  // so our layout Box isn't named FloatingWindow
+        self.options.name = null; // so our layout Box isn't named FloatingWindow
 
         self.init_options = init_opts;
 
@@ -3661,6 +3662,7 @@ pub const FloatingWindowWidget = struct {
                     switch (me.action) {
                         .focus => {
                             e.handled = true;
+                            // unhandled focus (clicked on nothing)
                             focusWidget(null, null, null);
                         },
                         .press => {
@@ -3809,9 +3811,12 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
             continue;
 
         if (e.evt == .mouse and e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
+            // raise this subwindow but let the press continue so the window
+            // will do the drag-move
             raiseSubwindow(subwindowCurrentId());
         } else if (e.evt == .mouse and e.evt.mouse.action == .focus) {
-            // our window will already be focused, but this prevents the window from clearing the focused widget
+            // our window will already be focused, but this prevents the window
+            // from clearing the focused widget
             e.handled = true;
         }
     }
@@ -4104,7 +4109,7 @@ pub const AnimateWidget = struct {
     prev_alpha: f32 = 1.0,
 
     pub fn init(src: std.builtin.SourceLocation, kind: Kind, duration_micros: i32, opts: Options) Self {
-        const defaults = Options{.name = "Animate"};
+        const defaults = Options{ .name = "Animate" };
         return Self{ .wd = WidgetData.init(src, .{}, defaults.override(opts)), .kind = kind, .duration = duration_micros };
     }
 
@@ -4371,7 +4376,7 @@ pub const PanedWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, collapse_size: f32, opts: Options) Self {
         var self = Self{};
-        const defaults = Options{.name = "Paned"};
+        const defaults = Options{ .name = "Paned" };
         self.wd = WidgetData.init(src, .{}, defaults.override(opts));
         self.dir = dir;
         self.collapse_size = collapse_size;
@@ -5521,7 +5526,7 @@ pub const ContextWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, opts: Options) Self {
         var self = Self{};
-        const defaults = Options{.name = "Context"};
+        const defaults = Options{ .name = "Context" };
         self.wd = WidgetData.init(src, .{}, defaults.override(opts));
         self.winId = subwindowCurrentId();
         if (focusedWidgetIdInCurrentSubwindow()) |fid| {
@@ -5644,7 +5649,7 @@ pub const OverlayWidget = struct {
     wd: WidgetData = undefined,
 
     pub fn init(src: std.builtin.SourceLocation, opts: Options) Self {
-        const defaults = Options{.name = "Overlay"};
+        const defaults = Options{ .name = "Overlay" };
         return Self{ .wd = WidgetData.init(src, .{}, defaults.override(opts)) };
     }
 
@@ -5724,7 +5729,7 @@ pub const BoxWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, equal_space: bool, opts: Options) BoxWidget {
         var self = Self{};
-        const defaults = Options{.name = "Box"};
+        const defaults = Options{ .name = "Box" };
         self.wd = WidgetData.init(src, .{}, defaults.override(opts));
         self.dir = dir;
         self.equal_space = equal_space;
@@ -6763,7 +6768,7 @@ pub const ScaleWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, scale_in: f32, opts: Options) Self {
         var self = Self{};
-        const defaults = Options{.name = "Scale"};
+        const defaults = Options{ .name = "Scale" };
         self.wd = WidgetData.init(src, .{}, defaults.override(opts));
         self.scale = scale_in;
         return self;
@@ -7397,7 +7402,7 @@ pub const LabelWidget = struct {
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) !bool {
     var ret = false;
 
-    var lw = try LabelWidget.init(src, fmt, args, opts);
+    var lw = try LabelWidget.init(src, fmt, args, opts.override(.{ .name = "LabelClick" }));
     // now lw has a Rect from its parent but hasn't processed events or drawn
 
     const lwid = lw.data().id;
@@ -7522,7 +7527,7 @@ pub const IconWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, opts: Options) !Self {
         var self = Self{};
-        const options = (Options{.name = "Icon"}).override(opts);
+        const options = (Options{ .name = "Icon" }).override(opts);
         self.name = name;
         self.tvg_bytes = tvg_bytes;
 
@@ -7595,7 +7600,7 @@ pub const ImageWidget = struct {
 
     pub fn init(src: std.builtin.SourceLocation, name: []const u8, image_bytes: []const u8, opts: Options) !Self {
         var self = Self{};
-        const options = (Options{.name = "Image"}).override(opts);
+        const options = (Options{ .name = "Image" }).override(opts);
         self.name = name;
         self.image_bytes = image_bytes;
 
