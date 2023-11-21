@@ -1260,7 +1260,7 @@ pub fn parentReset(id: u32, w: Widget) void {
             if (builtin.mode == .Debug) {
                 log.err("  {s}:{d} id {x} {s}\n", .{ ww.data().src.file, ww.data().src.line, ww.data().id, ww.data().options.name orelse "???" });
             } else {
-                log.err("  ???:??? (no debug info) id {x} {s}\n", .{ ww.data().id, ww.data().options.name orelse "???" });
+                log.err("  (no @src()) id {x} {s}\n", .{ ww.data().id, ww.data().options.name orelse "???" });
             }
 
             if (ww.data().id == cw.wd.id) {
@@ -1932,7 +1932,7 @@ pub const Window = struct {
     rendering: bool = false,
 
     debug_window_show: bool = false,
-    debug_widget_id: u32 = 0,
+    debug_widget_id: u32 = 0, // 0 means no widget is selected
     debug_info_name_rect: []const u8 = "",
     debug_info_src_id_extra: []const u8 = "",
     debug_under_mouse: bool = false,
