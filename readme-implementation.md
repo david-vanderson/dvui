@@ -135,9 +135,45 @@ Each widget gets a `u32` id by combining:
 - @src() passed to widget
 - `.id_extra` field of Options passed to widget (defaults to 0)
 
-The id a widget gets should be the same each frame, even if other widgets are being added or removed.  Mixing in the parent's id also means you can package up a collection of widgets in a function and call that function in many different parents making it easy to replicate parts of the gui.
+Since each parent already has a unique id, we only need to ensure that all children in that parent get unique ids.  Normally @src() is enough for this.  Even if a widget is made in a function or loop (so @src is always the same), usually the parent will be different each time.
 
-`.id_extra` is to differentiate many children being added to the same parent in a loop.
+When that is not the case, we can add `.id_extra` to the `Options` passed to the widget.
+
+If creating widgets in a function, you probably want the function to take `@src()` and `Options` and pass those to the outer-most created widget.
+
+Examples
+```zig
+// caller is responsible for passing src and .id_extra if needed
+fn my_wrapper(src: std.builtin.SourceLocation, opts: Options) !void {
+    var wrapper_box = try dvui.box(src, .horizontal, opts);
+    defer wrapper_box.deinit();
+
+    // label is a child of wrapper_box, so can just call @src() here
+    try dvui.label(@src(), "Wrapped", .{}, .{});
+}
+
+pub fn frame() !void {
+    // normally we pass @src() and that is good enough
+    var vbox = try dvui.box(@src(), .vertical, .{});
+    defer vbox.deinit();
+
+    for (0..3) |i| {
+        // this will be called multiple times with the same parent and
+        // @src(), so pass .id_extra here to keep the IDs unique
+        var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
+
+        // label is a child of hbox, so can just call @src() here
+        try dvui.label(@src(), "Label {d}", .{i}, .{});
+
+        hbox.deinit();
+
+        // this will be called multiple times with the same parent and
+        // @src(), so pass .id_extra here to keep the IDs unique
+        try my_wrapper(@src(), .{ .id_extra = i });
+    }
+}
+
+```
 
 ## Event Handling
 

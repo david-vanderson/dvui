@@ -1321,9 +1321,9 @@ pub fn minSizeSet(maybe_src: ?std.builtin.SourceLocation, id: u32, s: Size) !voi
     if (try cw.min_sizes.fetchPut(id, .{ .size = s })) |ss| {
         if (ss.value.used) {
             if (maybe_src) |src| {
-                log.debug("{s}:{d} id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options\n", .{ src.file, src.line, id });
+                log.err("{s}:{d} id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ src.file, src.line, id });
             } else {
-                log.debug("???:??? (no debug info) id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options\n", .{id});
+                log.err("???:??? (no debug info) id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{id});
             }
             cw.debug_widget_id = id;
         }
