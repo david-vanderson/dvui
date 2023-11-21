@@ -1238,11 +1238,38 @@ pub fn parentGet() Widget {
     return currentWindow().wd.parent;
 }
 
-pub fn parentSet(w: Widget) Widget {
+/// Make a new widget the current parent.
+pub fn parentSet(w: Widget) void {
     const cw = currentWindow();
-    const ret = cw.wd.parent;
     cw.wd.parent = w;
-    return ret;
+}
+
+/// Make a previous parent widget the current parent.
+///
+/// Pass the current parent's id.  This is used to detect a coding error where
+/// a widget's deinit() was accidentally not called.
+pub fn parentReset(id: u32, w: Widget) void {
+    const cw = currentWindow();
+    const actual_current = cw.wd.parent.data().id;
+    if (id != actual_current) {
+        log.err("parentReset id {x} is unexpectedly parent (trying to highlight), maybe missing call to deinit() somewhere in the parent chain:\n", .{actual_current});
+        cw.debug_widget_id = actual_current;
+
+        var ww = cw.wd.parent;
+        while (true) : (ww = ww.data().parent) {
+            if (builtin.mode == .Debug) {
+                log.err("  {s}:{d} id {x} {s}\n", .{ ww.data().src.file, ww.data().src.line, ww.data().id, ww.data().options.name orelse "???" });
+            } else {
+                log.err("  ???:??? (no debug info) id {x} {s}\n", .{ ww.data().id, ww.data().options.name orelse "???" });
+            }
+
+            if (ww.data().id == cw.wd.id) {
+                // got to base Window
+                break;
+            }
+        }
+    }
+    cw.wd.parent = w;
 }
 
 pub fn popupSet(p: ?*PopupWidget) ?*PopupWidget {
@@ -3188,7 +3215,7 @@ pub const PopupWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
 
         self.prev_windowId = subwindowCurrentSet(self.wd.id);
         self.parent_popup = popupSet(self);
@@ -3354,7 +3381,7 @@ pub const PopupWidget = struct {
         // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();
 
         _ = popupSet(self.parent_popup);
-        _ = parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
         _ = subwindowCurrentSet(self.prev_windowId);
         clipSet(self.prevClip);
     }
@@ -3555,7 +3582,7 @@ pub const FloatingWindowWidget = struct {
             self.wd.rect.h = 0;
         }
 
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
         self.prev_windowId = subwindowCurrentSet(self.wd.id);
 
         // reset clip to whole OS window
@@ -3787,7 +3814,7 @@ pub const FloatingWindowWidget = struct {
 
         // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();
 
-        _ = parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
         _ = subwindowCurrentSet(self.prev_windowId);
         clipSet(self.prevClip);
     }
@@ -4114,7 +4141,7 @@ pub const AnimateWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
         try self.wd.register();
 
         if (firstFrame(self.wd.id)) {
@@ -4194,7 +4221,7 @@ pub const AnimateWidget = struct {
 
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
-        _ = parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
     }
 };
 
@@ -4481,7 +4508,7 @@ pub const PanedWidget = struct {
         try self.wd.borderAndBackground(.{});
         self.prevClip = clip(self.wd.contentRectScale().r);
 
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
     }
 
     pub fn matchEvent(self: *Self, e: *Event) bool {
@@ -4666,7 +4693,7 @@ pub const PanedWidget = struct {
         dvui.dataSet(null, self.wd.id, "_data", SavedData{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
-        _ = dvui.parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
     }
 };
 
@@ -4791,7 +4818,7 @@ pub const TextLayoutWidget = struct {
 
     pub fn install(self: *Self) !void {
         try self.wd.register();
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
 
         if (self.selection_in) |sel| {
             self.selection = sel;
@@ -5514,7 +5541,7 @@ pub const TextLayoutWidget = struct {
 
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
-        _ = parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
     }
 };
 
@@ -5552,7 +5579,7 @@ pub const ContextWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
         try self.wd.register();
         try self.wd.borderAndBackground(.{});
     }
@@ -5642,7 +5669,7 @@ pub const ContextWidget = struct {
         }
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
-        _ = parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
     }
 };
 
@@ -5663,7 +5690,7 @@ pub const OverlayWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
         try self.wd.register();
         try self.wd.borderAndBackground(.{});
     }
@@ -5698,7 +5725,7 @@ pub const OverlayWidget = struct {
     pub fn deinit(self: *Self) void {
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
-        _ = parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
     }
 };
 
@@ -5770,7 +5797,7 @@ pub const BoxWidget = struct {
             }
         }
 
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
     }
 
     pub fn drawBackground(self: *Self) !void {
@@ -5903,7 +5930,7 @@ pub const BoxWidget = struct {
 
         dataSet(null, self.wd.id, "_data", Data{ .total_weight_prev = self.total_weight, .min_space_taken_prev = self.min_space_taken });
 
-        _ = parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
     }
 };
 
@@ -6101,7 +6128,7 @@ pub const ScrollContainerWidget = struct {
 
         self.frame_viewport = self.si.viewport.topleft();
 
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
     }
 
     pub fn matchEvent(self: *Self, e: *Event) bool {
@@ -6501,7 +6528,7 @@ pub const ScrollContainerWidget = struct {
 
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
-        _ = parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
     }
 };
 
@@ -6784,7 +6811,7 @@ pub const ScaleWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
         try self.wd.register();
         try self.wd.borderAndBackground(.{});
 
@@ -6834,7 +6861,7 @@ pub const ScaleWidget = struct {
         self.box.deinit();
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
-        _ = parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
     }
 };
 
@@ -6895,7 +6922,7 @@ pub const MenuWidget = struct {
     }
 
     pub fn install(self: *Self) !void {
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
         self.parentMenu = menuSet(self);
         try self.wd.register();
         try self.wd.borderAndBackground(.{});
@@ -7042,7 +7069,7 @@ pub const MenuWidget = struct {
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
         _ = menuSet(self.parentMenu);
-        _ = parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
     }
 };
 
@@ -7140,7 +7167,7 @@ pub const MenuItemWidget = struct {
 
         try self.wd.borderAndBackground(.{});
 
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
     }
 
     pub fn drawBackground(self: *Self, opts: struct { focus_as_outline: bool = false }) !void {
@@ -7315,7 +7342,7 @@ pub const MenuItemWidget = struct {
         dataSet(null, self.wd.id, "_focus_last", self.focused_last_frame);
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
-        _ = parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
     }
 };
 
@@ -7700,7 +7727,7 @@ pub const ButtonWidget = struct {
 
     pub fn install(self: *Self) !void {
         try self.wd.register();
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
 
         if (self.wd.visible()) {
             try tabIndexSet(self.wd.id, self.wd.options.tab_index);
@@ -7828,7 +7855,7 @@ pub const ButtonWidget = struct {
     pub fn deinit(self: *Self) void {
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
-        _ = parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
     }
 };
 
@@ -8567,7 +8594,7 @@ pub const TextEntryWidget = struct {
             try tabIndexSet(self.wd.id, self.wd.options.tab_index);
         }
 
-        _ = parentSet(self.widget());
+        parentSet(self.widget());
 
         try self.wd.borderAndBackground(.{});
 
@@ -9019,7 +9046,7 @@ pub const TextEntryWidget = struct {
         clipSet(self.prevClip);
         self.wd.minSizeSetAndRefresh();
         self.wd.minSizeReportToParent();
-        _ = parentSet(self.wd.parent);
+        parentReset(self.wd.id, self.wd.parent);
     }
 };
 

@@ -468,7 +468,7 @@ pub const StrokeTest = struct {
     wd: dvui.WidgetData = undefined,
 
     pub fn install(self: *Self, src: std.builtin.SourceLocation, options: dvui.Options) !void {
-        const defaults = dvui.Options{.name = "StrokeTest"};
+        const defaults = dvui.Options{ .name = "StrokeTest" };
         self.wd = dvui.WidgetData.init(src, .{}, defaults.override(options));
         try self.wd.register();
 
