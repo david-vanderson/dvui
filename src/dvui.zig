@@ -9727,9 +9727,16 @@ pub const WidgetData = struct {
 
             if (self.id == cw.debug_widget_id) {
                 cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x} {s}\n\n{}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{ self.id, name, rs.r, self.options.expandGet(), rs.s, self.options.paddingGet().scale(rs.s), self.options.borderGet().scale(rs.s), self.options.marginGet().scale(rs.s) });
-                try pathAddRect(rs.r.insetAll(0), .{});
+                const clipr = clipGet();
+                // clip to whole window so we always see the outline
+                clipSet(windowRectPixels());
+
+                // intersect our rect with the clip - we only want to outline
+                // the visible part
+                try pathAddRect(rs.r.intersect(clipr), .{});
                 var color = (Options{ .color_style = .err }).color(.fill);
-                try pathStrokeAfter(true, true, 3 * rs.s, .none, color);
+                try pathStrokeAfter(true, true, 1 * rs.s, .none, color);
+                clipSet(clipr);
             }
         }
     }
