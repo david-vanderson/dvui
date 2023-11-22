@@ -142,6 +142,13 @@ pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: O
 * Hard to do dialog sequence
   * retained mode guis can run a modal dialog recursively so that dialog code can only exist in a single function
 
+### Parent Child and Nesting
+The primary layout mechanism is nesting widgets.  DVUI keeps track of the current parent widget.  When a widget runs, it is a child of the current parent.  A widget may then make itself the current parent, and reset back to the previous parent when it runs `deinit()`.
+
+The parent widget decides what rectangle of the screen to assign to each child.
+
+The child widgets report their min sizes to the parent (who uses those the next frame for layout decisions).
+
 ### Handle All Events
 DVUI processes every input event, making it useable in low framerate situations.  A button can receive a mouse-down event and a mouse-up event in the same frame and correctly report a click.  A custom button could even report multiple clicks per frame.  (the higher level `dvui.button()` function only reports 1 click per frame)
 
@@ -244,17 +251,6 @@ else {
 }
 ```
 The theme's color_accent is also used to show keyboard focus.
-
-### Layout
-A widget receives its position and size from its parent.  The widget sends these fields of the Options struct to the parent:
-- min_size_content - the minimum size requested for this widget's content area
-  - padding/border/margin are automatically added
-- expand - whether to take up all the space available
-  - horizontal or vertical or both
-- gravity_x, gravity_y - position a non-expanded widget inside a larger rectangle
-- rect - directly specify position in parent (rarely used)
-  - a long scrollable list can use this to skip widgets that aren't visible
-  - example is the demo icon browser
 
 See [implementation details](readme-implementation.md) for more information.
 
