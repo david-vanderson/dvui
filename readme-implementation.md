@@ -131,7 +131,7 @@ TODO: floatingWindows/popups
 
 ### Widget IDs
 Each widget gets a `u32` id by combining:
-- parent's id
+- parent's id (see https://github.com/david-vanderson/dvui/blob/main/README.md#parent-child-and-nesting )
 - @src() passed to widget
 - `.id_extra` field of Options passed to widget (defaults to 0)
 
@@ -209,6 +209,16 @@ Sometimes a widget will just want to observe events but not mark them as process
 
 
 ## Min Size and Layout
+A widget receives its position and size from its parent.  The widget sends these fields of the Options struct to the parent:
+- min_size_content - the minimum size requested for this widget's content area
+  - padding/border/margin are automatically added
+- expand - whether to take up all the space available
+  - horizontal or vertical or both
+- gravity_x, gravity_y - position a non-expanded widget inside a larger rectangle
+- rect - directly specify position in parent (rarely used)
+  - a long scrollable list can use this to skip widgets that aren't visible
+  - example is the demo icon browser
+
 - communication from child to parent
 - how refresh works
 
