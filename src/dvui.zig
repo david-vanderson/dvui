@@ -1252,22 +1252,36 @@ pub fn parentReset(id: u32, w: Widget) void {
     const cw = currentWindow();
     const actual_current = cw.wd.parent.data().id;
     if (id != actual_current) {
-        log.err("parentReset id {x} is unexpectedly parent (trying to highlight), maybe missing call to deinit() somewhere in the parent chain:\n", .{actual_current});
         cw.debug_widget_id = actual_current;
 
         var ww = cw.wd.parent;
-        while (true) : (ww = ww.data().parent) {
-            if (builtin.mode == .Debug) {
-                log.err("  {s}:{d} id {x} {s}\n", .{ ww.data().src.file, ww.data().src.line, ww.data().id, ww.data().options.name orelse "???" });
-            } else {
-                log.err("  (no @src()) id {x} {s}\n", .{ ww.data().id, ww.data().options.name orelse "???" });
-            }
+        const wd = ww.data();
+        const widget_name = wd.options.name orelse "???";
 
-            if (ww.data().id == cw.wd.id) {
-                // got to base Window
-                break;
-            }
+        const stderr = std.io.getStdOut().writer();
+        log.err("widget is not closed within its parent. did you forget to call `.deinit()`?", .{});
+        if (builtin.mode == .Debug) {
+            stderr.print("was initialized at [{s}:{}:{}] ", .{ wd.src.file, wd.src.line, wd.src.column }) catch {};
+        } else {
+            stderr.print("was initialized at [???] ", .{}) catch {};
         }
+        stderr.print("{s} id={x}\n", .{ widget_name, wd.id }) catch {};
+
+        // log.err("widget is closed before its child. (trying to highlight), maybe missing call to deinit() somewhere in the parent chain:", .{actual_current});
+
+        // var ww = cw.wd.parent;
+        // while (true) : (ww = ww.data().parent) {
+        //     if (builtin.mode == .Debug) {
+        //         stderr.print("  ({s}:{d}) id={x} {s}\n", .{ ww.data().src.file, ww.data().src.line, ww.data().id, ww.data().options.name orelse "???" }) catch unreachable;
+        //     } else {
+        //         stderr.print("  (???) id={x} {s}\n", .{ ww.data().id, ww.data().options.name orelse "???" }) catch unreachable;
+        //     }
+
+        //     if (ww.data().id == cw.wd.id) {
+        //         // got to base Window
+        //         break;
+        //     }
+        // }
     }
     cw.wd.parent = w;
 }
