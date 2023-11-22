@@ -1255,33 +1255,21 @@ pub fn parentReset(id: u32, w: Widget) void {
         cw.debug_widget_id = actual_current;
 
         var ww = cw.wd.parent;
-        const wd = ww.data();
-        const widget_name = wd.options.name orelse "???";
+        var wd = ww.data();
+        var widget_name = wd.options.name orelse "???";
 
-        const stderr = std.io.getStdOut().writer();
         log.err("widget is not closed within its parent. did you forget to call `.deinit()`?", .{});
-        if (builtin.mode == .Debug) {
-            stderr.print("was initialized at [{s}:{}:{}] ", .{ wd.src.file, wd.src.line, wd.src.column }) catch {};
-        } else {
-            stderr.print("was initialized at [???] ", .{}) catch {};
+
+        while (true) : (ww = ww.data().parent) {
+            wd = ww.data();
+            widget_name = wd.options.name orelse "???";
+            log.err("  {s} id {x} was initialized at [{s}:{d}]", .{ widget_name, wd.id, wd.src.file, wd.src.line });
+
+            if (wd.id == cw.wd.id) {
+                // got to base Window
+                break;
+            }
         }
-        stderr.print("{s} id={x}\n", .{ widget_name, wd.id }) catch {};
-
-        // log.err("widget is closed before its child. (trying to highlight), maybe missing call to deinit() somewhere in the parent chain:", .{actual_current});
-
-        // var ww = cw.wd.parent;
-        // while (true) : (ww = ww.data().parent) {
-        //     if (builtin.mode == .Debug) {
-        //         stderr.print("  ({s}:{d}) id={x} {s}\n", .{ ww.data().src.file, ww.data().src.line, ww.data().id, ww.data().options.name orelse "???" }) catch unreachable;
-        //     } else {
-        //         stderr.print("  (???) id={x} {s}\n", .{ ww.data().id, ww.data().options.name orelse "???" }) catch unreachable;
-        //     }
-
-        //     if (ww.data().id == cw.wd.id) {
-        //         // got to base Window
-        //         break;
-        //     }
-        // }
     }
     cw.wd.parent = w;
 }
@@ -1327,20 +1315,6 @@ pub fn minSizeGet(id: u32) ?Size {
         return ss.size;
     } else {
         return null;
-    }
-}
-
-pub fn minSizeSet(maybe_src: ?std.builtin.SourceLocation, id: u32, s: Size) !void {
-    var cw = currentWindow();
-    if (try cw.min_sizes.fetchPut(id, .{ .size = s })) |ss| {
-        if (ss.value.used) {
-            if (maybe_src) |src| {
-                log.err("{s}:{d} id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ src.file, src.line, id });
-            } else {
-                log.err("???:??? (no debug info) id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{id});
-            }
-            cw.debug_widget_id = id;
-        }
     }
 }
 
@@ -1985,7 +1959,7 @@ pub const Window = struct {
             .dialogs = std.ArrayList(Dialog).init(gpa),
             .toasts = std.ArrayList(Toast).init(gpa),
             .debug_refresh_mutex = std.Thread.Mutex{},
-            .wd = WidgetData{ .src = if (builtin.mode == .Debug) src else {}, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
+            .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
             .backend = backend,
         };
 
@@ -9674,10 +9648,10 @@ pub const WidgetData = struct {
     rect: Rect = Rect{},
     min_size: Size = Size{},
     options: Options = undefined,
-    src: if (builtin.mode == .Debug) std.builtin.SourceLocation else void,
+    src: std.builtin.SourceLocation,
 
     pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
-        var self = WidgetData{ .src = if (builtin.mode == .Debug) src else {} };
+        var self = WidgetData{ .src = src };
         self.init_options = init_options;
         self.options = opts;
 
@@ -9854,15 +9828,25 @@ pub const WidgetData = struct {
             // first frame.
             refresh(null, @src(), self.id);
         }
-        minSizeSet(if (builtin.mode == .Debug) self.src else null, self.id, self.min_size) catch |err| switch (err) {
-            error.OutOfMemory => {
-                // returning an error here means that all widgets deinit can return
-                // it, which is very annoying because you can't "defer try
-                // widget.deinit()".  Also if we are having memory issues then we
-                // have larger problems than here.
-                log.err("minSizeSetAndRefresh got {!} when trying to minSizeSet widget {x}\n", .{ err, self.id });
-            },
+
+        var cw = currentWindow();
+
+        var existing_min_size = cw.min_sizes.fetchPut(self.id, .{ .size = self.min_size }) catch |err| blk: {
+            // returning an error here means that all widgets deinit can return
+            // it, which is very annoying because you can't "defer try
+            // widget.deinit()".  Also if we are having memory issues then we
+            // have larger problems than here.
+            log.err("minSizeSetAndRefresh got {!} when trying to set min size of widget {x}\n", .{ err, self.id });
+
+            break :blk null;
         };
+
+        if (existing_min_size) |kv| {
+            if (kv.value.used) {
+                log.err("{s}:{d} id {x} already used this frame (highlighting), may need to pass .id_extra = <loop index> into Options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ self.src.file, self.src.line, self.id });
+                cw.debug_widget_id = self.id;
+            }
+        }
     }
 
     pub fn minSizeReportToParent(self: *const WidgetData) void {
