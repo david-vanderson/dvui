@@ -293,6 +293,12 @@ pub fn demo() !void {
         try animations();
     }
 
+    if (try dvui.expander(@src(), "Debugging and Errors", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        try debuggingErrors();
+    }
+
     if (try dvui.button(@src(), "Toggle Theme", .{})) {
         if (dvui.themeGet() == &Adwaita.light) {
             dvui.themeSet(&Adwaita.dark);
@@ -314,16 +320,6 @@ pub fn demo() !void {
     }
 
     try dvui.checkbox(@src(), &dvui.currentWindow().snap_to_pixels, "Snap to Pixels (see window title)", .{});
-
-    if (try dvui.expander(@src(), "Show Font Atlases", .{}, .{ .expand = .horizontal })) {
-        try dvui.debugFontAtlases(@src(), .{});
-    }
-
-    if (try dvui.expander(@src(), "(Debug) duplicate id", .{}, .{ .expand = .horizontal })) {
-        for (0..2) |_| {
-            try dvui.label(@src(), "i should be highlighted", .{}, .{});
-        }
-    }
 
     if (show_dialog) {
         try dialogDirect();
@@ -660,24 +656,8 @@ pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: O
     color.b = @intFromFloat(blue);
 }
 
-fn makeLabels(src: std.builtin.SourceLocation, count: usize) !void {
-    var vp = try dvui.virtualParent(src, .{ .id_extra = count });
-    defer vp.deinit();
-    try dvui.label(@src(), "makeLabels 1", .{}, .{});
-    try dvui.label(@src(), "makeLabels 2", .{}, .{});
-}
-
 pub fn layout() !void {
     const opts: Options = .{ .color_style = .content, .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
-
-    try dvui.label(@src(), "Virtual Parent", .{}, .{});
-    {
-        var vbox = try dvui.box(@src(), .vertical, .{});
-        defer vbox.deinit();
-
-        try makeLabels(@src(), 0);
-        try makeLabels(@src(), 1);
-    }
 
     try dvui.label(@src(), "Gravity", .{}, .{});
     {
@@ -1077,6 +1057,48 @@ pub fn animations() !void {
             const wait = 1000 * (1000 - left);
             try dvui.timer(mslabel.wd.id, wait);
         }
+    }
+}
+
+fn makeLabels(src: std.builtin.SourceLocation, count: usize) !void {
+    // we want to add labels to the widget that is the parent when makeLabels
+    // is called, but since makeLabels is called twice in the same parent we'll
+    // get duplicate IDs
+
+    // virtualParent helps by being a parent for ID purposes but leaves the
+    // layout to the previous parent
+    var vp = try dvui.virtualParent(src, .{ .id_extra = count });
+    defer vp.deinit();
+    try dvui.label(@src(), "one", .{}, .{});
+    try dvui.label(@src(), "two", .{}, .{});
+}
+
+pub fn debuggingErrors() !void {
+    try dvui.label(@src(), "Virtual Parent (affects IDs but not layout)", .{}, .{});
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{.margin = .{ .x = 10 }});
+        defer hbox.deinit();
+        try dvui.label(@src(), "makeLabels twice:", .{}, .{});
+
+        try makeLabels(@src(), 0);
+        try makeLabels(@src(), 1);
+    }
+
+    if (try dvui.expander(@src(), "Duplicate id (expanding will log error)", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        for (0..2) |i| {
+            try dvui.label(@src(), "this should be highlighted (and error logged)", .{}, .{});
+            try dvui.label(@src(), " - fix by passing .id_extra = <loop index>", .{}, .{ .id_extra = i });
+        }
+
+        if (try dvui.labelClick(@src(), "See https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids", .{}, .{ .gravity_y = 0.5, .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } })) {
+            try dvui.openURL("https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids");
+        }
+    }
+
+    if (try dvui.expander(@src(), "Show Font Atlases", .{}, .{ .expand = .horizontal })) {
+        try dvui.debugFontAtlases(@src(), .{});
     }
 }
 
