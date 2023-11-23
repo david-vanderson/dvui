@@ -5661,6 +5661,73 @@ pub const ContextWidget = struct {
     }
 };
 
+pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) !*VirtualParentWidget {
+    var ret = try currentWindow().arena.create(VirtualParentWidget);
+    ret.* = VirtualParentWidget.init(src, opts);
+    try ret.install();
+    return ret;
+}
+
+/// This is a widget that forwards all parent calls to its parent.  Useful
+/// where you want to wrap widgets but only to adjust their IDs.
+pub const VirtualParentWidget = struct {
+    const Self = @This();
+    wd: WidgetData = undefined,
+    child_rect_union: ?Rect = null,
+
+    pub fn init(src: std.builtin.SourceLocation, opts: Options) Self {
+        const id = parentGet().extendId(src, opts.idExtra());
+        const rect = dataGet(null, id, "_rect", Rect);
+        const defaults = Options{ .name = "Virtual Parent", .rect = rect orelse .{} };
+        return Self{ .wd = WidgetData.init(src, .{}, defaults.override(opts)) };
+    }
+
+    pub fn install(self: *Self) !void {
+        parentSet(self.widget());
+        try self.wd.register();
+    }
+
+    pub fn widget(self: *Self) Widget {
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    }
+
+    pub fn data(self: *Self) *WidgetData {
+        return &self.wd;
+    }
+
+    pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+        const ret = self.wd.parent.rectFor(id, min_size, e, g);
+        if (self.child_rect_union) |u| {
+            self.child_rect_union = u.unionWith(ret);
+        } else {
+            self.child_rect_union = ret;
+        }
+        return ret;
+    }
+
+    pub fn screenRectScale(self: *Self, rect: Rect) RectScale {
+        return self.wd.parent.screenRectScale(rect);
+    }
+
+    pub fn minSizeForChild(self: *Self, s: Size) void {
+        self.wd.parent.minSizeForChild(s);
+    }
+
+    pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
+        _ = bubbling;
+        if (e.bubbleable()) {
+            self.wd.parent.processEvent(e, true);
+        }
+    }
+
+    pub fn deinit(self: *Self) void {
+        if (self.child_rect_union) |u| {
+            dataSet(null, self.wd.id, "_rect", u);
+        }
+        parentReset(self.wd.id, self.wd.parent);
+    }
+};
+
 pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
     var ret = try currentWindow().arena.create(OverlayWidget);
     ret.* = OverlayWidget.init(src, opts);

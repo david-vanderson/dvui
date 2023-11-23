@@ -79,6 +79,18 @@ pub fn intersect(a: Rect, b: Rect) Rect {
     return Rect{ .x = x, .y = y, .w = @max(0, x2 - x), .h = @max(0, y2 - y) };
 }
 
+pub fn unionWith(a: Rect, b: Rect) Rect {
+    const ax2 = a.x + a.w;
+    const ay2 = a.y + a.h;
+    const bx2 = b.x + b.w;
+    const by2 = b.y + b.h;
+    const x = @min(a.x, b.x);
+    const y = @min(a.y, b.y);
+    const x2 = @max(ax2, bx2);
+    const y2 = @max(ay2, by2);
+    return Rect{ .x = x, .y = y, .w = @max(0, x2 - x), .h = @max(0, y2 - y) };
+}
+
 pub fn shrinkToSize(self: *const Rect, s: Size) Rect {
     return Rect{ .x = self.x, .y = self.y, .w = @min(self.w, s.w), .h = @min(self.h, s.h) };
 }
