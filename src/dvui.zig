@@ -1263,7 +1263,7 @@ pub fn parentReset(id: u32, w: Widget) void {
         while (true) : (ww = ww.data().parent) {
             wd = ww.data();
             widget_name = wd.options.name orelse "???";
-            log.err("  {s} id={x} was initialized at [{s}:{d}]", .{ widget_name, wd.id, wd.src.file, wd.src.line });
+            log.err("  {s} id={x} was initialized at [{s}:{d}:{d}]", .{ widget_name, wd.id, wd.src.file, wd.src.line, wd.src.column });
 
             if (wd.id == cw.wd.id) {
                 // got to base Window
