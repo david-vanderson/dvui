@@ -660,8 +660,8 @@ pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: O
     color.b = @intFromFloat(blue);
 }
 
-fn makeLabels(count: usize) !void {
-    var vp = try dvui.virtualParent(@src(), .{ .id_extra = count });
+fn makeLabels(src: std.builtin.SourceLocation, count: usize) !void {
+    var vp = try dvui.virtualParent(src, .{ .id_extra = count });
     defer vp.deinit();
     try dvui.label(@src(), "makeLabels 1", .{}, .{});
     try dvui.label(@src(), "makeLabels 2", .{}, .{});
@@ -675,8 +675,8 @@ pub fn layout() !void {
         var vbox = try dvui.box(@src(), .vertical, .{});
         defer vbox.deinit();
 
-        try makeLabels(0);
-        try makeLabels(1);
+        try makeLabels(@src(), 0);
+        try makeLabels(@src(), 1);
     }
 
     try dvui.label(@src(), "Gravity", .{}, .{});
