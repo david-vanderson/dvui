@@ -25,7 +25,8 @@ pub var show_demo_window: bool = false;
 var checkbox_bool: bool = false;
 var icon_image_size_extra: f32 = 0;
 var icon_image_rotation: f32 = 0;
-var slider_vector_val: [3]f32 = .{ 1, 2, 3 };
+var test_array = [_]f32{ 0, 1, 2 };
+var slider_vector_val: []f32 = test_array[0..3];
 var slider_val: f32 = 0.0;
 var slider_entry_val: f32 = 0.05;
 var slider_entry_min: bool = true;
@@ -406,7 +407,7 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Vector Slider Entry", .{}, .{ .gravity_y = 0.5 });
-        _ = try dvui.sliderVector(@src(), "{d:0.2}", 3, &slider_vector_val, .{ .min = .{ -1, null, -3 }, .max = .{ 1, 2, null } }, .{ .gravity_y = 0.5 });
+        _ = try dvui.sliderVector(@src(), "{d:0.2}", 3, slider_vector_val, .{ .min = .{ -1, null, -3 }, .max = .{ 1, 2, null } }, .{ .gravity_y = 0.5 });
         try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{ .gravity_y = 0.5 });
     }
 
@@ -639,7 +640,7 @@ pub fn styling() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{.w = 30, .h = 20}, .background = true, .color_fill = backbox_color, .gravity_y = 0.5 });
+        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = backbox_color, .gravity_y = 0.5 });
         backbox.deinit();
 
         try colorSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 });
