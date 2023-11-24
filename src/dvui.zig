@@ -22,7 +22,7 @@ pub const Adwaita = @import("themes/Adwaita.zig");
 
 pub const enums = @import("enums.zig");
 
-const c = @cImport({
+pub const c = @cImport({
     @cInclude("freetype/ftadvanc.h");
     @cInclude("freetype/ftbbox.h");
     @cInclude("freetype/ftbitmap.h");
