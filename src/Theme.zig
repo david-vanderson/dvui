@@ -25,6 +25,7 @@ pub const StyleColors = struct {
     border: ?Color = null,
     hover: ?Color = null,
     press: ?Color = null,
+    press_text: ?Color = null,
 };
 
 name: []const u8,

@@ -131,7 +131,7 @@ const AnimatingDialog = struct {
         try tl.addText(message, .{});
         tl.deinit();
 
-        if (try dvui.button(@src(), "Ok", .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
+        if (try dvui.button(@src(), "Ok", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
             closing = true;
             dvui.dataSet(null, id, "response", enums.DialogResponse.ok);
         }
@@ -247,11 +247,11 @@ pub fn demo() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        if (try dvui.button(@src(), "Toggle Debug Window", .{})) {
+        if (try dvui.button(@src(), "Toggle Debug Window", .{}, .{})) {
             dvui.toggleDebugWindow();
         }
 
-        if (try dvui.button(@src(), "Toggle Theme", .{})) {
+        if (try dvui.button(@src(), "Toggle Theme", .{}, .{})) {
             if (dvui.themeGet() == &Adwaita.light) {
                 dvui.themeSet(&Adwaita.dark);
             } else {
@@ -259,11 +259,11 @@ pub fn demo() !void {
             }
         }
 
-        if (try dvui.button(@src(), "Zoom In", .{})) {
+        if (try dvui.button(@src(), "Zoom In", .{}, .{})) {
             scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
         }
 
-        if (try dvui.button(@src(), "Zoom Out", .{})) {
+        if (try dvui.button(@src(), "Zoom Out", .{}, .{})) {
             scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
         }
     }
@@ -338,8 +338,8 @@ pub fn basicWidgets() !void {
 
         try dvui.label(@src(), "Label", .{}, .{ .gravity_y = 0.5 });
         try dvui.label(@src(), "Multi-line\nLabel", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
-        _ = try dvui.button(@src(), "Button", .{ .gravity_y = 0.5 });
-        _ = try dvui.button(@src(), "Multi-line\nButton", .{});
+        _ = try dvui.button(@src(), "Button", .{}, .{ .gravity_y = 0.5 });
+        _ = try dvui.button(@src(), "Multi-line\nButton", .{}, .{});
     }
 
     {
@@ -438,7 +438,7 @@ pub fn basicWidgets() !void {
         try dvui.icon(@src(), "aircraft", entypo.aircraft, icon_opts);
         try dvui.icon(@src(), "notes", entypo.beamed_note, icon_opts);
 
-        if (try dvui.button(@src(), "Icon Browser", .{ .gravity_y = 0.5 })) {
+        if (try dvui.button(@src(), "Icon Browser", .{}, .{ .gravity_y = 0.5 })) {
             IconBrowser.show = true;
         }
     }
@@ -450,19 +450,19 @@ pub fn basicWidgets() !void {
 
         try dvui.label(@src(), "Resize Rotate Icons/Images", .{}, .{ .gravity_y = 0.5 });
 
-        if (try dvui.buttonIcon(@src(), "plus", entypo.plus, .{ .gravity_y = 0.5 })) {
+        if (try dvui.buttonIcon(@src(), "plus", entypo.plus, .{}, .{ .gravity_y = 0.5 })) {
             icon_image_size_extra += 1;
         }
 
-        if (try dvui.buttonIcon(@src(), "minus", entypo.minus, .{ .gravity_y = 0.5 })) {
+        if (try dvui.buttonIcon(@src(), "minus", entypo.minus, .{}, .{ .gravity_y = 0.5 })) {
             icon_image_size_extra = @max(0, icon_image_size_extra - 1);
         }
 
-        if (try dvui.buttonIcon(@src(), "cc", entypo.cc, .{ .gravity_y = 0.5 })) {
+        if (try dvui.buttonIcon(@src(), "cc", entypo.cc, .{}, .{ .gravity_y = 0.5 })) {
             icon_image_rotation = icon_image_rotation + 5 * std.math.pi / 180.0;
         }
 
-        if (try dvui.buttonIcon(@src(), "ccw", entypo.ccw, .{ .gravity_y = 0.5 })) {
+        if (try dvui.buttonIcon(@src(), "ccw", entypo.ccw, .{}, .{ .gravity_y = 0.5 })) {
             icon_image_rotation = icon_image_rotation - 5 * std.math.pi / 180.0;
         }
     }
@@ -534,6 +534,7 @@ pub fn textEntryWidgets() !void {
             @src(),
             "toggle",
             if (text_entry_password_buf_obf_enable) entypo.eye_with_line else entypo.eye,
+             .{},
             .{ .gravity_y = 0.5, .min_size_content = .{ .h = 12 } },
         )) {
             text_entry_password_buf_obf_enable = !text_entry_password_buf_obf_enable;
@@ -592,12 +593,12 @@ pub fn styling() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        _ = try dvui.button(@src(), "Accent", .{ .color_style = .accent });
-        _ = try dvui.button(@src(), "Success", .{ .color_style = .success });
-        _ = try dvui.button(@src(), "Error", .{ .color_style = .err });
-        _ = try dvui.button(@src(), "Window", .{ .color_style = .window });
-        _ = try dvui.button(@src(), "Content", .{ .color_style = .content });
-        _ = try dvui.button(@src(), "Control", .{ .color_style = .control });
+        _ = try dvui.button(@src(), "Accent", .{}, .{ .color_style = .accent });
+        _ = try dvui.button(@src(), "Success", .{}, .{ .color_style = .success });
+        _ = try dvui.button(@src(), "Error", .{}, .{ .color_style = .err });
+        _ = try dvui.button(@src(), "Window", .{}, .{ .color_style = .window });
+        _ = try dvui.button(@src(), "Content", .{}, .{ .color_style = .content });
+        _ = try dvui.button(@src(), "Control", .{}, .{ .color_style = .control });
     }
 
     try dvui.label(@src(), "margin/border/padding", .{}, .{});
@@ -608,19 +609,19 @@ pub fn styling() !void {
         const opts: Options = .{ .color_style = .content, .border = Rect.all(1), .background = true, .gravity_y = 0.5 };
 
         var o = try dvui.overlay(@src(), opts);
-        _ = try dvui.button(@src(), "default", .{});
+        _ = try dvui.button(@src(), "default", .{}, .{});
         o.deinit();
 
         o = try dvui.overlay(@src(), opts);
-        _ = try dvui.button(@src(), "+border", .{ .border = Rect.all(2) });
+        _ = try dvui.button(@src(), "+border", .{}, .{ .border = Rect.all(2) });
         o.deinit();
 
         o = try dvui.overlay(@src(), opts);
-        _ = try dvui.button(@src(), "+padding 10", .{ .border = Rect.all(2), .padding = Rect.all(10) });
+        _ = try dvui.button(@src(), "+padding 10", .{}, .{ .border = Rect.all(2), .padding = Rect.all(10) });
         o.deinit();
 
         o = try dvui.overlay(@src(), opts);
-        _ = try dvui.button(@src(), "+margin 10", .{ .border = Rect.all(2), .margin = Rect.all(10), .padding = Rect.all(10) });
+        _ = try dvui.button(@src(), "+margin 10", .{}, .{ .border = Rect.all(2), .margin = Rect.all(10), .padding = Rect.all(10) });
         o.deinit();
     }
 
@@ -631,11 +632,11 @@ pub fn styling() !void {
 
         const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
 
-        _ = try dvui.button(@src(), "0", opts.override(.{ .corner_radius = Rect.all(0) }));
-        _ = try dvui.button(@src(), "2", opts.override(.{ .corner_radius = Rect.all(2) }));
-        _ = try dvui.button(@src(), "7", opts.override(.{ .corner_radius = Rect.all(7) }));
-        _ = try dvui.button(@src(), "100", opts.override(.{ .corner_radius = Rect.all(100) }));
-        _ = try dvui.button(@src(), "mixed", opts.override(.{ .corner_radius = .{ .x = 0, .y = 2, .w = 7, .h = 100 } }));
+        _ = try dvui.button(@src(), "0", .{}, opts.override(.{ .corner_radius = Rect.all(0) }));
+        _ = try dvui.button(@src(), "2", .{}, opts.override(.{ .corner_radius = Rect.all(2) }));
+        _ = try dvui.button(@src(), "7", .{}, opts.override(.{ .corner_radius = Rect.all(7) }));
+        _ = try dvui.button(@src(), "100", .{}, opts.override(.{ .corner_radius = Rect.all(100) }));
+        _ = try dvui.button(@src(), "mixed", .{}, opts.override(.{ .corner_radius = .{ .x = 0, .y = 2, .w = 7, .h = 100 } }));
     }
 
     try dvui.label(@src(), "directy set colors", .{}, .{});
@@ -680,7 +681,7 @@ pub fn layout() !void {
 
         inline for ([3]f32{ 0.0, 0.5, 1.0 }, 0..) |horz, hi| {
             inline for ([3]f32{ 0.0, 0.5, 1.0 }, 0..) |vert, vi| {
-                _ = try dvui.button(@src(), try std.fmt.bufPrint(&buf, "{d},{d}", .{ horz, vert }), .{ .id_extra = hi * 3 + vi, .gravity_x = horz, .gravity_y = vert });
+                _ = try dvui.button(@src(), try std.fmt.bufPrint(&buf, "{d},{d}", .{ horz, vert }), .{}, .{ .id_extra = hi * 3 + vi, .gravity_x = horz, .gravity_y = vert });
             }
         }
     }
@@ -693,15 +694,15 @@ pub fn layout() !void {
             var vbox = try dvui.box(@src(), .vertical, opts);
             defer vbox.deinit();
 
-            _ = try dvui.button(@src(), "none", .{ .expand = .none });
-            _ = try dvui.button(@src(), "horizontal", .{ .expand = .horizontal });
-            _ = try dvui.button(@src(), "vertical", .{ .expand = .vertical });
+            _ = try dvui.button(@src(), "none", .{}, .{ .expand = .none });
+            _ = try dvui.button(@src(), "horizontal", .{}, .{ .expand = .horizontal });
+            _ = try dvui.button(@src(), "vertical", .{}, .{ .expand = .vertical });
         }
         {
             var vbox = try dvui.box(@src(), .vertical, opts);
             defer vbox.deinit();
 
-            _ = try dvui.button(@src(), "both", .{ .expand = .both });
+            _ = try dvui.button(@src(), "both", .{}, .{ .expand = .both });
         }
     }
 
@@ -718,18 +719,18 @@ pub fn layout() !void {
                 var vbox = try dvui.box(@src(), .vertical, opts.override(.{ .expand = .both, .min_size_content = .{} }));
                 defer vbox.deinit();
 
-                _ = try dvui.button(@src(), "vertical", grav);
-                _ = try dvui.button(@src(), "expand", grav.override(.{ .expand = .vertical }));
-                _ = try dvui.button(@src(), "a", grav);
+                _ = try dvui.button(@src(), "vertical", .{}, grav);
+                _ = try dvui.button(@src(), "expand", .{}, grav.override(.{ .expand = .vertical }));
+                _ = try dvui.button(@src(), "a", .{}, grav);
             }
 
             {
                 var vbox = try dvui.boxEqual(@src(), .vertical, opts.override(.{ .expand = .both, .min_size_content = .{} }));
                 defer vbox.deinit();
 
-                _ = try dvui.button(@src(), "vert equal", grav);
-                _ = try dvui.button(@src(), "expand", grav.override(.{ .expand = .vertical }));
-                _ = try dvui.button(@src(), "a", grav);
+                _ = try dvui.button(@src(), "vert equal", .{}, grav);
+                _ = try dvui.button(@src(), "expand", .{}, grav.override(.{ .expand = .vertical }));
+                _ = try dvui.button(@src(), "a", .{}, grav);
             }
         }
 
@@ -740,18 +741,18 @@ pub fn layout() !void {
                 var hbox2 = try dvui.box(@src(), .horizontal, opts.override(.{ .expand = .both, .min_size_content = .{} }));
                 defer hbox2.deinit();
 
-                _ = try dvui.button(@src(), "horizontal", grav);
-                _ = try dvui.button(@src(), "expand", grav.override(.{ .expand = .horizontal }));
-                _ = try dvui.button(@src(), "a", grav);
+                _ = try dvui.button(@src(), "horizontal", .{}, grav);
+                _ = try dvui.button(@src(), "expand", .{}, grav.override(.{ .expand = .horizontal }));
+                _ = try dvui.button(@src(), "a", .{}, grav);
             }
 
             {
                 var hbox2 = try dvui.boxEqual(@src(), .horizontal, opts.override(.{ .expand = .both, .min_size_content = .{} }));
                 defer hbox2.deinit();
 
-                _ = try dvui.button(@src(), "horz\nequal", grav);
-                _ = try dvui.button(@src(), "expand", grav.override(.{ .expand = .horizontal }));
-                _ = try dvui.button(@src(), "a", grav);
+                _ = try dvui.button(@src(), "horz\nequal", .{}, grav);
+                _ = try dvui.button(@src(), "expand", .{}, grav.override(.{ .expand = .horizontal }));
+                _ = try dvui.button(@src(), "a", .{}, grav);
             }
         }
     }
@@ -770,7 +771,7 @@ pub fn layout() !void {
             try dvui.label(@src(), "Left Side", .{}, .{});
             try dvui.label(@src(), "collapses when width < {d}", .{collapsed_width}, .{});
             try dvui.label(@src(), "current width {d}", .{paned.wd.rect.w}, .{});
-            if (collapsed and try dvui.button(@src(), "Goto Right", .{})) {
+            if (collapsed and try dvui.button(@src(), "Goto Right", .{}, .{})) {
                 paned.animateSplit(0.0);
             }
         }
@@ -780,7 +781,7 @@ pub fn layout() !void {
             defer vbox.deinit();
 
             try dvui.label(@src(), "Right Side", .{}, .{});
-            if (collapsed and try dvui.button(@src(), "Goto Left", .{})) {
+            if (collapsed and try dvui.button(@src(), "Goto Left", .{}, .{})) {
                 paned.animateSplit(1.0);
             }
         }
@@ -804,10 +805,10 @@ pub fn layoutText() !void {
         defer tl.deinit();
 
         var cbox = try dvui.box(@src(), .vertical, .{ .padding = .{ .w = 4 } });
-        if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{ .padding = Rect.all(6), .min_size_content = .{ .h = 18 } })) {
+        if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{}, .{ .padding = Rect.all(6), .min_size_content = .{ .h = 18 } })) {
             try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
         }
-        if (try dvui.buttonIcon(@src(), "more", entypo.dots_three_vertical, .{ .padding = Rect.all(6), .min_size_content = .{ .h = 18 } })) {
+        if (try dvui.buttonIcon(@src(), "more", entypo.dots_three_vertical, .{}, .{ .padding = Rect.all(6), .min_size_content = .{ .h = 18 } })) {
             try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
         }
         cbox.deinit();
@@ -827,12 +828,12 @@ pub fn layoutText() !void {
 
         try dvui.label(@src(), "line height factor: {d:0.2}", .{line_height_factor}, .{ .gravity_y = 0.5 });
 
-        if (try dvui.button(@src(), "inc", .{})) {
+        if (try dvui.button(@src(), "inc", .{}, .{})) {
             line_height_factor += 0.1;
             line_height_factor = @min(10, line_height_factor);
         }
 
-        if (try dvui.button(@src(), "dec", .{})) {
+        if (try dvui.button(@src(), "dec", .{}, .{})) {
             line_height_factor -= 0.1;
             line_height_factor = @max(0.1, line_height_factor);
         }
@@ -912,7 +913,7 @@ pub fn submenus() !void {
 }
 
 pub fn dialogs(demo_win_id: u32) !void {
-    if (try dvui.button(@src(), "Direct Dialog", .{})) {
+    if (try dvui.button(@src(), "Direct Dialog", .{}, .{})) {
         show_dialog = true;
     }
 
@@ -920,7 +921,7 @@ pub fn dialogs(demo_win_id: u32) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        if (try dvui.button(@src(), "Ok Dialog", .{})) {
+        if (try dvui.button(@src(), "Ok Dialog", .{}, .{})) {
             try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "This is a non modal dialog with no callafter" });
         }
 
@@ -933,7 +934,7 @@ pub fn dialogs(demo_win_id: u32) !void {
             }
         };
 
-        if (try dvui.button(@src(), "Ok Followup", .{})) {
+        if (try dvui.button(@src(), "Ok Followup", .{}, .{})) {
             try dvui.dialog(@src(), .{ .title = "Ok Followup", .message = "This is a modal dialog with modal followup", .callafterFn = dialogsFollowup.callafter });
         }
     }
@@ -942,19 +943,19 @@ pub fn dialogs(demo_win_id: u32) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        if (try dvui.button(@src(), "Toast 1", .{})) {
+        if (try dvui.button(@src(), "Toast 1", .{}, .{})) {
             try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 1 to demo window" });
         }
 
-        if (try dvui.button(@src(), "Toast 2", .{})) {
+        if (try dvui.button(@src(), "Toast 2", .{}, .{})) {
             try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 2 to demo window" });
         }
 
-        if (try dvui.button(@src(), "Toast 3", .{})) {
+        if (try dvui.button(@src(), "Toast 3", .{}, .{})) {
             try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Toast 3 to demo window" });
         }
 
-        if (try dvui.button(@src(), "Toast Main Window", .{})) {
+        if (try dvui.button(@src(), "Toast Main Window", .{}, .{})) {
             try dvui.toast(@src(), .{ .message = "Toast to main window" });
         }
     }
@@ -964,12 +965,12 @@ pub fn dialogs(demo_win_id: u32) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        if (try dvui.button(@src(), "Dialog after 1 second", .{})) {
+        if (try dvui.button(@src(), "Dialog after 1 second", .{}, .{})) {
             const bg_thread = try std.Thread.spawn(.{}, background_dialog, .{ dvui.currentWindow(), 1_000_000_000 });
             bg_thread.detach();
         }
 
-        if (try dvui.button(@src(), "Toast after 1 second", .{})) {
+        if (try dvui.button(@src(), "Toast after 1 second", .{}, .{})) {
             const bg_thread = try std.Thread.spawn(.{}, background_toast, .{ dvui.currentWindow(), 1_000_000_000, demo_win_id });
             bg_thread.detach();
         }
@@ -979,7 +980,7 @@ pub fn dialogs(demo_win_id: u32) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
         defer hbox.deinit();
 
-        if (try dvui.button(@src(), "Show Progress from another Thread", .{})) {
+        if (try dvui.button(@src(), "Show Progress from another Thread", .{}, .{})) {
             progress_mutex.lock();
             progress_val = 0;
             progress_mutex.unlock();
@@ -1015,11 +1016,11 @@ pub fn animations() !void {
         }
     }
 
-    if (try dvui.button(@src(), "Animating Dialog (Scale)", .{})) {
+    if (try dvui.button(@src(), "Animating Dialog (Scale)", .{}, .{})) {
         try dvui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog (Scale)", .message = "This shows how to animate dialogs and other floating windows by changing the scale.", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
     }
 
-    if (try dvui.button(@src(), "Animating Window (Rect)", .{})) {
+    if (try dvui.button(@src(), "Animating Window (Rect)", .{}, .{})) {
         if (animating_window_show) {
             animating_window_closing = true;
         } else {
@@ -1127,7 +1128,7 @@ pub fn dialogDirect() !void {
     try dvui.label(@src(), "Asking a Question", .{}, .{ .font_style = .title_4 });
     try dvui.label(@src(), "This dialog is being shown in a direct style, controlled entirely in user code.", .{}, .{});
 
-    if (try dvui.button(@src(), "Toggle extra stuff and fit window", .{})) {
+    if (try dvui.button(@src(), "Toggle extra stuff and fit window", .{}, .{})) {
         data.extra_stuff = !data.extra_stuff;
         dialog_win.autoSize();
     }
@@ -1141,11 +1142,11 @@ pub fn dialogDirect() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0 });
         defer hbox.deinit();
 
-        if (try dvui.button(@src(), "Yes", .{})) {
+        if (try dvui.button(@src(), "Yes", .{}, .{})) {
             dialog_win.close(); // can close the dialog this way
         }
 
-        if (try dvui.button(@src(), "No", .{})) {
+        if (try dvui.button(@src(), "No", .{}, .{})) {
             show_dialog = false; // can close by not running this code anymore
         }
     }
@@ -1178,7 +1179,7 @@ pub fn icon_browser() !void {
             const r = Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
             var iconbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i, .expand = .horizontal, .rect = r });
 
-            if (try dvui.buttonIcon(@src(), "entypo." ++ d.name, @field(entypo, d.name), .{ .min_size_content = .{ .h = 20 } })) {
+            if (try dvui.buttonIcon(@src(), "entypo." ++ d.name, @field(entypo, d.name), .{}, .{ .min_size_content = .{ .h = 20 } })) {
                 // TODO: copy full buttonIcon code line into clipboard and show toast
             }
             var tl = try dvui.textLayout(@src(), .{ .break_lines = false }, .{});

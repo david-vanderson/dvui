@@ -30,6 +30,7 @@ pub var light = Theme{
         .border = Color.lerp(Color.white, 0.4, Color.black),
         .hover = Color.lerp(Color.white, 0.2, Color.black),
         .press = Color.lerp(Color.white, 0.3, Color.black),
+        .press_text = Color.black,
     },
 
     .style_control = .{ .fill = Color{ .r = 0xe0, .g = 0xe0, .b = 0xe0 } },
@@ -42,6 +43,7 @@ pub var light = Theme{
         .border = Color.lerp(accent, 0.4, Color.black),
         .hover = Color.lerp(accent, 0.2, Color.black),
         .press = Color.lerp(accent, 0.3, Color.black),
+        .press_text = Color.white,
     },
     .style_success = .{
         .accent = success.darken(0.3),
@@ -50,6 +52,7 @@ pub var light = Theme{
         .border = Color.lerp(success, 0.4, Color.black),
         .hover = Color.lerp(success, 0.2, Color.black),
         .press = Color.lerp(success, 0.3, Color.black),
+        .press_text = Color.white,
     },
     .style_err = .{
         .accent = err.darken(0.3),
@@ -58,6 +61,7 @@ pub var light = Theme{
         .border = Color.lerp(err, 0.4, Color.black),
         .hover = Color.lerp(err, 0.2, Color.black),
         .press = Color.lerp(err, 0.3, Color.black),
+        .press_text = Color.white,
     },
 };
 
@@ -86,6 +90,7 @@ pub var dark = Theme{
         .border = Color.lerp(dark_fill, 0.4, Color.white),
         .hover = Color.lerp(dark_fill, 0.2, Color.white),
         .press = Color.lerp(dark_fill, 0.3, Color.white),
+        .press_text = Color.white,
     },
 
     .style_control = .{ .fill = Color{ .r = 0x40, .g = 0x40, .b = 0x40 } },
@@ -98,6 +103,7 @@ pub var dark = Theme{
         .border = Color.lerp(accent, 0.4, Color.white),
         .hover = Color.lerp(accent, 0.2, Color.white),
         .press = Color.lerp(accent, 0.3, Color.white),
+        .press_text = Color.white,
     },
     .style_success = .{
         .accent = dark_success.lighten(0.3),
@@ -106,6 +112,7 @@ pub var dark = Theme{
         .border = Color.lerp(success, 0.4, Color.white),
         .hover = Color.lerp(success, 0.2, Color.white),
         .press = Color.lerp(success, 0.3, Color.white),
+        .press_text = Color.white,
     },
     .style_err = .{
         .accent = dark_err.lighten(0.3),
@@ -114,5 +121,6 @@ pub var dark = Theme{
         .border = Color.lerp(err, 0.4, Color.white),
         .hover = Color.lerp(err, 0.2, Color.white),
         .press = Color.lerp(err, 0.3, Color.white),
+        .press_text = Color.white,
     },
 };
