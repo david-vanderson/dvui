@@ -8128,11 +8128,15 @@ pub var slider_entry_defaults: Options = .{
     // min size calulated from font
 };
 
-pub const SliderEntryInitOptions = struct {
-    value: *f32,
+pub const RangeOptions = struct {
     min: ?f32 = null,
     max: ?f32 = null,
     interval: ?f32 = null,
+};
+
+pub const SliderEntryInitOptions = struct {
+    value: *f32,
+    range: RangeOptions = .{},
 };
 
 /// Combines a slider and a text entry box on key press.  Displays value on top of slider.
@@ -8309,41 +8313,41 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     if (p) |pp| {
                         if (max_x > min_x) {
                             ret = true;
-                            if (init_opts.min != null and init_opts.max != null) {
+                            if (init_opts.range.min != null and init_opts.range.max != null) {
                                 // lerp but make sure we can hit the max
                                 if (pp.x > max_x) {
-                                    init_opts.value.* = init_opts.max.?;
+                                    init_opts.value.* = init_opts.range.max.?;
                                 } else {
                                     const px_lerp = @max(0, @min(1, (pp.x - min_x) / (max_x - min_x)));
-                                    init_opts.value.* = init_opts.min.? + px_lerp * (init_opts.max.? - init_opts.min.?);
-                                    if (init_opts.interval) |ival| {
-                                        init_opts.value.* = init_opts.min.? + ival * @round((init_opts.value.* - init_opts.min.?) / ival);
+                                    init_opts.value.* = init_opts.range.min.? + px_lerp * (init_opts.range.max.? - init_opts.range.min.?);
+                                    if (init_opts.range.interval) |ival| {
+                                        init_opts.value.* = init_opts.range.min.? + ival * @round((init_opts.value.* - init_opts.range.min.?) / ival);
                                     }
                                 }
-                            } else if (init_opts.min != null) {
+                            } else if (init_opts.range.min != null) {
                                 // only have min, go exponentially to the right
                                 if (pp.x < min_x) {
-                                    init_opts.value.* = init_opts.min.?;
+                                    init_opts.value.* = init_opts.range.min.?;
                                 } else {
-                                    const base = if (init_opts.min.? == 0) exp_min_change else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.min.?)))) * exp_min_change;
+                                    const base = if (init_opts.range.min.? == 0) exp_min_change else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.range.min.?)))) * exp_min_change;
                                     const how_far = @max(0, (pp.x - min_x)) / px_scale;
                                     const how_much = (@exp(how_far * exp_stretch) - 1) * base;
-                                    init_opts.value.* = init_opts.min.? + how_much;
-                                    if (init_opts.interval) |ival| {
-                                        init_opts.value.* = init_opts.min.? + ival * @round((init_opts.value.* - init_opts.min.?) / ival);
+                                    init_opts.value.* = init_opts.range.min.? + how_much;
+                                    if (init_opts.range.interval) |ival| {
+                                        init_opts.value.* = init_opts.range.min.? + ival * @round((init_opts.value.* - init_opts.range.min.?) / ival);
                                     }
                                 }
-                            } else if (init_opts.max != null) {
+                            } else if (init_opts.range.max != null) {
                                 // only have max, go exponentially to the left
                                 if (pp.x > max_x) {
-                                    init_opts.value.* = init_opts.max.?;
+                                    init_opts.value.* = init_opts.range.max.?;
                                 } else {
-                                    const base = if (init_opts.max.? == 0) exp_min_change else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.max.?)))) * exp_min_change;
+                                    const base = if (init_opts.range.max.? == 0) exp_min_change else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.range.max.?)))) * exp_min_change;
                                     const how_far = @max(0, (max_x - pp.x)) / px_scale;
                                     const how_much = (@exp(how_far * exp_stretch) - 1) * base;
-                                    init_opts.value.* = init_opts.max.? - how_much;
-                                    if (init_opts.interval) |ival| {
-                                        init_opts.value.* = init_opts.max.? - ival * @round((init_opts.max.? - init_opts.value.*) / ival);
+                                    init_opts.value.* = init_opts.range.max.? - how_much;
+                                    if (init_opts.range.interval) |ival| {
+                                        init_opts.value.* = init_opts.range.max.? - ival * @round((init_opts.range.max.? - init_opts.value.*) / ival);
                                     }
                                 }
                             } else {
@@ -8354,7 +8358,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                         const how_far = (pp.x - start_x) / px_scale;
                                         const how_much = (@exp(@fabs(how_far) * exp_stretch) - 1) * base;
                                         init_opts.value.* = if (how_far < 0) start_v - how_much else start_v + how_much;
-                                        if (init_opts.interval) |ival| {
+                                        if (init_opts.range.interval) |ival| {
                                             init_opts.value.* = start_v + ival * @round((init_opts.value.* - start_v) / ival);
                                         }
                                     }
@@ -8371,18 +8375,18 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             .left, .right => {
                                 e.handled = true;
                                 ret = true;
-                                if (init_opts.interval) |ival| {
+                                if (init_opts.range.interval) |ival| {
                                     init_opts.value.* = init_opts.value.* + (if (ke.code == .left) -ival else ival);
                                 } else {
                                     const how_much = @fabs(init_opts.value.*) * key_percentage;
                                     init_opts.value.* = if (ke.code == .left) init_opts.value.* - how_much else init_opts.value.* + how_much;
                                 }
 
-                                if (init_opts.min) |min| {
+                                if (init_opts.range.min) |min| {
                                     init_opts.value.* = @max(min, init_opts.value.*);
                                 }
 
-                                if (init_opts.max) |max| {
+                                if (init_opts.range.max) |max| {
                                     init_opts.value.* = @min(max, init_opts.value.*);
                                 }
                             },
@@ -8401,8 +8405,8 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         try b.wd.borderAndBackground(.{ .fill_color = if (hover) b.wd.options.color(.hover) else b.wd.options.color(.fill) });
 
         // only draw handle if we have a min and max
-        if (init_opts.min != null and init_opts.max != null) {
-            const how_far = (init_opts.value.* - init_opts.min.?) / (init_opts.max.? - init_opts.min.?);
+        if (init_opts.range.min != null and init_opts.range.max != null) {
+            const how_far = (init_opts.value.* - init_opts.range.min.?) / (init_opts.range.max.? - init_opts.range.min.?);
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
 
@@ -8425,6 +8429,83 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     }
 
     return ret;
+}
+
+fn isF32Slice(comptime ptr: std.builtin.Type.Pointer, comptime child_info: std.builtin.Type) bool {
+    const is_slice = ptr.size == .Slice;
+    const holds_f32 = switch (child_info) {
+        .Float => |f| f.bits == 32,
+        else => false,
+    };
+
+    // If f32 slice, cast. Otherwise, throw an error.
+    if (is_slice) {
+        if (!holds_f32) {
+            @compileError("Only f32 slices are supported!");
+        }
+        return true;
+    }
+
+    return false;
+}
+
+fn checkAndCastDataPtr(comptime num_components: u32, value: anytype) *[num_components]f32 {
+    switch (@typeInfo(@TypeOf(value))) {
+        .Pointer => |ptr| {
+            const child_info = @typeInfo(ptr.child);
+            const is_f32_slice = comptime isF32Slice(ptr, child_info);
+
+            if (is_f32_slice) {
+                return @as(*[num_components]f32, @ptrCast(value.ptr));
+            }
+
+            // If not slice, need to check for arrays and vectors.
+            // Need to also check the length.
+            const data_len = switch (child_info) {
+                .Vector => |vec| vec.len,
+                .Array => |arr| arr.len,
+                else => @compileError("Must supply a pointer to a vector or array!"),
+            };
+
+            if (data_len != num_components) {
+                @compileError("Data and options have different lengths!");
+            }
+
+            return @ptrCast(value);
+        },
+        else => @compileError("Must supply a pointer to a vector or array!"),
+    }
+}
+
+pub const SliderVectorInitOptions = struct {
+    range: RangeOptions = .{},
+};
+
+pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, comptime num_components: u32, value: anytype, init_opts: SliderVectorInitOptions, opts: Options) !bool {
+    var data_arr = checkAndCastDataPtr(num_components, value);
+
+    var b = try dvui.box(line, .horizontal, opts);
+    defer b.deinit();
+
+    var slider_opts = opts.strip().override(.{ .margin = Rect.all(4) });
+
+    var any_changed = false;
+    inline for (0..num_components) |i| {
+        // `catch false` because otherwise (`try`) would cause issues where the (i+1)th, (i+2)th, ... components would not get drawn properly while ith is modified.
+        const component_opts = .{
+            .value = &data_arr[i],
+            .range = .{
+                .min = init_opts.range.min,
+                .max = init_opts.range.max,
+                .interval = init_opts.range.interval,
+            },
+        };
+
+        const component_changed = try dvui.sliderEntry(line, fmt, component_opts, slider_opts.override(.{ .id_extra = i }));
+        any_changed = any_changed or component_changed;
+    }
+
+    return any_changed;
 }
 
 pub var progress_defaults: Options = .{
