@@ -8280,19 +8280,24 @@ pub const SliderVectorInitOptions = struct {
 pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, comptime num_components: u32, value: anytype, init_opts: SliderVectorInitOptions, opts: Options) !bool {
     var data_arr = checkAndCastDataPtr(num_components, value);
 
-    var b = try dvui.box(@src(), .horizontal, opts);
+    var b = try dvui.box(line, .horizontal, opts);
     defer b.deinit();
+
+    var slider_opts = opts.strip().override(.{ .margin = Rect.all(4) });
 
     var any_changed = false;
     inline for (0..num_components) |i| {
         // `catch false` because otherwise (`try`) would cause issues where the (i+1)th, (i+2)th, ... components would not get drawn properly while ith is modified.
-        const component_opts = .{ .value = &data_arr[i], .range = .{
-            .min = init_opts.range.min,
-            .max = init_opts.range.max,
-            .interval = init_opts.range.interval,
-        } };
+        const component_opts = .{
+            .value = &data_arr[i],
+            .range = .{
+                .min = init_opts.range.min,
+                .max = init_opts.range.max,
+                .interval = init_opts.range.interval,
+            },
+        };
 
-        const component_changed = dvui.sliderEntry(line, fmt, component_opts, opts.override(.{ .id_extra = i })) catch false;
+        const component_changed = dvui.sliderEntry(line, fmt, component_opts, slider_opts.override(.{ .id_extra = i })) catch false;
         any_changed = any_changed or component_changed;
     }
 
