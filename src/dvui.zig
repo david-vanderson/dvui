@@ -2965,11 +2965,11 @@ pub const Window = struct {
         try tl.addText(self.debug_info_src_id_extra, .{});
         tl.deinit();
 
-        if (try dvui.button(@src(), if (dum) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{})) {
+        if (try dvui.button(@src(), if (dum) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
             dum = !dum;
         }
 
-        if (try dvui.button(@src(), if (dum) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{})) {
+        if (try dvui.button(@src(), if (dum) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{}, .{})) {
             dum = !dum;
             self.debug_under_mouse_esc_needed = dum;
         }
@@ -2980,7 +2980,7 @@ pub const Window = struct {
         self.debug_refresh_mutex.lock();
         logit = self.debug_refresh;
         self.debug_refresh_mutex.unlock();
-        if (try dvui.button(@src(), if (logit) "Stop Refresh Logging" else "Start Refresh Logging", .{})) {
+        if (try dvui.button(@src(), if (logit) "Stop Refresh Logging" else "Start Refresh Logging", .{}, .{})) {
             self.debug_refresh_mutex.lock();
             self.debug_refresh = !self.debug_refresh;
             self.debug_refresh_mutex.unlock();
@@ -2996,7 +2996,7 @@ pub const Window = struct {
                 var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
                 defer hbox.deinit();
 
-                if (try dvui.buttonIcon(@src(), "find", entypo.magnifying_glass, .{ .min_size_content = .{ .h = 12 } })) {
+                if (try dvui.buttonIcon(@src(), "find", entypo.magnifying_glass, .{}, .{ .min_size_content = .{ .h = 12 } })) {
                     self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(line, ' '), 16) catch 0;
                 }
 
@@ -3812,7 +3812,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     var over = try dvui.overlay(@src(), .{ .expand = .horizontal });
 
     if (openflag) |of| {
-        if (try dvui.buttonIcon(@src(), "close", entypo.cross, .{ .min_size_content = .{ .h = 16 }, .corner_radius = Rect.all(16), .padding = Rect.all(0), .margin = Rect.all(2) })) {
+        if (try dvui.buttonIcon(@src(), "close", entypo.cross, .{}, .{ .min_size_content = .{ .h = 16 }, .corner_radius = Rect.all(16), .padding = Rect.all(0), .margin = Rect.all(2) })) {
             of.* = false;
         }
     }
@@ -3955,7 +3955,7 @@ pub fn dialogDisplay(id: u32) !void {
     try tl.addText(message, .{});
     tl.deinit();
 
-    if (try dvui.button(@src(), "Ok", .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
+    if (try dvui.button(@src(), "Ok", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
         dvui.dialogRemove(id);
         if (callafter) |ca| {
             try ca(id, .ok);
@@ -4695,7 +4695,7 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     ret.* = TextLayoutWidget.init(src, init_opts, opts);
     try ret.install();
     // can install corner widgets here
-    //_ = try dvui.button(@src(), "upright", .{ .gravity_x = 1.0 });
+    //_ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
     ret.processEvents();
     // now call addText() any number of times
     return ret;
@@ -7914,9 +7914,9 @@ pub const ButtonWidget = struct {
     }
 };
 
-pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) !bool {
+pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) !bool {
     // initialize widget and get rectangle from parent
-    var bw = ButtonWidget.init(src, .{}, opts);
+    var bw = ButtonWidget.init(src, init_opts, opts);
 
     // make ourselves the new parent
     try bw.install();
@@ -7927,14 +7927,18 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Opti
     // draw background/border
     try bw.drawBackground();
 
+    // use pressed text color if desired
+    var click = bw.clicked();
+    var options = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
+
+    if (captured(bw.wd.id)) options = options.override(.{ .color_text = opts.color(.press_text) });
+
     // this child widget:
     // - has bw as parent
     // - gets a rectangle from bw
     // - draws itself
     // - reports its min size to bw
-    try labelNoFmt(@src(), label_str, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
-
-    var click = bw.clicked();
+    try labelNoFmt(@src(), label_str, options);
 
     // draw focus
     try bw.drawFocus();
@@ -7946,8 +7950,8 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Opti
     return click;
 }
 
-pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, opts: Options) !bool {
-    var bw = ButtonWidget.init(src, .{}, opts);
+pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) !bool {
+    var bw = ButtonWidget.init(src, init_opts, opts);
     try bw.install();
     bw.processEvents();
     try bw.drawBackground();

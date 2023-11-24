@@ -75,6 +75,7 @@ color_fill: ?Color = null,
 color_border: ?Color = null,
 color_hover: ?Color = null,
 color_press: ?Color = null,
+color_press_text: ?Color = null,
 
 // use to override font_style
 font: ?Font = null,
@@ -111,6 +112,7 @@ pub const ColorKind = enum {
     border,
     hover,
     press,
+    press_text,
 };
 
 pub fn color(self: *const Options, kind: ColorKind) Color {
@@ -121,6 +123,7 @@ pub fn color(self: *const Options, kind: ColorKind) Color {
         .border => self.color_border,
         .hover => self.color_hover,
         .press => self.color_press,
+        .press_text => self.color_press_text,
     };
 
     // if we have a custom color, return it
@@ -146,6 +149,7 @@ pub fn color(self: *const Options, kind: ColorKind) Color {
         .border => ret = cs.border orelse dvui.themeGet().style_content.border orelse unreachable,
         .hover => ret = cs.hover orelse dvui.themeGet().style_content.hover orelse unreachable,
         .press => ret = cs.press orelse dvui.themeGet().style_content.press orelse unreachable,
+        .press_text => ret = cs.press_text orelse dvui.themeGet().style_content.press_text orelse unreachable,
     }
 
     return (ret orelse unreachable).transparent(dvui.themeGet().alpha);
@@ -258,6 +262,7 @@ pub fn strip(self: *const Options) Options {
         .color_border = self.color_border,
         .color_hover = self.color_hover,
         .color_press = self.color_press,
+        .color_press_text = self.color_press_text,
         .font = self.font,
         .color_style = self.color_style,
         .font_style = self.font_style,
