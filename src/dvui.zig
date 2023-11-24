@@ -8297,7 +8297,7 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
             },
         };
 
-        const component_changed = dvui.sliderEntry(line, fmt, component_opts, slider_opts.override(.{ .id_extra = i })) catch false;
+        const component_changed = try dvui.sliderEntry(line, fmt, component_opts, slider_opts.override(.{ .id_extra = i }));
         any_changed = any_changed or component_changed;
     }
 
