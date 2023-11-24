@@ -43,7 +43,7 @@ pub var light = Theme{
         .border = Color.lerp(accent, 0.4, Color.black),
         .hover = Color.lerp(accent, 0.2, Color.black),
         .press = Color.lerp(accent, 0.3, Color.black),
-        .press_text = Color.black,
+        .press_text = Color.white,
     },
     .style_success = .{
         .accent = success.darken(0.3),
@@ -52,7 +52,7 @@ pub var light = Theme{
         .border = Color.lerp(success, 0.4, Color.black),
         .hover = Color.lerp(success, 0.2, Color.black),
         .press = Color.lerp(success, 0.3, Color.black),
-        .press_text = Color.black,
+        .press_text = Color.white,
     },
     .style_err = .{
         .accent = err.darken(0.3),
@@ -61,7 +61,7 @@ pub var light = Theme{
         .border = Color.lerp(err, 0.4, Color.black),
         .hover = Color.lerp(err, 0.2, Color.black),
         .press = Color.lerp(err, 0.3, Color.black),
-        .press_text = Color.black,
+        .press_text = Color.white,
     },
 };
 
