@@ -5,20 +5,19 @@ const SDLBackend = @import("SDLBackend");
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
-const window_icon = @embedFile("src/zig-favicon.png");
+const window_icon_png = @embedFile("src/zig-favicon.png");
 
 pub fn main() !void {
-    var win_backend = try SDLBackend.init(.{
+    var backend = try SDLBackend.init(.{
         .width = 800,
         .height = 600,
         .vsync = false,
         .title = "DVUI SDL test",
-        .icon = window_icon,
     });
-    win_backend.log_events = false;
-    defer win_backend.deinit();
+    defer backend.deinit();
+    backend.setIconFromFileContent(window_icon_png);
 
-    var win = try dvui.Window.init(@src(), 0, gpa, win_backend.backend());
+    var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
     defer win.deinit();
 
     win.debug_touch_simulate_events = false;
@@ -37,11 +36,11 @@ pub fn main() !void {
     //var rng = std.rand.DefaultPrng.init(0);
 
     main_loop: while (true) {
-        var nstime = win.beginWait(win_backend.hasEvent());
+        var nstime = win.beginWait(backend.hasEvent());
         try win.begin(nstime);
-        win_backend.clear();
+        backend.clear();
 
-        const quit = try win_backend.addAllEvents(&win);
+        const quit = try backend.addAllEvents(&win);
         if (quit) break :main_loop;
 
         _ = try dvui.Examples.demo();
@@ -397,13 +396,13 @@ pub fn main() !void {
 
         const end_micros = try win.end(.{});
 
-        win_backend.setCursor(win.cursorRequested());
+        backend.setCursor(win.cursorRequested());
 
-        win_backend.renderPresent();
+        backend.renderPresent();
 
         const wait_event_micros = win.waitTime(end_micros, null);
 
-        win_backend.waitEventTimeout(wait_event_micros);
+        backend.waitEventTimeout(wait_event_micros);
     }
 }
 

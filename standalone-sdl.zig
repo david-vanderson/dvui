@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("dvui");
 const Backend = @import("SDLBackend");
 
-const window_icon = @embedFile("src/zig-favicon.png");
+const window_icon_png = @embedFile("src/zig-favicon.png");
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
@@ -21,9 +21,9 @@ pub fn main() !void {
         .height = 600,
         .vsync = vsync,
         .title = "DVUI Standalone Example",
-        .icon = window_icon,
     });
     defer backend.deinit();
+    backend.setIconFromFileContent(window_icon_png);
 
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());

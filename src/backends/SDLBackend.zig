@@ -25,7 +25,6 @@ pub const initOptions = struct {
     height: u32,
     vsync: bool,
     title: [:0]const u8,
-    icon: ?[]const u8 = null,
 };
 
 pub fn init(options: initOptions) !SDLBackend {
@@ -175,24 +174,27 @@ pub fn init(options: initOptions) !SDLBackend {
         }
     }
 
-
-    if (options.icon) |bytes| {
-        var icon_w: c_int = undefined;
-        var icon_h: c_int = undefined;
-        var channels_in_file: c_int = undefined;
-        const data = dvui.c.stbi_load_from_memory(bytes.ptr, @as(c_int, @intCast(bytes.len)), &icon_w, &icon_h, &channels_in_file, 4);
-        if (data == null) {
-            dvui.log.warn("imageTexture stbi_load error on window icon: {s}\n", .{ dvui.c.stbi_failure_reason() });
-        } else {
-            defer dvui.c.stbi_image_free(data);
-            var surface = c.SDL_CreateRGBSurfaceWithFormatFrom(data, @as(c_int, @intCast(icon_w)), @as(c_int, @intCast(icon_h)), 32, @as(c_int, @intCast(4 * icon_w)), c.SDL_PIXELFORMAT_ABGR8888);
-            defer c.SDL_FreeSurface(surface);
-
-            c.SDL_SetWindowIcon(window, surface);
-        }
-    }
-
     return back;
+}
+
+pub fn setIconFromFileContent(self: *SDLBackend, file_content: []const u8) void {
+    var icon_w: c_int = undefined;
+    var icon_h: c_int = undefined;
+    var channels_in_file: c_int = undefined;
+    const data = dvui.c.stbi_load_from_memory(file_content.ptr, @as(c_int, @intCast(file_content.len)), &icon_w, &icon_h, &channels_in_file, 4);
+    if (data == null) {
+        dvui.log.warn("when setting icon, stbi_load error: {s}\n", .{dvui.c.stbi_failure_reason()});
+        return;
+    }
+    defer dvui.c.stbi_image_free(data);
+    self.setIconFromABGR8888(data, icon_w, icon_h);
+}
+
+pub fn setIconFromABGR8888(self: *SDLBackend, data: [*]const u8, icon_w: c_int, icon_h: c_int) void {
+    var surface = c.SDL_CreateRGBSurfaceWithFormatFrom(@ptrCast(@constCast(data)), icon_w, icon_h, 32, 4 * icon_w, c.SDL_PIXELFORMAT_ABGR8888);
+    defer c.SDL_FreeSurface(surface);
+
+    c.SDL_SetWindowIcon(self.window, surface);
 }
 
 pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) void {
@@ -515,7 +517,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
         },
         if (sdl3) c.SDL_EVENT_MOUSE_WHEEL else c.SDL_MOUSEWHEEL => {
             if (self.log_events) {
-                std.debug.print("sdl event MOUSEWHEEL {d} {d}\n", .{event.wheel.y, event.wheel.which});
+                std.debug.print("sdl event MOUSEWHEEL {d} {d}\n", .{ event.wheel.y, event.wheel.which });
             }
 
             const ticks = if (sdl3) event.wheel.y else @as(f32, @floatFromInt(event.wheel.y));
