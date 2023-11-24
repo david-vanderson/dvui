@@ -123,7 +123,7 @@ pub fn main() !void {
                 }
 
                 {
-                    if (try dvui.button(@src(), "Stroke Test", .{})) {
+                    if (try dvui.button(@src(), "Stroke Test", .{}, .{})) {
                         StrokeTest.show_dialog = !StrokeTest.show_dialog;
                     }
 
@@ -136,11 +136,11 @@ pub fn main() !void {
                     var box = try dvui.box(@src(), .horizontal, .{});
                     defer box.deinit();
 
-                    if (try dvui.button(@src(), "content_scale + .1", .{})) {
+                    if (try dvui.button(@src(), "content_scale + .1", .{}, .{})) {
                         win.content_scale += 0.1;
                     }
 
-                    if (try dvui.button(@src(), "content_scale - .1", .{})) {
+                    if (try dvui.button(@src(), "content_scale - .1", .{}, .{})) {
                         win.content_scale -= 0.1;
                     }
 
@@ -150,7 +150,7 @@ pub fn main() !void {
                 {
                     try dvui.label(@src(), "Theme: {s}", .{dvui.themeGet().name}, .{});
 
-                    if (try dvui.button(@src(), "Toggle Theme", .{})) {
+                    if (try dvui.button(@src(), "Toggle Theme", .{}, .{})) {
                         if (dvui.themeGet() == &dvui.Adwaita.light) {
                             dvui.themeSet(&dvui.Adwaita.dark);
                         } else {
@@ -158,13 +158,13 @@ pub fn main() !void {
                         }
                     }
 
-                    if (try dvui.button(@src(), if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window", .{})) {
+                    if (try dvui.button(@src(), if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window", .{}, .{})) {
                         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
                     }
                 }
 
                 {
-                    if (try dvui.button(@src(), "add window", .{})) {
+                    if (try dvui.button(@src(), "add window", .{}, .{})) {
                         num_windows += 10;
                     }
 
@@ -193,7 +193,7 @@ pub fn main() !void {
 
                         try dvui.windowHeader("Modal Dialog", "", &open);
 
-                        if (try dvui.button(@src(), "add window", .{})) {
+                        if (try dvui.button(@src(), "add window", .{}, .{})) {
                             num_windows += 3;
                         }
 
@@ -219,10 +219,10 @@ pub fn main() !void {
                         .scroll_horizontal = false,
                     }, .{});
                     try te.install();
-                    _ = try dvui.button(@src(), "upleft", .{});
-                    _ = try dvui.button(@src(), "upright", .{ .gravity_x = 1.0 });
-                    _ = try dvui.button(@src(), "downleft", .{ .gravity_y = 1.0 });
-                    _ = try dvui.button(@src(), "downright", .{ .gravity_x = 1.0, .gravity_y = 1.0 });
+                    _ = try dvui.button(@src(), "upleft", .{}, .{});
+                    _ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
+                    _ = try dvui.button(@src(), "downleft", .{}, .{ .gravity_y = 1.0 });
+                    _ = try dvui.button(@src(), "downright", .{}, .{ .gravity_x = 1.0, .gravity_y = 1.0 });
                     te.processEvents();
                     try te.draw();
                     te.deinit();
@@ -230,10 +230,10 @@ pub fn main() !void {
                     var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{});
                     try tl.install();
 
-                    _ = try dvui.button(@src(), "upleft", .{});
-                    _ = try dvui.button(@src(), "upright", .{ .gravity_x = 1.0 });
-                    _ = try dvui.button(@src(), "downleft", .{ .gravity_y = 1.0 });
-                    _ = try dvui.button(@src(), "downright", .{ .gravity_x = 1.0, .gravity_y = 1.0 });
+                    _ = try dvui.button(@src(), "upleft", .{}, .{});
+                    _ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
+                    _ = try dvui.button(@src(), "downleft", .{}, .{ .gravity_y = 1.0 });
+                    _ = try dvui.button(@src(), "downright", .{}, .{ .gravity_x = 1.0, .gravity_y = 1.0 });
 
                     tl.processEvents();
 
@@ -252,22 +252,22 @@ pub fn main() !void {
                         var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
                         defer hbox.deinit();
                         try dvui.label(@src(), "{d} {d} : {d}", .{ Sel.sel.start, Sel.sel.end, Sel.sel.cursor }, .{});
-                        if (try dvui.button(@src(), "Inc Start", .{})) {
+                        if (try dvui.button(@src(), "Inc Start", .{}, .{})) {
                             Sel.sel.incStart();
                         }
-                        if (try dvui.button(@src(), "Dec Start", .{})) {
+                        if (try dvui.button(@src(), "Dec Start", .{}, .{})) {
                             Sel.sel.decStart();
                         }
-                        if (try dvui.button(@src(), "Inc End", .{})) {
+                        if (try dvui.button(@src(), "Inc End", .{}, .{})) {
                             Sel.sel.incEnd();
                         }
-                        if (try dvui.button(@src(), "Dec End", .{})) {
+                        if (try dvui.button(@src(), "Dec End", .{}, .{})) {
                             Sel.sel.decEnd();
                         }
-                        if (try dvui.button(@src(), "Inc Cur", .{})) {
+                        if (try dvui.button(@src(), "Inc Cur", .{}, .{})) {
                             Sel.sel.incCursor();
                         }
-                        if (try dvui.button(@src(), "Dec Cur", .{})) {
+                        if (try dvui.button(@src(), "Dec Cur", .{}, .{})) {
                             Sel.sel.decCursor();
                         }
                     }
@@ -302,7 +302,7 @@ pub fn main() !void {
 
                 var start_closing: bool = false;
 
-                if (try dvui.button(@src(), "Floating Window", .{ .gravity_x = 1.0, .gravity_y = 1.0, .margin = dvui.Rect.all(10) })) {
+                if (try dvui.button(@src(), "Floating Window", .{}, .{ .gravity_x = 1.0, .gravity_y = 1.0, .margin = dvui.Rect.all(10) })) {
                     if (FloatingWindowTest.show) {
                         start_closing = true;
                     } else {
@@ -322,7 +322,7 @@ pub fn main() !void {
 
                     try dvui.label(@src(), "Pretty Cool", .{}, .{ .font = .{ .name = "VeraMono", .ttf_bytes = dvui.bitstream_vera.VeraMono, .size = 20 } });
 
-                    if (try dvui.button(@src(), "button", .{})) {
+                    if (try dvui.button(@src(), "button", .{}, .{})) {
                         floats[0] = true;
                     }
 
@@ -344,12 +344,12 @@ pub fn main() !void {
                             const oo = dvui.Options{ .margin = dvui.Rect.all(4), .expand = .horizontal };
                             var box = try dvui.box(@src(), .horizontal, oo);
 
-                            if (try dvui.button(@src(), "Yes", oo)) {
+                            if (try dvui.button(@src(), "Yes", .{}, oo)) {
                                 std.debug.print("Yes {d}\n", .{fi});
                                 floats[fi + 1] = true;
                             }
 
-                            if (try dvui.button(@src(), "No", oo)) {
+                            if (try dvui.button(@src(), "No", .{}, oo)) {
                                 std.debug.print("No {d}\n", .{fi});
                                 fw2.close();
                             }
@@ -363,10 +363,10 @@ pub fn main() !void {
                     var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
                     try tl.install();
                     {
-                        if (try dvui.button(@src(), "Win Up .1", .{})) {
+                        if (try dvui.button(@src(), "Win Up .1", .{}, .{})) {
                             fwin.wd.rect.y -= 0.1;
                         }
-                        if (try dvui.button(@src(), "Win Down .1", .{ .gravity_x = 1.0 })) {
+                        if (try dvui.button(@src(), "Win Down .1", .{}, .{ .gravity_x = 1.0 })) {
                             fwin.wd.rect.y += 0.1;
                         }
                     }
@@ -493,7 +493,7 @@ pub const StrokeTest = struct {
             try dvui.pathFillConvex(fill_color);
 
             _ = i;
-            //_ = try dvui.button(@src(), i, "Floating", .{ .rect = dvui.Rect.fromPoint(p) });
+            //_ = try dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });
         }
 
         for (points) |p| {
