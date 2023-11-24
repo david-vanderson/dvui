@@ -243,8 +243,29 @@ pub fn demo() !void {
     var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
     defer vbox.deinit();
 
-    if (try dvui.button(@src(), "Toggle Debug Window", .{})) {
-        dvui.toggleDebugWindow();
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        if (try dvui.button(@src(), "Toggle Debug Window", .{})) {
+            dvui.toggleDebugWindow();
+        }
+
+        if (try dvui.button(@src(), "Toggle Theme", .{})) {
+            if (dvui.themeGet() == &Adwaita.light) {
+                dvui.themeSet(&Adwaita.dark);
+            } else {
+                dvui.themeSet(&Adwaita.light);
+            }
+        }
+
+        if (try dvui.button(@src(), "Zoom In", .{})) {
+            scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
+        }
+
+        if (try dvui.button(@src(), "Zoom Out", .{})) {
+            scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
+        }
     }
 
     if (try dvui.expander(@src(), "Basic Widgets", .{}, .{ .expand = .horizontal })) {
@@ -300,28 +321,6 @@ pub fn demo() !void {
         defer b.deinit();
         try debuggingErrors();
     }
-
-    if (try dvui.button(@src(), "Toggle Theme", .{})) {
-        if (dvui.themeGet() == &Adwaita.light) {
-            dvui.themeSet(&Adwaita.dark);
-        } else {
-            dvui.themeSet(&Adwaita.light);
-        }
-    }
-
-    if (try dvui.button(@src(), "Zoom In", .{})) {
-        scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
-
-        //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * dvui.themeGet().font_body.size });
-    }
-
-    if (try dvui.button(@src(), "Zoom Out", .{})) {
-        scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
-
-        //std.debug.print("scale {d} {d}\n", .{ scale_val, scale_val * dvui.themeGet().font_body.size });
-    }
-
-    try dvui.checkbox(@src(), &dvui.currentWindow().snap_to_pixels, "Snap to Pixels (see window title)", .{});
 
     if (show_dialog) {
         try dialogDirect();
@@ -1087,8 +1086,10 @@ fn makeLabels(src: std.builtin.SourceLocation, count: usize) !void {
 }
 
 pub fn debuggingErrors() !void {
-    try dvui.label(@src(), "Virtual Parent (affects IDs but not layout)", .{}, .{});
-    {
+    try dvui.checkbox(@src(), &dvui.currentWindow().snap_to_pixels, "Snap to Pixels", .{});
+    try dvui.label(@src(), "on non-hdpi screens watch the window title \"DVUI Demo\"", .{}, .{ .margin = .{ .x = 10 } });
+
+    if (try dvui.expander(@src(), "Virtual Parent (affects IDs but not layout)", .{}, .{ .expand = .horizontal })) {
         var hbox = try dvui.box(@src(), .horizontal, .{.margin = .{ .x = 10 }});
         defer hbox.deinit();
         try dvui.label(@src(), "makeLabels twice:", .{}, .{});
