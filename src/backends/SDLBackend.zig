@@ -25,6 +25,7 @@ pub const initOptions = struct {
     height: u32,
     vsync: bool,
     title: [:0]const u8,
+    icon: ?[]const u8 = null,
 };
 
 pub fn init(options: initOptions) !SDLBackend {
@@ -172,6 +173,10 @@ pub fn init(options: initOptions) !SDLBackend {
                 _ = c.SDL_SetWindowSize(window, @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(options.width)))), @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(options.height)))));
             }
         }
+    }
+
+    if (options.icon) |bytes| {
+        back.setIconFromFileContent(bytes);
     }
 
     return back;
