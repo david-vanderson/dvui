@@ -25,6 +25,8 @@ pub var show_demo_window: bool = false;
 var checkbox_bool: bool = false;
 var icon_image_size_extra: f32 = 0;
 var icon_image_rotation: f32 = 0;
+var test_array = [_]f32{ 0, 1, 2 };
+var slider_vector_val: []f32 = test_array[0..3];
 var slider_val: f32 = 0.0;
 var slider_entry_val: f32 = 0.05;
 var slider_entry_min: bool = true;
@@ -389,7 +391,7 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
-        _ = try dvui.sliderEntry(@src(), "val: {d:0.3}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{ .gravity_y = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "val: {d:0.3}", .{ .value = &slider_entry_val, .range = .{ .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) } }, .{ .gravity_y = 0.5 });
         try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{ .gravity_y = 0.5 });
     }
 
@@ -400,6 +402,15 @@ pub fn basicWidgets() !void {
         try dvui.checkbox(@src(), &slider_entry_min, "Min", .{});
         try dvui.checkbox(@src(), &slider_entry_max, "Max", .{});
         try dvui.checkbox(@src(), &slider_entry_interval, "Interval", .{});
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 } });
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Vector Slider Entry", .{}, .{ .gravity_y = 0.5 });
+        _ = try dvui.sliderVector(@src(), "{d:0.2}", 3, slider_vector_val, .{ .range = .{ .min = -1, .max = 2 } }, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{ .gravity_y = 0.5 });
     }
 
     {
@@ -647,9 +658,9 @@ pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: O
     var green: f32 = @floatFromInt(color.g);
     var blue: f32 = @floatFromInt(color.b);
 
-    _ = try dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
-    _ = try dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
-    _ = try dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
+    _ = try dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .range = .{ .min = 0, .max = 255, .interval = 1 } }, .{ .gravity_y = 0.5 });
+    _ = try dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .range = .{ .min = 0, .max = 255, .interval = 1 } }, .{ .gravity_y = 0.5 });
+    _ = try dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .range = .{ .min = 0, .max = 255, .interval = 1 } }, .{ .gravity_y = 0.5 });
 
     color.r = @intFromFloat(red);
     color.g = @intFromFloat(green);
