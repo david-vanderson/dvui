@@ -8489,6 +8489,8 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
     var b = try dvui.box(line, .horizontal, opts);
     defer b.deinit();
 
+    const slider_opts = slider_entry_defaults.override(opts);
+
     var any_changed = false;
     inline for (0..num_components) |i| {
         const component_opts = .{
@@ -8498,7 +8500,7 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
             .interval = init_opts.interval,
         };
 
-        const component_changed = try dvui.sliderEntry(line, fmt, component_opts, .{ .id_extra = i, .margin = .{ .x = 2, .w = 2 } });
+        const component_changed = try dvui.sliderEntry(line, fmt, component_opts, slider_opts.override(.{ .id_extra = i }));
         any_changed = any_changed or component_changed;
     }
 
