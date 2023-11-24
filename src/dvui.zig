@@ -8231,11 +8231,36 @@ pub fn SliderVectorInitOptions(comptime num_components: u32) type {
     };
 }
 
+fn isF32Slice(comptime ptr: std.builtin.Type.Pointer, comptime child_info: std.builtin.Type) bool {
+    const is_slice = ptr.size == .Slice;
+    const holds_f32 = switch (child_info) {
+        .Float => |f| f.bits == 32,
+        else => false,
+    };
+
+    // If f32 slice, cast. Otherwise, throw an error.
+    if (is_slice) {
+        if (!holds_f32) {
+            @compileError("Only f32 slices are supported!");
+        }
+        return true;
+    }
+
+    return false;
+}
+
 fn checkAndCastDataPtr(comptime num_components: u32, value: anytype) *[num_components]f32 {
     switch (@typeInfo(@TypeOf(value))) {
         .Pointer => |ptr| {
             const child_info = @typeInfo(ptr.child);
+            const is_f32_slice = comptime isF32Slice(ptr, child_info);
 
+            if (is_f32_slice) {
+                return @as(*[num_components]f32, @ptrCast(value.ptr));
+            }
+
+            // If not slice, need to check for arrays and vectors.
+            // Need to also check the length.
             const data_len = switch (child_info) {
                 .Vector => |vec| vec.len,
                 .Array => |arr| arr.len,
