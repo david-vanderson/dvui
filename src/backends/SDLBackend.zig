@@ -25,6 +25,7 @@ pub const initOptions = struct {
     height: u32,
     vsync: bool,
     title: [:0]const u8,
+    icon: ?[]const u8 = null,
 };
 
 pub fn init(options: initOptions) !SDLBackend {
@@ -171,6 +172,23 @@ pub fn init(options: initOptions) !SDLBackend {
             if (back.initial_scale != 1.0) {
                 _ = c.SDL_SetWindowSize(window, @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(options.width)))), @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(options.height)))));
             }
+        }
+    }
+
+
+    if (options.icon) |bytes| {
+        var icon_w: c_int = undefined;
+        var icon_h: c_int = undefined;
+        var channels_in_file: c_int = undefined;
+        const data = dvui.c.stbi_load_from_memory(bytes.ptr, @as(c_int, @intCast(bytes.len)), &icon_w, &icon_h, &channels_in_file, 4);
+        if (data == null) {
+            dvui.log.warn("imageTexture stbi_load error on window icon: {s}\n", .{ dvui.c.stbi_failure_reason() });
+        } else {
+            defer dvui.c.stbi_image_free(data);
+            var surface = c.SDL_CreateRGBSurfaceWithFormatFrom(data, @as(c_int, @intCast(icon_w)), @as(c_int, @intCast(icon_h)), 32, @as(c_int, @intCast(4 * icon_w)), c.SDL_PIXELFORMAT_ABGR8888);
+            defer c.SDL_FreeSurface(surface);
+
+            c.SDL_SetWindowIcon(window, surface);
         }
     }
 

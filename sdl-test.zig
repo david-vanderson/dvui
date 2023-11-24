@@ -5,12 +5,15 @@ const SDLBackend = @import("SDLBackend");
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
+const window_icon = @embedFile("src/zig-favicon.png");
+
 pub fn main() !void {
     var win_backend = try SDLBackend.init(.{
         .width = 800,
         .height = 600,
         .vsync = false,
         .title = "DVUI SDL test",
+        .icon = window_icon,
     });
     win_backend.log_events = false;
     defer win_backend.deinit();
