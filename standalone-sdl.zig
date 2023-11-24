@@ -21,9 +21,9 @@ pub fn main() !void {
         .height = 600,
         .vsync = vsync,
         .title = "DVUI Standalone Example",
+        .icon = window_icon_png, // can also call setIconFromFileContent()
     });
     defer backend.deinit();
-    backend.setIconFromFileContent(window_icon_png);
 
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
