@@ -13,15 +13,15 @@ pub var light = Theme{
     .name = "Adwaita",
     .dark = false,
 
-    .font_body = Font{ .size = 11, .name = "Vera", .ttf_bytes = bitstream_vera.Vera },
-    .font_heading = Font{ .size = 11, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
-    .font_caption = Font{ .size = 9, .name = "Vera", .ttf_bytes = bitstream_vera.Vera },
-    .font_caption_heading = Font{ .size = 9, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
-    .font_title = Font{ .size = 24, .name = "Vera", .ttf_bytes = bitstream_vera.Vera },
-    .font_title_1 = Font{ .size = 20, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
-    .font_title_2 = Font{ .size = 17, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
-    .font_title_3 = Font{ .size = 15, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
-    .font_title_4 = Font{ .size = 13, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
+    .font_body = .{ .size = 11, .name = "Vera", .ttf_bytes = bitstream_vera.Vera },
+    .font_heading = .{ .size = 11, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
+    .font_caption = .{ .size = 9, .name = "Vera", .ttf_bytes = bitstream_vera.Vera },
+    .font_caption_heading = .{ .size = 9, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
+    .font_title = .{ .size = 24, .name = "Vera", .ttf_bytes = bitstream_vera.Vera },
+    .font_title_1 = .{ .size = 20, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
+    .font_title_2 = .{ .size = 17, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
+    .font_title_3 = .{ .size = 15, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
+    .font_title_4 = .{ .size = 13, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
 
     .style_content = .{
         .accent = accent,
@@ -33,8 +33,8 @@ pub var light = Theme{
         .press_text = Color.black,
     },
 
-    .style_control = .{ .fill = Color{ .r = 0xe0, .g = 0xe0, .b = 0xe0 } },
-    .style_window = .{ .fill = Color{ .r = 0xf0, .g = 0xf0, .b = 0xf0 } },
+    .style_control = .{ .fill = .{ .r = 0xe0, .g = 0xe0, .b = 0xe0 } },
+    .style_window = .{ .fill = .{ .r = 0xf0, .g = 0xf0, .b = 0xf0 } },
 
     .style_accent = .{
         .accent = accent.darken(0.3),
@@ -73,15 +73,15 @@ pub var dark = Theme{
     .name = "Adwaita Dark",
     .dark = true,
 
-    .font_body = Font{ .size = 11, .name = "Vera", .ttf_bytes = bitstream_vera.Vera },
-    .font_heading = Font{ .size = 11, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
-    .font_caption = Font{ .size = 9, .name = "Vera", .ttf_bytes = bitstream_vera.Vera },
-    .font_caption_heading = Font{ .size = 9, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
-    .font_title = Font{ .size = 24, .name = "Vera", .ttf_bytes = bitstream_vera.Vera },
-    .font_title_1 = Font{ .size = 20, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
-    .font_title_2 = Font{ .size = 17, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
-    .font_title_3 = Font{ .size = 15, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
-    .font_title_4 = Font{ .size = 13, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
+    .font_body = .{ .size = 11, .name = "Vera", .ttf_bytes = bitstream_vera.Vera },
+    .font_heading = .{ .size = 11, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
+    .font_caption = .{ .size = 9, .name = "Vera", .ttf_bytes = bitstream_vera.Vera },
+    .font_caption_heading = .{ .size = 9, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
+    .font_title = .{ .size = 24, .name = "Vera", .ttf_bytes = bitstream_vera.Vera },
+    .font_title_1 = .{ .size = 20, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
+    .font_title_2 = .{ .size = 17, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
+    .font_title_3 = .{ .size = 15, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
+    .font_title_4 = .{ .size = 13, .name = "VeraBd", .ttf_bytes = bitstream_vera.VeraBd },
 
     .style_content = .{
         .accent = accent,
@@ -93,8 +93,8 @@ pub var dark = Theme{
         .press_text = Color.white,
     },
 
-    .style_control = .{ .fill = Color{ .r = 0x40, .g = 0x40, .b = 0x40 } },
-    .style_window = .{ .fill = Color{ .r = 0x2b, .g = 0x2b, .b = 0x2b } },
+    .style_control = .{ .fill = .{ .r = 0x40, .g = 0x40, .b = 0x40 } },
+    .style_window = .{ .fill = .{ .r = 0x2b, .g = 0x2b, .b = 0x2b } },
 
     .style_accent = .{
         .accent = accent.lighten(0.3),
