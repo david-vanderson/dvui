@@ -21,9 +21,14 @@ cursor_backing_tried: [@typeInfo(dvui.Cursor).Enum.fields.len]bool = [_]bool{fal
 arena: std.mem.Allocator = undefined,
 
 pub const initOptions = struct {
-    width: u32,
-    height: u32,
+    /// The initial size of the application window
+    size: dvui.Size,
+    /// Set the minimum size of the window
+    min_size: ?dvui.Size = null,
+    /// Set the maximum size of the window
+    max_size: ?dvui.Size = null,
     vsync: bool,
+    /// The application title to display
     title: [:0]const u8,
     /// content of a PNG image (or any other format stb_image can load)
     /// tip: use @embedFile
@@ -43,12 +48,12 @@ pub fn init(options: initOptions) !SDLBackend {
 
     var window: *c.SDL_Window = undefined;
     if (sdl3) {
-        window = c.SDL_CreateWindow(options.title, @as(c_int, @intCast(options.width)), @as(c_int, @intCast(options.height)), c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE) orelse {
+        window = c.SDL_CreateWindow(options.title, @as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE) orelse {
             dvui.log.err("SDL: Failed to open window: {s}\n", .{c.SDL_GetError()});
             return error.BackendError;
         };
     } else {
-        window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intCast(options.width)), @as(c_int, @intCast(options.height)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
+        window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
             dvui.log.err("SDL: Failed to open window: {s}\n", .{c.SDL_GetError()});
             return error.BackendError;
         };
@@ -172,13 +177,21 @@ pub fn init(options: initOptions) !SDLBackend {
             }
 
             if (back.initial_scale != 1.0) {
-                _ = c.SDL_SetWindowSize(window, @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(options.width)))), @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(options.height)))));
+                _ = c.SDL_SetWindowSize(window, @as(c_int, @intFromFloat(back.initial_scale * options.size.w)), @as(c_int, @intFromFloat(back.initial_scale * options.size.h)));
             }
         }
     }
 
     if (options.icon) |bytes| {
         back.setIconFromFileContent(bytes);
+    }
+
+    if (options.min_size) |size| {
+        _ = c.SDL_SetWindowMinimumSize(window, @as(c_int, @intFromFloat(back.initial_scale * size.w)), @as(c_int, @intFromFloat(back.initial_scale * size.h)));
+    }
+
+    if (options.max_size) |size| {
+        _ = c.SDL_SetWindowMaximumSize(window, @as(c_int, @intFromFloat(back.initial_scale * size.w)), @as(c_int, @intFromFloat(back.initial_scale * size.h)));
     }
 
     return back;
