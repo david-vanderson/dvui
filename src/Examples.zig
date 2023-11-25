@@ -10,16 +10,14 @@ const ScrollInfo = dvui.ScrollInfo;
 const Size = dvui.Size;
 const entypo = dvui.entypo;
 const Adwaita = dvui.Adwaita;
+const ButtonWidget = dvui.ButtonWidget;
+const FloatingWindowWidget = dvui.FloatingWindowWidget;
+const LabelWidget = dvui.LabelWidget;
+const TextLayoutWidget = dvui.TextLayoutWidget;
 
 const enums = dvui.enums;
 
 const zig_favicon = @embedFile("zig-favicon.png");
-
-// TODO: Split
-const FloatingWindowWidget = dvui.FloatingWindowWidget;
-const TextLayoutWidget = dvui.TextLayoutWidget;
-const ButtonWidget = dvui.ButtonWidget;
-const LabelWidget = dvui.LabelWidget;
 
 pub var show_demo_window: bool = false;
 var checkbox_bool: bool = false;
