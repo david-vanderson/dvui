@@ -583,6 +583,8 @@ pub fn textEntryWidgets() !void {
         left_alignment.record(hbox.data().id, te.data());
         te.deinit();
     }
+
+    try dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});
 }
 
 pub fn styling() !void {
