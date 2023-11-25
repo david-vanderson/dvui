@@ -113,16 +113,19 @@ There is always a single parent widget.  `parentSet()` is how a widget sets itse
 * child (in WidgetData.init): `parentGet()` to get an interface to the parent
 * child (in WidgetData.init): `parent.extendId()` to create an ID
 * child (in WidgetData.init): `parent.rectFor()` send our min size from last frame to parent and get back a Rect (our place on the screen)
+  * except when `Options.rect` is set - see below
 * child: `parentSet()` installs itself as the new parent
 * child (in deinit - minSizeReportToParent): `parent.minSizeForChild()` send our min size for this frame to parent
   * parent uses this to calculate it's own min size for this frame
+  * except when `Options.rect` is set - see below
 * child (in deinit): `parentSet()` install previous parent
 
 Each widget keeps a pointer to its parent widget, which forms a chain going back to `dvui.Window` which is the original parent.  This chain is used for:
 * `parent.screenRectScale()` translate from our child Rect (in our parent's coordinate space) to a RectScale (in screen coordinates).
 * `parent.processEvent()` bubble keyboard events, so pressing the "up" key while focused on a button can make the containing scroll area scroll.
 
-TODO: floatingWindows/popups
+#### Opting Out of Normal Layout
+If `Options.rect` is set, the widget is directly specifying its position and size.  In this case, it does not call `parent.rectFor()` nor `parent.minSizeForChild()`, which means it is invisible to its parent for layout purposes.  The parent can still receive bubbled events.
 
 ### Windows and Subwindows
 `dvui.Window` maps to a single OS window.  All widgets and drawing happen in that window.
@@ -210,19 +213,17 @@ Sometimes a widget will just want to observe events but not mark them as process
 
 ## Min Size and Layout
 A widget receives its position and size from its parent.  The widget sends these fields of the Options struct to the parent:
-- min_size_content - the minimum size requested for this widget's content area
-  - padding/border/margin are automatically added
-- expand - whether to take up all the space available
-  - horizontal or vertical or both
-- gravity_x, gravity_y - position a non-expanded widget inside a larger rectangle
-- rect - directly specify position in parent (rarely used)
-  - a long scrollable list can use this to skip widgets that aren't visible
-  - example is the demo icon browser
-
-- communication from child to parent
-- how refresh works
+* min_size_content - the minimum size requested for this widget's content area
+  * padding/border/margin are automatically added
+* expand - whether to take up all the space available
+  * horizontal or vertical or both
+* gravity_x, gravity_y - position a non-expanded widget inside a larger rectangle
+* rect - directly specify position in parent (rarely used)
+  * a long scrollable list can use this to skip widgets that aren't visible
+  * example is the demo icon browser
 
 ## FPS and Frame Refresh
+* how refresh works
 
 ## Animations
 
@@ -235,7 +236,11 @@ A widget receives its position and size from its parent.  The widget sends these
 ## Mutlithreading
 
 ## Tab Index
-* null vs 0 vs 1-
+Pressing tab will cycle keyboard focus (keyboard navigate) through all the widgets that have called `tabIndexSet()`.  Widgets will call it with the passed in `Options.tab_index`.  The order is:
+* lower tab_index values come first
+* null (default) comes after everything else
+* 0 (zero) tab_index disables keyboard navigation
+* widgets with the same tab_index go in the order they are executed
 
 ## Drawing
 All drawing happens in pixel space.  A widget can call `parent.screenRectScale()` to get a rectangle in pixel screen coordinates plus the scale from logical points to physical pixels.
