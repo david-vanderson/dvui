@@ -28,6 +28,16 @@ pub const initOptions = struct {
     /// content of a PNG image (or any other format stb_image can load)
     /// tip: use @embedFile
     icon: ?[]const u8 = null,
+    /// Set the minimum size of the window
+    min_size: ?struct {
+        width: u32,
+        height: u32,
+    } = null,
+    /// Set the maximum size of the window
+    max_size: ?struct {
+        width: u32,
+        height: u32,
+    } = null,
 };
 
 pub fn init(options: initOptions) !SDLBackend {
@@ -179,6 +189,14 @@ pub fn init(options: initOptions) !SDLBackend {
 
     if (options.icon) |bytes| {
         back.setIconFromFileContent(bytes);
+    }
+
+    if (options.min_size) |size| {
+        _ = c.SDL_SetWindowMinimumSize(window, @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(size.width)))), @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(size.height)))));
+    }
+
+    if (options.max_size) |size| {
+        _ = c.SDL_SetWindowMaximumSize(window, @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(size.width)))), @as(c_int, @intFromFloat(back.initial_scale * @as(f32, @floatFromInt(size.height)))));
     }
 
     return back;
