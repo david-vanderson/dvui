@@ -25,6 +25,8 @@ pub const initOptions = struct {
     height: u32,
     vsync: bool,
     title: [:0]const u8,
+    /// content of a PNG image (or any other format stb_image can load)
+    /// tip: use @embedFile
     icon: ?[]const u8 = null,
 };
 
