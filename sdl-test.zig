@@ -9,8 +9,7 @@ const window_icon_png = @embedFile("src/zig-favicon.png");
 
 pub fn main() !void {
     var backend = try SDLBackend.init(.{
-        .width = 800,
-        .height = 600,
+        .size = .{ .w = 800.0, .h = 600.0 },
         .vsync = false,
         .title = "DVUI SDL test",
     });
