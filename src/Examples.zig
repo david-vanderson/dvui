@@ -57,8 +57,8 @@ const IconBrowser = struct {
 const AnimatingDialog = struct {
     pub fn dialogDisplay(id: u32) !void {
         const modal = dvui.dataGet(null, id, "_modal", bool) orelse unreachable;
-        const title = dvui.dataGetSlice(null, id, "_title", []const u8) orelse unreachable;
-        const message = dvui.dataGetSlice(null, id, "_message", []const u8) orelse unreachable;
+        const title = dvui.dataGetSlice(null, id, "_title", []u8) orelse unreachable;
+        const message = dvui.dataGetSlice(null, id, "_message", []u8) orelse unreachable;
         const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
         // once we record a response, refresh it until we close
