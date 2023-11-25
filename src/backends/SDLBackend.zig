@@ -15,9 +15,9 @@ renderer: *c.SDL_Renderer,
 touch_mouse_events: bool = false,
 log_events: bool = false,
 initial_scale: f32 = 1.0,
-cursor_last: dvui.Cursor = .arrow,
-cursor_backing: [@typeInfo(dvui.Cursor).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.Cursor).Enum.fields.len,
-cursor_backing_tried: [@typeInfo(dvui.Cursor).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(dvui.Cursor).Enum.fields.len,
+cursor_last: dvui.enums.Cursor = .arrow,
+cursor_backing: [@typeInfo(dvui.enums.Cursor).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.enums.Cursor).Enum.fields.len,
+cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(dvui.enums.Cursor).Enum.fields.len,
 arena: std.mem.Allocator = undefined,
 
 pub const initOptions = struct {
@@ -250,7 +250,7 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
     return false;
 }
 
-pub fn setCursor(self: *SDLBackend, cursor: dvui.Cursor) void {
+pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
     if (cursor != self.cursor_last) {
         self.cursor_last = cursor;
 

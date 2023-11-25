@@ -222,3 +222,18 @@ pub const DialogResponse = enum(u8) {
     ok,
     _,
 };
+
+pub const Cursor = enum(u8) {
+    arrow,
+    ibeam,
+    wait,
+    wait_arrow,
+    crosshair,
+    arrow_nw_se,
+    arrow_ne_sw,
+    arrow_w_e,
+    arrow_n_s,
+    arrow_all,
+    bad,
+    hand,
+};
