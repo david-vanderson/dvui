@@ -20,6 +20,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 * [Podcast Player](https://github.com/david-vanderson/podcast)
 * [Graphical Janet REPL](https://codeberg.org/iacore/janet-graphical-repl)
 * [FIDO2/ Passkey compatible authenticator implementation for Linux](https://github.com/r4gus/keypass)
+* [QEMU frontend](https://github.com/AnErrupTion/ZigEmu)
 
 ## Features
 
@@ -70,7 +71,7 @@ pub fn build(b: *std.Build) void {
     .dependencies = .{
         .dvui = .{
             .url = "https://github.com/david-vanderson/dvui/archive/COMMIT_HASH_HERE.tar.gz",
-            // .hash = "",
+            .hash = "FILE_HASH_HERE",
         },
     },
 }
@@ -90,15 +91,14 @@ pub fn build(b: *std.Build) void {
   - Panes with draggable sash
   - Dropdown
 - Missing Widgets for now
-  - combo box
-  - radio button
-  - datagrid
+  - Radio Button
+  - Data Grid
 
 ## Design
 
 ### Immediate Mode
 ```zig
-if (try dvui.button(@src(), "Ok", .{})) {
+if (try dvui.button(@src(), "Ok", .{}, .{})) {
   dialog.close();
 }
 ```
@@ -244,10 +244,10 @@ dvui.ButtonWidget.defaults.background = false;
 Themes can be changed between frames or even within a frame.  The theme controls the fonts and colors referenced by font_style and color_style.
 ```zig
 if (theme_dark) {
-    win.theme = &dvui.theme_Adwaita_Dark;
+    win.theme = &dvui.Adwaita.dark;
 }
 else {
-    win.theme = &dvui.theme_Adwaita;
+    win.theme = &dvui.Adwaita.light;
 }
 ```
 The theme's color_accent is also used to show keyboard focus.
