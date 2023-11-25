@@ -2,6 +2,8 @@
 zig 0.12:
 - if sliceAsBytes/bytesAsSlice includes sentinel, then need to update our use
 
+check zig std lib for bytesAsSlice alignment - should it always aligncast?
+
 add to readme-implementation
 
 
