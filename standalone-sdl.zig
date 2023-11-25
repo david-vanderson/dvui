@@ -17,8 +17,8 @@ var show_dialog_outside_frame: bool = false;
 pub fn main() !void {
     // init SDL backend (creates OS window)
     var backend = try Backend.init(.{
-        .width = 500,
-        .height = 600,
+        .size = .{ .w = 500.0, .h = 600.0 },
+        .min_size = .{ .w = 500.0, .h = 600.0 },
         .vsync = vsync,
         .title = "DVUI Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
