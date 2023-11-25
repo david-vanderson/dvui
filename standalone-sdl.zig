@@ -22,6 +22,14 @@ pub fn main() !void {
         .vsync = vsync,
         .title = "DVUI Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
+        .min_size = .{
+            .width = 500,
+            .height = 600,
+        },
+        .max_size = .{
+            .width = 700,
+            .height = 800,
+        },
     });
     defer backend.deinit();
 
