@@ -20,7 +20,7 @@ cursor_backing: [@typeInfo(dvui.enums.Cursor).Enum.fields.len]?*c.SDL_Cursor = [
 cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(dvui.enums.Cursor).Enum.fields.len,
 arena: std.mem.Allocator = undefined,
 
-pub const initOptions = struct {
+pub const InitOptions = struct {
     /// The initial size of the application window
     size: dvui.Size,
     /// Set the minimum size of the window
@@ -35,7 +35,7 @@ pub const initOptions = struct {
     icon: ?[]const u8 = null,
 };
 
-pub fn init(options: initOptions) !SDLBackend {
+pub fn init(options: InitOptions) !SDLBackend {
     _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
     // use the string version instead of the #define so we compile with SDL < 2.24
