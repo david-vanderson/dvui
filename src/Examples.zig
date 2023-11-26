@@ -406,7 +406,7 @@ pub fn basicWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer hbox.deinit();
 
-        _ = try dvui.sliderVector(@src(), "{d:0.2}", 3, slider_vector_val, .{ .min = -1, .max = 2 }, .{ .gravity_y = 0.5 });
+        _ = try dvui.sliderVector(@src(), "{d:0.2}", 3, slider_vector_val, .{ .min = -1, .max = 2 }, .{ .gravity_y = 0.5, .min_size_content = .{}, .expand = .horizontal });
     }
 
     _ = dvui.spacer(@src(), .{ .h = 4 }, .{});
