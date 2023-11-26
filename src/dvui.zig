@@ -4579,13 +4579,13 @@ pub const SliderVectorInitOptions = struct {
     interval: ?f32 = null,
 };
 
+// Options are forwarded to the individual sliderEntries, including
+// min_size_content
 pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, comptime num_components: u32, value: anytype, init_opts: SliderVectorInitOptions, opts: Options) !bool {
     var data_arr = checkAndCastDataPtr(num_components, value);
 
-    var b = try dvui.box(line, .horizontal, opts);
+    var b = try dvui.box(line, .horizontal, .{ .expand = opts.expandGet() });
     defer b.deinit();
-
-    const slider_opts = slider_entry_defaults.override(opts);
 
     var any_changed = false;
     inline for (0..num_components) |i| {
@@ -4596,7 +4596,7 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
             .interval = init_opts.interval,
         };
 
-        const component_changed = try dvui.sliderEntry(line, fmt, component_opts, slider_opts.override(.{ .id_extra = i }));
+        const component_changed = try dvui.sliderEntry(line, fmt, component_opts, opts.override(.{ .id_extra = i, .expand = .both }));
         any_changed = any_changed or component_changed;
     }
 
