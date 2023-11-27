@@ -221,8 +221,9 @@ Start with the high-level functions, and when needed, copy the body of the high-
 Each widget has the following options that can be changed through the Options struct when creating the widget:
 - margin (space outside border)
 - border (on each side)
-- background (fills space inside border with background color)
 - padding (space inside border)
+- min_size_content (margin/border/padding added to get min size)
+- background (fills space inside border with background color)
 - corner_radius (for each corner)
 - color_style (use theme's colors)
   - or directly set colors:
