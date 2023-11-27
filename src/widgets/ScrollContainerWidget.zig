@@ -101,15 +101,6 @@ pub fn processEvents(self: *ScrollContainerWidget) void {
         if (!self.matchEvent(e))
             continue;
 
-        // for finger down we let the event go through but stop any velocity scrolling
-        if (e.evt == .mouse and e.evt.mouse.action == .press and e.evt.mouse.button.touch()) {
-            self.finger_down = true;
-
-            // stop any current scrolling
-            self.si.velocity.x = 0;
-            self.si.velocity.y = 0;
-        }
-
         self.processEvent(e, false);
     }
 
@@ -124,7 +115,7 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
             self.si.velocity.x *= @exp(@log(damping) * dvui.secondsSinceLastFrame());
             if (@fabs(self.si.velocity.x) > 1) {
                 //std.debug.print("vel x {d}\n", .{self.si.velocity.x});
-                self.si.viewport.x += self.si.velocity.x;
+                self.si.viewport.x += self.si.velocity.x * 50 * dvui.secondsSinceLastFrame();
                 dvui.refresh(null, @src(), self.wd.id);
             } else {
                 self.si.velocity.x = 0;
@@ -136,7 +127,7 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
             self.si.velocity.y *= @exp(@log(damping) * dvui.secondsSinceLastFrame());
             if (@fabs(self.si.velocity.y) > 1) {
                 //std.debug.print("vel y {d}\n", .{self.si.velocity.y});
-                self.si.viewport.y += self.si.velocity.y;
+                self.si.viewport.y += self.si.velocity.y * 50 * dvui.secondsSinceLastFrame();
                 dvui.refresh(null, @src(), self.wd.id);
             } else {
                 self.si.velocity.y = 0;
@@ -228,6 +219,22 @@ pub fn minSizeForChild(self: *ScrollContainerWidget, s: Size) void {
 
 pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) void {
     switch (e.evt) {
+        .mouse => |me| {
+            // for finger down we let the event go through but stop any velocity scrolling
+            if (me.action == .press and me.button.touch()) {
+                self.finger_down = true;
+
+                // stop any current scrolling
+                if (self.si.velocity.x != 0 or self.si.velocity.y != 0) {
+                    // if we were scrolling, then eat the finger press so it
+                    // doesn't do anything other than stop the scroll
+                    e.handled = true;
+
+                    self.si.velocity.x = 0;
+                    self.si.velocity.y = 0;
+                }
+            }
+        },
         .key => |ke| {
             if (bubbling or (self.wd.id == dvui.focusedWidgetId())) {
                 if (ke.code == .up and (ke.action == .down or ke.action == .repeat)) {
