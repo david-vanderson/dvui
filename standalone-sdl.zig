@@ -41,6 +41,10 @@ pub fn main() !void {
         const quit = try backend.addAllEvents(&win);
         if (quit) break :main_loop;
 
+        // if dvui widgets might not cover the whole window, then need to clear
+        // the previous frame's render
+        backend.clear();
+
         try dvui_frame();
 
         // marks end of dvui frame, don't call dvui functions after this
