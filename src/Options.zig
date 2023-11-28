@@ -1,3 +1,4 @@
+const std = @import("std");
 const dvui = @import("dvui.zig");
 
 const Color = dvui.Color;
@@ -143,16 +144,16 @@ pub fn color(self: *const Options, kind: ColorKind) Color {
 
     // return color from style or default
     switch (kind) {
-        .accent => ret = cs.accent orelse dvui.themeGet().style_content.accent orelse unreachable,
-        .text => ret = cs.text orelse dvui.themeGet().style_content.text orelse unreachable,
-        .fill => ret = cs.fill orelse dvui.themeGet().style_content.fill orelse unreachable,
-        .border => ret = cs.border orelse dvui.themeGet().style_content.border orelse unreachable,
-        .hover => ret = cs.hover orelse dvui.themeGet().style_content.hover orelse unreachable,
-        .press => ret = cs.press orelse dvui.themeGet().style_content.press orelse unreachable,
-        .press_text => ret = cs.press_text orelse dvui.themeGet().style_content.press_text orelse unreachable,
+        .accent => ret = cs.accent orelse dvui.themeGet().style_content.accent,
+        .text => ret = cs.text orelse dvui.themeGet().style_content.text,
+        .fill => ret = cs.fill orelse dvui.themeGet().style_content.fill,
+        .border => ret = cs.border orelse dvui.themeGet().style_content.border,
+        .hover => ret = cs.hover orelse dvui.themeGet().style_content.hover,
+        .press => ret = cs.press orelse dvui.themeGet().style_content.press,
+        .press_text => ret = cs.press_text orelse dvui.themeGet().style_content.press_text,
     }
 
-    return (ret orelse unreachable).transparent(dvui.themeGet().alpha);
+    return (ret orelse std.debug.panic("no color found, kind={}\ndid you forget to include the color in your theme?", .{kind})).transparent(dvui.themeGet().alpha);
 }
 
 pub fn fontGet(self: *const Options) Font {
