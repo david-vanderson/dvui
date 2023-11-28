@@ -2,48 +2,39 @@ const dvui = @import("dvui.zig");
 
 const Color = dvui.Color;
 const Font = dvui.Font;
-
-pub const ColorStyle = enum {
-    content, // default
-    accent,
-    control,
-    window,
-    success,
-    err,
-};
-
-pub const StyleColors = struct {
-    // used to show focus
-    accent: ?Color = null,
-
-    text: ?Color = null,
-
-    // background color contrasting the most with the text color, used when
-    // displaying lots of text
-    fill: ?Color = null,
-
-    border: ?Color = null,
-    hover: ?Color = null,
-    press: ?Color = null,
-    press_text: ?Color = null,
-};
+const Options = dvui.Options;
 
 name: []const u8,
+
+// widgets can use this if they need to adjust colors
 dark: bool,
 
 alpha: f32 = 1.0,
 
-// Options.color_style selects between these
+// used for focus
+color_accent: Color,
 
-// content is default and must have all fields non-null
-style_content: StyleColors,
+color_err: Color,
 
-// any null fields in these will use .content fields
-style_accent: StyleColors,
-style_control: StyleColors,
-style_window: StyleColors,
-style_success: StyleColors,
-style_err: StyleColors,
+// text/foreground color
+color_text: Color,
+
+// text/foreground color when widget is pressed
+color_text_press: Color,
+
+// background color for displaying lots of text
+color_fill: Color,
+
+// background color for containers that have other widgets inside
+color_fill_window: Color,
+
+// background color for controls like buttons
+color_fill_control: Color,
+
+color_fill_hover: Color,
+color_fill_press: Color,
+
+color_border: Color,
 
 font_body: Font,
 font_heading: Font,
@@ -54,3 +45,9 @@ font_title_1: Font,
 font_title_2: Font,
 font_title_3: Font,
 font_title_4: Font,
+
+// used for highlighting menu/dropdown items
+style_accent: Options,
+
+// used for a button to perform dangerous actions
+style_err: Options,

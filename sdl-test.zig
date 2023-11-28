@@ -98,7 +98,7 @@ pub fn main() !void {
             }
 
             {
-                var win_scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_style = .window });
+                var win_scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
                 defer win_scroll.deinit();
 
                 {
@@ -172,7 +172,7 @@ pub fn main() !void {
                     for (0..num_windows) |i| {
                         var open: bool = true;
                         //var nwin = try dvui.floatingWindow(@src(), .{ .open_flag = &open, .window_avoid = .nudge }, .{ .id_extra = i, .color_style = .window, .min_size_content = .{ .w = 200, .h = 60 } });
-                        var nwin = try dvui.floatingWindow(@src(), .{ .open_flag = &open }, .{ .id_extra = i, .color_style = .window, .min_size_content = .{ .w = 200, .h = 60 } });
+                        var nwin = try dvui.floatingWindow(@src(), .{ .open_flag = &open }, .{ .id_extra = i, .min_size_content = .{ .w = 200, .h = 60 } });
                         //var nwin = dvui.FloatingWindowWidget.init(@src(), .{
                         //    .open_flag = &open,
                         //}, .{ .id_extra = i, .color_style = .window, .min_size_content = .{ .w = 200, .h = 60 } });
@@ -336,7 +336,7 @@ pub fn main() !void {
                             }
                             var buf = std.mem.zeroes([100]u8);
                             var buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{ fi, name }) catch unreachable;
-                            var fw2 = try dvui.floatingWindow(@src(), .{ .modal = modal, .open_flag = f }, .{ .id_extra = fi, .color_style = .window, .min_size_content = .{ .w = 150, .h = 100 } });
+                            var fw2 = try dvui.floatingWindow(@src(), .{ .modal = modal, .open_flag = f }, .{ .id_extra = fi, .min_size_content = .{ .w = 150, .h = 100 } });
                             defer fw2.deinit();
                             try dvui.labelNoFmt(@src(), buf_slice, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 

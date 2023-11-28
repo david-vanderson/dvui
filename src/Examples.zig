@@ -346,7 +346,7 @@ pub fn basicWidgets() !void {
 
         try dvui.label(@src(), "Link:", .{}, .{ .gravity_y = 0.5 });
 
-        if (try dvui.labelClick(@src(), "https://github.com/david-vanderson/dvui", .{}, .{ .gravity_y = 0.5, .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } })) {
+        if (try dvui.labelClick(@src(), "https://github.com/david-vanderson/dvui", .{}, .{ .gravity_y = 0.5, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
             try dvui.openURL("https://github.com/david-vanderson/dvui");
         }
     }
@@ -441,7 +441,6 @@ pub fn basicWidgets() !void {
         }
     }
 
-
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -532,7 +531,7 @@ pub fn textEntryWidgets() !void {
             @src(),
             "toggle",
             if (text_entry_password_buf_obf_enable) entypo.eye_with_line else entypo.eye,
-             .{},
+            .{},
             .{ .gravity_y = 0.5, .min_size_content = .{ .h = 12 } },
         )) {
             text_entry_password_buf_obf_enable = !text_entry_password_buf_obf_enable;
@@ -588,17 +587,29 @@ pub fn textEntryWidgets() !void {
 }
 
 pub fn styling() !void {
-    try dvui.label(@src(), "color style", .{}, .{});
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        _ = try dvui.button(@src(), "Accent", .{}, .{ .color_style = .accent });
-        _ = try dvui.button(@src(), "Success", .{}, .{ .color_style = .success });
-        _ = try dvui.button(@src(), "Error", .{}, .{ .color_style = .err });
-        _ = try dvui.button(@src(), "Window", .{}, .{ .color_style = .window });
-        _ = try dvui.button(@src(), "Content", .{}, .{ .color_style = .content });
-        _ = try dvui.button(@src(), "Control", .{}, .{ .color_style = .control });
+        _ = try dvui.button(@src(), "Accent", .{}, dvui.themeGet().style_accent);
+        _ = try dvui.button(@src(), "Error", .{}, dvui.themeGet().style_err);
+        _ = try dvui.button(@src(), "Window", .{}, .{ .color_fill = .{ .name = .fill_window } });
+        _ = try dvui.button(@src(), "Content", .{}, .{ .color_fill = .{ .name = .fill } });
+        _ = try dvui.button(@src(), "Control", .{}, .{});
+    }
+
+    try dvui.label(@src(), "separators", .{}, .{});
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 9 } });
+        defer hbox.deinit();
+
+        const opts: Options = .{ .margin = .{ .x = 2, .w = 2 }, .gravity_y = 0.5 };
+
+        try dvui.separator(@src(), opts.override(.{ .expand = .horizontal }));
+        try dvui.separator(@src(), opts.override(.{ .expand = .vertical }));
+        try dvui.separator(@src(), opts.override(.{ .expand = .horizontal, .min_size_content = .{ .h = 3 } }));
+        try dvui.separator(@src(), opts.override(.{ .expand = .vertical }));
+        try dvui.separator(@src(), opts.override(.{ .expand = .horizontal, .min_size_content = .{ .h = 5 } }));
     }
 
     try dvui.label(@src(), "margin/border/padding", .{}, .{});
@@ -606,7 +617,7 @@ pub fn styling() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        const opts: Options = .{ .color_style = .content, .border = Rect.all(1), .background = true, .gravity_y = 0.5 };
+        const opts: Options = .{ .border = Rect.all(1), .background = true, .gravity_y = 0.5 };
 
         var o = try dvui.overlay(@src(), opts);
         _ = try dvui.button(@src(), "default", .{}, .{});
@@ -644,7 +655,7 @@ pub fn styling() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = backbox_color, .gravity_y = 0.5 });
+        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = .{ .color = backbox_color }, .gravity_y = 0.5 });
         backbox.deinit();
 
         try colorSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 });
@@ -670,7 +681,7 @@ pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: O
 }
 
 pub fn layout() !void {
-    const opts: Options = .{ .color_style = .content, .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
+    const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
 
     try dvui.label(@src(), "Gravity", .{}, .{});
     {
@@ -1049,7 +1060,7 @@ pub fn animations() !void {
 
     if (try dvui.expander(@src(), "Spinner", .{}, .{ .expand = .horizontal })) {
         try dvui.labelNoFmt(@src(), "Spinner maxes out frame rate", .{});
-        try dvui.spinner(@src(), .{ .color_text = .{ .r = 100, .g = 200, .b = 100 } });
+        try dvui.spinner(@src(), .{ .color_text = .{ .color = .{ .r = 100, .g = 200, .b = 100 } } });
     }
 
     if (try dvui.expander(@src(), "Clock", .{}, .{ .expand = .horizontal })) {
@@ -1091,7 +1102,7 @@ pub fn debuggingErrors() !void {
     try dvui.label(@src(), "on non-hdpi screens watch the window title \"DVUI Demo\"", .{}, .{ .margin = .{ .x = 10 } });
 
     if (try dvui.expander(@src(), "Virtual Parent (affects IDs but not layout)", .{}, .{ .expand = .horizontal })) {
-        var hbox = try dvui.box(@src(), .horizontal, .{.margin = .{ .x = 10 }});
+        var hbox = try dvui.box(@src(), .horizontal, .{ .margin = .{ .x = 10 } });
         defer hbox.deinit();
         try dvui.label(@src(), "makeLabels twice:", .{}, .{});
 
@@ -1107,7 +1118,7 @@ pub fn debuggingErrors() !void {
             try dvui.label(@src(), " - fix by passing .id_extra = <loop index>", .{}, .{ .id_extra = i });
         }
 
-        if (try dvui.labelClick(@src(), "See https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids", .{}, .{ .gravity_y = 0.5, .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } })) {
+        if (try dvui.labelClick(@src(), "See https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids", .{}, .{ .gravity_y = 0.5, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
             try dvui.openURL("https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids");
         }
     }

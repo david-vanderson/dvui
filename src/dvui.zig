@@ -3482,7 +3482,7 @@ pub fn animate(src: std.builtin.SourceLocation, kind: AnimateWidget.Kind, durati
 }
 
 pub var dropdown_defaults: Options = .{
-    .color_style = .control,
+    .color_fill = .{ .name = .fill_control },
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .padding = Rect.all(4),
@@ -3569,7 +3569,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
             var labelopts = options.strip();
 
             if (mi.show_active) {
-                labelopts = labelopts.override(.{ .color_style = .accent });
+                labelopts = labelopts.override(dvui.themeGet().style_accent);
             }
 
             try labelNoFmt(@src(), entries[i], labelopts);
@@ -3705,8 +3705,8 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) !void {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
-        .border = .{ .x = 1, .y = 1, .w = 0, .h = 0 },
-        .color_style = .content,
+        .color_fill = .{ .name = .border },
+        .min_size_content = .{ .w = 1, .h = 1 },
     };
 
     var wd = WidgetData.init(src, .{}, defaults.override(opts));
@@ -3794,7 +3794,7 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, ini
     }
 
     if (mi.show_active) {
-        labelopts = labelopts.override(.{ .color_style = .accent });
+        labelopts = labelopts.override(themeGet().style_accent);
     }
 
     try labelNoFmt(@src(), label_str, labelopts);
@@ -3817,7 +3817,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
     }
 
     if (mi.show_active) {
-        iconopts = iconopts.override(.{ .color_style = .accent });
+        iconopts = iconopts.override(themeGet().style_accent);
     }
 
     try icon(@src(), name, tvg_bytes, iconopts);
@@ -4027,7 +4027,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     var click = bw.clicked();
     var options = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-    if (captured(bw.wd.id)) options = options.override(.{ .color_text = opts.color(.press_text) });
+    if (captured(bw.wd.id)) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
 
     // this child widget:
     // - has bw as parent
@@ -4065,7 +4065,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
 pub var slider_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
-    .color_style = .control,
+    .color_fill = .{ .name = .fill_control },
 };
 
 // returns true if percent was changed
@@ -4198,13 +4198,13 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
 
     var fill_color: Color = undefined;
     if (captured(b.data().id)) {
-        fill_color = options.color(.press);
+        fill_color = options.color(.fill_press);
     } else if (hovered) {
-        fill_color = options.color(.hover);
+        fill_color = options.color(.fill_hover);
     } else {
         fill_color = options.color(.fill);
     }
-    var knob = BoxWidget.init(@src(), .horizontal, false, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
+    var knob = BoxWidget.init(@src(), .horizontal, false, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = .{ .color = fill_color } });
     try knob.install();
     try knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
@@ -4223,7 +4223,7 @@ pub var slider_entry_defaults: Options = .{
     .margin = Rect.all(4),
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(2),
-    .color_style = .control,
+    .color_fill = .{ .name = .fill_control },
     .background = true,
     // min size calulated from font
 };
@@ -4498,7 +4498,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             }
         }
 
-        try b.wd.borderAndBackground(.{ .fill_color = if (hover) b.wd.options.color(.hover) else b.wd.options.color(.fill) });
+        try b.wd.borderAndBackground(.{ .fill_color = if (hover) b.wd.options.color(.fill_hover) else b.wd.options.color(.fill) });
 
         // only draw handle if we have a min and max
         if (init_opts.min != null and init_opts.max != null) {
@@ -4507,7 +4507,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             const knobrs = b.widget().screenRectScale(knobRect);
 
             try pathAddRect(knobrs.r, options.corner_radiusGet().scale(knobrs.s));
-            try pathFillConvex(options.color(.press));
+            try pathFillConvex(options.color(.fill_press));
         }
 
         try label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
@@ -4606,7 +4606,7 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
 pub var progress_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 10, .h = 10 },
-    .color_style = .control,
+    .color_fill = .{ .name = .fill_control },
 };
 
 pub const Progress_InitOptions = struct {
@@ -4645,7 +4645,6 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 pub var checkbox_defaults: Options = .{
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(4),
-    .color_style = .content,
 };
 
 pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, opts: Options) !void {
@@ -4691,16 +4690,16 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
     var options = opts;
     if (checked) {
-        options = opts.override(.{ .color_style = .accent });
+        options = opts.override(themeGet().style_accent);
         try pathAddRect(rs.r.insetAll(0.5 * rs.s), opts.corner_radiusGet().scale(rs.s));
     } else {
         try pathAddRect(rs.r.insetAll(rs.s), opts.corner_radiusGet().scale(rs.s));
     }
 
     if (pressed) {
-        try pathFillConvex(options.color(.press));
+        try pathFillConvex(options.color(.fill_press));
     } else if (hovered) {
-        try pathFillConvex(options.color(.hover));
+        try pathFillConvex(options.color(.fill_hover));
     } else {
         try pathFillConvex(options.color(.fill));
     }

@@ -21,7 +21,6 @@ pub var defaults: Options = .{
     // window header), and the bottom is against something curved (bottom
     // of a window)
     .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
-    .color_style = .content,
 };
 
 pub const InitOpts = struct {

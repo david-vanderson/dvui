@@ -18,7 +18,7 @@ pub var defaults: Options = .{
     .corner_radius = Rect.all(5),
     .border = Rect.all(1),
     .background = true,
-    .color_style = .window,
+    .color_fill = .{ .name = .fill_window },
 };
 
 pub const InitOptions = struct {

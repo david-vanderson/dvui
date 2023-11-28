@@ -17,7 +17,7 @@ const MenuWidget = @This();
 
 pub var defaults: Options = .{
     .name = "Menu",
-    .color_style = .window,
+    .color_fill = .{ .name = .fill_window },
 };
 
 pub const InitOptions = struct {

@@ -13,7 +13,6 @@ const MenuItemWidget = @This();
 
 pub var defaults: Options = .{
     .name = "MenuItem",
-    .color_style = .content,
     .corner_radius = Rect.all(5),
     .padding = Rect.all(4),
 };
@@ -90,7 +89,7 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
     } else if ((self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
         const rs = self.wd.backgroundRectScale();
         try dvui.pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));
-        try dvui.pathFillConvex(self.wd.options.color(.hover));
+        try dvui.pathFillConvex(self.wd.options.color(.fill_hover));
     } else if (self.wd.options.backgroundGet()) {
         const rs = self.wd.backgroundRectScale();
         try dvui.pathAddRect(rs.r, self.wd.options.corner_radiusGet().scale(rs.s));

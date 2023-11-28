@@ -21,7 +21,6 @@ pub var defaults: Options = .{
     .border = Rect.all(1),
     .padding = Rect.all(4),
     .background = true,
-    .color_style = .content,
     // min_size_content is calculated in init()
 };
 
