@@ -15,7 +15,6 @@ const ScrollBarWidget = @This();
 
 pub var defaults: Options = .{
     .name = "ScrollBar",
-    .color_style = .content,
     .min_size_content = .{ .w = 10, .h = 10 },
 };
 

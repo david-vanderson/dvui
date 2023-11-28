@@ -18,7 +18,6 @@ pub var defaults: Options = .{
     // most of the time ScrollContainer is used inside ScrollArea which
     // overrides these
     .background = true,
-    .color_style = .content,
     .min_size_content = .{ .w = 5, .h = 5 },
 };
 

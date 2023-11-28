@@ -17,7 +17,6 @@ pub var defaults: Options = .{
     .margin = Rect.all(4),
     .padding = Rect.all(4),
     .background = true,
-    .color_style = .content,
     .min_size_content = .{ .w = 250 },
 };
 

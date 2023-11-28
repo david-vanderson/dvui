@@ -70,13 +70,13 @@ gravity_y: ?f32 = null,
 tab_index: ?u16 = null,
 
 // used to override widget and theme defaults
-color_accent: ?Color = null,
-color_text: ?Color = null,
-color_fill: ?Color = null,
-color_border: ?Color = null,
-color_hover: ?Color = null,
-color_press: ?Color = null,
-color_press_text: ?Color = null,
+color_accent: ?ColorOrName = null,
+color_text: ?ColorOrName = null,
+color_text_press: ?ColorOrName = null,
+color_fill: ?ColorOrName = null,
+color_fill_hover: ?ColorOrName = null,
+color_fill_press: ?ColorOrName = null,
+color_border: ?ColorOrName = null,
 
 // use to override font_style
 font: ?Font = null,
@@ -103,57 +103,70 @@ background: ?bool = null,
 // use to pick a font from the theme
 font_style: ?FontStyle = null,
 
-// use to pick a color from the theme
-color_style: ?Theme.ColorStyle = null,
-
-pub const ColorKind = enum {
+// All the colors you can get from a Theme
+pub const ColorsFromTheme = enum {
     accent,
+    err,
     text,
+    text_press,
     fill,
+    fill_window,
+    fill_control,
+    fill_hover,
+    fill_press,
     border,
-    hover,
-    press,
-    press_text,
 };
 
-pub fn color(self: *const Options, kind: ColorKind) Color {
-    var ret: ?Color = switch (kind) {
-        .accent => self.color_accent,
-        .text => self.color_text,
-        .fill => self.color_fill,
-        .border => self.color_border,
-        .hover => self.color_hover,
-        .press => self.color_press,
-        .press_text => self.color_press_text,
+// Either specify the color directly or name a color from the Theme
+pub const ColorOrName = union(enum) {
+    color: Color,
+    name: ColorsFromTheme,
+};
+
+// All the colors you can ask Options for
+pub const ColorAsk = enum {
+    accent,
+    text,
+    text_press,
+    fill,
+    fill_hover,
+    fill_press,
+    border,
+};
+
+pub fn color(self: *const Options, ask: ColorAsk) Color {
+    var color_or_name: ColorOrName = switch (ask) {
+        .accent => self.color_accent orelse .{ .name = .accent },
+        .text => self.color_text orelse .{ .name = .text },
+        .text_press => self.color_text_press orelse .{ .name = .text_press },
+        .fill => self.color_fill orelse .{ .name = .fill },
+        .fill_hover => self.color_fill_hover orelse .{ .name = .fill_hover },
+        .fill_press => self.color_fill_press orelse .{ .name = .fill_press },
+        .border => self.color_border orelse .{ .name = .border },
     };
 
-    // if we have a custom color, return it
-    if (ret) |r| {
-        return r.transparent(dvui.themeGet().alpha);
-    }
+    const col = blk: {
+        switch (color_or_name) {
+            // if we have a custom color, use it
+            .color => |col| break :blk col,
 
-    // find the colors in our style
-    const cs: Theme.StyleColors = switch (self.color_style orelse .content) {
-        .content => dvui.themeGet().style_content,
-        .accent => dvui.themeGet().style_accent,
-        .window => dvui.themeGet().style_window,
-        .control => dvui.themeGet().style_control,
-        .success => dvui.themeGet().style_success,
-        .err => dvui.themeGet().style_err,
+            .name => |from_theme| switch (from_theme) {
+                // named color, get from theme
+                .accent => break :blk dvui.themeGet().color_accent,
+                .err => break :blk dvui.themeGet().color_err,
+                .text => break :blk dvui.themeGet().color_text,
+                .text_press => break :blk dvui.themeGet().color_text_press,
+                .fill => break :blk dvui.themeGet().color_fill,
+                .fill_window => break :blk dvui.themeGet().color_fill_window,
+                .fill_control => break :blk dvui.themeGet().color_fill_control,
+                .fill_hover => break :blk dvui.themeGet().color_fill_hover,
+                .fill_press => break :blk dvui.themeGet().color_fill_press,
+                .border => break :blk dvui.themeGet().color_border,
+            },
+        }
     };
 
-    // return color from style or default
-    switch (kind) {
-        .accent => ret = cs.accent orelse dvui.themeGet().style_content.accent,
-        .text => ret = cs.text orelse dvui.themeGet().style_content.text,
-        .fill => ret = cs.fill orelse dvui.themeGet().style_content.fill,
-        .border => ret = cs.border orelse dvui.themeGet().style_content.border,
-        .hover => ret = cs.hover orelse dvui.themeGet().style_content.hover,
-        .press => ret = cs.press orelse dvui.themeGet().style_content.press,
-        .press_text => ret = cs.press_text orelse dvui.themeGet().style_content.press_text,
-    }
-
-    return (ret orelse std.debug.panic("no color found, kind={}\ndid you forget to include the color in your theme?", .{kind})).transparent(dvui.themeGet().alpha);
+    return col.transparent(dvui.themeGet().alpha);
 }
 
 pub fn fontGet(self: *const Options) Font {
@@ -259,14 +272,15 @@ pub fn strip(self: *const Options) Options {
         // keep the rest
         .color_accent = self.color_accent,
         .color_text = self.color_text,
+        .color_text_press = self.color_text_press,
         .color_fill = self.color_fill,
+        .color_fill_hover = self.color_fill_hover,
+        .color_fill_press = self.color_fill_press,
         .color_border = self.color_border,
-        .color_hover = self.color_hover,
-        .color_press = self.color_press,
-        .color_press_text = self.color_press_text,
+
         .font = self.font,
-        .color_style = self.color_style,
         .font_style = self.font_style,
+
         .rotation = self.rotation,
         .debug = self.debug,
     };

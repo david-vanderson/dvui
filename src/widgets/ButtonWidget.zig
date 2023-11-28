@@ -15,7 +15,7 @@ const ButtonWidget = @This();
 
 pub var defaults: Options = .{
     .name = "Button",
-    .color_style = .control,
+    .color_fill = .{ .name = .fill_control },
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .padding = Rect.all(4),
@@ -65,9 +65,9 @@ pub fn processEvents(self: *ButtonWidget) void {
 pub fn drawBackground(self: *ButtonWidget) !void {
     var fill_color: ?Color = null;
     if (dvui.captured(self.wd.id)) {
-        fill_color = self.wd.options.color(.press);
+        fill_color = self.wd.options.color(.fill_press);
     } else if (self.hover) {
-        fill_color = self.wd.options.color(.hover);
+        fill_color = self.wd.options.color(.fill_hover);
     }
 
     try self.wd.borderAndBackground(.{ .fill_color = fill_color });

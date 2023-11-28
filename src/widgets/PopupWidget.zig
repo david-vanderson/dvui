@@ -19,7 +19,7 @@ pub var defaults: Options = .{
     .border = Rect.all(1),
     .padding = Rect.all(4),
     .background = true,
-    .color_style = .window,
+    .color_fill = .{ .name = .fill_window },
 };
 
 wd: WidgetData = undefined,
