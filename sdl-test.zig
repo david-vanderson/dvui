@@ -469,6 +469,8 @@ pub const StrokeTest = struct {
     wd: dvui.WidgetData = undefined,
 
     pub fn install(self: *Self, src: std.builtin.SourceLocation, options: dvui.Options) !void {
+        _ = try dvui.sliderEntry(@src(), "thick: {d:0.2}", .{ .value = &thickness }, .{ .expand = .horizontal });
+
         const defaults = dvui.Options{ .name = "StrokeTest" };
         self.wd = dvui.WidgetData.init(src, .{}, defaults.override(options));
         try self.wd.register();
@@ -581,7 +583,7 @@ pub const StrokeTest = struct {
                     },
                     .wheel_y => {
                         e.handled = true;
-                        var base: f32 = 1.05;
+                        var base: f32 = 1.02;
                         const zs = @exp(@log(base) * me.data.wheel_y);
                         if (zs != 1.0) {
                             thickness *= zs;
