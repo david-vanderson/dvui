@@ -80,23 +80,46 @@ pub fn install(self: *ScrollAreaWidget) !void {
 
     const focus_target = self.init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", u32);
 
+    var do_vbar = false;
+    var do_hbar = false;
     if (self.si.vertical != .none) {
         if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar == .auto and (self.si.virtual_size.h > self.si.viewport.h))) {
-            // do the scrollbars first so that they still appear even if there's not enough space
-            self.vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = self.si, .focus_id = focus_target }, .{ .gravity_x = 1.0, .expand = .vertical });
-            try self.vbar.?.install();
+            do_vbar = true;
+            self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
         }
+    }
+
+    if (self.si.horizontal != .none) {
+        if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar == .auto and (self.si.virtual_size.w > self.si.viewport.w))) {
+            do_hbar = true;
+            self.si.viewport.h -= ScrollBarWidget.defaults.min_sizeGet().h;
+        }
+    }
+
+    // test for vbar again because hbar might have removed some of our room
+    if (!do_vbar) {
+        if (self.si.vertical != .none) {
+            if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar == .auto and (self.si.virtual_size.h > self.si.viewport.h))) {
+                do_vbar = true;
+                self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
+            }
+        }
+    }
+
+    if (do_vbar) {
+        // do the scrollbars first so that they still appear even if there's not enough space
+        // - could instead do them in deinit
+        self.vbar = ScrollBarWidget.init(@src(), .{ .scroll_info = self.si, .focus_id = focus_target }, .{ .gravity_x = 1.0, .expand = .vertical });
+        try self.vbar.?.install();
     }
 
     self.vbox = BoxWidget.init(@src(), .vertical, false, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "ScrollAreaWidget vbox" }));
     try self.vbox.install();
     try self.vbox.drawBackground();
 
-    if (self.si.horizontal != .none) {
-        if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar == .auto and (self.si.virtual_size.w > self.si.viewport.w))) {
-            self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, .{ .expand = .horizontal, .gravity_y = 1.0 });
-            try self.hbar.?.install();
-        }
+    if (do_hbar) {
+        self.hbar = ScrollBarWidget.init(@src(), .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target }, .{ .expand = .horizontal, .gravity_y = 1.0 });
+        try self.hbar.?.install();
     }
 
     var container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
