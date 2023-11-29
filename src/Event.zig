@@ -67,7 +67,8 @@ pub const Mouse = struct {
     action: Action,
 
     // This distinguishes between mouse and touch events.
-    // .none is used for mouse motion, wheel, and position
+    // .none is used for mouse wheel and position
+    // mouse motion will be a touch or .none
     button: enums.Button,
 
     p: Point,

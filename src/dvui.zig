@@ -28,6 +28,7 @@ pub const BoxWidget = @import("widgets/BoxWidget.zig");
 pub const ButtonWidget = @import("widgets/ButtonWidget.zig");
 pub const ContextWidget = @import("widgets/ContextWidget.zig");
 pub const FloatingWindowWidget = @import("widgets/FloatingWindowWidget.zig");
+pub const FloatingContextWidget = @import("widgets/FloatingContextWidget.zig");
 pub const IconWidget = @import("widgets/IconWidget.zig");
 pub const ImageWidget = @import("widgets/ImageWidget.zig");
 pub const LabelWidget = @import("widgets/LabelWidget.zig");
@@ -2077,6 +2078,7 @@ pub const Window = struct {
         return ret;
     }
 
+    // this is only for mouse - for touch use addEventTouchMotion
     pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) !bool {
         self.positionMouseEventRemove();
 
@@ -2086,7 +2088,7 @@ pub const Window = struct {
         self.mouse_pt = newpt;
         const winId = self.windowFor(self.mouse_pt);
 
-        // TODO: focus follows mouse
+        // maybe could do focus follows mouse here
         // - generate a .focus event here instead of just doing focusWindow(winId, null);
         // - how to make it optional?
 
@@ -3654,6 +3656,8 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     //_ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
     ret.processEvents();
     // now call addText() any number of times
+    // then call addTextDone()
+    // then call touchEditing()
     return ret;
 }
 

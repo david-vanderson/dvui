@@ -130,6 +130,10 @@ pub fn install(self: *ScrollAreaWidget) !void {
     self.scroll.processVelocity();
 }
 
+pub fn data(self: *ScrollAreaWidget) *WidgetData {
+    return &self.hbox.wd;
+}
+
 pub fn deinit(self: *ScrollAreaWidget) void {
     dvui.dataSet(null, self.hbox.data().id, "_scroll_id", self.scroll.wd.id);
     self.scroll.deinit();

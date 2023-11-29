@@ -16,19 +16,13 @@ change the layout section of the demo to be interactive with checkboxes for expa
 on hidpi display, selecting a bunch of text leaves small gaps noticeable in the selection background
 
 
-scroll container touch down should set handled if the velocity is non-zero to prevent children widgets from handling it when you are just trying to stop the scrolling
-- also why is it doing it in processEvents rather than processEvent?
-- if velocity is non-zero, scroll container should eat the finger down so you don't interact with stuff while you are scrolling
-- why is scrolling velocity so large in simulation compared to on the phone?
-  - maybe because the velocity isn't being multiplied by the frame time
-
-
 add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEntry
-- 2 states (one where we show the menu and draggable cursor stuff)
-  - single dragless click toggles between
-  - only show the menu/draggables if we are in that state AND have focus
-- popup menu we show wheneverthat eats all focus events, nothing in it can ever get focus by default
-  - also doesn't close by itself, totally dependent on parent widget for whether it is shown or not
+- addText needs to report back the pixel position of the selection start/end so we can draw the draggables
+- floating context doesn't show when we are dragging draggables
+- floating context doesn't show between touch down and beginning of drag or touch release
+- floating context needs smarter positioning
+
+remove entypo icons for companies
 
 
 see if we can get the mach backend working again
@@ -36,6 +30,8 @@ see if we can get the mach backend working again
 - can we also get it working in a browser?
 
 don't use box for slider, use WidgetData directly?  Other widgets?
+
+should box do something intelligent about dividing space if snap_to_pixels is on?
 
 UI scaling on Windows causes fonts to look blurry, maybe if snap to pixels is true, we round to nearest font size and then don't adjust for target_fraction?
 
