@@ -638,13 +638,29 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
 
 pub fn touchEditing(self: *TextLayoutWidget, rs: RectScale) !void {
     if (self.touch_editing and self.wd.id == dvui.focusedWidgetId() and self.wd.visible()) {
-        var fc = dvui.FloatingContextWidget.init(@src(), .{ .parent_rectscale = rs }, .{});
+        var fc = dvui.FloatingContextWidget.init(@src(), .{});
+
+        var r = rs.r.offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
+
+        if (dvui.minSizeGet(fc.data().id)) |_| {
+            const ms = dvui.minSize(fc.data().id, fc.data().options.min_sizeGet());
+            fc.wd.rect.w = ms.w;
+            fc.wd.rect.h = ms.h;
+
+            fc.wd.rect.x = r.x + r.w - fc.wd.rect.w;
+            fc.wd.rect.y = r.y - fc.wd.rect.h;
+
+            fc.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{ .x = fc.wd.rect.x, .y = fc.wd.rect.y }, fc.wd.rect);
+        } else {
+            // need another frame to get our min size
+            dvui.refresh(null, @src(), fc.wd.id);
+        }
+
         try fc.install();
         defer fc.deinit();
 
         var hbox = try dvui.box(@src(), .horizontal, .{
             .background = true,
-            .color_style = .content,
         });
         defer hbox.deinit();
 
@@ -833,8 +849,12 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
 
 pub fn deinit(self: *TextLayoutWidget) void {
     if (!self.add_text_done) {
-        self.addTextDone(.{}) catch {};
-        self.touchEditing(.{ .r = dvui.clipGet(), .s = self.wd.rectScale().s }) catch {};
+        self.addTextDone(.{}) catch |err| {
+            dvui.log.err("TextLayoutWidget.deinit addTextDone got {!}\n", .{err});
+        };
+        self.touchEditing(.{ .r = dvui.clipGet(), .s = self.wd.rectScale().s }) catch |err| {
+            dvui.log.err("TextLayoutWidget.deinit touchEditing got {!}\n", .{err});
+        };
     }
     dvui.dataSet(null, self.wd.id, "_touch_editing", self.touch_editing);
     dvui.dataSet(null, self.wd.id, "_touch_editing_drag", self.touch_editing_drag);

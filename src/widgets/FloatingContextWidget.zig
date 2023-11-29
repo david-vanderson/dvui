@@ -15,13 +15,7 @@ pub var defaults: Options = .{
     .name = "FloatingContext",
 };
 
-pub const InitOptions = struct {
-    parent_rectscale: RectScale,
-};
-
 wd: WidgetData = undefined,
-init_opts: InitOptions = undefined,
-options: Options = undefined,
 prev_windowId: u32 = 0,
 prevClip: Rect = Rect{},
 
@@ -31,16 +25,13 @@ prevClip: Rect = Rect{},
 ///
 /// Don't put menus or menuItems in a floating context because those depend on
 /// focus to work.
-pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingContextWidget {
+pub fn init(src: std.builtin.SourceLocation, opts: Options) FloatingContextWidget {
     var self = FloatingContextWidget{};
-    self.init_opts = init_opts;
-
-    self.options = defaults.override(opts);
 
     // passing options.rect will stop WidgetData.init from calling
     // rectFor/minSizeForChild which is important because we are outside
     // normal layout
-    self.wd = WidgetData.init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{} });
+    self.wd = WidgetData.init(src, .{ .subwindow = true }, defaults.override(opts).override(.{ .rect = opts.rect orelse .{} }));
 
     return self;
 }
@@ -49,21 +40,6 @@ pub fn install(self: *FloatingContextWidget) !void {
     dvui.parentSet(self.widget());
 
     self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id);
-    var r = self.init_opts.parent_rectscale.r.offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
-
-    if (dvui.minSizeGet(self.wd.id)) |_| {
-        const ms = dvui.minSize(self.wd.id, self.options.min_sizeGet());
-        self.wd.rect.w = ms.w;
-        self.wd.rect.h = ms.h;
-
-        self.wd.rect.x = r.x + r.w - self.wd.rect.w;
-        self.wd.rect.y = r.y - self.wd.rect.h;
-
-        self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.wd.rect.x, .y = self.wd.rect.y }, self.wd.rect);
-    } else {
-        // need another frame to get our min size
-        dvui.refresh(null, @src(), self.wd.id);
-    }
 
     const rs = self.wd.rectScale();
 
