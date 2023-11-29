@@ -90,7 +90,6 @@ sel_mouse_down_pt: ?Point = null,
 sel_mouse_down_bytes: ?usize = null,
 sel_mouse_drag_pt: ?Point = null,
 sel_left_right: i32 = 0,
-touch_selection: bool = false,
 
 cursor_seen: bool = false,
 cursor_rect: ?Rect = null,
@@ -104,10 +103,16 @@ add_text_done: bool = false,
 copy_sel: ?Selection = null,
 copy_slice: ?[]u8 = null,
 
+// when this is true and we have focus, show the popup with select all, copy, etc.
+touch_editing: bool = false,
+touch_editing_drag: bool = false,
+
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextLayoutWidget {
     const options = defaults.override(opts);
     var self = TextLayoutWidget{ .wd = WidgetData.init(src, .{}, options), .selection_in = init_opts.selection };
     self.break_lines = init_opts.break_lines;
+    self.touch_editing = dvui.dataGet(null, self.wd.id, "_touch_editing", bool) orelse false;
+    self.touch_editing_drag = dvui.dataGet(null, self.wd.id, "_touch_editing_drag", bool) orelse false;
 
     return self;
 }
@@ -123,10 +128,6 @@ pub fn install(self: *TextLayoutWidget) !void {
             self.selection_store = s;
         }
         self.selection = &self.selection_store;
-    }
-
-    if (dvui.dataGet(null, self.wd.id, "_touch_selection", bool)) |ts| {
-        self.touch_selection = ts;
     }
 
     if (dvui.dataGet(null, self.wd.id, "_sel_left_right", i32)) |slf| {
@@ -635,6 +636,28 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
     }
 }
 
+pub fn touchEditing(self: *TextLayoutWidget, rs: RectScale) !void {
+    if (self.touch_editing and self.wd.id == dvui.focusedWidgetId() and self.wd.visible()) {
+        var fc = dvui.FloatingContextWidget.init(@src(), .{ .parent_rectscale = rs }, .{});
+        try fc.install();
+        defer fc.deinit();
+
+        var hbox = try dvui.box(@src(), .horizontal, .{
+            .background = true,
+            .color_style = .content,
+        });
+        defer hbox.deinit();
+
+        if (try dvui.buttonIcon(@src(), "copy", dvui.entypo.copy, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
+            std.debug.print("Copy\n", .{});
+        }
+
+        if (try dvui.buttonIcon(@src(), "select all", dvui.entypo.text, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
+            std.debug.print("Select All\n", .{});
+        }
+    }
+}
+
 pub fn widget(self: *TextLayoutWidget) Widget {
     return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
 }
@@ -689,6 +712,10 @@ pub fn selectionGet(self: *TextLayoutWidget, opts: struct { check_updown: bool =
 }
 
 pub fn matchEvent(self: *TextLayoutWidget, e: *Event) bool {
+    if (self.touch_editing and e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
+        self.touch_editing_drag = false;
+    }
+
     return dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
 }
 
@@ -715,14 +742,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             dvui.captureMouse(self.wd.id);
             dvui.dragPreStart(e.evt.mouse.p, .ibeam, Point{});
 
-            // Normally a touch-motion-release over text will cause a
-            // scroll. To support selection with touch, first you
-            // touch-release (without crossing the drag threshold) which
-            // does a select-all, then you can select a subset.  If you
-            // select an empty selection (touch-release without drag) then
-            // you go back to normal scroll behavior.
-            if (!e.evt.mouse.button.touch() or !self.selection.empty()) {
-                self.touch_selection = true;
+            if (e.evt.mouse.button.touch()) {} else {
                 self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
                 self.sel_mouse_drag_pt = null;
                 self.cursor_updown = 0;
@@ -730,20 +750,26 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             }
         } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
             e.handled = true;
+
             if (dvui.captured(self.wd.id)) {
-                if (e.evt.mouse.button.touch() and !self.touch_selection) {
-                    // select all text
-                    self.selection.start = 0;
-                    self.selection.cursor = 0;
-                    self.selection.end = std.math.maxInt(usize);
+                if (e.evt.mouse.button.touch()) {
+                    // this was a touch-release without drag, which transitions
+                    // us between touch editing
+
+                    self.touch_editing = !self.touch_editing;
+                    std.debug.print("touch_editing {}\n", .{self.touch_editing});
+
+                    self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                    self.touch_editing_drag = false;
                 }
-                self.touch_selection = false;
-                dvui.captureMouse(null); // stop possible drag and capture
+
+                dvui.captureMouse(null);
             }
         } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
             // move if dragging
             if (dvui.dragging(e.evt.mouse.p)) |dps| {
-                if (self.touch_selection) {
+                if (!e.evt.mouse.button.touch()) {
+                    std.debug.print("drag\n", .{});
                     e.handled = true;
                     self.sel_mouse_drag_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
                     self.cursor_updown = 0;
@@ -756,6 +782,9 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     } } };
                     self.processEvent(&scrolldrag, true);
                 } else {
+                    if (self.touch_editing) {
+                        self.touch_editing_drag = true;
+                    }
                     // user intended to scroll with a finger swipe
                     dvui.captureMouse(null); // stop possible drag and capture
                 }
@@ -805,9 +834,11 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
 pub fn deinit(self: *TextLayoutWidget) void {
     if (!self.add_text_done) {
         self.addTextDone(.{}) catch {};
+        self.touchEditing(.{ .r = dvui.clipGet(), .s = self.wd.rectScale().s }) catch {};
     }
+    dvui.dataSet(null, self.wd.id, "_touch_editing", self.touch_editing);
+    dvui.dataSet(null, self.wd.id, "_touch_editing_drag", self.touch_editing_drag);
     dvui.dataSet(null, self.wd.id, "_selection", self.selection.*);
-    dvui.dataSet(null, self.wd.id, "_touch_selection", self.touch_selection);
     if (self.sel_left_right != 0) {
         // user might have pressed left a few times, but we couldn't
         // process them all this frame because they crossed calls to
