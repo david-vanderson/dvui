@@ -13,6 +13,7 @@ add to readme a section about layout from a high level
 
 change the layout section of the demo to be interactive with checkboxes for expanding
 
+on hidpi display, selecting a bunch of text leaves small gaps noticeable in the selection background
 
 
 scroll container touch down should set handled if the velocity is non-zero to prevent children widgets from handling it when you are just trying to stop the scrolling
