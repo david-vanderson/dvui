@@ -94,7 +94,12 @@ pub fn register(self: *const WidgetData) !void {
 
             // intersect our rect with the clip - we only want to outline
             // the visible part
-            try dvui.pathAddRect(rs.r.intersect(clipr), .{});
+            var outline_rect = rs.r.intersect(clipr);
+            if (cw.snap_to_pixels) {
+                outline_rect.x = @ceil(outline_rect.x) - 0.5;
+                outline_rect.y = @ceil(outline_rect.y) - 0.5;
+            }
+            try dvui.pathAddRect(outline_rect, .{});
             var color = dvui.themeGet().color_err;
             try dvui.pathStrokeAfter(true, true, 1 * rs.s, .none, color);
             dvui.clipSet(clipr);
