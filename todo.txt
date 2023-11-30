@@ -17,9 +17,7 @@ on hidpi display, selecting a bunch of text leaves small gaps noticeable in the 
 
 
 add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEntry
-- addText needs to report back the pixel position of the selection start/end so we can draw the draggables
 - floating context doesn't show when we are dragging draggables
-- floating context doesn't show between touch down and beginning of drag or touch release
 - floating context needs smarter positioning
 
 remove entypo icons for companies

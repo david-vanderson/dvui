@@ -90,6 +90,8 @@ sel_mouse_down_pt: ?Point = null,
 sel_mouse_down_bytes: ?usize = null,
 sel_mouse_drag_pt: ?Point = null,
 sel_left_right: i32 = 0,
+sel_start_r: Rect = .{},
+sel_end_r: Rect = .{},
 
 cursor_seen: bool = false,
 cursor_rect: ?Rect = null,
@@ -105,14 +107,22 @@ copy_slice: ?[]u8 = null,
 
 // when this is true and we have focus, show the popup with select all, copy, etc.
 touch_editing: bool = false,
-touch_editing_drag: bool = false,
+touch_editing_show: bool = true,
+touch_editing_focus_on_touchdown: bool = false,
+focus_at_start: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextLayoutWidget {
     const options = defaults.override(opts);
     var self = TextLayoutWidget{ .wd = WidgetData.init(src, .{}, options), .selection_in = init_opts.selection };
     self.break_lines = init_opts.break_lines;
     self.touch_editing = dvui.dataGet(null, self.wd.id, "_touch_editing", bool) orelse false;
-    self.touch_editing_drag = dvui.dataGet(null, self.wd.id, "_touch_editing_drag", bool) orelse false;
+    self.touch_editing_show = dvui.dataGet(null, self.wd.id, "_touch_editing_show", bool) orelse true;
+    self.touch_editing_focus_on_touchdown = dvui.dataGet(null, self.wd.id, "_touch_editing_focus_on_touchdown", bool) orelse false;
+
+    self.sel_start_r = dvui.dataGet(null, self.wd.id, "_sel_start_r", Rect) orelse .{};
+    self.sel_end_r = dvui.dataGet(null, self.wd.id, "_sel_end_r", Rect) orelse .{};
+
+    self.focus_at_start = self.wd.id == dvui.focusedWidgetId();
 
     return self;
 }
@@ -155,6 +165,34 @@ pub fn install(self: *TextLayoutWidget) !void {
     }
 
     self.prevClip = dvui.clip(rs.r);
+
+    if (self.touch_editing and self.touch_editing_show and self.wd.id == dvui.focusedWidgetId() and self.wd.visible()) {
+        var start_rect = self.sel_start_r;
+        start_rect.x -= 10;
+        start_rect.w = 10;
+        const srs = self.screenRectScale(start_rect);
+
+        var end_rect = self.sel_end_r;
+        end_rect.w = 10;
+        const ers = self.screenRectScale(end_rect);
+
+        const oldclip = dvui.clipGet();
+        defer dvui.clipSet(oldclip);
+
+        dvui.clipSet(dvui.windowRectPixels());
+        try dvui.pathAddRect(srs.r, Rect.all(0));
+        try dvui.pathStrokeAfter(true, true, 1.0, .none, self.wd.options.color(.accent));
+
+        try dvui.pathAddRect(ers.r, Rect.all(0));
+        try dvui.pathStrokeAfter(true, true, 1.0, .none, self.wd.options.color(.accent));
+
+        //var fc = dvui.FloatingContextWidget.init(@src(), .{});
+
+        //var r = rs.r.offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
+
+        //try fc.install();
+        //defer fc.deinit();
+    }
 }
 
 pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, opts: Options) !void {
@@ -464,6 +502,17 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
             }
         }
 
+        // record screen position of selection for touch editing
+        if (self.selection.start >= self.bytes_seen and self.selection.start <= self.bytes_seen + end) {
+            const start_off = try options.fontGet().textSize(txt[0..self.selection.start -| self.bytes_seen]);
+            self.sel_start_r = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 0, .h = start_off.h };
+        }
+
+        if (self.selection.end >= self.bytes_seen and self.selection.end <= self.bytes_seen + end) {
+            const end_off = try options.fontGet().textSize(txt[0..self.selection.end -| self.bytes_seen]);
+            self.sel_end_r = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 0, .h = end_off.h };
+        }
+
         const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });
         //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
         const rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
@@ -637,7 +686,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
 }
 
 pub fn touchEditing(self: *TextLayoutWidget, rs: RectScale) !void {
-    if (self.touch_editing and self.wd.id == dvui.focusedWidgetId() and self.wd.visible()) {
+    if (self.touch_editing and self.touch_editing_show and self.wd.id == dvui.focusedWidgetId() and self.wd.visible()) {
         var fc = dvui.FloatingContextWidget.init(@src(), .{});
 
         var r = rs.r.offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
@@ -729,7 +778,7 @@ pub fn selectionGet(self: *TextLayoutWidget, opts: struct { check_updown: bool =
 
 pub fn matchEvent(self: *TextLayoutWidget, e: *Event) bool {
     if (self.touch_editing and e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
-        self.touch_editing_drag = false;
+        self.touch_editing_show = true;
     }
 
     return dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
@@ -758,7 +807,12 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             dvui.captureMouse(self.wd.id);
             dvui.dragPreStart(e.evt.mouse.p, .ibeam, Point{});
 
-            if (e.evt.mouse.button.touch()) {} else {
+            if (e.evt.mouse.button.touch()) {
+                self.touch_editing_focus_on_touchdown = self.focus_at_start;
+                if (self.touch_editing) {
+                    self.touch_editing_show = false;
+                }
+            } else {
                 self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
                 self.sel_mouse_drag_pt = null;
                 self.cursor_updown = 0;
@@ -772,11 +826,12 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     // this was a touch-release without drag, which transitions
                     // us between touch editing
 
-                    self.touch_editing = !self.touch_editing;
-                    std.debug.print("touch_editing {}\n", .{self.touch_editing});
-
-                    self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-                    self.touch_editing_drag = false;
+                    if (self.touch_editing_focus_on_touchdown) {
+                        self.touch_editing = !self.touch_editing;
+                        self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                    } else {
+                        self.touch_editing = true;
+                    }
                 }
 
                 dvui.captureMouse(null);
@@ -785,7 +840,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             // move if dragging
             if (dvui.dragging(e.evt.mouse.p)) |dps| {
                 if (!e.evt.mouse.button.touch()) {
-                    std.debug.print("drag\n", .{});
                     e.handled = true;
                     self.sel_mouse_drag_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
                     self.cursor_updown = 0;
@@ -798,9 +852,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     } } };
                     self.processEvent(&scrolldrag, true);
                 } else {
-                    if (self.touch_editing) {
-                        self.touch_editing_drag = true;
-                    }
                     // user intended to scroll with a finger swipe
                     dvui.captureMouse(null); // stop possible drag and capture
                 }
@@ -857,7 +908,10 @@ pub fn deinit(self: *TextLayoutWidget) void {
         };
     }
     dvui.dataSet(null, self.wd.id, "_touch_editing", self.touch_editing);
-    dvui.dataSet(null, self.wd.id, "_touch_editing_drag", self.touch_editing_drag);
+    dvui.dataSet(null, self.wd.id, "_touch_editing_show", self.touch_editing_show);
+    dvui.dataSet(null, self.wd.id, "_touch_editing_focus_on_touchdown", self.touch_editing_focus_on_touchdown);
+    dvui.dataSet(null, self.wd.id, "_sel_start_r", self.sel_start_r);
+    dvui.dataSet(null, self.wd.id, "_sel_end_r", self.sel_end_r);
     dvui.dataSet(null, self.wd.id, "_selection", self.selection.*);
     if (self.sel_left_right != 0) {
         // user might have pressed left a few times, but we couldn't
