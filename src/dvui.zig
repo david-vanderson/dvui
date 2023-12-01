@@ -1310,6 +1310,10 @@ pub fn windowRectPixels() Rect {
     return currentWindow().rect_pixels;
 }
 
+pub fn windowRectScale() RectScale {
+    return .{ .r = currentWindow().rect_pixels, .s = currentWindow().natural_scale };
+}
+
 pub fn windowNaturalScale() f32 {
     return currentWindow().natural_scale;
 }
