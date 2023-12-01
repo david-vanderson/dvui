@@ -186,7 +186,7 @@ pub fn install(self: *TextLayoutWidget) !void {
         try dvui.pathAddRect(ers.r, Rect.all(0));
         try dvui.pathStrokeAfter(true, true, 1.0, .none, self.wd.options.color(.accent));
 
-        //var fc = dvui.FloatingContextWidget.init(@src(), .{});
+        //var fc = dvui.FloatingWidget.init(@src(), .{});
 
         //var r = rs.r.offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
 
@@ -687,7 +687,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
 
 pub fn touchEditing(self: *TextLayoutWidget, rs: RectScale) !void {
     if (self.touch_editing and self.touch_editing_show and self.wd.id == dvui.focusedWidgetId() and self.wd.visible()) {
-        var fc = dvui.FloatingContextWidget.init(@src(), .{});
+        var fc = dvui.FloatingWidget.init(@src(), .{});
 
         var r = rs.r.offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
 

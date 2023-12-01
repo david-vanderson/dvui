@@ -9,24 +9,27 @@ const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
 
-const FloatingContextWidget = @This();
+const FloatingWidget = @This();
 
 pub var defaults: Options = .{
-    .name = "FloatingContext",
+    .name = "Floating",
 };
 
 wd: WidgetData = undefined,
 prev_windowId: u32 = 0,
 prevClip: Rect = Rect{},
 
-/// FloatingContextWidget is a subwindow to show a small floating context menu.
+/// FloatingWidget is a subwindow to show a any temporary floating thing.
 /// It doesn't focus itself (as a subwindow), and whether it is shown or not is
 /// entirely up to the calling code.
 ///
-/// Don't put menus or menuItems in a floating context because those depend on
-/// focus to work.
-pub fn init(src: std.builtin.SourceLocation, opts: Options) FloatingContextWidget {
-    var self = FloatingContextWidget{};
+/// Don't put menus or menuItems in a floating widget because those depend on
+/// focus to work.  FloatingMenu is made for that.
+///
+/// Use FloatingWindowWidget for a floating window that the user can change
+/// size, move around, and adjust stacking.
+pub fn init(src: std.builtin.SourceLocation, opts: Options) FloatingWidget {
+    var self = FloatingWidget{};
 
     // passing options.rect will stop WidgetData.init from calling
     // rectFor/minSizeForChild which is important because we are outside
@@ -36,7 +39,7 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) FloatingContextWidge
     return self;
 }
 
-pub fn install(self: *FloatingContextWidget) !void {
+pub fn install(self: *FloatingWidget) !void {
     dvui.parentSet(self.widget());
 
     self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id);
@@ -52,27 +55,27 @@ pub fn install(self: *FloatingContextWidget) !void {
     dvui.clipSet(rs.r);
 }
 
-pub fn widget(self: *FloatingContextWidget) Widget {
+pub fn widget(self: *FloatingWidget) Widget {
     return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
 }
 
-pub fn data(self: *FloatingContextWidget) *WidgetData {
+pub fn data(self: *FloatingWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn rectFor(self: *FloatingContextWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *FloatingWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     return dvui.placeIn(self.wd.contentRect().justSize(), dvui.minSize(id, min_size), e, g);
 }
 
-pub fn screenRectScale(self: *FloatingContextWidget, rect: Rect) RectScale {
+pub fn screenRectScale(self: *FloatingWidget, rect: Rect) RectScale {
     return self.wd.contentRectScale().rectToScreen(rect);
 }
 
-pub fn minSizeForChild(self: *FloatingContextWidget, s: Size) void {
+pub fn minSizeForChild(self: *FloatingWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.padSize(s));
 }
 
-pub fn processEvent(self: *FloatingContextWidget, e: *Event, bubbling: bool) void {
+pub fn processEvent(self: *FloatingWidget, e: *Event, bubbling: bool) void {
     // no normal events, just forward close_popup
     switch (e.evt) {
         .close_popup => {
@@ -85,7 +88,7 @@ pub fn processEvent(self: *FloatingContextWidget, e: *Event, bubbling: bool) voi
     _ = bubbling;
 }
 
-pub fn deinit(self: *FloatingContextWidget) void {
+pub fn deinit(self: *FloatingWidget) void {
     self.wd.minSizeSetAndRefresh();
 
     // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();
