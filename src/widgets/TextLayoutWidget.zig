@@ -92,6 +92,7 @@ sel_mouse_drag_pt: ?Point = null,
 sel_left_right: i32 = 0,
 sel_start_r: Rect = .{},
 sel_end_r: Rect = .{},
+sel_pts: [2]?Point = [2]?Point{ null, null },
 
 cursor_seen: bool = false,
 cursor_rect: ?Rect = null,
@@ -167,31 +168,95 @@ pub fn install(self: *TextLayoutWidget) !void {
     self.prevClip = dvui.clip(rs.r);
 
     if (self.touch_editing and self.touch_editing_show and self.wd.id == dvui.focusedWidgetId() and self.wd.visible()) {
-        var start_rect = self.sel_start_r;
-        start_rect.x -= 10;
-        start_rect.w = 10;
-        const srs = self.screenRectScale(start_rect);
+        const size = 24;
+        {
+            var rect = self.sel_start_r;
+            rect.y += rect.h; // move to below the line
+            const srs = self.screenRectScale(rect);
+            rect = dvui.windowRectScale().rectFromScreen(srs.r);
+            rect.x -= size;
+            rect.w = size;
+            rect.h = size;
 
-        var end_rect = self.sel_end_r;
-        end_rect.w = 10;
-        const ers = self.screenRectScale(end_rect);
+            var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
+            try fc.install();
 
-        const oldclip = dvui.clipGet();
-        defer dvui.clipSet(oldclip);
+            const fcrs = fc.wd.rectScale();
+            var evts = dvui.events();
+            for (evts) |*e| {
+                if (!dvui.eventMatch(e, .{ .id = fc.wd.id, .r = fcrs.r }))
+                    continue;
 
-        dvui.clipSet(dvui.windowRectPixels());
-        try dvui.pathAddRect(srs.r, Rect.all(0));
-        try dvui.pathStrokeAfter(true, true, 1.0, .none, self.wd.options.color(.accent));
+                if (e.evt == .mouse) {
+                    const me = e.evt.mouse;
+                    if (me.action == .press and me.button.touch()) {
+                        dvui.captureMouse(fc.wd.id);
+                    } else if (me.action == .release and me.button.touch()) {
+                        dvui.captureMouse(null);
+                    } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
+                        const corner = me.p.plus(.{ .x = size * 0.7 * dvui.windowNaturalScale(), .y = -size * 0.7 * dvui.windowNaturalScale() });
+                        self.sel_pts[0] = self.wd.contentRectScale().pointFromScreen(corner);
+                        self.sel_pts[1] = self.sel_end_r.topleft().plus(.{ .y = self.sel_end_r.h / 2 });
+                        //std.debug.print("sel_pts {?any} {?any}\n", .{ self.sel_pts[0], self.sel_pts[1] });
+                    }
+                }
+            }
 
-        try dvui.pathAddRect(ers.r, Rect.all(0));
-        try dvui.pathStrokeAfter(true, true, 1.0, .none, self.wd.options.color(.accent));
+            try dvui.pathAddPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
+            try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+            try dvui.pathFillConvex(dvui.themeGet().color_fill_control);
 
-        //var fc = dvui.FloatingWidget.init(@src(), .{});
+            try dvui.pathAddPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
+            try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+            try dvui.pathStroke(true, 1.0, .none, self.wd.options.color(.border));
 
-        //var r = rs.r.offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
+            fc.deinit();
+        }
 
-        //try fc.install();
-        //defer fc.deinit();
+        {
+            var rect = self.sel_end_r;
+            rect.y += rect.h; // move to below the line
+            const srs = self.screenRectScale(rect);
+            rect = dvui.windowRectScale().rectFromScreen(srs.r);
+            rect.w = size;
+            rect.h = size;
+
+            var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
+            try fc.install();
+            const fcrs = fc.wd.rectScale();
+            var evts = dvui.events();
+            for (evts) |*e| {
+                if (!dvui.eventMatch(e, .{ .id = fc.wd.id, .r = fcrs.r }))
+                    continue;
+
+                if (e.evt == .mouse) {
+                    const me = e.evt.mouse;
+                    if (me.action == .press and me.button.touch()) {
+                        dvui.captureMouse(fc.wd.id);
+                        e.handled = true;
+                    } else if (me.action == .release and me.button.touch()) {
+                        dvui.captureMouse(null);
+                        e.handled = true;
+                    } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
+                        const corner = me.p.plus(.{ .x = -size * 0.7 * dvui.windowNaturalScale(), .y = -size * 0.7 * dvui.windowNaturalScale() });
+                        self.sel_pts[1] = self.wd.contentRectScale().pointFromScreen(corner);
+                        if (self.sel_pts[0] == null) {
+                            self.sel_pts[0] = self.sel_start_r.topleft().plus(.{ .y = self.sel_start_r.h / 2 });
+                        }
+                    }
+                }
+            }
+
+            try dvui.pathAddPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
+            try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+            try dvui.pathFillConvex(dvui.themeGet().color_fill_control);
+
+            try dvui.pathAddPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
+            try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+            try dvui.pathStroke(true, 1.0, .none, self.wd.options.color(.border));
+
+            fc.deinit();
+        }
     }
 }
 
@@ -502,15 +567,57 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
             }
         }
 
-        // record screen position of selection for touch editing
+        if (self.sel_pts[0] != null or self.sel_pts[1] != null) {
+            var sel_bytes = [2]?usize{ null, null };
+            for (self.sel_pts, 0..) |maybe_pt, i| {
+                if (maybe_pt) |p| {
+                    const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
+                    if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
+                        // point is before this text
+                        sel_bytes[i] = self.bytes_seen;
+                        self.sel_pts[i] = null;
+                    } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
+                        // point is in this text
+                        const how_far = p.x - rs.x;
+                        var pt_end: usize = undefined;
+                        _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
+                        sel_bytes[i] = self.bytes_seen + pt_end;
+                        self.sel_pts[i] = null;
+                    } else {
+                        if (newline and p.y < (rs.y + rs.h)) {
+                            // point is after this text on this same horizontal line
+                            sel_bytes[i] = self.bytes_seen + end - 1;
+                            self.sel_pts[i] = null;
+                        } else {
+                            // point is after this text, but we might not get anymore
+                            sel_bytes[i] = self.bytes_seen + end;
+                        }
+                    }
+                }
+            }
+
+            //std.debug.print("sel_bytes {?d} {?d}\n", .{ sel_bytes[0], sel_bytes[1] });
+
+            // start off getting both, then getting one
+            if (sel_bytes[0] != null and sel_bytes[1] != null) {
+                self.selection.cursor = @min(sel_bytes[0].?, sel_bytes[1].?);
+                self.selection.start = @min(sel_bytes[0].?, sel_bytes[1].?);
+                self.selection.end = @max(sel_bytes[0].?, sel_bytes[1].?);
+            } else if (sel_bytes[0] != null or sel_bytes[1] != null) {
+                self.selection.end = sel_bytes[0] orelse sel_bytes[1].?;
+            }
+        }
+
+        // record screen position of selection for touch editing (use s for
+        // height in case we are calling textSize with an empty slice)
         if (self.selection.start >= self.bytes_seen and self.selection.start <= self.bytes_seen + end) {
             const start_off = try options.fontGet().textSize(txt[0..self.selection.start -| self.bytes_seen]);
-            self.sel_start_r = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 0, .h = start_off.h };
+            self.sel_start_r = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 0, .h = s.h };
         }
 
         if (self.selection.end >= self.bytes_seen and self.selection.end <= self.bytes_seen + end) {
             const end_off = try options.fontGet().textSize(txt[0..self.selection.end -| self.bytes_seen]);
-            self.sel_end_r = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 0, .h = end_off.h };
+            self.sel_end_r = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 0, .h = s.h };
         }
 
         const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });

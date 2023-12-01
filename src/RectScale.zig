@@ -12,6 +12,10 @@ pub fn rectToScreen(rs: *const RectScale, r: Rect) RectScale {
     return .{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };
 }
 
+pub fn rectFromScreen(rs: *const RectScale, r: Rect) Rect {
+    return r.offsetNeg(rs.r).scale(1 / rs.s);
+}
+
 pub fn pointToScreen(rs: *const RectScale, p: Point) Point {
     return p.scale(rs.s).plus(rs.r.topleft());
 }

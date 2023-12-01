@@ -17,8 +17,15 @@ on hidpi display, selecting a bunch of text leaves small gaps noticeable in the 
 
 
 add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEntry
+- draggables should still show during scrolling
+- need to be able to drag-scroll draggables
 - floating context doesn't show when we are dragging draggables
 - floating context needs smarter positioning
+- on the very first time textLayout gets a touch click (no drag), we DO want to set the cursor
+- if the draggable's point is not visible then don't show the draggable
+
+
+rename popup to floatingmenu (and deprecate old name for a while)
 
 remove entypo icons for companies
 
