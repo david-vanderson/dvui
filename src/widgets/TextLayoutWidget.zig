@@ -106,7 +106,7 @@ add_text_done: bool = false,
 copy_sel: ?Selection = null,
 copy_slice: ?[]u8 = null,
 
-// when this is true and we have focus, show the popup with select all, copy, etc.
+// when this is true and we have focus, show the floating widget with select all, copy, etc.
 touch_editing: bool = false,
 touch_editing_show: bool = true,
 touch_editing_focus_on_touchdown: bool = false,
@@ -157,6 +157,11 @@ pub fn install(self: *TextLayoutWidget) !void {
         if (dvui.dataGet(null, self.wd.id, "_cursor_updown_drag", bool)) |cud| {
             self.cursor_updown_drag = cud;
         }
+    }
+
+    if (dvui.dataGet(null, self.wd.id, "_copy_sel_next_frame", bool) != null) {
+        dvui.dataRemove(null, self.wd.id, "_copy_sel_next_frame");
+        self.copy_sel = self.selection.*;
     }
 
     const rs = self.wd.contentRectScale();
@@ -816,16 +821,32 @@ pub fn touchEditing(self: *TextLayoutWidget, rs: RectScale) !void {
         defer fc.deinit();
 
         var hbox = try dvui.box(@src(), .horizontal, .{
+            .corner_radius = dvui.ButtonWidget.defaults.corner_radiusGet(),
             .background = true,
+            .border = dvui.Rect.all(1),
         });
         defer hbox.deinit();
 
         if (try dvui.buttonIcon(@src(), "copy", dvui.entypo.copy, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
-            std.debug.print("Copy\n", .{});
+            if (self.selectionGet(.{})) |sel| {
+                if (!sel.empty()) {
+                    dvui.dataSet(null, self.wd.id, "_copy_sel_next_frame", true);
+
+                    // we are called after all the text has been rendered, so
+                    // need to go another frame to actually do the copy
+                    dvui.refresh(null, @src(), self.wd.id);
+                }
+            }
         }
 
-        if (try dvui.buttonIcon(@src(), "select all", dvui.entypo.text, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
-            std.debug.print("Select All\n", .{});
+        if (try dvui.buttonIcon(@src(), "select all", dvui.entypo.swap, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
+            self.selection.start = 0;
+            self.selection.cursor = 0;
+            self.selection.end = std.math.maxInt(usize);
+
+            // we are after all the text has been rendered, so need to go
+            // another frame to show the select all
+            dvui.refresh(null, @src(), self.wd.id);
         }
     }
 }
@@ -1020,6 +1041,7 @@ pub fn deinit(self: *TextLayoutWidget) void {
     dvui.dataSet(null, self.wd.id, "_sel_start_r", self.sel_start_r);
     dvui.dataSet(null, self.wd.id, "_sel_end_r", self.sel_end_r);
     dvui.dataSet(null, self.wd.id, "_selection", self.selection.*);
+
     if (self.sel_left_right != 0) {
         // user might have pressed left a few times, but we couldn't
         // process them all this frame because they crossed calls to
