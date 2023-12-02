@@ -229,7 +229,7 @@ pub fn main() !void {
                     te.deinit();
 
                     var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{});
-                    try tl.install();
+                    try tl.install(tl.data().id == dvui.focusedWidgetId());
 
                     _ = try dvui.button(@src(), "upleft", .{}, .{});
                     _ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
@@ -287,7 +287,7 @@ pub fn main() !void {
                     ;
                     try tl.addText(lorem, .{});
                     try tl.addTextDone(.{});
-                    try tl.touchEditing(scroll.data().contentRectScale());
+                    try tl.touchEditing(scroll.data().contentRectScale(), tl.data().id == dvui.focusedWidgetId());
                     tl.deinit();
                     scroll.deinit();
                 }
@@ -363,7 +363,7 @@ pub fn main() !void {
                     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both });
                     defer scroll.deinit();
                     var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
-                    try tl.install();
+                    try tl.install(tl.data().id == dvui.focusedWidgetId());
                     {
                         if (try dvui.button(@src(), "Win Up .1", .{}, .{})) {
                             fwin.wd.rect.y -= 0.1;

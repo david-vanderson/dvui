@@ -2024,7 +2024,7 @@ pub const Window = struct {
         self.debug_refresh_mutex.unlock();
 
         if (logit) {
-            std.debug.print("{s}:{d} refresh {?x}", .{ src.file, src.line, id });
+            log.debug("{s}:{d} refresh {?x}", .{ src.file, src.line, id });
         }
         self.extra_frames_needed = 1;
     }
@@ -2037,7 +2037,7 @@ pub const Window = struct {
         self.debug_refresh_mutex.unlock();
 
         if (logit) {
-            std.debug.print("{s}:{d} refreshBackend {?x}", .{ src.file, src.line, id });
+            log.debug("{s}:{d} refreshBackend {?x}", .{ src.file, src.line, id });
         }
         self.backend.refresh();
     }
@@ -3655,7 +3655,7 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     const cw = currentWindow();
     var ret = try cw.arena.create(TextLayoutWidget);
     ret.* = TextLayoutWidget.init(src, init_opts, opts);
-    try ret.install();
+    try ret.install(ret.data().id == dvui.focusedWidgetId());
 
     // can install corner widgets here
     //_ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
