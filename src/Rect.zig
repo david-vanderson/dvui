@@ -11,6 +11,10 @@ y: f32 = 0,
 w: f32 = 0,
 h: f32 = 0,
 
+pub fn equals(self: *const Rect, r: Rect) bool {
+    return (self.x == r.x and self.y == r.y and self.w == r.w and self.h == r.h);
+}
+
 pub fn add(self: *const Rect, r: Rect) Rect {
     return Rect{ .x = self.x + r.x, .y = self.y + r.y, .w = self.w + r.w, .h = self.h + r.h };
 }

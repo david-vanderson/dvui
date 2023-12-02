@@ -17,7 +17,6 @@ on hidpi display, selecting a bunch of text leaves small gaps noticeable in the 
 
 
 add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEntry
-- test when there is no text, might need to add stuff to addTextDone
 - draggables should still show during scrolling
 - need to be able to drag-scroll draggables
 - floating context doesn't show when we are dragging draggables
@@ -26,6 +25,10 @@ add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEnt
 - if the draggable's point is not visible then don't show the draggable
 - test in low fps situations, might need to add refresh
 
+
+textEntry key updown (shift-updown for textLayout) needs to be fixed to be able to do another updown each frame
+- figure out where cursor is from updown_pt from last frame
+- from there determine new cursor point and store for next frame
 
 rename popup to floatingmenu (and deprecate old name for a while)
 

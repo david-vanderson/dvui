@@ -253,51 +253,50 @@ pub fn minSizeForChild(self: *TextEntryWidget, s: Size) void {
 }
 
 pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
-    if (self.textLayout.selectionGet(.{})) |sel| {
-        if (!sel.empty()) {
-            // delete selection
-            std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
-            self.len -= (sel.end - sel.start);
-            sel.end = sel.start;
-            sel.cursor = sel.start;
-        }
-
-        var new_len = @min(new.len, self.init_opts.text.len - self.len);
-
-        // find start of last utf8 char
-        var last: usize = new_len -| 1;
-        while (last < new_len and new[last] & 0xc0 == 0x80) {
-            last -|= 1;
-        }
-
-        // if the last utf8 char can't fit, don't include it
-        if (last < new_len) {
-            const utf8_size = std.unicode.utf8ByteSequenceLength(new[last]) catch 0;
-            if (utf8_size != (new_len - last)) {
-                new_len = last;
-            }
-        }
-
-        // make room if we can
-        if (sel.cursor + new_len < self.init_opts.text.len) {
-            std.mem.copyBackwards(u8, self.init_opts.text[sel.cursor + new_len ..], self.init_opts.text[sel.cursor..self.len]);
-        }
-
-        // update our len and maintain 0 termination if possible
-        self.len += new_len;
-        if (self.len < self.init_opts.text.len) {
-            self.init_opts.text[self.len] = 0;
-        }
-
-        // insert
-        std.mem.copy(u8, self.init_opts.text[sel.cursor..], new[0..new_len]);
-        sel.cursor += new_len;
-        sel.end = sel.cursor;
-        sel.start = sel.cursor;
-
-        // we might have dropped to a new line, so make sure the cursor is visible
-        self.scroll_to_cursor = true;
+    var sel = self.textLayout.selectionGet(self.len);
+    if (!sel.empty()) {
+        // delete selection
+        std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+        self.len -= (sel.end - sel.start);
+        sel.end = sel.start;
+        sel.cursor = sel.start;
     }
+
+    var new_len = @min(new.len, self.init_opts.text.len - self.len);
+
+    // find start of last utf8 char
+    var last: usize = new_len -| 1;
+    while (last < new_len and new[last] & 0xc0 == 0x80) {
+        last -|= 1;
+    }
+
+    // if the last utf8 char can't fit, don't include it
+    if (last < new_len) {
+        const utf8_size = std.unicode.utf8ByteSequenceLength(new[last]) catch 0;
+        if (utf8_size != (new_len - last)) {
+            new_len = last;
+        }
+    }
+
+    // make room if we can
+    if (sel.cursor + new_len < self.init_opts.text.len) {
+        std.mem.copyBackwards(u8, self.init_opts.text[sel.cursor + new_len ..], self.init_opts.text[sel.cursor..self.len]);
+    }
+
+    // update our len and maintain 0 termination if possible
+    self.len += new_len;
+    if (self.len < self.init_opts.text.len) {
+        self.init_opts.text[self.len] = 0;
+    }
+
+    // insert
+    std.mem.copy(u8, self.init_opts.text[sel.cursor..], new[0..new_len]);
+    sel.cursor += new_len;
+    sel.end = sel.cursor;
+    sel.start = sel.cursor;
+
+    // we might have dropped to a new line, so make sure the cursor is visible
+    self.scroll_to_cursor = true;
 }
 
 // Designed to run after event processing and before drawing
@@ -336,56 +335,54 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 .backspace => {
                     if (ke.action == .down or ke.action == .repeat) {
                         e.handled = true;
-                        if (self.textLayout.selectionGet(.{})) |sel| {
-                            if (!sel.empty()) {
-                                // just delete selection
-                                std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
-                                self.len -= (sel.end - sel.start);
-                                self.init_opts.text[self.len] = 0;
-                                sel.end = sel.start;
-                                sel.cursor = sel.start;
-                                self.scroll_to_cursor = true;
-                            } else if (sel.cursor > 0) {
-                                // delete character just before cursor
-                                //
-                                // A utf8 char might consist of more than one byte.
-                                // Find the beginning of the last byte by iterating over
-                                // the string backwards. The first byte of a utf8 char
-                                // does not have the pattern 10xxxxxx.
-                                var i: usize = 1;
-                                while (self.init_opts.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
-                                std.mem.copy(u8, self.init_opts.text[sel.cursor - i ..], self.init_opts.text[sel.cursor..self.len]);
-                                self.len -= i;
-                                self.init_opts.text[self.len] = 0;
-                                sel.cursor -= i;
-                                sel.start = sel.cursor;
-                                sel.end = sel.cursor;
-                                self.scroll_to_cursor = true;
-                            }
+                        var sel = self.textLayout.selectionGet(self.len);
+                        if (!sel.empty()) {
+                            // just delete selection
+                            std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+                            self.len -= (sel.end - sel.start);
+                            self.init_opts.text[self.len] = 0;
+                            sel.end = sel.start;
+                            sel.cursor = sel.start;
+                            self.scroll_to_cursor = true;
+                        } else if (sel.cursor > 0) {
+                            // delete character just before cursor
+                            //
+                            // A utf8 char might consist of more than one byte.
+                            // Find the beginning of the last byte by iterating over
+                            // the string backwards. The first byte of a utf8 char
+                            // does not have the pattern 10xxxxxx.
+                            var i: usize = 1;
+                            while (self.init_opts.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
+                            std.mem.copy(u8, self.init_opts.text[sel.cursor - i ..], self.init_opts.text[sel.cursor..self.len]);
+                            self.len -= i;
+                            self.init_opts.text[self.len] = 0;
+                            sel.cursor -= i;
+                            sel.start = sel.cursor;
+                            sel.end = sel.cursor;
+                            self.scroll_to_cursor = true;
                         }
                     }
                 },
                 .delete => {
                     if (ke.action == .down or ke.action == .repeat) {
                         e.handled = true;
-                        if (self.textLayout.selectionGet(.{})) |sel| {
-                            if (!sel.empty()) {
-                                // just delete selection
-                                std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
-                                self.len -= (sel.end - sel.start);
-                                self.init_opts.text[self.len] = 0;
-                                sel.end = sel.start;
-                                sel.cursor = sel.start;
-                                self.scroll_to_cursor = true;
-                            } else if (sel.cursor < self.len) {
-                                // delete the character just after the cursor
-                                //
-                                // A utf8 char might consist of more than one byte.
-                                const i = std.unicode.utf8ByteSequenceLength(self.init_opts.text[sel.cursor]) catch 1;
-                                std.mem.copy(u8, self.init_opts.text[sel.cursor..], self.init_opts.text[sel.cursor + i .. self.len]);
-                                self.len -= i;
-                                self.init_opts.text[self.len] = 0;
-                            }
+                        var sel = self.textLayout.selectionGet(self.len);
+                        if (!sel.empty()) {
+                            // just delete selection
+                            std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+                            self.len -= (sel.end - sel.start);
+                            self.init_opts.text[self.len] = 0;
+                            sel.end = sel.start;
+                            sel.cursor = sel.start;
+                            self.scroll_to_cursor = true;
+                        } else if (sel.cursor < self.len) {
+                            // delete the character just after the cursor
+                            //
+                            // A utf8 char might consist of more than one byte.
+                            const i = std.unicode.utf8ByteSequenceLength(self.init_opts.text[sel.cursor]) catch 1;
+                            std.mem.copy(u8, self.init_opts.text[sel.cursor..], self.init_opts.text[sel.cursor + i .. self.len]);
+                            self.len -= i;
+                            self.init_opts.text[self.len] = 0;
                         }
                     }
                 },
@@ -431,59 +428,55 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                     if (ke.action == .down and ke.mod.controlCommand()) {
                         // cut
                         e.handled = true;
-                        if (self.textLayout.selectionGet(.{})) |sel| {
-                            if (!sel.empty()) {
-                                // copy selection to clipboard
-                                dvui.clipboardTextSet(self.init_opts.text[sel.start..sel.end]) catch |err| {
-                                    dvui.log.err("clipboardTextSet error {!}\n", .{err});
-                                };
+                        var sel = self.textLayout.selectionGet(self.len);
+                        if (!sel.empty()) {
+                            // copy selection to clipboard
+                            dvui.clipboardTextSet(self.init_opts.text[sel.start..sel.end]) catch |err| {
+                                dvui.log.err("clipboardTextSet error {!}\n", .{err});
+                            };
 
-                                // delete selection
-                                std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
-                                self.len -= (sel.end - sel.start);
-                                self.init_opts.text[self.len] = 0;
-                                sel.end = sel.start;
-                                sel.cursor = sel.start;
-                                self.scroll_to_cursor = true;
-                            }
+                            // delete selection
+                            std.mem.copy(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+                            self.len -= (sel.end - sel.start);
+                            self.init_opts.text[self.len] = 0;
+                            sel.end = sel.start;
+                            sel.cursor = sel.start;
+                            self.scroll_to_cursor = true;
                         }
                     }
                 },
                 .left, .right => |code| {
                     if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
                         e.handled = true;
-                        if (self.textLayout.selectionGet(.{})) |sel| {
-                            if (code == .left) {
-                                // If the cursor is at position 0 do nothing...
-                                if (sel.cursor > 0) {
-                                    // ... otherwise, "jump over" the utf8 char to the
-                                    // left of the cursor.
-                                    var i: usize = 1;
-                                    while (sel.cursor -| i > 0 and self.init_opts.text[sel.cursor -| i] & 0xc0 == 0x80) : (i += 1) {}
-                                    sel.cursor -|= i;
-                                }
-                            } else {
-                                if (sel.cursor < self.len) {
-                                    // Get the number of bytes of the current code point and
-                                    // "jump" to the next code point to the right of the cursor.
-                                    sel.cursor += std.unicode.utf8ByteSequenceLength(self.init_opts.text[sel.cursor]) catch 1;
-                                    sel.cursor = @min(sel.cursor, self.len);
-                                }
+                        var sel = self.textLayout.selectionGet(self.len);
+                        if (code == .left) {
+                            // If the cursor is at position 0 do nothing...
+                            if (sel.cursor > 0) {
+                                // ... otherwise, "jump over" the utf8 char to the
+                                // left of the cursor.
+                                var i: usize = 1;
+                                while (sel.cursor -| i > 0 and self.init_opts.text[sel.cursor -| i] & 0xc0 == 0x80) : (i += 1) {}
+                                sel.cursor -|= i;
                             }
-
-                            sel.start = sel.cursor;
-                            sel.end = sel.cursor;
-                            self.scroll_to_cursor = true;
+                        } else {
+                            if (sel.cursor < self.len) {
+                                // Get the number of bytes of the current code point and
+                                // "jump" to the next code point to the right of the cursor.
+                                sel.cursor += std.unicode.utf8ByteSequenceLength(self.init_opts.text[sel.cursor]) catch 1;
+                                sel.cursor = @min(sel.cursor, self.len);
+                            }
                         }
+
+                        sel.start = sel.cursor;
+                        sel.end = sel.cursor;
+                        self.scroll_to_cursor = true;
                     }
                 },
                 .up, .down => |code| {
                     if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
                         e.handled = true;
-                        if (self.textLayout.selectionGet(.{ .check_updown = false })) |_| {
-                            self.textLayout.cursor_updown += if (code == .down) 1 else -1;
-                            self.textLayout.cursor_updown_drag = false;
-                        }
+                        self.textLayout.cursor_updown += if (code == .down) 1 else -1;
+                        self.textLayout.cursor_updown_drag = false;
                     }
                 },
                 else => {},

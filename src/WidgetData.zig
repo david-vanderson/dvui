@@ -119,15 +119,19 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
             bg = true;
         }
         const rs = self.borderRectScale();
-        try dvui.pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-        var col = self.options.color(.border);
-        try dvui.pathFillConvex(col);
+        if (!rs.r.empty()) {
+            try dvui.pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
+            var col = self.options.color(.border);
+            try dvui.pathFillConvex(col);
+        }
     }
 
     if (bg) {
         const rs = self.backgroundRectScale();
-        try dvui.pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-        try dvui.pathFillConvex(opts.fill_color orelse self.options.color(.fill));
+        if (!rs.r.empty()) {
+            try dvui.pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
+            try dvui.pathFillConvex(opts.fill_color orelse self.options.color(.fill));
+        }
     }
 }
 
