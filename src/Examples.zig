@@ -812,7 +812,7 @@ pub fn layoutText() !void {
 
     {
         var tl = TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
-        try tl.install();
+        try tl.install(tl.data().id == dvui.focusedWidgetId());
         defer tl.deinit();
 
         var cbox = try dvui.box(@src(), .vertical, .{ .padding = .{ .w = 4 } });

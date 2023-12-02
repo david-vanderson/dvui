@@ -97,7 +97,7 @@ pub fn install(self: *TextEntryWidget) !void {
     self.scrollClip = dvui.clipGet();
 
     self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding, .min_size_content = .{} }));
-    try self.textLayout.install();
+    try self.textLayout.install(self.wd.id == dvui.focusedWidgetId());
     self.textClip = dvui.clipGet();
 
     // don't call textLayout.processEvents here, we forward events inside our own processEvents
@@ -173,6 +173,7 @@ pub fn draw(self: *TextEntryWidget) !void {
     }
 
     try self.textLayout.addTextDone(self.wd.options.strip());
+    try self.textLayout.touchEditing(.{ .r = dvui.clipGet(), .s = self.wd.rectScale().s }, self.wd.id == dvui.focusedWidgetId());
 
     if (self.init_opts.password_char) |pc| {
         // reset selection
