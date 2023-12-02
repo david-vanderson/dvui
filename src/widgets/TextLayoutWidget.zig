@@ -101,6 +101,7 @@ cursor_updown_drag: bool = true,
 cursor_updown_pt: ?Point = null,
 scroll_to_cursor: bool = false,
 
+touch_editing_done: bool = false,
 add_text_done: bool = false,
 
 copy_sel: ?Selection = null,
@@ -166,9 +167,7 @@ pub fn install(self: *TextLayoutWidget) !void {
 
     const rs = self.wd.contentRectScale();
 
-    if (!rs.r.empty()) {
-        try self.wd.borderAndBackground(.{});
-    }
+    try self.wd.borderAndBackground(.{});
 
     self.prevClip = dvui.clip(rs.r);
 
@@ -603,11 +602,14 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
 
             //std.debug.print("sel_bytes {?d} {?d}\n", .{ sel_bytes[0], sel_bytes[1] });
 
-            // start off getting both, then getting one
+            // start off getting both, then maybe getting one
             if (sel_bytes[0] != null and sel_bytes[1] != null) {
                 self.selection.cursor = @min(sel_bytes[0].?, sel_bytes[1].?);
                 self.selection.start = @min(sel_bytes[0].?, sel_bytes[1].?);
                 self.selection.end = @max(sel_bytes[0].?, sel_bytes[1].?);
+
+                // changing touch selection, need to refresh to move draggables
+                dvui.refresh(null, @src(), self.wd.id);
             } else if (sel_bytes[0] != null or sel_bytes[1] != null) {
                 self.selection.end = sel_bytes[0] orelse sel_bytes[1].?;
             }
@@ -617,12 +619,20 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
         // height in case we are calling textSize with an empty slice)
         if (self.selection.start >= self.bytes_seen and self.selection.start <= self.bytes_seen + end) {
             const start_off = try options.fontGet().textSize(txt[0..self.selection.start -| self.bytes_seen]);
-            self.sel_start_r = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 0, .h = s.h };
+            const new_start_r = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 0, .h = s.h };
+            if (!self.sel_start_r.equals(new_start_r)) {
+                dvui.refresh(null, @src(), self.wd.id);
+            }
+            self.sel_start_r = new_start_r;
         }
 
         if (self.selection.end >= self.bytes_seen and self.selection.end <= self.bytes_seen + end) {
             const end_off = try options.fontGet().textSize(txt[0..self.selection.end -| self.bytes_seen]);
-            self.sel_end_r = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 0, .h = s.h };
+            const new_end_r = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 0, .h = s.h };
+            if (!self.sel_end_r.equals(new_end_r)) {
+                dvui.refresh(null, @src(), self.wd.id);
+            }
+            self.sel_end_r = new_end_r;
         }
 
         const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });
@@ -741,16 +751,30 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
 
     if (self.copy_sel) |_| {
         // we are copying to clipboard and never stopped
-        try dvui.clipboardTextSet(self.copy_slice.?);
+        try dvui.clipboardTextSet(self.copy_slice orelse "");
 
         self.copy_sel = null;
-        dvui.currentWindow().arena.free(self.copy_slice.?);
+        if (self.copy_slice) |cs| {
+            dvui.currentWindow().arena.free(cs);
+        }
         self.copy_slice = null;
     }
 
     // if we had mouse/keyboard interaction, need to handle things if addText never gets called
     if (self.sel_mouse_down_pt) |_| {
         self.sel_mouse_down_bytes = self.bytes_seen;
+    }
+
+    if (self.selection.start > self.bytes_seen) {
+        const options = self.wd.options.override(opts);
+        self.sel_start_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .h = try options.fontGet().lineHeight() };
+        dvui.refresh(null, @src(), self.wd.id);
+    }
+
+    if (self.selection.end > self.bytes_seen) {
+        const options = self.wd.options.override(opts);
+        self.sel_end_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .h = try options.fontGet().lineHeight() };
+        dvui.refresh(null, @src(), self.wd.id);
     }
 
     self.selection.cursor = @min(self.selection.cursor, self.bytes_seen);
@@ -768,8 +792,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
         self.selection.cursor = self.bytes_seen;
 
         const options = self.wd.options.override(opts);
-        const size = try options.fontGet().textSize("");
-        const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
+        const cr = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
 
         if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
             const cr_new = cr.add(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
@@ -798,6 +821,11 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
 }
 
 pub fn touchEditing(self: *TextLayoutWidget, rs: RectScale) !void {
+    if (!self.add_text_done) {
+        try self.addTextDone(.{});
+    }
+    self.touch_editing_done = true;
+
     if (self.touch_editing and self.touch_editing_show and self.wd.id == dvui.focusedWidgetId() and self.wd.visible()) {
         var fc = dvui.FloatingWidget.init(@src(), .{});
 
@@ -828,15 +856,11 @@ pub fn touchEditing(self: *TextLayoutWidget, rs: RectScale) !void {
         defer hbox.deinit();
 
         if (try dvui.buttonIcon(@src(), "copy", dvui.entypo.copy, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
-            if (self.selectionGet(.{})) |sel| {
-                if (!sel.empty()) {
-                    dvui.dataSet(null, self.wd.id, "_copy_sel_next_frame", true);
+            dvui.dataSet(null, self.wd.id, "_copy_sel_next_frame", true);
 
-                    // we are called after all the text has been rendered, so
-                    // need to go another frame to actually do the copy
-                    dvui.refresh(null, @src(), self.wd.id);
-                }
-            }
+            // we are called after all the text has been rendered, so
+            // need to go another frame to actually do the copy
+            dvui.refresh(null, @src(), self.wd.id);
         }
 
         if (try dvui.buttonIcon(@src(), "select all", dvui.entypo.swap, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
@@ -892,16 +916,17 @@ pub fn minSizeForChild(self: *TextLayoutWidget, s: Size) void {
     // we calculate our min size in deinit() after we have seen our text
 }
 
-pub fn selectionGet(self: *TextLayoutWidget, opts: struct { check_updown: bool = true }) ?*Selection {
-    if (self.sel_mouse_down_pt == null and
-        self.sel_mouse_drag_pt == null and
-        self.cursor_updown_pt == null and
-        (!opts.check_updown or self.cursor_updown == 0))
-    {
-        return self.selection;
-    } else {
-        return null;
-    }
+// Using this function helps prevent accidentally using the selection when the
+// end is way too large, because the way we do select all is to set end to
+// maxInt(usize) and fix it up the next frame.
+//
+// Either the caller knows the max (like TextEntryWidget), or they can pass
+// maxInt(usize) and be clued into what might happen.
+pub fn selectionGet(self: *TextLayoutWidget, max: usize) *Selection {
+    self.selection.start = @min(self.selection.start, max);
+    self.selection.cursor = @min(self.selection.cursor, max);
+    self.selection.end = @min(self.selection.end, max);
+    return self.selection;
 }
 
 pub fn matchEvent(self: *TextLayoutWidget, e: *Event) bool {
@@ -939,6 +964,9 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 self.touch_editing_focus_on_touchdown = self.focus_at_start;
                 if (self.touch_editing) {
                     self.touch_editing_show = false;
+
+                    // need to refresh draggables
+                    dvui.refresh(null, @src(), self.wd.id);
                 }
             } else {
                 self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
@@ -1014,11 +1042,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
     } else if (e.evt == .key and e.evt.key.mod.controlCommand() and e.evt.key.code == .c and e.evt.key.action == .down) {
         // copy
         e.handled = true;
-        if (self.selectionGet(.{})) |sel| {
-            if (!sel.empty()) {
-                self.copy_sel = sel.*;
-            }
-        }
+        self.copy_sel = self.selection.*;
     }
 
     if (e.bubbleable()) {
@@ -1031,6 +1055,8 @@ pub fn deinit(self: *TextLayoutWidget) void {
         self.addTextDone(.{}) catch |err| {
             dvui.log.err("TextLayoutWidget.deinit addTextDone got {!}\n", .{err});
         };
+    }
+    if (!self.touch_editing_done) {
         self.touchEditing(.{ .r = dvui.clipGet(), .s = self.wd.rectScale().s }) catch |err| {
             dvui.log.err("TextLayoutWidget.deinit touchEditing got {!}\n", .{err});
         };

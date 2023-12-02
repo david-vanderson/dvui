@@ -3656,12 +3656,16 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     var ret = try cw.arena.create(TextLayoutWidget);
     ret.* = TextLayoutWidget.init(src, init_opts, opts);
     try ret.install();
+
     // can install corner widgets here
     //_ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
+
     ret.processEvents();
-    // now call addText() any number of times
-    // then call addTextDone()
-    // then call touchEditing()
+
+    // call addText() any number of times
+
+    // can call addTextDone() (will be called automatically if you don't)
+    // can call touchEditing() (will be called automatically if you don't)
     return ret;
 }
 
