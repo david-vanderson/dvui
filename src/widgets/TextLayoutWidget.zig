@@ -765,13 +765,13 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
         self.sel_mouse_down_bytes = self.bytes_seen;
     }
 
-    if (self.selection.start > self.bytes_seen) {
+    if (self.selection.start >= self.bytes_seen) {
         const options = self.wd.options.override(opts);
         self.sel_start_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .h = try options.fontGet().lineHeight() };
         dvui.refresh(null, @src(), self.wd.id);
     }
 
-    if (self.selection.end > self.bytes_seen) {
+    if (self.selection.end >= self.bytes_seen) {
         const options = self.wd.options.override(opts);
         self.sel_end_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .h = try options.fontGet().lineHeight() };
         dvui.refresh(null, @src(), self.wd.id);
