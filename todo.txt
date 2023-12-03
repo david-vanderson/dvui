@@ -20,8 +20,6 @@ on hidpi display, selecting a bunch of text leaves small gaps noticeable in the 
 
 add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEntry
 - floating context needs smarter positioning
-- on the very first time textLayout gets a touch click (no drag), we DO want to set the cursor
-- if the draggable's point is not visible then don't show the draggable
 - different context menu for textEntry
 
 

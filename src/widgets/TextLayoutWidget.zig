@@ -114,6 +114,7 @@ copy_slice: ?[]u8 = null,
 
 // when this is true and we have focus, show the floating widget with select all, copy, etc.
 touch_editing: bool = false,
+te_first: bool = true,
 te_show_draggables: bool = true,
 te_show_context_menu: bool = true,
 te_focus_on_touchdown: bool = false,
@@ -125,6 +126,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     self.break_lines = init_opts.break_lines;
     self.touch_edit_just_focused = init_opts.touch_edit_just_focused;
     self.touch_editing = dvui.dataGet(null, self.wd.id, "_touch_editing", bool) orelse false;
+    self.te_first = dvui.dataGet(null, self.wd.id, "_te_first", bool) orelse true;
     self.te_show_draggables = dvui.dataGet(null, self.wd.id, "_te_show_draggables", bool) orelse true;
     self.te_show_context_menu = dvui.dataGet(null, self.wd.id, "_te_show_context_menu", bool) orelse true;
     self.te_focus_on_touchdown = dvui.dataGet(null, self.wd.id, "_te_focus_on_touchdown", bool) orelse false;
@@ -182,6 +184,8 @@ pub fn install(self: *TextLayoutWidget, focused: bool) !void {
     if (self.touch_editing and self.te_show_draggables and self.focus_at_start and self.wd.visible()) {
         const size = 24;
         {
+            // calculate visible before FloatingWidget changes clip
+            const visible = !dvui.clipGet().intersect(rs.rectToScreen(self.sel_start_r)).empty();
             var rect = self.sel_start_r;
             rect.y += rect.h; // move to below the line
             const srs = self.screenRectScale(rect);
@@ -221,18 +225,22 @@ pub fn install(self: *TextLayoutWidget, focused: bool) !void {
                 }
             }
 
-            try dvui.pathAddPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
-            try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
-            try dvui.pathFillConvex(dvui.themeGet().color_fill_control);
+            if (visible) {
+                try dvui.pathAddPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
+                try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+                try dvui.pathFillConvex(dvui.themeGet().color_fill_control);
 
-            try dvui.pathAddPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
-            try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
-            try dvui.pathStroke(true, 1.0, .none, self.wd.options.color(.border));
+                try dvui.pathAddPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
+                try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+                try dvui.pathStroke(true, 1.0, .none, self.wd.options.color(.border));
+            }
 
             fc.deinit();
         }
 
         {
+            // calculate visible before FloatingWidget changes clip
+            const visible = !dvui.clipGet().intersect(rs.rectToScreen(self.sel_end_r)).empty();
             var rect = self.sel_end_r;
             rect.y += rect.h; // move to below the line
             const srs = self.screenRectScale(rect);
@@ -272,13 +280,15 @@ pub fn install(self: *TextLayoutWidget, focused: bool) !void {
                 }
             }
 
-            try dvui.pathAddPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
-            try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
-            try dvui.pathFillConvex(dvui.themeGet().color_fill_control);
+            if (visible) {
+                try dvui.pathAddPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
+                try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+                try dvui.pathFillConvex(dvui.themeGet().color_fill_control);
 
-            try dvui.pathAddPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
-            try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
-            try dvui.pathStroke(true, 1.0, .none, self.wd.options.color(.border));
+                try dvui.pathAddPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
+                try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+                try dvui.pathStroke(true, 1.0, .none, self.wd.options.color(.border));
+            }
 
             fc.deinit();
         }
@@ -645,13 +655,13 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
         if (self.selection.start >= self.bytes_seen and self.selection.start <= self.bytes_seen + end) {
             do_sel_start_r = true;
             const start_off = try options.fontGet().textSize(txt[0..self.selection.start -| self.bytes_seen]);
-            new_start_r = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 0, .h = s.h };
+            new_start_r = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
         if (self.selection.end >= self.bytes_seen and self.selection.end <= self.bytes_seen + end) {
             do_sel_end_r = true;
             const end_off = try options.fontGet().textSize(txt[0..self.selection.end -| self.bytes_seen]);
-            new_end_r = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 0, .h = s.h };
+            new_end_r = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
         const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });
@@ -754,7 +764,7 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
 
         if (do_sel_start_r) {
             if (newline and (self.selection.start == self.bytes_seen)) {
-                new_start_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 0, .h = s.h };
+                new_start_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = s.h };
             }
             if (!self.sel_start_r.equals(new_start_r)) {
                 dvui.refresh(null, @src(), self.wd.id);
@@ -764,7 +774,7 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
 
         if (do_sel_end_r) {
             if (newline and (self.selection.end == self.bytes_seen)) {
-                new_end_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 0, .h = s.h };
+                new_end_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = s.h };
             }
             if (!self.sel_end_r.equals(new_end_r)) {
                 dvui.refresh(null, @src(), self.wd.id);
@@ -1031,6 +1041,13 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                         self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
                     } else if (self.touch_edit_just_focused) {
                         self.touch_editing = true;
+                        if (self.te_first) {
+                            // This is the very first time we are entering
+                            // touch editing from not having focus, we want to
+                            // position the cursor.
+                            self.te_first = false;
+                            self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                        }
                     }
                 }
 
@@ -1105,6 +1122,7 @@ pub fn deinit(self: *TextLayoutWidget) void {
         };
     }
     dvui.dataSet(null, self.wd.id, "_touch_editing", self.touch_editing);
+    dvui.dataSet(null, self.wd.id, "_te_first", self.te_first);
     dvui.dataSet(null, self.wd.id, "_te_show_draggables", self.te_show_draggables);
     dvui.dataSet(null, self.wd.id, "_te_show_context_menu", self.te_show_context_menu);
     dvui.dataSet(null, self.wd.id, "_te_focus_on_touchdown", self.te_focus_on_touchdown);
