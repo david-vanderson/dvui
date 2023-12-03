@@ -36,7 +36,7 @@ nextVirtualSize: Size = Size{},
 next_widget_ypos: f32 = 0, // goes from 0 to viritualSize.h
 
 inject_capture_id: ?u32 = null,
-inject_mouse_pt: Point = .{},
+seen_scroll_drag: bool = false,
 
 finger_down: bool = false,
 
@@ -275,14 +275,14 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
                 sd.screen_rect.y < rs.r.y and // scrolling would show more of child
                 self.si.viewport.y > 0) // can scroll up
             {
-                scrolly = if (sd.injected) -200 * dvui.secondsSinceLastFrame() else -5;
+                scrolly = if (!self.seen_scroll_drag) -200 * dvui.secondsSinceLastFrame() else -5;
             }
 
             if (sd.mouse_pt.y >= (rs.r.y + rs.r.h) and
                 (sd.screen_rect.y + sd.screen_rect.h) > (rs.r.y + rs.r.h) and
                 self.si.viewport.y < self.si.scroll_max(.vertical))
             {
-                scrolly = if (sd.injected) 200 * dvui.secondsSinceLastFrame() else 5;
+                scrolly = if (!self.seen_scroll_drag) 200 * dvui.secondsSinceLastFrame() else 5;
             }
 
             var scrollx: f32 = 0;
@@ -290,14 +290,14 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
                 sd.screen_rect.x < rs.r.x and // scrolling would show more of child
                 self.si.viewport.x > 0) // can scroll left
             {
-                scrollx = if (sd.injected) -200 * dvui.secondsSinceLastFrame() else -5;
+                scrollx = if (!self.seen_scroll_drag) -200 * dvui.secondsSinceLastFrame() else -5;
             }
 
             if (sd.mouse_pt.x >= (rs.r.x + rs.r.w) and
                 (sd.screen_rect.x + sd.screen_rect.w) > (rs.r.x + rs.r.w) and
                 self.si.viewport.x < self.si.scroll_max(.horizontal))
             {
-                scrollx = if (sd.injected) 200 * dvui.secondsSinceLastFrame() else 5;
+                scrollx = if (!self.seen_scroll_drag) 200 * dvui.secondsSinceLastFrame() else 5;
             }
 
             if (scrolly != 0 or scrollx != 0) {
@@ -313,8 +313,9 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
                 // if we are scrolling, then we need a motion event next
                 // frame so that the child widget can adjust selection
                 self.inject_capture_id = sd.capture_id;
-                self.inject_mouse_pt = sd.mouse_pt;
             }
+
+            self.seen_scroll_drag = true;
         },
         .scroll_to => |st| {
             e.handled = true;
@@ -454,6 +455,10 @@ pub fn deinit(self: *ScrollContainerWidget) void {
     dvui.dataSet(null, self.wd.id, "_finger_down", self.finger_down);
 
     if (self.inject_capture_id) |ci| {
+        // Only do this if the widget that sent the scroll_drag event still has
+        // mouse capture at this point.  Mouse could have moved, generated a
+        // scroll_drag, then released - in that case we don't want to inject a
+        // motion event next frame.
         if (ci == dvui.captureMouseId()) {
             // inject a mouse motion event into next frame
             dvui.currentWindow().inject_motion_event = true;
