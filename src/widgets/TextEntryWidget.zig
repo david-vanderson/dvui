@@ -173,7 +173,7 @@ pub fn draw(self: *TextEntryWidget) !void {
     }
 
     try self.textLayout.addTextDone(self.wd.options.strip());
-    try self.textLayout.touchEditing(.{ .r = dvui.clipGet(), .s = self.wd.rectScale().s }, self.wd.id == dvui.focusedWidgetId());
+    try self.textLayout.touchEditing(.{ .r = dvui.clipGet(), .s = self.wd.rectScale().s });
 
     if (self.init_opts.password_char) |pc| {
         // reset selection

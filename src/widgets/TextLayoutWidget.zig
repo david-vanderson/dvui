@@ -124,12 +124,12 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     self.sel_start_r = dvui.dataGet(null, self.wd.id, "_sel_start_r", Rect) orelse .{};
     self.sel_end_r = dvui.dataGet(null, self.wd.id, "_sel_end_r", Rect) orelse .{};
 
-    self.focus_at_start = self.wd.id == dvui.focusedWidgetId();
-
     return self;
 }
 
 pub fn install(self: *TextLayoutWidget, focused: bool) !void {
+    self.focus_at_start = focused;
+
     try self.wd.register();
     dvui.parentSet(self.widget());
 
@@ -171,7 +171,7 @@ pub fn install(self: *TextLayoutWidget, focused: bool) !void {
 
     self.prevClip = dvui.clip(rs.r);
 
-    if (self.touch_editing and self.touch_editing_show and focused and self.wd.visible()) {
+    if (self.touch_editing and self.touch_editing_show and self.focus_at_start and self.wd.visible()) {
         const size = 24;
         {
             var rect = self.sel_start_r;
@@ -842,13 +842,13 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
     }
 }
 
-pub fn touchEditing(self: *TextLayoutWidget, rs: RectScale, focused: bool) !void {
+pub fn touchEditing(self: *TextLayoutWidget, rs: RectScale) !void {
     if (!self.add_text_done) {
         try self.addTextDone(.{});
     }
     self.touch_editing_done = true;
 
-    if (self.touch_editing and self.touch_editing_show and focused and self.wd.visible()) {
+    if (self.touch_editing and self.touch_editing_show and self.focus_at_start and self.wd.visible()) {
         var fc = dvui.FloatingWidget.init(@src(), .{});
 
         var r = rs.r.offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
@@ -1079,7 +1079,7 @@ pub fn deinit(self: *TextLayoutWidget) void {
         };
     }
     if (!self.touch_editing_done) {
-        self.touchEditing(.{ .r = dvui.clipGet(), .s = self.wd.rectScale().s }, self.wd.id == dvui.focusedWidgetId()) catch |err| {
+        self.touchEditing(.{ .r = dvui.clipGet(), .s = self.wd.rectScale().s }) catch |err| {
             dvui.log.err("TextLayoutWidget.deinit touchEditing got {!}\n", .{err});
         };
     }

@@ -287,7 +287,7 @@ pub fn main() !void {
                     ;
                     try tl.addText(lorem, .{});
                     try tl.addTextDone(.{});
-                    try tl.touchEditing(scroll.data().contentRectScale(), tl.data().id == dvui.focusedWidgetId());
+                    try tl.touchEditing(scroll.data().contentRectScale());
                     tl.deinit();
                     scroll.deinit();
                 }
