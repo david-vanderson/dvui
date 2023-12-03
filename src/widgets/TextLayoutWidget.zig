@@ -109,8 +109,9 @@ copy_slice: ?[]u8 = null,
 
 // when this is true and we have focus, show the floating widget with select all, copy, etc.
 touch_editing: bool = false,
-touch_editing_show: bool = true,
-touch_editing_focus_on_touchdown: bool = false,
+te_show_draggables: bool = true,
+te_show_context_menu: bool = true,
+te_focus_on_touchdown: bool = false,
 focus_at_start: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextLayoutWidget {
@@ -118,8 +119,9 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     var self = TextLayoutWidget{ .wd = WidgetData.init(src, .{}, options), .selection_in = init_opts.selection };
     self.break_lines = init_opts.break_lines;
     self.touch_editing = dvui.dataGet(null, self.wd.id, "_touch_editing", bool) orelse false;
-    self.touch_editing_show = dvui.dataGet(null, self.wd.id, "_touch_editing_show", bool) orelse true;
-    self.touch_editing_focus_on_touchdown = dvui.dataGet(null, self.wd.id, "_touch_editing_focus_on_touchdown", bool) orelse false;
+    self.te_show_draggables = dvui.dataGet(null, self.wd.id, "_te_show_draggables", bool) orelse true;
+    self.te_show_context_menu = dvui.dataGet(null, self.wd.id, "_te_show_context_menu", bool) orelse true;
+    self.te_focus_on_touchdown = dvui.dataGet(null, self.wd.id, "_te_focus_on_touchdown", bool) orelse false;
 
     self.sel_start_r = dvui.dataGet(null, self.wd.id, "_sel_start_r", Rect) orelse .{};
     self.sel_end_r = dvui.dataGet(null, self.wd.id, "_sel_end_r", Rect) orelse .{};
@@ -171,7 +173,7 @@ pub fn install(self: *TextLayoutWidget, focused: bool) !void {
 
     self.prevClip = dvui.clip(rs.r);
 
-    if (self.touch_editing and self.touch_editing_show and self.focus_at_start and self.wd.visible()) {
+    if (self.touch_editing and self.te_show_draggables and self.focus_at_start and self.wd.visible()) {
         const size = 24;
         {
             var rect = self.sel_start_r;
@@ -195,6 +197,7 @@ pub fn install(self: *TextLayoutWidget, focused: bool) !void {
                     const me = e.evt.mouse;
                     if (me.action == .press and me.button.touch()) {
                         dvui.captureMouse(fc.wd.id);
+                        self.te_show_context_menu = false;
                     } else if (me.action == .release and me.button.touch()) {
                         dvui.captureMouse(null);
                     } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
@@ -237,10 +240,9 @@ pub fn install(self: *TextLayoutWidget, focused: bool) !void {
                     const me = e.evt.mouse;
                     if (me.action == .press and me.button.touch()) {
                         dvui.captureMouse(fc.wd.id);
-                        e.handled = true;
+                        self.te_show_context_menu = false;
                     } else if (me.action == .release and me.button.touch()) {
                         dvui.captureMouse(null);
-                        e.handled = true;
                     } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
                         const corner = me.p.plus(.{ .x = -size * 0.7 * dvui.windowNaturalScale(), .y = -size * 0.7 * dvui.windowNaturalScale() });
                         self.sel_pts[1] = self.wd.contentRectScale().pointFromScreen(corner);
@@ -848,7 +850,7 @@ pub fn touchEditing(self: *TextLayoutWidget, rs: RectScale) !void {
     }
     self.touch_editing_done = true;
 
-    if (self.touch_editing and self.touch_editing_show and self.focus_at_start and self.wd.visible()) {
+    if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.wd.visible()) {
         var fc = dvui.FloatingWidget.init(@src(), .{});
 
         var r = rs.r.offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
@@ -953,7 +955,8 @@ pub fn selectionGet(self: *TextLayoutWidget, max: usize) *Selection {
 
 pub fn matchEvent(self: *TextLayoutWidget, e: *Event) bool {
     if (self.touch_editing and e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
-        self.touch_editing_show = true;
+        self.te_show_draggables = true;
+        self.te_show_context_menu = true;
     }
 
     return dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
@@ -983,9 +986,10 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             dvui.dragPreStart(e.evt.mouse.p, .ibeam, Point{});
 
             if (e.evt.mouse.button.touch()) {
-                self.touch_editing_focus_on_touchdown = self.focus_at_start;
+                std.debug.print("touch down\n", .{});
+                self.te_focus_on_touchdown = self.focus_at_start;
                 if (self.touch_editing) {
-                    self.touch_editing_show = false;
+                    self.te_show_context_menu = false;
 
                     // need to refresh draggables
                     dvui.refresh(null, @src(), self.wd.id);
@@ -1004,7 +1008,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     // this was a touch-release without drag, which transitions
                     // us between touch editing
 
-                    if (self.touch_editing_focus_on_touchdown) {
+                    if (self.te_focus_on_touchdown) {
                         self.touch_editing = !self.touch_editing;
                         self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
                     } else {
@@ -1084,8 +1088,9 @@ pub fn deinit(self: *TextLayoutWidget) void {
         };
     }
     dvui.dataSet(null, self.wd.id, "_touch_editing", self.touch_editing);
-    dvui.dataSet(null, self.wd.id, "_touch_editing_show", self.touch_editing_show);
-    dvui.dataSet(null, self.wd.id, "_touch_editing_focus_on_touchdown", self.touch_editing_focus_on_touchdown);
+    dvui.dataSet(null, self.wd.id, "_te_show_draggables", self.te_show_draggables);
+    dvui.dataSet(null, self.wd.id, "_te_show_context_menu", self.te_show_context_menu);
+    dvui.dataSet(null, self.wd.id, "_te_focus_on_touchdown", self.te_focus_on_touchdown);
     dvui.dataSet(null, self.wd.id, "_sel_start_r", self.sel_start_r);
     dvui.dataSet(null, self.wd.id, "_sel_end_r", self.sel_end_r);
     dvui.dataSet(null, self.wd.id, "_selection", self.selection.*);
