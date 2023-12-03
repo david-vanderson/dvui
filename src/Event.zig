@@ -93,7 +93,6 @@ pub const ScrollDrag = struct {
     mouse_pt: Point,
     screen_rect: Rect,
     capture_id: u32,
-    injected: bool,
 };
 
 pub const ScrollTo = struct {

@@ -1020,7 +1020,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             }
         } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
             // move if dragging
-            if (dvui.dragging(e.evt.mouse.p)) |dps| {
+            if (dvui.dragging(e.evt.mouse.p)) |_| {
                 if (!e.evt.mouse.button.touch()) {
                     e.handled = true;
                     self.sel_mouse_drag_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
@@ -1030,7 +1030,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                         .mouse_pt = e.evt.mouse.p,
                         .screen_rect = self.wd.rectScale().r,
                         .capture_id = self.wd.id,
-                        .injected = (dps.x == 0 and dps.y == 0),
                     } } };
                     self.processEvent(&scrolldrag, true);
                 } else {
