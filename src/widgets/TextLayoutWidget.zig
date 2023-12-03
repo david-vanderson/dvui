@@ -617,22 +617,20 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
 
         // record screen position of selection for touch editing (use s for
         // height in case we are calling textSize with an empty slice)
+        var do_sel_start_r = false;
+        var new_start_r: Rect = undefined;
+        var do_sel_end_r = false;
+        var new_end_r: Rect = undefined;
         if (self.selection.start >= self.bytes_seen and self.selection.start <= self.bytes_seen + end) {
+            do_sel_start_r = true;
             const start_off = try options.fontGet().textSize(txt[0..self.selection.start -| self.bytes_seen]);
-            const new_start_r = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 0, .h = s.h };
-            if (!self.sel_start_r.equals(new_start_r)) {
-                dvui.refresh(null, @src(), self.wd.id);
-            }
-            self.sel_start_r = new_start_r;
+            new_start_r = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 0, .h = s.h };
         }
 
         if (self.selection.end >= self.bytes_seen and self.selection.end <= self.bytes_seen + end) {
+            do_sel_end_r = true;
             const end_off = try options.fontGet().textSize(txt[0..self.selection.end -| self.bytes_seen]);
-            const new_end_r = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 0, .h = s.h };
-            if (!self.sel_end_r.equals(new_end_r)) {
-                dvui.refresh(null, @src(), self.wd.id);
-            }
-            self.sel_end_r = new_end_r;
+            new_end_r = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 0, .h = s.h };
         }
 
         const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });
@@ -733,6 +731,26 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
             }
         }
 
+        if (do_sel_start_r) {
+            if (newline and (self.selection.start == self.bytes_seen)) {
+                new_start_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 0, .h = s.h };
+            }
+            if (!self.sel_start_r.equals(new_start_r)) {
+                dvui.refresh(null, @src(), self.wd.id);
+            }
+            self.sel_start_r = new_start_r;
+        }
+
+        if (do_sel_end_r) {
+            if (newline and (self.selection.end == self.bytes_seen)) {
+                new_end_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 0, .h = s.h };
+            }
+            if (!self.sel_end_r.equals(new_end_r)) {
+                dvui.refresh(null, @src(), self.wd.id);
+            }
+            self.sel_end_r = new_end_r;
+        }
+
         if (self.wd.options.rect != null) {
             // we were given a rect, so don't need to calculate our min height,
             // so stop as soon as we run off the end of the clipping region
@@ -765,16 +783,20 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
         self.sel_mouse_down_bytes = self.bytes_seen;
     }
 
-    if (self.selection.start >= self.bytes_seen) {
+    if (self.selection.start > self.bytes_seen or self.bytes_seen == 0) {
         const options = self.wd.options.override(opts);
         self.sel_start_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .h = try options.fontGet().lineHeight() };
-        dvui.refresh(null, @src(), self.wd.id);
+        if (self.selection.start > self.bytes_seen) {
+            dvui.refresh(null, @src(), self.wd.id);
+        }
     }
 
-    if (self.selection.end >= self.bytes_seen) {
+    if (self.selection.end > self.bytes_seen or self.bytes_seen == 0) {
         const options = self.wd.options.override(opts);
         self.sel_end_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .h = try options.fontGet().lineHeight() };
-        dvui.refresh(null, @src(), self.wd.id);
+        if (self.selection.end > self.bytes_seen) {
+            dvui.refresh(null, @src(), self.wd.id);
+        }
     }
 
     self.selection.cursor = @min(self.selection.cursor, self.bytes_seen);
