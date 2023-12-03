@@ -82,7 +82,8 @@ pub fn install(self: *TextEntryWidget) !void {
 
     try self.wd.borderAndBackground(.{});
 
-    self.prevClip = dvui.clipGet();
+    self.prevClip = dvui.clip(self.wd.borderRectScale().r);
+    const borderClip = dvui.clipGet();
 
     self.scroll = ScrollAreaWidget.init(@src(), .{
         .vertical = if (self.init_opts.scroll_vertical orelse self.init_opts.multiline) .auto else .none,
@@ -111,7 +112,7 @@ pub fn install(self: *TextEntryWidget) !void {
     sel.end = dvui.findUtf8Start(self.init_opts.text[0..self.len], sel.end);
 
     // textLayout clips to its content, but we need to get events out to our border
-    dvui.clipSet(self.prevClip);
+    dvui.clipSet(borderClip);
 }
 
 pub fn matchEvent(self: *TextEntryWidget, e: *Event) bool {
