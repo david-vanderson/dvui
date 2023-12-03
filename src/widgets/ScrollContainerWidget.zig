@@ -199,7 +199,7 @@ pub fn screenRectScale(self: *ScrollContainerWidget, rect: Rect) RectScale {
     r.y -= self.frame_viewport.y;
     r.x -= self.frame_viewport.x;
 
-    return self.wd.contentRectScale().rectToScreen(r);
+    return self.wd.contentRectScale().rectToRectScale(r);
 }
 
 pub fn minSizeForChild(self: *ScrollContainerWidget, s: Size) void {

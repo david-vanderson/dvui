@@ -8,8 +8,12 @@ const RectScale = @This();
 r: Rect = Rect{},
 s: f32 = 0.0,
 
-pub fn rectToScreen(rs: *const RectScale, r: Rect) RectScale {
+pub fn rectToRectScale(rs: *const RectScale, r: Rect) RectScale {
     return .{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };
+}
+
+pub fn rectToScreen(rs: *const RectScale, r: Rect) Rect {
+    return r.scale(rs.s).offset(rs.r);
 }
 
 pub fn rectFromScreen(rs: *const RectScale, r: Rect) Rect {

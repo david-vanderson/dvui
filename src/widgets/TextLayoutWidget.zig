@@ -23,6 +23,10 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     selection: ?*Selection = null,
     break_lines: bool = true,
+
+    // Whether to enter touch editing mode on a touch-release (no drag) if we
+    // were not focused before the touch.
+    touch_edit_just_focused: bool = true,
 };
 
 pub const Selection = struct {
@@ -81,6 +85,7 @@ insert_pt: Point = Point{},
 prevClip: Rect = Rect{},
 first_line: bool = true,
 break_lines: bool = undefined,
+touch_edit_just_focused: bool = undefined,
 
 bytes_seen: usize = 0,
 selection_in: ?*Selection = null,
@@ -118,6 +123,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     const options = defaults.override(opts);
     var self = TextLayoutWidget{ .wd = WidgetData.init(src, .{}, options), .selection_in = init_opts.selection };
     self.break_lines = init_opts.break_lines;
+    self.touch_edit_just_focused = init_opts.touch_edit_just_focused;
     self.touch_editing = dvui.dataGet(null, self.wd.id, "_touch_editing", bool) orelse false;
     self.te_show_draggables = dvui.dataGet(null, self.wd.id, "_te_show_draggables", bool) orelse true;
     self.te_show_context_menu = dvui.dataGet(null, self.wd.id, "_te_show_context_menu", bool) orelse true;
@@ -668,7 +674,7 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
             const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
 
             if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                const cr_new = cr.add(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
+                const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
                 self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
 
                 // might have already passed, so need to go again next frame
@@ -832,7 +838,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
         const cr = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
 
         if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-            const cr_new = cr.add(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
+            const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
             self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
 
             // might have already passed, so need to go again next frame
@@ -943,7 +949,7 @@ pub fn rectFor(self: *TextLayoutWidget, id: u32, min_size: Size, e: Options.Expa
 }
 
 pub fn screenRectScale(self: *TextLayoutWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToScreen(rect);
+    return self.wd.contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *TextLayoutWidget, s: Size) void {
@@ -1023,7 +1029,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     if (self.te_focus_on_touchdown) {
                         self.touch_editing = !self.touch_editing;
                         self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-                    } else {
+                    } else if (self.touch_edit_just_focused) {
                         self.touch_editing = true;
                     }
                 }

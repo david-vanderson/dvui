@@ -57,7 +57,7 @@ pub fn rectFor(self: *ScaleWidget, id: u32, min_size: Size, e: Options.Expand, g
 pub fn screenRectScale(self: *ScaleWidget, rect: Rect) RectScale {
     var rs = self.wd.contentRectScale();
     rs.s *= self.scale;
-    return rs.rectToScreen(rect);
+    return rs.rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *ScaleWidget, s: Size) void {

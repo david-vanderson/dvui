@@ -97,7 +97,7 @@ pub fn install(self: *TextEntryWidget) !void {
 
     self.scrollClip = dvui.clipGet();
 
-    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding, .min_size_content = .{} }));
+    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .touch_edit_just_focused = false }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding, .min_size_content = .{} }));
     try self.textLayout.install(self.wd.id == dvui.focusedWidgetId());
     self.textClip = dvui.clipGet();
 
@@ -214,7 +214,7 @@ pub fn drawCursor(self: *TextEntryWidget) !void {
         // the cursor can be slightly outside the textLayout clip
         dvui.clipSet(self.scrollClip);
 
-        var crect = cr.add(.{ .x = -1 });
+        var crect = cr.plus(.{ .x = -1 });
         crect.w = 2;
         try dvui.pathAddRect(self.textLayout.screenRectScale(crect).r, Rect.all(0));
         try dvui.pathFillConvex(self.wd.options.color(.accent));
@@ -247,7 +247,7 @@ pub fn rectFor(self: *TextEntryWidget, id: u32, min_size: Size, e: Options.Expan
 }
 
 pub fn screenRectScale(self: *TextEntryWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToScreen(rect);
+    return self.wd.contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *TextEntryWidget, s: Size) void {

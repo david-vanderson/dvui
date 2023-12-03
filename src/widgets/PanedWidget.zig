@@ -250,7 +250,7 @@ pub fn rectFor(self: *PanedWidget, id: u32, min_size: Size, e: Options.Expand, g
 }
 
 pub fn screenRectScale(self: *PanedWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToScreen(rect);
+    return self.wd.contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *PanedWidget, s: dvui.Size) void {
