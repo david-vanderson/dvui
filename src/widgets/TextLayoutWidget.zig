@@ -204,7 +204,13 @@ pub fn install(self: *TextLayoutWidget, focused: bool) !void {
                         const corner = me.p.plus(.{ .x = size * 0.7 * dvui.windowNaturalScale(), .y = -size * 0.7 * dvui.windowNaturalScale() });
                         self.sel_pts[0] = self.wd.contentRectScale().pointFromScreen(corner);
                         self.sel_pts[1] = self.sel_end_r.topleft().plus(.{ .y = self.sel_end_r.h / 2 });
-                        //std.debug.print("sel_pts {?any} {?any}\n", .{ self.sel_pts[0], self.sel_pts[1] });
+
+                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                            .mouse_pt = e.evt.mouse.p,
+                            .screen_rect = self.wd.rectScale().r,
+                            .capture_id = self.wd.id,
+                        } } };
+                        self.processEvent(&scrolldrag, true);
                     }
                 }
             }
@@ -249,6 +255,13 @@ pub fn install(self: *TextLayoutWidget, focused: bool) !void {
                         if (self.sel_pts[0] == null) {
                             self.sel_pts[0] = self.sel_start_r.topleft().plus(.{ .y = self.sel_start_r.h / 2 });
                         }
+
+                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                            .mouse_pt = e.evt.mouse.p,
+                            .screen_rect = self.wd.rectScale().r,
+                            .capture_id = self.wd.id,
+                        } } };
+                        self.processEvent(&scrolldrag, true);
                     }
                 }
             }
@@ -986,7 +999,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             dvui.dragPreStart(e.evt.mouse.p, .ibeam, Point{});
 
             if (e.evt.mouse.button.touch()) {
-                std.debug.print("touch down\n", .{});
                 self.te_focus_on_touchdown = self.focus_at_start;
                 if (self.touch_editing) {
                     self.te_show_context_menu = false;
