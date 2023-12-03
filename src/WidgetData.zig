@@ -159,7 +159,7 @@ pub fn borderRect(self: *const WidgetData) Rect {
 
 pub fn borderRectScale(self: *const WidgetData) RectScale {
     const r = self.borderRect().offsetNeg(self.rect);
-    return self.rectScale().rectToScreen(r);
+    return self.rectScale().rectToRectScale(r);
 }
 
 pub fn backgroundRect(self: *const WidgetData) Rect {
@@ -168,7 +168,7 @@ pub fn backgroundRect(self: *const WidgetData) Rect {
 
 pub fn backgroundRectScale(self: *const WidgetData) RectScale {
     const r = self.backgroundRect().offsetNeg(self.rect);
-    return self.rectScale().rectToScreen(r);
+    return self.rectScale().rectToRectScale(r);
 }
 
 pub fn contentRect(self: *const WidgetData) Rect {
@@ -177,7 +177,7 @@ pub fn contentRect(self: *const WidgetData) Rect {
 
 pub fn contentRectScale(self: *const WidgetData) RectScale {
     const r = self.contentRect().offsetNeg(self.rect);
-    return self.rectScale().rectToScreen(r);
+    return self.rectScale().rectToRectScale(r);
 }
 
 pub fn padSize(self: *const WidgetData, s: Size) Size {

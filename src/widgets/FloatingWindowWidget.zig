@@ -381,7 +381,7 @@ pub fn rectFor(self: *FloatingWindowWidget, id: u32, min_size: Size, e: Options.
 }
 
 pub fn screenRectScale(self: *FloatingWindowWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToScreen(rect);
+    return self.wd.contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *FloatingWindowWidget, s: Size) void {

@@ -63,7 +63,7 @@ pub fn rectFor(self: *ContextWidget, id: u32, min_size: Size, e: Options.Expand,
 }
 
 pub fn screenRectScale(self: *ContextWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToScreen(rect);
+    return self.wd.contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *ContextWidget, s: Size) void {

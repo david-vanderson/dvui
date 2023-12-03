@@ -108,7 +108,7 @@ pub fn rectFor(self: *ButtonWidget, id: u32, min_size: Size, e: Options.Expand, 
 }
 
 pub fn screenRectScale(self: *ButtonWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToScreen(rect);
+    return self.wd.contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *ButtonWidget, s: Size) void {

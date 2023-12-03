@@ -474,7 +474,7 @@ pub fn textEntryWidgets() !void {
 
         try dvui.label(@src(), "Singleline", .{}, .{ .gravity_y = 0.5 });
 
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_buf }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().add(left_alignment.margin(hbox.data().id)) });
+        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_buf }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
         left_alignment.record(hbox.data().id, te.data());
 
         const teid = te.data().id;
@@ -521,7 +521,7 @@ pub fn textEntryWidgets() !void {
         var te = try dvui.textEntry(@src(), .{
             .text = &text_entry_password_buf,
             .password_char = if (text_entry_password_buf_obf_enable) "*" else null,
-        }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().add(left_alignment.margin(hbox.data().id)) });
+        }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
 
         left_alignment.record(hbox.data().id, te.data());
 
@@ -552,7 +552,7 @@ pub fn textEntryWidgets() !void {
         };
 
         try dvui.label(@src(), "Filtered", .{}, .{ .gravity_y = 0.5 });
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = buf }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().add(left_alignment.margin(hbox.data().id)) });
+        var te = dvui.TextEntryWidget.init(@src(), .{ .text = buf }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
         left_alignment.record(hbox.data().id, te.data());
 
         try te.install();
@@ -578,7 +578,7 @@ pub fn textEntryWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Multiline", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .multiline = true }, .{ .min_size_content = .{ .w = 150, .h = 80 }, .margin = dvui.TextEntryWidget.defaults.marginGet().add(left_alignment.margin(hbox.data().id)) });
+        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .multiline = true }, .{ .min_size_content = .{ .w = 150, .h = 80 }, .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
         left_alignment.record(hbox.data().id, te.data());
         te.deinit();
     }

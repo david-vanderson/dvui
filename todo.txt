@@ -22,11 +22,11 @@ add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEnt
 - floating context needs smarter positioning
 - on the very first time textLayout gets a touch click (no drag), we DO want to set the cursor
 - if the draggable's point is not visible then don't show the draggable
-- for textEntry, if we get a click without focus and we aren't touch_editing, then just focus (don't enter editing)
 - different context menu for textEntry
 
 
 textEntry key updown (shift-updown for textLayout) needs to be fixed to be able to do another updown each frame
+- probably should always record a rect position for selection start/cursor/end
 - figure out where cursor is from updown_pt from last frame
 - from there determine new cursor point and store for next frame
 
