@@ -26,7 +26,7 @@ pub const InitOptions = struct {
     rect: ?*Rect = null,
     open_flag: ?*bool = null,
     process_events_in_deinit: bool = true,
-    stay_above_parent: bool = false,
+    stay_above_parent_window: bool = false,
     window_avoid: enum {
         none,
 
@@ -209,7 +209,7 @@ pub fn install(self: *FloatingWindowWidget) !void {
 
 pub fn drawBackground(self: *FloatingWindowWidget) !void {
     const rs = self.wd.rectScale();
-    try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent) self.prev_windowId else null);
+    try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowId else null);
     dvui.captureMouseMaintain(self.wd.id);
     try self.wd.register();
 

@@ -31,6 +31,8 @@ Below is a screenshot of the demo window, whose source code can be found at `src
   - Existing integrations with [Mach](https://machengine.org/) and [SDL](https://libsdl.org/)
 - Icon support via [TinyVG](https://tinyvg.tech/)
 - Font support via [freetype](https://github.com/david-vanderson/freetype/tree/zig-pkg)
+- Touch support
+  - Including selection draggables in text entries
 - Animations
 - Themes
 - FPS throttling
@@ -80,6 +82,7 @@ pub fn build(b: *std.Build) void {
 ## Built-in Widgets
 
   - Text Entry (single and multiline)
+    - Includes touch support (selection draggables and menu)
   - Floating Window
   - Menu
   - Popup/Context Window

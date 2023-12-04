@@ -46,7 +46,7 @@ pub fn install(self: *FloatingWidget) !void {
 
     const rs = self.wd.rectScale();
 
-    try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, null);
+    try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, self.prev_windowId);
     dvui.captureMouseMaintain(self.wd.id);
     try self.wd.register();
 
