@@ -229,12 +229,17 @@ pub fn main() !void {
                     te.deinit();
 
                     var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{});
-                    try tl.install(tl.data().id == dvui.focusedWidgetId());
+                    try tl.install(.{});
 
                     _ = try dvui.button(@src(), "upleft", .{}, .{});
                     _ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
                     _ = try dvui.button(@src(), "downleft", .{}, .{ .gravity_y = 1.0 });
                     _ = try dvui.button(@src(), "downright", .{}, .{ .gravity_x = 1.0, .gravity_y = 1.0 });
+
+                    if (try tl.touchEditing()) |floating_widget| {
+                        defer floating_widget.deinit();
+                        try tl.touchEditingMenu();
+                    }
 
                     tl.processEvents();
 
@@ -287,7 +292,6 @@ pub fn main() !void {
                     ;
                     try tl.addText(lorem, .{});
                     try tl.addTextDone(.{});
-                    try tl.touchEditing(scroll.data().contentRectScale());
                     tl.deinit();
                     scroll.deinit();
                 }
@@ -363,7 +367,7 @@ pub fn main() !void {
                     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both });
                     defer scroll.deinit();
                     var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
-                    try tl.install(tl.data().id == dvui.focusedWidgetId());
+                    try tl.install(.{});
                     {
                         if (try dvui.button(@src(), "Win Up .1", .{}, .{})) {
                             fwin.wd.rect.y -= 0.1;
@@ -371,6 +375,10 @@ pub fn main() !void {
                         if (try dvui.button(@src(), "Win Down .1", .{}, .{ .gravity_x = 1.0 })) {
                             fwin.wd.rect.y += 0.1;
                         }
+                    }
+                    if (try tl.touchEditing()) |floating_widget| {
+                        defer floating_widget.deinit();
+                        try tl.touchEditingMenu();
                     }
                     tl.processEvents();
                     const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";

@@ -543,8 +543,8 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
     var items = cw.subwindows.items[1..];
     for (items, 0..) |sw, i| {
         if (sw.id == subwindow_id) {
-            if (sw.stay_above_parent != null) {
-                //std.debug.print("raiseSubwindow: tried to raise a subwindow {x} with stay_above_parent set\n", .{subwindow_id});
+            if (sw.stay_above_parent_window != null) {
+                //std.debug.print("raiseSubwindow: tried to raise a subwindow {x} with stay_above_parent_window set\n", .{subwindow_id});
                 return;
             }
 
@@ -553,11 +553,11 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
                 return;
             }
 
-            // move it to the end, also move any stay_above_parent subwindows
+            // move it to the end, also move any stay_above_parent_window subwindows
             // directly on top of it as well - we know from above that the
-            // first window does not have stay_above_parent so this loop ends
+            // first window does not have stay_above_parent_window so this loop ends
             var first = true;
-            while (first or items[i].stay_above_parent != null) {
+            while (first or items[i].stay_above_parent_window != null) {
                 first = false;
                 const item = items[i];
                 for (items[i..(items.len - 1)], 0..) |*b, k| {
@@ -1002,7 +1002,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     cw.path.clearAndFree();
 }
 
-pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_above_parent: ?u32) !void {
+pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_above_parent_window: ?u32) !void {
     const cw = currentWindow();
 
     for (cw.subwindows.items) |*sw| {
@@ -1012,7 +1012,7 @@ pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_ab
             sw.rect = rect;
             sw.rect_pixels = rect_pixels;
             sw.modal = modal;
-            sw.stay_above_parent = stay_above_parent;
+            sw.stay_above_parent_window = stay_above_parent_window;
 
             if (sw.render_cmds.items.len > 0 or sw.render_cmds_after.items.len > 0) {
                 log.warn("subwindowAdd {x} is clearing some drawing commands (did you try to draw between subwindowCurrentSet and subwindowAdd?)\n", .{id});
@@ -1025,8 +1025,8 @@ pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_ab
     }
 
     // haven't seen this window before
-    const sw = Window.Subwindow{ .id = id, .rect = rect, .rect_pixels = rect_pixels, .modal = modal, .stay_above_parent = stay_above_parent, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena), .render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena) };
-    if (stay_above_parent) |subwin_id| {
+    const sw = Window.Subwindow{ .id = id, .rect = rect, .rect_pixels = rect_pixels, .modal = modal, .stay_above_parent_window = stay_above_parent_window, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena), .render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena) };
+    if (stay_above_parent_window) |subwin_id| {
         // it wants to be above subwin_id
         var i: usize = 0;
         while (i < cw.subwindows.items.len and cw.subwindows.items[i].id != subwin_id) {
@@ -1038,7 +1038,7 @@ pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_ab
         }
 
         // i points just past subwin_id, go until we run out of subwindows that want to be on top of this subwin_id
-        while (i < cw.subwindows.items.len and cw.subwindows.items[i].stay_above_parent == subwin_id) {
+        while (i < cw.subwindows.items.len and cw.subwindows.items[i].stay_above_parent_window == subwin_id) {
             i += 1;
         }
 
@@ -1830,7 +1830,7 @@ pub const Window = struct {
         render_cmds_after: std.ArrayList(RenderCmd),
         used: bool = true,
         modal: bool = false,
-        stay_above_parent: ?u32 = null,
+        stay_above_parent_window: ?u32 = null,
     };
 
     const SavedSize = struct {
@@ -2921,7 +2921,7 @@ pub const Window = struct {
     fn toastsShow(self: *Self) !void {
         var ti = dvui.toastsFor(null);
         if (ti) |*it| {
-            var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent = true, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
+            var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent_window = true, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
             defer toast_win.deinit();
 
             toast_win.data().rect = dvui.placeIn(self.wd.rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
@@ -3655,17 +3655,21 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     const cw = currentWindow();
     var ret = try cw.arena.create(TextLayoutWidget);
     ret.* = TextLayoutWidget.init(src, init_opts, opts);
-    try ret.install(ret.data().id == dvui.focusedWidgetId());
+    try ret.install(.{});
 
     // can install corner widgets here
     //_ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
+
+    if (try ret.touchEditing()) |floating_widget| {
+        defer floating_widget.deinit();
+        try ret.touchEditingMenu();
+    }
 
     ret.processEvents();
 
     // call addText() any number of times
 
     // can call addTextDone() (will be called automatically if you don't)
-    // can call touchEditing() (will be called automatically if you don't)
     return ret;
 }
 

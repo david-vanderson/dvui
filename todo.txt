@@ -20,13 +20,13 @@ on hidpi display, selecting a bunch of text leaves small gaps noticeable in the 
 
 add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEntry
 - floating context needs smarter positioning
-- different context menu for textEntry
 
 
 textEntry key updown (shift-updown for textLayout) needs to be fixed to be able to do another updown each frame
 - probably should always record a rect position for selection start/cursor/end
 - figure out where cursor is from updown_pt from last frame
 - from there determine new cursor point and store for next frame
+- can we not check sel_mouse_down_pt = null and other stuff for each key?
 
 rename popup to floatingmenu (and deprecate old name for a while)
 

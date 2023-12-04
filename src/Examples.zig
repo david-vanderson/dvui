@@ -216,7 +216,7 @@ pub fn demo() !void {
 
     var ti = dvui.toastsFor(float.data().id);
     if (ti) |*it| {
-        var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent = true, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
+        var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent_window = true, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
         defer toast_win.deinit();
 
         toast_win.data().rect = dvui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
@@ -812,7 +812,7 @@ pub fn layoutText() !void {
 
     {
         var tl = TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
-        try tl.install(tl.data().id == dvui.focusedWidgetId());
+        try tl.install(.{});
         defer tl.deinit();
 
         var cbox = try dvui.box(@src(), .vertical, .{ .padding = .{ .w = 4 } });
@@ -823,6 +823,11 @@ pub fn layoutText() !void {
             try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
         }
         cbox.deinit();
+
+        if (try tl.touchEditing()) |floating_widget| {
+            defer floating_widget.deinit();
+            try tl.touchEditingMenu();
+        }
 
         tl.processEvents();
 
@@ -1098,8 +1103,12 @@ fn makeLabels(src: std.builtin.SourceLocation, count: usize) !void {
 }
 
 pub fn debuggingErrors() !void {
-    try dvui.checkbox(@src(), &dvui.currentWindow().snap_to_pixels, "Snap to Pixels", .{});
+    try dvui.checkbox(@src(), &dvui.currentWindow().snap_to_pixels, "Snap to pixels", .{});
     try dvui.label(@src(), "on non-hdpi screens watch the window title \"DVUI Demo\"", .{}, .{ .margin = .{ .x = 10 } });
+
+    try dvui.checkbox(@src(), &dvui.currentWindow().debug_touch_simulate_events, "Convert mouse events to touch", .{});
+    try dvui.label(@src(), "- mouse drag will scroll", .{}, .{ .margin = .{ .x = 10 } });
+    try dvui.label(@src(), "- mouse click in text layout/entry shows touch draggables and menu", .{}, .{ .margin = .{ .x = 10 } });
 
     if (try dvui.expander(@src(), "Virtual Parent (affects IDs but not layout)", .{}, .{ .expand = .horizontal })) {
         var hbox = try dvui.box(@src(), .horizontal, .{ .margin = .{ .x = 10 } });

@@ -9,6 +9,7 @@ const RectScale = dvui.RectScale;
 const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
+const FloatingWidget = dvui.FloatingWidget;
 
 const TextLayoutWidget = @This();
 
@@ -36,6 +37,12 @@ pub const Selection = struct {
 
     pub fn empty(self: *Selection) bool {
         return self.start == self.end;
+    }
+
+    pub fn selectAll(self: *Selection) void {
+        self.start = 0;
+        self.cursor = 0;
+        self.end = std.math.maxInt(usize);
     }
 
     pub fn incCursor(self: *Selection) void {
@@ -106,7 +113,6 @@ cursor_updown_drag: bool = true,
 cursor_updown_pt: ?Point = null,
 scroll_to_cursor: bool = false,
 
-touch_editing_done: bool = false,
 add_text_done: bool = false,
 
 copy_sel: ?Selection = null,
@@ -119,6 +125,7 @@ te_show_draggables: bool = true,
 te_show_context_menu: bool = true,
 te_focus_on_touchdown: bool = false,
 focus_at_start: bool = false,
+te_floating: FloatingWidget = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextLayoutWidget {
     const options = defaults.override(opts);
@@ -137,8 +144,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn install(self: *TextLayoutWidget, focused: bool) !void {
-    self.focus_at_start = focused;
+pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, show_touch_draggables: bool = true }) !void {
+    self.focus_at_start = opts.focused orelse (self.wd.id == dvui.focusedWidgetId());
 
     try self.wd.register();
     dvui.parentSet(self.widget());
@@ -170,18 +177,13 @@ pub fn install(self: *TextLayoutWidget, focused: bool) !void {
         }
     }
 
-    if (dvui.dataGet(null, self.wd.id, "_copy_sel_next_frame", bool) != null) {
-        dvui.dataRemove(null, self.wd.id, "_copy_sel_next_frame");
-        self.copy_sel = self.selection.*;
-    }
-
     const rs = self.wd.contentRectScale();
 
     try self.wd.borderAndBackground(.{});
 
     self.prevClip = dvui.clip(rs.r);
 
-    if (self.touch_editing and self.te_show_draggables and self.focus_at_start and self.wd.visible()) {
+    if (opts.show_touch_draggables and self.touch_editing and self.te_show_draggables and self.focus_at_start and self.wd.visible()) {
         const size = 24;
         {
             // calculate visible before FloatingWidget changes clip
@@ -816,7 +818,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
 
     if (self.selection.start > self.bytes_seen or self.bytes_seen == 0) {
         const options = self.wd.options.override(opts);
-        self.sel_start_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .h = try options.fontGet().lineHeight() };
+        self.sel_start_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
         if (self.selection.start > self.bytes_seen) {
             dvui.refresh(null, @src(), self.wd.id);
         }
@@ -824,7 +826,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
 
     if (self.selection.end > self.bytes_seen or self.bytes_seen == 0) {
         const options = self.wd.options.override(opts);
-        self.sel_end_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .h = try options.fontGet().lineHeight() };
+        self.sel_end_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
         if (self.selection.end > self.bytes_seen) {
             dvui.refresh(null, @src(), self.wd.id);
         }
@@ -873,58 +875,47 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
     }
 }
 
-pub fn touchEditing(self: *TextLayoutWidget, rs: RectScale) !void {
-    if (!self.add_text_done) {
-        try self.addTextDone(.{});
-    }
-    self.touch_editing_done = true;
-
+pub fn touchEditing(self: *TextLayoutWidget) !?*FloatingWidget {
     if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.wd.visible()) {
-        var fc = dvui.FloatingWidget.init(@src(), .{});
+        self.te_floating = dvui.FloatingWidget.init(@src(), .{});
 
-        var r = rs.r.offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
+        var r = dvui.clipGet().offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
 
-        if (dvui.minSizeGet(fc.data().id)) |_| {
-            const ms = dvui.minSize(fc.data().id, fc.data().options.min_sizeGet());
-            fc.wd.rect.w = ms.w;
-            fc.wd.rect.h = ms.h;
+        if (dvui.minSizeGet(self.te_floating.data().id)) |_| {
+            const ms = dvui.minSize(self.te_floating.data().id, self.te_floating.data().options.min_sizeGet());
+            self.te_floating.wd.rect.w = ms.w;
+            self.te_floating.wd.rect.h = ms.h;
 
-            fc.wd.rect.x = r.x + r.w - fc.wd.rect.w;
-            fc.wd.rect.y = r.y - fc.wd.rect.h;
+            self.te_floating.wd.rect.x = r.x + r.w - self.te_floating.wd.rect.w;
+            self.te_floating.wd.rect.y = r.y - self.te_floating.wd.rect.h - self.wd.options.paddingGet().y;
 
-            fc.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{ .x = fc.wd.rect.x, .y = fc.wd.rect.y }, fc.wd.rect);
+            self.te_floating.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.te_floating.wd.rect.x, .y = self.te_floating.wd.rect.y }, self.te_floating.wd.rect);
         } else {
             // need another frame to get our min size
-            dvui.refresh(null, @src(), fc.wd.id);
+            dvui.refresh(null, @src(), self.te_floating.wd.id);
         }
 
-        try fc.install();
-        defer fc.deinit();
+        try self.te_floating.install();
+        return &self.te_floating;
+    }
 
-        var hbox = try dvui.box(@src(), .horizontal, .{
-            .corner_radius = dvui.ButtonWidget.defaults.corner_radiusGet(),
-            .background = true,
-            .border = dvui.Rect.all(1),
-        });
-        defer hbox.deinit();
+    return null;
+}
 
-        if (try dvui.buttonIcon(@src(), "copy", dvui.entypo.copy, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
-            dvui.dataSet(null, self.wd.id, "_copy_sel_next_frame", true);
+pub fn touchEditingMenu(self: *TextLayoutWidget) !void {
+    var hbox = try dvui.box(@src(), .horizontal, .{
+        .corner_radius = dvui.ButtonWidget.defaults.corner_radiusGet(),
+        .background = true,
+        .border = dvui.Rect.all(1),
+    });
+    defer hbox.deinit();
 
-            // we are called after all the text has been rendered, so
-            // need to go another frame to actually do the copy
-            dvui.refresh(null, @src(), self.wd.id);
-        }
+    if (try dvui.buttonIcon(@src(), "select all", dvui.entypo.swap, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
+        self.selection.selectAll();
+    }
 
-        if (try dvui.buttonIcon(@src(), "select all", dvui.entypo.swap, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
-            self.selection.start = 0;
-            self.selection.cursor = 0;
-            self.selection.end = std.math.maxInt(usize);
-
-            // we are after all the text has been rendered, so need to go
-            // another frame to show the select all
-            dvui.refresh(null, @src(), self.wd.id);
-        }
+    if (try dvui.buttonIcon(@src(), "copy", dvui.entypo.copy, .{}, .{ .min_size_content = .{ .h = 20 }, .margin = Rect.all(2) })) {
+        self.copy();
     }
 }
 
@@ -986,6 +977,7 @@ pub fn matchEvent(self: *TextLayoutWidget, e: *Event) bool {
     if (self.touch_editing and e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
         self.te_show_draggables = true;
         self.te_show_context_menu = true;
+        dvui.refresh(null, @src(), self.wd.id);
     }
 
     return dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
@@ -1039,8 +1031,10 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     if (self.te_focus_on_touchdown) {
                         self.touch_editing = !self.touch_editing;
                         self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-                    } else if (self.touch_edit_just_focused) {
-                        self.touch_editing = true;
+                    } else {
+                        if (self.touch_edit_just_focused) {
+                            self.touch_editing = true;
+                        }
                         if (self.te_first) {
                             // This is the very first time we are entering
                             // touch editing from not having focus, we want to
@@ -1049,6 +1043,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                             self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
                         }
                     }
+                    dvui.refresh(null, @src(), self.wd.id);
                 }
 
                 dvui.captureMouse(null);
@@ -1100,9 +1095,8 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             else => {},
         }
     } else if (e.evt == .key and e.evt.key.mod.controlCommand() and e.evt.key.code == .c and e.evt.key.action == .down) {
-        // copy
         e.handled = true;
-        self.copy_sel = self.selection.*;
+        self.copy();
     }
 
     if (e.bubbleable()) {
@@ -1110,15 +1104,15 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
     }
 }
 
+// must be called before addText()
+pub fn copy(self: *TextLayoutWidget) void {
+    self.copy_sel = self.selection.*;
+}
+
 pub fn deinit(self: *TextLayoutWidget) void {
     if (!self.add_text_done) {
         self.addTextDone(.{}) catch |err| {
             dvui.log.err("TextLayoutWidget.deinit addTextDone got {!}\n", .{err});
-        };
-    }
-    if (!self.touch_editing_done) {
-        self.touchEditing(.{ .r = dvui.clipGet(), .s = self.wd.rectScale().s }) catch |err| {
-            dvui.log.err("TextLayoutWidget.deinit touchEditing got {!}\n", .{err});
         };
     }
     dvui.dataSet(null, self.wd.id, "_touch_editing", self.touch_editing);
