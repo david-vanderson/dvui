@@ -18,7 +18,7 @@ pub fn main() !void {
     // init SDL backend (creates OS window)
     var backend = try Backend.init(.{
         .size = .{ .w = 500.0, .h = 600.0 },
-        .min_size = .{ .w = 500.0, .h = 600.0 },
+        .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = vsync,
         .title = "DVUI Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
