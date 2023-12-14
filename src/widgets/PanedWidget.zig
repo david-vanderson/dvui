@@ -19,11 +19,6 @@ pub const InitOptions = struct {
     collapsed_size: f32,
 };
 
-const SavedData = struct {
-    split_ratio: f32,
-    rect: Rect,
-};
-
 const handle_size = 4;
 
 wd: WidgetData = undefined,
@@ -35,6 +30,7 @@ hovered: bool = false,
 first_side_id: ?u32 = null,
 prevClip: Rect = Rect{},
 collapsed_state: bool = false,
+collapsing: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) PanedWidget {
     var self = PanedWidget{};
@@ -44,73 +40,45 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     self.collapsed_size = init_opts.collapsed_size;
 
     const rect = self.wd.contentRect();
-
-    self.collapsed_state = dvui.dataGet(null, self.wd.id, "_collapsed", bool) orelse switch (self.dir) {
-        .horizontal => (rect.w < self.collapsed_size),
-        .vertical => (rect.h < self.collapsed_size),
+    const our_size = switch (self.dir) {
+        .horizontal => rect.w,
+        .vertical => rect.h,
     };
 
-    if (dvui.dataGet(null, self.wd.id, "_data", SavedData)) |d| {
-        self.split_ratio = d.split_ratio;
-        switch (self.dir) {
-            .horizontal => {
-                if (d.rect.w >= self.collapsed_size and rect.w < self.collapsed_size) {
-                    // collapsing
-                    if (self.split_ratio >= 0.5) {
-                        self.animateSplit(1.0);
-                    } else {
-                        self.animateSplit(0.0);
-                    }
-                } else if (d.rect.w < self.collapsed_size and rect.w >= self.collapsed_size) {
-                    // expanding
-                    self.collapsed_state = false;
-                    if (self.split_ratio > 0.5) {
-                        self.animateSplit(0.5);
-                    } else {
-                        // we were on the second widget, this will
-                        // "remember" we were on it
-                        self.animateSplit(0.4999);
-                    }
-                }
-            },
-            .vertical => {
-                if (d.rect.w >= self.collapsed_size and rect.w < self.collapsed_size) {
-                    // collapsing
-                    if (self.split_ratio >= 0.5) {
-                        self.animateSplit(1.0);
-                    } else {
-                        self.animateSplit(0.0);
-                    }
-                } else if (d.rect.w < self.collapsed_size and rect.w >= self.collapsed_size) {
-                    // expanding
-                    self.collapsed_state = false;
-                    if (self.split_ratio > 0.5) {
-                        self.animateSplit(0.5);
-                    } else {
-                        // we were on the second widget, this will
-                        // "remember" we were on it
-                        self.animateSplit(0.4999);
-                    }
-                }
-            },
+    self.collapsing = dvui.dataGet(null, self.wd.id, "_collapsing", bool) orelse false;
+
+    self.collapsed_state = dvui.dataGet(null, self.wd.id, "_collapsed", bool) orelse (our_size < self.collapsed_size);
+    if (self.collapsing) {
+        self.collapsed_state = false;
+    }
+
+    if (dvui.dataGet(null, self.wd.id, "_split_ratio", f32)) |r| {
+        self.split_ratio = r;
+        if (!self.collapsing and !self.collapsed_state and our_size < self.collapsed_size) {
+            // collapsing
+            self.collapsing = true;
+            if (self.split_ratio >= 0.5) {
+                self.animateSplit(1.0);
+            } else {
+                self.animateSplit(0.0);
+            }
+        } else if (!self.collapsing and self.collapsed_state and our_size >= self.collapsed_size) {
+            // expanding
+            self.collapsed_state = false;
+            if (self.split_ratio > 0.5) {
+                self.animateSplit(0.5);
+            } else {
+                // we were on the second widget, this will
+                // "remember" we were on it
+                self.animateSplit(0.4999);
+            }
         }
     } else {
         // first frame
-        switch (self.dir) {
-            .horizontal => {
-                if (rect.w < self.collapsed_size) {
-                    self.split_ratio = 1.0;
-                } else {
-                    self.split_ratio = 0.5;
-                }
-            },
-            .vertical => {
-                if (rect.w < self.collapsed_size) {
-                    self.split_ratio = 1.0;
-                } else if (rect.w >= self.collapsed_size) {
-                    self.split_ratio = 0.5;
-                }
-            },
+        if (our_size < self.collapsed_size) {
+            self.split_ratio = 1.0;
+        } else {
+            self.split_ratio = 0.5;
         }
     }
 
@@ -118,11 +86,9 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         self.split_ratio = a.lerp();
     }
 
-    if (dvui.animationDone(self.wd.id, "_split_ratio")) {
-        self.collapsed_state = switch (self.dir) {
-            .horizontal => (rect.w < self.collapsed_size),
-            .vertical => (rect.h < self.collapsed_size),
-        };
+    if (self.collapsing and dvui.animationDone(self.wd.id, "_split_ratio")) {
+        self.collapsing = false;
+        self.collapsed_state = our_size < self.collapsed_size;
     }
 
     return self;
@@ -315,8 +281,9 @@ pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {
 
 pub fn deinit(self: *PanedWidget) void {
     dvui.clipSet(self.prevClip);
+    dvui.dataSet(null, self.wd.id, "_collapsing", self.collapsing);
     dvui.dataSet(null, self.wd.id, "_collapsed", self.collapsed_state);
-    dvui.dataSet(null, self.wd.id, "_data", SavedData{ .split_ratio = self.split_ratio, .rect = self.wd.contentRect() });
+    dvui.dataSet(null, self.wd.id, "_split_ratio", self.split_ratio);
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);

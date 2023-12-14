@@ -14,12 +14,20 @@ add to readme a section about layout from a high level
 change the layout section of the demo to be interactive with checkboxes for expanding
 
 on hidpi display, selecting a bunch of text leaves small gaps noticeable in the selection background
+- only if the text is added char by char
 
 
 
 
-add touch stuff for editing/copy/paste/select all/etc. on textLayout and textEntry
-- floating context needs smarter positioning
+textLayout/textEntry touch editing:
+- floating context needs smarter positioning if it can't go above the widget
+- touch draggables need to be bigger
+- touch draggables need to remember relative position of touch down when being dragged
+- if you have a really long line in the multiline text entry that doesn't end in a newline, you can't see the final draggable?
+
+floating window resize corner needs to be larger for touch
+
+touch pinch zoom (window? subwindow?) - integrated with ScrollContainer?
 
 
 textEntry key updown (shift-updown for textLayout) needs to be fixed to be able to do another updown each frame
@@ -32,6 +40,7 @@ rename popup to floatingmenu (and deprecate old name for a while)
 
 remove entypo icons for companies
 
+UI scaling on Windows causes fonts to look blurry, maybe if snap to pixels is true, we round to nearest font size and then don't adjust for target_fraction?
 
 see if we can get the mach backend working again
 - maybe just use the glfw part of mach?
@@ -40,8 +49,6 @@ see if we can get the mach backend working again
 don't use box for slider, use WidgetData directly?  Other widgets?
 
 should box do something intelligent about dividing space if snap_to_pixels is on?
-
-UI scaling on Windows causes fonts to look blurry, maybe if snap to pixels is true, we round to nearest font size and then don't adjust for target_fraction?
 
 add hyperlink functionality to textLayout
 
@@ -87,9 +94,6 @@ change MenuWidget to take InitOptions
 - also should take parentSubwindowId
 
 popupSet - can this be done as a static var inside PopupWidget?
-
-remove the color_style error?
-- success and error styles are only used on buttons, so maybe special case them
 
 
 send updates to tinyvg
