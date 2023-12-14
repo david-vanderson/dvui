@@ -205,7 +205,7 @@ pub fn demo() !void {
         return;
     }
 
-    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 440, .h = 400 } });
+    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = @min(440, dvui.windowRect().w), .h = @min(400, dvui.windowRect().h) } });
     defer float.deinit();
 
     // pad the fps label so that it doesn't trigger refresh when the number
@@ -245,7 +245,7 @@ pub fn demo() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        if (try dvui.button(@src(), "Toggle Debug Window", .{}, .{})) {
+        if (try dvui.button(@src(), "Debug Window", .{}, .{})) {
             dvui.toggleDebugWindow();
         }
 
@@ -603,12 +603,17 @@ pub fn styling() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 9 } });
         defer hbox.deinit();
 
-        const opts: Options = .{ .margin = .{ .x = 2, .w = 2 }, .gravity_y = 0.5 };
+        const opts: Options = .{ .margin = dvui.Rect.all(2), .gravity_y = 0.5 };
+
+        try dvui.separator(@src(), opts.override(.{ .expand = .vertical }));
+        try dvui.separator(@src(), opts.override(.{ .expand = .vertical, .min_size_content = .{ .w = 3 } }));
+        try dvui.separator(@src(), opts.override(.{ .expand = .vertical, .min_size_content = .{ .w = 5 } }));
+
+        var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
+        defer vbox.deinit();
 
         try dvui.separator(@src(), opts.override(.{ .expand = .horizontal }));
-        try dvui.separator(@src(), opts.override(.{ .expand = .vertical }));
         try dvui.separator(@src(), opts.override(.{ .expand = .horizontal, .min_size_content = .{ .h = 3 } }));
-        try dvui.separator(@src(), opts.override(.{ .expand = .vertical }));
         try dvui.separator(@src(), opts.override(.{ .expand = .horizontal, .min_size_content = .{ .h = 5 } }));
     }
 
