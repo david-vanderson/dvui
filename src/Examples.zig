@@ -42,6 +42,7 @@ var backbox_color: dvui.Color = .{};
 var animating_window_show: bool = false;
 var animating_window_closing: bool = false;
 var animating_window_rect = Rect{ .x = 100, .y = 100, .w = 300, .h = 200 };
+var paned_collapsed_width: f32 = 400;
 
 var progress_mutex = std.Thread.Mutex{};
 var progress_val: f32 = 0.0;
@@ -775,19 +776,17 @@ pub fn layout() !void {
 
     try dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{});
     {
-        const collapsed_width: f32 = 400;
-        var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = collapsed_width }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 100 } });
+        var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = paned_collapsed_width }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 100 } });
         defer paned.deinit();
-        const collapsed = paned.collapsed();
 
         {
             var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true });
             defer vbox.deinit();
 
             try dvui.label(@src(), "Left Side", .{}, .{});
-            try dvui.label(@src(), "collapses when width < {d}", .{collapsed_width}, .{});
+            try dvui.label(@src(), "collapses when width < {d}", .{paned_collapsed_width}, .{});
             try dvui.label(@src(), "current width {d}", .{paned.wd.rect.w}, .{});
-            if (collapsed and try dvui.button(@src(), "Goto Right", .{}, .{})) {
+            if (paned.collapsed() and try dvui.button(@src(), "Goto Right", .{}, .{})) {
                 paned.animateSplit(0.0);
             }
         }
@@ -797,11 +796,13 @@ pub fn layout() !void {
             defer vbox.deinit();
 
             try dvui.label(@src(), "Right Side", .{}, .{});
-            if (collapsed and try dvui.button(@src(), "Goto Left", .{}, .{})) {
+            if (paned.collapsed() and try dvui.button(@src(), "Goto Left", .{}, .{})) {
                 paned.animateSplit(1.0);
             }
         }
     }
+
+    _ = try dvui.sliderEntry(@src(), "collapse under {d:0.0}", .{ .value = &paned_collapsed_width, .min = 100, .max = 600, .interval = 10 }, .{});
 }
 
 pub fn layoutText() !void {
