@@ -15,6 +15,8 @@ change the layout section of the demo to be interactive with checkboxes for expa
 
 
 
+update dvui-demo
+
 update podcast to latest dvui
 
 
@@ -37,8 +39,6 @@ textEntry key updown (shift-updown for textLayout) needs to be fixed to be able 
 - figure out where cursor is from updown_pt from last frame
 - from there determine new cursor point and store for next frame
 - can we not check sel_mouse_down_pt = null and other stuff for each key?
-
-rename popup to floatingmenu (and deprecate old name for a while)
 
 remove entypo icons for companies
 
