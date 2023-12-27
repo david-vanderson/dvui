@@ -186,6 +186,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
     if (opts.show_touch_draggables and self.touch_editing and self.te_show_draggables and self.focus_at_start and self.wd.visible()) {
         const size = 36;
         {
+
             // calculate visible before FloatingWidget changes clip
 
             // We only draw if visible (to prevent drawing way outside the
@@ -193,7 +194,12 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             // we maintain capture.  That way you can drag a draggable off the
             // textLayout (so it's not visible), which causes a scroll, but
             // when the draggable shows back up you are still dragging it.
-            const visible = !dvui.clipGet().intersect(rs.rectToScreen(self.sel_start_r)).empty();
+
+            // sel_start_r might be just off the right-hand edge, so widen it
+            var cursor = self.sel_start_r;
+            cursor.x -= 1;
+            cursor.w += 1;
+            const visible = !dvui.clipGet().intersect(rs.rectToScreen(cursor)).empty();
 
             var rect = self.sel_start_r;
             rect.y += rect.h; // move to below the line
@@ -256,7 +262,12 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
 
         {
             // calculate visible before FloatingWidget changes clip
-            const visible = !dvui.clipGet().intersect(rs.rectToScreen(self.sel_end_r)).empty();
+
+            // sel_end_r might be just off the right-hand edge, so widen it
+            var cursor = self.sel_end_r;
+            cursor.x -= 1;
+            cursor.w += 1;
+            const visible = !dvui.clipGet().intersect(rs.rectToScreen(cursor)).empty();
 
             var rect = self.sel_end_r;
             rect.y += rect.h; // move to below the line
