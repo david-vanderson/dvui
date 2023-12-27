@@ -43,6 +43,14 @@ pub fn topleft(self: *const Rect) Point {
     return Point{ .x = self.x, .y = self.y };
 }
 
+pub fn topRight(self: *const Rect) Point {
+    return Point{ .x = self.x + self.w, .y = self.y };
+}
+
+pub fn bottomLeft(self: *const Rect) Point {
+    return Point{ .x = self.x, .y = self.y + self.h };
+}
+
 pub fn bottomRight(self: *const Rect) Point {
     return Point{ .x = self.x + self.w, .y = self.y + self.h };
 }
