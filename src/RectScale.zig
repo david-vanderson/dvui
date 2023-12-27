@@ -21,9 +21,9 @@ pub fn rectFromScreen(rs: *const RectScale, r: Rect) Rect {
 }
 
 pub fn pointToScreen(rs: *const RectScale, p: Point) Point {
-    return p.scale(rs.s).plus(rs.r.topleft());
+    return p.scale(rs.s).plus(rs.r.topLeft());
 }
 
 pub fn pointFromScreen(rs: *const RectScale, p: Point) Point {
-    return Point.diff(p, rs.r.topleft()).scale(1 / rs.s);
+    return Point.diff(p, rs.r.topLeft()).scale(1 / rs.s);
 }

@@ -57,13 +57,13 @@ pub fn install(self: *PopupWidget) !void {
     self.parent_popup = dvui.popupSet(self);
 
     if (dvui.minSizeGet(self.wd.id)) |_| {
-        self.wd.rect = Rect.fromPoint(self.initialRect.topleft());
+        self.wd.rect = Rect.fromPoint(self.initialRect.topLeft());
         const ms = dvui.minSize(self.wd.id, self.options.min_sizeGet());
         self.wd.rect.w = ms.w;
         self.wd.rect.h = ms.h;
         self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), self.initialRect, self.wd.rect);
     } else {
-        self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), self.initialRect, Rect.fromPoint(self.initialRect.topleft()));
+        self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), self.initialRect, Rect.fromPoint(self.initialRect.topLeft()));
         dvui.focusSubwindow(self.wd.id, null);
 
         // need a second frame to fit contents (FocusWindow calls refresh but

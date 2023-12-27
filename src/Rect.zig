@@ -39,7 +39,7 @@ pub fn justSize(self: *const Rect) Rect {
     return Rect{ .x = 0, .y = 0, .w = self.w, .h = self.h };
 }
 
-pub fn topleft(self: *const Rect) Point {
+pub fn topLeft(self: *const Rect) Point {
     return Point{ .x = self.x, .y = self.y };
 }
 

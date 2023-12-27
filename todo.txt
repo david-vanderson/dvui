@@ -13,17 +13,17 @@ add to readme a section about layout from a high level
 
 change the layout section of the demo to be interactive with checkboxes for expanding
 
+
+
+update podcast to latest dvui
+
+
+
 on hidpi display, selecting a bunch of text leaves small gaps noticeable in the selection background
 - only if the text is added char by char
 
-
-
-
 textLayout/textEntry touch editing:
 - floating context needs smarter positioning if it can't go above the widget
-- if you have a really long line in the multiline text entry that doesn't end in a newline, you can't see the final draggable?
-
-rename Rect.topleft to Rect.topLeft
 
 touch pinch zoom (window? subwindow?) - integrated with ScrollContainer?
 
