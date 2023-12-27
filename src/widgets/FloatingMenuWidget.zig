@@ -11,10 +11,10 @@ const WidgetData = dvui.WidgetData;
 const MenuWidget = dvui.MenuWidget;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
 
-const PopupWidget = @This();
+const FloatingMenuWidget = @This();
 
 pub var defaults: Options = .{
-    .name = "Popup",
+    .name = "FloatingMenu",
     .corner_radius = Rect.all(5),
     .border = Rect.all(1),
     .padding = Rect.all(4),
@@ -25,21 +25,21 @@ pub var defaults: Options = .{
 wd: WidgetData = undefined,
 options: Options = undefined,
 prev_windowId: u32 = 0,
-parent_popup: ?*PopupWidget = null,
+parent_popup: ?*FloatingMenuWidget = null,
 have_popup_child: bool = false,
 menu: MenuWidget = undefined,
 initialRect: Rect = Rect{},
 prevClip: Rect = Rect{},
 scroll: ScrollAreaWidget = undefined,
 
-pub fn init(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) PopupWidget {
-    var self = PopupWidget{};
+pub fn init(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) FloatingMenuWidget {
+    var self = FloatingMenuWidget{};
 
     // options is really for our embedded MenuWidget, so save them for the
     // end of install()
     self.options = defaults.override(opts);
 
-    // the popup itself doesn't have any styling, it comes from the
+    // the widget itself doesn't have any styling, it comes from the
     // embedded MenuWidget
     // passing options.rect will stop WidgetData.init from calling
     // rectFor/minSizeForChild which is important because we are outside
@@ -50,7 +50,7 @@ pub fn init(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) P
     return self;
 }
 
-pub fn install(self: *PopupWidget) !void {
+pub fn install(self: *FloatingMenuWidget) !void {
     dvui.parentSet(self.widget());
 
     self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id);
@@ -100,27 +100,27 @@ pub fn install(self: *PopupWidget) !void {
     }
 }
 
-pub fn widget(self: *PopupWidget) Widget {
+pub fn widget(self: *FloatingMenuWidget) Widget {
     return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
 }
 
-pub fn data(self: *PopupWidget) *WidgetData {
+pub fn data(self: *FloatingMenuWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn rectFor(self: *PopupWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *FloatingMenuWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     return dvui.placeIn(self.wd.contentRect().justSize(), dvui.minSize(id, min_size), e, g);
 }
 
-pub fn screenRectScale(self: *PopupWidget, rect: Rect) RectScale {
+pub fn screenRectScale(self: *FloatingMenuWidget, rect: Rect) RectScale {
     return self.wd.contentRectScale().rectToRectScale(rect);
 }
 
-pub fn minSizeForChild(self: *PopupWidget, s: Size) void {
+pub fn minSizeForChild(self: *FloatingMenuWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.padSize(s));
 }
 
-pub fn processEvent(self: *PopupWidget, e: *Event, bubbling: bool) void {
+pub fn processEvent(self: *FloatingMenuWidget, e: *Event, bubbling: bool) void {
     // popup does cleanup events, but not normal events
     switch (e.evt) {
         .close_popup => {
@@ -133,7 +133,7 @@ pub fn processEvent(self: *PopupWidget, e: *Event, bubbling: bool) void {
     _ = bubbling;
 }
 
-pub fn chainFocused(self: *PopupWidget, self_call: bool) bool {
+pub fn chainFocused(self: *FloatingMenuWidget, self_call: bool) bool {
     if (!self_call) {
         // if we got called by someone else, then we have a popup child
         self.have_popup_child = true;
@@ -162,7 +162,7 @@ pub fn chainFocused(self: *PopupWidget, self_call: bool) bool {
     return ret;
 }
 
-pub fn deinit(self: *PopupWidget) void {
+pub fn deinit(self: *FloatingMenuWidget) void {
     self.menu.deinit();
     self.scroll.deinit();
 

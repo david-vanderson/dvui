@@ -29,6 +29,7 @@ pub const ButtonWidget = @import("widgets/ButtonWidget.zig");
 pub const ContextWidget = @import("widgets/ContextWidget.zig");
 pub const FloatingWindowWidget = @import("widgets/FloatingWindowWidget.zig");
 pub const FloatingWidget = @import("widgets/FloatingWidget.zig");
+pub const FloatingMenuWidget = @import("widgets/FloatingMenuWidget.zig");
 pub const IconWidget = @import("widgets/IconWidget.zig");
 pub const ImageWidget = @import("widgets/ImageWidget.zig");
 pub const LabelWidget = @import("widgets/LabelWidget.zig");
@@ -36,7 +37,6 @@ pub const MenuWidget = @import("widgets/MenuWidget.zig");
 pub const MenuItemWidget = @import("widgets/MenuItemWidget.zig");
 pub const OverlayWidget = @import("widgets/OverlayWidget.zig");
 pub const PanedWidget = @import("widgets/PanedWidget.zig");
-pub const PopupWidget = @import("widgets/PopupWidget.zig");
 pub const ScaleWidget = @import("widgets/ScaleWidget.zig");
 pub const ScrollAreaWidget = @import("widgets/ScrollAreaWidget.zig");
 pub const ScrollBarWidget = @import("widgets/ScrollBarWidget.zig");
@@ -1284,7 +1284,7 @@ pub fn parentReset(id: u32, w: Widget) void {
     cw.wd.parent = w;
 }
 
-pub fn popupSet(p: ?*PopupWidget) ?*PopupWidget {
+pub fn popupSet(p: ?*FloatingMenuWidget) ?*FloatingMenuWidget {
     const cw = currentWindow();
     const ret = cw.popup_current;
     cw.popup_current = p;
@@ -1898,7 +1898,7 @@ pub const Window = struct {
     clipRect: Rect = Rect{},
 
     menu_current: ?*MenuWidget = null,
-    popup_current: ?*PopupWidget = null,
+    popup_current: ?*FloatingMenuWidget = null,
     theme: *Theme = &Adwaita.light,
 
     min_sizes: std.AutoHashMap(u32, SavedSize),
@@ -3171,9 +3171,11 @@ pub const Window = struct {
     }
 };
 
-pub fn popup(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) !*PopupWidget {
-    var ret = try currentWindow().arena.create(PopupWidget);
-    ret.* = PopupWidget.init(src, initialRect, opts);
+pub const popup = @compileError("popup renamed to floatingMenu");
+
+pub fn floatingMenu(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) !*FloatingMenuWidget {
+    var ret = try currentWindow().arena.create(FloatingMenuWidget);
+    ret.* = FloatingMenuWidget.init(src, initialRect, opts);
     try ret.install();
     return ret;
 }
@@ -3520,7 +3522,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 
     var ret = false;
     if (b.activeRect()) |r| {
-        var pop = PopupWidget.init(@src(), lw_rect, .{ .min_size_content = r.size() });
+        var pop = FloatingMenuWidget.init(@src(), lw_rect, .{ .min_size_content = r.size() });
         var first_frame = firstFrame(pop.wd.id);
 
         // move popup to align first item with b

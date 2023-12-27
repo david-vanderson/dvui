@@ -87,7 +87,7 @@ pub fn main() !void {
 
             if (context.activePoint()) |cp| {
                 //std.debug.print("context.rect {}\n", .{context.rect});
-                var fw2 = try dvui.popup(@src(), dvui.Rect.fromPoint(cp), .{});
+                var fw2 = try dvui.floatingMenu(@src(), dvui.Rect.fromPoint(cp), .{});
                 defer fw2.deinit();
 
                 _ = try dvui.menuItemLabel(@src(), "Cut", .{}, .{ .expand = .horizontal });
