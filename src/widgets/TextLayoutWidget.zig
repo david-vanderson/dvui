@@ -234,7 +234,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                     } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
                         const corner = me.p.plus(offset);
                         self.sel_pts[0] = self.wd.contentRectScale().pointFromScreen(corner);
-                        self.sel_pts[1] = self.sel_end_r.topleft().plus(.{ .y = self.sel_end_r.h / 2 });
+                        self.sel_pts[1] = self.sel_end_r.topLeft().plus(.{ .y = self.sel_end_r.h / 2 });
 
                         var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
                             .mouse_pt = e.evt.mouse.p,
@@ -292,7 +292,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                     if (me.action == .press and me.button.touch()) {
                         dvui.captureMouse(fc.wd.id);
                         self.te_show_context_menu = false;
-                        offset = fcrs.r.topleft().diff(me.p);
+                        offset = fcrs.r.topLeft().diff(me.p);
 
                         // give an extra offset of half the cursor height
                         offset.y -= self.sel_start_r.h * 0.5 * rs.s;
@@ -302,7 +302,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                         const corner = me.p.plus(offset);
                         self.sel_pts[1] = self.wd.contentRectScale().pointFromScreen(corner);
                         if (self.sel_pts[0] == null) {
-                            self.sel_pts[0] = self.sel_start_r.topleft().plus(.{ .y = self.sel_start_r.h / 2 });
+                            self.sel_pts[0] = self.sel_start_r.topLeft().plus(.{ .y = self.sel_start_r.h / 2 });
                         }
 
                         var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
@@ -721,7 +721,7 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
 
             if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
                 const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
-                self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
+                self.cursor_updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
 
                 // might have already passed, so need to go again next frame
                 dvui.refresh(null, @src(), self.wd.id);
@@ -885,7 +885,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
 
         if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
             const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
-            self.cursor_updown_pt = cr_new.topleft().plus(.{ .y = cr_new.h / 2 });
+            self.cursor_updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
 
             // might have already passed, so need to go again next frame
             dvui.refresh(null, @src(), self.wd.id);

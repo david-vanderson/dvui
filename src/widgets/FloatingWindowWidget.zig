@@ -126,7 +126,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
                 self.wd.rect.y = @round(self.wd.rect.y * s) / s;
             }
 
-            while (self.wd.rect.topleft().equals(prev_focus.topleft())) {
+            while (self.wd.rect.topLeft().equals(prev_focus.topLeft())) {
                 // if we ended up directly on top, nudge downright a bit
                 self.wd.rect.x += 24;
                 self.wd.rect.y += 24;
@@ -140,7 +140,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
                 nudge = false;
                 // don't check against subwindows[0] - that's that main window
                 for (cw.subwindows.items[1..]) |subw| {
-                    if (subw.rect.topleft().equals(self.wd.rect.topleft())) {
+                    if (subw.rect.topLeft().equals(self.wd.rect.topLeft())) {
                         self.wd.rect.x += 24;
                         self.wd.rect.y += 24;
                         nudge = true;

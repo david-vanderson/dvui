@@ -80,7 +80,7 @@ pub fn install(self: *ScrollContainerWidget) !void {
 
     self.prevClip = dvui.clip(self.wd.contentRectScale().r);
 
-    self.frame_viewport = self.si.viewport.topleft();
+    self.frame_viewport = self.si.viewport.topLeft();
 
     dvui.parentSet(self.widget());
 }
@@ -104,7 +104,7 @@ pub fn processEvents(self: *ScrollContainerWidget) void {
     }
 
     // might have changed from events
-    self.frame_viewport = self.si.viewport.topleft();
+    self.frame_viewport = self.si.viewport.topLeft();
 }
 
 pub fn processVelocity(self: *ScrollContainerWidget) void {
@@ -173,7 +173,7 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
     }
 
     // might have changed from events
-    self.frame_viewport = self.si.viewport.topleft();
+    self.frame_viewport = self.si.viewport.topLeft();
 }
 
 pub fn widget(self: *ScrollContainerWidget) Widget {
