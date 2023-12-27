@@ -21,13 +21,15 @@ on hidpi display, selecting a bunch of text leaves small gaps noticeable in the 
 
 textLayout/textEntry touch editing:
 - floating context needs smarter positioning if it can't go above the widget
-- touch draggables need to be bigger
-- touch draggables need to remember relative position of touch down when being dragged
 - if you have a really long line in the multiline text entry that doesn't end in a newline, you can't see the final draggable?
 
-floating window resize corner needs to be larger for touch
+rename Rect.topleft to Rect.topLeft
 
 touch pinch zoom (window? subwindow?) - integrated with ScrollContainer?
+
+
+paned should have an "autopos" mode where when not collapsed it will use the expand of the children to determine split
+- this way you can have the split automatically be not 50/50
 
 
 textEntry key updown (shift-updown for textLayout) needs to be fixed to be able to do another updown each frame

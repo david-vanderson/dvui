@@ -184,50 +184,56 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
     self.prevClip = dvui.clip(rs.r);
 
     if (opts.show_touch_draggables and self.touch_editing and self.te_show_draggables and self.focus_at_start and self.wd.visible()) {
-        const size = 24;
+        const size = 36;
         {
             // calculate visible before FloatingWidget changes clip
             const visible = !dvui.clipGet().intersect(rs.rectToScreen(self.sel_start_r)).empty();
-            var rect = self.sel_start_r;
-            rect.y += rect.h; // move to below the line
-            const srs = self.screenRectScale(rect);
-            rect = dvui.windowRectScale().rectFromScreen(srs.r);
-            rect.x -= size;
-            rect.w = size;
-            rect.h = size;
+            if (visible) {
+                var rect = self.sel_start_r;
+                rect.y += rect.h; // move to below the line
+                const srs = self.screenRectScale(rect);
+                rect = dvui.windowRectScale().rectFromScreen(srs.r);
+                rect.x -= size;
+                rect.w = size;
+                rect.h = size;
 
-            var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
-            try fc.install();
+                var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
+                try fc.install();
 
-            const fcrs = fc.wd.rectScale();
-            var evts = dvui.events();
-            for (evts) |*e| {
-                if (!dvui.eventMatch(e, .{ .id = fc.wd.id, .r = fcrs.r }))
-                    continue;
+                var offset: Point = dvui.dataGet(null, fc.wd.id, "_offset", Point) orelse .{};
 
-                if (e.evt == .mouse) {
-                    const me = e.evt.mouse;
-                    if (me.action == .press and me.button.touch()) {
-                        dvui.captureMouse(fc.wd.id);
-                        self.te_show_context_menu = false;
-                    } else if (me.action == .release and me.button.touch()) {
-                        dvui.captureMouse(null);
-                    } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
-                        const corner = me.p.plus(.{ .x = size * 0.7 * dvui.windowNaturalScale(), .y = -size * 0.7 * dvui.windowNaturalScale() });
-                        self.sel_pts[0] = self.wd.contentRectScale().pointFromScreen(corner);
-                        self.sel_pts[1] = self.sel_end_r.topleft().plus(.{ .y = self.sel_end_r.h / 2 });
+                const fcrs = fc.wd.rectScale();
+                var evts = dvui.events();
+                for (evts) |*e| {
+                    if (!dvui.eventMatch(e, .{ .id = fc.wd.id, .r = fcrs.r }))
+                        continue;
 
-                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
-                            .mouse_pt = e.evt.mouse.p,
-                            .screen_rect = self.wd.rectScale().r,
-                            .capture_id = self.wd.id,
-                        } } };
-                        self.processEvent(&scrolldrag, true);
+                    if (e.evt == .mouse) {
+                        const me = e.evt.mouse;
+                        if (me.action == .press and me.button.touch()) {
+                            dvui.captureMouse(fc.wd.id);
+                            self.te_show_context_menu = false;
+                            offset = fcrs.r.topRight().diff(me.p);
+
+                            // give an extra offset of half the cursor height
+                            offset.y -= self.sel_start_r.h * 0.5 * rs.s;
+                        } else if (me.action == .release and me.button.touch()) {
+                            dvui.captureMouse(null);
+                        } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
+                            const corner = me.p.plus(offset);
+                            self.sel_pts[0] = self.wd.contentRectScale().pointFromScreen(corner);
+                            self.sel_pts[1] = self.sel_end_r.topleft().plus(.{ .y = self.sel_end_r.h / 2 });
+
+                            var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                                .mouse_pt = e.evt.mouse.p,
+                                .screen_rect = self.wd.rectScale().r,
+                                .capture_id = self.wd.id,
+                            } } };
+                            self.processEvent(&scrolldrag, true);
+                        }
                     }
                 }
-            }
 
-            if (visible) {
                 try dvui.pathAddPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
                 try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
                 try dvui.pathFillConvex(dvui.themeGet().color_fill_control);
@@ -235,54 +241,62 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 try dvui.pathAddPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
                 try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
                 try dvui.pathStroke(true, 1.0, .none, self.wd.options.color(.border));
-            }
 
-            fc.deinit();
+                dvui.dataSet(null, fc.wd.id, "_offset", offset);
+                fc.deinit();
+            }
         }
 
         {
             // calculate visible before FloatingWidget changes clip
             const visible = !dvui.clipGet().intersect(rs.rectToScreen(self.sel_end_r)).empty();
-            var rect = self.sel_end_r;
-            rect.y += rect.h; // move to below the line
-            const srs = self.screenRectScale(rect);
-            rect = dvui.windowRectScale().rectFromScreen(srs.r);
-            rect.w = size;
-            rect.h = size;
+            if (visible) {
+                var rect = self.sel_end_r;
+                rect.y += rect.h; // move to below the line
+                const srs = self.screenRectScale(rect);
+                rect = dvui.windowRectScale().rectFromScreen(srs.r);
+                rect.w = size;
+                rect.h = size;
 
-            var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
-            try fc.install();
-            const fcrs = fc.wd.rectScale();
-            var evts = dvui.events();
-            for (evts) |*e| {
-                if (!dvui.eventMatch(e, .{ .id = fc.wd.id, .r = fcrs.r }))
-                    continue;
+                var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
+                try fc.install();
 
-                if (e.evt == .mouse) {
-                    const me = e.evt.mouse;
-                    if (me.action == .press and me.button.touch()) {
-                        dvui.captureMouse(fc.wd.id);
-                        self.te_show_context_menu = false;
-                    } else if (me.action == .release and me.button.touch()) {
-                        dvui.captureMouse(null);
-                    } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
-                        const corner = me.p.plus(.{ .x = -size * 0.7 * dvui.windowNaturalScale(), .y = -size * 0.7 * dvui.windowNaturalScale() });
-                        self.sel_pts[1] = self.wd.contentRectScale().pointFromScreen(corner);
-                        if (self.sel_pts[0] == null) {
-                            self.sel_pts[0] = self.sel_start_r.topleft().plus(.{ .y = self.sel_start_r.h / 2 });
+                var offset: Point = dvui.dataGet(null, fc.wd.id, "_offset", Point) orelse .{};
+
+                const fcrs = fc.wd.rectScale();
+                var evts = dvui.events();
+                for (evts) |*e| {
+                    if (!dvui.eventMatch(e, .{ .id = fc.wd.id, .r = fcrs.r }))
+                        continue;
+
+                    if (e.evt == .mouse) {
+                        const me = e.evt.mouse;
+                        if (me.action == .press and me.button.touch()) {
+                            dvui.captureMouse(fc.wd.id);
+                            self.te_show_context_menu = false;
+                            offset = fcrs.r.topleft().diff(me.p);
+
+                            // give an extra offset of half the cursor height
+                            offset.y -= self.sel_start_r.h * 0.5 * rs.s;
+                        } else if (me.action == .release and me.button.touch()) {
+                            dvui.captureMouse(null);
+                        } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
+                            const corner = me.p.plus(offset);
+                            self.sel_pts[1] = self.wd.contentRectScale().pointFromScreen(corner);
+                            if (self.sel_pts[0] == null) {
+                                self.sel_pts[0] = self.sel_start_r.topleft().plus(.{ .y = self.sel_start_r.h / 2 });
+                            }
+
+                            var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                                .mouse_pt = e.evt.mouse.p,
+                                .screen_rect = self.wd.rectScale().r,
+                                .capture_id = self.wd.id,
+                            } } };
+                            self.processEvent(&scrolldrag, true);
                         }
-
-                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
-                            .mouse_pt = e.evt.mouse.p,
-                            .screen_rect = self.wd.rectScale().r,
-                            .capture_id = self.wd.id,
-                        } } };
-                        self.processEvent(&scrolldrag, true);
                     }
                 }
-            }
 
-            if (visible) {
                 try dvui.pathAddPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
                 try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
                 try dvui.pathFillConvex(dvui.themeGet().color_fill_control);
@@ -290,9 +304,10 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 try dvui.pathAddPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
                 try dvui.pathAddArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
                 try dvui.pathStroke(true, 1.0, .none, self.wd.options.color(.border));
-            }
 
-            fc.deinit();
+                dvui.dataSet(null, fc.wd.id, "_offset", offset);
+                fc.deinit();
+            }
         }
     }
 }
