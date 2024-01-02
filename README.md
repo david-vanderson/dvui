@@ -152,6 +152,19 @@ The parent widget decides what rectangle of the screen to assign to each child.
 
 The child widgets report their min sizes to the parent (who uses those the next frame for layout decisions).
 
+#### Layout
+Usually you want each part of a gui to either be packed tightly (take up only min size), or expand to take the available space.  The choice might be different for vertical vs. horizontal.
+
+When a child widget is laid out (sized and positioned), it sends 2 pieces of info to the parent:
+- min size
+- hints for when space is larger than min size (expand, gravity_x, gravity_y)
+
+If parent is not `expand`ed, the intent is to pack as tightly as possible, so it will give all children only their min size.
+
+If parent has more space than the children need, it will lay them out using the hints:
+- expand - whether this child should take more space or not
+- gravity - if not expanded, where to position child in larger space
+
 ### Handle All Events
 DVUI processes every input event, making it useable in low framerate situations.  A button can receive a mouse-down event and a mouse-up event in the same frame and correctly report a click.  A custom button could even report multiple clicks per frame.  (the higher level `dvui.button()` function only reports 1 click per frame)
 
