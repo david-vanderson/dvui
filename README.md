@@ -145,14 +145,11 @@ pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: O
 * Hard to do dialog sequence
   * retained mode guis can run a modal dialog recursively so that dialog code can only exist in a single function
 
-### Parent Child and Nesting
+### Parent, Child, and Layout
 The primary layout mechanism is nesting widgets.  DVUI keeps track of the current parent widget.  When a widget runs, it is a child of the current parent.  A widget may then make itself the current parent, and reset back to the previous parent when it runs `deinit()`.
 
 The parent widget decides what rectangle of the screen to assign to each child.
 
-The child widgets report their min sizes to the parent (who uses those the next frame for layout decisions).
-
-#### Layout
 Usually you want each part of a gui to either be packed tightly (take up only min size), or expand to take the available space.  The choice might be different for vertical vs. horizontal.
 
 When a child widget is laid out (sized and positioned), it sends 2 pieces of info to the parent:
