@@ -145,23 +145,6 @@ pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: O
 * Hard to do dialog sequence
   * retained mode guis can run a modal dialog recursively so that dialog code can only exist in a single function
 
-### Parent, Child, and Layout
-The primary layout mechanism is nesting widgets.  DVUI keeps track of the current parent widget.  When a widget runs, it is a child of the current parent.  A widget may then make itself the current parent, and reset back to the previous parent when it runs `deinit()`.
-
-The parent widget decides what rectangle of the screen to assign to each child.
-
-Usually you want each part of a gui to either be packed tightly (take up only min size), or expand to take the available space.  The choice might be different for vertical vs. horizontal.
-
-When a child widget is laid out (sized and positioned), it sends 2 pieces of info to the parent:
-- min size
-- hints for when space is larger than min size (expand, gravity_x, gravity_y)
-
-If parent is not `expand`ed, the intent is to pack as tightly as possible, so it will give all children only their min size.
-
-If parent has more space than the children need, it will lay them out using the hints:
-- expand - whether this child should take more space or not
-- gravity - if not expanded, where to position child in larger space
-
 ### Handle All Events
 DVUI processes every input event, making it useable in low framerate situations.  A button can receive a mouse-down event and a mouse-up event in the same frame and correctly report a click.  A custom button could even report multiple clicks per frame.  (the higher level `dvui.button()` function only reports 1 click per frame)
 
@@ -229,6 +212,23 @@ Instead you can allocate the widget on the stack using the lower-level functions
 The lower-level functions give a lot more customization options including animations, intercepting events, and drawing differently.
 
 Start with the high-level functions, and when needed, copy the body of the high-level function and customize from there.
+
+### Parent, Child, and Layout
+The primary layout mechanism is nesting widgets.  DVUI keeps track of the current parent widget.  When a widget runs, it is a child of the current parent.  A widget may then make itself the current parent, and reset back to the previous parent when it runs `deinit()`.
+
+The parent widget decides what rectangle of the screen to assign to each child.
+
+Usually you want each part of a gui to either be packed tightly (take up only min size), or expand to take the available space.  The choice might be different for vertical vs. horizontal.
+
+When a child widget is laid out (sized and positioned), it sends 2 pieces of info to the parent:
+- min size
+- hints for when space is larger than min size (expand, gravity_x, gravity_y)
+
+If parent is not `expand`ed, the intent is to pack as tightly as possible, so it will give all children only their min size.
+
+If parent has more space than the children need, it will lay them out using the hints:
+- expand - whether this child should take more space or not
+- gravity - if not expanded, where to position child in larger space
 
 ### Appearance
 Each widget has the following options that can be changed through the Options struct when creating the widget:
