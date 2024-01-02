@@ -228,14 +228,16 @@ Each widget has the following options that can be changed through the Options st
 - min_size_content (margin/border/padding added to get min size)
 - background (fills space inside border with background color)
 - corner_radius (for each corner)
-- color_style (use theme's colors)
-  - or directly set colors:
-    - color_accent
-    - color_text
-    - color_fill
-    - color_border
-    - color_hover
-    - color_press
+- colors (either RGBA value or named)
+  - example RGBA `.color_text = .{ .color = .{ .r = 0xe0, .g = 0x1b, .b = 0x24 } }`
+  - example named `.color_text = .{ .name = .err }` (get current theme's `color_err`)
+  - color_accent
+  - color_text
+  - color_text_press
+  - color_fill
+  - color_fill_hover
+  - color_fill_press
+  - color_border
 - font_style (use theme's fonts)
   - or directly set font:
     - font
@@ -245,7 +247,7 @@ Each widget has its own default options.  These can be changed directly:
 dvui.ButtonWidget.defaults.background = false;
 ```
 
-Themes can be changed between frames or even within a frame.  The theme controls the fonts and colors referenced by font_style and color_style.
+Themes can be changed between frames or even within a frame.  The theme controls the fonts and colors referenced by font_style and named colors.
 ```zig
 if (theme_dark) {
     win.theme = &dvui.Adwaita.dark;
