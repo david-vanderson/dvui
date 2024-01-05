@@ -13,8 +13,8 @@ const AnimateWidget = @This();
 
 pub const Kind = enum {
     alpha,
-    vert,
-    horz,
+    vertical,
+    horizontal,
 };
 
 wd: WidgetData = undefined,
@@ -35,7 +35,7 @@ pub fn install(self: *AnimateWidget) !void {
 
     if (dvui.firstFrame(self.wd.id)) {
         // start begin animation
-        dvui.animation(self.wd.id, "_start", .{ .start_val = 0.0, .end_val = 1.0, .end_time = self.duration });
+        self.start();
     }
 
     if (dvui.animationGet(self.wd.id, "_end")) |a| {
@@ -50,12 +50,16 @@ pub fn install(self: *AnimateWidget) !void {
                 self.prev_alpha = dvui.themeGet().alpha;
                 dvui.themeGet().alpha *= v;
             },
-            .vert => {},
-            .horz => {},
+            .vertical => {},
+            .horizontal => {},
         }
     }
 
     try self.wd.borderAndBackground(.{});
+}
+
+pub fn start(self: *AnimateWidget) void {
+    dvui.animation(self.wd.id, "_start", .{ .start_val = 0.0, .end_val = 1.0, .end_time = self.duration });
 }
 
 pub fn startEnd(self: *AnimateWidget) void {
@@ -63,7 +67,11 @@ pub fn startEnd(self: *AnimateWidget) void {
 }
 
 pub fn end(self: *AnimateWidget) bool {
-    return dvui.animationDone(self.wd.id, "_end");
+    if (dvui.animationGet(self.wd.id, "_end")) |a| {
+        return a.done();
+    }
+
+    return false;
 }
 
 pub fn widget(self: *AnimateWidget) Widget {
@@ -99,10 +107,10 @@ pub fn deinit(self: *AnimateWidget) void {
             .alpha => {
                 dvui.themeGet().alpha = self.prev_alpha;
             },
-            .vert => {
+            .vertical => {
                 self.wd.min_size.h *= v;
             },
-            .horz => {
+            .horizontal => {
                 self.wd.min_size.w *= v;
             },
         }

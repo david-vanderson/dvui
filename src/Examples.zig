@@ -1038,6 +1038,75 @@ pub fn animations() !void {
         }
     }
 
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.labelNoFmt(@src(), "Alpha", .{ .gravity_y = 0.5 });
+
+        {
+            var animator = try dvui.animate(@src(), .alpha, 500_000, .{});
+            defer animator.deinit();
+
+            var hbox2 = try dvui.box(@src(), .horizontal, .{});
+            defer hbox2.deinit();
+
+            if (try dvui.button(@src(), "starting", .{}, .{})) {
+                animator.start();
+            }
+
+            if (try dvui.button(@src(), "ending", .{}, .{})) {
+                animator.startEnd();
+            }
+        }
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.labelNoFmt(@src(), "Vertical", .{ .gravity_y = 0.5 });
+
+        {
+            var animator = try dvui.animate(@src(), .vertical, 500_000, .{});
+            defer animator.deinit();
+
+            var hbox2 = try dvui.box(@src(), .horizontal, .{});
+            defer hbox2.deinit();
+
+            if (try dvui.button(@src(), "starting", .{}, .{})) {
+                animator.start();
+            }
+
+            if (try dvui.button(@src(), "ending", .{}, .{})) {
+                animator.startEnd();
+            }
+        }
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.labelNoFmt(@src(), "Horizontal", .{ .gravity_y = 0.5 });
+
+        {
+            var animator = try dvui.animate(@src(), .horizontal, 500_000, .{});
+            defer animator.deinit();
+
+            var hbox2 = try dvui.box(@src(), .horizontal, .{});
+            defer hbox2.deinit();
+
+            if (try dvui.button(@src(), "starting", .{}, .{})) {
+                animator.start();
+            }
+
+            if (try dvui.button(@src(), "ending", .{}, .{})) {
+                animator.startEnd();
+            }
+        }
+    }
+
     if (try dvui.button(@src(), "Animating Dialog (Scale)", .{}, .{})) {
         try dvui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog (Scale)", .message = "This shows how to animate dialogs and other floating windows by changing the scale.", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
     }
