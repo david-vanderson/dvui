@@ -222,8 +222,20 @@ A widget receives its position and size from its parent.  The widget sends these
   * a long scrollable list can use this to skip widgets that aren't visible
   * example is the demo icon browser
 
-## FPS and Frame Refresh
-* how refresh works
+## Refresh
+`refresh()` signals that a new frame should be rendered:
+- `refresh(null, ...)` is used during a frame (between Window.begin() and Window.end())
+- `refresh(window, ...)` is used outside the frame or from another thread
+  - useful when a background thread needs to wake up the gui thread
+
+If you are getting unexpected frames, you can turn on refresh logging.  Either using the button in the DVUI Debug window, or setting `Window.debug_refresh` while holding `Window.debug_refresh_mutex`:
+```zig
+window.debug_refresh_mutex.lock();
+window.debug_refresh = true;
+window.debug_refresh_mutex.unlock();
+```
+
+When `Window.debug_refresh` is true, DVUI will log calls to `refresh` along with src info and widget ids to help debug where the extra frames are coming from.
 
 ## Animations
 

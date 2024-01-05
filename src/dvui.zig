@@ -2989,7 +2989,7 @@ pub const Window = struct {
             self.debug_under_mouse_esc_needed = dum;
         }
 
-        // Can't hold the debug_refresh_mutex while calling dvui.buton because
+        // Can't hold the debug_refresh_mutex while calling dvui.button because
         // it will call refresh which will try to lock the mutex.
         var logit = false;
         self.debug_refresh_mutex.lock();
