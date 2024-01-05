@@ -1675,17 +1675,6 @@ pub fn animationGet(id: u32, key: []const u8) ?Animation {
     return null;
 }
 
-// returns true only on the frame where the animation expired
-pub fn animationDone(id: u32, key: []const u8) bool {
-    if (animationGet(id, key)) |a| {
-        if (a.end_time <= 0) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 pub fn timer(id: u32, micros: i32) !void {
     try currentWindow().timer(id, micros);
 }
