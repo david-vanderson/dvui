@@ -224,7 +224,7 @@ A widget receives its position and size from its parent.  The widget sends these
 
 ## Refresh
 `refresh()` signals that a new frame should be rendered:
-- `refresh(null, ...)` is used during a frame (between Window.begin() and Window.end())
+- `refresh(null, ...)` is used during a frame (between `Window.begin()` and `Window.end()`)
 - `refresh(window, ...)` is used outside the frame or from another thread
   - useful when a background thread needs to wake up the gui thread
 
@@ -252,6 +252,8 @@ While widgets are not stored between frames, they usually will need to store som
 - `dataGet()` - retrieve data (you must specify the type, but DVUI will (in Debug builds) check that the stored and asked-for types match
 - `dataSetSlice(), dataGetSlice()` - store/retrieve a slice of data
 - `dataRemove()` - remove a stored data
+
+The first parameter to these functions can be null during a frame (between `Window.begin()` and `Window.end()`).  If outside the frame or from a different thread, you must pass the `Window` as the first parameter.
 
 If a stored data is not used (`dataSet()` or `dataGet()`) for a frame, it will be automatically removed.  If you only want to store something for one frame, you can `dataSet()`, then next frame when `dataGet()` returns it, use `dataRemove()`.
 
