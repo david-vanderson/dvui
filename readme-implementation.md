@@ -257,10 +257,6 @@ The first parameter to these functions can be null during a frame (between `Wind
 
 If a stored data is not used (`dataSet()` or `dataGet()`) for a frame, it will be automatically removed.  If you only want to store something for one frame, you can `dataSet()`, then next frame when `dataGet()` returns it, use `dataRemove()`.
 
-## Clipping
-
-## Mutlithreading
-
 ## Tab Index
 Pressing tab will cycle keyboard focus (keyboard navigate) through all the widgets that have called `tabIndexSet()`.  Widgets will call it with the passed in `Options.tab_index`.  The order is:
 * lower tab_index values come first
@@ -269,10 +265,19 @@ Pressing tab will cycle keyboard focus (keyboard navigate) through all the widge
 * widgets with the same tab_index go in the order they are executed
 
 ## Drawing
-All drawing happens in pixel space.  A widget can call `parent.screenRectScale()` to get a rectangle in pixel screen coordinates plus the scale from logical points to physical pixels.
+All drawing happens in pixel space.  For a widget `w`:
+- `w.data().rectScale()` - pixels in screen space and scale factor for whole widget (content, padding, border, margin)
+- `w.data().borderRectScale()` - includes content, padding, border
+- `w.data().backgroundRectScale()` - includes content, padding
+- `w.data().contentRectScale()` - includes content
 
-- also margin/border/padding/content
-- deferred
-- subwindows
-- pathStrokeAfter for focus outlines
+The drawing functions are:
+- `renderText()` - single line of text
+- `renderIcon()` - tvg icon
+- `renderImage()` - raster image via stb_image
+- `pathFillConvex()` - fill convex path (see below)
+- `pathStroke()` - stroke path (see below)
+- `pathStrokeAfter()` - stroke path (see below) but done after everything else (used for the focus highlight so it can draw over other widgets)
+
+Currently there is a single implicit path.  `pathAddPoint()`, `pathAddRect()`, and `pathAddArc()` add to the path, and `pathFillConvex()` and `pathStroke()` clear the path.
 
