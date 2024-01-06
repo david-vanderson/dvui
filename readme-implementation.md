@@ -238,10 +238,22 @@ window.debug_refresh_mutex.unlock();
 When `Window.debug_refresh` is true, DVUI will log calls to `refresh` along with src info and widget ids to help debug where the extra frames are coming from.
 
 ## Animations
+`animation()` associates a value changing over time (represented by an `Animation` struct) with a widget id and key string.  `animationGet()` retrieves one if present.  `Animation.start_time` and Animation.end_time` are offsets from the current frame time, and are updated each frame.
 
-## Debugging
+There will always be a single frame where an animation is `done()` (`Animation.end_time <= 0`), then it will automatically be removed.
+
+See `spinner()` for how to make a seamless repeating animation.
+
+Any animation will implicitly cause a refresh, requesting the highest possible FPS during animation.  If you want periodic changes instead, use `timer()`.  It is a degenerate animation that starts and ends on a single frame, so it won't spam frames.
 
 ## dataGet/dataSet/dataGetSlice
+While widgets are not stored between frames, they usually will need to store some info (like whether a button is pressed).  Some data (like min size) is stored specially.  For everything else DVUI provides a way to store arbitrary data associated with a widget id and key string:
+- `dataSet()` - store any data type
+- `dataGet()` - retrieve data (you must specify the type, but DVUI will (in Debug builds) check that the stored and asked-for types match
+- `dataSetSlice(), dataGetSlice()` - store/retrieve a slice of data
+- `dataRemove()` - remove a stored data
+
+If a stored data is not used (`dataSet()` or `dataGet()`) for a frame, it will be automatically removed.  If you only want to store something for one frame, you can `dataSet()`, then next frame when `dataGet()` returns it, use `dataRemove()`.
 
 ## Clipping
 

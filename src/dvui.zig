@@ -2856,7 +2856,7 @@ pub const Window = struct {
 
     pub fn timer(self: *Self, id: u32, micros: i32) !void {
         // when start_time is in the future, we won't spam frames, so this will
-        // maybe cause a single frame and then expire
+        // cause a single frame and then expire
         const a = Animation{ .start_time = micros, .end_time = micros };
         const h = hashIdKey(id, "_timer");
         try self.animations.put(h, a);
@@ -3758,7 +3758,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     if (animationGet(wd.id, "_angle")) |a| {
         // existing animation
         var aa = a;
-        if (aa.end_time <= 0) {
+        if (aa.done()) {
             // this animation is expired, seemlessly transition to next animation
             aa = anim;
             aa.start_time = a.end_time;

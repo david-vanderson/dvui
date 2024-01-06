@@ -6,11 +6,6 @@ check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 add to readme-implementation
 
-add to readme a section about layout from a high level
-- either want a widget to take their min size, or expand to fill
-- if not expanded, gravity moves the widget around
-- if a parent widget is not expanded, all child widgets will get their min size
-
 change the layout section of the demo to be interactive with checkboxes for expanding
 
 
