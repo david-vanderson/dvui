@@ -1192,9 +1192,8 @@ pub fn snapToPixels() bool {
 /// Window.waitTime() and using the return value in for example
 /// SDLBackend.waitEventTimeout at the end of each frame).
 ///
-/// src and id are for debugging, which is enabled by setting
-/// Window.debug_refresh to true while holding Window.debug_refresh_mutex
-/// locked.  The debug window has a toggle button for this.
+/// src and id are for debugging, which is enabled by calling
+/// Window.debugRefresh(true).  The debug window has a toggle button for this.
 ///
 /// Can be called from any thread.
 ///
@@ -2005,14 +2004,22 @@ pub const Window = struct {
         self._arena.deinit();
     }
 
+    // called from any thread
+    pub fn debugRefresh(self: *Self, val: ?bool) bool {
+        self.debug_refresh_mutex.lock();
+        defer self.debug_refresh_mutex.unlock();
+
+        const previous = self.debug_refresh;
+        if (val) |v| {
+            self.debug_refresh = v;
+        }
+
+        return previous;
+    }
+
     // called from gui thread
     pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?u32) void {
-        var logit = false;
-        self.debug_refresh_mutex.lock();
-        logit = self.debug_refresh;
-        self.debug_refresh_mutex.unlock();
-
-        if (logit) {
+        if (self.debugRefresh(null)) {
             log.debug("{s}:{d} refresh {?x}", .{ src.file, src.line, id });
         }
         self.extra_frames_needed = 1;
@@ -2020,12 +2027,7 @@ pub const Window = struct {
 
     // called from any thread
     pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?u32) void {
-        var logit = false;
-        self.debug_refresh_mutex.lock();
-        logit = self.debug_refresh;
-        self.debug_refresh_mutex.unlock();
-
-        if (logit) {
+        if (self.debugRefresh(null)) {
             log.debug("{s}:{d} refreshBackend {?x}", .{ src.file, src.line, id });
         }
         self.backend.refresh();
@@ -2978,16 +2980,9 @@ pub const Window = struct {
             self.debug_under_mouse_esc_needed = dum;
         }
 
-        // Can't hold the debug_refresh_mutex while calling dvui.button because
-        // it will call refresh which will try to lock the mutex.
-        var logit = false;
-        self.debug_refresh_mutex.lock();
-        logit = self.debug_refresh;
-        self.debug_refresh_mutex.unlock();
+        var logit = self.debugRefresh(null);
         if (try dvui.button(@src(), if (logit) "Stop Refresh Logging" else "Start Refresh Logging", .{}, .{})) {
-            self.debug_refresh_mutex.lock();
-            self.debug_refresh = !self.debug_refresh;
-            self.debug_refresh_mutex.unlock();
+            _ = self.debugRefresh(!logit);
         }
 
         var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
