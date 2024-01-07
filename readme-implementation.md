@@ -228,17 +228,10 @@ A widget receives its position and size from its parent.  The widget sends these
 - `refresh(window, ...)` is used outside the frame or from another thread
   - useful when a background thread needs to wake up the gui thread
 
-If you are getting unexpected frames, you can turn on refresh logging.  Either using the button in the DVUI Debug window, or setting `Window.debug_refresh` while holding `Window.debug_refresh_mutex`:
-```zig
-window.debug_refresh_mutex.lock();
-window.debug_refresh = true;
-window.debug_refresh_mutex.unlock();
-```
-
-When `Window.debug_refresh` is true, DVUI will log calls to `refresh` along with src info and widget ids to help debug where the extra frames are coming from.
+If you are getting unexpected frames, you can turn on refresh logging.  Either using the button in the DVUI Debug window, or calling `Window.debugRefresh(true)`.  When on, DVUI will log calls to `refresh` along with src info and widget ids to help debug where the extra frames are coming from.
 
 ## Animations
-`animation()` associates a value changing over time (represented by an `Animation` struct) with a widget id and key string.  `animationGet()` retrieves one if present.  `Animation.start_time` and Animation.end_time` are offsets from the current frame time, and are updated each frame.
+`animation()` associates a value changing over time (represented by an `Animation` struct) with a widget id and key string.  `animationGet()` retrieves one if present.  `Animation.start_time` and `Animation.end_time` are offsets from the current frame time, and are updated each frame.
 
 There will always be a single frame where an animation is `done()` (`Animation.end_time <= 0`), then it will automatically be removed.
 
