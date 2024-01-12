@@ -1,4 +1,4 @@
-# DVUI - Easy to Integrate Immediate Mode GUI for Zig
+# DVUI - Immediate Zig GUI for Apps and Games
 
 A Zig GUI toolkit for whole applications or extra debugging windows in an existing application.
 
