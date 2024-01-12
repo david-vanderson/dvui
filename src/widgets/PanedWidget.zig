@@ -245,15 +245,17 @@ pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {
 
         if (dvui.captured(self.wd.id) or @fabs(mouse - target) < (5 * rs.s)) {
             self.hovered = true;
-            e.handled = true;
             if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
+                e.handled = true;
                 // capture and start drag
                 dvui.captureMouse(self.wd.id);
                 dvui.dragPreStart(e.evt.mouse.p, cursor, Point{});
             } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
+                e.handled = true;
                 // stop possible drag and capture
                 dvui.captureMouse(null);
             } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
+                e.handled = true;
                 // move if dragging
                 if (dvui.dragging(e.evt.mouse.p)) |dps| {
                     _ = dps;
@@ -269,6 +271,7 @@ pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {
                     self.split_ratio = @max(0.0, @min(1.0, self.split_ratio));
                 }
             } else if (e.evt.mouse.action == .position) {
+                e.handled = true;
                 dvui.cursorSet(cursor);
             }
         }

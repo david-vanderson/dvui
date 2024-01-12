@@ -35,6 +35,13 @@ var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
 var text_entry_multiline_buf = std.mem.zeroes([500]u8);
 var dropdown_val: usize = 1;
+var layout_margin: Rect = Rect.all(4);
+var layout_border: Rect = Rect.all(0);
+var layout_padding: Rect = Rect.all(4);
+var layout_gravity_x: f32 = 0.5;
+var layout_gravity_y: f32 = 0.5;
+var layout_expand_horizontal: bool = false;
+var layout_expand_vertical: bool = false;
 var show_dialog: bool = false;
 var scale_val: f32 = 1.0;
 var line_height_factor: f32 = 1.0;
@@ -618,30 +625,6 @@ pub fn styling() !void {
         try dvui.separator(@src(), opts.override(.{ .expand = .horizontal, .min_size_content = .{ .h = 5 } }));
     }
 
-    try dvui.label(@src(), "margin/border/padding", .{}, .{});
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        const opts: Options = .{ .border = Rect.all(1), .background = true, .gravity_y = 0.5 };
-
-        var o = try dvui.overlay(@src(), opts);
-        _ = try dvui.button(@src(), "default", .{}, .{});
-        o.deinit();
-
-        o = try dvui.overlay(@src(), opts);
-        _ = try dvui.button(@src(), "+border", .{}, .{ .border = Rect.all(2) });
-        o.deinit();
-
-        o = try dvui.overlay(@src(), opts);
-        _ = try dvui.button(@src(), "+padding 10", .{}, .{ .border = Rect.all(2), .padding = Rect.all(10) });
-        o.deinit();
-
-        o = try dvui.overlay(@src(), opts);
-        _ = try dvui.button(@src(), "+margin 10", .{}, .{ .border = Rect.all(2), .margin = Rect.all(10), .padding = Rect.all(10) });
-        o.deinit();
-    }
-
     try dvui.label(@src(), "corner radius", .{}, .{});
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
@@ -656,7 +639,7 @@ pub fn styling() !void {
         _ = try dvui.button(@src(), "mixed", .{}, opts.override(.{ .corner_radius = .{ .x = 0, .y = 2, .w = 7, .h = 100 } }));
     }
 
-    try dvui.label(@src(), "directy set colors", .{}, .{});
+    try dvui.label(@src(), "directly set colors", .{}, .{});
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -689,38 +672,77 @@ pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: O
 pub fn layout() !void {
     const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
 
-    try dvui.label(@src(), "Gravity", .{}, .{});
+    try dvui.label(@src(), "margin/border/padding", .{}, .{});
     {
-        var o = try dvui.overlay(@src(), opts);
-        defer o.deinit();
+        var vbox = try dvui.box(@src(), .vertical, .{});
+        defer vbox.deinit();
 
-        var buf: [128]u8 = undefined;
+        var vbox2 = try dvui.box(@src(), .vertical, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "margin top {d:0.0}", .{ .value = &layout_margin.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "border top {d:0.0}", .{ .value = &layout_border.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "padding top {d:0.0}", .{ .value = &layout_padding.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        vbox2.deinit();
 
-        inline for ([3]f32{ 0.0, 0.5, 1.0 }, 0..) |horz, hi| {
-            inline for ([3]f32{ 0.0, 0.5, 1.0 }, 0..) |vert, vi| {
-                _ = try dvui.button(@src(), try std.fmt.bufPrint(&buf, "{d},{d}", .{ horz, vert }), .{}, .{ .id_extra = hi * 3 + vi, .gravity_x = horz, .gravity_y = vert });
-            }
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+
+        vbox2 = try dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "margin left {d:0.0}", .{ .value = &layout_margin.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "border left {d:0.0}", .{ .value = &layout_border.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "padding left {d:0.0}", .{ .value = &layout_padding.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        vbox2.deinit();
+
+        var o = try dvui.overlay(@src(), .{ .min_size_content = .{ .w = 164, .h = 140 } });
+        var o2 = try dvui.overlay(@src(), .{ .background = true, .gravity_x = 0.5, .gravity_y = 0.5 });
+        if (try dvui.button(@src(), "reset", .{}, .{ .margin = layout_margin, .border = layout_border, .padding = layout_padding })) {
+            layout_margin = Rect.all(4);
+            layout_border = Rect.all(0);
+            layout_padding = Rect.all(4);
         }
+        o2.deinit();
+        o.deinit();
+
+        vbox2 = try dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "margin right {d:0.0}", .{ .value = &layout_margin.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "border right {d:0.0}", .{ .value = &layout_border.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "padding right {d:0.0}", .{ .value = &layout_padding.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        vbox2.deinit();
+
+        hbox.deinit();
+
+        vbox2 = try dvui.box(@src(), .vertical, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "margin bottom {d:0.0}", .{ .value = &layout_margin.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "border bottom {d:0.0}", .{ .value = &layout_border.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "padding bottom {d:0.0}", .{ .value = &layout_padding.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        vbox2.deinit();
     }
 
-    try dvui.label(@src(), "Expand", .{}, .{});
+    try dvui.label(@src(), "gravity/expand", .{}, .{});
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
-        {
-            var vbox = try dvui.box(@src(), .vertical, opts);
-            defer vbox.deinit();
 
-            _ = try dvui.button(@src(), "none", .{}, .{ .expand = .none });
-            _ = try dvui.button(@src(), "horizontal", .{}, .{ .expand = .horizontal });
-            _ = try dvui.button(@src(), "vertical", .{}, .{ .expand = .vertical });
+        var o = try dvui.overlay(@src(), opts);
+        var buf: [128]u8 = undefined;
+        const label = try std.fmt.bufPrint(&buf, "{d:0.2},{d:0.2}", .{ layout_gravity_x, layout_gravity_y });
+        var e: dvui.Options.Expand = .none;
+        if (layout_expand_horizontal and layout_expand_vertical) {
+            e = .both;
+        } else if (layout_expand_horizontal) {
+            e = .horizontal;
+        } else if (layout_expand_vertical) {
+            e = .vertical;
         }
-        {
-            var vbox = try dvui.box(@src(), .vertical, opts);
-            defer vbox.deinit();
 
-            _ = try dvui.button(@src(), "both", .{}, .{ .expand = .both });
-        }
+        _ = try dvui.button(@src(), label, .{}, .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = e });
+        o.deinit();
+
+        var vbox = try dvui.box(@src(), .vertical, .{});
+        try dvui.label(@src(), "Gravity", .{}, .{});
+        _ = try dvui.sliderEntry(@src(), "X: {d:0.2}", .{ .value = &layout_gravity_x, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
+        _ = try dvui.sliderEntry(@src(), "Y: {d:0.2}", .{ .value = &layout_gravity_y, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
+        try dvui.checkbox(@src(), &layout_expand_horizontal, "Expand Horizontal", .{});
+        try dvui.checkbox(@src(), &layout_expand_vertical, "Expand Vertical", .{});
+        vbox.deinit();
     }
 
     try dvui.label(@src(), "Boxes", .{}, .{});
