@@ -86,9 +86,9 @@ fn dvui_frame() !void {
         if (try dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .none })) |r| {
             var fw = try dvui.floatingMenu(@src(), dvui.Rect.fromPoint(dvui.Point{ .x = r.x, .y = r.y + r.h }), .{});
             defer fw.deinit();
-            _ = try dvui.menuItemLabel(@src(), "Cut", .{}, .{});
-            _ = try dvui.menuItemLabel(@src(), "Copy", .{}, .{});
-            _ = try dvui.menuItemLabel(@src(), "Paste", .{}, .{});
+            _ = try dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
+            _ = try dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
+            _ = try dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
         }
     }
 

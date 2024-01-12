@@ -870,11 +870,11 @@ pub fn menus() !void {
         var fw2 = try dvui.floatingMenu(@src(), Rect.fromPoint(cp), .{});
         defer fw2.deinit();
 
-        _ = try dvui.menuItemLabel(@src(), "Cut", .{}, .{ .expand = .horizontal });
-        if ((try dvui.menuItemLabel(@src(), "Close", .{}, .{ .expand = .horizontal })) != null) {
+        _ = try dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
+        _ = try dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
+        if ((try dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal })) != null) {
             dvui.menuGet().?.close();
         }
-        _ = try dvui.menuItemLabel(@src(), "Paste", .{}, .{ .expand = .horizontal });
     }
 
     var vbox = try dvui.box(@src(), .vertical, .{});
@@ -890,24 +890,24 @@ pub fn menus() !void {
 
             try submenus();
 
-            if (try dvui.menuItemLabel(@src(), "Close", .{}, .{ .expand = .horizontal }) != null) {
-                dvui.menuGet().?.close();
-            }
-
             try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
             if (try dvui.menuItemLabel(@src(), "Dialog", .{}, .{ .expand = .horizontal }) != null) {
                 dvui.menuGet().?.close();
                 show_dialog = true;
             }
+
+            if (try dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
+                dvui.menuGet().?.close();
+            }
         }
 
         if (try dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
             var fw = try dvui.floatingMenu(@src(), Rect.fromPoint(Point{ .x = r.x, .y = r.y + r.h }), .{});
             defer fw.deinit();
-            _ = try dvui.menuItemLabel(@src(), "Cut", .{}, .{ .expand = .horizontal });
-            _ = try dvui.menuItemLabel(@src(), "Copy", .{}, .{ .expand = .horizontal });
-            _ = try dvui.menuItemLabel(@src(), "Paste", .{}, .{ .expand = .horizontal });
+            _ = try dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
+            _ = try dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
+            _ = try dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
         }
     }
 
@@ -923,7 +923,7 @@ pub fn submenus() !void {
 
         try submenus();
 
-        if (try dvui.menuItemLabel(@src(), "Close", .{}, .{ .expand = .horizontal }) != null) {
+        if (try dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
             dvui.menuGet().?.close();
         }
 
