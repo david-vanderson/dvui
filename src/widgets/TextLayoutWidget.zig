@@ -89,6 +89,7 @@ corners: [4]?Rect = [_]?Rect{null} ** 4,
 corners_min_size: [4]?Size = [_]?Size{null} ** 4,
 corners_last_seen: ?u8 = null,
 insert_pt: Point = Point{},
+current_line_height: f32 = 0.0,
 prevClip: Rect = Rect{},
 first_line: bool = true,
 break_lines: bool = undefined,
@@ -341,6 +342,7 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
     const options = self.wd.options.override(opts);
     const msize = try options.fontGet().textSize("m");
     const line_height = try options.fontGet().lineHeight();
+    self.current_line_height = @max(self.current_line_height, line_height);
     var txt = text;
 
     const rect = self.wd.contentRect();
@@ -365,7 +367,7 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
         var width_after: f32 = 0;
         for (self.corners, 0..) |corner, i| {
             if (corner) |cor| {
-                if (@max(cor.y, self.insert_pt.y) < @min(cor.y + cor.h, self.insert_pt.y + line_height)) {
+                if (@max(cor.y, self.insert_pt.y) < @min(cor.y + cor.h, self.insert_pt.y + self.current_line_height)) {
                     linewidth -= cor.w;
                     if (linestart == cor.x) {
                         // used below - if we moved over for a widget, we
@@ -405,8 +407,9 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
 
         // if we are boxed in too much by corner widgets drop to next line
         if (self.break_lines and s.w > width and linewidth < container_width) {
-            self.insert_pt.y += line_height;
+            self.insert_pt.y += self.current_line_height;
             self.insert_pt.x = 0;
+            self.current_line_height = line_height;
             continue;
         }
 
@@ -424,8 +427,9 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
             } else if (self.insert_pt.x > linestart) {
                 // can't fit breaking on space, but we aren't starting at the left edge
                 // so drop to next line
-                self.insert_pt.y += line_height;
+                self.insert_pt.y += self.current_line_height;
                 self.insert_pt.x = 0;
+                self.current_line_height = line_height;
                 continue;
             }
         }
@@ -787,8 +791,14 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
 
         // move insert_pt to next line if we have more text
         if (txt.len > 0 or newline) {
-            self.insert_pt.y += line_height;
+            self.insert_pt.y += self.current_line_height;
             self.insert_pt.x = 0;
+            if (txt.len > 0) {
+                self.current_line_height = line_height;
+            } else if (newline) {
+                self.current_line_height = 0;
+            }
+
             if (newline) {
                 const newline_size = self.wd.padSize(.{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h });
                 if (!self.break_lines) {

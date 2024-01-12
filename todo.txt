@@ -4,16 +4,19 @@ zig 0.12:
 
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
-add to readme-implementation
-
-change the layout section of the demo to be interactive with checkboxes for expanding
-
 
 
 update dvui-demo
 
 update podcast to latest dvui
 
+revisit open issues
+
+mach backend
+
+
+
+switch options font selection to the same scheme as colors
 
 
 on hidpi display, selecting a bunch of text leaves small gaps noticeable in the selection background
@@ -34,8 +37,6 @@ textEntry key updown (shift-updown for textLayout) needs to be fixed to be able 
 - figure out where cursor is from updown_pt from last frame
 - from there determine new cursor point and store for next frame
 - can we not check sel_mouse_down_pt = null and other stuff for each key?
-
-remove entypo icons for companies
 
 UI scaling on Windows causes fonts to look blurry, maybe if snap to pixels is true, we round to nearest font size and then don't adjust for target_fraction?
 

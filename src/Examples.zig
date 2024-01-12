@@ -828,15 +828,7 @@ pub fn layout() !void {
 }
 
 pub fn layoutText() !void {
-    try dvui.label(@src(), "Title", .{}, .{ .font_style = .title });
-    try dvui.label(@src(), "Title-1", .{}, .{ .font_style = .title_1 });
-    try dvui.label(@src(), "Title-2", .{}, .{ .font_style = .title_2 });
-    try dvui.label(@src(), "Title-3", .{}, .{ .font_style = .title_3 });
-    try dvui.label(@src(), "Title-4", .{}, .{ .font_style = .title_4 });
-    try dvui.label(@src(), "Heading", .{}, .{ .font_style = .heading });
-    try dvui.label(@src(), "Caption-Heading", .{}, .{ .font_style = .caption_heading });
-    try dvui.label(@src(), "Caption", .{}, .{ .font_style = .caption });
-    try dvui.label(@src(), "Body", .{}, .{});
+    _ = try dvui.sliderEntry(@src(), "line height: {d:0.2}", .{ .value = &line_height_factor, .min = 0.1, .max = 2, .interval = 0.1 }, .{});
 
     {
         var tl = TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal });
@@ -852,6 +844,14 @@ pub fn layoutText() !void {
         }
         cbox.deinit();
 
+        cbox = try dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .{ .name = .fill_window }, .min_size_content = .{ .w = 120 } });
+        try dvui.icon(@src(), "aircraft", entypo.aircraft, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
+        try dvui.label(@src(), "Caption Heading", .{}, .{ .font_style = .caption_heading, .gravity_x = 0.5 });
+        var tl_caption = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .w = 10 }, .background = false });
+        try tl_caption.addText("Here is some caption text that is in it's own text layout.", .{ .font_style = .caption });
+        tl_caption.deinit();
+        cbox.deinit();
+
         if (try tl.touchEditing()) |floating_widget| {
             defer floating_widget.deinit();
             try tl.touchEditingMenu();
@@ -859,28 +859,23 @@ pub fn layoutText() !void {
 
         tl.processEvents();
 
-        const start = "Notice that the text in this box is wrapping around the buttons in the corners.\n";
+        const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n";
+        try tl.addText(lorem, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
+
+        const start = "\nNotice that the text in this box is wrapping around the stuff in the corners.\n\n";
         try tl.addText(start, .{ .font_style = .title_4 });
 
-        const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-        try tl.addText(lorem, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
-    }
+        try tl.addText("Title ", .{ .font_style = .title });
+        try tl.addText("Title-1 ", .{ .font_style = .title_1 });
+        try tl.addText("Title-2 ", .{ .font_style = .title_2 });
+        try tl.addText("Title-3 ", .{ .font_style = .title_3 });
+        try tl.addText("Title-4 ", .{ .font_style = .title_4 });
+        try tl.addText("Heading\n", .{ .font_style = .heading });
 
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        try dvui.label(@src(), "line height factor: {d:0.2}", .{line_height_factor}, .{ .gravity_y = 0.5 });
-
-        if (try dvui.button(@src(), "inc", .{}, .{})) {
-            line_height_factor += 0.1;
-            line_height_factor = @min(10, line_height_factor);
-        }
-
-        if (try dvui.button(@src(), "dec", .{}, .{})) {
-            line_height_factor -= 0.1;
-            line_height_factor = @max(0.1, line_height_factor);
-        }
+        try tl.addText("Here ", .{ .font_style = .title, .color_text = .{ .color = .{ .r = 100, .b = 100 } } });
+        try tl.addText("is some ", .{ .font_style = .title_2, .color_text = .{ .color = .{ .b = 100, .g = 100 } } });
+        try tl.addText("ugly text ", .{ .font_style = .title_1, .color_text = .{ .color = .{ .r = 100, .g = 100 } } });
+        try tl.addText("that shows styling.\n", .{ .font_style = .caption, .color_text = .{ .color = .{ .r = 100, .g = 50, .b = 50 } } });
     }
 }
 
