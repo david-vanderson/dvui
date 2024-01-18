@@ -231,6 +231,9 @@ pub fn drawBackground(self: *FloatingWindowWidget) !void {
     try self.layout.drawBackground();
 }
 
+const cursor_resize_bottom_right: dvui.enums.Cursor = .arrow_nw_se;
+const cursor_drag: dvui.enums.Cursor = .arrow_all;
+
 pub fn processEventsBefore(self: *FloatingWindowWidget) void {
     const rs = self.wd.rectScale();
     var evts = dvui.events();
@@ -258,7 +261,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                 if (me.action == .press and me.button.pointer()) {
                     // capture and start drag
                     dvui.captureMouse(self.wd.id);
-                    dvui.dragStart(me.p, .arrow_all, Point.diff(rs.r.bottomRight(), me.p));
+                    dvui.dragStart(me.p, cursor_resize_bottom_right, Point.diff(rs.r.bottomRight(), me.p));
                     e.handled = true;
                 } else if (me.action == .release and me.button.pointer()) {
                     dvui.captureMouse(null); // stop drag and capture
@@ -266,11 +269,11 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                 } else if (me.action == .motion and dvui.captured(self.wd.id)) {
                     // move if dragging
                     if (dvui.dragging(me.p)) |dps| {
-                        if (dvui.cursorGetDragging() == .crosshair) {
+                        if (dvui.cursorGetDragging() == cursor_drag) {
                             const dp = dps.scale(1 / rs.s);
                             self.wd.rect.x += dp.x;
                             self.wd.rect.y += dp.y;
-                        } else if (dvui.cursorGetDragging() == .arrow_all) {
+                        } else if (dvui.cursorGetDragging() == cursor_resize_bottom_right) {
                             const p = me.p.plus(dvui.dragOffset()).scale(1 / rs.s);
                             self.wd.rect.w = @max(40, p.x - self.wd.rect.x);
                             self.wd.rect.h = @max(10, p.y - self.wd.rect.y);
@@ -280,7 +283,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                     }
                 } else if (me.action == .position) {
                     if (corner) {
-                        dvui.cursorSet(.arrow_all);
+                        dvui.cursorSet(cursor_resize_bottom_right);
                         e.handled = true;
                     }
                 }
@@ -312,7 +315,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                             e.handled = true;
                             // capture and start drag
                             dvui.captureMouse(self.wd.id);
-                            dvui.dragPreStart(e.evt.mouse.p, .crosshair, Point{});
+                            dvui.dragPreStart(e.evt.mouse.p, cursor_drag, Point{});
                         }
                     },
                     .release => {
@@ -326,7 +329,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                             e.handled = true;
                             // move if dragging
                             if (dvui.dragging(me.p)) |dps| {
-                                if (dvui.cursorGetDragging() == .crosshair) {
+                                if (dvui.cursorGetDragging() == cursor_drag) {
                                     const dp = dps.scale(1 / rs.s);
                                     self.wd.rect.x += dp.x;
                                     self.wd.rect.y += dp.y;
