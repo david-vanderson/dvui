@@ -2,7 +2,7 @@
 //! it is normally sRGB
 
 const std = @import("std");
-const c = @cImport(@cInclude("ok_color.h"));
+const c = @import("ok_color.zig");
 const Color = @This();
 
 r: u8 = 0xFF,
