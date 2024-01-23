@@ -140,7 +140,7 @@ pub fn draw(self: *PanedWidget) !void {
                 },
             }
             try dvui.pathAddRect(r, Rect.all(thick));
-            try dvui.pathFillConvex(self.wd.options.color(.text).transparent(0.5));
+            try dvui.pathFillConvex(self.wd.options.color(.text).multiply_alpha(0.5));
         }
     }
 }

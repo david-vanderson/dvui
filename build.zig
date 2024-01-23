@@ -121,6 +121,7 @@ pub fn build(b: *std.Build) !void {
 }
 
 pub fn link_deps(b: *std.Build, exe: *std.Build.Step.Compile) void {
+    exe.addCSourceFile(.{ .file = .{ .path = "src/ok_color.c" }, .flags = &.{} });
     // TODO: remove this part about freetype (pulling it from the dvui_dep
     // sub-builder) once https://github.com/ziglang/zig/pull/14731 lands
     const freetype_dep = b.dependency("freetype", .{
@@ -199,6 +200,7 @@ pub fn get_dependency_build_root(dep_prefix: []const u8, name: []const u8) []con
 
 /// prefix: library prefix. e.g. "dvui."
 pub fn add_include_paths(b: *std.Build, exe: *std.Build.CompileStep) void {
+    exe.addIncludePath(.{ .path = "src" });
     exe.addIncludePath(.{ .path = b.fmt("{s}{s}", .{ get_dependency_build_root(b.dep_prefix, "freetype"), "/include" }) });
     exe.addIncludePath(.{ .path = b.fmt("{s}{s}", .{ get_dependency_build_root(b.dep_prefix, "stb_image"), "/include" }) });
 }

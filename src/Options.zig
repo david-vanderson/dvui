@@ -166,7 +166,7 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
         }
     };
 
-    return col.transparent(dvui.themeGet().alpha);
+    return col.multiply_alpha(dvui.themeGet().alpha);
 }
 
 pub fn fontGet(self: *const Options) Font {
