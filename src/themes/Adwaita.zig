@@ -35,7 +35,7 @@ pub var light = Theme{
     .color_border = Color.lerp(Color.white, 0.4, Color.black),
 
     .style_accent = Options{
-        .color_accent = .{ .color = accent.darken(0.3) },
+        .color_accent = .{ .color = accent.lerp(0.3, Color.black) },
         .color_text = .{ .color = Color.white },
         .color_text_press = .{ .color = Color.white },
         .color_fill = .{ .color = accent },
@@ -45,7 +45,7 @@ pub var light = Theme{
     },
 
     .style_err = Options{
-        .color_accent = .{ .color = err.darken(0.3) },
+        .color_accent = .{ .color = err.lerp(0.3, Color.black) },
         .color_text = .{ .color = Color.white },
         .color_text_press = .{ .color = Color.white },
         .color_fill = .{ .color = err },
@@ -84,7 +84,7 @@ pub var dark = Theme{
     .color_border = Color.lerp(dark_fill, 0.4, Color.white),
 
     .style_accent = Options{
-        .color_accent = .{ .color = accent.lighten(0.3) },
+        .color_accent = .{ .color = accent.lerp(0.3, Color.white) },
         .color_text = .{ .color = Color.white },
         .color_text_press = .{ .color = Color.white },
         .color_fill = .{ .color = accent },
@@ -94,7 +94,7 @@ pub var dark = Theme{
     },
 
     .style_err = Options{
-        .color_accent = .{ .color = dark_err.lighten(0.3) },
+        .color_accent = .{ .color = dark_err.lerp(0.3, Color.white) },
         .color_text = .{ .color = Color.white },
         .color_text_press = .{ .color = Color.white },
         .color_fill = .{ .color = dark_err },
