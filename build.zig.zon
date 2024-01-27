@@ -10,9 +10,9 @@
             .url = "https://github.com/david-vanderson/freetype/archive/18a1df5a3ef8afa0782c419b153a21e9e160335f.tar.gz",
             .hash = "1220b305af272ac3026704b8d7e13740350daf59a6a95e45dedb428c55933e3df925",
         },
-        .stb_image = .{
-            .url = "https://github.com/david-vanderson/stb_image/archive/9a961327f5e67ec799bc9a6258d7abebb59d7028.tar.gz",
-            .hash = "1220e47cea6fd7a0098a1b0ac3e47a2c3b558dc3afb0a75c71d7b00e53936824287e",
-        },
+        //.stb_image = .{
+        //    .url = "https://github.com/david-vanderson/stb_image/archive/9a961327f5e67ec799bc9a6258d7abebb59d7028.tar.gz",
+        //    .hash = "1220e47cea6fd7a0098a1b0ac3e47a2c3b558dc3afb0a75c71d7b00e53936824287e",
+        //},
     },
 }
