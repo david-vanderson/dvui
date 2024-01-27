@@ -2,14 +2,6 @@ const std = @import("std");
 const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 
-const Packages = struct {
-    // Declared here because submodule may not be cloned at the time build.zig runs.
-    const zmath = Pkg{
-        .name = "zmath",
-        .source = .{ .path = "libs/zmath/src/zmath.zig" },
-    };
-};
-
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -18,8 +10,8 @@ pub fn build(b: *std.Build) !void {
         .name = "dvui_libs",
         .target = target,
         .optimize = optimize,
-        .link_libc = true,
     });
+    lib_bundle.addCSourceFile(.{ .file = .{ .path = "src/stb_image/stb_image_impl.c" }, .flags = &.{} });
     link_deps(b, lib_bundle);
     b.installArtifact(lib_bundle);
 
@@ -30,6 +22,13 @@ pub fn build(b: *std.Build) !void {
 
     const sdl_mod = b.addModule("SDLBackend", .{
         .source_file = .{ .path = "src/backends/SDLBackend.zig" },
+        .dependencies = &.{
+            .{ .name = "dvui", .module = dvui_mod },
+        },
+    });
+
+    const web_mod = b.addModule("WebBackend", .{
+        .source_file = .{ .path = "src/backends/WebBackend.zig" },
         .dependencies = &.{
             .{ .name = "dvui", .module = dvui_mod },
         },
@@ -118,6 +117,53 @@ pub fn build(b: *std.Build) !void {
         const run_step = b.step("sdl-test", "Run the SDL test");
         run_step.dependOn(&run_cmd.step);
     }
+
+    // web test
+    {
+        const webtarget = std.zig.CrossTarget{
+            .cpu_arch = .wasm32,
+            .os_tag = .freestanding,
+            .abi = .musl,
+        };
+
+        const wasm = b.addSharedLibrary(.{
+            .name = "web-test",
+            .root_source_file = .{ .path = "web-test.zig" },
+            .target = webtarget,
+            .optimize = optimize,
+        });
+
+        const stb_libs = b.addStaticLibrary(.{
+            .name = "dvui_stb_libs",
+            .target = webtarget,
+            .optimize = optimize,
+        });
+        stb_libs.addCSourceFile(.{ .file = .{ .path = "src/stb_image/stb_image_impl.c" }, .flags = &.{} });
+        stb_libs.linkLibC();
+
+        wasm.linkLibrary(stb_libs);
+        wasm.addModule("dvui", dvui_mod);
+        wasm.addModule("WebBackend", web_mod);
+        wasm.linkLibC();
+
+        wasm.export_symbol_names = &[_][]const u8{
+            "app_init",
+            "app_deinit",
+            "app_update",
+        };
+
+        add_include_paths(b, wasm);
+
+        const install_step = b.addInstallArtifact(wasm, .{
+            .dest_dir = .{ .override = .{ .custom = "bin" } },
+        });
+
+        const compile_step = b.step("web-test", "Compile the Web test");
+        compile_step.dependOn(&install_step.step);
+
+        compile_step.dependOn(&b.addInstallFileWithDir(.{ .path = "src/backends/index.html" }, .prefix, "bin/index.html").step);
+        compile_step.dependOn(&b.addInstallFileWithDir(.{ .path = "src/backends/WebBackend.js" }, .prefix, "bin/WebBackend.js").step);
+    }
 }
 
 pub fn link_deps(b: *std.Build, exe: *std.Build.Step.Compile) void {
@@ -129,18 +175,9 @@ pub fn link_deps(b: *std.Build, exe: *std.Build.Step.Compile) void {
     });
     exe.linkLibrary(freetype_dep.artifact("freetype"));
 
-    // TODO: remove this part about stb_image once either:
-    // - zig can successfully cimport stb_image.h
-    // - zig can have a module depend on a c file
-    const stbi_dep = b.dependency("stb_image", .{
-        .target = exe.target,
-        .optimize = exe.optimize,
-    });
-    exe.linkLibrary(stbi_dep.artifact("stb_image"));
-
-    exe.linkLibC();
-
-    if (exe.target.isWindows()) {
+    if (exe.target.cpu_arch == .wasm32) {
+        // nothing
+    } else if (exe.target.isWindows()) {
         const sdl_dep = b.dependency("sdl", .{
             .target = exe.target,
             .optimize = exe.optimize,
@@ -200,5 +237,6 @@ pub fn get_dependency_build_root(dep_prefix: []const u8, name: []const u8) []con
 /// prefix: library prefix. e.g. "dvui."
 pub fn add_include_paths(b: *std.Build, exe: *std.Build.CompileStep) void {
     exe.addIncludePath(.{ .path = b.fmt("{s}{s}", .{ get_dependency_build_root(b.dep_prefix, "freetype"), "/include" }) });
-    exe.addIncludePath(.{ .path = b.fmt("{s}{s}", .{ get_dependency_build_root(b.dep_prefix, "stb_image"), "/include" }) });
+    exe.addIncludePath(.{ .path = b.fmt("{s}/src/stb_image", .{b.build_root.path.?}) });
+    //exe.addIncludePath(.{ .path = b.fmt("{s}{s}", .{ get_dependency_build_root(b.dep_prefix, "stb_image"), "/include" }) });
 }
