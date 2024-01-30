@@ -46,23 +46,10 @@ export fn app_init() i32 {
     backend = WebBackend.init() catch {
         return 1;
     };
+    std.log.debug("hello1\n", .{});
     win = dvui.Window.init(@src(), 0, gpa, backend.backend()) catch {
         return 2;
     };
-
-    win.begin(1) catch {
-        return 5;
-    };
-
-    const imgsize = dvui.imageSize("zig favicon", zig_favicon) catch {
-        return 3;
-    };
-    std.log.debug("imgsize {}\n", .{imgsize});
-
-    const tce = dvui.imageTexture("zig favicon", zig_favicon) catch {
-        return 4;
-    };
-    _ = tce;
 
     return 0;
 }
@@ -73,21 +60,26 @@ export fn app_deinit() void {
 }
 
 export fn app_update() void {
+    std.log.debug("app_update\n", .{});
+    win.begin(1) catch unreachable;
+
+    const imgsize = dvui.imageSize("zig favicon", zig_favicon) catch unreachable;
+    std.log.debug("imgsize {}\n", .{imgsize});
+
+    const tce = dvui.imageTexture("zig favicon", zig_favicon) catch unreachable;
+    std.log.debug("texture {}\n", .{tce.texture});
+
     var indices: []const u32 = &[_]u32{ 0, 1, 2, 0, 2, 3 };
-    var index_slice = std.mem.sliceAsBytes(indices);
 
-    //var vtx: []const dvui.Vertex = &[_]dvui.Vertex {
-    //    .{ .pos = .{.x = 100, .y = 150}, .col = .{
-    //};
-    var vertexes: []const f32 = &[_]f32{
-        100, 150, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0,
-        200, 150, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0,
-        200, 250, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0,
-        100, 250, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+    var vtx: []const dvui.Vertex = &[_]dvui.Vertex{
+        .{ .pos = .{ .x = 100, .y = 150 }, .uv = .{ 0.0, 0.0 }, .col = .{} },
+        .{ .pos = .{ .x = 200, .y = 150 }, .uv = .{ 1.0, 0.0 }, .col = .{ .g = 0, .b = 0, .a = 200 } },
+        .{ .pos = .{ .x = 200, .y = 250 }, .uv = .{ 1.0, 1.0 }, .col = .{ .r = 0, .b = 0, .a = 100 } },
+        .{ .pos = .{ .x = 100, .y = 250 }, .uv = .{ 0.0, 1.0 }, .col = .{ .r = 0, .g = 0 } },
     };
-    var vertex_slice = std.mem.sliceAsBytes(vertexes);
 
-    WebBackend.wasm.wasm_renderGeometry(index_slice.ptr, index_slice.len, vertex_slice.ptr, vertex_slice.len);
+    backend.renderGeometry(tce.texture, vtx, indices);
+    //backend.renderGeometry(null, vtx, indices);
 
     //var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     //const arena = arena_allocator.allocator();

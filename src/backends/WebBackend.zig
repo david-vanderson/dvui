@@ -11,7 +11,9 @@ pub const wasm = struct {
     pub extern fn wasm_log_write(ptr: [*]const u8, len: usize) void;
     pub extern fn wasm_log_flush() void;
 
-    pub extern fn wasm_renderGeometry(index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize) void;
+    pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32) u32;
+    pub extern fn wasm_textureDestroy(u32) void;
+    pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8) void;
 };
 
 export const __stack_chk_guard: c_ulong = 0xBAAAAAAD;
@@ -104,22 +106,42 @@ pub fn contentScale(_: *WebBackend) f32 {
 
 pub fn renderGeometry(self: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
     _ = self;
-    _ = texture;
-    _ = vtx;
-    _ = idx;
+    var index_slice = std.mem.sliceAsBytes(idx);
+    var vertex_slice = std.mem.sliceAsBytes(vtx);
+
+    wasm.wasm_renderGeometry(
+        if (texture) |t| @as(u32, @intFromPtr(t)) else 0,
+        index_slice.ptr,
+        index_slice.len,
+        vertex_slice.ptr,
+        vertex_slice.len,
+        @sizeOf(dvui.Vertex),
+        @offsetOf(dvui.Vertex, "pos"),
+        @offsetOf(dvui.Vertex, "col"),
+        @offsetOf(dvui.Vertex, "uv"),
+    );
 }
 
 pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
     _ = self;
-    _ = pixels;
-    _ = width;
-    _ = height;
 
-    return @as(*anyopaque, @ptrFromInt(1));
+    // convert to premultiplied alpha
+    for (0..height) |h| {
+        for (0..width) |w| {
+            const i = (h * width + w) * 4;
+            const a: u16 = pixels[i + 3];
+            pixels[i] = @intCast(@divTrunc(@as(u16, pixels[i]) * a, 255));
+            pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * a, 255));
+            pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * a, 255));
+        }
+    }
+
+    const id = wasm.wasm_textureCreate(pixels, width, height);
+    return @ptrFromInt(id);
 }
 
 pub fn textureDestroy(_: *WebBackend, texture: *anyopaque) void {
-    _ = texture;
+    wasm.wasm_textureDestroy(@as(u32, @intFromPtr(texture)));
 }
 
 pub fn clipboardText(self: *WebBackend) []u8 {
