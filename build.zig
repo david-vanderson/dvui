@@ -138,7 +138,7 @@ pub fn build(b: *std.Build) !void {
             .target = webtarget,
             .optimize = optimize,
         });
-        stb_libs.addCSourceFile(.{ .file = .{ .path = "src/stb_image/stb_image_impl.c" }, .flags = &.{} });
+        stb_libs.addCSourceFile(.{ .file = .{ .path = "src/stb_image/stb_image_impl.c" }, .flags = &.{"-DINCLUDE_CUSTOM_LIBC_FUNCS=1"} });
         stb_libs.linkLibC();
 
         wasm.linkLibrary(stb_libs);
