@@ -15,7 +15,8 @@ function dvui(canvasId, wasmFile) {
 
     void main() {
       gl_Position = uMatrix * aVertexPosition;
-      vColor = aVertexColor;
+      vColor = aVertexColor / 255.0;  // normalize u8 colors to 0-1
+      vColor.rgb *= vColor.a;  // convert to premultiplied alpha
       vTextureCoord = aTextureCoord;
     }
   `;
@@ -47,6 +48,9 @@ function dvui(canvasId, wasmFile) {
     let vertexBuffer;
     let shaderProgram;
     let programInfo;
+    const textures = new Map();
+    let newTextureId = 1;
+
     let wasmResult;
     let log_string = '';
 
@@ -69,16 +73,50 @@ function dvui(canvasId, wasmFile) {
         wasm_now_f64() {
           return Date.now();
         },
-        wasm_renderGeometry(index_ptr, index_len, vertex_ptr, vertex_len) {
-            //console.log("renderGeometry " + index_ptr + " " + index_len);
+        wasm_textureCreate(pixels, width, height) {
+          const pixelData = new Uint8Array(wasmResult.instance.exports.memory.buffer, pixels, width * height * 4);
+
+          const texture = gl.createTexture();
+          const id = newTextureId;
+            console.log("creating texture " + id);
+          newTextureId += 1;
+          textures.set(id, texture);
+          
+          gl.bindTexture(gl.TEXTURE_2D, texture);
+
+            gl.texImage2D(
+              gl.TEXTURE_2D,
+              0,
+              gl.RGBA,
+                width,
+                height,
+                0,
+              gl.RGBA,
+              gl.UNSIGNED_BYTE,
+              pixelData,
+            );
+
+          gl.generateMipmap(gl.TEXTURE_2D);
+
+          return id;
+        },
+        wasm_textureDestroy(id) {
+            console.log("deleting texture " + id);
+          const texture = textures.get(id);
+          textures.delete(id);
+          
+          gl.deleteTexture(texture);
+        },
+        wasm_renderGeometry(textureId, index_ptr, index_len, vertex_ptr, vertex_len, sizeof_vertex, offset_pos, offset_col, offset_uv) {
+            console.log("renderGeometry " + textureId + " sizeof " + sizeof_vertex + " pos " + offset_pos + " col " + offset_col + " uv " + offset_uv);
 
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
           const indices = new Uint32Array(wasmResult.instance.exports.memory.buffer, index_ptr, index_len / 4);
           gl.bufferData( gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 
           gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-          const vertexes = new Float32Array(wasmResult.instance.exports.memory.buffer, vertex_ptr, vertex_len / 4);
-          gl.bufferData( gl.ARRAY_BUFFER, new Float32Array(vertexes), gl.STATIC_DRAW);
+          const vertexes = new Uint8Array(wasmResult.instance.exports.memory.buffer, vertex_ptr, vertex_len);
+          gl.bufferData( gl.ARRAY_BUFFER, vertexes, gl.STATIC_DRAW);
 
           let matrix = new Float32Array(16);
           matrix[0] = 2.0 / gl.canvas.clientWidth;
@@ -105,8 +143,8 @@ function dvui(canvasId, wasmFile) {
             2,  // num components
             gl.FLOAT,
             false,  // don't normalize
-            32,  // stride
-            0,  // offset
+            sizeof_vertex,  // stride
+            offset_pos,  // offset
           );
           gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
 
@@ -115,10 +153,10 @@ function dvui(canvasId, wasmFile) {
           gl.vertexAttribPointer(
             programInfo.attribLocations.vertexColor,
             4,  // num components
-            gl.FLOAT,
+            gl.UNSIGNED_BYTE,
             false,  // don't normalize
-            32, // stride
-            8,  // offset
+            sizeof_vertex, // stride
+            offset_col,  // offset
           );
           gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
 
@@ -129,8 +167,8 @@ function dvui(canvasId, wasmFile) {
             2,  // num components
             gl.FLOAT,
             false,  // don't normalize
-            32, // stride
-            24,  // offset
+            sizeof_vertex, // stride
+            offset_uv,  // offset
           );
           gl.enableVertexAttribArray(programInfo.attribLocations.textureCoord);
 
@@ -144,15 +182,16 @@ function dvui(canvasId, wasmFile) {
             matrix,
           );
 
-            //gl.activeTexture(gl.TEXTURE0);
+            if (textureId != 0) {
+                console.log("using texture " + textureId);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, textures.get(textureId));
+                gl.uniform1i(programInfo.uniformLocations.useTex, 1);
+            } else {
+                gl.uniform1i(programInfo.uniformLocations.useTex, 0);
+            }
 
-            // Bind the texture to texture unit 0
-            //gl.bindTexture(gl.TEXTURE_2D, texture);
-
-            // Tell the shader we bound the texture to texture unit 0
             gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
-
-            gl.uniform1i(programInfo.uniformLocations.useTex, 0);
 
             gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_INT, 0);
         },
@@ -203,7 +242,7 @@ function dvui(canvasId, wasmFile) {
 
           const canvas = document.querySelector(canvasId);
           // Initialize the GL context
-          gl = canvas.getContext("webgl2");
+          gl = canvas.getContext("webgl2", { alpha: true });
 
           // Only continue if WebGL is available and working
           if (gl === null) {
@@ -252,99 +291,23 @@ function dvui(canvasId, wasmFile) {
           },
         };
 
-          indexBuffer = gl.createBuffer();
-          vertexBuffer = gl.createBuffer();
+        indexBuffer = gl.createBuffer();
+        vertexBuffer = gl.createBuffer();
 
-        const texture = loadTexture(gl, "cubetexture.png");
-        //const texture = loadTexture(gl, "webgl.png");
-        // Flip image pixels into the bottom-to-top order that WebGL expects.
-        //gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
         function render() {
           gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
-          gl.clearDepth(1.0); // Clear everything
-          gl.enable(gl.DEPTH_TEST); // Enable depth testing
-          gl.depthFunc(gl.LEQUAL); // Near things obscure far things
-          gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+          gl.clear(gl.COLOR_BUFFER_BIT);
 
-            wasmResult.instance.exports.app_update();
+          wasmResult.instance.exports.app_update();
 
-            requestAnimationFrame(render);
+            //requestAnimationFrame(render);
         }
 
         requestAnimationFrame(render);
 
     });
 }
-
-
-function drawScene(gl, programInfo, buffers, texture) {
-
-}
-
-function loadTexture(gl, url) {
-  const texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-
-  // Because images have to be downloaded over the internet
-  // they might take a moment until they are ready.
-  // Until then put a single pixel in the texture so we can
-  // use it immediately. When the image has finished downloading
-  // we'll update the texture with the contents of the image.
-  const level = 0;
-  const internalFormat = gl.RGBA;
-  const width = 1;
-  const height = 1;
-  const border = 0;
-  const srcFormat = gl.RGBA;
-  const srcType = gl.UNSIGNED_BYTE;
-  const pixel = new Uint8Array([0, 0, 255, 255]); // opaque blue
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    level,
-    internalFormat,
-    width,
-    height,
-    border,
-    srcFormat,
-    srcType,
-    pixel,
-  );
-
-  const image = new Image();
-  image.onload = () => {
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(
-      gl.TEXTURE_2D,
-      level,
-      internalFormat,
-      srcFormat,
-      srcType,
-      image,
-    );
-
-    // WebGL1 has different requirements for power of 2 images
-    // vs. non power of 2 images so check if the image is a
-    // power of 2 in both dimensions.
-    if (isPowerOf2(image.width) && isPowerOf2(image.height)) {
-      // Yes, it's a power of 2. Generate mips.
-      gl.generateMipmap(gl.TEXTURE_2D);
-        //alert("pow2");
-    } else {
-      // No, it's not a power of 2. Turn off mips and set
-      // wrapping to clamp to edge
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    }
-  };
-  image.src = url;
-
-  return texture;
-}
-
-function isPowerOf2(value) {
-  return (value & (value - 1)) === 0;
-}
-
 

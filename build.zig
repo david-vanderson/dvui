@@ -158,8 +158,12 @@ pub fn build(b: *std.Build) !void {
             .dest_dir = .{ .override = .{ .custom = "bin" } },
         });
 
+        const timestamp = b.fmt("s/TIMESTAMP/{d}/g", .{std.time.nanoTimestamp()});
+        const cache_buster = b.addSystemCommand(&.{ "sed", "-i", timestamp, "zig-out/bin/index.html" });
+        cache_buster.step.dependOn(&install_step.step);
+
         const compile_step = b.step("web-test", "Compile the Web test");
-        compile_step.dependOn(&install_step.step);
+        compile_step.dependOn(&cache_buster.step);
 
         compile_step.dependOn(&b.addInstallFileWithDir(.{ .path = "src/backends/index.html" }, .prefix, "bin/index.html").step);
         compile_step.dependOn(&b.addInstallFileWithDir(.{ .path = "src/backends/WebBackend.js" }, .prefix, "bin/WebBackend.js").step);
