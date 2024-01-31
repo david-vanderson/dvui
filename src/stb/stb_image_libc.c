@@ -47,7 +47,7 @@ static double pow(double x, double y)
 }
 
 extern double dvui_c_ldexp(double x, int n);
-static double ldexp(double x, int n) {
+double ldexp(double x, int n) {
     return dvui_c_ldexp(x, n);
 }
 

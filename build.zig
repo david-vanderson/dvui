@@ -135,7 +135,7 @@ pub fn build(b: *std.Build) !void {
         });
 
         const stb_libs = b.addStaticLibrary(.{
-            .name = "dvui_stb_libs",
+            .name = "dvui_libs_nolibc",
             .target = webtarget,
             .optimize = optimize,
         });

@@ -59,26 +59,69 @@ export fn app_deinit() void {
     backend.deinit();
 }
 
-export fn app_update() void {
+// return number of micros to wait (interrupted by events) for next frame
+// return -1 to quit
+export fn app_update() i32 {
     std.log.debug("app_update\n", .{});
-    win.begin(1) catch unreachable;
-
-    const imgsize = dvui.imageSize("zig favicon", zig_favicon) catch unreachable;
-    std.log.debug("imgsize {}\n", .{imgsize});
-
-    const tce = dvui.imageTexture("zig favicon", zig_favicon) catch unreachable;
-    std.log.debug("texture {}\n", .{tce.texture});
-
-    var indices: []const u32 = &[_]u32{ 0, 1, 2, 0, 2, 3 };
-
-    var vtx: []const dvui.Vertex = &[_]dvui.Vertex{
-        .{ .pos = .{ .x = 100, .y = 150 }, .uv = .{ 0.0, 0.0 }, .col = .{} },
-        .{ .pos = .{ .x = 200, .y = 150 }, .uv = .{ 1.0, 0.0 }, .col = .{ .g = 0, .b = 0, .a = 200 } },
-        .{ .pos = .{ .x = 200, .y = 250 }, .uv = .{ 1.0, 1.0 }, .col = .{ .r = 0, .b = 0, .a = 100 } },
-        .{ .pos = .{ .x = 100, .y = 250 }, .uv = .{ 0.0, 1.0 }, .col = .{ .r = 0, .g = 0 } },
+    update() catch |err| {
+        std.log.err("update err {!}", .{err});
     };
 
-    backend.renderGeometry(tce.texture, vtx, indices);
+    return 1000000;
+}
+
+fn update() !void {
+    try win.begin(backend.nanoTime());
+    backend.clear();
+
+    dvui.Examples.show_demo_window = true;
+    _ = try dvui.Examples.demo();
+
+    var box = try dvui.box(@src(), .vertical, .{ .background = true, .color_fill = .{ .color = .{ .b = 0, .g = 0 } } });
+    try dvui.label(@src(), "hello", .{}, .{ .gravity_x = 0.5 });
+
+    if (try dvui.button(@src(), "Show Demo Window", .{}, .{})) {
+        dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
+    }
+
+    var buf: [100]u8 = undefined;
+    const fps_str = std.fmt.bufPrint(&buf, "{d:0>4.0} fps", .{dvui.FPS()}) catch unreachable;
+    try dvui.label(@src(), "{s}", .{fps_str}, .{ .gravity_x = 0.5 });
+
+    try dvui.label(@src(), "nanoTime {d}", .{dvui.currentWindow().frame_time_ns}, .{ .gravity_x = 0.5 });
+
+    //try dvui.debugFontAtlases(@src(), .{});
+    box.deinit();
+
+    const end_micros = try win.end(.{});
+    _ = end_micros;
+
+    //const imgsize = dvui.imageSize("zig favicon", zig_favicon) catch unreachable;
+    //std.log.debug("imgsize {}\n", .{imgsize});
+
+    //const tce = dvui.imageTexture("zig favicon", zig_favicon) catch unreachable;
+    //std.log.debug("texture {}\n", .{tce.texture});
+
+    //var indices: []const u32 = &[_]u32{ 0, 1, 2, 0, 2, 3 };
+    //var vtx: []const dvui.Vertex = &[_]dvui.Vertex{
+    //    .{ .pos = .{ .x = 100, .y = 150 }, .uv = .{ 0.0, 0.0 }, .col = .{} },
+    //    .{ .pos = .{ .x = 200, .y = 150 }, .uv = .{ 1.0, 0.0 }, .col = .{ .g = 0, .b = 0, .a = 200 } },
+    //    .{ .pos = .{ .x = 200, .y = 250 }, .uv = .{ 1.0, 1.0 }, .col = .{ .r = 0, .b = 0, .a = 100 } },
+    //    .{ .pos = .{ .x = 100, .y = 250 }, .uv = .{ 0.0, 1.0 }, .col = .{ .r = 0, .g = 0 } },
+    //};
+    //backend.renderGeometry(.texture, vtx, indices);
+
+    //const msize = dvui.themeGet().font_body.textSize("M") catch unreachable;
+    //std.log.debug("msize {}\n", .{msize});
+
+    //dvui.renderText(.{
+    //    .font = dvui.themeGet().font_body,
+    //    .text = "hello",
+    //    .rs = .{ .r = .{ .x = 10, .y = 10, .w = 100, .h = 100 }, .s = 1.0 },
+    //    .color = dvui.Color.white,
+    //}) catch unreachable;
+
+    //dvui.labelNoFmt(@src(), "hello", .{ .background = true }) catch unreachable;
     //backend.renderGeometry(null, vtx, indices);
 
     //var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);

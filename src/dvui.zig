@@ -47,7 +47,7 @@ pub const VirtualParentWidget = @import("widgets/VirtualParentWidget.zig");
 
 pub const enums = @import("enums.zig");
 
-pub const useFreeType = true;
+pub const useFreeType = (builtin.target.cpu.arch != .wasm32);
 
 pub const c = @cImport({
     // musl fails to compile saying missing "bits/setjmp.h", and nobody should
@@ -71,11 +71,6 @@ pub const c = @cImport({
 });
 
 var ft2lib: if (useFreeType) c.FT_Library else void = undefined;
-
-fn nanoTime() i128 {
-    return std.time.nanoTimestamp();
-    //return 1;
-}
 
 pub const Error = error{ OutOfMemory, InvalidUtf8, freetypeError, tvgError, stbiError };
 
@@ -2142,7 +2137,7 @@ pub const Window = struct {
         errdefer self.deinit();
 
         self.focused_subwindowId = self.wd.id;
-        self.frame_time_ns = nanoTime();
+        self.frame_time_ns = 1;
 
         if (useFreeType) {
             FontCacheEntry.intToError(c.FT_Init_FreeType(&ft2lib)) catch |err| {
@@ -2401,7 +2396,7 @@ pub const Window = struct {
 
     /// beginWait coordinates with waitTime() to run frames only when needed
     pub fn beginWait(self: *Self, has_event: bool) i128 {
-        var new_time = @max(self.frame_time_ns, nanoTime());
+        var new_time = @max(self.frame_time_ns, self.backend.nanoTime());
 
         if (self.loop_wait_target) |target| {
             if (self.loop_wait_target_event and has_event) {
@@ -2429,7 +2424,7 @@ pub const Window = struct {
                 while (new_time < target) {
                     //i += 1;
                     std.time.sleep(0);
-                    new_time = @max(self.frame_time_ns, nanoTime());
+                    new_time = @max(self.frame_time_ns, self.backend.nanoTime());
                 }
 
                 //if (i > 0) {
@@ -2469,7 +2464,7 @@ pub const Window = struct {
         const target = min_micros + wait_micros;
 
         // how long it's taken from begin to here
-        const so_far_nanos = @max(self.frame_time_ns, nanoTime()) - self.frame_time_ns;
+        const so_far_nanos = @max(self.frame_time_ns, self.backend.nanoTime()) - self.frame_time_ns;
         var so_far_micros = @as(u32, @intCast(@divFloor(so_far_nanos, 1000)));
         //std.debug.print("  far {d:6}", .{so_far_micros});
 
