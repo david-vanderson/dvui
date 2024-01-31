@@ -47,24 +47,30 @@ pub const VirtualParentWidget = @import("widgets/VirtualParentWidget.zig");
 
 pub const enums = @import("enums.zig");
 
+pub const useFreeType = true;
+
 pub const c = @cImport({
     // musl fails to compile saying missing "bits/setjmp.h", and nobody should
     // be using setjmp anyway
     @cDefine("_SETJMP_H", "1");
 
-    @cInclude("freetype/ftadvanc.h");
-    @cInclude("freetype/ftbbox.h");
-    @cInclude("freetype/ftbitmap.h");
-    @cInclude("freetype/ftcolor.h");
-    @cInclude("freetype/ftlcdfil.h");
-    @cInclude("freetype/ftsizes.h");
-    @cInclude("freetype/ftstroke.h");
-    @cInclude("freetype/fttrigon.h");
-
-    @cInclude("stb_truetype.h");
+    if (useFreeType) {
+        @cInclude("freetype/ftadvanc.h");
+        @cInclude("freetype/ftbbox.h");
+        @cInclude("freetype/ftbitmap.h");
+        @cInclude("freetype/ftcolor.h");
+        @cInclude("freetype/ftlcdfil.h");
+        @cInclude("freetype/ftsizes.h");
+        @cInclude("freetype/ftstroke.h");
+        @cInclude("freetype/fttrigon.h");
+    } else {
+        @cInclude("stb_truetype.h");
+    }
 
     @cInclude("stb_image.h");
 });
+
+var ft2lib: if (useFreeType) c.FT_Library else void = undefined;
 
 fn nanoTime() i128 {
     return std.time.nanoTimestamp();
@@ -180,32 +186,30 @@ pub fn frameTimeNS() i128 {
 }
 
 const GlyphInfo = struct {
-    minx: f32,
-    maxx: f32,
-    advance: f32,
-    miny: f32,
-    maxy: f32,
-    f2_w: f32,
-    f2_h: f32,
-    f2_advance: f32,
-    f2_leftBearing: f32, // horizontal distance from pen position to glyph bounding box left edge
-    f2_topBearing: f32, // vertical distance from font ascent to glyph bounding box top edge
+    advance: f32, // horizontal distance to move the pen
+    leftBearing: f32, // horizontal distance from pen to bounding box left edge
+    topBearing: f32, // vertical distance from font ascent to bounding box top edge
+    w: f32, // width of bounding box
+    h: f32, // height of bounding box
     uv: @Vector(2, f32),
 };
 
 const FontCacheEntry = struct {
     used: bool = true,
-    face: c.FT_Face,
-    face2: c.stbtt_fontinfo,
-    face2_SF: f32,
-    face2_height: f32,
-    face2_ascent: f32,
+    face: if (useFreeType) c.FT_Face else c.stbtt_fontinfo,
+    scaleFactor: f32,
     height: f32,
     ascent: f32,
     glyph_info: std.AutoHashMap(u32, GlyphInfo),
     texture_atlas: *anyopaque,
     texture_atlas_size: Size,
     texture_atlas_regen: bool,
+
+    pub fn deinit(self: *FontCacheEntry) void {
+        if (useFreeType) {
+            _ = c.FT_Done_Face(self.face);
+        }
+    }
 
     pub const OpenFlags = packed struct(c_int) {
         memory: bool = false,
@@ -351,45 +355,53 @@ const FontCacheEntry = struct {
             return gi;
         }
 
-        FontCacheEntry.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(LoadFlags{ .render = false })))) catch |err| {
-            log.warn("glyphInfoGet freetype error {!} font {s} codepoint {d}\n", .{ err, font_name, codepoint });
-            return error.freetypeError;
-        };
+        var gi: GlyphInfo = undefined;
 
-        var f2_advanceWidth: c_int = undefined;
-        var f2_leftSideBearing: c_int = undefined;
-        c.stbtt_GetCodepointHMetrics(&self.face2, @as(c_int, @intCast(codepoint)), &f2_advanceWidth, &f2_leftSideBearing);
-        const f2_advance: f32 = self.face2_SF * @as(f32, @floatFromInt(f2_advanceWidth));
-        const f2_leftBearing: f32 = self.face2_SF * @as(f32, @floatFromInt(f2_leftSideBearing));
-        var f2_x0: c_int = undefined;
-        var f2_y0: c_int = undefined;
-        var f2_x1: c_int = undefined;
-        var f2_y1: c_int = undefined;
-        const ret = c.stbtt_GetCodepointBox(&self.face2, @as(c_int, @intCast(codepoint)), &f2_x0, &f2_y0, &f2_x1, &f2_y1);
-        const f2x0: f32 = if (ret == 0) 0 else self.face2_SF * @as(f32, @floatFromInt(f2_x0));
-        const f2y0: f32 = if (ret == 0) 0 else self.face2_SF * @as(f32, @floatFromInt(f2_y0));
-        const f2x1: f32 = if (ret == 0) 0 else self.face2_SF * @as(f32, @floatFromInt(f2_x1));
-        const f2y1: f32 = if (ret == 0) 0 else self.face2_SF * @as(f32, @floatFromInt(f2_y1));
+        if (useFreeType) {
+            FontCacheEntry.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(LoadFlags{ .render = false })))) catch |err| {
+                log.warn("glyphInfoGet freetype error {!} font {s} codepoint {d}\n", .{ err, font_name, codepoint });
+                return error.freetypeError;
+            };
 
-        const m = self.face.*.glyph.*.metrics;
-        const minx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
-        const miny = self.ascent - @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
+            const m = self.face.*.glyph.*.metrics;
+            const minx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
+            const miny = self.ascent - @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
 
-        const gi = GlyphInfo{
-            .minx = @floor(minx),
-            .maxx = @ceil(minx + @as(f32, @floatFromInt(m.width)) / 64.0),
-            .advance = @ceil(@as(f32, @floatFromInt(m.horiAdvance)) / 64.0),
-            .miny = @floor(miny),
-            .maxy = @ceil(miny + @as(f32, @floatFromInt(m.height)) / 64.0),
-            .f2_w = @ceil(f2x1) - @floor(f2x0),
-            .f2_h = @ceil(f2y1) - @floor(f2y0),
-            .f2_advance = f2_advance,
-            .f2_leftBearing = f2_leftBearing,
-            .f2_topBearing = self.face2_ascent - @ceil(f2y1),
-            .uv = .{ 0, 0 },
-        };
+            gi = GlyphInfo{
+                .advance = @ceil(@as(f32, @floatFromInt(m.horiAdvance)) / 64.0),
+                .leftBearing = @floor(minx),
+                .topBearing = @floor(miny),
+                .w = @ceil(minx + @as(f32, @floatFromInt(m.width)) / 64.0) - @floor(minx),
+                .h = @ceil(miny + @as(f32, @floatFromInt(m.height)) / 64.0) - @floor(miny),
+                .uv = .{ 0, 0 },
+            };
+        } else {
+            var advanceWidth: c_int = undefined;
+            var leftSideBearing: c_int = undefined;
+            c.stbtt_GetCodepointHMetrics(&self.face, @as(c_int, @intCast(codepoint)), &advanceWidth, &leftSideBearing);
+            var ix0: c_int = undefined;
+            var iy0: c_int = undefined;
+            var ix1: c_int = undefined;
+            var iy1: c_int = undefined;
+            const ret = c.stbtt_GetCodepointBox(&self.face, @as(c_int, @intCast(codepoint)), &ix0, &iy0, &ix1, &iy1);
+            const x0: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(ix0));
+            const y0: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(iy0));
+            const x1: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(ix1));
+            const y1: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(iy1));
 
-        std.debug.print("codepoint {d} minx {d} maxx {d} miny {d} maxy {d} f2lsb {d} f2x0 {d} f2x1 {d} f2y0 {d} f2y1 {d} advance {d}\n", .{ codepoint, gi.minx, gi.maxx, gi.miny, gi.maxy, f2_leftBearing, f2x0, f2x1, f2y0, f2y1, f2_advance });
+            //std.debug.print("codepoint {d} stbtt x0 {d} x1 {d} y0 {d} y1 {d}\n", .{ codepoint, x0, x1, y0, y1 });
+
+            gi = GlyphInfo{
+                .advance = self.scaleFactor * @as(f32, @floatFromInt(advanceWidth)),
+                .leftBearing = @floor(x0),
+                .topBearing = self.ascent - @ceil(y1),
+                .w = @ceil(x1) - @floor(x0),
+                .h = @ceil(y1) - @floor(y0),
+                .uv = .{ 0, 0 },
+            };
+        }
+
+        //std.debug.print("codepoint {d} advance {d} leftBearing {d} topBearing {d} w {d} h {d}\n", .{ codepoint, gi.advance, gi.leftBearing, gi.topBearing, gi.w, gi.h });
 
         // new glyph, need to regen texture atlas on next render
         //std.debug.print("new glyph {}\n", .{codepoint});
@@ -398,8 +410,78 @@ const FontCacheEntry = struct {
         try self.glyph_info.put(codepoint, gi);
         return gi;
     }
+
+    // doesn't scale the font or max_width, always stops at newlines
+    pub fn textSizeRaw(fce: *FontCacheEntry, font_name: []const u8, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: Font.EndMetric) !Size {
+        const mwidth = max_width orelse 1000000.0;
+
+        var x: f32 = 0;
+        var minx: f32 = 0;
+        var maxx: f32 = 0;
+        var miny: f32 = 0;
+        var maxy: f32 = fce.height;
+        var tw: f32 = 0;
+        var th: f32 = fce.height;
+
+        var ei: usize = 0;
+        var nearest_break: bool = false;
+
+        var utf8 = (try std.unicode.Utf8View.init(text)).iterator();
+        while (utf8.nextCodepoint()) |codepoint| {
+            const gi = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), font_name);
+
+            minx = @min(minx, x + gi.leftBearing);
+            maxx = @max(maxx, x + gi.leftBearing + gi.w);
+            maxx = @max(maxx, x + gi.advance);
+
+            miny = @min(miny, gi.topBearing);
+            maxy = @max(maxy, gi.topBearing + gi.h);
+
+            // TODO: kerning
+
+            if (codepoint == '\n') {
+                // newlines always terminate, and don't use any space
+                ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+                break;
+            }
+
+            if ((maxx - minx) > mwidth) {
+                switch (end_metric) {
+                    .before => break, // went too far
+                    .nearest => {
+                        if ((maxx - minx) - mwidth >= mwidth - tw) {
+                            break; // current one is closest
+                        } else {
+                            // get the next glyph and then break
+                            nearest_break = true;
+                        }
+                    },
+                }
+            }
+
+            // record that we processed this codepoint
+            ei += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
+
+            // update space taken by glyph
+            tw = maxx - minx;
+            th = maxy - miny;
+            x += gi.advance;
+
+            if (nearest_break) break;
+        }
+
+        // TODO: xstart and ystart
+
+        if (end_idx) |endout| {
+            endout.* = ei;
+        }
+
+        //std.debug.print("textSizeRaw size {d} for \"{s}\" {d}x{d} {d}\n", .{ self.size, text, tw, th, ei });
+        return Size{ .w = tw, .h = th };
+    }
 };
 
+// Will get a font at an integer size that might be larger than font.size
 pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     var cw = currentWindow();
     const fontHash = FontCacheEntry.hash(font);
@@ -408,63 +490,86 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         return fce;
     }
 
-    std.debug.print("FontCacheGet creating font size {d} name \"{s}\"\n", .{ font.size, font.name });
+    //std.debug.print("FontCacheGet creating font size {d} name \"{s}\"\n", .{ font.size, font.name });
 
-    var face: c.FT_Face = undefined;
-    var args: c.FT_Open_Args = undefined;
-    args.flags = @as(u32, @bitCast(FontCacheEntry.OpenFlags{ .memory = true }));
-    args.memory_base = font.ttf_bytes.ptr;
-    args.memory_size = @as(u31, @intCast(font.ttf_bytes.len));
-    FontCacheEntry.intToError(c.FT_Open_Face(cw.ft2lib, &args, 0, &face)) catch |err| {
-        log.warn("fontCacheGet freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, font.name });
-        return error.freetypeError;
-    };
-
-    const pixel_size = @as(u32, @intFromFloat(font.size));
-    FontCacheEntry.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
-        log.warn("fontCacheGet freetype error {!} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, font.name });
-        return error.freetypeError;
-    };
-
-    const ascender = @as(f32, @floatFromInt(face.*.ascender)) / 64.0;
-    const ss = @as(f32, @floatFromInt(face.*.size.*.metrics.y_scale)) / 0x10000;
-    const ascent = ascender * ss;
-    const height = @as(f32, @floatFromInt(face.*.size.*.metrics.height)) / 64.0;
-    std.debug.print("fontcache size {d} ascender {d} scale {d} ascent {d} height {d}\n", .{ font.size, ascender, ss, ascent, height });
-
-    var face2: c.stbtt_fontinfo = undefined;
-    _ = c.stbtt_InitFont(&face2, font.ttf_bytes.ptr, c.stbtt_GetFontOffsetForIndex(font.ttf_bytes.ptr, 0));
-    const face2_SF: f32 = c.stbtt_ScaleForPixelHeight(&face2, font.size);
-
-    var face2_ascent: c_int = undefined;
-    var face2_descent: c_int = undefined;
-    var face2_linegap: c_int = undefined;
-    c.stbtt_GetFontVMetrics(&face2, &face2_ascent, &face2_descent, &face2_linegap);
-    const f2_ascent = face2_SF * @as(f32, @floatFromInt(face2_ascent));
-    const f2_descent = face2_SF * @as(f32, @floatFromInt(face2_descent));
-    const f2_linegap = face2_SF * @as(f32, @floatFromInt(face2_linegap));
-    const f2_height = f2_ascent - f2_descent + f2_linegap;
-
-    std.debug.print("face2 scale {d} ascent {d} descent {d} linegap {d} height {d}\n", .{ face2_SF, f2_ascent, f2_descent, f2_linegap, f2_ascent - f2_descent + f2_linegap });
+    var entry: FontCacheEntry = undefined;
 
     // make debug texture atlas so we can see if something later goes wrong
     const size = .{ .w = 10, .h = 10 };
     var pixels = try cw.arena.alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
     @memset(pixels, 255);
 
-    const entry = FontCacheEntry{
-        .face = face,
-        .face2 = face2,
-        .face2_SF = face2_SF,
-        .face2_height = f2_height,
-        .face2_ascent = f2_ascent,
-        .height = @ceil(height),
-        .ascent = @floor(ascent),
-        .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-        .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h))),
-        .texture_atlas_size = size,
-        .texture_atlas_regen = true,
-    };
+    if (useFreeType) {
+        var face: c.FT_Face = undefined;
+        var args: c.FT_Open_Args = undefined;
+        args.flags = @as(u32, @bitCast(FontCacheEntry.OpenFlags{ .memory = true }));
+        args.memory_base = font.ttf_bytes.ptr;
+        args.memory_size = @as(u31, @intCast(font.ttf_bytes.len));
+        FontCacheEntry.intToError(c.FT_Open_Face(ft2lib, &args, 0, &face)) catch |err| {
+            log.warn("fontCacheGet freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, font.name });
+            return error.freetypeError;
+        };
+
+        // "pixel size" for freetype doesn't actually mean you'll get that height, it's more like using pts
+        // so we search for a font that has a height >= font.size
+        var pixel_size = @as(u32, @intFromFloat(@max(1, @ceil(font.size) - 20)));
+
+        while (true) : (pixel_size += 1) {
+            FontCacheEntry.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
+                log.warn("fontCacheGet freetype error {!} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, font.name });
+                return error.freetypeError;
+            };
+
+            const ascender = @as(f32, @floatFromInt(face.*.ascender)) / 64.0;
+            const ss = @as(f32, @floatFromInt(face.*.size.*.metrics.y_scale)) / 0x10000;
+            const ascent = ascender * ss;
+            const height = @as(f32, @floatFromInt(face.*.size.*.metrics.height)) / 64.0;
+
+            //std.debug.print("height {d} -> pixel_size {d}\n", .{ height, pixel_size });
+
+            if (height >= font.size) {
+                entry = FontCacheEntry{
+                    .face = face,
+                    .scaleFactor = 1.0, // not used with freetype
+                    .height = @ceil(height),
+                    .ascent = @floor(ascent),
+                    .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
+                    .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h))),
+                    .texture_atlas_size = size,
+                    .texture_atlas_regen = true,
+                };
+
+                break;
+            }
+        }
+    } else {
+        var face: c.stbtt_fontinfo = undefined;
+        _ = c.stbtt_InitFont(&face, font.ttf_bytes.ptr, c.stbtt_GetFontOffsetForIndex(font.ttf_bytes.ptr, 0));
+        const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, font.size);
+
+        var face2_ascent: c_int = undefined;
+        var face2_descent: c_int = undefined;
+        var face2_linegap: c_int = undefined;
+        c.stbtt_GetFontVMetrics(&face, &face2_ascent, &face2_descent, &face2_linegap);
+        const ascent = SF * @as(f32, @floatFromInt(face2_ascent));
+        const f2_descent = SF * @as(f32, @floatFromInt(face2_descent));
+        const f2_linegap = SF * @as(f32, @floatFromInt(face2_linegap));
+        const height = ascent - f2_descent + f2_linegap;
+
+        entry = FontCacheEntry{
+            .face = face,
+            .scaleFactor = SF,
+            .height = height,
+            .ascent = ascent,
+            .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
+            .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h))),
+            .texture_atlas_size = size,
+            .texture_atlas_regen = true,
+        };
+    }
+
+    //std.debug.print("fontcache size {d} ascent {d} height {d}\n", .{ font.size, entry.ascent, entry.height });
+
     try cw.font_cache.put(fontHash, entry);
 
     return cw.font_cache.getPtr(fontHash).?;
@@ -1962,8 +2067,6 @@ pub const Window = struct {
     dialogs: std.ArrayList(Dialog),
     toasts: std.ArrayList(Toast),
 
-    ft2lib: c.FT_Library = undefined,
-
     cursor_requested: enums.Cursor = .arrow,
     cursor_dragging: ?enums.Cursor = null,
 
@@ -2041,10 +2144,12 @@ pub const Window = struct {
         self.focused_subwindowId = self.wd.id;
         self.frame_time_ns = nanoTime();
 
-        FontCacheEntry.intToError(c.FT_Init_FreeType(&self.ft2lib)) catch |err| {
-            dvui.log.err("freetype error {!} trying to init freetype library\n", .{err});
-            return error.freetypeError;
-        };
+        if (useFreeType) {
+            FontCacheEntry.intToError(c.FT_Init_FreeType(&ft2lib)) catch |err| {
+                dvui.log.err("freetype error {!} trying to init freetype library\n", .{err});
+                return error.freetypeError;
+            };
+        }
 
         return self;
     }
@@ -2588,7 +2693,7 @@ pub const Window = struct {
             for (deadFonts.items) |id| {
                 var tce = self.font_cache.fetchRemove(id).?;
                 tce.value.glyph_info.deinit();
-                _ = c.FT_Done_Face(tce.value.face);
+                tce.value.deinit();
             }
 
             //std.debug.print("font_cache {d}\n", .{self.font_cache.count()});
@@ -4858,11 +4963,10 @@ pub fn renderText(opts: renderTextOptions) !void {
 
     // Make sure to always ask for a bigger size font, we'll reduce it down below
     const target_size = opts.font.size * opts.rs.s;
-    const ask_size = @ceil(target_size);
-    const target_fraction = target_size / ask_size;
-
-    const sized_font = opts.font.resize(ask_size);
+    const sized_font = opts.font.resize(target_size);
     var fce = try fontCacheGet(sized_font);
+
+    const target_fraction = target_size / fce.height;
 
     // make sure the cache has all the glyphs we need
     var utf8it = (try std.unicode.Utf8View.init(opts.text)).iterator();
@@ -4887,13 +4991,11 @@ pub fn renderText(opts: renderTextOptions) !void {
             while (it.next()) |gi| {
                 if (i % row_glyphs == 0) {
                     size.w = @max(size.w, rowlen);
-                    //FT size.h += fce.height + 2 * pad;
-                    size.h += @ceil(fce.face2_height) + 2 * pad;
+                    size.h += fce.height + 2 * pad;
                     rowlen = 0;
                 }
 
-                //FT rowlen += (gi.maxx - gi.minx) + 2 * pad;
-                rowlen += gi.f2_w + 2 * pad;
+                rowlen += gi.w + 2 * pad;
 
                 i += 1;
             } else {
@@ -4932,72 +5034,72 @@ pub fn renderText(opts: renderTextOptions) !void {
 
                 const codepoint = @as(u32, @intCast(e.key_ptr.*));
 
-                //FT
-                //FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @as(i32, @bitCast(FontCacheEntry.LoadFlags{ .render = true })))) catch |err| {
-                //    dvui.log.warn("renderText: freetype error {!} trying to FT_Load_Char font {s} codepoint {d}\n", .{ err, opts.font.name, codepoint });
-                //    return error.freetypeError;
-                //};
+                if (useFreeType) {
+                    FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @as(i32, @bitCast(FontCacheEntry.LoadFlags{ .render = true })))) catch |err| {
+                        dvui.log.warn("renderText: freetype error {!} trying to FT_Load_Char font {s} codepoint {d}\n", .{ err, opts.font.name, codepoint });
+                        return error.freetypeError;
+                    };
 
-                //const bitmap = fce.face.*.glyph.*.bitmap;
+                    const bitmap = fce.face.*.glyph.*.bitmap;
 
-                //std.debug.print("codepoint {d} gi {d}x{d} bitmap {d}x{d}\n", .{ e.key_ptr.*, e.value_ptr.maxx - e.value_ptr.minx, e.value_ptr.maxy - e.value_ptr.miny, bitmap.width(), bitmap.rows() });
-                //var row: i32 = 0;
-                //while (row < bitmap.rows) : (row += 1) {
-                //    var col: i32 = 0;
-                //    while (col < bitmap.width) : (col += 1) {
-                //        if (bitmap.buffer == null) {
-                //            log.warn("renderText freetype bitmap null for font {s} codepoint {d}\n", .{ opts.font.name, codepoint });
-                //            return error.freetypeError;
-                //        }
-                //        const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
+                    //std.debug.print("codepoint {d} gi {d}x{d} bitmap {d}x{d}\n", .{ e.key_ptr.*, e.value_ptr.maxx - e.value_ptr.minx, e.value_ptr.maxy - e.value_ptr.miny, bitmap.width(), bitmap.rows() });
+                    var row: i32 = 0;
+                    while (row < bitmap.rows) : (row += 1) {
+                        var col: i32 = 0;
+                        while (col < bitmap.width) : (col += 1) {
+                            if (bitmap.buffer == null) {
+                                log.warn("renderText freetype bitmap null for font {s} codepoint {d}\n", .{ opts.font.name, codepoint });
+                                return error.freetypeError;
+                            }
+                            const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
 
-                //        // because of the extra edge, offset by 1 row and 1 col
-                //        const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) * 4 + (x + col + pad) * 4));
+                            // because of the extra edge, offset by 1 row and 1 col
+                            const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) * 4 + (x + col + pad) * 4));
 
-                //        // not doing premultiplied alpha (yet), so keep the white color but adjust the alpha
-                //        //pixels[di] = src;
-                //        //pixels[di+1] = src;
-                //        //pixels[di+2] = src;
-                //        pixels[di + 3] = src;
-                //    }
-                //}
-
-                const out_w: u32 = @intFromFloat(gi.f2_w);
-                const out_h: u32 = @intFromFloat(gi.f2_h);
-
-                // single channel
-                var bitmap = try cw.arena.alloc(u8, @as(usize, out_w * out_h));
-
-                //std.debug.print("makecodepointBitmap size x {d} y {d} w {d} h {d} di {d} out w {d} h {d}\n", .{ x, y, size.w, size.h, di, out_w, out_h });
-
-                c.stbtt_MakeCodepointBitmapSubpixel(&fce.face2, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), fce.face2_SF, fce.face2_SF, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
-
-                const stride = @as(usize, @intFromFloat(size.w)) * 4;
-                const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x * 4));
-                for (0..out_h) |row| {
-                    for (0..out_w) |col| {
-                        pixels[di + (row + pad) * stride + (col + pad) * 4 + 3] = bitmap[row * out_w + col];
+                            // not doing premultiplied alpha (yet), so keep the white color but adjust the alpha
+                            //pixels[di] = src;
+                            //pixels[di+1] = src;
+                            //pixels[di+2] = src;
+                            pixels[di + 3] = src;
+                        }
                     }
-                }
+                } else {
+                    const out_w: u32 = @intFromFloat(gi.w);
+                    const out_h: u32 = @intFromFloat(gi.h);
 
-                if (false) {
-                    for (0..out_h + pad) |row| {
-                        for (0..out_w + pad) |col| {
-                            if (row < pad or row >= out_h or col < pad or col >= out_w) {
-                                pixels[di + row * stride + col * 4 + 3] = 200;
+                    // single channel
+                    var bitmap = try cw.arena.alloc(u8, @as(usize, out_w * out_h));
+
+                    //std.debug.print("makecodepointBitmap size x {d} y {d} w {d} h {d} di {d} out w {d} h {d}\n", .{ x, y, size.w, size.h, di, out_w, out_h });
+
+                    c.stbtt_MakeCodepointBitmapSubpixel(&fce.face, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), fce.scaleFactor, fce.scaleFactor, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
+
+                    const stride = @as(usize, @intFromFloat(size.w)) * 4;
+                    const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x * 4));
+                    for (0..out_h) |row| {
+                        for (0..out_w) |col| {
+                            pixels[di + (row + pad) * stride + (col + pad) * 4 + 3] = bitmap[row * out_w + col];
+                        }
+                    }
+
+                    if (false) {
+                        for (0..out_h + pad) |row| {
+                            for (0..out_w + pad) |col| {
+                                if (row < pad or row >= out_h or col < pad or col >= out_w) {
+                                    pixels[di + row * stride + col * 4 + 3] = 200;
+                                }
                             }
                         }
                     }
                 }
 
                 //FT x += @as(i32, @intCast(bitmap.width)) + 2 * pad;
-                x += @as(i32, @intCast(out_w)) + 2 * pad;
+                x += @as(i32, @intFromFloat(gi.w)) + 2 * pad;
 
                 i += 1;
                 if (i % row_glyphs == 0) {
                     x = pad;
-                    //FT y += @as(i32, @intFromFloat(fce.height)) + 2 * pad;
-                    y += @as(i32, @intFromFloat(fce.face2_height)) + 2 * pad;
+                    y += @as(i32, @intFromFloat(fce.height)) + 2 * pad;
                 }
             }
         }
@@ -5040,7 +5142,7 @@ pub fn renderText(opts: renderTextOptions) !void {
 
         // TODO: kerning
 
-        const nextx = x + gi.f2_advance * target_fraction;
+        const nextx = x + gi.advance * target_fraction;
 
         if (sel) {
             bytes_seen += std.unicode.utf8CodepointSequenceLength(codepoint) catch unreachable;
@@ -5062,9 +5164,8 @@ pub fn renderText(opts: renderTextOptions) !void {
         const len = @as(u32, @intCast(vtx.items.len));
         var v: Vertex = undefined;
 
-        const f2lsb = @floor(gi.f2_leftBearing);
-        v.pos.x = x + (f2lsb - pad) * target_fraction;
-        v.pos.y = y + (gi.f2_topBearing - pad) * target_fraction;
+        v.pos.x = x + (gi.leftBearing - pad) * target_fraction;
+        v.pos.y = y + (gi.topBearing - pad) * target_fraction;
         v.col = if (sel_in) opts.sel_color orelse opts.color else opts.color;
         v.uv = gi.uv;
         try vtx.append(v);
@@ -5075,19 +5176,19 @@ pub fn renderText(opts: renderTextOptions) !void {
 
         if (opts.debug) {
             //log.debug("{d} pad {d} minx {d} maxx {d} miny {d} maxy {d} x {d} y {d}", .{ bytes_seen, pad, gi.minx, gi.maxx, gi.miny, gi.maxy, v.pos.x, v.pos.y });
-            log.debug("{d} pad {d} left {d} top {d} w {d} h {d} advance {d}", .{ bytes_seen, pad, gi.f2_leftBearing, gi.f2_topBearing, gi.f2_w, gi.f2_h, gi.f2_advance });
+            //log.debug("{d} pad {d} left {d} top {d} w {d} h {d} advance {d}", .{ bytes_seen, pad, gi.f2_leftBearing, gi.f2_topBearing, gi.f2_w, gi.f2_h, gi.f2_advance });
         }
 
-        v.pos.x = x + (f2lsb + gi.f2_w + pad) * target_fraction;
-        v.uv[0] = gi.uv[0] + (gi.f2_w + 2 * pad) / fce.texture_atlas_size.w;
+        v.pos.x = x + (gi.leftBearing + gi.w + pad) * target_fraction;
+        v.uv[0] = gi.uv[0] + (gi.w + 2 * pad) / fce.texture_atlas_size.w;
         try vtx.append(v);
 
-        v.pos.y = y + (gi.f2_topBearing + gi.f2_h + pad) * target_fraction;
+        v.pos.y = y + (gi.topBearing + gi.h + pad) * target_fraction;
         sel_max_y = @max(sel_max_y, v.pos.y);
-        v.uv[1] = gi.uv[1] + (gi.f2_h + 2 * pad) / fce.texture_atlas_size.h;
+        v.uv[1] = gi.uv[1] + (gi.h + 2 * pad) / fce.texture_atlas_size.h;
         try vtx.append(v);
 
-        v.pos.x = x + (f2lsb - pad) * target_fraction;
+        v.pos.x = x + (gi.leftBearing - pad) * target_fraction;
         v.uv[0] = gi.uv[0];
         try vtx.append(v);
 
