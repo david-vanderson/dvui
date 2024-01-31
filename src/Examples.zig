@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
@@ -105,7 +106,7 @@ const AnimatingDialog = struct {
 
                     if (callafter) |ca| {
                         const response = dvui.dataGet(null, id, "response", enums.DialogResponse) orelse {
-                            std.debug.print("Error: no response for dialog {x}\n", .{id});
+                            std.log.debug("Error: no response for dialog {x}\n", .{id});
                             return;
                         };
                         try ca(id, response);
@@ -163,7 +164,7 @@ const AnimatingDialog = struct {
 
     pub fn after(id: u32, response: enums.DialogResponse) Error!void {
         _ = id;
-        std.debug.print("You clicked \"{s}\"\n", .{@tagName(response)});
+        std.log.debug("You clicked \"{s}\"\n", .{@tagName(response)});
     }
 };
 
@@ -999,35 +1000,37 @@ pub fn dialogs(demo_win_id: u32) !void {
         }
     }
 
-    try dvui.label(@src(), "Example of how to show a dialog/toast from another thread", .{}, .{});
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
+    if (!builtin.single_threaded) {
+        try dvui.label(@src(), "Example of how to show a dialog/toast from another thread", .{}, .{});
+        {
+            var hbox = try dvui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
 
-        if (try dvui.button(@src(), "Dialog after 1 second", .{}, .{})) {
-            const bg_thread = try std.Thread.spawn(.{}, background_dialog, .{ dvui.currentWindow(), 1_000_000_000 });
-            bg_thread.detach();
+            if (try dvui.button(@src(), "Dialog after 1 second", .{}, .{})) {
+                const bg_thread = try std.Thread.spawn(.{}, background_dialog, .{ dvui.currentWindow(), 1_000_000_000 });
+                bg_thread.detach();
+            }
+
+            if (try dvui.button(@src(), "Toast after 1 second", .{}, .{})) {
+                const bg_thread = try std.Thread.spawn(.{}, background_toast, .{ dvui.currentWindow(), 1_000_000_000, demo_win_id });
+                bg_thread.detach();
+            }
         }
 
-        if (try dvui.button(@src(), "Toast after 1 second", .{}, .{})) {
-            const bg_thread = try std.Thread.spawn(.{}, background_toast, .{ dvui.currentWindow(), 1_000_000_000, demo_win_id });
-            bg_thread.detach();
+        {
+            var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+            defer hbox.deinit();
+
+            if (try dvui.button(@src(), "Show Progress from another Thread", .{}, .{})) {
+                progress_mutex.lock();
+                progress_val = 0;
+                progress_mutex.unlock();
+                const bg_thread = try std.Thread.spawn(.{}, background_progress, .{ dvui.currentWindow(), 2_000_000_000 });
+                bg_thread.detach();
+            }
+
+            try dvui.progress(@src(), .{ .percent = progress_val }, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
         }
-    }
-
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-        defer hbox.deinit();
-
-        if (try dvui.button(@src(), "Show Progress from another Thread", .{}, .{})) {
-            progress_mutex.lock();
-            progress_val = 0;
-            progress_mutex.unlock();
-            const bg_thread = try std.Thread.spawn(.{}, background_progress, .{ dvui.currentWindow(), 2_000_000_000 });
-            bg_thread.detach();
-        }
-
-        try dvui.progress(@src(), .{ .percent = progress_val }, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
     }
 }
 

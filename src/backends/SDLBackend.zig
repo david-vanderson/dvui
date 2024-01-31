@@ -335,6 +335,11 @@ pub fn backend(self: *SDLBackend) dvui.Backend {
     return dvui.Backend.init(self, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free, openURL, refresh);
 }
 
+pub fn nanoTime(self: *SDLBackend) i128 {
+    _ = self;
+    return std.time.nanoTimestamp();
+}
+
 // caller responsible for calling free() on returned result.ptr
 pub fn clipboardText(self: *SDLBackend) []u8 {
     _ = self;

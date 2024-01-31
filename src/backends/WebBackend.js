@@ -35,7 +35,7 @@ function dvui(canvasId, wasmFile) {
 
     void main() {
         if (useTex) {
-            fragColor = texture(uSampler, vTextureCoord);
+            fragColor = texture(uSampler, vTextureCoord) * vColor;
         }
         else {
             fragColor = vColor;
@@ -70,15 +70,20 @@ function dvui(canvasId, wasmFile) {
           console.log(log_string);
           log_string = '';
         },
-        wasm_now_f64() {
-          return Date.now();
+        wasm_now() {
+          console.log(performance.now());
+          return performance.now();
+        },
+        wasm_clear() {
+          gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
+          gl.clear(gl.COLOR_BUFFER_BIT);
         },
         wasm_textureCreate(pixels, width, height) {
           const pixelData = new Uint8Array(wasmResult.instance.exports.memory.buffer, pixels, width * height * 4);
 
           const texture = gl.createTexture();
           const id = newTextureId;
-            console.log("creating texture " + id);
+          //console.log("creating texture " + id);
           newTextureId += 1;
           textures.set(id, texture);
           
@@ -101,14 +106,14 @@ function dvui(canvasId, wasmFile) {
           return id;
         },
         wasm_textureDestroy(id) {
-            console.log("deleting texture " + id);
+          //console.log("deleting texture " + id);
           const texture = textures.get(id);
           textures.delete(id);
           
           gl.deleteTexture(texture);
         },
         wasm_renderGeometry(textureId, index_ptr, index_len, vertex_ptr, vertex_len, sizeof_vertex, offset_pos, offset_col, offset_uv) {
-            console.log("renderGeometry " + textureId + " sizeof " + sizeof_vertex + " pos " + offset_pos + " col " + offset_col + " uv " + offset_uv);
+          //console.log("renderGeometry " + textureId + " sizeof " + sizeof_vertex + " pos " + offset_pos + " col " + offset_col + " uv " + offset_uv);
 
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
           const indices = new Uint32Array(wasmResult.instance.exports.memory.buffer, index_ptr, index_len / 4);
@@ -183,7 +188,6 @@ function dvui(canvasId, wasmFile) {
           );
 
             if (textureId != 0) {
-                console.log("using texture " + textureId);
                 gl.activeTexture(gl.TEXTURE0);
                 gl.bindTexture(gl.TEXTURE_2D, textures.get(textureId));
                 gl.uniform1i(programInfo.uniformLocations.useTex, 1);
@@ -298,12 +302,8 @@ function dvui(canvasId, wasmFile) {
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
         function render() {
-          gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
-          gl.clear(gl.COLOR_BUFFER_BIT);
-
-          wasmResult.instance.exports.app_update();
-
-            //requestAnimationFrame(render);
+          let micros_to_wait = wasmResult.instance.exports.app_update();
+          setTimeout(function () { requestAnimationFrame(render); }, micros_to_wait / 1000);
         }
 
         requestAnimationFrame(render);
