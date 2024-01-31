@@ -11,7 +11,8 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
-    lib_bundle.addCSourceFile(.{ .file = .{ .path = "src/stb_image/stb_image_impl.c" }, .flags = &.{} });
+    lib_bundle.addCSourceFile(.{ .file = .{ .path = "src/stb/stb_image_impl.c" }, .flags = &.{} });
+    lib_bundle.addCSourceFile(.{ .file = .{ .path = "src/stb/stb_truetype_impl.c" }, .flags = &.{} });
     link_deps(b, lib_bundle);
     b.installArtifact(lib_bundle);
 
@@ -138,7 +139,8 @@ pub fn build(b: *std.Build) !void {
             .target = webtarget,
             .optimize = optimize,
         });
-        stb_libs.addCSourceFile(.{ .file = .{ .path = "src/stb_image/stb_image_impl.c" }, .flags = &.{"-DINCLUDE_CUSTOM_LIBC_FUNCS=1"} });
+        stb_libs.addCSourceFile(.{ .file = .{ .path = "src/stb/stb_image_impl.c" }, .flags = &.{"-DINCLUDE_CUSTOM_LIBC_FUNCS=1"} });
+        stb_libs.addCSourceFile(.{ .file = .{ .path = "src/stb/stb_truetype_impl.c" }, .flags = &.{"-DINCLUDE_CUSTOM_LIBC_FUNCS=1"} });
         stb_libs.linkLibC();
 
         wasm.linkLibrary(stb_libs);
@@ -241,6 +243,5 @@ pub fn get_dependency_build_root(dep_prefix: []const u8, name: []const u8) []con
 /// prefix: library prefix. e.g. "dvui."
 pub fn add_include_paths(b: *std.Build, exe: *std.Build.CompileStep) void {
     exe.addIncludePath(.{ .path = b.fmt("{s}{s}", .{ get_dependency_build_root(b.dep_prefix, "freetype"), "/include" }) });
-    exe.addIncludePath(.{ .path = b.fmt("{s}/src/stb_image", .{b.build_root.path.?}) });
-    //exe.addIncludePath(.{ .path = b.fmt("{s}{s}", .{ get_dependency_build_root(b.dep_prefix, "stb_image"), "/include" }) });
+    exe.addIncludePath(.{ .path = b.fmt("{s}/src/stb", .{b.build_root.path.?}) });
 }
