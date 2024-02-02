@@ -47,6 +47,7 @@ static double pow(double x, double y)
 }
 
 extern double dvui_c_ldexp(double x, int n);
+/* this should be static as well, but then I get a linker error (only with ReleaseSafe, not Debug) */
 double ldexp(double x, int n) {
     return dvui_c_ldexp(x, n);
 }

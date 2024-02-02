@@ -26,9 +26,9 @@ pub const std_options = struct {
             .debug => "debug",
         };
         const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
+        const msg = level_txt ++ prefix2 ++ format ++ "\n";
 
-        (LogWriter{ .context = {} }).print(level_txt ++ prefix2 ++ format ++ "\n", args) catch return;
-
+        (LogWriter{ .context = {} }).print(msg, args) catch return;
         WebBackend.wasm.wasm_log_flush();
     }
 };
@@ -42,11 +42,9 @@ var backend: WebBackend = undefined;
 const zig_favicon = @embedFile("src/zig-favicon.png");
 
 export fn app_init() i32 {
-    std.log.debug("hello\n", .{});
     backend = WebBackend.init() catch {
         return 1;
     };
-    std.log.debug("hello1\n", .{});
     win = dvui.Window.init(@src(), 0, gpa, backend.backend()) catch {
         return 2;
     };
@@ -62,19 +60,55 @@ export fn app_deinit() void {
 // return number of micros to wait (interrupted by events) for next frame
 // return -1 to quit
 export fn app_update() i32 {
-    std.log.debug("app_update\n", .{});
     update() catch |err| {
-        std.log.err("update err {!}", .{err});
+        std.log.err("{!}", .{err});
+        var msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
+        WebBackend.wasm.wasm_panic(msg.ptr, msg.len);
+        return -1;
     };
 
     return 1000000;
 }
 
+export fn add_event(kind: u8, int1: u8, int2: u8, float1: f32, float2: f32) void {
+    add_event_internal(kind, int1, int2, float1, float2) catch |err| {
+        var msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
+        WebBackend.wasm.wasm_panic(msg.ptr, msg.len);
+    };
+}
+
+fn add_event_internal(kind: u8, int1: u8, int2: u8, float1: f32, float2: f32) !void {
+    _ = int2;
+    switch (kind) {
+        1 => {
+            try WebBackend.event_types.append(.mousemove);
+            try WebBackend.event_floats.append(float1);
+            try WebBackend.event_floats.append(float2);
+        },
+        2 => {
+            try WebBackend.event_types.append(.mousedown);
+            try WebBackend.event_ints.append(int1);
+        },
+        3 => {
+            try WebBackend.event_types.append(.mouseup);
+            try WebBackend.event_ints.append(int1);
+        },
+        else => {
+            std.log.debug("add_event_internal unknown kind {d}", .{kind});
+        },
+    }
+}
+
 fn update() !void {
+    // beginWait is not necessary, but cooperates with waitTime to properly
+    // wait for timers/animations.
+    //var nstime = win.beginWait(backend.hasEvent());
+
     try win.begin(backend.nanoTime());
     backend.clear();
 
-    dvui.Examples.show_demo_window = true;
+    try backend.addAllEvents(&win);
+
     _ = try dvui.Examples.demo();
 
     var box = try dvui.box(@src(), .vertical, .{ .background = true, .color_fill = .{ .color = .{ .b = 0, .g = 0 } } });
@@ -127,10 +161,6 @@ fn update() !void {
     //var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     //const arena = arena_allocator.allocator();
     //defer arena_allocator.deinit();
-
-    //// beginWait is not necessary, but cooperates with waitTime to properly
-    //// wait for timers/animations.
-    //var nstime = app.win.beginWait(engine.hasEvent());
 
     //// start gui, can call gui stuff after this
     //try app.win.begin(arena, nstime);

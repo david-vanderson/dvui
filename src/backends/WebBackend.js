@@ -61,6 +61,7 @@ function dvui(canvasId, wasmFile) {
       env: {
         wasm_panic: (ptr, len) => {
           let msg = utf8decoder.decode(new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, len));
+          alert(msg);
           throw Error(msg);
         },
         wasm_log_write: (ptr, len) => {
@@ -71,7 +72,6 @@ function dvui(canvasId, wasmFile) {
           log_string = '';
         },
         wasm_now() {
-          console.log(performance.now());
           return performance.now();
         },
         wasm_clear() {
@@ -301,13 +301,53 @@ function dvui(canvasId, wasmFile) {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
+        let renderRequested = false;
+        let renderTimeoutId = 0;
+
         function render() {
+          renderRequested = false;
           let micros_to_wait = wasmResult.instance.exports.app_update();
-          setTimeout(function () { requestAnimationFrame(render); }, micros_to_wait / 1000);
+          if (micros_to_wait == 0) {
+            requestRender();
+          } else if (micros_to_wait > 0) {
+            renderTimeoutId = setTimeout(function () { renderTimeoutId = 0; requestRender(); }, micros_to_wait / 1000);
+          }
+          // otherwise something went wrong, so stop
         }
 
-        requestAnimationFrame(render);
+        function requestRender() {
+            if (renderTimeoutId > 0) {
+                // we got called before the timeout happened
+                clearTimeout(renderTimeoutId);
+                renderTimeoutId = 0;
+            }
 
+            if (!renderRequested) {
+                // multiple events could call requestRender multiple times, and
+                // we only want a single requestAnimationFrame to happen before
+                // each call to app_update
+                renderRequested = true;
+                requestAnimationFrame(render);
+            }
+        }
+
+        // event listeners
+        canvas.addEventListener("mousemove", (ev) => {
+          wasmResult.instance.exports.add_event(1, 0, 0, ev.x, ev.y);
+          requestRender();
+        });
+        canvas.addEventListener("mousedown", (ev) => {
+          wasmResult.instance.exports.add_event(2, ev.button, 0, 0, 0);
+          requestRender();
+        });
+        canvas.addEventListener("mouseup", (ev) => {
+            console.log(ev);
+          wasmResult.instance.exports.add_event(3, ev.button, 0, 0, 0);
+          requestRender();
+        });
+
+        // start the first update
+        requestRender();
     });
 }
 
