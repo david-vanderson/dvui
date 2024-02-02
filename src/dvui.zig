@@ -4338,8 +4338,10 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
             part.h = trackrs.r.h - h;
         },
     }
-    try pathAddRect(part, options.corner_radiusGet().scale(trackrs.s));
-    try pathFillConvex(options.color(.accent));
+    if (b.data().visible()) {
+        try pathAddRect(part, options.corner_radiusGet().scale(trackrs.s));
+        try pathFillConvex(options.color(.accent));
+    }
 
     switch (dir) {
         .horizontal => {
@@ -4351,8 +4353,10 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
             part.h *= (1 - perc);
         },
     }
-    try pathAddRect(part, options.corner_radiusGet().scale(trackrs.s));
-    try pathFillConvex(options.color(.fill));
+    if (b.data().visible()) {
+        try pathAddRect(part, options.corner_radiusGet().scale(trackrs.s));
+        try pathFillConvex(options.color(.fill));
+    }
 
     var knobRect = switch (dir) {
         .horizontal => Rect{ .x = (br.w - knobsize) * perc, .w = knobsize, .h = knobsize },
@@ -4664,7 +4668,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         try b.wd.borderAndBackground(.{ .fill_color = if (hover) b.wd.options.color(.fill_hover) else b.wd.options.color(.fill) });
 
         // only draw handle if we have a min and max
-        if (init_opts.min != null and init_opts.max != null) {
+        if (b.wd.visible() and init_opts.min != null and init_opts.max != null) {
             const how_far = (init_opts.value.* - init_opts.min.?) / (init_opts.max.? - init_opts.min.?);
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
@@ -4834,7 +4838,9 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     var rs = s.borderRectScale();
     rs.r = rs.r.insetAll(0.5 * rs.s);
 
-    try checkmark(target.*, bw.focused(), rs, bw.capture(), bw.hovered(), options);
+    if (bw.wd.visible()) {
+        try checkmark(target.*, bw.focused(), rs, bw.capture(), bw.hovered(), options);
+    }
 
     if (label_str) |str| {
         _ = spacer(@src(), .{ .w = checkbox_defaults.paddingGet().w }, .{});
