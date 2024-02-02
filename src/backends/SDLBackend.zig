@@ -332,7 +332,7 @@ pub fn clear(self: *SDLBackend) void {
 }
 
 pub fn backend(self: *SDLBackend) dvui.Backend {
-    return dvui.Backend.init(self, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free, openURL, refresh);
+    return dvui.Backend.init(self, nanoTime, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free, openURL, refresh);
 }
 
 pub fn nanoTime(self: *SDLBackend) i128 {

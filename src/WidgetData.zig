@@ -112,6 +112,10 @@ pub fn visible(self: *const WidgetData) bool {
 }
 
 pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) !void {
+    if (!self.visible()) {
+        return;
+    }
+
     var bg = self.options.backgroundGet();
     if (self.options.borderGet().nonZero()) {
         if (!bg) {
@@ -136,11 +140,13 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
 }
 
 pub fn focusBorder(self: *const WidgetData) !void {
-    const rs = self.borderRectScale();
-    const thick = 2 * rs.s;
-    try dvui.pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-    var color = self.options.color(.accent);
-    try dvui.pathStrokeAfter(true, true, thick, .none, color);
+    if (self.visible()) {
+        const rs = self.borderRectScale();
+        const thick = 2 * rs.s;
+        try dvui.pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
+        var color = self.options.color(.accent);
+        try dvui.pathStrokeAfter(true, true, thick, .none, color);
+    }
 }
 
 pub fn rectScale(self: *const WidgetData) RectScale {
