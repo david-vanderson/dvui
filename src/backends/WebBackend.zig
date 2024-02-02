@@ -6,15 +6,15 @@ const WebBackend = @This();
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
-const EventType = enum {
-    mousemove,
-    mousedown,
-    mouseup,
+const EventTemp = struct {
+    kind: u8,
+    int1: u8,
+    int2: u8,
+    float1: f32,
+    float2: f32,
 };
 
-pub var event_types = std.ArrayList(EventType).init(gpa);
-pub var event_ints = std.ArrayList(u8).init(gpa);
-pub var event_floats = std.ArrayList(f32).init(gpa);
+pub var event_temps = std.ArrayList(EventTemp).init(gpa);
 
 pub const wasm = struct {
     pub extern fn wasm_panic(ptr: [*]const u8, len: usize) void;
@@ -81,52 +81,46 @@ export fn dvui_c_ldexp(x: f64, n: c_int) f64 {
     return x * @exp2(@as(f64, @floatFromInt(n)));
 }
 
+export fn add_event(kind: u8, int1: u8, int2: u8, float1: f32, float2: f32) void {
+    event_temps.append(.{
+        .kind = kind,
+        .int1 = int1,
+        .int2 = int2,
+        .float1 = float1,
+        .float2 = float2,
+    }) catch |err| {
+        var msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
+        wasm.wasm_panic(msg.ptr, msg.len);
+    };
+}
+
 pub fn hasEvent(_: *WebBackend) bool {
-    return event_types.items.len > 0;
+    return event_temps.items.len > 0;
+}
+
+fn buttonFromJS(jsButton: u8) dvui.enums.Button {
+    return switch (jsButton) {
+        0 => .left,
+        1 => .middle,
+        2 => .right,
+        3 => .four,
+        4 => .five,
+        else => .six,
+    };
 }
 
 pub fn addAllEvents(_: *WebBackend, win: *dvui.Window) !void {
-    var iint: usize = 0;
-    var ifloat: usize = 0;
-    for (event_types.items) |event_type| {
-        switch (event_type) {
-            .mousemove => {
-                const x = event_floats.items[ifloat];
-                ifloat += 1;
-                const y = event_floats.items[ifloat];
-                ifloat += 1;
-                _ = try win.addEventMouseMotion(x, y);
-            },
-            .mousedown => {
-                const button: dvui.enums.Button = switch (event_ints.items[iint]) {
-                    0 => .left,
-                    1 => .middle,
-                    2 => .right,
-                    3 => .four,
-                    4 => .five,
-                    else => .six,
-                };
-                _ = try win.addEventMouseButton(button, .press);
-                iint += 1;
-            },
-            .mouseup => {
-                const button: dvui.enums.Button = switch (event_ints.items[iint]) {
-                    0 => .left,
-                    1 => .middle,
-                    2 => .right,
-                    3 => .four,
-                    4 => .five,
-                    else => .six,
-                };
-                _ = try win.addEventMouseButton(button, .release);
-                iint += 1;
-            },
+    for (event_temps.items) |e| {
+        switch (e.kind) {
+            1 => _ = try win.addEventMouseMotion(e.float1, e.float2),
+            2 => _ = try win.addEventMouseButton(buttonFromJS(e.int1), .press),
+            3 => _ = try win.addEventMouseButton(buttonFromJS(e.int1), .release),
+            4 => _ = try win.addEventMouseWheel(if (e.float1 > 0) -20 else 20),
+            else => std.log.debug("addAllEvents unknown event kind {d}", .{e.kind}),
         }
     }
 
-    event_types.clearRetainingCapacity();
-    event_ints.clearRetainingCapacity();
-    event_floats.clearRetainingCapacity();
+    event_temps.clearRetainingCapacity();
 }
 
 pub fn init() !WebBackend {
