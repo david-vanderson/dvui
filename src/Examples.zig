@@ -1267,6 +1267,22 @@ pub fn dialogDirect() !void {
     }
 }
 
+const icon_names: [@typeInfo(entypo).Struct.decls.len][]const u8 = blk: {
+    var blah: [@typeInfo(entypo).Struct.decls.len][]const u8 = undefined;
+    for (@typeInfo(entypo).Struct.decls, 0..) |d, i| {
+        blah[i] = d.name;
+    }
+    break :blk blah;
+};
+
+const icon_fields: [@typeInfo(entypo).Struct.decls.len][]const u8 = blk: {
+    var blah: [@typeInfo(entypo).Struct.decls.len][]const u8 = undefined;
+    for (@typeInfo(entypo).Struct.decls, 0..) |d, i| {
+        blah[i] = @field(entypo, d.name);
+    }
+    break :blk blah;
+};
+
 pub fn icon_browser() !void {
     var fwin = try dvui.floatingWindow(@src(), .{ .rect = &IconBrowser.rect, .open_flag = &IconBrowser.show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
     defer fwin.deinit();
@@ -1289,17 +1305,17 @@ pub fn icon_browser() !void {
     const visibleRect = scroll.si.viewport;
     var cursor: f32 = 0;
 
-    inline for (@typeInfo(entypo).Struct.decls, 0..) |d, i| {
+    for (icon_names, icon_fields, 0..) |name, field, i| {
         if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
             const r = Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
             var iconbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i, .expand = .horizontal, .rect = r });
 
-            if (try dvui.buttonIcon(@src(), "entypo." ++ d.name, @field(entypo, d.name), .{}, .{ .min_size_content = .{ .h = 20 } })) {
+            var buf: [100]u8 = undefined;
+            const text = try std.fmt.bufPrint(&buf, "entypo.{s}", .{name});
+            if (try dvui.buttonIcon(@src(), text, field, .{}, .{ .min_size_content = .{ .h = 20 } })) {
                 // TODO: copy full buttonIcon code line into clipboard and show toast
             }
-            var tl = try dvui.textLayout(@src(), .{ .break_lines = false }, .{});
-            try tl.addText("entypo." ++ d.name, .{});
-            tl.deinit();
+            try dvui.labelNoFmt(@src(), text, .{ .gravity_y = 0.5 });
 
             iconbox.deinit();
 
