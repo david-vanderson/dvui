@@ -152,6 +152,7 @@ pub fn build(b: *std.Build) !void {
             "app_init",
             "app_deinit",
             "app_update",
+            "add_event",
         };
 
         add_include_paths(b, wasm);

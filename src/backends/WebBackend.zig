@@ -6,6 +6,16 @@ const WebBackend = @This();
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
+const EventType = enum {
+    mousemove,
+    mousedown,
+    mouseup,
+};
+
+pub var event_types = std.ArrayList(EventType).init(gpa);
+pub var event_ints = std.ArrayList(u8).init(gpa);
+pub var event_floats = std.ArrayList(f32).init(gpa);
+
 pub const wasm = struct {
     pub extern fn wasm_panic(ptr: [*]const u8, len: usize) void;
     pub extern fn wasm_log_write(ptr: [*]const u8, len: usize) void;
@@ -71,6 +81,54 @@ export fn dvui_c_ldexp(x: f64, n: c_int) f64 {
     return x * @exp2(@as(f64, @floatFromInt(n)));
 }
 
+pub fn hasEvent(_: *WebBackend) bool {
+    return event_types.items.len > 0;
+}
+
+pub fn addAllEvents(_: *WebBackend, win: *dvui.Window) !void {
+    var iint: usize = 0;
+    var ifloat: usize = 0;
+    for (event_types.items) |event_type| {
+        switch (event_type) {
+            .mousemove => {
+                const x = event_floats.items[ifloat];
+                ifloat += 1;
+                const y = event_floats.items[ifloat];
+                ifloat += 1;
+                _ = try win.addEventMouseMotion(x, y);
+            },
+            .mousedown => {
+                const button: dvui.enums.Button = switch (event_ints.items[iint]) {
+                    0 => .left,
+                    1 => .middle,
+                    2 => .right,
+                    3 => .four,
+                    4 => .five,
+                    else => .six,
+                };
+                _ = try win.addEventMouseButton(button, .press);
+                iint += 1;
+            },
+            .mouseup => {
+                const button: dvui.enums.Button = switch (event_ints.items[iint]) {
+                    0 => .left,
+                    1 => .middle,
+                    2 => .right,
+                    3 => .four,
+                    4 => .five,
+                    else => .six,
+                };
+                _ = try win.addEventMouseButton(button, .release);
+                iint += 1;
+            },
+        }
+    }
+
+    event_types.clearRetainingCapacity();
+    event_ints.clearRetainingCapacity();
+    event_floats.clearRetainingCapacity();
+}
+
 pub fn init() !WebBackend {
     var back: WebBackend = undefined;
     return back;
@@ -91,7 +149,6 @@ pub fn backend(self: *WebBackend) dvui.Backend {
 
 pub fn nanoTime(self: *WebBackend) i128 {
     _ = self;
-    std.log.debug("nanoTime", .{});
     return @as(i128, @intFromFloat(wasm.wasm_now())) * 1_000_000;
 }
 
