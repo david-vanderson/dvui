@@ -144,7 +144,7 @@ pub fn init(
 }
 
 pub fn nanoTime(self: *Backend) i128 {
-    self.vtable.nanoTime(self.ptr);
+    return self.vtable.nanoTime(self.ptr);
 }
 
 pub fn begin(self: *Backend, arena: std.mem.Allocator) void {

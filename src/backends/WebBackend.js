@@ -332,8 +332,14 @@ function dvui(canvasId, wasmFile) {
         }
 
         // event listeners
+        canvas.addEventListener("contextmenu", (ev) => {
+            ev.preventDefault();
+        });
         canvas.addEventListener("mousemove", (ev) => {
-          wasmResult.instance.exports.add_event(1, 0, 0, ev.x, ev.y);
+          var rect = canvas.getBoundingClientRect();
+          var x = (ev.clientX - rect.left) / (rect.right - rect.left) * canvas.width;
+          var y = (ev.clientY - rect.top) / (rect.bottom - rect.top) * canvas.height;
+          wasmResult.instance.exports.add_event(1, 0, 0, x, y);
           requestRender();
         });
         canvas.addEventListener("mousedown", (ev) => {
@@ -341,8 +347,11 @@ function dvui(canvasId, wasmFile) {
           requestRender();
         });
         canvas.addEventListener("mouseup", (ev) => {
-            console.log(ev);
           wasmResult.instance.exports.add_event(3, ev.button, 0, 0, 0);
+          requestRender();
+        });
+        canvas.addEventListener("wheel", (ev) => {
+          wasmResult.instance.exports.add_event(4, 0, 0, ev.deltaY, 0);
           requestRender();
         });
 

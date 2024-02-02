@@ -70,35 +70,6 @@ export fn app_update() i32 {
     return 1000000;
 }
 
-export fn add_event(kind: u8, int1: u8, int2: u8, float1: f32, float2: f32) void {
-    add_event_internal(kind, int1, int2, float1, float2) catch |err| {
-        var msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
-        WebBackend.wasm.wasm_panic(msg.ptr, msg.len);
-    };
-}
-
-fn add_event_internal(kind: u8, int1: u8, int2: u8, float1: f32, float2: f32) !void {
-    _ = int2;
-    switch (kind) {
-        1 => {
-            try WebBackend.event_types.append(.mousemove);
-            try WebBackend.event_floats.append(float1);
-            try WebBackend.event_floats.append(float2);
-        },
-        2 => {
-            try WebBackend.event_types.append(.mousedown);
-            try WebBackend.event_ints.append(int1);
-        },
-        3 => {
-            try WebBackend.event_types.append(.mouseup);
-            try WebBackend.event_ints.append(int1);
-        },
-        else => {
-            std.log.debug("add_event_internal unknown kind {d}", .{kind});
-        },
-    }
-}
-
 fn update() !void {
     // beginWait is not necessary, but cooperates with waitTime to properly
     // wait for timers/animations.
