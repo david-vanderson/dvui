@@ -22,13 +22,14 @@ pub const wasm = struct {
     pub extern fn wasm_log_flush() void;
 
     pub extern fn wasm_now() f64;
-    pub extern fn wasm_clear() void;
+    pub extern fn wasm_sleep(ms: u32) void;
 
     pub extern fn wasm_pixel_width() f32;
     pub extern fn wasm_pixel_height() f32;
     pub extern fn wasm_canvas_width() f32;
     pub extern fn wasm_canvas_height() f32;
 
+    pub extern fn wasm_clear() void;
     pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32) u32;
     pub extern fn wasm_textureDestroy(u32) void;
     pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8) void;
@@ -143,12 +144,17 @@ pub fn clear(self: *WebBackend) void {
 }
 
 pub fn backend(self: *WebBackend) dvui.Backend {
-    return dvui.Backend.init(self, nanoTime, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free, openURL, refresh);
+    return dvui.Backend.init(self, nanoTime, sleep, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free, openURL, refresh);
 }
 
 pub fn nanoTime(self: *WebBackend) i128 {
     _ = self;
     return @as(i128, @intFromFloat(wasm.wasm_now())) * 1_000_000;
+}
+
+pub fn sleep(self: *WebBackend, ns: u64) void {
+    _ = self;
+    wasm.wasm_sleep(@intCast(@divTrunc(ns, 1_000_000)));
 }
 
 pub fn begin(self: *WebBackend, arena: std.mem.Allocator) void {

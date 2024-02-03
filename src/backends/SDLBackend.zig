@@ -332,12 +332,17 @@ pub fn clear(self: *SDLBackend) void {
 }
 
 pub fn backend(self: *SDLBackend) dvui.Backend {
-    return dvui.Backend.init(self, nanoTime, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free, openURL, refresh);
+    return dvui.Backend.init(self, nanoTime, sleep, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free, openURL, refresh);
 }
 
 pub fn nanoTime(self: *SDLBackend) i128 {
     _ = self;
     return std.time.nanoTimestamp();
+}
+
+pub fn sleep(self: *SDLBackend, ns: u64) void {
+    _ = self;
+    std.time.sleep(ns);
 }
 
 // caller responsible for calling free() on returned result.ptr

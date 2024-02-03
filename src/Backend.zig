@@ -11,6 +11,7 @@ vtable: *const VTable,
 
 const VTable = struct {
     nanoTime: *const fn (ptr: *anyopaque) i128,
+    sleep: *const fn (ptr: *anyopaque, ns: u64) void,
     begin: *const fn (ptr: *anyopaque, arena: std.mem.Allocator) void,
     end: *const fn (ptr: *anyopaque) void,
     pixelSize: *const fn (ptr: *anyopaque) Size,
@@ -29,6 +30,7 @@ const VTable = struct {
 pub fn init(
     pointer: anytype,
     comptime nanoTimeFn: fn (ptr: @TypeOf(pointer)) i128,
+    comptime sleepFn: fn (ptr: @TypeOf(pointer), ns: u64) void,
     comptime beginFn: fn (ptr: @TypeOf(pointer), arena: std.mem.Allocator) void,
     comptime endFn: fn (ptr: @TypeOf(pointer)) void,
     comptime pixelSizeFn: fn (ptr: @TypeOf(pointer)) Size,
@@ -52,6 +54,11 @@ pub fn init(
         fn nanoTimeImpl(ptr: *anyopaque) i128 {
             const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
             return @call(.always_inline, nanoTimeFn, .{self});
+        }
+
+        fn sleepImpl(ptr: *anyopaque, ns: u64) void {
+            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
+            return @call(.always_inline, sleepFn, .{ self, ns });
         }
 
         fn beginImpl(ptr: *anyopaque, arena: std.mem.Allocator) void {
@@ -121,6 +128,7 @@ pub fn init(
 
         const vtable = VTable{
             .nanoTime = nanoTimeImpl,
+            .sleep = sleepImpl,
             .begin = beginImpl,
             .end = endImpl,
             .pixelSize = pixelSizeImpl,
@@ -145,6 +153,10 @@ pub fn init(
 
 pub fn nanoTime(self: *Backend) i128 {
     return self.vtable.nanoTime(self.ptr);
+}
+
+pub fn sleep(self: *Backend, ns: u64) void {
+    return self.vtable.sleep(self.ptr, ns);
 }
 
 pub fn begin(self: *Backend, arena: std.mem.Allocator) void {
