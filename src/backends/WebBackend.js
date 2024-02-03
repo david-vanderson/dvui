@@ -50,6 +50,7 @@ function dvui(canvasId, wasmFile) {
     let programInfo;
     const textures = new Map();
     let newTextureId = 1;
+    const scale = window.devicePixelRatio;
 
     let wasmResult;
     let log_string = '';
@@ -73,6 +74,18 @@ function dvui(canvasId, wasmFile) {
         },
         wasm_now() {
           return performance.now();
+        },
+        wasm_pixel_width() {
+            return gl.drawingBufferWidth;
+        },
+        wasm_pixel_height() {
+            return gl.drawingBufferHeight;
+        },
+        wasm_canvas_width() {
+            return gl.canvas.clientWidth;
+        },
+        wasm_canvas_height() {
+            return gl.canvas.clientHeight;
         },
         wasm_clear() {
           gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
@@ -199,36 +212,6 @@ function dvui(canvasId, wasmFile) {
 
             gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_INT, 0);
         },
-
-        //createTexture() {
-        //  const texture = gl.createTexture();
-        //  gl.bindTexture(gl.TEXTURE_2D, texture);
-
-        //  // Because images have to be downloaded over the internet
-        //  // they might take a moment until they are ready.
-        //  // Until then put a single pixel in the texture so we can
-        //  // use it immediately. When the image has finished downloading
-        //  // we'll update the texture with the contents of the image.
-        //  const level = 0;
-        //  const internalFormat = gl.RGBA;
-        //  const width = 1;
-        //  const height = 1;
-        //  const border = 0;
-        //  const srcFormat = gl.RGBA;
-        //  const srcType = gl.UNSIGNED_BYTE;
-        //  const pixel = new Uint8Array([0, 0, 255, 255]); // opaque blue
-        //  gl.texImage2D(
-        //    gl.TEXTURE_2D,
-        //    level,
-        //    internalFormat,
-        //    width,
-        //    height,
-        //    border,
-        //    srcFormat,
-        //    srcType,
-        //    pixel,
-        //  );
-        //},
       },
     };
 
@@ -238,11 +221,6 @@ function dvui(canvasId, wasmFile) {
     .then(result => {
 
         wasmResult = result;
-
-        console.log(wasmResult.instance.exports);
-
-        let init_result = wasmResult.instance.exports.app_init();
-        console.log("init result " + init_result);
 
           const canvas = document.querySelector(canvasId);
           // Initialize the GL context
@@ -304,8 +282,18 @@ function dvui(canvasId, wasmFile) {
         let renderRequested = false;
         let renderTimeoutId = 0;
 
+        wasmResult.instance.exports.app_init();
+
         function render() {
           renderRequested = false;
+
+          // if the canvas changed size, adjust the backing buffer
+          const w = gl.canvas.clientWidth;
+          const h = gl.canvas.clientHeight;
+          gl.canvas.width = Math.round(w * scale);
+          gl.canvas.height = Math.round(h * scale);
+          gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
           let micros_to_wait = wasmResult.instance.exports.app_update();
           if (micros_to_wait == 0) {
             requestRender();

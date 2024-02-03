@@ -24,6 +24,11 @@ pub const wasm = struct {
     pub extern fn wasm_now() f64;
     pub extern fn wasm_clear() void;
 
+    pub extern fn wasm_pixel_width() f32;
+    pub extern fn wasm_pixel_height() f32;
+    pub extern fn wasm_canvas_width() f32;
+    pub extern fn wasm_canvas_height() f32;
+
     pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32) u32;
     pub extern fn wasm_textureDestroy(u32) void;
     pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8) void;
@@ -154,15 +159,11 @@ pub fn begin(self: *WebBackend, arena: std.mem.Allocator) void {
 pub fn end(_: *WebBackend) void {}
 
 pub fn pixelSize(_: *WebBackend) dvui.Size {
-    var w: i32 = 400;
-    var h: i32 = 300;
-    return dvui.Size{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
+    return dvui.Size{ .w = wasm.wasm_pixel_width(), .h = wasm.wasm_pixel_height() };
 }
 
 pub fn windowSize(_: *WebBackend) dvui.Size {
-    var w: i32 = 400;
-    var h: i32 = 300;
-    return dvui.Size{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
+    return dvui.Size{ .w = wasm.wasm_canvas_width(), .h = wasm.wasm_canvas_height() };
 }
 
 pub fn contentScale(_: *WebBackend) f32 {
