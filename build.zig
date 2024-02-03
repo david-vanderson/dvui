@@ -161,15 +161,47 @@ pub fn build(b: *std.Build) !void {
             .dest_dir = .{ .override = .{ .custom = "bin" } },
         });
 
-        const timestamp = b.fmt("s/TIMESTAMP/{d}/g", .{std.time.nanoTimestamp()});
-        const cache_buster = b.addSystemCommand(&.{ "sed", "-i", timestamp, "zig-out/bin/index.html" });
-        cache_buster.step.dependOn(&install_step.step);
+        cacheBusterStep = std.Build.Step.init(.{
+            .id = .custom,
+            .name = "cache-buster",
+            .owner = b,
+            .makeFn = cacheBuster,
+            .first_ret_addr = @returnAddress(),
+        });
+        cacheBusterStep.dependOn(&install_step.step);
 
         const compile_step = b.step("web-test", "Compile the Web test");
-        compile_step.dependOn(&cache_buster.step);
+        compile_step.dependOn(&cacheBusterStep);
 
         compile_step.dependOn(&b.addInstallFileWithDir(.{ .path = "src/backends/index.html" }, .prefix, "bin/index.html").step);
         compile_step.dependOn(&b.addInstallFileWithDir(.{ .path = "src/backends/WebBackend.js" }, .prefix, "bin/WebBackend.js").step);
+    }
+}
+
+var cacheBusterStep: std.Build.Step = undefined;
+
+fn cacheBuster(step: *std.Build.Step, prog_node: *std.Progress.Node) !void {
+    _ = step;
+    _ = prog_node;
+    std.debug.print("cacheBuster\n", .{});
+
+    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const arena = arena_allocator.allocator();
+    defer arena_allocator.deinit();
+
+    const path = "zig-out/bin/index.html";
+    const needle = "TIMESTAMP";
+    var file = try std.fs.cwd().openFile(path, .{});
+    var contents = try file.reader().readAllAlloc(arena, 100 * 1024 * 1024);
+    const index = std.mem.indexOf(u8, contents, needle);
+    file.close();
+
+    if (index) |idx| {
+        var newfile = try std.fs.cwd().createFile(path, .{});
+        defer newfile.close();
+        try newfile.writer().writeAll(contents[0..idx]);
+        try newfile.writer().print("{d}", .{std.time.nanoTimestamp()});
+        try newfile.writer().writeAll(contents[idx + needle.len ..]);
     }
 }
 
