@@ -2423,7 +2423,7 @@ pub const Window = struct {
                 //var first_time = new_time;
                 while (new_time < target) {
                     //i += 1;
-                    std.time.sleep(0);
+                    self.backend.sleep(0);
                     new_time = @max(self.frame_time_ns, self.backend.nanoTime());
                 }
 
@@ -2501,7 +2501,7 @@ pub const Window = struct {
         //std.debug.print("  min {d:6}", .{min_micros});
         if (min_micros > 0) {
             // wait unconditionally for fps target
-            std.time.sleep(min_micros * 1000);
+            self.backend.sleep(min_micros * 1000);
             self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target_min)) * 1000);
         }
 

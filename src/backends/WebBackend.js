@@ -1,3 +1,8 @@
+
+async function dvui_sleep(ms) {
+    await new Promise(r => setTimeout(r, ms));
+}
+
 function dvui(canvasId, wasmFile) {
 
   const vertexShaderSource = `# version 300 es
@@ -74,6 +79,9 @@ function dvui(canvasId, wasmFile) {
         },
         wasm_now() {
           return performance.now();
+        },
+        wasm_sleep(ms) {
+            dvui_sleep(ms);
         },
         wasm_pixel_width() {
             return gl.drawingBufferWidth;
@@ -294,11 +302,11 @@ function dvui(canvasId, wasmFile) {
           gl.canvas.height = Math.round(h * scale);
           gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
-          let micros_to_wait = wasmResult.instance.exports.app_update();
-          if (micros_to_wait == 0) {
+          let millis_to_wait = wasmResult.instance.exports.app_update();
+          if (millis_to_wait == 0) {
             requestRender();
-          } else if (micros_to_wait > 0) {
-            renderTimeoutId = setTimeout(function () { renderTimeoutId = 0; requestRender(); }, micros_to_wait / 1000);
+          } else if (millis_to_wait > 0) {
+            renderTimeoutId = setTimeout(function () { renderTimeoutId = 0; requestRender(); }, millis_to_wait);
           }
           // otherwise something went wrong, so stop
         }
