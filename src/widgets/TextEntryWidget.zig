@@ -516,8 +516,11 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn paste(self: *TextEntryWidget) void {
-    const clip_text = dvui.clipboardText();
-    defer dvui.backendFree(clip_text.ptr);
+    const clip_text = dvui.clipboardText() catch |err| blk: {
+        dvui.log.err("clipboardText error {!}\n", .{err});
+        break :blk "";
+    };
+
     if (self.init_opts.multiline) {
         self.textTyped(clip_text);
     } else {
