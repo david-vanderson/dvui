@@ -95,6 +95,10 @@ function dvui(canvasId, wasmFile) {
         wasm_canvas_height() {
             return gl.canvas.clientHeight;
         },
+        wasm_scissor(x, y, w, h) {
+            // 0,0 is lower left corner, units are same as clientWidth/clientHeight
+            return gl.scissor(x, y, w, h);
+        },
         wasm_clear() {
           gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
           gl.clear(gl.COLOR_BUFFER_BIT);
@@ -133,8 +137,11 @@ function dvui(canvasId, wasmFile) {
           
           gl.deleteTexture(texture);
         },
-        wasm_renderGeometry(textureId, index_ptr, index_len, vertex_ptr, vertex_len, sizeof_vertex, offset_pos, offset_col, offset_uv) {
+        wasm_renderGeometry(textureId, index_ptr, index_len, vertex_ptr, vertex_len, sizeof_vertex, offset_pos, offset_col, offset_uv, x, y, w, h) {
           //console.log("renderGeometry " + textureId + " sizeof " + sizeof_vertex + " pos " + offset_pos + " col " + offset_col + " uv " + offset_uv);
+          
+          const old_scissor = gl.getParameter(gl.SCISSOR_BOX);
+          gl.scissor(x, y, w, h);
 
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
           const indices = new Uint32Array(wasmResult.instance.exports.memory.buffer, index_ptr, index_len / 4);
@@ -219,6 +226,8 @@ function dvui(canvasId, wasmFile) {
             gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
 
             gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_INT, 0);
+
+            gl.scissor(old_scissor[0], old_scissor[1], old_scissor[2], old_scissor[3]);
         },
       },
     };
@@ -286,6 +295,8 @@ function dvui(canvasId, wasmFile) {
 
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.enable(gl.SCISSOR_TEST);
+        gl.scissor(0, 0, gl.canvas.clientWidth, gl.canvas.clientHeight);
 
         let renderRequested = false;
         let renderTimeoutId = 0;

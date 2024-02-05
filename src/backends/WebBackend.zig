@@ -28,11 +28,12 @@ pub const wasm = struct {
     pub extern fn wasm_pixel_height() f32;
     pub extern fn wasm_canvas_width() f32;
     pub extern fn wasm_canvas_height() f32;
+    pub extern fn wasm_scissor(x: u32, y: u32, w: u32, h: u32) void;
 
     pub extern fn wasm_clear() void;
     pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32) u32;
     pub extern fn wasm_textureDestroy(u32) void;
-    pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8) void;
+    pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, x: u32, y: u32, w: u32, h: u32) void;
 };
 
 export const __stack_chk_guard: c_ulong = 0xBAAAAAAD;
@@ -160,6 +161,7 @@ pub fn sleep(self: *WebBackend, ns: u64) void {
 pub fn begin(self: *WebBackend, arena: std.mem.Allocator) void {
     _ = self;
     _ = arena;
+    wasm.wasm_scissor(0, 0, @intFromFloat(wasm.wasm_canvas_width()), @intFromFloat(wasm.wasm_canvas_height()));
 }
 
 pub fn end(_: *WebBackend) void {}
@@ -176,8 +178,21 @@ pub fn contentScale(_: *WebBackend) f32 {
     return 1.0;
 }
 
-pub fn renderGeometry(self: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
-    _ = self;
+pub fn renderGeometry(_: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
+    const clipr = dvui.windowRectPixels().intersect(dvui.clipGet());
+    if (clipr.empty()) {
+        return;
+    }
+
+    // figure out how much we are losing by truncating x and y, need to add that back to w and h
+    const x: u32 = @intFromFloat(clipr.x);
+    const w: u32 = @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x)));
+
+    // y needs to be converted to 0 at bottom first
+    const ry: f32 = wasm.wasm_canvas_height() - clipr.y - clipr.h;
+    const y: u32 = @intFromFloat(ry);
+    const h: u32 = @intFromFloat(@ceil(clipr.h + ry - @floor(ry)));
+
     var index_slice = std.mem.sliceAsBytes(idx);
     var vertex_slice = std.mem.sliceAsBytes(vtx);
 
@@ -191,6 +206,10 @@ pub fn renderGeometry(self: *WebBackend, texture: ?*anyopaque, vtx: []const dvui
         @offsetOf(dvui.Vertex, "pos"),
         @offsetOf(dvui.Vertex, "col"),
         @offsetOf(dvui.Vertex, "uv"),
+        x,
+        y,
+        w,
+        h,
     );
 }
 
@@ -216,7 +235,7 @@ pub fn textureDestroy(_: *WebBackend, texture: *anyopaque) void {
     wasm.wasm_textureDestroy(@as(u32, @intFromPtr(texture)));
 }
 
-pub fn clipboardText(self: *WebBackend) []u8 {
+pub fn clipboardText(self: *WebBackend) error{OutOfMemory}![]u8 {
     _ = self;
     var buf: [10]u8 = [_]u8{0} ** 10;
     @memcpy(buf[0..9], "clipboard");
