@@ -144,7 +144,7 @@ pub fn clear(self: *WebBackend) void {
 }
 
 pub fn backend(self: *WebBackend) dvui.Backend {
-    return dvui.Backend.init(self, nanoTime, sleep, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, free, openURL, refresh);
+    return dvui.Backend.init(self, nanoTime, sleep, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, openURL, refresh);
 }
 
 pub fn nanoTime(self: *WebBackend) i128 {
@@ -227,11 +227,6 @@ pub fn clipboardTextSet(self: *WebBackend, text: []const u8) !void {
     _ = self;
     _ = text;
     return;
-}
-
-pub fn free(self: *WebBackend, p: *anyopaque) void {
-    _ = self;
-    _ = p;
 }
 
 pub fn openURL(self: *WebBackend, url: []const u8) !void {

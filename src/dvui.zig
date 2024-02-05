@@ -1375,8 +1375,7 @@ pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?u32) void {
     }
 }
 
-// caller responsible for calling backendFree on result.ptr
-pub fn clipboardText() []u8 {
+pub fn clipboardText() error{OutOfMemory}![]u8 {
     const cw = currentWindow();
     return cw.backend.clipboardText();
 }
@@ -1384,11 +1383,6 @@ pub fn clipboardText() []u8 {
 pub fn clipboardTextSet(text: []u8) error{OutOfMemory}!void {
     const cw = currentWindow();
     try cw.backend.clipboardTextSet(text);
-}
-
-pub fn backendFree(p: *anyopaque) void {
-    const cw = currentWindow();
-    cw.backend.free(p);
 }
 
 pub fn openURL(url: []const u8) !void {
