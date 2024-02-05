@@ -840,6 +840,10 @@ pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool)
 }
 
 pub fn pathFillConvex(col: Color) !void {
+    if (dvui.windowRectPixels().intersect(dvui.clipGet()).empty()) {
+        return;
+    }
+
     const cw = currentWindow();
     if (cw.path.items.len < 3) {
         cw.path.clearAndFree();
@@ -949,6 +953,10 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
 }
 
 pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) !void {
+    if (dvui.windowRectPixels().intersect(dvui.clipGet()).empty()) {
+        return;
+    }
+
     const cw = currentWindow();
 
     if (cw.path.items.len == 1) {
@@ -5281,6 +5289,9 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 }
 
 pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Color) !void {
+    if (rs.s == 0) return;
+    if (clipGet().intersect(rs.r).empty()) return;
+
     var cw = currentWindow();
 
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, 4);
