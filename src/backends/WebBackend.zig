@@ -6,10 +6,12 @@ const WebBackend = @This();
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
+var arena: std.mem.Allocator = undefined;
+
 const EventTemp = struct {
     kind: u8,
-    int1: u8,
-    int2: u8,
+    int1: u32,
+    int2: u32,
     float1: f32,
     float2: f32,
 };
@@ -88,7 +90,12 @@ export fn dvui_c_ldexp(x: f64, n: c_int) f64 {
     return x * @exp2(@as(f64, @floatFromInt(n)));
 }
 
-export fn add_event(kind: u8, int1: u8, int2: u8, float1: f32, float2: f32) void {
+export fn arena_u8(len: usize) [*c]u8 {
+    var buf = arena.alloc(u8, len) catch return @ptrFromInt(0);
+    return buf.ptr;
+}
+
+export fn add_event(kind: u8, int1: u32, int2: u32, float1: f32, float2: f32) void {
     event_temps.append(.{
         .kind = kind,
         .int1 = int1,
@@ -105,7 +112,7 @@ pub fn hasEvent(_: *WebBackend) bool {
     return event_temps.items.len > 0;
 }
 
-fn buttonFromJS(jsButton: u8) dvui.enums.Button {
+fn buttonFromJS(jsButton: u32) dvui.enums.Button {
     return switch (jsButton) {
         0 => .left,
         1 => .middle,
@@ -116,6 +123,134 @@ fn buttonFromJS(jsButton: u8) dvui.enums.Button {
     };
 }
 
+fn hashKeyCode(str: []const u8) u32 {
+    var fnv = std.hash.Fnv1a_32.init();
+    fnv.update(str);
+    return fnv.final();
+}
+
+pub fn web_key_code_to_dvui(code: []u8) dvui.enums.Key {
+    @setEvalBranchQuota(2000);
+    var fnv = std.hash.Fnv1a_32.init();
+    fnv.update(code);
+    return switch (fnv.final()) {
+        hashKeyCode("KeyA") => .a,
+        hashKeyCode("KeyB") => .b,
+        hashKeyCode("KeyC") => .c,
+        hashKeyCode("KeyD") => .d,
+        hashKeyCode("KeyE") => .e,
+        hashKeyCode("KeyF") => .f,
+        hashKeyCode("KeyG") => .g,
+        hashKeyCode("KeyH") => .h,
+        hashKeyCode("KeyI") => .i,
+        hashKeyCode("KeyJ") => .j,
+        hashKeyCode("KeyK") => .k,
+        hashKeyCode("KeyL") => .l,
+        hashKeyCode("KeyM") => .m,
+        hashKeyCode("KeyN") => .n,
+        hashKeyCode("KeyO") => .o,
+        hashKeyCode("KeyP") => .p,
+        hashKeyCode("KeyQ") => .q,
+        hashKeyCode("KeyR") => .r,
+        hashKeyCode("KeyS") => .s,
+        hashKeyCode("KeyT") => .t,
+        hashKeyCode("KeyU") => .u,
+        hashKeyCode("KeyV") => .v,
+        hashKeyCode("KeyW") => .w,
+        hashKeyCode("KeyX") => .x,
+        hashKeyCode("KeyY") => .y,
+        hashKeyCode("KeyZ") => .z,
+
+        hashKeyCode("Digit0") => .zero,
+        hashKeyCode("Digit1") => .one,
+        hashKeyCode("Digit2") => .two,
+        hashKeyCode("Digit3") => .three,
+        hashKeyCode("Digit4") => .four,
+        hashKeyCode("Digit5") => .five,
+        hashKeyCode("Digit6") => .six,
+        hashKeyCode("Digit7") => .seven,
+        hashKeyCode("Digit8") => .eight,
+        hashKeyCode("Digit9") => .nine,
+
+        hashKeyCode("F1") => .f1,
+        hashKeyCode("F2") => .f2,
+        hashKeyCode("F3") => .f3,
+        hashKeyCode("F4") => .f4,
+        hashKeyCode("F5") => .f5,
+        hashKeyCode("F6") => .f6,
+        hashKeyCode("F7") => .f7,
+        hashKeyCode("F8") => .f8,
+        hashKeyCode("F9") => .f9,
+        hashKeyCode("F10") => .f10,
+        hashKeyCode("F11") => .f11,
+        hashKeyCode("F12") => .f12,
+
+        hashKeyCode("NumpadDivide") => .kp_divide,
+        hashKeyCode("NumpadMultiply") => .kp_multiply,
+        hashKeyCode("NumpadSubtract") => .kp_subtract,
+        hashKeyCode("NumpadAdd") => .kp_add,
+        hashKeyCode("NumpadEnter") => .kp_enter,
+        hashKeyCode("Numpad0") => .kp_0,
+        hashKeyCode("Numpad1") => .kp_1,
+        hashKeyCode("Numpad2") => .kp_2,
+        hashKeyCode("Numpad3") => .kp_3,
+        hashKeyCode("Numpad4") => .kp_4,
+        hashKeyCode("Numpad5") => .kp_5,
+        hashKeyCode("Numpad6") => .kp_6,
+        hashKeyCode("Numpad7") => .kp_7,
+        hashKeyCode("Numpad8") => .kp_8,
+        hashKeyCode("Numpad9") => .kp_9,
+        hashKeyCode("NumpadDecimal") => .kp_decimal,
+
+        hashKeyCode("Enter") => .enter,
+        hashKeyCode("Escape") => .escape,
+        hashKeyCode("Tab") => .tab,
+        hashKeyCode("ShiftLeft") => .left_shift,
+        hashKeyCode("ShiftRight") => .right_shift,
+        hashKeyCode("ControlLeft") => .left_control,
+        hashKeyCode("ControlRight") => .right_control,
+        hashKeyCode("AltLeft") => .left_alt,
+        hashKeyCode("AltRight") => .right_alt,
+        hashKeyCode("MetaLeft") => .left_command, // is this correct?
+        hashKeyCode("MetaRight") => .right_command, // is this correct?
+        hashKeyCode("ContextMenu") => .menu, // is this correct?
+        hashKeyCode("NumLock") => .num_lock,
+        hashKeyCode("CapsLock") => .caps_lock,
+        //c.SDLK_PRINTSCREEN => .print,  // can we get this?
+        hashKeyCode("ScrollLock") => .scroll_lock,
+        hashKeyCode("Pause") => .pause,
+
+        hashKeyCode("Delete") => .delete,
+        hashKeyCode("Home") => .home,
+        hashKeyCode("End") => .end,
+        hashKeyCode("PageUp") => .page_up,
+        hashKeyCode("PageDown") => .page_down,
+        hashKeyCode("Insert") => .insert,
+        hashKeyCode("ArrowLeft") => .left,
+        hashKeyCode("ArrowRight") => .right,
+        hashKeyCode("ArrowUp") => .up,
+        hashKeyCode("ArrowDown") => .down,
+        hashKeyCode("Backspace") => .backspace,
+        hashKeyCode("Space") => .space,
+        hashKeyCode("Minus") => .minus,
+        hashKeyCode("Equal") => .equal,
+        hashKeyCode("BracketLeft") => .left_bracket,
+        hashKeyCode("BracketRight") => .right_bracket,
+        hashKeyCode("Backslash") => .backslash,
+        hashKeyCode("Semicolon") => .semicolon,
+        hashKeyCode("Quote") => .apostrophe,
+        hashKeyCode("Comma") => .comma,
+        hashKeyCode("Period") => .period,
+        hashKeyCode("Slash") => .slash,
+        hashKeyCode("Backquote") => .grave,
+
+        else => blk: {
+            dvui.log.debug("web_key_code_to_dvui unknown key code {s}\n", .{code});
+            break :blk .unknown;
+        },
+    };
+}
+
 pub fn addAllEvents(_: *WebBackend, win: *dvui.Window) !void {
     for (event_temps.items) |e| {
         switch (e.kind) {
@@ -123,6 +258,29 @@ pub fn addAllEvents(_: *WebBackend, win: *dvui.Window) !void {
             2 => _ = try win.addEventMouseButton(buttonFromJS(e.int1), .press),
             3 => _ = try win.addEventMouseButton(buttonFromJS(e.int1), .release),
             4 => _ = try win.addEventMouseWheel(if (e.float1 > 0) -20 else 20),
+            5 => {
+                const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
+                std.log.debug("keydown {s}", .{str});
+                _ = try win.addEventKey(.{
+                    .action = .down,
+                    .code = web_key_code_to_dvui(str),
+                    .mod = .none,
+                });
+            },
+            6 => {
+                const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
+                std.log.debug("keyup {s}", .{str});
+                _ = try win.addEventKey(.{
+                    .action = .up,
+                    .code = web_key_code_to_dvui(str),
+                    .mod = .none,
+                });
+            },
+            7 => {
+                const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
+                std.log.debug("text event {s}", .{str});
+                _ = try win.addEventText(str);
+            },
             else => std.log.debug("addAllEvents unknown event kind {d}", .{e.kind}),
         }
     }
@@ -158,9 +316,9 @@ pub fn sleep(self: *WebBackend, ns: u64) void {
     wasm.wasm_sleep(@intCast(@divTrunc(ns, 1_000_000)));
 }
 
-pub fn begin(self: *WebBackend, arena: std.mem.Allocator) void {
+pub fn begin(self: *WebBackend, arena_in: std.mem.Allocator) void {
     _ = self;
-    _ = arena;
+    arena = arena_in;
     wasm.wasm_scissor(0, 0, @intFromFloat(wasm.wasm_canvas_width()), @intFromFloat(wasm.wasm_canvas_height()));
 }
 

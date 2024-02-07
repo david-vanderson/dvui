@@ -364,6 +364,32 @@ function dvui(canvasId, wasmFile) {
             wasmResult.instance.exports.add_event(4, 0, 0, ev.deltaY, 0);
             requestRender();
         });
+        canvas.addEventListener("keydown", (ev) => {
+            const str = utf8encoder.encode(ev.code);
+            const ptr = wasmResult.instance.exports.arena_u8(str.length);
+            var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
+            dest.set(str);
+            wasmResult.instance.exports.add_event(5, ptr, str.length, 0, 0);
+            requestRender();
+        });
+        canvas.addEventListener("keyup", (ev) => {
+            const str = utf8encoder.encode(ev.code);
+            const ptr = wasmResult.instance.exports.arena_u8(str.length);
+            var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
+            dest.set(str);
+            wasmResult.instance.exports.add_event(6, ptr, str.length, 0, 0);
+            requestRender();
+        });
+        canvas.addEventListener("beforeinput", (ev) => {
+            if (ev.data) {
+                const str = utf8encoder.encode(ev.data);
+                const ptr = wasmResult.instance.exports.arena_u8(str.length);
+                var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
+                dest.set(str);
+                wasmResult.instance.exports.add_event(7, ptr, str.length, 0, 0);
+            }
+            requestRender();
+        });
 
         // start the first update
         requestRender();

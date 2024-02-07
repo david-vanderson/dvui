@@ -153,6 +153,7 @@ pub fn build(b: *std.Build) !void {
             "app_deinit",
             "app_update",
             "add_event",
+            "arena_u8",
         };
 
         add_include_paths(b, wasm);
