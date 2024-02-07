@@ -840,12 +840,14 @@ pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool)
 }
 
 pub fn pathFillConvex(col: Color) !void {
-    if (dvui.windowRectPixels().intersect(dvui.clipGet()).empty()) {
+    const cw = currentWindow();
+
+    if (cw.path.items.len < 3) {
+        cw.path.clearAndFree();
         return;
     }
 
-    const cw = currentWindow();
-    if (cw.path.items.len < 3) {
+    if (dvui.windowRectPixels().intersect(dvui.clipGet()).empty()) {
         cw.path.clearAndFree();
         return;
     }
@@ -953,11 +955,12 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
 }
 
 pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) !void {
+    const cw = currentWindow();
+
     if (dvui.windowRectPixels().intersect(dvui.clipGet()).empty()) {
+        cw.path.clearAndFree();
         return;
     }
-
-    const cw = currentWindow();
 
     if (cw.path.items.len == 1) {
         // draw a circle with radius thickness at that point
