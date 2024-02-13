@@ -365,6 +365,8 @@ function dvui(canvasId, wasmFile) {
             requestRender();
         });
         canvas.addEventListener("keydown", (ev) => {
+            // preventDefault to stop tab from tabbing away from the canvas
+            ev.preventDefault();
             const str = utf8encoder.encode(ev.code);
             const ptr = wasmResult.instance.exports.arena_u8(str.length);
             var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
