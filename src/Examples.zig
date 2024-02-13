@@ -24,13 +24,13 @@ pub var show_demo_window: bool = false;
 var checkbox_bool: bool = false;
 var icon_image_size_extra: f32 = 0;
 var icon_image_rotation: f32 = 0;
-var test_array = [_]f32{ 0, 1, 2 };
-var slider_vector_val: []f32 = test_array[0..3];
+var slider_vector_array = [_]f32{ 0, 1, 2 };
 var slider_val: f32 = 0.0;
 var slider_entry_val: f32 = 0.05;
 var slider_entry_min: bool = true;
 var slider_entry_max: bool = true;
 var slider_entry_interval: bool = true;
+var slider_entry_vector: bool = false;
 var text_entry_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
@@ -397,8 +397,12 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Slider Entry", .{}, .{ .gravity_y = 0.5 });
-        _ = try dvui.sliderEntry(@src(), "val: {d:0.3}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{ .gravity_y = 0.5 });
-        try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{ .gravity_y = 0.5 });
+        if (!slider_entry_vector) {
+            _ = try dvui.sliderEntry(@src(), "val: {d:0.3}", .{ .value = &slider_entry_val, .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{ .gravity_y = 0.5 });
+            try dvui.label(@src(), "(enter or ctrl-click)", .{}, .{ .gravity_y = 0.5 });
+        } else {
+            _ = try dvui.sliderVector(@src(), "{d:0.2}", 3, &slider_vector_array, .{ .min = (if (slider_entry_min) 0 else null), .max = (if (slider_entry_max) 1 else null), .interval = (if (slider_entry_interval) 0.1 else null) }, .{});
+        }
     }
 
     {
@@ -408,14 +412,7 @@ pub fn basicWidgets() !void {
         try dvui.checkbox(@src(), &slider_entry_min, "Min", .{});
         try dvui.checkbox(@src(), &slider_entry_max, "Max", .{});
         try dvui.checkbox(@src(), &slider_entry_interval, "Interval", .{});
-    }
-
-    try dvui.label(@src(), "Vector Slider Entry", .{}, .{ .gravity_y = 0.5 });
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer hbox.deinit();
-
-        _ = try dvui.sliderVector(@src(), "{d:0.2}", 3, slider_vector_val, .{ .min = -1, .max = 2 }, .{ .gravity_y = 0.5, .min_size_content = .{}, .expand = .horizontal, .font = dvui.themeGet().font_body.resize(9) });
+        try dvui.checkbox(@src(), &slider_entry_vector, "Vector", .{});
     }
 
     _ = dvui.spacer(@src(), .{ .h = 4 }, .{});

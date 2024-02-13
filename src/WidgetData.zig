@@ -87,7 +87,11 @@ pub fn register(self: *const WidgetData) !void {
         }
 
         if (self.id == cw.debug_widget_id) {
-            cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x} {s}\n\n{}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{ self.id, name, rs.r, self.options.expandGet(), rs.s, self.options.paddingGet().scale(rs.s), self.options.borderGet().scale(rs.s), self.options.marginGet().scale(rs.s) });
+            var min_size = Size{};
+            if (dvui.minSizeGet(self.id)) |ms| {
+                min_size = ms;
+            }
+            cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x} {s}\n\n{}\nmin {}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{ self.id, name, rs.r, min_size, self.options.expandGet(), rs.s, self.options.paddingGet().scale(rs.s), self.options.borderGet().scale(rs.s), self.options.marginGet().scale(rs.s) });
             const clipr = dvui.clipGet();
             // clip to whole window so we always see the outline
             dvui.clipSet(dvui.windowRectPixels());
