@@ -42,6 +42,9 @@ var backend: WebBackend = undefined;
 const zig_favicon = @embedFile("src/zig-favicon.png");
 
 export fn app_init() i32 {
+    dvui.Adwaita.light = dvui.Adwaita.light.fontSizeAdd(2);
+    dvui.Adwaita.dark = dvui.Adwaita.dark.fontSizeAdd(2);
+
     backend = WebBackend.init() catch {
         return 1;
     };
@@ -135,6 +138,8 @@ fn dvui_frame() !void {
     try tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
     try tl2.addText("\n\n", .{});
     try tl2.addText("Cursor is always being set by dvui.", .{});
+    try tl2.addText("\n\n", .{});
+    try tl2.addText("Fonts are being rendered by stb_truetype.", .{});
     tl2.deinit();
 
     if (dvui.Examples.show_demo_window) {
