@@ -4,6 +4,8 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Options = dvui.Options;
 
+const Theme = @This();
+
 name: []const u8,
 
 // widgets can use this if they need to adjust colors
@@ -51,3 +53,18 @@ style_accent: Options,
 
 // used for a button to perform dangerous actions
 style_err: Options,
+
+pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
+    var ret = self.*;
+    ret.font_body.size += delta;
+    ret.font_heading.size += delta;
+    ret.font_caption.size += delta;
+    ret.font_caption_heading.size += delta;
+    ret.font_title.size += delta;
+    ret.font_title_1.size += delta;
+    ret.font_title_2.size += delta;
+    ret.font_title_3.size += delta;
+    ret.font_title_4.size += delta;
+
+    return ret;
+}
