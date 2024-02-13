@@ -129,7 +129,7 @@ fn hashKeyCode(str: []const u8) u32 {
     return fnv.final();
 }
 
-pub fn web_key_code_to_dvui(code: []u8) dvui.enums.Key {
+fn web_key_code_to_dvui(code: []u8) dvui.enums.Key {
     @setEvalBranchQuota(2000);
     var fnv = std.hash.Fnv1a_32.init();
     fnv.update(code);
@@ -251,6 +251,18 @@ pub fn web_key_code_to_dvui(code: []u8) dvui.enums.Key {
     };
 }
 
+fn web_mod_code_to_dvui(wmod: u8) dvui.enums.Mod {
+    if (wmod == 0) return .none;
+
+    var m: u16 = 0;
+    if (wmod & 0b0001 > 0) m |= @intFromEnum(dvui.enums.Mod.lshift);
+    if (wmod & 0b0010 > 0) m |= @intFromEnum(dvui.enums.Mod.lcontrol);
+    if (wmod & 0b0100 > 0) m |= @intFromEnum(dvui.enums.Mod.lalt);
+    if (wmod & 0b1000 > 0) m |= @intFromEnum(dvui.enums.Mod.lcommand);
+
+    return @as(dvui.enums.Mod, @enumFromInt(m));
+}
+
 pub fn addAllEvents(_: *WebBackend, win: *dvui.Window) !void {
     for (event_temps.items) |e| {
         switch (e.kind) {
@@ -260,28 +272,25 @@ pub fn addAllEvents(_: *WebBackend, win: *dvui.Window) !void {
             4 => _ = try win.addEventMouseWheel(if (e.float1 > 0) -20 else 20),
             5 => {
                 const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
-                std.log.debug("keydown {s}", .{str});
                 _ = try win.addEventKey(.{
-                    .action = .down,
+                    .action = if (e.float1 > 0) .repeat else .down,
                     .code = web_key_code_to_dvui(str),
-                    .mod = .none,
+                    .mod = web_mod_code_to_dvui(@intFromFloat(e.float2)),
                 });
             },
             6 => {
                 const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
-                std.log.debug("keyup {s}", .{str});
                 _ = try win.addEventKey(.{
                     .action = .up,
                     .code = web_key_code_to_dvui(str),
-                    .mod = .none,
+                    .mod = web_mod_code_to_dvui(@intFromFloat(e.float2)),
                 });
             },
             7 => {
                 const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
-                std.log.debug("text event {s}", .{str});
                 _ = try win.addEventText(str);
             },
-            else => std.log.debug("addAllEvents unknown event kind {d}", .{e.kind}),
+            else => dvui.log.debug("addAllEvents unknown event kind {d}", .{e.kind}),
         }
     }
 
