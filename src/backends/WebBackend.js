@@ -369,7 +369,7 @@ function dvui(canvasId, wasmFile) {
             const ptr = wasmResult.instance.exports.arena_u8(str.length);
             var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
             dest.set(str);
-            wasmResult.instance.exports.add_event(5, ptr, str.length, 0, 0);
+            wasmResult.instance.exports.add_event(5, ptr, str.length, ev.repeat, (ev.metaKey << 3) + (ev.altKey << 2) + (ev.ctrlKey << 1) + (ev.shiftKey << 0));
             requestRender();
         });
         canvas.addEventListener("keyup", (ev) => {
@@ -377,7 +377,7 @@ function dvui(canvasId, wasmFile) {
             const ptr = wasmResult.instance.exports.arena_u8(str.length);
             var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
             dest.set(str);
-            wasmResult.instance.exports.add_event(6, ptr, str.length, 0, 0);
+            wasmResult.instance.exports.add_event(6, ptr, str.length, 0, (ev.metaKey << 3) + (ev.altKey << 2) + (ev.ctrlKey << 1) + (ev.shiftKey << 0));
             requestRender();
         });
         canvas.addEventListener("beforeinput", (ev) => {
@@ -387,8 +387,8 @@ function dvui(canvasId, wasmFile) {
                 var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
                 dest.set(str);
                 wasmResult.instance.exports.add_event(7, ptr, str.length, 0, 0);
+                requestRender();
             }
-            requestRender();
         });
 
         // start the first update
