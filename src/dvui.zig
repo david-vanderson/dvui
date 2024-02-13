@@ -4428,6 +4428,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         const msize = options.fontGet().textSize("M") catch unreachable;
         options.min_size_content = .{ .w = msize.w * 10, .h = msize.h };
     }
+
     var ret = false;
     var hover = false;
     var b = BoxWidget.init(src, .horizontal, false, options);
@@ -4755,9 +4756,6 @@ pub const SliderVectorInitOptions = struct {
 // min_size_content
 pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, comptime num_components: u32, value: anytype, init_opts: SliderVectorInitOptions, opts: Options) !bool {
     var data_arr = checkAndCastDataPtr(num_components, value);
-
-    var b = try dvui.box(line, .horizontal, .{ .expand = opts.expandGet() });
-    defer b.deinit();
 
     var any_changed = false;
     inline for (0..num_components) |i| {
