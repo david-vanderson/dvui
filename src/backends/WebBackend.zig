@@ -30,7 +30,6 @@ pub const wasm = struct {
     pub extern fn wasm_pixel_height() f32;
     pub extern fn wasm_canvas_width() f32;
     pub extern fn wasm_canvas_height() f32;
-    pub extern fn wasm_scissor(x: u32, y: u32, w: u32, h: u32) void;
 
     pub extern fn wasm_clear() void;
     pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32) u32;
@@ -328,7 +327,6 @@ pub fn sleep(self: *WebBackend, ns: u64) void {
 pub fn begin(self: *WebBackend, arena_in: std.mem.Allocator) void {
     _ = self;
     arena = arena_in;
-    wasm.wasm_scissor(0, 0, @intFromFloat(wasm.wasm_canvas_width()), @intFromFloat(wasm.wasm_canvas_height()));
 }
 
 pub fn end(_: *WebBackend) void {}
@@ -356,9 +354,11 @@ pub fn renderGeometry(_: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Ve
     const w: u32 = @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x)));
 
     // y needs to be converted to 0 at bottom first
-    const ry: f32 = wasm.wasm_canvas_height() - clipr.y - clipr.h;
+    const ry: f32 = wasm.wasm_pixel_height() - clipr.y - clipr.h;
     const y: u32 = @intFromFloat(ry);
     const h: u32 = @intFromFloat(@ceil(clipr.h + ry - @floor(ry)));
+
+    //dvui.log.debug("renderGeometry pixels {} clipr {} ry {d} clip {d} {d} {d} {d}", .{ dvui.windowRectPixels(), clipr, ry, x, y, w, h });
 
     var index_slice = std.mem.sliceAsBytes(idx);
     var vertex_slice = std.mem.sliceAsBytes(vtx);
