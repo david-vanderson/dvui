@@ -485,7 +485,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         return fce;
     }
 
-    //std.debug.print("FontCacheGet creating font size {d} name \"{s}\"\n", .{ font.size, font.name });
+    log.debug("FontCacheGet creating font size {d} name \"{s}\"\n", .{ font.size, font.name });
 
     var entry: FontCacheEntry = undefined;
 
@@ -540,7 +540,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     } else {
         var face: c.stbtt_fontinfo = undefined;
         _ = c.stbtt_InitFont(&face, font.ttf_bytes.ptr, c.stbtt_GetFontOffsetForIndex(font.ttf_bytes.ptr, 0));
-        const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, font.size);
+        const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, @ceil(font.size));
 
         var face2_ascent: c_int = undefined;
         var face2_descent: c_int = undefined;
@@ -563,7 +563,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         };
     }
 
-    //std.debug.print("fontcache size {d} ascent {d} height {d}\n", .{ font.size, entry.ascent, entry.height });
+    log.debug("fontcache size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
 
     try cw.font_cache.put(fontHash, entry);
 
@@ -2646,7 +2646,7 @@ pub const Window = struct {
         self.wd.rect = self.backend.windowSize().rect().scale(1.0 / self.content_scale);
         self.natural_scale = self.rect_pixels.w / self.wd.rect.w;
 
-        //std.debug.print("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
+        //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
         try subwindowAdd(self.wd.id, self.wd.rect, self.rect_pixels, false, null);
 
@@ -5040,7 +5040,7 @@ pub fn renderText(opts: renderTextOptions) !void {
 
                 if (useFreeType) {
                     FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @as(i32, @bitCast(FontCacheEntry.LoadFlags{ .render = true })))) catch |err| {
-                        dvui.log.warn("renderText: freetype error {!} trying to FT_Load_Char font {s} codepoint {d}\n", .{ err, opts.font.name, codepoint });
+                        log.warn("renderText: freetype error {!} trying to FT_Load_Char font {s} codepoint {d}\n", .{ err, opts.font.name, codepoint });
                         return error.freetypeError;
                     };
 
@@ -5074,7 +5074,7 @@ pub fn renderText(opts: renderTextOptions) !void {
                     // single channel
                     var bitmap = try cw.arena.alloc(u8, @as(usize, out_w * out_h));
 
-                    //std.debug.print("makecodepointBitmap size x {d} y {d} w {d} h {d} di {d} out w {d} h {d}\n", .{ x, y, size.w, size.h, di, out_w, out_h });
+                    //log.debug("makecodepointBitmap size x {d} y {d} w {d} h {d} out w {d} h {d}", .{ x, y, size.w, size.h, out_w, out_h });
 
                     c.stbtt_MakeCodepointBitmapSubpixel(&fce.face, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), fce.scaleFactor, fce.scaleFactor, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
 
@@ -5097,7 +5097,6 @@ pub fn renderText(opts: renderTextOptions) !void {
                     }
                 }
 
-                //FT x += @as(i32, @intCast(bitmap.width)) + 2 * pad;
                 x += @as(i32, @intFromFloat(gi.w)) + 2 * pad;
 
                 i += 1;
@@ -5112,7 +5111,6 @@ pub fn renderText(opts: renderTextOptions) !void {
         fce.texture_atlas_size = size;
     }
 
-    //std.debug.print("creating text texture size {} font size {d} for \"{s}\"\n", .{size, font.size, text});
     var vtx = std.ArrayList(Vertex).init(cw.arena);
     defer vtx.deinit();
     var idx = std.ArrayList(u32).init(cw.arena);

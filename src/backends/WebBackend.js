@@ -55,7 +55,6 @@ function dvui(canvasId, wasmFile) {
     let programInfo;
     const textures = new Map();
     let newTextureId = 1;
-    const scale = window.devicePixelRatio;
 
     let wasmResult;
     let log_string = '';
@@ -94,10 +93,6 @@ function dvui(canvasId, wasmFile) {
         },
         wasm_canvas_height() {
             return gl.canvas.clientHeight;
-        },
-        wasm_scissor(x, y, w, h) {
-            // 0,0 is lower left corner, units are same as clientWidth/clientHeight
-            return gl.scissor(x, y, w, h);
         },
         wasm_clear() {
             gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
@@ -152,12 +147,12 @@ function dvui(canvasId, wasmFile) {
             gl.bufferData( gl.ARRAY_BUFFER, vertexes, gl.STATIC_DRAW);
 
             let matrix = new Float32Array(16);
-            matrix[0] = 2.0 / gl.canvas.clientWidth;
+            matrix[0] = 2.0 / gl.drawingBufferWidth;
             matrix[1] = 0.0;
             matrix[2] = 0.0;
             matrix[3] = 0.0;
             matrix[4] = 0.0;
-            matrix[5] = -2.0 / gl.canvas.clientHeight;
+            matrix[5] = -2.0 / gl.drawingBufferHeight;
             matrix[6] = 0.0;
             matrix[7] = 0.0;
             matrix[8] = 0.0;
@@ -309,9 +304,12 @@ function dvui(canvasId, wasmFile) {
             // if the canvas changed size, adjust the backing buffer
             const w = gl.canvas.clientWidth;
             const h = gl.canvas.clientHeight;
+            const scale = window.devicePixelRatio;
+            //console.log("wxh " + w + "x" + h + " scale " + scale);
             gl.canvas.width = Math.round(w * scale);
             gl.canvas.height = Math.round(h * scale);
             gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+            gl.scissor(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
             let millis_to_wait = wasmResult.instance.exports.app_update();
             if (millis_to_wait == 0) {
