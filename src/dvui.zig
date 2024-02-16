@@ -2244,7 +2244,7 @@ pub const Window = struct {
         self.positionMouseEventRemove();
 
         const newpt = (Point{ .x = x, .y = y }).scale(self.natural_scale / self.content_scale);
-        //std.debug.print("mouse motion {d} {d} -> {d} {d}\n", .{ x, y, newpt.x, newpt.y });
+        //log.debug("mouse motion {d} {d} -> {d} {d}", .{ x, y, newpt.x, newpt.y });
         const dp = newpt.diff(self.mouse_pt);
         self.mouse_pt = newpt;
         const winId = self.windowFor(self.mouse_pt);
