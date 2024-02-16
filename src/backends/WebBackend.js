@@ -224,6 +224,11 @@ function dvui(canvasId, wasmFile) {
 
             gl.scissor(old_scissor[0], old_scissor[1], old_scissor[2], old_scissor[3]);
         },
+        wasm_cursor(name_ptr, name_len) {
+            let cursor_name = utf8decoder.decode(new Uint8Array(wasmResult.instance.exports.memory.buffer, name_ptr, name_len));
+            console.log("cursor " + cursor_name);
+            gl.canvas.style.cursor = cursor_name;
+        },
       },
     };
 

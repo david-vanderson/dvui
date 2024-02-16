@@ -7,6 +7,7 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 var arena: std.mem.Allocator = undefined;
+cursor_last: dvui.enums.Cursor = .arrow,
 
 const EventTemp = struct {
     kind: u8,
@@ -35,6 +36,7 @@ pub const wasm = struct {
     pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32) u32;
     pub extern fn wasm_textureDestroy(u32) void;
     pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, x: u32, y: u32, w: u32, h: u32) void;
+    pub extern fn wasm_cursor(name: [*]const u8, name_len: u32) void;
 };
 
 export const __stack_chk_guard: c_ulong = 0xBAAAAAAD;
@@ -297,7 +299,7 @@ pub fn addAllEvents(_: *WebBackend, win: *dvui.Window) !void {
 }
 
 pub fn init() !WebBackend {
-    var back: WebBackend = undefined;
+    var back: WebBackend = .{};
     return back;
 }
 
@@ -422,4 +424,26 @@ pub fn openURL(self: *WebBackend, url: []const u8) !void {
 
 pub fn refresh(self: *WebBackend) void {
     _ = self;
+}
+
+pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
+    if (cursor != self.cursor_last) {
+        self.cursor_last = cursor;
+
+        const name: []const u8 = switch (cursor) {
+            .arrow => "default",
+            .ibeam => "text",
+            .wait => "wait",
+            .wait_arrow => "progress",
+            .crosshair => "crosshair",
+            .arrow_nw_se => "nwse-resize",
+            .arrow_ne_sw => "nesw-resize",
+            .arrow_w_e => "ew-resize",
+            .arrow_n_s => "ns-resize",
+            .arrow_all => "move",
+            .bad => "not-allowed",
+            .hand => "pointer",
+        };
+        wasm.wasm_cursor(name.ptr, name.len);
+    }
 }

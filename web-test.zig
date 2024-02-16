@@ -84,12 +84,7 @@ fn update() !i32 {
 
     const end_micros = try win.end(.{});
 
-    //// set cursor only if it is above our demo window
-    //if (app.win.cursorRequestedFloating()) |cursor| {
-    //    app.win_backend.setCursor(cursor);
-    //} else {
-    //    app.win_backend.setCursor(.bad);
-    //}
+    backend.setCursor(win.cursorRequested());
 
     const wait_event_micros = win.waitTime(end_micros, null);
     return @intCast(@divTrunc(wait_event_micros, 1000));
