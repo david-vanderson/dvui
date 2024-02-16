@@ -345,8 +345,8 @@ function dvui(canvasId, wasmFile) {
         });
         canvas.addEventListener("mousemove", (ev) => {
             var rect = canvas.getBoundingClientRect();
-            var x = (ev.clientX - rect.left) / (rect.right - rect.left) * canvas.width;
-            var y = (ev.clientY - rect.top) / (rect.bottom - rect.top) * canvas.height;
+            var x = (ev.clientX - rect.left) / (rect.right - rect.left) * canvas.clientWidth;
+            var y = (ev.clientY - rect.top) / (rect.bottom - rect.top) * canvas.clientHeight;
             wasmResult.instance.exports.add_event(1, 0, 0, x, y);
             requestRender();
         });
