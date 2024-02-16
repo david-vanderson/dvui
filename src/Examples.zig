@@ -670,50 +670,6 @@ pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: O
 pub fn layout() !void {
     const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
 
-    try dvui.label(@src(), "margin/border/padding", .{}, .{});
-    {
-        var vbox = try dvui.box(@src(), .vertical, .{});
-        defer vbox.deinit();
-
-        var vbox2 = try dvui.box(@src(), .vertical, .{ .gravity_x = 0.5 });
-        _ = try dvui.sliderEntry(@src(), "margin top {d:0.0}", .{ .value = &layout_margin.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = try dvui.sliderEntry(@src(), "border top {d:0.0}", .{ .value = &layout_border.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = try dvui.sliderEntry(@src(), "padding top {d:0.0}", .{ .value = &layout_padding.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        vbox2.deinit();
-
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-
-        vbox2 = try dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
-        _ = try dvui.sliderEntry(@src(), "margin left {d:0.0}", .{ .value = &layout_margin.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = try dvui.sliderEntry(@src(), "border left {d:0.0}", .{ .value = &layout_border.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = try dvui.sliderEntry(@src(), "padding left {d:0.0}", .{ .value = &layout_padding.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        vbox2.deinit();
-
-        var o = try dvui.overlay(@src(), .{ .min_size_content = .{ .w = 164, .h = 140 } });
-        var o2 = try dvui.overlay(@src(), .{ .background = true, .gravity_x = 0.5, .gravity_y = 0.5 });
-        if (try dvui.button(@src(), "reset", .{}, .{ .margin = layout_margin, .border = layout_border, .padding = layout_padding })) {
-            layout_margin = Rect.all(4);
-            layout_border = Rect.all(0);
-            layout_padding = Rect.all(4);
-        }
-        o2.deinit();
-        o.deinit();
-
-        vbox2 = try dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
-        _ = try dvui.sliderEntry(@src(), "margin right {d:0.0}", .{ .value = &layout_margin.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = try dvui.sliderEntry(@src(), "border right {d:0.0}", .{ .value = &layout_border.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = try dvui.sliderEntry(@src(), "padding right {d:0.0}", .{ .value = &layout_padding.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        vbox2.deinit();
-
-        hbox.deinit();
-
-        vbox2 = try dvui.box(@src(), .vertical, .{ .gravity_x = 0.5 });
-        _ = try dvui.sliderEntry(@src(), "margin bottom {d:0.0}", .{ .value = &layout_margin.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = try dvui.sliderEntry(@src(), "border bottom {d:0.0}", .{ .value = &layout_border.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        _ = try dvui.sliderEntry(@src(), "padding bottom {d:0.0}", .{ .value = &layout_padding.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
-        vbox2.deinit();
-    }
-
     try dvui.label(@src(), "gravity/expand", .{}, .{});
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
@@ -741,6 +697,50 @@ pub fn layout() !void {
         try dvui.checkbox(@src(), &layout_expand_horizontal, "Expand Horizontal", .{});
         try dvui.checkbox(@src(), &layout_expand_vertical, "Expand Vertical", .{});
         vbox.deinit();
+    }
+
+    try dvui.label(@src(), "margin/border/padding", .{}, .{});
+    {
+        var vbox = try dvui.box(@src(), .vertical, .{});
+        defer vbox.deinit();
+
+        var vbox2 = try dvui.box(@src(), .vertical, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "padding {d:0.0}", .{ .value = &layout_padding.y, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        vbox2.deinit();
+
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+
+        vbox2 = try dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "padding {d:0.0}", .{ .value = &layout_padding.x, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        vbox2.deinit();
+
+        var o = try dvui.overlay(@src(), .{ .min_size_content = .{ .w = 164, .h = 140 } });
+        var o2 = try dvui.overlay(@src(), .{ .background = true, .gravity_x = 0.5, .gravity_y = 0.5 });
+        if (try dvui.button(@src(), "reset", .{}, .{ .margin = layout_margin, .border = layout_border, .padding = layout_padding })) {
+            layout_margin = Rect.all(4);
+            layout_border = Rect.all(0);
+            layout_padding = Rect.all(4);
+        }
+        o2.deinit();
+        o.deinit();
+
+        vbox2 = try dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "padding {d:0.0}", .{ .value = &layout_padding.w, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        vbox2.deinit();
+
+        hbox.deinit();
+
+        vbox2 = try dvui.box(@src(), .vertical, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "margin {d:0.0}", .{ .value = &layout_margin.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "border {d:0.0}", .{ .value = &layout_border.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        _ = try dvui.sliderEntry(@src(), "padding {d:0.0}", .{ .value = &layout_padding.h, .min = 0, .max = 20.0, .interval = 1 }, .{});
+        vbox2.deinit();
     }
 
     try dvui.label(@src(), "Boxes", .{}, .{});
