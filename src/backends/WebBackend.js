@@ -414,9 +414,9 @@ function dvui(canvasId, wasmFile) {
             requestRender();
         });
         canvas.addEventListener("mousemove", (ev) => {
-            var rect = canvas.getBoundingClientRect();
-            var x = (ev.clientX - rect.left) / (rect.right - rect.left) * canvas.clientWidth;
-            var y = (ev.clientY - rect.top) / (rect.bottom - rect.top) * canvas.clientHeight;
+            let rect = canvas.getBoundingClientRect();
+            let x = (ev.clientX - rect.left) / (rect.right - rect.left) * canvas.clientWidth;
+            let y = (ev.clientY - rect.top) / (rect.bottom - rect.top) * canvas.clientHeight;
             wasmResult.instance.exports.add_event(1, 0, 0, x, y);
             requestRender();
         });
@@ -462,6 +462,43 @@ function dvui(canvasId, wasmFile) {
                 requestRender();
             }
         });
+        canvas.addEventListener("touchstart", (ev) => {
+            ev.preventDefault();
+            let rect = canvas.getBoundingClientRect();
+            for (let i = 0; i < ev.changedTouches.length; i++) {
+                let touch = ev.changedTouches[i];
+                let x = (touch.clientX - rect.left) / (rect.right - rect.left);
+                let y = (touch.clientY - rect.top) / (rect.bottom - rect.top);
+                wasmResult.instance.exports.add_event(8, 0, 0, x, y);
+            }
+            requestRender();
+        });
+        canvas.addEventListener("touchend", (ev) => {
+            ev.preventDefault();
+            let rect = canvas.getBoundingClientRect();
+            for (let i = 0; i < ev.changedTouches.length; i++) {
+                let touch = ev.changedTouches[i];
+                let x = (touch.clientX - rect.left) / (rect.right - rect.left);
+                let y = (touch.clientY - rect.top) / (rect.bottom - rect.top);
+                wasmResult.instance.exports.add_event(9, 0, 0, x, y);
+            }
+            requestRender();
+        });
+        canvas.addEventListener("touchmove", (ev) => {
+            ev.preventDefault();
+            let rect = canvas.getBoundingClientRect();
+            for (let i = 0; i < ev.changedTouches.length; i++) {
+                let touch = ev.changedTouches[i];
+                let x = (touch.clientX - rect.left) / (rect.right - rect.left);
+                let y = (touch.clientY - rect.top) / (rect.bottom - rect.top);
+                wasmResult.instance.exports.add_event(10, 0, 0, x, y);
+            }
+            requestRender();
+        });
+        //canvas.addEventListener("touchcancel", (ev) => {
+        //    console.log(ev);
+        //    requestRender();
+        //});
 
         // start the first update
         requestRender();

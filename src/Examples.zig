@@ -265,6 +265,11 @@ pub fn demo() !void {
                 dvui.themeSet(&Adwaita.light);
             }
         }
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
 
         if (try dvui.button(@src(), "Zoom In", .{}, .{})) {
             scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
