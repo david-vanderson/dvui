@@ -5,7 +5,27 @@ async function dvui_sleep(ms) {
 
 function dvui(canvasId, wasmFile) {
 
-    const vertexShaderSource = `# version 300 es
+    const vertexShaderSource_webgl = `
+        precision mediump float;
+
+        attribute vec4 aVertexPosition;
+        attribute vec4 aVertexColor;
+        attribute vec2 aTextureCoord;
+
+        uniform mat4 uMatrix;
+
+        varying vec4 vColor;
+        varying vec2 vTextureCoord;
+
+        void main() {
+          gl_Position = uMatrix * aVertexPosition;
+          vColor = aVertexColor / 255.0;  // normalize u8 colors to 0-1
+          vColor.rgb *= vColor.a;  // convert to premultiplied alpha
+          vTextureCoord = aTextureCoord;
+        }
+    `;
+
+    const vertexShaderSource_webgl2 = `# version 300 es
 
         precision mediump float;
 
@@ -26,7 +46,27 @@ function dvui(canvasId, wasmFile) {
         }
     `;
 
-    const fragmentShaderSource = `# version 300 es
+
+    const fragmentShaderSource_webgl = `
+        precision mediump float;
+
+        varying vec4 vColor;
+        varying vec2 vTextureCoord;
+
+        uniform sampler2D uSampler;
+        uniform bool useTex;
+
+        void main() {
+            if (useTex) {
+                gl_FragColor = texture2D(uSampler, vTextureCoord) * vColor;
+            }
+            else {
+                gl_FragColor = vColor;
+            }
+        }
+    `;
+
+    const fragmentShaderSource_webgl2 = `# version 300 es
 
         precision mediump float;
 
@@ -48,6 +88,7 @@ function dvui(canvasId, wasmFile) {
         }
     `;
 
+    let webgl2 = true;
     let gl;
     let indexBuffer;
     let vertexBuffer;
@@ -121,7 +162,13 @@ function dvui(canvasId, wasmFile) {
                 pixelData,
             );
 
-            gl.generateMipmap(gl.TEXTURE_2D);
+            if (webgl2) {
+                gl.generateMipmap(gl.TEXTURE_2D);
+            } else {
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            }
 
             return id;
         },
@@ -240,29 +287,47 @@ function dvui(canvasId, wasmFile) {
         wasmResult = result;
 
         const canvas = document.querySelector(canvasId);
-        // Initialize the GL context
         gl = canvas.getContext("webgl2", { alpha: true });
-
-        // Only continue if WebGL is available and working
         if (gl === null) {
-            alert("Unable to initialize WebGL. Your browser or machine may not support it.");
+            webgl2 = false;
+            gl = canvas.getContext("webgl", { alpha: true });
+        }
+
+        if (gl === null) {
+            alert("Unable to initialize WebGL.");
             return;
         }
 
+        if (!webgl2) {
+            const ext = gl.getExtension("OES_element_index_uint");
+            if (ext === null) {
+                alert("WebGL doesn't support OES_element_index_uint.");
+                return;
+            }
+        }
+
         const vertexShader = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(vertexShader, vertexShaderSource);
+        if (webgl2) {
+            gl.shaderSource(vertexShader, vertexShaderSource_webgl2);
+        } else {
+            gl.shaderSource(vertexShader, vertexShaderSource_webgl);
+        }
         gl.compileShader(vertexShader);
         if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
-            alert(`Error compiling vertex shader: ${gl.getShaderInfoLog(shader)}`);
+            alert(`Error compiling vertex shader: ${gl.getShaderInfoLog(vertexShader)}`);
             gl.deleteShader(vertexShader);
             return null;
         }
 
         const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(fragmentShader, fragmentShaderSource);
+        if (webgl2) {
+            gl.shaderSource(fragmentShader, fragmentShaderSource_webgl2);
+        } else {
+            gl.shaderSource(fragmentShader, fragmentShaderSource_webgl);
+        }
         gl.compileShader(fragmentShader);
         if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
-            alert(`Error compiling fragment shader: ${gl.getShaderInfoLog(shader)}`);
+            alert(`Error compiling fragment shader: ${gl.getShaderInfoLog(fragmentShader)}`);
             gl.deleteShader(fragmentShader);
             return null;
         }
