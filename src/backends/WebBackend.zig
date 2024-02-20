@@ -7,7 +7,8 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 var arena: std.mem.Allocator = undefined;
-cursor_last: dvui.enums.Cursor = .arrow,
+cursor_last: dvui.enums.Cursor = .wait,
+last_touch: dvui.Point = .{},
 
 const EventTemp = struct {
     kind: u8,
@@ -264,7 +265,7 @@ fn web_mod_code_to_dvui(wmod: u8) dvui.enums.Mod {
     return @as(dvui.enums.Mod, @enumFromInt(m));
 }
 
-pub fn addAllEvents(_: *WebBackend, win: *dvui.Window) !void {
+pub fn addAllEvents(self: *WebBackend, win: *dvui.Window) !void {
     for (event_temps.items) |e| {
         switch (e.kind) {
             1 => _ = try win.addEventMouseMotion(e.float1, e.float2),
@@ -290,6 +291,18 @@ pub fn addAllEvents(_: *WebBackend, win: *dvui.Window) !void {
             7 => {
                 const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
                 _ = try win.addEventText(str);
+            },
+            8 => {
+                _ = try win.addEventPointer(.touch0, .press, .{ .x = e.float1, .y = e.float2 });
+                self.last_touch = .{ .x = e.float1, .y = e.float2 };
+            },
+            9 => {
+                _ = try win.addEventPointer(.touch0, .release, .{ .x = e.float1, .y = e.float2 });
+                self.last_touch = .{ .x = e.float1, .y = e.float2 };
+            },
+            10 => {
+                _ = try win.addEventTouchMotion(.touch0, e.float1, e.float2, e.float1 - self.last_touch.x, e.float2 - self.last_touch.y);
+                self.last_touch = .{ .x = e.float1, .y = e.float2 };
             },
             else => dvui.log.debug("addAllEvents unknown event kind {d}", .{e.kind}),
         }
