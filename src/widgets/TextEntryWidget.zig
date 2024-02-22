@@ -163,6 +163,10 @@ pub fn processEvents(self: *TextEntryWidget) void {
 pub fn draw(self: *TextEntryWidget) !void {
     const focused = (self.wd.id == dvui.focusedWidgetId());
 
+    if (focused) {
+        dvui.wantOnScreenKeyboard(.{});
+    }
+
     // set clip back to what textLayout had, so we don't draw over the scrollbars
     dvui.clipSet(self.textClip);
 

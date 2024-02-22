@@ -99,6 +99,7 @@ function dvui(canvasId, wasmFile) {
 
     let wasmResult;
     let log_string = '';
+    let hidden_input;
 
     const utf8decoder = new TextDecoder();
     const utf8encoder = new TextEncoder();
@@ -273,8 +274,14 @@ function dvui(canvasId, wasmFile) {
         },
         wasm_cursor(name_ptr, name_len) {
             let cursor_name = utf8decoder.decode(new Uint8Array(wasmResult.instance.exports.memory.buffer, name_ptr, name_len));
-            console.log("cursor " + cursor_name);
             gl.canvas.style.cursor = cursor_name;
+        },
+        wasm_on_screen_keyboard(x, y, w, h) {
+            if (w > 0 && h > 0) {
+                hidden_input.focus();
+            } else {
+                hidden_input.blur();
+            }
         },
       },
     };
@@ -287,6 +294,15 @@ function dvui(canvasId, wasmFile) {
         wasmResult = result;
 
         const canvas = document.querySelector(canvasId);
+
+        let div = document.createElement("div");
+        div.style.width = 0;
+        div.style.height = 0;
+        div.style.overflow = "hidden";
+        hidden_input = document.createElement("input");
+        div.appendChild(hidden_input);
+        document.body.prepend(div);
+
         gl = canvas.getContext("webgl2", { alpha: true });
         if (gl === null) {
             webgl2 = false;
@@ -432,27 +448,38 @@ function dvui(canvasId, wasmFile) {
             wasmResult.instance.exports.add_event(4, 0, 0, ev.deltaY, 0);
             requestRender();
         });
-        canvas.addEventListener("keydown", (ev) => {
-            if (ev.code == "Tab") {
+
+        let keydown = function(ev) {
+            if (ev.key == "Tab") {
                 // preventDefault to stop tab from tabbing away from the canvas
                 ev.preventDefault();
             }
-            const str = utf8encoder.encode(ev.code);
-            const ptr = wasmResult.instance.exports.arena_u8(str.length);
-            var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
-            dest.set(str);
-            wasmResult.instance.exports.add_event(5, ptr, str.length, ev.repeat, (ev.metaKey << 3) + (ev.altKey << 2) + (ev.ctrlKey << 1) + (ev.shiftKey << 0));
-            requestRender();
-        });
-        canvas.addEventListener("keyup", (ev) => {
-            const str = utf8encoder.encode(ev.code);
+            let str = utf8encoder.encode(ev.key);
+            console.log("keydown '" + str + "'");
+            if (str.length > 0) {
+                const ptr = wasmResult.instance.exports.arena_u8(str.length);
+                var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
+                dest.set(str);
+                wasmResult.instance.exports.add_event(5, ptr, str.length, ev.repeat, (ev.metaKey << 3) + (ev.altKey << 2) + (ev.ctrlKey << 1) + (ev.shiftKey << 0));
+                requestRender();
+            }
+        };
+        canvas.addEventListener("keydown", keydown);
+        hidden_input.addEventListener("keydown", keydown);
+
+        let keyup = function(ev) {
+            const str = utf8encoder.encode(ev.key);
             const ptr = wasmResult.instance.exports.arena_u8(str.length);
             var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
             dest.set(str);
             wasmResult.instance.exports.add_event(6, ptr, str.length, 0, (ev.metaKey << 3) + (ev.altKey << 2) + (ev.ctrlKey << 1) + (ev.shiftKey << 0));
             requestRender();
-        });
-        canvas.addEventListener("beforeinput", (ev) => {
+        };
+        canvas.addEventListener("keyup", keyup);
+        hidden_input.addEventListener("keyup", keyup);
+
+        hidden_input.addEventListener("beforeinput", (ev) => {
+            ev.preventDefault();
             if (ev.data) {
                 const str = utf8encoder.encode(ev.data);
                 const ptr = wasmResult.instance.exports.arena_u8(str.length);

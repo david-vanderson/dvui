@@ -1971,6 +1971,12 @@ pub fn tabIndexPrev(event_num: ?u16) void {
     focusWidget(newId, null, event_num);
 }
 
+// r is in pixels
+pub fn wantOnScreenKeyboard(r: Rect) void {
+    const cw = currentWindow();
+    cw.osk_focused_widget_text_rect = r;
+}
+
 // maps to OS window
 pub const Window = struct {
     const Self = @This();
@@ -2017,6 +2023,9 @@ pub const Window = struct {
 
     // id of the subwindow that has focus
     focused_subwindowId: u32 = 0,
+
+    // handling the OSK (on screen keyboard)
+    osk_focused_widget_text_rect: ?Rect = null,
 
     snap_to_pixels: bool = true,
     alpha: f32 = 1.0,
@@ -2555,6 +2564,7 @@ pub const Window = struct {
         current_window = self;
 
         self.cursor_requested = .arrow;
+        self.osk_focused_widget_text_rect = null;
         self.debug_info_name_rect = "";
         self.debug_info_src_id_extra = "";
         if (self.debug_under_mouse) {
@@ -3244,6 +3254,8 @@ pub const Window = struct {
         // If one of the addEvent* functions forgot to add the synthetic mouse
         // event to the end this will print a debug message.
         self.positionMouseEventRemove();
+
+        self.backend.showKeyboard(self.osk_focused_widget_text_rect);
 
         self.backend.end();
 
@@ -5374,7 +5386,6 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotati
     // Ask for an integer size icon, then render it to fit rs
     const target_size = rs.r.h;
     const ask_height = @ceil(target_size);
-    //const target_fraction = target_size / ask_height;
 
     const tce = iconTexture(name, tvg_bytes, @as(u32, @intFromFloat(ask_height))) catch return;
 

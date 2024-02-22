@@ -20,6 +20,7 @@ const VTable = struct {
     renderGeometry: *const fn (ptr: *anyopaque, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void,
     textureCreate: *const fn (ptr: *anyopaque, pixels: [*]u8, width: u32, height: u32) *anyopaque,
     textureDestroy: *const fn (ptr: *anyopaque, texture: *anyopaque) void,
+    showKeyboard: *const fn (ptr: *anyopaque, rect: ?dvui.Rect) void,
     clipboardText: *const fn (ptr: *anyopaque) error{OutOfMemory}![]u8,
     clipboardTextSet: *const fn (ptr: *anyopaque, text: []const u8) error{OutOfMemory}!void,
     openURL: *const fn (ptr: *anyopaque, url: []const u8) error{OutOfMemory}!void,
@@ -38,6 +39,7 @@ pub fn init(
     comptime renderGeometryFn: fn (ptr: @TypeOf(pointer), texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void,
     comptime textureCreateFn: fn (ptr: @TypeOf(pointer), pixels: [*]u8, width: u32, height: u32) *anyopaque,
     comptime textureDestroyFn: fn (ptr: @TypeOf(pointer), texture: *anyopaque) void,
+    comptime showKeyboardFn: fn (ptr: @TypeOf(pointer), rect: ?dvui.Rect) void,
     comptime clipboardTextFn: fn (ptr: @TypeOf(pointer)) error{OutOfMemory}![]u8,
     comptime clipboardTextSetFn: fn (ptr: @TypeOf(pointer), text: []const u8) error{OutOfMemory}!void,
     comptime openURLFn: fn (ptr: @TypeOf(pointer), url: []const u8) error{OutOfMemory}!void,
@@ -99,6 +101,11 @@ pub fn init(
             return @call(.always_inline, textureDestroyFn, .{ self, texture });
         }
 
+        fn showKeyboardImpl(ptr: *anyopaque, rect: ?dvui.Rect) void {
+            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
+            return @call(.always_inline, showKeyboardFn, .{ self, rect });
+        }
+
         fn clipboardTextImpl(ptr: *anyopaque) error{OutOfMemory}![]u8 {
             const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
             return @call(.always_inline, clipboardTextFn, .{self});
@@ -130,6 +137,7 @@ pub fn init(
             .renderGeometry = renderGeometryImpl,
             .textureCreate = textureCreateImpl,
             .textureDestroy = textureDestroyImpl,
+            .showKeyboard = showKeyboardImpl,
             .clipboardText = clipboardTextImpl,
             .clipboardTextSet = clipboardTextSetImpl,
             .openURL = openURLImpl,
@@ -181,6 +189,10 @@ pub fn textureCreate(self: *Backend, pixels: [*]u8, width: u32, height: u32) *an
 
 pub fn textureDestroy(self: *Backend, texture: *anyopaque) void {
     self.vtable.textureDestroy(self.ptr, texture);
+}
+
+pub fn showKeyboard(self: *Backend, rect: ?dvui.Rect) void {
+    self.vtable.showKeyboard(self.ptr, rect);
 }
 
 pub fn clipboardText(self: *Backend) error{OutOfMemory}![]u8 {
