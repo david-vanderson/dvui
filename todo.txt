@@ -6,15 +6,38 @@ check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
 
-update dvui-demo
+web backend
+- build.zig based on: zig build-lib web-test.zig -target wasm32-freestanding -dynamic --export=app_init --export=app_deinit --export=app_update --export=add -femit-bin=src/backends/web-test.wasm
+  - this will change with 0.12 to build-exe -fno-entry (see https://github.com/ziglang/zig/pull/17815 )
+  - might not have to do all the exports?
 
-update podcast to latest dvui
+- on my phone everything is too small
+- on phone chrome entering characters works, but backspace first removes characters from the keyboard buffer before we get them removed, something to do with IME
 
-revisit open issues
+- clipboard
+- firefox mouse-over menu items causes them to flicker?
+  - only the top level items File, Edit, not ones inside a floating menu
 
-mach backend
+add cursors to examples (row of buttons or something one for each cursor)
+
+UI scaling on Windows (and browsers) causes fonts to look blurry, maybe if snap to pixels is true, we round to nearest font size and then don't adjust for target_fraction?
+
+change line_height_factor to be a line_height override instead
 
 
+docs:
+- web-test how to try it
+- stb_truetype vs freetype
+- upload baked web-test demo
+  - maybe use a custom theme with larger fonts
+- speak to mach backend
+
+
+if textLayout is doing touch editing and gets a mouse down event, it should end touch editing
+
+touch editing - when a paste or text insertion happens, toggle off the touch editing
+
+colorspace conversions (see issue)
 
 switch options font selection to the same scheme as colors
 
@@ -37,8 +60,6 @@ textEntry key updown (shift-updown for textLayout) needs to be fixed to be able 
 - figure out where cursor is from updown_pt from last frame
 - from there determine new cursor point and store for next frame
 - can we not check sel_mouse_down_pt = null and other stuff for each key?
-
-UI scaling on Windows causes fonts to look blurry, maybe if snap to pixels is true, we round to nearest font size and then don't adjust for target_fraction?
 
 see if we can get the mach backend working again
 - maybe just use the glfw part of mach?

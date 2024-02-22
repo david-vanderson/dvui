@@ -38,6 +38,7 @@ pub const wasm = struct {
     pub extern fn wasm_textureDestroy(u32) void;
     pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, x: u32, y: u32, w: u32, h: u32) void;
     pub extern fn wasm_cursor(name: [*]const u8, name_len: u32) void;
+    pub extern fn wasm_on_screen_keyboard(x: f32, y: f32, w: f32, h: f32) void;
 };
 
 export const __stack_chk_guard: c_ulong = 0xBAAAAAAD;
@@ -326,7 +327,7 @@ pub fn clear(self: *WebBackend) void {
 }
 
 pub fn backend(self: *WebBackend) dvui.Backend {
-    return dvui.Backend.init(self, nanoTime, sleep, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, openURL, refresh);
+    return dvui.Backend.init(self, nanoTime, sleep, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, showKeyboard, clipboardText, clipboardTextSet, openURL, refresh);
 }
 
 pub fn nanoTime(self: *WebBackend) i128 {
@@ -415,6 +416,14 @@ pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32) 
 
 pub fn textureDestroy(_: *WebBackend, texture: *anyopaque) void {
     wasm.wasm_textureDestroy(@as(u32, @intFromPtr(texture)));
+}
+
+pub fn showKeyboard(_: *WebBackend, rect: ?dvui.Rect) void {
+    if (rect) |_| {
+        wasm.wasm_on_screen_keyboard(0, 0, 1, 1);
+    } else {
+        wasm.wasm_on_screen_keyboard(0, 0, 0, 0);
+    }
 }
 
 pub fn clipboardText(self: *WebBackend) error{OutOfMemory}![]u8 {
