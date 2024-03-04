@@ -11,11 +11,6 @@ web backend
   - this will change with 0.12 to build-exe -fno-entry (see https://github.com/ziglang/zig/pull/17815 )
   - might not have to do all the exports?
 
-- on my phone everything is too small (scale 1.76..?)
-  - implement pinch-zoom
-
-fix web backend not reporting touch ends correctly for each touch
-
 web_key_code_to_dvui is warning because we switched from ev.code to ev.key
 
 scrolling when content_scale is different is wrong

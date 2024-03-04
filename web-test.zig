@@ -39,6 +39,7 @@ const gpa = gpa_instance.allocator();
 var win: dvui.Window = undefined;
 var backend: WebBackend = undefined;
 var touchPoints: [2]?dvui.Point = [_]?dvui.Point{null} ** 2;
+var orig_content_scale: f32 = 1.0;
 
 const zig_favicon = @embedFile("src/zig-favicon.png");
 
@@ -52,6 +53,8 @@ export fn app_init() i32 {
     win = dvui.Window.init(@src(), 0, gpa, backend.backend()) catch {
         return 2;
     };
+
+    orig_content_scale = win.content_scale;
 
     return 0;
 }
@@ -189,8 +192,12 @@ fn dvui_frame() !void {
         try tl2.addText("Fonts are being rendered by stb_truetype.", .{});
     }
     try tl2.addText("\n\n", .{});
-    try tl2.format("Scale: {d:0.2}", .{dvui.windowNaturalScale()}, .{});
+    try tl2.format("Scale: {d:0.2} (try pinch-zoom)", .{dvui.windowNaturalScale()}, .{});
     tl2.deinit();
+
+    if (try dvui.button(@src(), "Reset Scale", .{}, .{})) {
+        new_content_scale = orig_content_scale;
+    }
 
     if (dvui.Examples.show_demo_window) {
         if (try dvui.button(@src(), "Hide Demo Window", .{}, .{})) {
