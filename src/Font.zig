@@ -21,6 +21,11 @@ pub fn lineHeightFactor(self: *const Font, factor: f32) Font {
 
 // handles multiple lines
 pub fn textSize(self: *const Font, text: []const u8) !Size {
+    if (text.len == 0) {
+        // just want the line height
+        return .{ .w = 0, .h = try self.lineHeight() };
+    }
+
     var ret = Size{};
 
     var end: usize = 0;
@@ -52,7 +57,8 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
     const ask_size = self.size * ss;
     const sized_font = self.resize(ask_size);
     const fce = try dvui.fontCacheGet(sized_font);
-    const s = try fce.textSizeRaw(self.name, text, max_width_sized, end_idx, end_metric);
+    var s = try fce.textSizeRaw(self.name, text, max_width_sized, end_idx, end_metric);
+    s.h *= self.line_height_factor;
 
     // do this check after calling textSizeRaw so that end_idx is set
     if (ss == 0) return Size{};
@@ -63,9 +69,6 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
 }
 
 pub fn lineHeight(self: *const Font) !f32 {
-    // do the same sized thing as textSizeEx so they will cache the same font
-    const ss = dvui.parentGet().screenRectScale(Rect{}).s;
-    if (ss == 0) return 0;
-
-    return self.size * self.line_height_factor;
+    const s = try self.textSizeEx(" ", null, null, .before);
+    return s.h;
 }
