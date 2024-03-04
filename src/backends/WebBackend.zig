@@ -316,6 +316,7 @@ pub fn addAllEvents(self: *WebBackend, win: *dvui.Window) !void {
                     dy = e.float2 - p.y;
                 }
                 _ = try win.addEventTouchMotion(touch, e.float1, e.float2, dx, dy);
+                self.touchPoints[e.int1] = .{ .x = e.float1, .y = e.float2 };
             },
             else => dvui.log.debug("addAllEvents unknown event kind {d}", .{e.kind}),
         }
