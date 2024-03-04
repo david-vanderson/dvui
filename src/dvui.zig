@@ -2304,7 +2304,7 @@ pub const Window = struct {
         self.positionMouseEventRemove();
 
         if (xynorm) |xyn| {
-            const newpt = (Point{ .x = xyn.x * self.wd.rect.w, .y = xyn.y * self.wd.rect.h }).scale(self.natural_scale / self.content_scale);
+            const newpt = (Point{ .x = xyn.x * self.wd.rect.w, .y = xyn.y * self.wd.rect.h }).scale(self.natural_scale);
             self.mouse_pt = newpt;
         }
 
@@ -2373,11 +2373,11 @@ pub const Window = struct {
     pub fn addEventTouchMotion(self: *Self, finger: enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) !bool {
         self.positionMouseEventRemove();
 
-        const newpt = (Point{ .x = xnorm * self.wd.rect.w, .y = ynorm * self.wd.rect.h }).scale(self.natural_scale / self.content_scale);
+        const newpt = (Point{ .x = xnorm * self.wd.rect.w, .y = ynorm * self.wd.rect.h }).scale(self.natural_scale);
         //std.debug.print("touch motion {} {d} {d}\n", .{ finger, newpt.x, newpt.y });
         self.mouse_pt = newpt;
 
-        const dp = (Point{ .x = dxnorm * self.wd.rect.w, .y = dynorm * self.wd.rect.h }).scale(self.natural_scale / self.content_scale);
+        const dp = (Point{ .x = dxnorm * self.wd.rect.w, .y = dynorm * self.wd.rect.h }).scale(self.natural_scale);
 
         const winId = self.windowFor(self.mouse_pt);
 

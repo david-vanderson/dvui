@@ -38,6 +38,7 @@ const gpa = gpa_instance.allocator();
 
 var win: dvui.Window = undefined;
 var backend: WebBackend = undefined;
+var touchPoints: [2]?dvui.Point = [_]?dvui.Point{null} ** 2;
 
 const zig_favicon = @embedFile("src/zig-favicon.png");
 
@@ -81,6 +82,16 @@ fn update() !i32 {
     backend.clear();
 
     try dvui_frame();
+    //try dvui.label(@src(), "test", .{}, .{ .color_text = .{ .color = dvui.Color.white } });
+
+    //var indices: []const u32 = &[_]u32{ 0, 1, 2, 0, 2, 3 };
+    //var vtx: []const dvui.Vertex = &[_]dvui.Vertex{
+    //    .{ .pos = .{ .x = 100, .y = 150 }, .uv = .{ 0.0, 0.0 }, .col = .{} },
+    //    .{ .pos = .{ .x = 200, .y = 150 }, .uv = .{ 1.0, 0.0 }, .col = .{ .g = 0, .b = 0, .a = 200 } },
+    //    .{ .pos = .{ .x = 200, .y = 250 }, .uv = .{ 1.0, 1.0 }, .col = .{ .r = 0, .b = 0, .a = 100 } },
+    //    .{ .pos = .{ .x = 100, .y = 250 }, .uv = .{ 0.0, 1.0 }, .col = .{ .r = 0, .g = 0 } },
+    //};
+    //backend.renderGeometry(null, vtx, indices);
 
     const end_micros = try win.end(.{});
 
@@ -91,6 +102,44 @@ fn update() !i32 {
 }
 
 fn dvui_frame() !void {
+    var new_content_scale: ?f32 = null;
+    var old_dist: ?f32 = null;
+    for (dvui.events()) |*e| {
+        if (e.evt == .mouse and (e.evt.mouse.button == .touch0 or e.evt.mouse.button == .touch1)) {
+            const idx: usize = if (e.evt.mouse.button == .touch0) 0 else 1;
+            switch (e.evt.mouse.action) {
+                .press => {
+                    touchPoints[idx] = e.evt.mouse.p;
+                },
+                .release => {
+                    touchPoints[idx] = null;
+                },
+                .motion => {
+                    if (touchPoints[0] != null and touchPoints[1] != null) {
+                        e.handled = true;
+                        var dx: f32 = undefined;
+                        var dy: f32 = undefined;
+
+                        if (old_dist == null) {
+                            dx = touchPoints[0].?.x - touchPoints[1].?.x;
+                            dy = touchPoints[0].?.y - touchPoints[1].?.y;
+                            old_dist = @sqrt(dx * dx + dy * dy);
+                        }
+
+                        touchPoints[idx] = e.evt.mouse.p;
+
+                        dx = touchPoints[0].?.x - touchPoints[1].?.x;
+                        dy = touchPoints[0].?.y - touchPoints[1].?.y;
+                        const new_dist: f32 = @sqrt(dx * dx + dy * dy);
+
+                        new_content_scale = win.content_scale * new_dist / old_dist.?;
+                    }
+                },
+                else => {},
+            }
+        }
+    }
+
     {
         var m = try dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();
@@ -139,6 +188,8 @@ fn dvui_frame() !void {
     } else {
         try tl2.addText("Fonts are being rendered by stb_truetype.", .{});
     }
+    try tl2.addText("\n\n", .{});
+    try tl2.format("Scale: {d:0.2}", .{dvui.windowNaturalScale()}, .{});
     tl2.deinit();
 
     if (dvui.Examples.show_demo_window) {
@@ -153,4 +204,8 @@ fn dvui_frame() !void {
 
     // look at demo() for examples of dvui widgets, shows in a floating window
     try dvui.Examples.demo();
+
+    if (new_content_scale) |ns| {
+        win.content_scale = ns;
+    }
 }

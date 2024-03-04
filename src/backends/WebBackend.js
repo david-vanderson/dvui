@@ -100,6 +100,17 @@ function dvui(canvasId, wasmFile) {
     let wasmResult;
     let log_string = '';
     let hidden_input;
+    let touches = [];  // list of tuple (touch identifier, initial index)
+
+    function touchIndex(pointerId) {
+        let idx = touches.findIndex((e) => e[0] === pointerId);
+        if (idx < 0) {
+            idx = touches.length;
+            touches.push([pointerId, idx]);
+        }
+
+        return idx;
+    }
 
     const utf8decoder = new TextDecoder();
     const utf8encoder = new TextEncoder();
@@ -303,6 +314,10 @@ function dvui(canvasId, wasmFile) {
         div.appendChild(hidden_input);
         document.body.prepend(div);
 
+        //let par = document.createElement("p");
+        //document.body.prepend(par);
+        //par.textContent += window.devicePixelRatio;
+
         gl = canvas.getContext("webgl2", { alpha: true });
         if (gl === null) {
             webgl2 = false;
@@ -496,7 +511,8 @@ function dvui(canvasId, wasmFile) {
                 let touch = ev.changedTouches[i];
                 let x = (touch.clientX - rect.left) / (rect.right - rect.left);
                 let y = (touch.clientY - rect.top) / (rect.bottom - rect.top);
-                wasmResult.instance.exports.add_event(8, 0, 0, x, y);
+                let tidx = touchIndex(touch.identifier);
+                wasmResult.instance.exports.add_event(8, touches[tidx][1], 0, x, y);
             }
             requestRender();
         });
@@ -507,7 +523,9 @@ function dvui(canvasId, wasmFile) {
                 let touch = ev.changedTouches[i];
                 let x = (touch.clientX - rect.left) / (rect.right - rect.left);
                 let y = (touch.clientY - rect.top) / (rect.bottom - rect.top);
-                wasmResult.instance.exports.add_event(9, 0, 0, x, y);
+                let tidx = touchIndex(touch.identifier);
+                wasmResult.instance.exports.add_event(9, touches[tidx][1], 0, x, y);
+                touches.splice(tidx, 1);
             }
             requestRender();
         });
@@ -518,7 +536,8 @@ function dvui(canvasId, wasmFile) {
                 let touch = ev.changedTouches[i];
                 let x = (touch.clientX - rect.left) / (rect.right - rect.left);
                 let y = (touch.clientY - rect.top) / (rect.bottom - rect.top);
-                wasmResult.instance.exports.add_event(10, 0, 0, x, y);
+                let tidx = touchIndex(touch.identifier);
+                wasmResult.instance.exports.add_event(10, touches[tidx][1], 0, x, y);
             }
             requestRender();
         });
