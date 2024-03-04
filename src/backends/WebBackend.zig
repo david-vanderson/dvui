@@ -8,7 +8,8 @@ const gpa = gpa_instance.allocator();
 
 var arena: std.mem.Allocator = undefined;
 cursor_last: dvui.enums.Cursor = .wait,
-last_touch: dvui.Point = .{},
+touchPoints: [10]?dvui.Point = [_]?dvui.Point{null} ** 10,
+last_touch_enum: dvui.enums.Button = .none,
 
 const EventTemp = struct {
     kind: u8,
@@ -294,16 +295,27 @@ pub fn addAllEvents(self: *WebBackend, win: *dvui.Window) !void {
                 _ = try win.addEventText(str);
             },
             8 => {
-                _ = try win.addEventPointer(.touch0, .press, .{ .x = e.float1, .y = e.float2 });
-                self.last_touch = .{ .x = e.float1, .y = e.float2 };
+                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
+                self.last_touch_enum = touch;
+                _ = try win.addEventPointer(touch, .press, .{ .x = e.float1, .y = e.float2 });
+                self.touchPoints[e.int1] = .{ .x = e.float1, .y = e.float2 };
             },
             9 => {
-                _ = try win.addEventPointer(.touch0, .release, .{ .x = e.float1, .y = e.float2 });
-                self.last_touch = .{ .x = e.float1, .y = e.float2 };
+                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
+                self.last_touch_enum = touch;
+                _ = try win.addEventPointer(touch, .release, .{ .x = e.float1, .y = e.float2 });
+                self.touchPoints[e.int1] = null;
             },
             10 => {
-                _ = try win.addEventTouchMotion(.touch0, e.float1, e.float2, e.float1 - self.last_touch.x, e.float2 - self.last_touch.y);
-                self.last_touch = .{ .x = e.float1, .y = e.float2 };
+                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
+                self.last_touch_enum = touch;
+                var dx: f32 = 0;
+                var dy: f32 = 0;
+                if (self.touchPoints[e.int1]) |p| {
+                    dx = e.float1 - p.x;
+                    dy = e.float2 - p.y;
+                }
+                _ = try win.addEventTouchMotion(touch, e.float1, e.float2, dx, dy);
             },
             else => dvui.log.debug("addAllEvents unknown event kind {d}", .{e.kind}),
         }
