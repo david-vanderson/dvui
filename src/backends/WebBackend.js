@@ -470,7 +470,6 @@ function dvui(canvasId, wasmFile) {
                 ev.preventDefault();
             }
             let str = utf8encoder.encode(ev.key);
-            console.log("keydown '" + str + "'");
             if (str.length > 0) {
                 const ptr = wasmResult.instance.exports.arena_u8(str.length);
                 var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
