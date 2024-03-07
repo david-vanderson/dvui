@@ -8,6 +8,9 @@ How to run the built-in examples:
 
 - ```zig build run-standalone-sdl```
 - ```zig build run-ontop-sdl```
+- ```zig build web-test```
+  - then load `zig-out/bin/index.html`
+  - [online demo](https://david-vanderson.github.io)
 
 This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify widgets.
 
@@ -27,10 +30,16 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 - Immediate Mode Interface
 - Process every input event (suitable for low-fps situations)
 - Use for whole UI or for debugging on top of existing application
-- Integrate with just a few functions
-  - Existing integrations with [Mach](https://machengine.org/) and [SDL](https://libsdl.org/)
+- Existing backends
+  - [SDL](https://libsdl.org/)
+  - [Web](https://david-vanderson.github.io)
+  - [Mach](https://machengine.org/)
+    - note: Mach backend is on hold until zig 0.12 is released
 - Icon support via [TinyVG](https://tinyvg.tech/)
-- Font support via [freetype](https://github.com/david-vanderson/freetype/tree/zig-pkg)
+- Raster image support via [stb_image](https://github.com/nothings/stb)
+- Font support
+  - [freetype](https://github.com/david-vanderson/freetype/tree/zig-pkg)
+  - [stb_truetype](https://github.com/nothings/stb)
 - Touch support
   - Including selection draggables in text entries
 - Animations

@@ -13,17 +13,6 @@ web backend
 
 - on phone chrome entering characters works, but backspace first removes characters from the keyboard buffer before we get them removed, something to do with IME
 
-- clipboard
-- firefox mouse-over menu items causes them to flicker?
-  - only the top level items File, Edit, not ones inside a floating menu
-
-add cursors to examples (row of buttons or something one for each cursor)
-
-UI scaling on Windows (and browsers) causes fonts to look blurry, maybe if snap to pixels is true, we round to nearest font size and then don't adjust for target_fraction?
-
-change line_height_factor to be a line_height override instead
-
-
 docs:
 - web-test how to try it
 - stb_truetype vs freetype
@@ -31,6 +20,18 @@ docs:
   - maybe use a custom theme with larger fonts
 - speak to mach backend
 
+make sure dvui-demo works
+
+zig.news writeup for how to do a build.zig step with a zig function
+
+web backend clipboard
+
+add cursors to examples (row of buttons or something one for each cursor)
+
+UI scaling on Windows (and browsers) causes fonts to look blurry, maybe if snap to pixels is true, we round to nearest font size and then don't adjust for target_fraction?
+
+firefox mouse-over menu items causes them to flicker?
+- only the top level items File, Edit, not ones inside a floating menu
 
 if textLayout is doing touch editing and gets a mouse down event, it should end touch editing
 
