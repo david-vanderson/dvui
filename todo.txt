@@ -13,12 +13,8 @@ web backend
 
 - on phone chrome entering characters works, but backspace first removes characters from the keyboard buffer before we get them removed, something to do with IME
 
-docs:
-- web-test how to try it
-- stb_truetype vs freetype
-- upload baked web-test demo
-  - maybe use a custom theme with larger fonts
-- speak to mach backend
+web slider entry doesn't get keyboard when in textentry mode
+- need to signal that it can get keyboard input
 
 make sure dvui-demo works
 
