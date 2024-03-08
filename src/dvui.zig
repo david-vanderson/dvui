@@ -4464,6 +4464,8 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     _ = dataGet(null, b.data().id, "_start_v", f32);
 
     if (text_mode) {
+        dvui.wantOnScreenKeyboard(.{});
+
         var te_buf = dataGetSlice(null, b.data().id, "_buf", []u8) orelse blk: {
             var buf = [_]u8{0} ** 20;
             _ = std.fmt.bufPrintZ(&buf, "{d:0.3}", .{init_opts.value.*}) catch {};
