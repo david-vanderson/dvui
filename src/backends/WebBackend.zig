@@ -40,6 +40,7 @@ pub const wasm = struct {
     pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, x: u32, y: u32, w: u32, h: u32) void;
     pub extern fn wasm_cursor(name: [*]const u8, name_len: u32) void;
     pub extern fn wasm_on_screen_keyboard(x: f32, y: f32, w: f32, h: f32) void;
+    pub extern fn wasm_open_url(ptr: [*]const u8, len: usize) void;
 };
 
 export const __stack_chk_guard: c_ulong = 0xBAAAAAAD;
@@ -447,8 +448,8 @@ pub fn clipboardTextSet(self: *WebBackend, text: []const u8) !void {
 }
 
 pub fn openURL(self: *WebBackend, url: []const u8) !void {
+    wasm.wasm_open_url(url.ptr, url.len);
     _ = self;
-    _ = url;
 }
 
 pub fn refresh(self: *WebBackend) void {
