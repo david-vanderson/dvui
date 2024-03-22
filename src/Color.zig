@@ -2,7 +2,8 @@
 //! it is normally sRGB
 
 const std = @import("std");
-const c = @cImport(@cInclude("ok_color.h"));
+// const c = @cImport(@cInclude("ok_color.h"));
+const c = @import("ok_color.zig");
 const Color = @This();
 
 r: u8 = 0xFF,
@@ -40,10 +41,10 @@ pub fn fromOkhsl(color: c.HSL, a: u8) Color {
 }
 
 fn okhsl_to_vector(color: c.HSL) @Vector(3, f32) {
-    return @bitCast(color);
+    return .{ color.h, color.s, color.l };
 }
 fn vector_to_okhsl(color: @Vector(3, f32)) c.HSL {
-    return @bitCast(color);
+    return .{ .h = color[0], .s = color[1], .l = color[2] };
 }
 fn splat(__: f32) @Vector(3, f32) {
     return @splat(__);
