@@ -31,31 +31,36 @@ pub fn multiply_alpha(x: Color, y: f32) Color {
 // we choose okhsl because it has orthogonal lightness
 // https://bottosson.github.io/posts/colorpicker/#summary-2
 pub fn okhsl(__: Color) c.HSL {
-    return c.srgb_to_okhsl(.{ .r = __.r, .g = __.g, .b = __.b });
+    return c.srgb_to_okhsl(.{
+        .r = @as(f32, @floatFromInt(__.r)) / 255.0,
+        .g = @as(f32, @floatFromInt(__.g)) / 255.0,
+        .b = @as(f32, @floatFromInt(__.b)) / 255.0,
+    });
 }
+const round = std.math.round;
 pub fn fromOkhsl(color: c.HSL, a: u8) Color {
-    _ = color;
-    _ = a;
-
-    return undefined;
-}
-
-fn okhsl_to_vector(color: c.HSL) @Vector(3, f32) {
-    return .{ color.h, color.s, color.l };
-}
-fn vector_to_okhsl(color: @Vector(3, f32)) c.HSL {
-    return .{ .h = color[0], .s = color[1], .l = color[2] };
-}
-fn splat(__: f32) @Vector(3, f32) {
-    return @splat(__);
+    const rgb = c.okhsl_to_srgb(color);
+    return Color{
+        .r = @intFromFloat(round(rgb.r * 255.0)),
+        .g = @intFromFloat(round(rgb.g * 255.0)),
+        .b = @intFromFloat(round(rgb.b * 255.0)),
+        .a = a,
+    };
 }
 
 pub fn lerp(current: Color, target_ratio: f32, target: Color) Color {
-    const current_hsl = okhsl_to_vector(current.okhsl());
-    const target_hsl = okhsl_to_vector(target.okhsl());
-    const mix_hsl = vector_to_okhsl(current_hsl * splat(1.0 - target_ratio) + target_hsl * splat(target_ratio));
+    const current_hsl = current.okhsl();
+    const target_hsl = target.okhsl();
+    const mix_hsl = c.HSL{
+        .h = current_hsl.h * (1.0 - target_ratio) + target_hsl.h * (target_ratio),
+        .s = current_hsl.s * (1.0 - target_ratio) + target_hsl.s * (target_ratio),
+        .l = current_hsl.l * (1.0 - target_ratio) + target_hsl.l * (target_ratio),
+    };
+
     const current_a: f32 = @floatFromInt(current.a);
     const target_a: f32 = @floatFromInt(target.a);
     const mix_a = current_a * (1.0 - target_ratio) + target_a * target_ratio; // this is cursed ,, if the two color's alpha was not originally similar, the mix will not be visually linear
+
+    @compileLog(current, current_hsl, target_hsl, mix_hsl);
     return fromOkhsl(mix_hsl, @intFromFloat(mix_a));
 }
