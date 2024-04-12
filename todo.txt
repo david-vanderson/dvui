@@ -12,11 +12,8 @@ web backend
   - might not have to do all the exports?
 
 - on phone chrome entering characters works, but backspace first removes characters from the keyboard buffer before we get them removed, something to do with IME
+- on iphones keyboard doesn't show up when focusing a text entry
 
-web slider entry doesn't get keyboard when in textentry mode
-- need to signal that it can get keyboard input
-
-make sure dvui-demo works
 
 zig.news writeup for how to do a build.zig step with a zig function
 
