@@ -47,6 +47,8 @@ var show_dialog: bool = false;
 var scale_val: f32 = 1.0;
 var line_height_factor: f32 = 1.0;
 var backbox_color: dvui.Color = .{};
+var hsluv_hsl: dvui.Color.HSLuv = .{ .l = 50 };
+var hsluv_rgb: dvui.Color = .{};
 var animating_window_show: bool = false;
 var animating_window_closing: bool = false;
 var animating_window_rect = Rect{ .x = 100, .y = 100, .w = 300, .h = 200 };
@@ -650,12 +652,23 @@ pub fn styling() !void {
         var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = .{ .color = backbox_color }, .gravity_y = 0.5 });
         backbox.deinit();
 
-        try colorSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 });
+        _ = try rgbSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 });
+    }
+
+    try dvui.label(@src(), "HSLuv support", .{}, .{});
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = .{ .color = hsluv_rgb }, .gravity_y = 0.5 });
+        backbox.deinit();
+
+        try hsluvSliders(@src(), &hsluv_hsl, &hsluv_rgb, .{ .gravity_y = 0.5 });
     }
 }
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a Color
-pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) !void {
+pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) !void {
     var hbox = try dvui.box(src, .horizontal, opts);
     defer hbox.deinit();
 
@@ -670,6 +683,27 @@ pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: O
     color.r = @intFromFloat(red);
     color.g = @intFromFloat(green);
     color.b = @intFromFloat(blue);
+}
+
+// Let's wrap the sliderEntry widget so we have 3 that represent a HSLuv Color
+pub fn hsluvSliders(src: std.builtin.SourceLocation, hsluv: *dvui.Color.HSLuv, color_out: *dvui.Color, opts: Options) !void {
+    var hbox = try dvui.box(src, .horizontal, opts);
+    defer hbox.deinit();
+
+    var changed = false;
+    if (try dvui.sliderEntry(@src(), "H: {d:0.0}", .{ .value = &hsluv.h, .min = 0, .max = 360, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+        changed = true;
+    }
+    if (try dvui.sliderEntry(@src(), "S: {d:0.0}", .{ .value = &hsluv.s, .min = 0, .max = 100, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+        changed = true;
+    }
+    if (try dvui.sliderEntry(@src(), "L: {d:0.0}", .{ .value = &hsluv.l, .min = 0, .max = 100, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+        changed = true;
+    }
+
+    if (changed) {
+        color_out.* = hsluv.color();
+    }
 }
 
 pub fn layout() !void {
