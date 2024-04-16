@@ -117,6 +117,13 @@ function dvui(canvasId, wasmFile) {
 
     const imports = {
         env: {
+        wasm_about_webgl2: () => {
+            if (webgl2) {
+                return 1;
+            } else {
+                return 0;
+            }
+        },
         wasm_panic: (ptr, len) => {
             let msg = utf8decoder.decode(new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, len));
             alert(msg);
