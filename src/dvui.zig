@@ -5047,8 +5047,8 @@ pub fn renderText(opts: renderTextOptions) !void {
             var i: u32 = 0;
             while (it.next()) |e| {
                 var gi = e.value_ptr;
-                gi.uv[0] = @as(f32, @floatFromInt(x)) / size.w;
-                gi.uv[1] = @as(f32, @floatFromInt(y)) / size.h;
+                gi.uv[0] = @as(f32, @floatFromInt(x + pad)) / size.w;
+                gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / size.h;
 
                 const codepoint = @as(u32, @intCast(e.key_ptr.*));
 
@@ -5180,8 +5180,8 @@ pub fn renderText(opts: renderTextOptions) !void {
         const len = @as(u32, @intCast(vtx.items.len));
         var v: Vertex = undefined;
 
-        v.pos.x = x + (gi.leftBearing - pad) * target_fraction;
-        v.pos.y = y + (gi.topBearing - pad) * target_fraction;
+        v.pos.x = x + gi.leftBearing * target_fraction;
+        v.pos.y = y + gi.topBearing * target_fraction;
         v.col = if (sel_in) opts.sel_color orelse opts.color else opts.color;
         v.uv = gi.uv;
         try vtx.append(v);
@@ -5195,16 +5195,16 @@ pub fn renderText(opts: renderTextOptions) !void {
             //log.debug("{d} pad {d} left {d} top {d} w {d} h {d} advance {d}", .{ bytes_seen, pad, gi.f2_leftBearing, gi.f2_topBearing, gi.f2_w, gi.f2_h, gi.f2_advance });
         }
 
-        v.pos.x = x + (gi.leftBearing + gi.w + pad) * target_fraction;
-        v.uv[0] = gi.uv[0] + (gi.w + 2 * pad) / fce.texture_atlas_size.w;
+        v.pos.x = x + (gi.leftBearing + gi.w) * target_fraction;
+        v.uv[0] = gi.uv[0] + gi.w / fce.texture_atlas_size.w;
         try vtx.append(v);
 
-        v.pos.y = y + (gi.topBearing + gi.h + pad) * target_fraction;
+        v.pos.y = y + (gi.topBearing + gi.h) * target_fraction;
         sel_max_y = @max(sel_max_y, v.pos.y);
-        v.uv[1] = gi.uv[1] + (gi.h + 2 * pad) / fce.texture_atlas_size.h;
+        v.uv[1] = gi.uv[1] + gi.h / fce.texture_atlas_size.h;
         try vtx.append(v);
 
-        v.pos.x = x + (gi.leftBearing - pad) * target_fraction;
+        v.pos.x = x + gi.leftBearing * target_fraction;
         v.uv[0] = gi.uv[0];
         try vtx.append(v);
 
