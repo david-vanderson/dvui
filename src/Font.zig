@@ -63,9 +63,9 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
     // do this check after calling textSizeRaw so that end_idx is set
     if (ss == 0) return Size{};
 
-    const target_fraction = self.size / fce.height;
+    //const target_fraction = 1.0; //self.size / fce.height;
     //std.debug.print("textSize size {d} for \"{s}\" {d} {}\n", .{ self.size, text, target_fraction, s.scale(target_fraction) });
-    return s.scale(target_fraction);
+    return s.scale(1.0 / ss);
 }
 
 pub fn lineHeight(self: *const Font) !f32 {
