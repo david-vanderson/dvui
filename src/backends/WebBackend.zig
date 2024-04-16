@@ -22,6 +22,8 @@ const EventTemp = struct {
 pub var event_temps = std.ArrayList(EventTemp).init(gpa);
 
 pub const wasm = struct {
+    pub extern fn wasm_about_webgl2() u8;
+
     pub extern fn wasm_panic(ptr: [*]const u8, len: usize) void;
     pub extern fn wasm_log_write(ptr: [*]const u8, len: usize) void;
     pub extern fn wasm_log_flush() void;
@@ -332,6 +334,14 @@ pub fn deinit(self: *WebBackend) void {
 pub fn clear(self: *WebBackend) void {
     _ = self;
     wasm.wasm_clear();
+}
+
+pub fn about(_: *WebBackend) []const u8 {
+    if (wasm.wasm_about_webgl2() == 1) {
+        return "web with webgl2";
+    } else {
+        return "web with webgl (no mipmapping)";
+    }
 }
 
 pub fn backend(self: *WebBackend) dvui.Backend {
