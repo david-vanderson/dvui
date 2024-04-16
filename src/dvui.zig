@@ -4984,7 +4984,7 @@ pub fn renderText(opts: renderTextOptions) !void {
     const sized_font = opts.font.resize(target_size);
     var fce = try fontCacheGet(sized_font);
 
-    const target_fraction = target_size / fce.height;
+    const target_fraction = 1.0; //target_size / fce.height;
 
     // make sure the cache has all the glyphs we need
     var utf8it = (try std.unicode.Utf8View.init(opts.text)).iterator();
