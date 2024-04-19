@@ -338,9 +338,9 @@ pub fn clear(self: *WebBackend) void {
 
 pub fn about(_: *WebBackend) []const u8 {
     if (wasm.wasm_about_webgl2() == 1) {
-        return "web with webgl2";
+        return "webgl2";
     } else {
-        return "web with webgl (no mipmapping)";
+        return "webgl (no mipmapping)";
     }
 }
 

@@ -60,7 +60,7 @@ export fn app_init() i32 {
 }
 
 export fn app_deinit() void {
-    //win.deinit();
+    win.deinit();
     backend.deinit();
 }
 
