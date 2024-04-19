@@ -407,8 +407,7 @@ function dvui(canvasId, wasmFile) {
 
         let renderRequested = false;
         let renderTimeoutId = 0;
-
-        wasmResult.instance.exports.app_init();
+        let app_initialized = false;
 
         function render() {
             renderRequested = false;
@@ -422,6 +421,11 @@ function dvui(canvasId, wasmFile) {
             gl.canvas.height = Math.round(h * scale);
             gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
             gl.scissor(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
+            if (!app_initialized) {
+                app_initialized = true;
+                wasmResult.instance.exports.app_init();
+            }
 
             let millis_to_wait = wasmResult.instance.exports.app_update();
             if (millis_to_wait == 0) {
