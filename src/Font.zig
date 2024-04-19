@@ -63,9 +63,10 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
     // do this check after calling textSizeRaw so that end_idx is set
     if (ss == 0) return Size{};
 
-    //const target_fraction = 1.0; //self.size / fce.height;
+    // this must be synced with dvui.renderText()
+    const target_fraction = if (dvui.currentWindow().snap_to_pixels) 1.0 / ss else self.size / fce.height;
     //std.debug.print("textSize size {d} for \"{s}\" {d} {}\n", .{ self.size, text, target_fraction, s.scale(target_fraction) });
-    return s.scale(1.0 / ss);
+    return s.scale(target_fraction);
 }
 
 pub fn lineHeight(self: *const Font) !f32 {
