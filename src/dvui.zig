@@ -506,10 +506,10 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         };
 
         // "pixel size" for freetype doesn't actually mean you'll get that height, it's more like using pts
-        // so we search for a font that has a height >= font.size
-        var pixel_size = @as(u32, @intFromFloat(@max(1, @ceil(font.size) - 20)));
+        // so we search for a font that has a height <= font.size
+        var pixel_size = @as(u32, @intFromFloat(@max(1, @floor(font.size))));
 
-        while (true) : (pixel_size += 1) {
+        while (true) : (pixel_size -= 1) {
             FontCacheEntry.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
                 log.warn("fontCacheGet freetype error {!} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, font.name });
                 return error.freetypeError;
@@ -522,7 +522,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
 
             //std.debug.print("height {d} -> pixel_size {d}\n", .{ height, pixel_size });
 
-            if (height >= font.size) {
+            if (height <= font.size) {
                 entry = FontCacheEntry{
                     .face = face,
                     .scaleFactor = 1.0, // not used with freetype
@@ -540,7 +540,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     } else {
         var face: c.stbtt_fontinfo = undefined;
         _ = c.stbtt_InitFont(&face, font.ttf_bytes.ptr, c.stbtt_GetFontOffsetForIndex(font.ttf_bytes.ptr, 0));
-        const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, @ceil(font.size));
+        const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, @floor(font.size));
 
         var face2_ascent: c_int = undefined;
         var face2_descent: c_int = undefined;
@@ -4984,7 +4984,8 @@ pub fn renderText(opts: renderTextOptions) !void {
     const sized_font = opts.font.resize(target_size);
     var fce = try fontCacheGet(sized_font);
 
-    const target_fraction = 1.0; //target_size / fce.height;
+    // this must be synced with Font.textSizeEx()
+    const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.height;
 
     // make sure the cache has all the glyphs we need
     var utf8it = (try std.unicode.Utf8View.init(opts.text)).iterator();
