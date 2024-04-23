@@ -143,6 +143,7 @@ pub fn main() !void {
 
                     if (try dvui.button(@src(), "content_scale - .1", .{}, .{})) {
                         win.content_scale -= 0.1;
+                        win.content_scale = @max(0.1, win.content_scale);
                     }
 
                     try dvui.label(@src(), "content_scale {d}", .{win.content_scale}, .{});

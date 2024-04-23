@@ -485,7 +485,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         return fce;
     }
 
-    log.debug("FontCacheGet creating font size {d} name \"{s}\"\n", .{ font.size, font.name });
+    log.debug("FontCacheGet creating font size {d} name \"{s}\"", .{ font.size, font.name });
 
     var entry: FontCacheEntry = undefined;
 
@@ -493,6 +493,8 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     const size = .{ .w = 10, .h = 10 };
     var pixels = try cw.arena.alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
     @memset(pixels, 255);
+
+    const min_pixel_size = 1;
 
     if (useFreeType) {
         var face: c.FT_Face = undefined;
@@ -507,7 +509,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
 
         // "pixel size" for freetype doesn't actually mean you'll get that height, it's more like using pts
         // so we search for a font that has a height <= font.size
-        var pixel_size = @as(u32, @intFromFloat(@max(1, @floor(font.size))));
+        var pixel_size = @as(u32, @intFromFloat(@max(min_pixel_size, @floor(font.size))));
 
         while (true) : (pixel_size -= 1) {
             FontCacheEntry.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
@@ -522,7 +524,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
 
             //std.debug.print("height {d} -> pixel_size {d}\n", .{ height, pixel_size });
 
-            if (height <= font.size) {
+            if (height <= font.size or pixel_size == min_pixel_size) {
                 entry = FontCacheEntry{
                     .face = face,
                     .scaleFactor = 1.0, // not used with freetype
@@ -540,7 +542,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     } else {
         var face: c.stbtt_fontinfo = undefined;
         _ = c.stbtt_InitFont(&face, font.ttf_bytes.ptr, c.stbtt_GetFontOffsetForIndex(font.ttf_bytes.ptr, 0));
-        const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, @floor(font.size));
+        const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, @max(min_pixel_size, @floor(font.size)));
 
         var face2_ascent: c_int = undefined;
         var face2_descent: c_int = undefined;
@@ -563,7 +565,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         };
     }
 
-    log.debug("fontcache size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
+    log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
 
     try cw.font_cache.put(fontHash, entry);
 

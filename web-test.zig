@@ -135,7 +135,7 @@ fn dvui_frame() !void {
                         dy = touchPoints[0].?.y - touchPoints[1].?.y;
                         const new_dist: f32 = @sqrt(dx * dx + dy * dy);
 
-                        new_content_scale = win.content_scale * new_dist / old_dist.?;
+                        new_content_scale = @max(0.1, win.content_scale * new_dist / old_dist.?);
                     }
                 },
                 else => {},
