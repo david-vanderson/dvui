@@ -95,6 +95,9 @@ first_line: bool = true,
 break_lines: bool = undefined,
 touch_edit_just_focused: bool = undefined,
 
+cursor_pt: ?Point = null,
+click_pt: ?Point = null,
+
 bytes_seen: usize = 0,
 selection_in: ?*Selection = null,
 selection: *Selection = undefined,
@@ -339,6 +342,16 @@ pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, 
 }
 
 pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
+    _ = try self.addTextEx(text, false, opts);
+}
+
+pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: Options) !bool {
+    return try self.addTextEx(text, true, opts);
+}
+
+fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: Options) !bool {
+    var clicked = false;
+
     const options = self.wd.options.override(opts);
     const msize = try options.fontGet().textSize("m");
     const line_height = try options.fontGet().lineHeight();
@@ -495,6 +508,23 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
                     self.selection.end = self.selection.cursor;
                 }
                 self.sel_left_right -= 1;
+            }
+        }
+
+        if (clickable) {
+            if (self.cursor_pt) |p| {
+                const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
+                if (p.x > rs.x and p.x < (rs.x + rs.w) and p.y > rs.y and p.y < (rs.y + rs.h)) {
+                    // point is in this text
+                    dvui.cursorSet(.hand);
+                }
+            }
+
+            if (self.click_pt) |p| {
+                const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
+                if (p.x > rs.x and p.x < (rs.x + rs.w) and p.y > rs.y and p.y < (rs.y + rs.h)) {
+                    clicked = true;
+                }
             }
         }
 
@@ -839,6 +869,15 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
             }
         }
     }
+
+    if (clicked) {
+        // we can only click when not in touch editing, so that click must have
+        // transitioned us into touch editing, but we don't want to transition
+        // if the click happened on clickable text
+        self.touch_editing = false;
+    }
+
+    return clicked;
 }
 
 pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
@@ -1068,6 +1107,11 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             e.handled = true;
 
             if (dvui.captured(self.wd.id)) {
+                if (!self.touch_editing and dvui.dragging(e.evt.mouse.p) == null) {
+                    // click without drag
+                    self.click_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                }
+
                 if (e.evt.mouse.button.touch()) {
                     // this was a touch-release without drag, which transitions
                     // us between touch editing
@@ -1093,7 +1137,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 dvui.captureMouse(null);
             }
         } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
-            // move if dragging
             if (dvui.dragging(e.evt.mouse.p)) |_| {
                 if (!e.evt.mouse.button.touch()) {
                     e.handled = true;
@@ -1111,6 +1154,9 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     dvui.captureMouse(null); // stop possible drag and capture
                 }
             }
+        } else if (e.evt.mouse.action == .position) {
+            e.handled = true;
+            self.cursor_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
         }
     } else if (e.evt == .key and (e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.mod.shift()) {
         switch (e.evt.key.code) {

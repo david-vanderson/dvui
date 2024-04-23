@@ -251,8 +251,6 @@ pub fn main() !void {
                 {
                     const Sel = struct {
                         var sel = dvui.TextLayoutWidget.Selection{};
-                        var text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-                        var buf = std.mem.zeroes([256]u8);
                     };
                     {
                         var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
@@ -279,18 +277,25 @@ pub fn main() !void {
                     }
                     var scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{ .min_size_content = .{ .w = 150, .h = 100 }, .margin = dvui.Rect.all(4) });
                     var tl = try dvui.textLayout(@src(), .{ .selection = &Sel.sel, .break_lines = false }, .{});
-                    const lorem =
+                    const lorem1 =
                         \\Lorem € ipsum dolor sit amet, consectetur adipiscing elit,
                         \\sed do eiusmod tempor incididunt ut labore et dolore
-                        \\magna aliqua. Ut enim ad minim veniam, quis nostrud
+                        \\magna 
+                    ;
+                    const lorem2 =
+                        \\. Ut enim ad minim veniam, quis nostrud
                         \\exercitation ullamco laboris nisi ut aliquip ex ea
                         \\commodo consequat. Duis aute irure dolor in
                         \\reprehenderit in voluptate velit esse cillum dolore
                         \\eu fugiat nulla pariatur. Excepteur sint occaecat
                         \\cupidatat non proident, sunt in culpa qui officia
-                        \\deserunt mollit anim id est laborum."
+                        \\deserunt mollit anim id est laborum.
                     ;
-                    try tl.addText(lorem, .{});
+                    try tl.addText(lorem1, .{});
+                    if (try tl.addTextClick("aliqua", .{ .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
+                        std.debug.print("clicked\n", .{});
+                    }
+                    try tl.addText(lorem2, .{});
                     try tl.addTextDone(.{});
                     tl.deinit();
                     scroll.deinit();
