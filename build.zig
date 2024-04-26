@@ -176,7 +176,37 @@ pub fn build(b: *std.Build) !void {
 
         compile_step.dependOn(&b.addInstallFileWithDir(.{ .path = "src/backends/index.html" }, .prefix, "bin/index.html").step);
         compile_step.dependOn(&b.addInstallFileWithDir(.{ .path = "src/backends/WebBackend.js" }, .prefix, "bin/WebBackend.js").step);
+
+        b.getInstallStep().dependOn(compile_step);
     }
+
+    // color conversion test
+    //{
+    //    const exe = b.addExecutable(.{
+    //        .name = "test_color",
+    //        .root_source_file = .{ .path = "src/test_color.zig" },
+    //        .target = target,
+    //        .optimize = optimize,
+    //    });
+
+    //    const c_lib = b.addStaticLibrary(.{
+    //        .name = "hsluv",
+    //        .target = target,
+    //        .optimize = optimize,
+    //    });
+    //    c_lib.addCSourceFile(.{ .file = .{ .path = "src/hsluv.c" }, .flags = &.{} });
+    //    c_lib.linkLibC();
+    //    exe.linkLibrary(c_lib);
+
+    //    exe.addIncludePath(.{ .path = "src" });
+    //    exe.linkLibC();
+    //    b.installArtifact(exe);
+
+    //    const run_exe = b.addRunArtifact(exe);
+
+    //    const run_step = b.step("test_color", "Run test_color");
+    //    run_step.dependOn(&run_exe.step);
+    //}
 }
 
 var cacheBusterStep: std.Build.Step = undefined;

@@ -332,7 +332,7 @@ pub fn clear(self: *SDLBackend) void {
 }
 
 pub fn backend(self: *SDLBackend) dvui.Backend {
-    return dvui.Backend.init(self, nanoTime, sleep, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, showKeyboard, clipboardText, clipboardTextSet, openURL, refresh);
+    return dvui.Backend.init(self, nanoTime, sleep, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, openURL, refresh);
 }
 
 pub fn nanoTime(self: *SDLBackend) i128 {
@@ -459,8 +459,6 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32) 
 pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
     c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(texture)));
 }
-
-pub fn showKeyboard(_: *SDLBackend, _: ?dvui.Rect) void {}
 
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
     switch (event.type) {

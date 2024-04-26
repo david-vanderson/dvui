@@ -2839,6 +2839,10 @@ pub const Window = struct {
         }
     }
 
+    pub fn OSKRequested(self: *const Self) ?Rect {
+        return self.osk_focused_widget_text_rect;
+    }
+
     pub fn renderCommands(self: *Self, queue: *std.ArrayList(RenderCmd)) !void {
         self.rendering = true;
         defer self.rendering = false;
@@ -3256,8 +3260,6 @@ pub const Window = struct {
         // If one of the addEvent* functions forgot to add the synthetic mouse
         // event to the end this will print a debug message.
         self.positionMouseEventRemove();
-
-        self.backend.showKeyboard(self.osk_focused_widget_text_rect);
 
         self.backend.end();
 
@@ -4981,9 +4983,10 @@ pub fn renderText(opts: renderTextOptions) !void {
         return;
     }
 
-    // Make sure to always ask for a bigger size font, we'll reduce it down below
     const target_size = opts.font.size * opts.rs.s;
     const sized_font = opts.font.resize(target_size);
+
+    // might get a slightly smaller font
     var fce = try fontCacheGet(sized_font);
 
     // this must be synced with Font.textSizeEx()

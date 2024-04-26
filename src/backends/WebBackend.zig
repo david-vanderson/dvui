@@ -345,7 +345,7 @@ pub fn about(_: *WebBackend) []const u8 {
 }
 
 pub fn backend(self: *WebBackend) dvui.Backend {
-    return dvui.Backend.init(self, nanoTime, sleep, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, showKeyboard, clipboardText, clipboardTextSet, openURL, refresh);
+    return dvui.Backend.init(self, nanoTime, sleep, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, openURL, refresh);
 }
 
 pub fn nanoTime(self: *WebBackend) i128 {
@@ -436,7 +436,7 @@ pub fn textureDestroy(_: *WebBackend, texture: *anyopaque) void {
     wasm.wasm_textureDestroy(@as(u32, @intFromPtr(texture)));
 }
 
-pub fn showKeyboard(_: *WebBackend, rect: ?dvui.Rect) void {
+pub fn setOSKPosition(_: *WebBackend, rect: ?dvui.Rect) void {
     if (rect) |_| {
         wasm.wasm_on_screen_keyboard(0, 0, 1, 1);
     } else {

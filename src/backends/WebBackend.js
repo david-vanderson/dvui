@@ -101,6 +101,7 @@ function dvui(canvasId, wasmFile) {
     let log_string = '';
     let hidden_input;
     let touches = [];  // list of tuple (touch identifier, initial index)
+    let oskPosition = [];  // x y w h of on screen keyboard editing position, or empty if none
 
     function touchIndex(pointerId) {
         let idx = touches.findIndex((e) => e[0] === pointerId);
@@ -296,9 +297,9 @@ function dvui(canvasId, wasmFile) {
         },
         wasm_on_screen_keyboard(x, y, w, h) {
             if (w > 0 && h > 0) {
-                hidden_input.focus();
+                oskPosition = [x, y, w, h];
             } else {
-                gl.canvas.focus();
+                oskPosition = [];
             }
         },
         wasm_open_url: (ptr, len) => {
@@ -452,6 +453,14 @@ function dvui(canvasId, wasmFile) {
             }
         }
 
+        function oskCheck() {
+            if (oskPosition.length == 0) {
+                gl.canvas.focus();
+            } else {
+                hidden_input.focus();
+            }
+        }
+
         // event listeners
         canvas.addEventListener("contextmenu", (ev) => {
             ev.preventDefault();
@@ -473,6 +482,7 @@ function dvui(canvasId, wasmFile) {
         canvas.addEventListener("mouseup", (ev) => {
             wasmResult.instance.exports.add_event(3, ev.button, 0, 0, 0);
             requestRender();
+            oskCheck();
         });
         canvas.addEventListener("wheel", (ev) => {
             wasmResult.instance.exports.add_event(4, 0, 0, ev.deltaY, 0);
@@ -542,6 +552,7 @@ function dvui(canvasId, wasmFile) {
                 touches.splice(tidx, 1);
             }
             requestRender();
+            oskCheck();
         });
         canvas.addEventListener("touchmove", (ev) => {
             ev.preventDefault();
