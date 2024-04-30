@@ -107,7 +107,9 @@ sel_mouse_down_bytes: ?usize = null,
 sel_mouse_drag_pt: ?Point = null,
 sel_left_right: i32 = 0,
 sel_start_r: Rect = .{},
+sel_start_r_new: ?Rect = null,
 sel_end_r: Rect = .{},
+sel_end_r_new: ?Rect = null,
 sel_pts: [2]?Point = [2]?Point{ null, null },
 
 cursor_seen: bool = false,
@@ -718,20 +720,14 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
 
         // record screen position of selection for touch editing (use s for
         // height in case we are calling textSize with an empty slice)
-        var do_sel_start_r = false;
-        var new_start_r: Rect = undefined;
-        var do_sel_end_r = false;
-        var new_end_r: Rect = undefined;
         if (self.selection.start >= self.bytes_seen and self.selection.start <= self.bytes_seen + end) {
-            do_sel_start_r = true;
             const start_off = try options.fontGet().textSize(txt[0..self.selection.start -| self.bytes_seen]);
-            new_start_r = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
+            self.sel_start_r_new = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
         if (self.selection.end >= self.bytes_seen and self.selection.end <= self.bytes_seen + end) {
-            do_sel_end_r = true;
             const end_off = try options.fontGet().textSize(txt[0..self.selection.end -| self.bytes_seen]);
-            new_end_r = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
+            self.sel_end_r_new = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
         const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });
@@ -838,24 +834,12 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             }
         }
 
-        if (do_sel_start_r) {
-            if (newline and (self.selection.start == self.bytes_seen)) {
-                new_start_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = s.h };
-            }
-            if (!self.sel_start_r.equals(new_start_r)) {
-                dvui.refresh(null, @src(), self.wd.id);
-            }
-            self.sel_start_r = new_start_r;
+        if (newline and (self.selection.start == self.bytes_seen)) {
+            self.sel_start_r_new = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
-        if (do_sel_end_r) {
-            if (newline and (self.selection.end == self.bytes_seen)) {
-                new_end_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = s.h };
-            }
-            if (!self.sel_end_r.equals(new_end_r)) {
-                dvui.refresh(null, @src(), self.wd.id);
-            }
-            self.sel_end_r = new_end_r;
+        if (newline and (self.selection.end == self.bytes_seen)) {
+            self.sel_end_r_new = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
         if (self.wd.options.rect != null) {
@@ -899,12 +883,26 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
         self.sel_mouse_down_bytes = self.bytes_seen;
     }
 
+    if (self.sel_start_r_new) |start_r| {
+        if (!self.sel_start_r.equals(start_r)) {
+            dvui.refresh(null, @src(), self.wd.id);
+        }
+        self.sel_start_r = start_r;
+    }
+
     if (self.selection.start > self.bytes_seen or self.bytes_seen == 0) {
         const options = self.wd.options.override(opts);
         self.sel_start_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
         if (self.selection.start > self.bytes_seen) {
             dvui.refresh(null, @src(), self.wd.id);
         }
+    }
+
+    if (self.sel_end_r_new) |end_r| {
+        if (!self.sel_end_r.equals(end_r)) {
+            dvui.refresh(null, @src(), self.wd.id);
+        }
+        self.sel_end_r = end_r;
     }
 
     if (self.selection.end > self.bytes_seen or self.bytes_seen == 0) {
