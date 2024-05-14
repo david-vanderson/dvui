@@ -1,18 +1,17 @@
 .{
     .name = "dvui",
     .version = "0.0.1",
+    .paths = .{""},
     .dependencies = .{
         .sdl = .{
-            .url = "https://github.com/Beyley/SDL/archive/587205c11bfd88d515408209ca4b1c271e9f5db9.tar.gz",
-            .hash = "1220da316edbe998b3ae807af6b22b4f8c713c0b77b72275a5bc358b115ee3ecec14",
+            .url = "https://github.com/david-vanderson/SDL/archive/48fe9b739fce30dffd6c48e0fbb6fd1de2179753.tar.gz",
+            .hash = "122036ecd24b4146d0a1fa2839bba322191aaacdb5000b03f2f632d6a11a18c42f77",
+            .lazy = true,
         },
         .freetype = .{
-            .url = "https://github.com/david-vanderson/freetype/archive/18a1df5a3ef8afa0782c419b153a21e9e160335f.tar.gz",
-            .hash = "1220b305af272ac3026704b8d7e13740350daf59a6a95e45dedb428c55933e3df925",
+            .url = "https://github.com/david-vanderson/freetype/archive/9759c8ea9b310d3411b5142ba03d53fcf7199550.tar.gz",
+            .hash = "122068050425c51433847b3371f1c3ffe19cec92795cd7ee6e191643cb35ae752cab",
+            .lazy = true,
         },
-        //.stb_image = .{
-        //    .url = "https://github.com/david-vanderson/stb_image/archive/9a961327f5e67ec799bc9a6258d7abebb59d7028.tar.gz",
-        //    .hash = "1220e47cea6fd7a0098a1b0ac3e47a2c3b558dc3afb0a75c71d7b00e53936824287e",
-        //},
     },
 }

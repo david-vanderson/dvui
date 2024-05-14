@@ -148,24 +148,24 @@ pub fn renderStream(allocator: std.mem.Allocator, parser: anytype, writer: anyty
             },
 
             .draw_line_path => |data| {
-                var style = svgStyle(&cache, null, data.style, data.line_width);
-                var path = SvgPath{ .path = data.path };
+                const style = svgStyle(&cache, null, data.style, data.line_width);
+                const path = SvgPath{ .path = data.path };
                 try writer.print(
                     \\<path style="{}" d="{}"/>
                 , .{ style, path });
             },
 
             .fill_path => |data| {
-                var style = svgStyle(&cache, data.style, null, null);
-                var path = SvgPath{ .path = data.path };
+                const style = svgStyle(&cache, data.style, null, null);
+                const path = SvgPath{ .path = data.path };
                 try writer.print(
                     \\<path style="{}" d="{}"/>
                 , .{ style, path });
             },
 
             .outline_fill_path => |data| {
-                var style = svgStyle(&cache, data.fill_style, data.line_style, data.line_width);
-                var path = SvgPath{ .path = data.path };
+                const style = svgStyle(&cache, data.fill_style, data.line_style, data.line_width);
+                const path = SvgPath{ .path = data.path };
 
                 try writer.print(
                     \\<path style="{}" d="{}"/>
@@ -194,9 +194,9 @@ pub fn renderStream(allocator: std.mem.Allocator, parser: anytype, writer: anyty
                     try writer.writeAll("</linearGradient>");
                 },
                 .radial => |grad| {
-                    var dx = grad.point_1.x - grad.point_0.x;
-                    var dy = grad.point_1.y - grad.point_0.y;
-                    var r = std.math.sqrt(dx * dx + dy * dy);
+                    const dx = grad.point_1.x - grad.point_0.x;
+                    const dy = grad.point_1.y - grad.point_0.y;
+                    const r = std.math.sqrt(dx * dx + dy * dy);
 
                     try writer.print(
                         \\<radialGradient id="grad{}" gradientUnits="userSpaceOnUse" cx="{d}" cy="{d}" r="{d}">
@@ -328,9 +328,9 @@ const SvgStyleCache = struct {
         }
         const color = self.color_table[i];
 
-        var r = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.r, 0.0, 255.0)));
-        var g = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.g, 0.0, 255.0)));
-        var b = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.b, 0.0, 255.0)));
+        const r = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.r, 0.0, 255.0)));
+        const g = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.g, 0.0, 255.0)));
+        const b = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.b, 0.0, 255.0)));
         try writer.print("{s}:#{X:0>2}{X:0>2}{X:0>2};", .{ prefix, r, g, b });
         if (color.a != 1.0) {
             try writer.print("{s}-opacity:{d};", .{ prefix, color.a });
@@ -343,9 +343,9 @@ const SvgStyleCache = struct {
         }
         const color = self.color_table[i];
 
-        var r = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.r, 0.0, 255.0)));
-        var g = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.g, 0.0, 255.0)));
-        var b = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.b, 0.0, 255.0)));
+        const r = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.r, 0.0, 255.0)));
+        const g = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.g, 0.0, 255.0)));
+        const b = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.b, 0.0, 255.0)));
         try writer.print("{s}#{X:0>2}{X:0>2}{X:0>2}{s}", .{ prefix, r, g, b, postfix });
     }
 };

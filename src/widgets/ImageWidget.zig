@@ -37,8 +37,8 @@ pub fn install(self: *ImageWidget) !void {
 }
 
 pub fn draw(self: *ImageWidget) !void {
-    var rect = dvui.placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
-    var rs = self.wd.parent.screenRectScale(rect);
+    const rect = dvui.placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
+    const rs = self.wd.parent.screenRectScale(rect);
     try dvui.renderImage(self.name, self.image_bytes, rs, self.wd.options.rotationGet(), .{});
 }
 

@@ -491,7 +491,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
 
     // make debug texture atlas so we can see if something later goes wrong
     const size = .{ .w = 10, .h = 10 };
-    var pixels = try cw.arena.alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
+    const pixels = try cw.arena.alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
     @memset(pixels, 255);
 
     const min_pixel_size = 1;
@@ -803,10 +803,10 @@ pub fn pathAddRect(r: Rect, radius: Rect) !void {
     const bl = Point{ .x = r.x + rad.h, .y = r.y + r.h - rad.h };
     const br = Point{ .x = r.x + r.w - rad.w, .y = r.y + r.h - rad.w };
     const tr = Point{ .x = r.x + r.w - rad.y, .y = r.y + rad.y };
-    try pathAddArc(tl, rad.x, math.pi * 1.5, math.pi, @fabs(tl.y - bl.y) < 0.5);
-    try pathAddArc(bl, rad.h, math.pi, math.pi * 0.5, @fabs(bl.x - br.x) < 0.5);
-    try pathAddArc(br, rad.w, math.pi * 0.5, 0, @fabs(br.y - tr.y) < 0.5);
-    try pathAddArc(tr, rad.y, math.pi * 2.0, math.pi * 1.5, @fabs(tr.x - tl.x) < 0.5);
+    try pathAddArc(tl, rad.x, math.pi * 1.5, math.pi, @abs(tl.y - bl.y) < 0.5);
+    try pathAddArc(bl, rad.h, math.pi, math.pi * 0.5, @abs(bl.x - br.x) < 0.5);
+    try pathAddArc(br, rad.w, math.pi * 0.5, 0, @abs(br.y - tr.y) < 0.5);
+    try pathAddArc(tr, rad.y, math.pi * 2.0, math.pi * 1.5, @abs(tr.x - tl.x) < 0.5);
 }
 
 pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool) !void {
@@ -857,7 +857,7 @@ pub fn pathFillConvex(col: Color) !void {
     if (!cw.rendering) {
         var path_copy = std.ArrayList(Point).init(cw.arena);
         try path_copy.appendSlice(cw.path.items);
-        var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
+        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
@@ -941,7 +941,7 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
     if (after or !cw.rendering) {
         var path_copy = std.ArrayList(Point).init(cw.arena);
         try path_copy.appendSlice(cw.path.items);
-        var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
+        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
 
         var sw = cw.subwindowCurrent();
         if (after) {
@@ -1269,7 +1269,7 @@ pub fn dragging(p: Point) ?Point {
         .prestart => {
             const dp = Point.diff(p, cw.drag_pt);
             const dps = dp.scale(1 / windowNaturalScale());
-            if (@fabs(dps.x) > 3 or @fabs(dps.y) > 3) {
+            if (@abs(dps.x) > 3 or @abs(dps.y) > 3) {
                 cw.drag_pt = p;
                 cw.drag_state = .dragging;
                 return dp;
@@ -1339,7 +1339,7 @@ pub fn clipGet() Rect {
 
 pub fn clip(new: Rect) Rect {
     const cw = currentWindow();
-    var ret = cw.clipRect;
+    const ret = cw.clipRect;
     clipSet(cw.clipRect.intersect(new));
     return ret;
 }
@@ -3162,7 +3162,7 @@ pub const Window = struct {
             self.debug_under_mouse_esc_needed = dum;
         }
 
-        var logit = self.debugRefresh(null);
+        const logit = self.debugRefresh(null);
         if (try dvui.button(@src(), if (logit) "Stop Refresh Logging" else "Start Refresh Logging", .{}, .{})) {
             _ = self.debugRefresh(!logit);
         }
@@ -3216,7 +3216,7 @@ pub const Window = struct {
 
         // events may have been tagged with a focus widget that never showed up, so
         // we wouldn't even get them bubbled
-        var evts = events();
+        const evts = events();
         for (evts) |*e| {
             if (!eventMatch(e, .{ .id = self.wd.id, .r = self.rect_pixels, .cleanup = true }))
                 continue;
@@ -3367,7 +3367,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     try dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading });
     try dvui.labelNoFmt(@src(), right_str, .{ .gravity_x = 1.0 });
 
-    var evts = events();
+    const evts = events();
     for (evts) |*e| {
         if (!eventMatch(e, .{ .id = over.wd.id, .r = over.wd.contentRectScale().r }))
             continue;
@@ -3588,7 +3588,7 @@ pub const ToastIterator = struct {
         // have to deal with toasts possibly removing themselves inbetween
         // calls to next()
 
-        var items = self.cw.toasts.items;
+        const items = self.cw.toasts.items;
         if (self.i < items.len and self.last_id != null and self.last_id.? == items[self.i].id) {
             // we already did this one, move to the next
             self.i += 1;
@@ -3689,7 +3689,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
     var ret = false;
     if (b.activeRect()) |r| {
         var pop = FloatingMenuWidget.init(@src(), lw_rect, .{ .min_size_content = r.size() });
-        var first_frame = firstFrame(pop.wd.id);
+        const first_frame = firstFrame(pop.wd.id);
 
         // move popup to align first item with b
         pop.initialRect.x -= MenuItemWidget.defaults.borderGet().x;
@@ -3716,7 +3716,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
         // only want a mouse-up to choose something if the mouse has moved in the popup
         var eat_mouse_up = dataGet(null, pop.wd.id, "_eat_mouse_up", bool) orelse true;
 
-        var evts = events();
+        const evts = events();
         for (evts) |*e| {
             if (!eventMatch(e, .{ .id = pop.data().id, .r = pop.data().rectScale().r }))
                 continue;
@@ -3931,7 +3931,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     const r = rs.r;
 
     var angle: f32 = 0;
-    var anim = Animation{ .start_val = 0, .end_val = 2 * math.pi, .end_time = 4_500_000 };
+    const anim = Animation{ .start_val = 0, .end_val = 2 * math.pi, .end_time = 4_500_000 };
     if (animationGet(wd.id, "_angle")) |a| {
         // existing animation
         var aa = a;
@@ -4208,7 +4208,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     try bw.drawBackground();
 
     // use pressed text color if desired
-    var click = bw.clicked();
+    const click = bw.clicked();
     var options = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
     if (captured(bw.wd.id)) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
@@ -4240,7 +4240,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
     // min width based on the height
     try icon(@src(), name, tvg_bytes, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content }));
 
-    var click = bw.clicked();
+    const click = bw.clicked();
     try bw.drawFocus();
     bw.deinit();
     return click;
@@ -4276,7 +4276,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
     const trackrs = b.widget().screenRectScale(track);
 
     const rs = b.data().contentRectScale();
-    var evts = events();
+    const evts = events();
     for (evts) |*e| {
         if (!eventMatch(e, .{ .id = b.data().id, .r = rs.r }))
             continue;
@@ -4379,7 +4379,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
         try pathFillConvex(options.color(.fill));
     }
 
-    var knobRect = switch (dir) {
+    const knobRect = switch (dir) {
         .horizontal => Rect{ .x = (br.w - knobsize) * perc, .w = knobsize, .h = knobsize },
         .vertical => Rect{ .y = (br.h - knobsize) * (1 - perc), .w = knobsize, .h = knobsize },
     };
@@ -4490,7 +4490,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
         var new_val: ?f32 = null;
 
-        var evts = events();
+        const evts = events();
         for (evts) |*e| {
             if (e.evt == .key) {
                 ctrl_down = e.evt.key.mod.controlCommand();
@@ -4559,7 +4559,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         const max_x = trackrs.r.x + trackrs.r.w;
         const px_scale = trackrs.s;
 
-        var evts = events();
+        const evts = events();
         for (evts) |*e| {
             if (e.evt == .key) {
                 ctrl_down = e.evt.key.mod.controlCommand();
@@ -4616,7 +4616,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                 if (pp.x < min_x) {
                                     init_opts.value.* = init_opts.min.?;
                                 } else {
-                                    const base = if (init_opts.min.? == 0) exp_min_change else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.min.?)))) * exp_min_change;
+                                    const base = if (init_opts.min.? == 0) exp_min_change else @exp(math.ln10 * @floor(@log10(@abs(init_opts.min.?)))) * exp_min_change;
                                     const how_far = @max(0, (pp.x - min_x)) / px_scale;
                                     const how_much = (@exp(how_far * exp_stretch) - 1) * base;
                                     init_opts.value.* = init_opts.min.? + how_much;
@@ -4629,7 +4629,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                 if (pp.x > max_x) {
                                     init_opts.value.* = init_opts.max.?;
                                 } else {
-                                    const base = if (init_opts.max.? == 0) exp_min_change else @exp(math.ln10 * @floor(@log10(@fabs(init_opts.max.?)))) * exp_min_change;
+                                    const base = if (init_opts.max.? == 0) exp_min_change else @exp(math.ln10 * @floor(@log10(@abs(init_opts.max.?)))) * exp_min_change;
                                     const how_far = @max(0, (max_x - pp.x)) / px_scale;
                                     const how_much = (@exp(how_far * exp_stretch) - 1) * base;
                                     init_opts.value.* = init_opts.max.? - how_much;
@@ -4641,9 +4641,9 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                 // neither min nor max, go exponentially away from starting value
                                 if (dataGet(null, b.data().id, "_start_x", f32)) |start_x| {
                                     if (dataGet(null, b.data().id, "_start_v", f32)) |start_v| {
-                                        const base = if (start_v == 0) exp_min_change else @exp(math.ln10 * @floor(@log10(@fabs(start_v)))) * exp_min_change;
+                                        const base = if (start_v == 0) exp_min_change else @exp(math.ln10 * @floor(@log10(@abs(start_v)))) * exp_min_change;
                                         const how_far = (pp.x - start_x) / px_scale;
-                                        const how_much = (@exp(@fabs(how_far) * exp_stretch) - 1) * base;
+                                        const how_much = (@exp(@abs(how_far) * exp_stretch) - 1) * base;
                                         init_opts.value.* = if (how_far < 0) start_v - how_much else start_v + how_much;
                                         if (init_opts.interval) |ival| {
                                             init_opts.value.* = start_v + ival * @round((init_opts.value.* - start_v) / ival);
@@ -4665,7 +4665,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                 if (init_opts.interval) |ival| {
                                     init_opts.value.* = init_opts.value.* + (if (ke.code == .left) -ival else ival);
                                 } else {
-                                    const how_much = @fabs(init_opts.value.*) * key_percentage;
+                                    const how_much = @abs(init_opts.value.*) * key_percentage;
                                     init_opts.value.* = if (ke.code == .left) init_opts.value.* - how_much else init_opts.value.* + how_much;
                                 }
 
@@ -4853,7 +4853,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     var b = try box(@src(), .horizontal, options.strip().override(.{ .expand = .both }));
     defer b.deinit();
 
-    var check_size = try options.fontGet().lineHeight();
+    const check_size = try options.fontGet().lineHeight();
     const s = spacer(@src(), Size.all(check_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
     var rs = s.borderRectScale();
@@ -4975,7 +4975,7 @@ pub fn renderText(opts: renderTextOptions) !void {
     if (!cw.rendering) {
         var opts_copy = opts;
         opts_copy.text = try cw.arena.dupe(u8, opts.text);
-        var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
+        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
@@ -5092,7 +5092,7 @@ pub fn renderText(opts: renderTextOptions) !void {
                     const out_h: u32 = @intFromFloat(gi.h);
 
                     // single channel
-                    var bitmap = try cw.arena.alloc(u8, @as(usize, out_w * out_h));
+                    const bitmap = try cw.arena.alloc(u8, @as(usize, out_w * out_h));
 
                     //log.debug("makecodepointBitmap size x {d} y {d} w {d} h {d} out w {d} h {d}", .{ x, y, size.w, size.h, out_w, out_h });
 
@@ -5137,7 +5137,7 @@ pub fn renderText(opts: renderTextOptions) !void {
     defer idx.deinit();
 
     var x: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
-    var y: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.y) else opts.rs.r.y;
+    const y: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.y) else opts.rs.r.y;
 
     if (opts.debug) {
         log.debug("renderText x {d} y {d}\n", .{ x, y });
@@ -5255,7 +5255,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
     var cw = currentWindow();
 
     if (!cw.rendering) {
-        var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .debug_font_atlases = .{ .rs = rs, .color = color } } };
+        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .debug_font_atlases = .{ .rs = rs, .color = color } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
@@ -5263,8 +5263,8 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
         return;
     }
 
-    var x: f32 = if (cw.snap_to_pixels) @round(rs.r.x) else rs.r.x;
-    var y: f32 = if (cw.snap_to_pixels) @round(rs.r.y) else rs.r.y;
+    const x: f32 = if (cw.snap_to_pixels) @round(rs.r.x) else rs.r.x;
+    const y: f32 = if (cw.snap_to_pixels) @round(rs.r.y) else rs.r.y;
 
     var offset: f32 = 0;
     var it = cw.font_cache.iterator();
@@ -5318,14 +5318,14 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Co
     var idx = try std.ArrayList(u32).initCapacity(cw.arena, 6);
     defer idx.deinit();
 
-    var x: f32 = if (cw.snap_to_pixels) @round(rs.r.x) else rs.r.x;
-    var y: f32 = if (cw.snap_to_pixels) @round(rs.r.y) else rs.r.y;
+    const x: f32 = if (cw.snap_to_pixels) @round(rs.r.x) else rs.r.x;
+    const y: f32 = if (cw.snap_to_pixels) @round(rs.r.y) else rs.r.y;
 
-    var xw = rs.r.x + rs.r.w;
-    var yh = rs.r.y + rs.r.h;
+    const xw = rs.r.x + rs.r.w;
+    const yh = rs.r.y + rs.r.h;
 
-    var midx = (x + xw) / 2;
-    var midy = (y + yh) / 2;
+    const midx = (x + xw) / 2;
+    const midy = (y + yh) / 2;
 
     var v: Vertex = undefined;
     v.pos.x = x;
@@ -5382,8 +5382,8 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotati
     var cw = currentWindow();
 
     if (!cw.rendering) {
-        var name_copy = try cw.arena.dupe(u8, name);
-        var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .rotation = rotation, .colormod = colormod } } };
+        const name_copy = try cw.arena.dupe(u8, name);
+        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .rotation = rotation, .colormod = colormod } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
@@ -5452,8 +5452,8 @@ pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, rot
     var cw = currentWindow();
 
     if (!cw.rendering) {
-        var name_copy = try cw.arena.dupe(u8, name);
-        var cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .image = .{ .name = name_copy, .image_bytes = image_bytes, .rs = rs, .rotation = rotation, .colormod = colormod } } };
+        const name_copy = try cw.arena.dupe(u8, name);
+        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .image = .{ .name = name_copy, .image_bytes = image_bytes, .rs = rs, .rotation = rotation, .colormod = colormod } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);

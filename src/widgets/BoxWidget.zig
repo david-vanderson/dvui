@@ -91,7 +91,7 @@ pub fn rectFor(self: *BoxWidget, id: u32, min_size: Size, e: Options.Expand, g: 
         }
     }
 
-    var child_size = dvui.minSize(id, min_size);
+    const child_size = dvui.minSize(id, min_size);
 
     var rect = self.childRect;
     rect.w = @min(rect.w, child_size.w);

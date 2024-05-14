@@ -483,10 +483,10 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
                 if (item == .end)
                     break;
 
-                var x = try self.parseNumber();
-                var y = try self.parseNumber();
-                var width = try self.parseNumber();
-                var height = try self.parseNumber();
+                const x = try self.parseNumber();
+                const y = try self.parseNumber();
+                const width = try self.parseNumber();
+                const height = try self.parseNumber();
 
                 try self.expectEnd();
 
@@ -509,8 +509,8 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
                 if (item == .end)
                     break;
 
-                var p0 = try self.parsePoint();
-                var p1 = try self.parsePoint();
+                const p0 = try self.parsePoint();
+                const p1 = try self.parsePoint();
 
                 try self.expectEnd();
 
@@ -533,8 +533,8 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
                 if (item == .end)
                     break;
 
-                var x = try self.parseNumber();
-                var y = try self.parseNumber();
+                const x = try self.parseNumber();
+                const y = try self.parseNumber();
 
                 try self.expectEnd();
 
@@ -649,11 +649,11 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
             if ((try self.parseInteger(u8)) != 1)
                 return error.UnsupportedVersion;
 
-            var header = try self.parseHeader();
+            const header = try self.parseHeader();
 
             try self.builder.writeHeader(header.width, header.height, header.scale, header.color_encoding, header.coordinate_range);
 
-            var color_table = try self.parseColorTable();
+            const color_table = try self.parseColorTable();
             defer self.allocator.free(color_table);
 
             try self.builder.writeColorTable(color_table);
@@ -668,7 +668,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
                         const command = try self.parseEnum(tvg.Command);
                         switch (command) {
                             .fill_polygon => {
-                                var style = try self.parseStyle();
+                                const style = try self.parseStyle();
 
                                 var points = try self.readPoints();
                                 defer points.deinit();
@@ -677,15 +677,15 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
                             },
 
                             .fill_rectangles => {
-                                var style = try self.parseStyle();
-                                var rects = try self.readRectangles();
+                                const style = try self.parseStyle();
+                                const rects = try self.readRectangles();
                                 defer rects.deinit();
 
                                 try self.builder.writeFillRectangles(style, rects.items);
                             },
 
                             .fill_path => {
-                                var style = try self.parseStyle();
+                                const style = try self.parseStyle();
 
                                 var path = try self.readPath();
                                 defer path.deinit();
@@ -694,8 +694,8 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
                             },
 
                             .draw_lines => {
-                                var style = try self.parseStyle();
-                                var line_width = try self.parseNumber();
+                                const style = try self.parseStyle();
+                                const line_width = try self.parseNumber();
 
                                 var lines = try self.readLines();
                                 defer lines.deinit();
@@ -704,8 +704,8 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
                             },
 
                             .draw_line_loop => {
-                                var style = try self.parseStyle();
-                                var line_width = try self.parseNumber();
+                                const style = try self.parseStyle();
+                                const line_width = try self.parseNumber();
 
                                 var points = try self.readPoints();
                                 defer points.deinit();
@@ -714,8 +714,8 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
                             },
 
                             .draw_line_strip => {
-                                var style = try self.parseStyle();
-                                var line_width = try self.parseNumber();
+                                const style = try self.parseStyle();
+                                const line_width = try self.parseNumber();
 
                                 var points = try self.readPoints();
                                 defer points.deinit();
@@ -723,18 +723,18 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
                                 try self.builder.writeDrawLineStrip(style, line_width, points.items);
                             },
                             .draw_line_path => {
-                                var style = try self.parseStyle();
-                                var line_width = try self.parseNumber();
+                                const style = try self.parseStyle();
+                                const line_width = try self.parseNumber();
 
-                                var path = try self.readPath();
+                                const path = try self.readPath();
 
                                 try self.builder.writeDrawPath(style, line_width, path.segments);
                             },
 
                             .outline_fill_polygon => {
-                                var fill_style = try self.parseStyle();
-                                var line_style = try self.parseStyle();
-                                var line_width = try self.parseNumber();
+                                const fill_style = try self.parseStyle();
+                                const line_style = try self.parseStyle();
+                                const line_width = try self.parseNumber();
 
                                 var points = try self.readPoints();
                                 defer points.deinit();
@@ -743,9 +743,9 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
                             },
 
                             .outline_fill_rectangles => {
-                                var fill_style = try self.parseStyle();
-                                var line_style = try self.parseStyle();
-                                var line_width = try self.parseNumber();
+                                const fill_style = try self.parseStyle();
+                                const line_style = try self.parseStyle();
+                                const line_width = try self.parseNumber();
 
                                 var rects = try self.readRectangles();
                                 defer rects.deinit();
@@ -753,11 +753,11 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
                                 try self.builder.writeOutlineFillRectangles(fill_style, line_style, line_width, rects.items);
                             },
                             .outline_fill_path => {
-                                var fill_style = try self.parseStyle();
-                                var line_style = try self.parseStyle();
-                                var line_width = try self.parseNumber();
+                                const fill_style = try self.parseStyle();
+                                const line_style = try self.parseStyle();
+                                const line_width = try self.parseNumber();
 
-                                var path = try self.readPath();
+                                const path = try self.readPath();
 
                                 try self.builder.writeOutlineFillPath(fill_style, line_style, line_width, path.segments);
                             },

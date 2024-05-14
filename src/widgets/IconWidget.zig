@@ -39,8 +39,8 @@ pub fn install(self: *IconWidget) !void {
 }
 
 pub fn draw(self: *IconWidget) !void {
-    var rect = dvui.placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
-    var rs = self.wd.parent.screenRectScale(rect);
+    const rect = dvui.placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
+    const rs = self.wd.parent.screenRectScale(rect);
     try dvui.renderIcon(self.name, self.tvg_bytes, rs, self.wd.options.rotationGet(), self.wd.options.color(.text));
 }
 

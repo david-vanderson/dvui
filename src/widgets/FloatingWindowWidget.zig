@@ -94,7 +94,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             // only size ourselves once by default
             self.auto_size = false;
 
-            var ms = Size.max(min_size, self.options.min_sizeGet());
+            const ms = Size.max(min_size, self.options.min_sizeGet());
             self.wd.rect.w = ms.w;
             self.wd.rect.h = ms.h;
 
@@ -236,7 +236,7 @@ const cursor_drag: dvui.enums.Cursor = .arrow_all;
 
 pub fn processEventsBefore(self: *FloatingWindowWidget) void {
     const rs = self.wd.rectScale();
-    var evts = dvui.events();
+    const evts = dvui.events();
     for (evts) |*e| {
         if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r }))
             continue;
@@ -297,7 +297,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
     // duplicate processEventsBefore (minus corner stuff) because you could
     // have a click down, motion, and up in same frame and you wouldn't know
     // you needed to do anything until you got capture here
-    var evts = dvui.events();
+    const evts = dvui.events();
     for (evts) |*e| {
         if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r, .cleanup = true }))
             continue;

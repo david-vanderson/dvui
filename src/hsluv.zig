@@ -159,7 +159,7 @@ pub fn xyz2rgb(in_out: *Triplet) void {
 }
 
 pub fn rgb2xyz(in_out: *Triplet) void {
-    var rgbl: Triplet = .{ .a = to_linear(in_out.a), .b = to_linear(in_out.b), .c = to_linear(in_out.c) };
+    const rgbl: Triplet = .{ .a = to_linear(in_out.a), .b = to_linear(in_out.b), .c = to_linear(in_out.c) };
     const x = dot_product(m_inv[0], rgbl);
     const y = dot_product(m_inv[1], rgbl);
     const z = dot_product(m_inv[2], rgbl);
@@ -237,7 +237,7 @@ pub fn luv2lch(in_out: *Triplet) void {
     if (c < 0.0001) {
         h = 0;
     } else {
-        h = std.math.atan2(f32, v, u) * 57.29577951308232087680; // (180 / pi)
+        h = std.math.atan2(v, u) * 57.29577951308232087680; // (180 / pi)
         if (h < 0.0)
             h += 360.0;
     }

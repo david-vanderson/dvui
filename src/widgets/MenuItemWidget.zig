@@ -104,7 +104,7 @@ pub fn matchEvent(self: *MenuItemWidget, e: *Event) bool {
 }
 
 pub fn processEvents(self: *MenuItemWidget) void {
-    var evts = dvui.events();
+    const evts = dvui.events();
     for (evts) |*e| {
         if (!self.matchEvent(e))
             continue;

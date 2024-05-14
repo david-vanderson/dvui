@@ -18,12 +18,7 @@ web backend
 
 text rendering:
 - investigate if with stb_truetype we can align horizontally to pixels?
-
-
-bug repro steps:
-- touch_edit a text layout
-- move focus to floating window
-- click-release in text layout causes touch_edit to stop?
+- see if the vertical weirdness is global, maybe a canvas size thing?  Does it happen in the SDL demo?
 
 
 zig.news writeup for how to do a build.zig step with a zig function

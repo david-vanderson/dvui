@@ -6,34 +6,76 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const lib_bundle = b.addStaticLibrary(.{
-        .name = "dvui_libs",
+    const dvui_mod = b.addModule("dvui", .{
+        .root_source_file = b.path("src/dvui.zig"),
+    });
+
+    dvui_mod.addCSourceFiles(.{ .files = &.{
+        "src/stb/stb_image_impl.c",
+        "src/stb/stb_truetype_impl.c",
+    } });
+
+    dvui_mod.addIncludePath(b.path("src/stb"));
+
+    const freetype_dep = b.lazyDependency("freetype", .{
         .target = target,
         .optimize = optimize,
     });
-    lib_bundle.addCSourceFile(.{ .file = .{ .path = "src/stb/stb_image_impl.c" }, .flags = &.{} });
-    lib_bundle.addCSourceFile(.{ .file = .{ .path = "src/stb/stb_truetype_impl.c" }, .flags = &.{} });
-    link_deps(b, lib_bundle);
-    b.installArtifact(lib_bundle);
 
-    const dvui_mod = b.addModule("dvui", .{
-        .source_file = .{ .path = "src/dvui.zig" },
-        .dependencies = &.{},
-    });
+    if (freetype_dep) |fd| {
+        dvui_mod.linkLibrary(fd.artifact("freetype"));
+    }
 
     const sdl_mod = b.addModule("SDLBackend", .{
-        .source_file = .{ .path = "src/backends/SDLBackend.zig" },
-        .dependencies = &.{
-            .{ .name = "dvui", .module = dvui_mod },
-        },
+        .root_source_file = b.path("src/backends/SDLBackend.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
     });
+    sdl_mod.addImport("dvui", dvui_mod);
 
-    const web_mod = b.addModule("WebBackend", .{
-        .source_file = .{ .path = "src/backends/WebBackend.zig" },
-        .dependencies = &.{
-            .{ .name = "dvui", .module = dvui_mod },
-        },
-    });
+    if (target.result.cpu.arch == .wasm32) {
+        // nothing
+    } else if (target.result.os.tag == .windows) {
+        const sdl_dep = b.lazyDependency("sdl", .{
+            .target = target,
+            .optimize = optimize,
+        });
+        if (sdl_dep) |sd| {
+            sdl_mod.linkLibrary(sd.artifact("SDL2"));
+        }
+
+        sdl_mod.linkSystemLibrary("setupapi", .{});
+        sdl_mod.linkSystemLibrary("winmm", .{});
+        sdl_mod.linkSystemLibrary("gdi32", .{});
+        sdl_mod.linkSystemLibrary("imm32", .{});
+        sdl_mod.linkSystemLibrary("version", .{});
+        sdl_mod.linkSystemLibrary("oleaut32", .{});
+        sdl_mod.linkSystemLibrary("ole32", .{});
+    } else {
+        if (target.result.os.tag.isDarwin()) {
+            sdl_mod.linkSystemLibrary("z", .{});
+            sdl_mod.linkSystemLibrary("bz2", .{});
+            sdl_mod.linkSystemLibrary("iconv", .{});
+            sdl_mod.linkFramework("AppKit", .{});
+            sdl_mod.linkFramework("AudioToolbox", .{});
+            sdl_mod.linkFramework("Carbon", .{});
+            sdl_mod.linkFramework("Cocoa", .{});
+            sdl_mod.linkFramework("CoreAudio", .{});
+            sdl_mod.linkFramework("CoreFoundation", .{});
+            sdl_mod.linkFramework("CoreGraphics", .{});
+            sdl_mod.linkFramework("CoreHaptics", .{});
+            sdl_mod.linkFramework("CoreVideo", .{});
+            sdl_mod.linkFramework("ForceFeedback", .{});
+            sdl_mod.linkFramework("GameController", .{});
+            sdl_mod.linkFramework("IOKit", .{});
+            sdl_mod.linkFramework("Metal", .{});
+        }
+
+        sdl_mod.linkSystemLibrary("SDL2", .{});
+        //sdl_mod.addIncludePath(.{.path = "/Users/dvanderson/SDL2-2.24.1/include"});
+        //sdl_mod.addObjectFile(.{.path = "/Users/dvanderson/SDL2-2.24.1/build/.libs/libSDL2.a"});
+    }
 
     // mach example
     //{
@@ -71,16 +113,13 @@ pub fn build(b: *std.Build) !void {
     inline for (examples) |ex| {
         const exe = b.addExecutable(.{
             .name = ex,
-            .root_source_file = .{ .path = ex ++ ".zig" },
+            .root_source_file = b.path(ex ++ ".zig"),
             .target = target,
             .optimize = optimize,
         });
 
-        exe.addModule("dvui", dvui_mod);
-        exe.addModule("SDLBackend", sdl_mod);
-
-        exe.linkLibrary(lib_bundle);
-        add_include_paths(b, exe);
+        exe.root_module.addImport("dvui", dvui_mod);
+        exe.root_module.addImport("SDLBackend", sdl_mod);
 
         const compile_step = b.step(ex, "Compile " ++ ex);
         compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
@@ -97,19 +136,18 @@ pub fn build(b: *std.Build) !void {
     {
         const exe = b.addExecutable(.{
             .name = "sdl-test",
-            .root_source_file = .{ .path = "sdl-test.zig" },
+            .root_source_file = b.path("sdl-test.zig"),
             .target = target,
             .optimize = optimize,
         });
 
-        exe.addModule("dvui", dvui_mod);
-        exe.addModule("SDLBackend", sdl_mod);
+        exe.root_module.addImport("dvui", dvui_mod);
+        exe.root_module.addImport("SDLBackend", sdl_mod);
 
-        exe.linkLibrary(lib_bundle);
-        add_include_paths(b, exe);
+        const exe_install = b.addInstallArtifact(exe, .{});
 
         const compile_step = b.step("compile-sdl-test", "Compile the SDL test");
-        compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
+        compile_step.dependOn(&exe_install.step);
         b.getInstallStep().dependOn(compile_step);
 
         const run_cmd = b.addRunArtifact(exe);
@@ -121,34 +159,45 @@ pub fn build(b: *std.Build) !void {
 
     // web test
     {
-        const webtarget = std.zig.CrossTarget{
+        const webtarget = std.Target.Query{
             .cpu_arch = .wasm32,
             .os_tag = .freestanding,
             .abi = .musl,
         };
 
-        const wasm = b.addSharedLibrary(.{
+        const dvui_mod_web = b.addModule("dvui", .{
+            .root_source_file = b.path("src/dvui.zig"),
+            .target = b.resolveTargetQuery(webtarget),
+            .optimize = optimize,
+        });
+
+        dvui_mod_web.addCSourceFiles(.{
+            .files = &.{
+                "src/stb/stb_image_impl.c",
+                "src/stb/stb_truetype_impl.c",
+            },
+            .flags = &.{"-DINCLUDE_CUSTOM_LIBC_FUNCS=1"},
+        });
+
+        dvui_mod_web.addIncludePath(b.path("src/stb"));
+
+        const wasm = b.addExecutable(.{
             .name = "web-test",
             .root_source_file = .{ .path = "web-test.zig" },
-            .target = webtarget,
+            .target = b.resolveTargetQuery(webtarget),
             .optimize = optimize,
+            .link_libc = true,
         });
 
-        const stb_libs = b.addStaticLibrary(.{
-            .name = "dvui_libs_nolibc",
-            .target = webtarget,
-            .optimize = optimize,
+        wasm.entry = .disabled;
+
+        wasm.root_module.addImport("dvui", dvui_mod_web);
+
+        const web_mod = b.addModule("WebBackend", .{
+            .root_source_file = b.path("src/backends/WebBackend.zig"),
         });
-        stb_libs.addCSourceFile(.{ .file = .{ .path = "src/stb/stb_image_impl.c" }, .flags = &.{"-DINCLUDE_CUSTOM_LIBC_FUNCS=1"} });
-        stb_libs.addCSourceFile(.{ .file = .{ .path = "src/stb/stb_truetype_impl.c" }, .flags = &.{"-DINCLUDE_CUSTOM_LIBC_FUNCS=1"} });
-        stb_libs.linkLibC();
 
-        wasm.linkLibrary(stb_libs);
-        wasm.addModule("dvui", dvui_mod);
-        wasm.addModule("WebBackend", web_mod);
-        wasm.linkLibC();
-
-        wasm.export_symbol_names = &[_][]const u8{
+        web_mod.export_symbol_names = &[_][]const u8{
             "app_init",
             "app_deinit",
             "app_update",
@@ -156,7 +205,8 @@ pub fn build(b: *std.Build) !void {
             "arena_u8",
         };
 
-        add_include_paths(b, wasm);
+        wasm.root_module.addImport("WebBackend", web_mod);
+        web_mod.addImport("dvui", dvui_mod_web);
 
         const install_step = b.addInstallArtifact(wasm, .{
             .dest_dir = .{ .override = .{ .custom = "bin" } },
@@ -234,78 +284,4 @@ fn cacheBuster(step: *std.Build.Step, prog_node: *std.Progress.Node) !void {
         try newfile.writer().print("{d}", .{std.time.nanoTimestamp()});
         try newfile.writer().writeAll(contents[idx + needle.len ..]);
     }
-}
-
-pub fn link_deps(b: *std.Build, exe: *std.Build.Step.Compile) void {
-    // TODO: remove this part about freetype (pulling it from the dvui_dep
-    // sub-builder) once https://github.com/ziglang/zig/pull/14731 lands
-    const freetype_dep = b.dependency("freetype", .{
-        .target = exe.target,
-        .optimize = exe.optimize,
-    });
-    exe.linkLibrary(freetype_dep.artifact("freetype"));
-
-    if (exe.target.cpu_arch == .wasm32) {
-        // nothing
-    } else if (exe.target.isWindows()) {
-        const sdl_dep = b.dependency("sdl", .{
-            .target = exe.target,
-            .optimize = exe.optimize,
-        });
-        exe.linkLibrary(sdl_dep.artifact("SDL2"));
-
-        exe.linkSystemLibrary("setupapi");
-        exe.linkSystemLibrary("winmm");
-        exe.linkSystemLibrary("gdi32");
-        exe.linkSystemLibrary("imm32");
-        exe.linkSystemLibrary("version");
-        exe.linkSystemLibrary("oleaut32");
-        exe.linkSystemLibrary("ole32");
-    } else {
-        if (exe.target.isDarwin()) {
-            exe.linkSystemLibrary("z");
-            exe.linkSystemLibrary("bz2");
-            exe.linkSystemLibrary("iconv");
-            exe.linkFramework("AppKit");
-            exe.linkFramework("AudioToolbox");
-            exe.linkFramework("Carbon");
-            exe.linkFramework("Cocoa");
-            exe.linkFramework("CoreAudio");
-            exe.linkFramework("CoreFoundation");
-            exe.linkFramework("CoreGraphics");
-            exe.linkFramework("CoreHaptics");
-            exe.linkFramework("CoreVideo");
-            exe.linkFramework("ForceFeedback");
-            exe.linkFramework("GameController");
-            exe.linkFramework("IOKit");
-            exe.linkFramework("Metal");
-        }
-
-        exe.linkSystemLibrary("SDL2");
-        //exe.addIncludePath(.{.path = "/Users/dvanderson/SDL2-2.24.1/include"});
-        //exe.addObjectFile(.{.path = "/Users/dvanderson/SDL2-2.24.1/build/.libs/libSDL2.a"});
-    }
-}
-
-const build_runner = @import("root");
-const deps = build_runner.dependencies;
-
-pub fn get_dependency_build_root(dep_prefix: []const u8, name: []const u8) []const u8 {
-    inline for (@typeInfo(deps.imports).Struct.decls) |decl| {
-        if (std.mem.startsWith(u8, decl.name, dep_prefix) and
-            std.mem.endsWith(u8, decl.name, name) and
-            decl.name.len == dep_prefix.len + name.len)
-        {
-            return @field(deps.build_root, decl.name);
-        }
-    }
-
-    std.debug.print("no dependency named '{s}'\n", .{name});
-    std.process.exit(1);
-}
-
-/// prefix: library prefix. e.g. "dvui."
-pub fn add_include_paths(b: *std.Build, exe: *std.Build.CompileStep) void {
-    exe.addIncludePath(.{ .path = b.fmt("{s}{s}", .{ get_dependency_build_root(b.dep_prefix, "freetype"), "/include" }) });
-    exe.addIncludePath(.{ .path = b.fmt("{s}/src/stb", .{b.build_root.path.?}) });
 }

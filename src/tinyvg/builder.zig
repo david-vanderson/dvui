@@ -97,7 +97,7 @@ pub fn Builder(comptime Writer: type) type {
                 },
 
                 .u8888 => for (colors) |c| {
-                    var rgba = c.toRgba8();
+                    const rgba = c.toRgba8();
                     try self.writer.writeIntLittle(u8, rgba[0]);
                     try self.writer.writeIntLittle(u8, rgba[1]);
                     try self.writer.writeIntLittle(u8, rgba[2]);

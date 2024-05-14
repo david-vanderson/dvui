@@ -79,7 +79,7 @@ pub fn data(self: *ScrollBarWidget) *WidgetData {
 
 pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect) void {
     const rs = self.wd.borderRectScale();
-    var evts = dvui.events();
+    const evts = dvui.events();
     for (evts) |*e| {
         if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = rs.r }))
             continue;

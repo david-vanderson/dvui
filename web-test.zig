@@ -11,26 +11,28 @@ fn writeLog(_: void, msg: []const u8) WriteError!usize {
     return msg.len;
 }
 
-pub const std_options = struct {
-    /// Overwrite default log handler
-    pub fn logFn(
-        comptime message_level: std.log.Level,
-        comptime scope: @Type(.EnumLiteral),
-        comptime format: []const u8,
-        args: anytype,
-    ) void {
-        const level_txt = switch (message_level) {
-            .err => "error",
-            .warn => "warning",
-            .info => "info",
-            .debug => "debug",
-        };
-        const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
-        const msg = level_txt ++ prefix2 ++ format ++ "\n";
+pub fn logFn(
+    comptime message_level: std.log.Level,
+    comptime scope: @Type(.EnumLiteral),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    const level_txt = switch (message_level) {
+        .err => "error",
+        .warn => "warning",
+        .info => "info",
+        .debug => "debug",
+    };
+    const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
+    const msg = level_txt ++ prefix2 ++ format ++ "\n";
 
-        (LogWriter{ .context = {} }).print(msg, args) catch return;
-        WebBackend.wasm.wasm_log_flush();
-    }
+    (LogWriter{ .context = {} }).print(msg, args) catch return;
+    WebBackend.wasm.wasm_log_flush();
+}
+
+pub const std_options: std.Options = .{
+    // Overwrite default log handler
+    .logFn = logFn,
 };
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
@@ -69,14 +71,14 @@ export fn app_deinit() void {
 export fn app_update() i32 {
     return update() catch |err| {
         std.log.err("{!}", .{err});
-        var msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
+        const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
         WebBackend.wasm.wasm_panic(msg.ptr, msg.len);
         return -1;
     };
 }
 
 fn update() !i32 {
-    var nstime = win.beginWait(backend.hasEvent());
+    const nstime = win.beginWait(backend.hasEvent());
 
     try win.begin(nstime);
 

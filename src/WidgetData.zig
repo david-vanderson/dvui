@@ -77,7 +77,7 @@ pub fn register(self: *const WidgetData) !void {
             // prevents stuff in lower subwindows being caught
             cw.windowFor(cw.mouse_pt) == dvui.subwindowCurrentId())
         {
-            var old = cw.debug_under_mouse_info;
+            const old = cw.debug_under_mouse_info;
             cw.debug_under_mouse_info = try std.fmt.allocPrint(cw.gpa, "{s}\n{x} {s}", .{ old, self.id, name });
             if (old.len > 0) {
                 cw.gpa.free(old);
@@ -104,7 +104,7 @@ pub fn register(self: *const WidgetData) !void {
                 outline_rect.y = @ceil(outline_rect.y) - 0.5;
             }
             try dvui.pathAddRect(outline_rect, .{});
-            var color = dvui.themeGet().color_err;
+            const color = dvui.themeGet().color_err;
             try dvui.pathStrokeAfter(true, true, 1 * rs.s, .none, color);
             dvui.clipSet(clipr);
         }
@@ -129,7 +129,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
         const rs = self.borderRectScale();
         if (!rs.r.empty()) {
             try dvui.pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-            var col = self.options.color(.border);
+            const col = self.options.color(.border);
             try dvui.pathFillConvex(col);
         }
     }
@@ -148,7 +148,7 @@ pub fn focusBorder(self: *const WidgetData) !void {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
         try dvui.pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-        var color = self.options.color(.accent);
+        const color = self.options.color(.accent);
         try dvui.pathStrokeAfter(true, true, thick, .none, color);
     }
 }
@@ -223,7 +223,7 @@ pub fn minSizeSetAndRefresh(self: *const WidgetData) void {
 
     var cw = dvui.currentWindow();
 
-    var existing_min_size = cw.min_sizes.fetchPut(self.id, .{ .size = self.min_size }) catch |err| blk: {
+    const existing_min_size = cw.min_sizes.fetchPut(self.id, .{ .size = self.min_size }) catch |err| blk: {
         // returning an error here means that all widgets deinit can return
         // it, which is very annoying because you can't "defer try
         // widget.deinit()".  Also if we are having memory issues then we

@@ -34,15 +34,15 @@ pub fn scroll_max(self: ScrollInfo, dir: enums.Direction) f32 {
 }
 
 pub fn fraction_visible(self: ScrollInfo, dir: enums.Direction) f32 {
-    var viewport_start = switch (dir) {
+    const viewport_start = switch (dir) {
         .vertical => self.viewport.y,
         .horizontal => self.viewport.x,
     };
-    var viewport_size = switch (dir) {
+    const viewport_size = switch (dir) {
         .vertical => self.viewport.h,
         .horizontal => self.viewport.w,
     };
-    var virtual_size = switch (dir) {
+    const virtual_size = switch (dir) {
         .vertical => self.virtual_size.h,
         .horizontal => self.virtual_size.w,
     };
@@ -62,15 +62,15 @@ pub fn fraction_visible(self: ScrollInfo, dir: enums.Direction) f32 {
 }
 
 pub fn scroll_fraction(self: ScrollInfo, dir: enums.Direction) f32 {
-    var viewport_start = switch (dir) {
+    const viewport_start = switch (dir) {
         .vertical => self.viewport.y,
         .horizontal => self.viewport.x,
     };
-    var viewport_size = switch (dir) {
+    const viewport_size = switch (dir) {
         .vertical => self.viewport.h,
         .horizontal => self.viewport.w,
     };
-    var virtual_size = switch (dir) {
+    const virtual_size = switch (dir) {
         .vertical => self.virtual_size.h,
         .horizontal => self.virtual_size.w,
     };

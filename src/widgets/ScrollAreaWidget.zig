@@ -122,7 +122,7 @@ pub fn install(self: *ScrollAreaWidget) !void {
         try self.hbar.?.install();
     }
 
-    var container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
+    const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
     self.scroll = ScrollContainerWidget.init(@src(), self.si, container_opts);
 
     try self.scroll.install();

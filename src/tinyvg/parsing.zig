@@ -141,14 +141,14 @@ pub fn Parser(comptime Reader: type) type {
                     const range = @as(tvg.Range, @enumFromInt(scale_and_flags.coordinate_range));
 
                     const width: u32 = switch (range) {
-                        .reduced => mapZeroToMax(try reader.readIntLittle(u8)),
-                        .default => mapZeroToMax(try reader.readIntLittle(u16)),
-                        .enhanced => std.math.cast(u32, mapZeroToMax(try reader.readIntLittle(u32))) orelse return error.InvalidData,
+                        .reduced => mapZeroToMax(try reader.readInt(u8, .little)),
+                        .default => mapZeroToMax(try reader.readInt(u16, .little)),
+                        .enhanced => std.math.cast(u32, mapZeroToMax(try reader.readInt(u32, .little))) orelse return error.InvalidData,
                     };
                     const height: u32 = switch (range) {
-                        .reduced => mapZeroToMax(try reader.readIntLittle(u8)),
-                        .default => mapZeroToMax(try reader.readIntLittle(u16)),
-                        .enhanced => std.math.cast(u32, mapZeroToMax(try reader.readIntLittle(u32))) orelse return error.InvalidData,
+                        .reduced => mapZeroToMax(try reader.readInt(u8, .little)),
+                        .default => mapZeroToMax(try reader.readInt(u16, .little)),
+                        .enhanced => std.math.cast(u32, mapZeroToMax(try reader.readInt(u32, .little))) orelse return error.InvalidData,
                     };
 
                     const color_count = try self.readUInt();
@@ -159,13 +159,13 @@ pub fn Parser(comptime Reader: type) type {
                     for (self.color_table) |*c| {
                         c.* = switch (color_encoding) {
                             .u8888 => tvg.Color{
-                                .r = @as(f32, @floatFromInt(try reader.readIntLittle(u8))) / 255.0,
-                                .g = @as(f32, @floatFromInt(try reader.readIntLittle(u8))) / 255.0,
-                                .b = @as(f32, @floatFromInt(try reader.readIntLittle(u8))) / 255.0,
-                                .a = @as(f32, @floatFromInt(try reader.readIntLittle(u8))) / 255.0,
+                                .r = @as(f32, @floatFromInt(try reader.readInt(u8, .little))) / 255.0,
+                                .g = @as(f32, @floatFromInt(try reader.readInt(u8, .little))) / 255.0,
+                                .b = @as(f32, @floatFromInt(try reader.readInt(u8, .little))) / 255.0,
+                                .a = @as(f32, @floatFromInt(try reader.readInt(u8, .little))) / 255.0,
                             },
                             .u565 => blk: {
-                                const rgb = try reader.readIntLittle(u16);
+                                const rgb = try reader.readInt(u16, .little);
                                 break :blk tvg.Color{
                                     .r = @as(f32, @floatFromInt((rgb & 0x001F) >> 0)) / 31.0,
                                     .g = @as(f32, @floatFromInt((rgb & 0x07E0) >> 5)) / 63.0,
@@ -175,10 +175,10 @@ pub fn Parser(comptime Reader: type) type {
                             },
                             .f32 => tvg.Color{
                                 // TODO: Verify if this is platform independently correct:
-                                .r = @as(f32, @bitCast(try reader.readIntLittle(u32))),
-                                .g = @as(f32, @bitCast(try reader.readIntLittle(u32))),
-                                .b = @as(f32, @bitCast(try reader.readIntLittle(u32))),
-                                .a = @as(f32, @bitCast(try reader.readIntLittle(u32))),
+                                .r = @as(f32, @bitCast(try reader.readInt(u32, .little))),
+                                .g = @as(f32, @bitCast(try reader.readInt(u32, .little))),
+                                .b = @as(f32, @bitCast(try reader.readInt(u32, .little))),
+                                .a = @as(f32, @bitCast(try reader.readInt(u32, .little))),
                             },
                             .custom => return error.UnsupportedColorFormat,
                         };
@@ -210,7 +210,7 @@ pub fn Parser(comptime Reader: type) type {
             // alignment here
             try self.temp_buffer.resize(@sizeOf(T) * length);
 
-            var items = std.mem.bytesAsSlice(T, self.temp_buffer.items[0..(@sizeOf(T) * length)]);
+            const items = std.mem.bytesAsSlice(T, self.temp_buffer.items[0..(@sizeOf(T) * length)]);
             std.debug.assert(items.len == length);
             return items;
         }
@@ -229,7 +229,7 @@ pub fn Parser(comptime Reader: type) type {
             // T2 alignment could be larger than T1
             const offset = std.mem.alignForward(usize, @sizeOf(T1) * length1, @alignOf(T2));
 
-            var result = .{
+            const result = .{
                 .first = std.mem.bytesAsSlice(T1, self.temp_buffer.items[0 .. @sizeOf(T1) * length1]),
                 .second = @as([]T2, @alignCast(std.mem.bytesAsSlice(T2, self.temp_buffer.items[offset..][0 .. @sizeOf(T2) * length2]))),
             };
@@ -447,7 +447,7 @@ pub fn Parser(comptime Reader: type) type {
                 segment.start.x = try self.readUnit();
                 segment.start.y = try self.readUnit();
 
-                var commands = buffers.second[segment_start..][0..segment_len];
+                const commands = buffers.second[segment_start..][0..segment_len];
                 for (commands) |*node| {
                     node.* = try self.readNode();
                 }
@@ -472,7 +472,7 @@ pub fn Parser(comptime Reader: type) type {
             };
             const tag = @as(Tag, @bitCast(try self.readByte()));
 
-            var line_width: ?f32 = if (tag.has_line_width)
+            const line_width: ?f32 = if (tag.has_line_width)
                 try self.readUnit()
             else
                 null;
@@ -501,7 +501,7 @@ pub fn Parser(comptime Reader: type) type {
                     },
                 }) },
                 .arc_circle => blk: {
-                    var flags = try self.readByte();
+                    const flags = try self.readByte();
                     break :blk PathNode{ .arc_circle = PathNode.NodeData(PathNode.ArcCircle).init(line_width, PathNode.ArcCircle{
                         .radius = try self.readUnit(),
                         .large_arc = (flags & 1) != 0,
@@ -513,7 +513,7 @@ pub fn Parser(comptime Reader: type) type {
                     }) };
                 },
                 .arc_ellipse => blk: {
-                    var flags = try self.readByte();
+                    const flags = try self.readByte();
                     break :blk PathNode{ .arc_ellipse = PathNode.NodeData(PathNode.ArcEllipse).init(line_width, PathNode.ArcEllipse{
                         .radius_x = try self.readUnit(),
                         .radius_y = try self.readUnit(),
@@ -589,9 +589,9 @@ pub fn Parser(comptime Reader: type) type {
 
         fn readUnit(self: *const Self) !f32 {
             switch (self.header.coordinate_range) {
-                .reduced => return @as(tvg.Unit, @enumFromInt(try self.reader.readIntLittle(i8))).toFloat(self.header.scale),
-                .default => return @as(tvg.Unit, @enumFromInt(try self.reader.readIntLittle(i16))).toFloat(self.header.scale),
-                .enhanced => return @as(tvg.Unit, @enumFromInt(try self.reader.readIntLittle(i32))).toFloat(self.header.scale),
+                .reduced => return @as(tvg.Unit, @enumFromInt(try self.reader.readInt(i8, .little))).toFloat(self.header.scale),
+                .default => return @as(tvg.Unit, @enumFromInt(try self.reader.readInt(i16, .little))).toFloat(self.header.scale),
+                .enhanced => return @as(tvg.Unit, @enumFromInt(try self.reader.readInt(i32, .little))).toFloat(self.header.scale),
             }
         }
 
@@ -600,7 +600,7 @@ pub fn Parser(comptime Reader: type) type {
         }
 
         fn readU16(self: *Self) !u16 {
-            return try self.reader.readIntLittle(u16);
+            return try self.reader.readInt(u16, .little);
         }
     };
 }

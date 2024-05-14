@@ -170,7 +170,7 @@ pub fn deinit(self: *FloatingMenuWidget) void {
     self.wd.minSizeMax(self.options.min_sizeGet());
 
     const rs = self.wd.rectScale();
-    var evts = dvui.events();
+    const evts = dvui.events();
     for (evts) |*e| {
         if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r, .cleanup = true }))
             continue;

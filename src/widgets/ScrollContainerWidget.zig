@@ -95,7 +95,7 @@ pub fn matchEvent(self: *ScrollContainerWidget, e: *Event) bool {
 }
 
 pub fn processEvents(self: *ScrollContainerWidget) void {
-    var evts = dvui.events();
+    const evts = dvui.events();
     for (evts) |*e| {
         if (!self.matchEvent(e))
             continue;
@@ -110,9 +110,9 @@ pub fn processEvents(self: *ScrollContainerWidget) void {
 pub fn processVelocity(self: *ScrollContainerWidget) void {
     if (!self.finger_down) {
         {
-            const damping = 0.0001 + @min(1.0, @fabs(self.si.velocity.x) / 50.0) * (0.7 - 0.0001);
+            const damping = 0.0001 + @min(1.0, @abs(self.si.velocity.x) / 50.0) * (0.7 - 0.0001);
             self.si.velocity.x *= @exp(@log(damping) * dvui.secondsSinceLastFrame());
-            if (@fabs(self.si.velocity.x) > 1) {
+            if (@abs(self.si.velocity.x) > 1) {
                 //std.debug.print("vel x {d}\n", .{self.si.velocity.x});
                 self.si.viewport.x += self.si.velocity.x * 50 * dvui.secondsSinceLastFrame();
                 dvui.refresh(null, @src(), self.wd.id);
@@ -122,9 +122,9 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
         }
 
         {
-            const damping = 0.0001 + @min(1.0, @fabs(self.si.velocity.y) / 50.0) * (0.7 - 0.0001);
+            const damping = 0.0001 + @min(1.0, @abs(self.si.velocity.y) / 50.0) * (0.7 - 0.0001);
             self.si.velocity.y *= @exp(@log(damping) * dvui.secondsSinceLastFrame());
-            if (@fabs(self.si.velocity.y) > 1) {
+            if (@abs(self.si.velocity.y) > 1) {
                 //std.debug.print("vel y {d}\n", .{self.si.velocity.y});
                 self.si.viewport.y += self.si.velocity.y * 50 * dvui.secondsSinceLastFrame();
                 dvui.refresh(null, @src(), self.wd.id);
@@ -185,11 +185,10 @@ pub fn data(self: *ScrollContainerWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *ScrollContainerWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    var expand = e;
     const y = self.next_widget_ypos;
     const h = self.si.virtual_size.h - y;
     const rect = Rect{ .x = 0, .y = y, .w = self.si.virtual_size.w, .h = h };
-    const ret = dvui.placeIn(rect, dvui.minSize(id, min_size), expand, g);
+    const ret = dvui.placeIn(rect, dvui.minSize(id, min_size), e, g);
     self.next_widget_ypos = (ret.y + ret.h);
     return ret;
 }
@@ -367,7 +366,7 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
 
 pub fn processEventsAfter(self: *ScrollContainerWidget) void {
     const rs = self.wd.borderRectScale();
-    var evts = dvui.events();
+    const evts = dvui.events();
     for (evts) |*e| {
         if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r }))
             continue;
@@ -421,7 +420,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                         self.si.viewport.y -= me.data.motion.y / rs.s;
                         self.si.velocity.y = -me.data.motion.y / rs.s;
                         dvui.refresh(null, @src(), self.wd.id);
-                        if (@fabs(me.data.motion.y) > @fabs(me.data.motion.x) and self.si.viewport.y >= 0 and self.si.viewport.y <= self.si.scroll_max(.vertical)) {
+                        if (@abs(me.data.motion.y) > @abs(me.data.motion.x) and self.si.viewport.y >= 0 and self.si.viewport.y <= self.si.scroll_max(.vertical)) {
                             propogate = false;
                         }
                     }
@@ -429,7 +428,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                         self.si.viewport.x -= me.data.motion.x / rs.s;
                         self.si.velocity.x = -me.data.motion.x / rs.s;
                         dvui.refresh(null, @src(), self.wd.id);
-                        if (@fabs(me.data.motion.x) > @fabs(me.data.motion.y) and self.si.viewport.x >= 0 and self.si.viewport.x <= self.si.scroll_max(.horizontal)) {
+                        if (@abs(me.data.motion.x) > @abs(me.data.motion.y) and self.si.viewport.x >= 0 and self.si.viewport.x <= self.si.scroll_max(.horizontal)) {
                             propogate = false;
                         }
                     }
