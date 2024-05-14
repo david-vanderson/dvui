@@ -108,7 +108,7 @@ pub fn matchEvent(self: *PanedWidget, e: *Event) bool {
 }
 
 pub fn processEvents(self: *PanedWidget) void {
-    var evts = dvui.events();
+    const evts = dvui.events();
     for (evts) |*e| {
         if (!self.matchEvent(e))
             continue;
@@ -243,7 +243,7 @@ pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {
             },
         }
 
-        if (dvui.captured(self.wd.id) or @fabs(mouse - target) < (5 * rs.s)) {
+        if (dvui.captured(self.wd.id) or @abs(mouse - target) < (5 * rs.s)) {
             self.hovered = true;
             if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
                 e.handled = true;

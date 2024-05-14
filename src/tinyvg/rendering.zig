@@ -89,7 +89,7 @@ pub fn renderStream(
         try renderCommand(&framebuffer, parser.header, parser.color_table, cmd, temporary_allocator);
     }
 
-    var image = Image{
+    const image = Image{
         .pixels = try image_allocator.alloc(Color8, target_pixel_count),
         .width = target_size.width,
         .height = target_size.height,
@@ -299,8 +299,8 @@ pub fn renderCommand(
     /// When given, the `renderCommand` is able to render complexer graphics
     allocator: ?std.mem.Allocator,
 ) !void {
-    if (!comptime isFramebuffer(@TypeOf(framebuffer)))
-        @compileError("framebuffer needs fields width, height and function setPixel!");
+    //if (!comptime isFramebuffer(@TypeOf(framebuffer)))
+    //@compileError("framebuffer needs fields width, height and function setPixel!");
     const fb_width = @as(f32, @floatFromInt(framebuffer.width));
     const fb_height = @as(f32, @floatFromInt(framebuffer.height));
     // std.debug.print("render {}\n", .{cmd});#
@@ -411,10 +411,10 @@ pub fn renderCommand(
         .outline_fill_rectangles => |data| {
             for (data.rectangles) |rect| {
                 painter.fillRectangle(framebuffer, rect.x, rect.y, rect.width, rect.height, color_table, data.fill_style);
-                var tl = Point{ .x = rect.x, .y = rect.y };
-                var tr = Point{ .x = rect.x + rect.width, .y = rect.y };
-                var bl = Point{ .x = rect.x, .y = rect.y + rect.height };
-                var br = Point{ .x = rect.x + rect.width, .y = rect.y + rect.height };
+                const tl = Point{ .x = rect.x, .y = rect.y };
+                const tr = Point{ .x = rect.x + rect.width, .y = rect.y };
+                const bl = Point{ .x = rect.x, .y = rect.y + rect.height };
+                const br = Point{ .x = rect.x + rect.width, .y = rect.y + rect.height };
                 painter.drawLine(framebuffer, color_table, data.line_style, data.line_width, data.line_width, .{ .start = tl, .end = tr });
                 painter.drawLine(framebuffer, color_table, data.line_style, data.line_width, data.line_width, .{ .start = tr, .end = br });
                 painter.drawLine(framebuffer, color_table, data.line_style, data.line_width, data.line_width, .{ .start = br, .end = bl });
@@ -526,7 +526,7 @@ pub fn renderPath(
                 .horiz => |x| try point_store.append(Point{ .x = x.data, .y = point_store.back().y }, x.line_width orelse last_width),
                 .vert => |y| try point_store.append(Point{ .x = point_store.back().x, .y = y.data }, y.line_width orelse last_width),
                 .bezier => |bezier| {
-                    var previous = point_store.back();
+                    const previous = point_store.back();
 
                     const oct0_x = [4]f32{ previous.x, bezier.data.c0.x, bezier.data.c1.x, bezier.data.p1.x };
                     const oct0_y = [4]f32{ previous.y, bezier.data.c0.y, bezier.data.c1.y, bezier.data.p1.y };
@@ -543,7 +543,7 @@ pub fn renderPath(
                     try point_store.append(bezier.data.p1, new_width);
                 },
                 .quadratic_bezier => |bezier| {
-                    var previous = point_store.back();
+                    const previous = point_store.back();
 
                     const oct0_x = [3]f32{ previous.x, bezier.data.c.x, bezier.data.p1.x };
                     const oct0_y = [3]f32{ previous.y, bezier.data.c.y, bezier.data.p1.y };
@@ -627,7 +627,7 @@ inline fn sqrt(val: anytype) @TypeOf(val) {
     return @sqrt(val);
 }
 inline fn abs(val: anytype) @TypeOf(val) {
-    return @fabs(val);
+    return @abs(val);
 }
 
 pub fn renderEllipse(
@@ -744,7 +744,7 @@ fn renderCircle(
     const angle = std.math.asin(std.math.clamp(sqrt(len_squared) / r, -1.0, 1.0)) * 2;
     const arc = if (large_arc) (std.math.tau - angle) else angle;
 
-    var pos = sub(p0, center);
+    const pos = sub(p0, center);
     for (0..circle_divs - 1) |i| {
         const step_mat = rotationMat(@as(f32, @floatFromInt(i)) * (if (turn_left) -arc else arc) / circle_divs);
         const point = add(applyMat(step_mat, pos), center);
@@ -856,9 +856,9 @@ fn distance(p1: Point, p2: Point) f32 {
 }
 
 fn getProjectedPointOnLine(v1: Point, v2: Point, p: Point) Point {
-    var l1 = sub(v2, v1);
-    var l2 = sub(p, v1);
-    var proj = dot(l1, l2) / length2(l1);
+    const l1 = sub(v2, v1);
+    const l2 = sub(p, v1);
+    const proj = dot(l1, l2) / length2(l1);
 
     return add(v1, scale(l1, proj));
 }
@@ -903,7 +903,7 @@ const Painter = struct {
             while (x <= max_x) : (x += 1) {
 
                 // compute "center" of the pixel
-                var p = self.mapPointToImage(pointFromInts(x, y));
+                const p = self.mapPointToImage(pointFromInts(x, y));
 
                 var inside_count: usize = 0;
                 for (points_lists) |points| {
@@ -957,7 +957,7 @@ const Painter = struct {
 
         //-----------
 
-        q.x = @fabs(q.x);
+        q.x = @abs(q.x);
 
         const b = ra - rb;
         const c = tvg.point(@sqrt(h - b * b), b);
@@ -1029,7 +1029,7 @@ const Painter = struct {
             while (x <= max_x) : (x += 1) {
 
                 // compute "center" of the pixel
-                var p = self.mapPointToImage(pointFromInts(x, y));
+                const p = self.mapPointToImage(pointFromInts(x, y));
 
                 const dist = sdUnevenCapsule(
                     p,

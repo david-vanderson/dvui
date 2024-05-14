@@ -35,7 +35,7 @@ pub fn main() !void {
     //var rng = std.rand.DefaultPrng.init(0);
 
     main_loop: while (true) {
-        var nstime = win.beginWait(backend.hasEvent());
+        const nstime = win.beginWait(backend.hasEvent());
         try win.begin(nstime);
         backend.clear();
 
@@ -50,7 +50,7 @@ pub fn main() !void {
 
             const scale = try dvui.scale(@src(), scale_val, .{ .expand = .both });
             defer {
-                var evts = dvui.events();
+                const evts = dvui.events();
                 for (evts) |*e| {
                     switch (e.evt) {
                         .key => |ke| {
@@ -67,7 +67,7 @@ pub fn main() !void {
                         .mouse => |me| {
                             if (me.action == .wheel_y and scale_mod.controlCommand()) {
                                 e.handled = true;
-                                var base: f32 = 1.01;
+                                const base: f32 = 1.01;
                                 const zs = @exp(@log(base) * me.data.wheel_y);
                                 if (zs != 1.0) {
                                     scale_val *= zs;
@@ -208,7 +208,7 @@ pub fn main() !void {
                 {
                     var hbox = try dvui.box(@src(), .horizontal, .{});
                     defer hbox.deinit();
-                    var buf = dvui.dataGetSlice(null, hbox.wd.id, "data_key", [:0]u8) orelse blk: {
+                    const buf = dvui.dataGetSlice(null, hbox.wd.id, "data_key", [:0]u8) orelse blk: {
                         dvui.dataSetSlice(null, hbox.wd.id, "data_key", "hello\n" ** 10);
                         break :blk dvui.dataGetSlice(null, hbox.wd.id, "data_key", [:0]u8).?;
                     };
@@ -346,7 +346,7 @@ pub fn main() !void {
                                 name = "Modal";
                             }
                             var buf = std.mem.zeroes([100]u8);
-                            var buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{ fi, name }) catch unreachable;
+                            const buf_slice = std.fmt.bufPrintZ(&buf, "{d} {s} Dialog", .{ fi, name }) catch unreachable;
                             var fw2 = try dvui.floatingWindow(@src(), .{ .modal = modal, .open_flag = f }, .{ .id_extra = fi, .min_size_content = .{ .w = 150, .h = 100 } });
                             defer fw2.deinit();
                             try dvui.labelNoFmt(@src(), buf_slice, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
@@ -490,7 +490,7 @@ pub const StrokeTest = struct {
         self.wd = dvui.WidgetData.init(src, .{}, defaults.override(options));
         try self.wd.register();
 
-        var evts = dvui.events();
+        const evts = dvui.events();
         for (evts) |*e| {
             if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
                 continue;
@@ -562,7 +562,7 @@ pub const StrokeTest = struct {
 
                             for (points, 0..) |p, i| {
                                 const dp = dvui.Point.diff(p, mp);
-                                if (@fabs(dp.x) < 5 and @fabs(dp.y) < 5) {
+                                if (@abs(dp.x) < 5 and @abs(dp.y) < 5) {
                                     dragi = i;
                                     break;
                                 }
@@ -598,7 +598,7 @@ pub const StrokeTest = struct {
                     },
                     .wheel_y => {
                         e.handled = true;
-                        var base: f32 = 1.02;
+                        const base: f32 = 1.02;
                         const zs = @exp(@log(base) * me.data.wheel_y);
                         if (zs != 1.0) {
                             thickness *= zs;

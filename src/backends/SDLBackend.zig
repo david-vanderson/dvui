@@ -211,7 +211,7 @@ pub fn setIconFromFileContent(self: *SDLBackend, file_content: []const u8) void 
 }
 
 pub fn setIconFromABGR8888(self: *SDLBackend, data: [*]const u8, icon_w: c_int, icon_h: c_int) void {
-    var surface = c.SDL_CreateRGBSurfaceWithFormatFrom(@ptrCast(@constCast(data)), icon_w, icon_h, 32, 4 * icon_w, c.SDL_PIXELFORMAT_ABGR8888);
+    const surface = c.SDL_CreateRGBSurfaceWithFormatFrom(@ptrCast(@constCast(data)), icon_w, icon_h, 32, 4 * icon_w, c.SDL_PIXELFORMAT_ABGR8888);
     defer c.SDL_FreeSurface(surface);
 
     c.SDL_SetWindowIcon(self.window, surface);
@@ -346,7 +346,7 @@ pub fn sleep(self: *SDLBackend, ns: u64) void {
 }
 
 pub fn clipboardText(self: *SDLBackend) ![]u8 {
-    var p = c.SDL_GetClipboardText();
+    const p = c.SDL_GetClipboardText();
     defer c.SDL_free(p);
     return try self.arena.dupe(u8, std.mem.sliceTo(p, 0));
 }

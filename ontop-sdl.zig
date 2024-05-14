@@ -20,7 +20,7 @@ pub fn main() !void {
     try app_init();
 
     // create SDL backend using existing window and renderer
-    var backend = SDLBackend{ .window = window, .renderer = renderer };
+    var backend = SDLBackend{ .window = @as(*SDLBackend.c.SDL_Window, @ptrCast(window)), .renderer = @as(*SDLBackend.c.SDL_Renderer, @ptrCast(renderer)) };
     // your app will do the SDL deinit
 
     // init dvui Window (maps onto a single OS window)

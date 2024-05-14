@@ -135,7 +135,7 @@ pub const ColorAsk = enum {
 };
 
 pub fn color(self: *const Options, ask: ColorAsk) Color {
-    var color_or_name: ColorOrName = switch (ask) {
+    const color_or_name: ColorOrName = switch (ask) {
         .accent => self.color_accent orelse .{ .name = .accent },
         .text => self.color_text orelse .{ .name = .text },
         .text_press => self.color_text_press orelse .{ .name = .text_press },

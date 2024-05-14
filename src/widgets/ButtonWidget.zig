@@ -53,7 +53,7 @@ pub fn matchEvent(self: *ButtonWidget, e: *Event) bool {
 }
 
 pub fn processEvents(self: *ButtonWidget) void {
-    var evts = dvui.events();
+    const evts = dvui.events();
     for (evts) |*e| {
         if (!self.matchEvent(e))
             continue;

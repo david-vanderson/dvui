@@ -555,7 +555,7 @@ pub fn textEntryWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        var buf = dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8) orelse blk: {
+        const buf = dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8) orelse blk: {
             dvui.dataSetSlice(null, hbox.wd.id, "buffer", &[_]u8{0} ** 30);
             break :blk dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8).?;
         };

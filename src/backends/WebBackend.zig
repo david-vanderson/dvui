@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const dvui = @import("dvui");
 
 const WebBackend = @This();
@@ -54,13 +55,13 @@ export fn dvui_c_alloc(size: usize) ?*anyopaque {
         //std.log.debug("dvui_c_alloc {d} failed", .{size});
         return null;
     };
-    std.mem.writeIntNative(usize, buffer[0..@sizeOf(usize)], buffer.len);
+    std.mem.writeInt(usize, buffer[0..@sizeOf(usize)], buffer.len, builtin.cpu.arch.endian());
     return buffer.ptr + 16;
 }
 
 export fn dvui_c_free(ptr: ?*anyopaque) void {
     const buffer = @as([*]align(16) u8, @alignCast(@ptrCast(ptr orelse return))) - 16;
-    const len = std.mem.readIntNative(usize, buffer[0..@sizeOf(usize)]);
+    const len = std.mem.readInt(usize, buffer[0..@sizeOf(usize)], builtin.cpu.arch.endian());
     //std.log.debug("dvui_c_free {d}", .{len - 16});
 
     gpa.free(buffer[0..len]);
@@ -75,12 +76,12 @@ export fn dvui_c_realloc_sized(ptr: ?*anyopaque, oldsize: usize, newsize: usize)
     }
 
     const buffer = @as([*]u8, @ptrCast(ptr.?)) - 16;
-    const len = std.mem.readIntNative(usize, buffer[0..@sizeOf(usize)]);
+    const len = std.mem.readInt(usize, buffer[0..@sizeOf(usize)], builtin.cpu.arch.endian());
 
     var slice = buffer[0..len];
     _ = gpa.resize(slice, newsize + 16);
 
-    std.mem.writeIntNative(usize, slice[0..@sizeOf(usize)], slice.len);
+    std.mem.writeInt(usize, slice[0..@sizeOf(usize)], slice.len, builtin.cpu.arch.endian());
     return slice.ptr + 16;
 }
 
@@ -98,7 +99,7 @@ export fn dvui_c_ldexp(x: f64, n: c_int) f64 {
 }
 
 export fn arena_u8(len: usize) [*c]u8 {
-    var buf = arena.alloc(u8, len) catch return @ptrFromInt(0);
+    const buf = arena.alloc(u8, len) catch return @ptrFromInt(0);
     return buf.ptr;
 }
 
@@ -110,7 +111,7 @@ export fn add_event(kind: u8, int1: u32, int2: u32, float1: f32, float2: f32) vo
         .float1 = float1,
         .float2 = float2,
     }) catch |err| {
-        var msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
+        const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
         wasm.wasm_panic(msg.ptr, msg.len);
     };
 }
@@ -323,7 +324,7 @@ pub fn addAllEvents(self: *WebBackend, win: *dvui.Window) !void {
 }
 
 pub fn init() !WebBackend {
-    var back: WebBackend = .{};
+    const back: WebBackend = .{};
     return back;
 }
 
@@ -394,8 +395,8 @@ pub fn renderGeometry(_: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Ve
 
     //dvui.log.debug("renderGeometry pixels {} clipr {} ry {d} clip {d} {d} {d} {d}", .{ dvui.windowRectPixels(), clipr, ry, x, y, w, h });
 
-    var index_slice = std.mem.sliceAsBytes(idx);
-    var vertex_slice = std.mem.sliceAsBytes(vtx);
+    const index_slice = std.mem.sliceAsBytes(idx);
+    const vertex_slice = std.mem.sliceAsBytes(vtx);
 
     wasm.wasm_renderGeometry(
         if (texture) |t| @as(u32, @intFromPtr(t)) else 0,

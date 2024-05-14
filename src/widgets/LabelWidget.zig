@@ -45,7 +45,7 @@ pub fn install(self: *LabelWidget) !void {
 }
 
 pub fn draw(self: *LabelWidget) !void {
-    var rect = dvui.placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
+    const rect = dvui.placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
     var rs = self.wd.parent.screenRectScale(rect);
     const oldclip = dvui.clip(rs.r);
     var iter = std.mem.split(u8, self.label_str, "\n");
@@ -71,7 +71,7 @@ pub fn matchEvent(self: *LabelWidget, e: *Event) bool {
 }
 
 pub fn processEvents(self: *LabelWidget) void {
-    var evts = dvui.events();
+    const evts = dvui.events();
     for (evts) |*e| {
         if (!self.matchEvent(e))
             continue;

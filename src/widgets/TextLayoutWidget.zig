@@ -221,7 +221,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             var offset: Point = dvui.dataGet(null, fc.wd.id, "_offset", Point) orelse .{};
 
             const fcrs = fc.wd.rectScale();
-            var evts = dvui.events();
+            const evts = dvui.events();
             for (evts) |*e| {
                 if (!dvui.eventMatch(e, .{ .id = fc.wd.id, .r = fcrs.r }))
                     continue;
@@ -288,7 +288,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             var offset: Point = dvui.dataGet(null, fc.wd.id, "_offset", Point) orelse .{};
 
             const fcrs = fc.wd.rectScale();
-            var evts = dvui.events();
+            const evts = dvui.events();
             for (evts) |*e| {
                 if (!dvui.eventMatch(e, .{ .id = fc.wd.id, .r = fcrs.r }))
                     continue;
@@ -338,7 +338,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
 }
 
 pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, opts: Options) !void {
-    var cw = dvui.currentWindow();
+    const cw = dvui.currentWindow();
     const l = try std.fmt.allocPrint(cw.arena, fmt, args);
     try self.addText(l, opts);
 }
@@ -960,7 +960,7 @@ pub fn touchEditing(self: *TextLayoutWidget) !?*FloatingWidget {
     if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.wd.visible()) {
         self.te_floating = dvui.FloatingWidget.init(@src(), .{});
 
-        var r = dvui.clipGet().offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
+        const r = dvui.clipGet().offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
 
         if (dvui.minSizeGet(self.te_floating.data().id)) |_| {
             const ms = dvui.minSize(self.te_floating.data().id, self.te_floating.data().options.min_sizeGet());
@@ -1065,7 +1065,7 @@ pub fn matchEvent(self: *TextLayoutWidget, e: *Event) bool {
 }
 
 pub fn processEvents(self: *TextLayoutWidget) void {
-    var evts = dvui.events();
+    const evts = dvui.events();
     for (evts) |*e| {
         if (!self.matchEvent(e))
             continue;
