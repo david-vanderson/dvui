@@ -165,7 +165,7 @@ pub fn build(b: *std.Build) !void {
             .abi = .musl,
         };
 
-        const dvui_mod_web = b.addModule("dvui", .{
+        const dvui_mod_web = b.addModule("dvui_web", .{
             .root_source_file = b.path("src/dvui.zig"),
             .target = b.resolveTargetQuery(webtarget),
             .optimize = optimize,
