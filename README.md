@@ -2,7 +2,7 @@
 
 A Zig GUI toolkit for whole applications or extra debugging windows in an existing application.
 
-Tested with only [Zig](https://ziglang.org/) 0.11.0.
+Tested with [Zig](https://ziglang.org/) 0.12.0.
 
 How to run the built-in examples:
 
@@ -34,7 +34,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
   - [SDL](https://libsdl.org/)
   - [Web](https://david-vanderson.github.io)
   - [Mach](https://machengine.org/)
-    - note: Mach backend is on hold until zig 0.12 is released
+    - note: Mach backend is currently out of date
 - Icon support via [TinyVG](https://tinyvg.tech/)
 - Raster image support via [stb_image](https://github.com/nothings/stb)
 - Font support
@@ -65,11 +65,8 @@ pub fn build(b: *std.Build) void {
 
     const exe = ...;
 
-    exe.addModule("dvui", dep_dvui.module("dvui"));
-    exe.addModule("SDLBackend", dep_dvui.module("SDLBackend"));
-    exe.linkLibrary(dep_dvui.artifact("dvui_libs"));
-
-    @import("root").dependencies.imports.dvui.add_include_paths(dep_dvui.builder, exe);
+    exe.root_module.addImport("dvui", dvui_dep.module("dvui"));
+    exe.root_module.addImport("SDLBackend", dvui_dep.module("SDLBackend"));
 }
 ```
 
