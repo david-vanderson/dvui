@@ -288,7 +288,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
     var sel = self.textLayout.selectionGet(self.len);
     if (!sel.empty()) {
         // delete selection
-        @memcpy(self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+        std.mem.copyBackwards(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
         self.len -= (sel.end - sel.start);
         sel.end = sel.start;
         sel.cursor = sel.start;
@@ -550,7 +550,7 @@ pub fn cut(self: *TextEntryWidget) void {
         };
 
         // delete selection
-        @memcpy(self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+        std.mem.copyBackwards(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
         self.len -= (sel.end - sel.start);
         self.init_opts.text[self.len] = 0;
         sel.end = sel.start;
