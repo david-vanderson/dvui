@@ -288,7 +288,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
     var sel = self.textLayout.selectionGet(self.len);
     if (!sel.empty()) {
         // delete selection
-        @memcpy(self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+        std.mem.copyForwards(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
         self.len -= (sel.end - sel.start);
         sel.end = sel.start;
         sel.cursor = sel.start;
@@ -322,7 +322,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
     }
 
     // insert
-    @memcpy(self.init_opts.text[sel.cursor..], new[0..new_len]);
+    std.mem.copyForwards(u8, self.init_opts.text[sel.cursor..], new[0..new_len]);
     sel.cursor += new_len;
     sel.end = sel.cursor;
     sel.start = sel.cursor;
@@ -370,7 +370,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                         var sel = self.textLayout.selectionGet(self.len);
                         if (!sel.empty()) {
                             // just delete selection
-                            @memcpy(self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+                            std.mem.copyForwards(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
                             self.len -= (sel.end - sel.start);
                             self.init_opts.text[self.len] = 0;
                             sel.end = sel.start;
@@ -385,7 +385,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             // does not have the pattern 10xxxxxx.
                             var i: usize = 1;
                             while (self.init_opts.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
-                            @memcpy(self.init_opts.text[sel.cursor - i ..], self.init_opts.text[sel.cursor..self.len]);
+                            std.mem.copyForwards(u8, self.init_opts.text[sel.cursor - i ..], self.init_opts.text[sel.cursor..self.len]);
                             self.len -= i;
                             self.init_opts.text[self.len] = 0;
                             sel.cursor -= i;
@@ -401,7 +401,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                         var sel = self.textLayout.selectionGet(self.len);
                         if (!sel.empty()) {
                             // just delete selection
-                            @memcpy(self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+                            std.mem.copyForwards(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
                             self.len -= (sel.end - sel.start);
                             self.init_opts.text[self.len] = 0;
                             sel.end = sel.start;
@@ -412,7 +412,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             //
                             // A utf8 char might consist of more than one byte.
                             const i = std.unicode.utf8ByteSequenceLength(self.init_opts.text[sel.cursor]) catch 1;
-                            @memcpy(self.init_opts.text[sel.cursor..], self.init_opts.text[sel.cursor + i .. self.len]);
+                            std.mem.copyForwards(u8, self.init_opts.text[sel.cursor..], self.init_opts.text[sel.cursor + i .. self.len]);
                             self.len -= i;
                             self.init_opts.text[self.len] = 0;
                         }
@@ -550,7 +550,7 @@ pub fn cut(self: *TextEntryWidget) void {
         };
 
         // delete selection
-        @memcpy(self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+        std.mem.copyForwards(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
         self.len -= (sel.end - sel.start);
         self.init_opts.text[self.len] = 0;
         sel.end = sel.start;
