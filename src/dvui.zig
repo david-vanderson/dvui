@@ -1388,7 +1388,7 @@ pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?u32) void {
     }
 }
 
-pub fn clipboardText() error{OutOfMemory}![]u8 {
+pub fn clipboardText() error{OutOfMemory}![]const u8 {
     const cw = currentWindow();
     return cw.backend.clipboardText();
 }

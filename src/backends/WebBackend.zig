@@ -41,9 +41,11 @@ pub const wasm = struct {
     pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32) u32;
     pub extern fn wasm_textureDestroy(u32) void;
     pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, x: u32, y: u32, w: u32, h: u32) void;
+
     pub extern fn wasm_cursor(name: [*]const u8, name_len: u32) void;
     pub extern fn wasm_on_screen_keyboard(x: f32, y: f32, w: f32, h: f32) void;
     pub extern fn wasm_open_url(ptr: [*]const u8, len: usize) void;
+    pub extern fn wasm_clipboardTextSet(ptr: [*]const u8, len: usize) void;
 };
 
 export const __stack_chk_guard: c_ulong = 0xBAAAAAAD;
@@ -445,16 +447,24 @@ pub fn setOSKPosition(_: *WebBackend, rect: ?dvui.Rect) void {
     }
 }
 
-pub fn clipboardText(self: *WebBackend) error{OutOfMemory}![]u8 {
+pub fn clipboardText(self: *WebBackend) error{OutOfMemory}![]const u8 {
     _ = self;
-    var buf: [10]u8 = [_]u8{0} ** 10;
-    @memcpy(buf[0..9], "clipboard");
-    return &buf;
+    // Current strategy is to return nothing:
+    // - let the browser continue with the paste operation
+    // - puts the text into the hidden_input
+    // - fires the "beforeinput" event
+    // - we see as normal text input
+    //
+    // Problem is that we can't initiate a paste, so our touch popup menu paste
+    // will do nothing.  I think this could be fixed in the future once
+    // browsers are all implementing the navigator.Clipboard.readText()
+    // function.
+    return "";
 }
 
 pub fn clipboardTextSet(self: *WebBackend, text: []const u8) !void {
     _ = self;
-    _ = text;
+    wasm.wasm_clipboardTextSet(text.ptr, text.len);
     return;
 }
 

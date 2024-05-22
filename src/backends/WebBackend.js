@@ -306,6 +306,14 @@ function dvui(canvasId, wasmFile) {
             let msg = utf8decoder.decode(new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, len));
             location.href = msg;
         },
+        wasm_clipboardTextSet: (ptr, len) => {
+            let msg = utf8decoder.decode(new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, len));
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(msg);
+            } else {
+                console.error("cannot set clipboard, navigator.clipboard is undefined");
+            }
+        },
       },
     };
 
@@ -491,9 +499,10 @@ function dvui(canvasId, wasmFile) {
 
         let keydown = function(ev) {
             if (ev.key == "Tab") {
-                // preventDefault to stop tab from tabbing away from the canvas
+                // stop tab from tabbing away from the canvas
                 ev.preventDefault();
             }
+
             let str = utf8encoder.encode(ev.key);
             if (str.length > 0) {
                 const ptr = wasmResult.instance.exports.arena_u8(str.length);
