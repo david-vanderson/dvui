@@ -307,6 +307,10 @@ function dvui(canvasId, wasmFile) {
             location.href = msg;
         },
         wasm_clipboardTextSet: (ptr, len) => {
+            if (len == 0) {
+                return;
+            }
+
             let msg = utf8decoder.decode(new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, len));
             if (navigator.clipboard) {
                 navigator.clipboard.writeText(msg);
