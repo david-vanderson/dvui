@@ -352,6 +352,8 @@ pub fn clipboardText(self: *SDLBackend) ![]const u8 {
 }
 
 pub fn clipboardTextSet(self: *SDLBackend, text: []const u8) !void {
+    if (text.len == 0) return;
+
     var cstr = try self.arena.alloc(u8, text.len + 1);
     @memcpy(cstr[0..text.len], text);
     cstr[cstr.len - 1] = 0;
