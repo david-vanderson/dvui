@@ -1,5 +1,5 @@
 
-zig 0.12:
+zig 0.13:
 - if sliceAsBytes/bytesAsSlice includes sentinel, then need to update our use
 
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
@@ -8,13 +8,19 @@ check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
 web backend
-- build.zig based on: zig build-lib web-test.zig -target wasm32-freestanding -dynamic --export=app_init --export=app_deinit --export=app_update --export=add -femit-bin=src/backends/web-test.wasm
-  - this will change with 0.12 to build-exe -fno-entry (see https://github.com/ziglang/zig/pull/17815 )
-  - might not have to do all the exports?
-
 - on phone chrome entering characters works, but backspace first removes characters from the keyboard buffer before we get them removed, something to do with IME
 
+web backend clipboard
+- ideally we should preventDefault on copy/paste events, then be able to access the clipboard
 
+            navigator.clipboard.readText().then(function (text) {
+                console.log("read: " + text);
+            });
+
+
+maybe expand should be a f32 instead of bool
+- could express "want this to take up 1/3 of the space"
+- could function as weights for BoxWidget
 
 text rendering:
 - investigate if with stb_truetype we can align horizontally to pixels?
@@ -22,8 +28,6 @@ text rendering:
 
 
 zig.news writeup for how to do a build.zig step with a zig function
-
-web backend clipboard
 
 add cursors to examples (row of buttons or something one for each cursor)
 

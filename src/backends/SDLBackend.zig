@@ -345,7 +345,7 @@ pub fn sleep(self: *SDLBackend, ns: u64) void {
     std.time.sleep(ns);
 }
 
-pub fn clipboardText(self: *SDLBackend) ![]u8 {
+pub fn clipboardText(self: *SDLBackend) ![]const u8 {
     const p = c.SDL_GetClipboardText();
     defer c.SDL_free(p);
     return try self.arena.dupe(u8, std.mem.sliceTo(p, 0));

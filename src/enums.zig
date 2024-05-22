@@ -1,5 +1,3 @@
-const builtin = @import("builtin");
-
 pub const Button = enum {
     // used for mouse motion events
     none,
@@ -77,11 +75,7 @@ pub const Mod = enum(u16) {
     }
 
     pub fn controlCommand(self: Mod) bool {
-        if (builtin.target.isDarwin()) {
-            return self.command();
-        } else {
-            return self.control();
-        }
+        return self.control() or self.command();
     }
 };
 
