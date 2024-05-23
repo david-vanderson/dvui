@@ -103,6 +103,15 @@ function dvui(canvasId, wasmFile) {
     let touches = [];  // list of tuple (touch identifier, initial index)
     let oskPosition = [];  // x y w h of on screen keyboard editing position, or empty if none
 
+
+    function oskCheck() {
+        if (oskPosition.length == 0) {
+            gl.canvas.focus();
+        } else {
+            hidden_input.focus();
+        }
+    }
+
     function touchIndex(pointerId) {
         let idx = touches.findIndex((e) => e[0] === pointerId);
         if (idx < 0) {
@@ -315,7 +324,12 @@ function dvui(canvasId, wasmFile) {
             if (navigator.clipboard) {
                 navigator.clipboard.writeText(msg);
             } else {
-                console.error("cannot set clipboard, navigator.clipboard is undefined");
+                hidden_input.value = msg;
+                hidden_input.focus();
+                hidden_input.select();
+                document.execCommand("copy");
+                hidden_input.value = "";
+                oskCheck();
             }
         },
       },
@@ -331,9 +345,12 @@ function dvui(canvasId, wasmFile) {
         const canvas = document.querySelector(canvasId);
 
         let div = document.createElement("div");
-        div.style.width = 0;
-        div.style.height = 0;
-        div.style.overflow = "hidden";
+        div.style.position = "fixed";
+        div.style.opacity = 0;
+        div.style.zIndex = -1;
+        //div.style.width = 0;
+        //div.style.height = 0;
+        //div.style.overflow = "hidden";
         hidden_input = document.createElement("input");
         div.appendChild(hidden_input);
         document.body.prepend(div);
@@ -462,14 +479,6 @@ function dvui(canvasId, wasmFile) {
                 // each call to app_update
                 renderRequested = true;
                 requestAnimationFrame(render);
-            }
-        }
-
-        function oskCheck() {
-            if (oskPosition.length == 0) {
-                gl.canvas.focus();
-            } else {
-                hidden_input.focus();
             }
         }
 
