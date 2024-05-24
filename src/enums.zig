@@ -212,7 +212,7 @@ pub const Direction = enum {
 };
 
 pub const DialogResponse = enum(u8) {
-    closed,
+    cancel,
     ok,
     _,
 };
