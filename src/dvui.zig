@@ -3388,8 +3388,8 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     try dvui.separator(@src(), .{ .expand = .horizontal });
 }
 
-pub const DialogDisplayFn = *const fn (u32) Error!void;
-pub const DialogCallAfterFn = *const fn (u32, enums.DialogResponse) Error!void;
+pub const DialogDisplayFn = *const fn (u32) anyerror!void;
+pub const DialogCallAfterFn = *const fn (u32, enums.DialogResponse) anyerror!void;
 
 pub const Dialog = struct {
     id: u32,
@@ -3444,6 +3444,8 @@ pub const DialogOptions = struct {
     modal: bool = true,
     title: []const u8 = "",
     message: []const u8,
+    ok_label: []const u8 = "Ok",
+    cancel_label: ?[]const u8 = null,
     displayFn: DialogDisplayFn = dialogDisplay,
     callafterFn: ?DialogCallAfterFn = null,
 };
@@ -3458,6 +3460,10 @@ pub fn dialog(src: std.builtin.SourceLocation, opts: DialogOptions) !void {
     dataSet(opts.window, id, "_modal", opts.modal);
     dataSetSlice(opts.window, id, "_title", opts.title);
     dataSetSlice(opts.window, id, "_message", opts.message);
+    dataSetSlice(opts.window, id, "_ok_label", opts.ok_label);
+    if (opts.cancel_label) |cl| {
+        dataSetSlice(opts.window, id, "_cancel_label", cl);
+    }
     if (opts.callafterFn) |ca| {
         dataSet(opts.window, id, "_callafter", ca);
     }
@@ -3483,6 +3489,14 @@ pub fn dialogDisplay(id: u32) !void {
         return;
     };
 
+    const ok_label = dvui.dataGetSlice(null, id, "_ok_label", []u8) orelse {
+        log.err("dialogDisplay lost data for dialog {x}\n", .{id});
+        dvui.dialogRemove(id);
+        return;
+    };
+
+    const cancel_label = dvui.dataGetSlice(null, id, "_cancel_label", []u8);
+
     const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
     var win = try floatingWindow(@src(), .{ .modal = modal }, .{ .id_extra = id });
@@ -3493,7 +3507,7 @@ pub fn dialogDisplay(id: u32) !void {
     if (!header_openflag) {
         dvui.dialogRemove(id);
         if (callafter) |ca| {
-            try ca(id, .closed);
+            try ca(id, .cancel);
         }
         return;
     }
@@ -3502,7 +3516,20 @@ pub fn dialogDisplay(id: u32) !void {
     try tl.addText(message, .{});
     tl.deinit();
 
-    if (try dvui.button(@src(), "Ok", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5, .tab_index = 1 })) {
+    var hbox = try dvui.box(@src(), .horizontal, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+    defer hbox.deinit();
+
+    if (cancel_label) |cl| {
+        if (try dvui.button(@src(), cl, .{}, .{ .tab_index = 2 })) {
+            dvui.dialogRemove(id);
+            if (callafter) |ca| {
+                try ca(id, .cancel);
+            }
+            return;
+        }
+    }
+
+    if (try dvui.button(@src(), ok_label, .{}, .{ .tab_index = 1 })) {
         dvui.dialogRemove(id);
         if (callafter) |ca| {
             try ca(id, .ok);
@@ -3637,7 +3664,7 @@ pub fn toastDisplay(id: u32) !void {
 
     var animator = try dvui.animate(@src(), .alpha, 500_000, .{ .id_extra = id });
     defer animator.deinit();
-    try dvui.labelNoFmt(@src(), message, .{ .background = true, .corner_radius = dvui.Rect.all(1000) });
+    try dvui.labelNoFmt(@src(), message, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = Rect.all(8) });
 
     if (dvui.timerDone(id)) {
         animator.startEnd();

@@ -133,7 +133,7 @@ const AnimatingDialog = struct {
         try dvui.windowHeader(title, "", &header_openflag);
         if (!header_openflag) {
             closing = true;
-            dvui.dataSet(null, id, "response", enums.DialogResponse.closed);
+            dvui.dataSet(null, id, "response", enums.DialogResponse.cancel);
         }
 
         var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
@@ -1017,8 +1017,8 @@ pub fn dialogs(demo_win_id: u32) !void {
             }
         };
 
-        if (try dvui.button(@src(), "Ok Followup", .{}, .{})) {
-            try dvui.dialog(@src(), .{ .title = "Ok Followup", .message = "This is a modal dialog with modal followup", .callafterFn = dialogsFollowup.callafter });
+        if (try dvui.button(@src(), "Followup", .{}, .{})) {
+            try dvui.dialog(@src(), .{ .title = "Followup", .message = "This is a modal dialog with modal followup", .callafterFn = dialogsFollowup.callafter, .ok_label = "Do it", .cancel_label = "Cancel" });
         }
     }
 
