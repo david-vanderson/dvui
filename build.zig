@@ -142,7 +142,7 @@ pub fn build(b: *std.Build) !void {
 
         const wasm = b.addExecutable(.{
             .name = "web-test",
-            .root_source_file = .{ .path = "web-test.zig" },
+            .root_source_file = b.path("web-test.zig"),
             .target = b.resolveTargetQuery(webtarget),
             .optimize = optimize,
             .link_libc = true,
@@ -183,8 +183,8 @@ pub fn build(b: *std.Build) !void {
         const compile_step = b.step("web-test", "Compile the Web test");
         compile_step.dependOn(&cacheBusterStep);
 
-        compile_step.dependOn(&b.addInstallFileWithDir(.{ .path = "src/backends/index.html" }, .prefix, "bin/index.html").step);
-        compile_step.dependOn(&b.addInstallFileWithDir(.{ .path = "src/backends/WebBackend.js" }, .prefix, "bin/WebBackend.js").step);
+        compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/index.html"), .prefix, "bin/index.html").step);
+        compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/WebBackend.js"), .prefix, "bin/WebBackend.js").step);
 
         b.getInstallStep().dependOn(compile_step);
     }
@@ -220,9 +220,8 @@ pub fn build(b: *std.Build) !void {
 
 var cacheBusterStep: std.Build.Step = undefined;
 
-fn cacheBuster(step: *std.Build.Step, prog_node: *std.Progress.Node) !void {
+fn cacheBuster(step: *std.Build.Step, _: std.Progress.Node) !void {
     _ = step;
-    _ = prog_node;
     std.debug.print("cacheBuster\n", .{});
 
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);

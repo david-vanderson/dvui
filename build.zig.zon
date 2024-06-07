@@ -4,13 +4,13 @@
     .paths = .{""},
     .dependencies = .{
         .sdl = .{
-            .url = "https://github.com/david-vanderson/SDL/archive/bd6cf41713cc9d51a2857f98adb7fa2697d61bc6.tar.gz",
-            .hash = "1220f3825d1e0329194656d9a7d672892cf8d6843d2ab4ae8eefb4366d4069dcd050",
+            .url = "https://github.com/david-vanderson/SDL/archive/d8c0f56f7f10cb1b932f1dcb5341ed1c1f449044.tar.gz",
+            .hash = "12207138ebafa398e5e0a224fdd94fa30dc295782fbd8e386d7c37fa34d3b8e87bfb",
             .lazy = true,
         },
         .freetype = .{
-            .url = "https://github.com/david-vanderson/freetype/archive/9759c8ea9b310d3411b5142ba03d53fcf7199550.tar.gz",
-            .hash = "122068050425c51433847b3371f1c3ffe19cec92795cd7ee6e191643cb35ae752cab",
+            .url = "https://github.com/david-vanderson/freetype/archive/a62b6192d81952e64b8c16504427f3e28ef10e5f.tar.gz",
+            .hash = "12203988c200e30d2fbc2678bb3e49eb3f117cc79faf8d228b63e54d8cdf278378e1",
             .lazy = true,
         },
     },
