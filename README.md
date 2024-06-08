@@ -2,7 +2,7 @@
 
 A Zig GUI toolkit for whole applications or extra debugging windows in an existing application.
 
-Tested with [Zig](https://ziglang.org/) 0.12.0.
+Tested with [Zig](https://ziglang.org/) 0.13
 
 How to run the built-in examples:
 
