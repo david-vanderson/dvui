@@ -21,7 +21,7 @@ cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).Enum.fields.len]bool = [_]bo
 arena: std.mem.Allocator = undefined,
 
 pub const InitOptions = struct {
-    /// The allocator used during init
+    /// The allocator used for temporary allocations used during init()
     allocator: std.mem.Allocator,
     /// The initial size of the application window
     size: dvui.Size,
