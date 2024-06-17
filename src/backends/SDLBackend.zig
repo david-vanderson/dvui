@@ -21,6 +21,8 @@ cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).Enum.fields.len]bool = [_]bo
 arena: std.mem.Allocator = undefined,
 
 pub const InitOptions = struct {
+    /// The allocator used during init
+    allocator: std.mem.Allocator,
     /// The initial size of the application window
     size: dvui.Size,
     /// Set the minimum size of the window
@@ -87,38 +89,38 @@ pub fn init(options: InitOptions) !SDLBackend {
             var guess_from_dpi = true;
 
             // first try to inspect environment variables
-            var buf: [1024]u8 = undefined;
-            @memset(&buf, 0);
-            var fba = std.heap.FixedBufferAllocator.init(&buf);
+            {
+                const qt_auto_str: ?[]u8 = std.process.getEnvVarOwned(options.allocator, "QT_AUTO_SCREEN_SCALE_FACTOR") catch |err| switch (err) {
+                    error.EnvironmentVariableNotFound => null,
+                    else => return err,
+                };
+                defer if (qt_auto_str) |str| options.allocator.free(str);
+                if (qt_auto_str != null and std.mem.eql(u8, qt_auto_str.?, "0")) {
+                    dvui.log.info("QT_AUTO_SCREEN_SCALE_FACTOR is 0, disabling content scale guessing\n", .{});
+                    guess_from_dpi = false;
+                }
+                const qt_str: ?[]u8 = std.process.getEnvVarOwned(options.allocator, "QT_SCALE_FACTOR") catch |err| switch (err) {
+                    error.EnvironmentVariableNotFound => null,
+                    else => return err,
+                };
+                defer if (qt_str) |str| options.allocator.free(str);
+                const gdk_str: ?[]u8 = std.process.getEnvVarOwned(options.allocator, "GDK_SCALE") catch |err| switch (err) {
+                    error.EnvironmentVariableNotFound => null,
+                    else => return err,
+                };
+                defer if (gdk_str) |str| options.allocator.free(str);
 
-            const qt_auto_str: ?[]u8 = std.process.getEnvVarOwned(fba.allocator(), "QT_AUTO_SCREEN_SCALE_FACTOR") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => null,
-                else => return err,
-            };
-            if (qt_auto_str != null and std.mem.eql(u8, qt_auto_str.?, "0")) {
-                dvui.log.info("QT_AUTO_SCREEN_SCALE_FACTOR is 0, disabling content scale guessing\n", .{});
-                guess_from_dpi = false;
-            }
-
-            const qt_str: ?[]u8 = std.process.getEnvVarOwned(fba.allocator(), "QT_SCALE_FACTOR") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => null,
-                else => return err,
-            };
-            const gdk_str: ?[]u8 = std.process.getEnvVarOwned(fba.allocator(), "GDK_SCALE") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => null,
-                else => return err,
-            };
-
-            if (qt_str) |str| {
-                const qt_scale = std.fmt.parseFloat(f32, str) catch 1.0;
-                dvui.log.info("QT_SCALE_FACTOR is {d}, using that for initial content scale\n", .{qt_scale});
-                back.initial_scale = qt_scale;
-                guess_from_dpi = false;
-            } else if (gdk_str) |str| {
-                const gdk_scale = std.fmt.parseFloat(f32, str) catch 1.0;
-                dvui.log.info("GDK_SCALE is {d}, using that for initial content scale\n", .{gdk_scale});
-                back.initial_scale = gdk_scale;
-                guess_from_dpi = false;
+                if (qt_str) |str| {
+                    const qt_scale = std.fmt.parseFloat(f32, str) catch 1.0;
+                    dvui.log.info("QT_SCALE_FACTOR is {d}, using that for initial content scale\n", .{qt_scale});
+                    back.initial_scale = qt_scale;
+                    guess_from_dpi = false;
+                } else if (gdk_str) |str| {
+                    const gdk_scale = std.fmt.parseFloat(f32, str) catch 1.0;
+                    dvui.log.info("GDK_SCALE is {d}, using that for initial content scale\n", .{gdk_scale});
+                    back.initial_scale = gdk_scale;
+                    guess_from_dpi = false;
+                }
             }
 
             if (guess_from_dpi) {
@@ -129,10 +131,11 @@ pub fn init(options: InitOptions) !SDLBackend {
                 //Xft.dpi:	96
                 //Xft.antialias:	1
                 if (mdpi == null and builtin.os.tag == .linux) {
-                    fba.reset();
-                    var stdout = std.ArrayList(u8).init(fba.allocator());
-                    var stderr = std.ArrayList(u8).init(fba.allocator());
-                    var child = std.process.Child.init(&.{ "xrdb", "-get", "Xft.dpi" }, fba.allocator());
+                    var stdout = std.ArrayList(u8).init(options.allocator);
+                    defer stdout.deinit();
+                    var stderr = std.ArrayList(u8).init(options.allocator);
+                    defer stderr.deinit();
+                    var child = std.process.Child.init(&.{ "xrdb", "-get", "Xft.dpi" }, options.allocator);
                     child.stdout_behavior = .Pipe;
                     child.stderr_behavior = .Pipe;
                     try child.spawn();
