@@ -15,8 +15,11 @@ var show_dialog_outside_frame: bool = false;
 /// - dvui renders the whole application
 /// - render frames only when needed
 pub fn main() !void {
+    defer _ = gpa_instance.deinit();
+
     // init SDL backend (creates OS window)
     var backend = try Backend.init(.{
+        .allocator = gpa,
         .size = .{ .w = 500.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = vsync,

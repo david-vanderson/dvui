@@ -8,7 +8,10 @@ const gpa = gpa_instance.allocator();
 const window_icon_png = @embedFile("src/zig-favicon.png");
 
 pub fn main() !void {
+    defer _ = gpa_instance.deinit();
+
     var backend = try SDLBackend.init(.{
+        .allocator = gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .vsync = false,
         .title = "DVUI SDL test",
