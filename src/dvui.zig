@@ -485,7 +485,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         return fce;
     }
 
-    log.debug("FontCacheGet creating font size {d} name \"{s}\"", .{ font.size, font.name });
+    log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, font.ttf_bytes.ptr, font.size, font.name });
 
     var entry: FontCacheEntry = undefined;
 
@@ -2166,16 +2166,27 @@ pub const Window = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        var it = self.datas.iterator();
-        while (it.next()) |item| item.value_ptr.free(self.gpa);
+        {
+            var it = self.datas.iterator();
+            while (it.next()) |item| item.value_ptr.free(self.gpa);
+            self.datas.deinit();
+        }
 
         self.subwindows.deinit();
         self.min_sizes.deinit();
-        self.datas.deinit();
         self.animations.deinit();
         self.tab_index_prev.deinit();
         self.tab_index.deinit();
-        self.font_cache.deinit();
+
+        {
+            var it = self.font_cache.iterator();
+            while (it.next()) |item| {
+                item.value_ptr.glyph_info.deinit();
+                item.value_ptr.deinit();
+            }
+            self.font_cache.deinit();
+        }
+
         self.texture_cache.deinit();
         self.dialogs.deinit();
         self._arena.deinit();
