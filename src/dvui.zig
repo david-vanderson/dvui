@@ -2172,6 +2172,11 @@ pub const Window = struct {
             self.datas.deinit();
         }
 
+        if (self.debug_under_mouse_info.len > 0) {
+            self.gpa.free(self.debug_under_mouse_info);
+            self.debug_under_mouse_info = "";
+        }
+
         self.subwindows.deinit();
         self.min_sizes.deinit();
         self.animations.deinit();
