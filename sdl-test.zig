@@ -238,11 +238,6 @@ pub fn main() !void {
                         }
                     }
 
-                    if (!reorderer.found_slot) {
-                        var reorderable = try reorderer.reorderable(@src(), .{ .last_slot = true }, .{ .id_extra = glob.strings.len, .expand = .horizontal });
-                        reorderable.deinit();
-                    }
-
                     reorderer.deinit();
 
                     if (down_idx) |di| {
