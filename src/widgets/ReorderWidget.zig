@@ -21,7 +21,10 @@ found_slot: bool = false,
 pub fn init(src: std.builtin.SourceLocation, opts: Options) ReorderWidget {
     var self = ReorderWidget{};
     const defaults = Options{ .name = "Reorder" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
+    // we are always going to be the same size as our parent's content rect,
+    // and not participate in normal widget layout
+    const parentSize = dvui.parentGet().data().contentRect().size();
+    self.wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = parentSize.rect() }));
     self.id_reorderable = dvui.dataGet(null, self.wd.id, "_id_reorderable", u32) orelse null;
     self.drag_point = dvui.dataGet(null, self.wd.id, "_drag_point", dvui.Point) orelse null;
     self.reorderable_size = dvui.dataGet(null, self.wd.id, "_reorderable_size", dvui.Size) orelse dvui.Size{};
@@ -49,15 +52,15 @@ pub fn data(self: *ReorderWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *ReorderWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    return dvui.placeIn(self.wd.contentRect().justSize(), dvui.minSize(id, min_size), e, g);
+    return self.wd.parent.rectFor(id, min_size, e, g);
 }
 
 pub fn screenRectScale(self: *ReorderWidget, rect: Rect) RectScale {
-    return self.wd.contentRectScale().rectToRectScale(rect);
+    return self.wd.parent.screenRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *ReorderWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.padSize(s));
+    self.wd.parent.minSizeForChild(s);
 }
 
 pub fn matchEvent(self: *ReorderWidget, e: *dvui.Event) bool {
@@ -100,8 +103,16 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *ReorderWidget) void {
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
+    // we aren't participating in normal widget layout, so don't do these
+    //self.wd.minSizeSetAndRefresh();
+    //self.wd.minSizeReportToParent();
+
+    if (self.drag_point != null and !self.found_slot) {
+        const last_slot: ?*Reorderable = self.reorderable(@src(), .{ .last_slot = true }, .{}) catch null;
+        if (last_slot) |ls| {
+            ls.deinit();
+        }
+    }
 
     if (self.id_reorderable) |idr| {
         dvui.dataSet(null, self.wd.id, "_id_reorderable", idr);
@@ -124,6 +135,7 @@ pub fn deinit(self: *ReorderWidget) void {
 pub fn startDrag(self: *ReorderWidget, id_reorderable: u32, p: dvui.Point) void {
     self.id_reorderable = id_reorderable;
     self.drag_point = p;
+    self.found_slot = true;
     dvui.captureMouse(self.wd.id);
 }
 
