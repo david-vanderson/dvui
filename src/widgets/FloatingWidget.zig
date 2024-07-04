@@ -19,7 +19,7 @@ wd: WidgetData = undefined,
 prev_windowId: u32 = 0,
 prevClip: Rect = Rect{},
 
-/// FloatingWidget is a subwindow to show a any temporary floating thing.
+/// FloatingWidget is a subwindow to show any temporary floating thing.
 /// It doesn't focus itself (as a subwindow), and whether it is shown or not is
 /// entirely up to the calling code.
 ///

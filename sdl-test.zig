@@ -209,101 +209,145 @@ pub fn main() !void {
                 }
 
                 {
-                    var hbox = try dvui.box(@src(), .horizontal, .{});
-                    defer hbox.deinit();
-                    const buf = dvui.dataGetSlice(null, hbox.wd.id, "data_key", [:0]u8) orelse blk: {
-                        dvui.dataSetSlice(null, hbox.wd.id, "data_key", "hello\n" ** 10);
-                        break :blk dvui.dataGetSlice(null, hbox.wd.id, "data_key", [:0]u8).?;
+                    const glob = struct {
+                        var strings = [_][]const u8{ "one", "two", "three" };
                     };
 
-                    //var te = try dvui.textEntry(@src(), .{
-                    var te = dvui.TextEntryWidget.init(@src(), .{
-                        .text = buf,
-                        .multiline = true,
-                        .scroll_vertical = false,
-                        .scroll_horizontal = false,
-                    }, .{});
-                    try te.install();
-                    _ = try dvui.button(@src(), "upleft", .{}, .{});
-                    _ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
-                    _ = try dvui.button(@src(), "downleft", .{}, .{ .gravity_y = 1.0 });
-                    _ = try dvui.button(@src(), "downright", .{}, .{ .gravity_x = 1.0, .gravity_y = 1.0 });
-                    te.processEvents();
-                    try te.draw();
-                    te.deinit();
+                    var down_idx: ?usize = null;
 
-                    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{});
-                    try tl.install(.{});
+                    var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 300 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
+                    defer vbox.deinit();
 
-                    _ = try dvui.button(@src(), "upleft", .{}, .{});
-                    _ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
-                    _ = try dvui.button(@src(), "downleft", .{}, .{ .gravity_y = 1.0 });
-                    _ = try dvui.button(@src(), "downright", .{}, .{ .gravity_x = 1.0, .gravity_y = 1.0 });
+                    var reorderer = try dvui.reorder(@src(), .{});
 
-                    if (try tl.touchEditing()) |floating_widget| {
-                        defer floating_widget.deinit();
-                        try tl.touchEditingMenu();
-                    }
+                    for (glob.strings, 0..) |s, i| {
+                        var reorderable = try reorderer.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
+                        defer reorderable.deinit();
 
-                    tl.processEvents();
-
-                    try tl.addText(std.mem.sliceTo(buf, 0), .{});
-
-                    tl.deinit();
-                }
-
-                {
-                    const Sel = struct {
-                        var sel = dvui.TextLayoutWidget.Selection{};
-                    };
-                    {
-                        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+                        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
                         defer hbox.deinit();
-                        try dvui.label(@src(), "{d} {d} : {d}", .{ Sel.sel.start, Sel.sel.end, Sel.sel.cursor }, .{});
-                        if (try dvui.button(@src(), "Inc Start", .{}, .{})) {
-                            Sel.sel.incStart();
-                        }
-                        if (try dvui.button(@src(), "Dec Start", .{}, .{})) {
-                            Sel.sel.decStart();
-                        }
-                        if (try dvui.button(@src(), "Inc End", .{}, .{})) {
-                            Sel.sel.incEnd();
-                        }
-                        if (try dvui.button(@src(), "Dec End", .{}, .{})) {
-                            Sel.sel.decEnd();
-                        }
-                        if (try dvui.button(@src(), "Inc Cur", .{}, .{})) {
-                            Sel.sel.incCursor();
-                        }
-                        if (try dvui.button(@src(), "Dec Cur", .{}, .{})) {
-                            Sel.sel.decCursor();
+
+                        try dvui.label(@src(), "String : {s}", .{s}, .{});
+
+                        try dvui.ReorderWidget.draggable(@src(), reorderable.wd.id, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 });
+
+                        if (try dvui.button(@src(), "down", .{}, .{ .gravity_x = 1.0 })) {
+                            if (i < glob.strings.len - 1) {
+                                down_idx = i;
+                            }
                         }
                     }
-                    var scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{ .min_size_content = .{ .w = 150, .h = 100 }, .margin = dvui.Rect.all(4) });
-                    var tl = try dvui.textLayout(@src(), .{ .selection = &Sel.sel, .break_lines = false }, .{});
-                    const lorem1 =
-                        \\Lorem € ipsum dolor sit amet, consectetur adipiscing elit,
-                        \\sed do eiusmod tempor incididunt ut labore et dolore
-                        \\magna 
-                    ;
-                    const lorem2 =
-                        \\. Ut enim ad minim veniam, quis nostrud
-                        \\exercitation ullamco laboris nisi ut aliquip ex ea
-                        \\commodo consequat. Duis aute irure dolor in
-                        \\reprehenderit in voluptate velit esse cillum dolore
-                        \\eu fugiat nulla pariatur. Excepteur sint occaecat
-                        \\cupidatat non proident, sunt in culpa qui officia
-                        \\deserunt mollit anim id est laborum.
-                    ;
-                    try tl.addText(lorem1, .{});
-                    if (try tl.addTextClick("aliqua", .{ .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
-                        std.debug.print("clicked\n", .{});
+
+                    if (!reorderer.found_slot) {
+                        var reorderable = try reorderer.reorderable(@src(), .{ .last_slot = true }, .{ .id_extra = glob.strings.len, .expand = .horizontal });
+                        reorderable.deinit();
                     }
-                    try tl.addText(lorem2, .{});
-                    try tl.addTextDone(.{});
-                    tl.deinit();
-                    scroll.deinit();
+
+                    reorderer.deinit();
+
+                    if (down_idx) |di| {
+                        const str = glob.strings[di + 1];
+                        glob.strings[di + 1] = glob.strings[di];
+                        glob.strings[di] = str;
+                    }
                 }
+
+                //{
+                //    var hbox = try dvui.box(@src(), .horizontal, .{});
+                //    defer hbox.deinit();
+                //    const buf = dvui.dataGetSlice(null, hbox.wd.id, "data_key", [:0]u8) orelse blk: {
+                //        dvui.dataSetSlice(null, hbox.wd.id, "data_key", "hello\n" ** 10);
+                //        break :blk dvui.dataGetSlice(null, hbox.wd.id, "data_key", [:0]u8).?;
+                //    };
+
+                //    //var te = try dvui.textEntry(@src(), .{
+                //    var te = dvui.TextEntryWidget.init(@src(), .{
+                //        .text = buf,
+                //        .multiline = true,
+                //        .scroll_vertical = false,
+                //        .scroll_horizontal = false,
+                //    }, .{});
+                //    try te.install();
+                //    _ = try dvui.button(@src(), "upleft", .{}, .{});
+                //    _ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
+                //    _ = try dvui.button(@src(), "downleft", .{}, .{ .gravity_y = 1.0 });
+                //    _ = try dvui.button(@src(), "downright", .{}, .{ .gravity_x = 1.0, .gravity_y = 1.0 });
+                //    te.processEvents();
+                //    try te.draw();
+                //    te.deinit();
+
+                //    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{});
+                //    try tl.install(.{});
+
+                //    _ = try dvui.button(@src(), "upleft", .{}, .{});
+                //    _ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
+                //    _ = try dvui.button(@src(), "downleft", .{}, .{ .gravity_y = 1.0 });
+                //    _ = try dvui.button(@src(), "downright", .{}, .{ .gravity_x = 1.0, .gravity_y = 1.0 });
+
+                //    if (try tl.touchEditing()) |floating_widget| {
+                //        defer floating_widget.deinit();
+                //        try tl.touchEditingMenu();
+                //    }
+
+                //    tl.processEvents();
+
+                //    try tl.addText(std.mem.sliceTo(buf, 0), .{});
+
+                //    tl.deinit();
+                //}
+
+                //{
+                //    const Sel = struct {
+                //        var sel = dvui.TextLayoutWidget.Selection{};
+                //    };
+                //    {
+                //        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+                //        defer hbox.deinit();
+                //        try dvui.label(@src(), "{d} {d} : {d}", .{ Sel.sel.start, Sel.sel.end, Sel.sel.cursor }, .{});
+                //        if (try dvui.button(@src(), "Inc Start", .{}, .{})) {
+                //            Sel.sel.incStart();
+                //        }
+                //        if (try dvui.button(@src(), "Dec Start", .{}, .{})) {
+                //            Sel.sel.decStart();
+                //        }
+                //        if (try dvui.button(@src(), "Inc End", .{}, .{})) {
+                //            Sel.sel.incEnd();
+                //        }
+                //        if (try dvui.button(@src(), "Dec End", .{}, .{})) {
+                //            Sel.sel.decEnd();
+                //        }
+                //        if (try dvui.button(@src(), "Inc Cur", .{}, .{})) {
+                //            Sel.sel.incCursor();
+                //        }
+                //        if (try dvui.button(@src(), "Dec Cur", .{}, .{})) {
+                //            Sel.sel.decCursor();
+                //        }
+                //    }
+                //    var scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{ .min_size_content = .{ .w = 150, .h = 100 }, .margin = dvui.Rect.all(4) });
+                //    var tl = try dvui.textLayout(@src(), .{ .selection = &Sel.sel, .break_lines = false }, .{});
+                //    const lorem1 =
+                //        \\Lorem € ipsum dolor sit amet, consectetur adipiscing elit,
+                //        \\sed do eiusmod tempor incididunt ut labore et dolore
+                //        \\magna
+                //    ;
+                //    const lorem2 =
+                //        \\. Ut enim ad minim veniam, quis nostrud
+                //        \\exercitation ullamco laboris nisi ut aliquip ex ea
+                //        \\commodo consequat. Duis aute irure dolor in
+                //        \\reprehenderit in voluptate velit esse cillum dolore
+                //        \\eu fugiat nulla pariatur. Excepteur sint occaecat
+                //        \\cupidatat non proident, sunt in culpa qui officia
+                //        \\deserunt mollit anim id est laborum.
+                //    ;
+                //    try tl.addText(lorem1, .{});
+                //    if (try tl.addTextClick("aliqua", .{ .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
+                //        std.debug.print("clicked\n", .{});
+                //    }
+                //    try tl.addText(lorem2, .{});
+                //    try tl.addTextDone(.{});
+                //    tl.deinit();
+                //    scroll.deinit();
+                //}
             }
 
             const fps = dvui.FPS();

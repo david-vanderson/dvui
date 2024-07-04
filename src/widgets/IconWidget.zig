@@ -38,6 +38,10 @@ pub fn install(self: *IconWidget) !void {
     try self.wd.borderAndBackground(.{});
 }
 
+pub fn matchEvent(self: *IconWidget, e: *dvui.Event) bool {
+    return dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.wd.borderRectScale().r });
+}
+
 pub fn draw(self: *IconWidget) !void {
     const rect = dvui.placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
     const rs = self.wd.parent.screenRectScale(rect);

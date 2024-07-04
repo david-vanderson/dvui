@@ -1,10 +1,15 @@
 
-zig 0.13:
+zig 0.14:
 - if sliceAsBytes/bytesAsSlice includes sentinel, then need to update our use
 
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
+ReorderWidget
+- floatingwidget needs to be sized according to the size we had
+- can't use minsize, container might be larger
+- test debugging window when selecting the reorderable id
+- test inside a scrollarea (need to be able to drag-scroll)
 
 
 web backend
