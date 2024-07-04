@@ -25,6 +25,7 @@ pub const entypo = @import("icons/entypo.zig");
 pub const Adwaita = @import("themes/Adwaita.zig");
 pub const AnimateWidget = @import("widgets/AnimateWidget.zig");
 pub const BoxWidget = @import("widgets/BoxWidget.zig");
+pub const ReorderWidget = @import("widgets/ReorderWidget.zig");
 pub const ButtonWidget = @import("widgets/ButtonWidget.zig");
 pub const ContextWidget = @import("widgets/ContextWidget.zig");
 pub const FloatingWindowWidget = @import("widgets/FloatingWindowWidget.zig");
@@ -3921,6 +3922,14 @@ pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Opt
     return ret;
 }
 
+pub fn reorder(src: std.builtin.SourceLocation, opts: Options) !*ReorderWidget {
+    var ret = try currentWindow().arena.create(ReorderWidget);
+    ret.* = ReorderWidget.init(src, opts);
+    try ret.install();
+    ret.processEvents();
+    return ret;
+}
+
 pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) !*ScrollAreaWidget {
     var ret = try currentWindow().arena.create(ScrollAreaWidget);
     ret.* = ScrollAreaWidget.init(src, init_opts, opts);
@@ -4984,7 +4993,7 @@ pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Ini
     ret.* = TextEntryWidget.init(src, init_opts, opts);
     try ret.install();
     // can install corner widgets here
-    //_ = try dvui.button(@src(), "upright", .{ .gravity_x = 1.0 });
+    //_ = try dvui.button(@src(), "upright", .{}, .{ .gravity_x = 1.0 });
     ret.processEvents();
     try ret.draw();
     return ret;
