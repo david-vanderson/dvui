@@ -26,6 +26,7 @@ pub const Adwaita = @import("themes/Adwaita.zig");
 pub const AnimateWidget = @import("widgets/AnimateWidget.zig");
 pub const BoxWidget = @import("widgets/BoxWidget.zig");
 pub const ReorderWidget = @import("widgets/ReorderWidget.zig");
+pub const Reorderable = ReorderWidget.Reorderable;
 pub const ButtonWidget = @import("widgets/ButtonWidget.zig");
 pub const ContextWidget = @import("widgets/ContextWidget.zig");
 pub const FloatingWindowWidget = @import("widgets/FloatingWindowWidget.zig");
