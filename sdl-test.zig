@@ -210,41 +210,78 @@ pub fn main() !void {
 
                 {
                     const glob = struct {
+                        //var strings = [_][]const u8{ "one", "two", "three" };
                         var strings = [_][]const u8{ "one", "two", "three" };
                     };
 
-                    var down_idx: ?usize = null;
+                    //var down_idx: ?usize = null;
 
                     var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 300 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
                     defer vbox.deinit();
 
-                    var reorderer = try dvui.reorder(@src(), .{});
+                    var reorder = try dvui.reorder(@src(), .{});
 
+                    var reorderable: dvui.Reorderable = undefined;
+
+                    var first_non_floating = true;
                     for (glob.strings, 0..) |s, i| {
-                        var reorderable = try reorderer.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
-                        defer reorderable.deinit();
+                        reorderable = dvui.Reorderable.init(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
+
+                        if (!reorderable.floating()) {
+                            if (first_non_floating) {
+                                first_non_floating = false;
+                            } else {
+                                try dvui.separator(@src(), .{ .id_extra = i, .expand = .horizontal, .margin = dvui.Rect.all(10) });
+                            }
+                        }
+
+                        try reorderable.install();
+
+                        if (reorderable.targetRectScale()) |rs| {
+                            // user is dragging a reorderable over this rect
+                            try dvui.pathAddRect(rs.r, .{});
+                            try dvui.pathFillConvex(.{ .r = 0, .g = 255, .b = 0 });
+
+                            // reset to use next space
+                            try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(10) });
+                            try reorderable.reinstall();
+                        }
 
                         var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
-                        defer hbox.deinit();
 
                         try dvui.label(@src(), "String : {s}", .{s}, .{});
 
-                        try dvui.ReorderWidget.draggable(@src(), reorderable.wd.id, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 });
+                        try dvui.ReorderWidget.draggable(@src(), &reorderable, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 });
 
-                        if (try dvui.button(@src(), "down", .{}, .{ .gravity_x = 1.0 })) {
-                            if (i < glob.strings.len - 1) {
-                                down_idx = i;
-                            }
+                        //if (try dvui.button(@src(), "down", .{}, .{ .gravity_x = 1.0 })) {
+                        //    if (i < glob.strings.len - 1) {
+                        //        down_idx = i;
+                        //    }
+                        //}
+
+                        hbox.deinit();
+                        reorderable.deinit();
+                    }
+
+                    if (reorder.needFinalSlot()) {
+                        try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(10) });
+                        reorderable = dvui.Reorderable.init(@src(), .{ .last_slot = true }, .{});
+                        try reorderable.install();
+                        if (reorderable.targetRectScale()) |rs| {
+                            // user is dragging a reorderable over this rect
+                            try dvui.pathAddRect(rs.r, .{});
+                            try dvui.pathFillConvex(.{ .r = 0, .g = 255, .b = 0 });
                         }
+                        reorderable.deinit();
                     }
 
-                    reorderer.deinit();
+                    reorder.deinit();
 
-                    if (down_idx) |di| {
-                        const str = glob.strings[di + 1];
-                        glob.strings[di + 1] = glob.strings[di];
-                        glob.strings[di] = str;
-                    }
+                    //if (down_idx) |di| {
+                    //    const str = glob.strings[di + 1];
+                    //    glob.strings[di + 1] = glob.strings[di];
+                    //    glob.strings[di] = str;
+                    //}
                 }
 
                 //{

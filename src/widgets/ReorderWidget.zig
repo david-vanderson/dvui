@@ -36,11 +36,10 @@ pub fn install(self: *ReorderWidget) !void {
 
     dvui.parentSet(self.widget());
     currentReorderWidget = self;
+}
 
-    if (self.drag_point) |dp| {
-        try dvui.pathAddPoint(dp);
-        try dvui.pathStrokeAfter(true, true, 5.0, .none, .{ .r = 0 });
-    }
+pub fn needFinalSlot(self: *ReorderWidget) bool {
+    return self.drag_point != null and !self.found_slot;
 }
 
 pub fn widget(self: *ReorderWidget) Widget {
@@ -88,9 +87,7 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event, bubbling: bool) void {
                     self.id_reorderable = null;
                     self.drag_point = null;
                 } else if (me.action == .motion) {
-                    if (self.wd.rectScale().r.contains(me.p)) {
-                        self.drag_point = me.p;
-                    }
+                    self.drag_point = me.p;
                 }
             },
             else => {},
@@ -106,13 +103,6 @@ pub fn deinit(self: *ReorderWidget) void {
     // we aren't participating in normal widget layout, so don't do these
     //self.wd.minSizeSetAndRefresh();
     //self.wd.minSizeReportToParent();
-
-    if (self.drag_point != null and !self.found_slot) {
-        const last_slot: ?*Reorderable = self.reorderable(@src(), .{ .last_slot = true }, .{}) catch null;
-        if (last_slot) |ls| {
-            ls.deinit();
-        }
-    }
 
     if (self.id_reorderable) |idr| {
         dvui.dataSet(null, self.wd.id, "_id_reorderable", idr);
@@ -139,7 +129,7 @@ pub fn startDrag(self: *ReorderWidget, id_reorderable: u32, p: dvui.Point) void 
     dvui.captureMouse(self.wd.id);
 }
 
-pub fn draggable(src: std.builtin.SourceLocation, id_reorderable: u32, opts: dvui.Options) !void {
+pub fn draggable(src: std.builtin.SourceLocation, reo: *Reorderable, opts: dvui.Options) !void {
     var iw = try dvui.IconWidget.init(src, "reorder_drag_icon", dvui.entypo.menu, opts);
     try iw.install();
     for (dvui.events()) |*e| {
@@ -151,14 +141,14 @@ pub fn draggable(src: std.builtin.SourceLocation, id_reorderable: u32, opts: dvu
                 if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
                     dvui.captureMouse(iw.wd.id);
-                    dvui.dragPreStart(me.p, null, dvui.Point{});
+                    dvui.dragPreStart(me.p, null, reo.wd.rectScale().r.topLeft().diff(me.p));
                 } else if (me.action == .motion) {
                     if (dvui.captured(iw.wd.id)) {
                         e.handled = true;
                         if (dvui.dragging(me.p)) |_| {
                             if (currentReorderWidget) |crw| {
                                 // ReorderWidget will capture mouse from here
-                                crw.startDrag(id_reorderable, me.p);
+                                crw.startDrag(reo.wd.id, me.p);
                             } else {
                                 dvui.log.err("ReorderWidget.draggable got a drag but currentReorderWidget was null", .{});
                             }
@@ -174,7 +164,7 @@ pub fn draggable(src: std.builtin.SourceLocation, id_reorderable: u32, opts: dvu
 }
 
 pub fn reorderable(_: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: Options) !*Reorderable {
-    var ret = try dvui.currentWindow().arena.create(Reorderable);
+    const ret = try dvui.currentWindow().arena.create(Reorderable);
     ret.* = Reorderable.init(src, init_opts, opts);
     try ret.install();
     return ret;
@@ -189,6 +179,7 @@ pub const Reorderable = struct {
     init_options: InitOptions = undefined,
     options: Options = undefined,
     floating_widget: ?dvui.FloatingWidget = null,
+    target_rs: ?dvui.RectScale = null,
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) Reorderable {
         var self = Reorderable{};
@@ -200,6 +191,19 @@ pub const Reorderable = struct {
         return self;
     }
 
+    // can call this after init before install
+    pub fn floating(self: *Reorderable) bool {
+        if (currentReorderWidget) |crw| {
+            if (crw.drag_point != null and crw.id_reorderable.? == self.wd.id) {
+                return true;
+            }
+        } else {
+            dvui.log.err("Reorderable.floating(): must be a child of ReorderWidget", .{});
+        }
+
+        return false;
+    }
+
     pub fn install(self: *Reorderable) !void {
         if (currentReorderWidget) |crw| {
             if (crw.drag_point) |dp| {
@@ -208,10 +212,9 @@ pub const Reorderable = struct {
                     try self.wd.register();
                     dvui.parentSet(self.widget());
 
-                    self.floating_widget = dvui.FloatingWidget.init(@src(), .{ .min_size_content = crw.reorderable_size });
+                    const topleft = dp.plus(dvui.dragOffset()).scale(1 / dvui.windowNaturalScale());
+                    self.floating_widget = dvui.FloatingWidget.init(@src(), .{ .rect = Rect.fromPoint(topleft), .min_size_content = crw.reorderable_size });
                     try self.floating_widget.?.install();
-
-                    return;
                 } else {
                     if (self.init_options.last_slot) {
                         self.wd = WidgetData.init(self.wd.src, .{}, self.options.override(.{ .min_size_content = crw.reorderable_size }));
@@ -220,26 +223,38 @@ pub const Reorderable = struct {
                     }
                     const rs = self.wd.rectScale();
                     if (rs.r.contains(dp)) {
+                        self.target_rs = rs;
                         crw.found_slot = true;
-                        // first color the rect
-                        try dvui.pathAddRect(rs.r, self.wd.parent.data().options.corner_radiusGet().scale(rs.s));
-                        //try dvui.pathFillConvex(opts.fill_color orelse self.options.color(.fill));
-                        try dvui.pathFillConvex(.{ .r = 0, .g = 255, .b = 0 });
+                    }
 
-                        if (!self.init_options.last_slot) {
-                            // then get the next rect - this needs to happen before we register ourselves as parent
-                            self.wd.minSizeMax(self.wd.rect.size());
-                            self.wd.minSizeReportToParent();
-                            self.wd = WidgetData.init(self.wd.src, .{}, self.options);
-                        }
+                    if (self.target_rs == null or self.init_options.last_slot) {
+                        try self.wd.register();
+                        dvui.parentSet(self.widget());
                     }
                 }
             } else {
                 self.wd = WidgetData.init(self.wd.src, .{}, self.options);
                 crw.reorderable_size = self.wd.rect.size();
-            }
-        }
 
+                try self.wd.register();
+                dvui.parentSet(self.widget());
+            }
+        } else {
+            dvui.log.err("Reorderable.install() must be a child of ReorderWidget", .{});
+        }
+    }
+
+    pub fn targetRectScale(self: *Reorderable) ?dvui.RectScale {
+        return self.target_rs;
+    }
+
+    pub fn reinstall(self: *Reorderable) !void {
+        // send our target rect to the parent for sizing
+        self.wd.minSizeMax(self.wd.rect.size());
+        self.wd.minSizeReportToParent();
+
+        // reinstall ourselves getting the next rect from parent
+        self.wd = WidgetData.init(self.wd.src, .{}, self.options);
         try self.wd.register();
         dvui.parentSet(self.widget());
     }
