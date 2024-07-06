@@ -210,8 +210,8 @@ pub fn main() !void {
 
                 {
                     const glob = struct {
-                        //var strings = [_][]const u8{ "one", "two", "three" };
-                        var strings = [_][]const u8{ "one", "two", "three" };
+                        var strings = [_][]const u8{ "one", "two", "three", "four", "five", "six" };
+                        //var strings = [_][]const u8{"one"};
                     };
 
                     //var down_idx: ?usize = null;
@@ -223,19 +223,28 @@ pub fn main() !void {
 
                     var reorderable: dvui.Reorderable = undefined;
 
-                    var first_non_floating = true;
+                    var removed_idx: ?usize = null;
+                    var insert_before_idx: ?usize = null;
+
+                    var seen_non_floating = false;
                     for (glob.strings, 0..) |s, i| {
-                        reorderable = dvui.Reorderable.init(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
+                        reorderable = dvui.Reorderable.init(@src(), reorder, .{}, .{ .id_extra = i, .expand = .horizontal });
 
                         if (!reorderable.floating()) {
-                            if (first_non_floating) {
-                                first_non_floating = false;
-                            } else {
+                            if (seen_non_floating) {
                                 try dvui.separator(@src(), .{ .id_extra = i, .expand = .horizontal, .margin = dvui.Rect.all(10) });
+                            } else {
+                                seen_non_floating = true;
                             }
                         }
 
                         try reorderable.install();
+
+                        if (reorderable.removed()) {
+                            removed_idx = i;
+                        } else if (reorderable.insertBefore()) {
+                            insert_before_idx = i;
+                        }
 
                         if (reorderable.targetRectScale()) |rs| {
                             // user is dragging a reorderable over this rect
@@ -264,9 +273,14 @@ pub fn main() !void {
                     }
 
                     if (reorder.needFinalSlot()) {
-                        try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(10) });
-                        reorderable = dvui.Reorderable.init(@src(), .{ .last_slot = true }, .{});
+                        if (seen_non_floating) {
+                            try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(10) });
+                        }
+                        reorderable = dvui.Reorderable.init(@src(), reorder, .{ .last_slot = true }, .{});
                         try reorderable.install();
+                        if (reorderable.insertBefore()) {
+                            insert_before_idx = glob.strings.len;
+                        }
                         if (reorderable.targetRectScale()) |rs| {
                             // user is dragging a reorderable over this rect
                             try dvui.pathAddRect(rs.r, .{});
@@ -276,6 +290,26 @@ pub fn main() !void {
                     }
 
                     reorder.deinit();
+
+                    if (removed_idx) |ri| {
+                        if (insert_before_idx) |ibi| {
+                            // remove this index
+                            const removed = glob.strings[ri];
+                            if (ri < ibi) {
+                                // moving down, shift others up
+                                for (ri..ibi - 1) |i| {
+                                    glob.strings[i] = glob.strings[i + 1];
+                                }
+                                glob.strings[ibi - 1] = removed;
+                            } else {
+                                // moving up, shift others down
+                                for (ibi..ri, 0..) |_, i| {
+                                    glob.strings[ri - i] = glob.strings[ri - i - 1];
+                                }
+                                glob.strings[ibi] = removed;
+                            }
+                        }
+                    }
 
                     //if (down_idx) |di| {
                     //    const str = glob.strings[di + 1];
