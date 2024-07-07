@@ -11,7 +11,7 @@ const WidgetData = dvui.WidgetData;
 const ReorderWidget = @This();
 
 wd: WidgetData = undefined,
-id_reorderable: ?u32 = null,
+id_reorderable: ?usize = null, // matches Reorderable.reorder_id
 drag_point: ?dvui.Point = null,
 drag_ending: bool = false,
 reorderable_size: Size = .{},
@@ -24,7 +24,7 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) ReorderWidget {
     // and not participate in normal widget layout
     const parentSize = dvui.parentGet().data().contentRect().size();
     self.wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = parentSize.rect() }));
-    self.id_reorderable = dvui.dataGet(null, self.wd.id, "_id_reorderable", u32) orelse null;
+    self.id_reorderable = dvui.dataGet(null, self.wd.id, "_id_reorderable", usize) orelse null;
     self.drag_point = dvui.dataGet(null, self.wd.id, "_drag_point", dvui.Point) orelse null;
     self.reorderable_size = dvui.dataGet(null, self.wd.id, "_reorderable_size", dvui.Size) orelse dvui.Size{};
     return self;
@@ -80,7 +80,7 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event, bubbling: bool) void {
     if (dvui.captured(self.wd.id)) {
         switch (e.evt) {
             .mouse => |me| {
-                if (me.action == .release and me.button.pointer()) {
+                if ((me.action == .press or me.action == .release) and me.button.pointer()) {
                     self.drag_ending = true;
                     dvui.captureMouse(null);
                     dvui.refresh(null, @src(), self.wd.id);
@@ -124,17 +124,18 @@ pub fn deinit(self: *ReorderWidget) void {
     dvui.parentReset(self.wd.id, self.wd.parent);
 }
 
-pub fn dragStart(self: *ReorderWidget, id_reorderable: u32, p: dvui.Point) void {
-    self.id_reorderable = id_reorderable;
+pub fn dragStart(self: *ReorderWidget, reorder_id: usize, p: dvui.Point) void {
+    self.id_reorderable = reorder_id;
     self.drag_point = p;
     self.found_slot = true;
     dvui.captureMouse(self.wd.id);
 }
 
-pub fn draggable(src: std.builtin.SourceLocation, reo: *Reorderable, opts: dvui.Options) !void {
+pub fn draggable(src: std.builtin.SourceLocation, top_left: dvui.Point, opts: dvui.Options) !?dvui.Point {
     var iw = try dvui.IconWidget.init(src, "reorder_drag_icon", dvui.entypo.menu, opts);
     try iw.install();
-    for (dvui.events()) |*e| {
+    var ret: ?dvui.Point = null;
+    loop: for (dvui.events()) |*e| {
         if (!iw.matchEvent(e))
             continue;
 
@@ -143,13 +144,13 @@ pub fn draggable(src: std.builtin.SourceLocation, reo: *Reorderable, opts: dvui.
                 if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
                     dvui.captureMouse(iw.wd.id);
-                    dvui.dragPreStart(me.p, null, reo.wd.rectScale().r.topLeft().diff(me.p));
+                    dvui.dragPreStart(me.p, null, top_left.diff(me.p));
                 } else if (me.action == .motion) {
                     if (dvui.captured(iw.wd.id)) {
                         e.handled = true;
                         if (dvui.dragging(me.p)) |_| {
-                            // ReorderWidget will capture mouse from here
-                            reo.reorder.dragStart(reo.wd.id, me.p);
+                            ret = me.p;
+                            break :loop;
                         }
                     }
                 }
@@ -159,6 +160,7 @@ pub fn draggable(src: std.builtin.SourceLocation, reo: *Reorderable, opts: dvui.
     }
     try iw.draw();
     iw.deinit();
+    return ret;
 }
 
 pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: Options) !*Reorderable {
@@ -170,6 +172,9 @@ pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_o
 
 pub const Reorderable = struct {
     pub const InitOptions = struct {
+        // if null, uses widget id
+        // if non-null, must be unique among reorderables in a single reorder
+        reorder_id: ?usize = null,
         last_slot: bool = false,
     };
 
@@ -194,7 +199,7 @@ pub const Reorderable = struct {
     // can call this after init before install
     pub fn floating(self: *Reorderable) bool {
         // if drag_point is non-null, id_reorderable is non-null
-        if (self.reorder.drag_point != null and self.reorder.id_reorderable.? == self.wd.id) {
+        if (self.reorder.drag_point != null and self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.wd.id)) {
             return true;
         }
 
@@ -203,7 +208,7 @@ pub const Reorderable = struct {
 
     pub fn install(self: *Reorderable) !void {
         if (self.reorder.drag_point) |dp| {
-            if (self.reorder.id_reorderable.? == self.wd.id) {
+            if (self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.wd.id)) {
                 // we are being dragged - put in floating widget
                 try self.wd.register();
                 dvui.parentSet(self.widget());
@@ -243,7 +248,7 @@ pub const Reorderable = struct {
 
     pub fn removed(self: *Reorderable) bool {
         // if drag_ending is true, id_reorderable is non-null
-        if (self.reorder.drag_ending and self.reorder.id_reorderable.? == self.wd.id) {
+        if (self.reorder.drag_ending and self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.wd.id)) {
             return true;
         }
 

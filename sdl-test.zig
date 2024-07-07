@@ -210,16 +210,41 @@ pub fn main() !void {
 
                 {
                     const glob = struct {
-                        var strings = [_][]const u8{ "one", "two", "three", "four", "five", "six" };
-                        //var strings = [_][]const u8{"one"};
+                        var strings_template = [10][]const u8{ "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
+                        var strings = [10][]const u8{ "0", "1", "2", "3", "4", "5", "", "", "", "" };
+                        var strings_len: usize = 6;
                     };
 
-                    //var down_idx: ?usize = null;
+                    var added_idx: ?usize = null;
+                    var added_idx_p: ?dvui.Point = null;
+                    {
+                        var hbox = try dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+
+                        try dvui.label(@src(), "Drag to add : {d}", .{glob.strings_len}, .{});
+
+                        if (try dvui.ReorderWidget.draggable(@src(), hbox.wd.rectScale().r.topLeft(), .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+                            if (glob.strings_len == glob.strings.len) {
+                                try dvui.toast(@src(), .{ .message = "List Full" });
+                                dvui.captureMouse(null);
+                            } else {
+                                glob.strings[glob.strings_len] = glob.strings_template[glob.strings_len];
+                                added_idx = glob.strings_len;
+                                added_idx_p = p;
+                                glob.strings_len += 1;
+                            }
+                        }
+
+                        hbox.deinit();
+                    }
 
                     var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 300 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
                     defer vbox.deinit();
 
                     var reorder = try dvui.reorder(@src(), .{});
+
+                    if (added_idx) |ai| {
+                        reorder.dragStart(ai, added_idx_p.?); // reorder grabs capture
+                    }
 
                     var reorderable: dvui.Reorderable = undefined;
 
@@ -227,8 +252,8 @@ pub fn main() !void {
                     var insert_before_idx: ?usize = null;
 
                     var seen_non_floating = false;
-                    for (glob.strings, 0..) |s, i| {
-                        reorderable = dvui.Reorderable.init(@src(), reorder, .{}, .{ .id_extra = i, .expand = .horizontal });
+                    for (glob.strings[0..glob.strings_len], 0..) |s, i| {
+                        reorderable = dvui.Reorderable.init(@src(), reorder, .{ .reorder_id = i }, .{ .id_extra = i, .expand = .horizontal });
 
                         if (!reorderable.floating()) {
                             if (seen_non_floating) {
@@ -256,17 +281,13 @@ pub fn main() !void {
                             try reorderable.reinstall();
                         }
 
-                        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+                        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
 
                         try dvui.label(@src(), "String : {s}", .{s}, .{});
 
-                        try dvui.ReorderWidget.draggable(@src(), &reorderable, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 });
-
-                        //if (try dvui.button(@src(), "down", .{}, .{ .gravity_x = 1.0 })) {
-                        //    if (i < glob.strings.len - 1) {
-                        //        down_idx = i;
-                        //    }
-                        //}
+                        if (try dvui.ReorderWidget.draggable(@src(), reorderable.wd.rectScale().r.topLeft(), .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+                            reorder.dragStart(i, p); // reorder grabs capture
+                        }
 
                         hbox.deinit();
                         reorderable.deinit();
@@ -276,10 +297,10 @@ pub fn main() !void {
                         if (seen_non_floating) {
                             try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(10) });
                         }
-                        reorderable = dvui.Reorderable.init(@src(), reorder, .{ .last_slot = true }, .{});
+                        reorderable = dvui.Reorderable.init(@src(), reorder, .{ .reorder_id = glob.strings_len, .last_slot = true }, .{});
                         try reorderable.install();
                         if (reorderable.insertBefore()) {
-                            insert_before_idx = glob.strings.len;
+                            insert_before_idx = glob.strings_len;
                         }
                         if (reorderable.targetRectScale()) |rs| {
                             // user is dragging a reorderable over this rect
@@ -293,7 +314,7 @@ pub fn main() !void {
 
                     if (removed_idx) |ri| {
                         if (insert_before_idx) |ibi| {
-                            // remove this index
+                            // save this index
                             const removed = glob.strings[ri];
                             if (ri < ibi) {
                                 // moving down, shift others up
@@ -308,14 +329,14 @@ pub fn main() !void {
                                 }
                                 glob.strings[ibi] = removed;
                             }
+                        } else {
+                            // just removing, shift others up
+                            for (ri..glob.strings_len - 1) |i| {
+                                glob.strings[i] = glob.strings[i + 1];
+                            }
+                            glob.strings_len -= 1;
                         }
                     }
-
-                    //if (down_idx) |di| {
-                    //    const str = glob.strings[di + 1];
-                    //    glob.strings[di + 1] = glob.strings[di];
-                    //    glob.strings[di] = str;
-                    //}
                 }
 
                 //{
