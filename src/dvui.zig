@@ -2011,7 +2011,9 @@ pub const Window = struct {
         copy_slice: if (builtin.mode == .Debug) bool else void = undefined,
 
         pub fn free(self: *const SavedData, allocator: std.mem.Allocator) void {
-            allocator.rawFree(self.data, @ctz(self.alignment), @returnAddress());
+            if (self.data.len != 0) {
+                allocator.rawFree(self.data, @ctz(self.alignment), @returnAddress());
+            }
         }
     };
 
@@ -2196,6 +2198,7 @@ pub const Window = struct {
 
         self.texture_cache.deinit();
         self.dialogs.deinit();
+        self.toasts.deinit();
         self._arena.deinit();
     }
 
