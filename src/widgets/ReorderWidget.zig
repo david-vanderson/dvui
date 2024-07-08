@@ -86,6 +86,13 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event, bubbling: bool) void {
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (me.action == .motion) {
                     self.drag_point = me.p;
+
+                    var scrolldrag = dvui.Event{ .evt = .{ .scroll_drag = .{
+                        .mouse_pt = me.p,
+                        .screen_rect = self.wd.rectScale().r,
+                        .capture_id = self.wd.id,
+                    } } };
+                    self.wd.parent.processEvent(&scrolldrag, true);
                 }
             },
             else => {},
@@ -131,7 +138,7 @@ pub fn dragStart(self: *ReorderWidget, reorder_id: usize, p: dvui.Point) void {
     dvui.captureMouse(self.wd.id);
 }
 
-pub fn draggable(src: std.builtin.SourceLocation, top_left: dvui.Point, opts: dvui.Options) !?dvui.Point {
+pub fn draggable(src: std.builtin.SourceLocation, top_left: ?dvui.Point, opts: dvui.Options) !?dvui.Point {
     var iw = try dvui.IconWidget.init(src, "reorder_drag_icon", dvui.entypo.menu, opts);
     try iw.install();
     var ret: ?dvui.Point = null;
@@ -144,7 +151,7 @@ pub fn draggable(src: std.builtin.SourceLocation, top_left: dvui.Point, opts: dv
                 if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
                     dvui.captureMouse(iw.wd.id);
-                    dvui.dragPreStart(me.p, null, top_left.diff(me.p));
+                    dvui.dragPreStart(me.p, null, (top_left orelse iw.wd.rectScale().r.topLeft()).diff(me.p));
                 } else if (me.action == .motion) {
                     if (dvui.captured(iw.wd.id)) {
                         e.handled = true;

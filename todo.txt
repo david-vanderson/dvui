@@ -15,13 +15,15 @@ ReorderWidget
   - make sure you can add something to an empty list
 - make a simpler api to use when you just want a list
 - test debugging window when selecting the reorderable id
-- test inside a scrollarea (need to be able to drag-scroll)
 - test on a hidpi machine
 - change landing color to the theme accent
 - add 3 samples to examples:
  - one vertical
  - one horizontal
  - one with separators and templates and removal
+
+
+test ability to scroll_drag on a touch screen - do we need a curtain area around the edge of the scrollarea/screen where touch events will cause a scroll drag?
 
 
 web backend
