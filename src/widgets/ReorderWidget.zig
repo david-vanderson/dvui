@@ -138,8 +138,14 @@ pub fn dragStart(self: *ReorderWidget, reorder_id: usize, p: dvui.Point) void {
     dvui.captureMouse(self.wd.id);
 }
 
-pub fn draggable(src: std.builtin.SourceLocation, top_left: ?dvui.Point, opts: dvui.Options) !?dvui.Point {
-    var iw = try dvui.IconWidget.init(src, "reorder_drag_icon", dvui.entypo.menu, opts);
+pub const draggableInitOptions = struct {
+    tvg_bytes: ?[]const u8 = null,
+    top_left: ?dvui.Point = null,
+    reorderable: ?*Reorderable = null,
+};
+
+pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOptions, opts: dvui.Options) !?dvui.Point {
+    var iw = try dvui.IconWidget.init(src, "reorder_drag_icon", init_opts.tvg_bytes orelse dvui.entypo.menu, opts);
     try iw.install();
     var ret: ?dvui.Point = null;
     loop: for (dvui.events()) |*e| {
@@ -151,12 +157,17 @@ pub fn draggable(src: std.builtin.SourceLocation, top_left: ?dvui.Point, opts: d
                 if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
                     dvui.captureMouse(iw.wd.id);
+                    const reo_top_left: ?dvui.Point = if (init_opts.reorderable) |reo| reo.wd.rectScale().r.topLeft() else null;
+                    const top_left: ?dvui.Point = init_opts.top_left orelse reo_top_left;
                     dvui.dragPreStart(me.p, null, (top_left orelse iw.wd.rectScale().r.topLeft()).diff(me.p));
                 } else if (me.action == .motion) {
                     if (dvui.captured(iw.wd.id)) {
                         e.handled = true;
                         if (dvui.dragging(me.p)) |_| {
                             ret = me.p;
+                            if (init_opts.reorderable) |reo| {
+                                reo.reorder.dragStart(reo.wd.id, me.p); // reorder grabs capture
+                            }
                             break :loop;
                         }
                     }
@@ -179,16 +190,27 @@ pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_o
 
 pub const Reorderable = struct {
     pub const InitOptions = struct {
+
+        // set to true for a reorderable that represents a final empty slot in
+        // the list shown during dragging
+        last_slot: bool = false,
+
         // if null, uses widget id
         // if non-null, must be unique among reorderables in a single reorder
         reorder_id: ?usize = null,
-        last_slot: bool = false,
+
+        // if false, caller responsible for drawing something when targetRectScale() returns true
+        draw_target: bool = true,
+
+        // if false, caller responsible for calling reinstall() when targetRectScale() returns true
+        reinstall: bool = true,
     };
 
     wd: WidgetData = undefined,
     reorder: *ReorderWidget = undefined,
     init_options: InitOptions = undefined,
     options: Options = undefined,
+    installed: bool = false,
     floating_widget: ?dvui.FloatingWidget = null,
     target_rs: ?dvui.RectScale = null,
 
@@ -214,6 +236,7 @@ pub const Reorderable = struct {
     }
 
     pub fn install(self: *Reorderable) !void {
+        self.installed = true;
         if (self.reorder.drag_point) |dp| {
             if (self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.wd.id)) {
                 // we are being dragged - put in floating widget
@@ -231,8 +254,18 @@ pub const Reorderable = struct {
                 }
                 const rs = self.wd.rectScale();
                 if (rs.r.contains(dp)) {
+                    // user is dragging a reorderable over this rect
                     self.target_rs = rs;
                     self.reorder.found_slot = true;
+
+                    if (self.init_options.draw_target) {
+                        try dvui.pathAddRect(rs.r, .{});
+                        try dvui.pathFillConvex(dvui.themeGet().color_accent);
+                    }
+
+                    if (self.init_options.reinstall and !self.init_options.last_slot) {
+                        try self.reinstall();
+                    }
                 }
 
                 if (self.target_rs == null or self.init_options.last_slot) {
@@ -264,6 +297,11 @@ pub const Reorderable = struct {
 
     // must be called after install()
     pub fn insertBefore(self: *Reorderable) bool {
+        if (!self.installed) {
+            dvui.log.err("Reorderable.insertBefore() must be called after install()", .{});
+            std.debug.assert(false);
+        }
+
         if (self.reorder.drag_ending and self.target_rs != null) {
             return true;
         }

@@ -89,19 +89,29 @@ pub fn build(b: *std.Build) void {
 
   - Text Entry (single and multiline)
     - Includes touch support (selection draggables and menu)
+  - Text Layout
+    - Parts can be clickable
+    - Parts separately styled
   - Floating Window
   - Menu
   - Popup/Context Window
   - Scroll Area
   - Button
+  - Multi-line label
+    - Can be clickable for links
   - Slider
+  - SliderEntry
+    - Combo slider and text entry
   - Checkbox
   - Toast
   - Panes with draggable sash
   - Dropdown
+  - Reorderable Lists
+    - Drag to reorder/remove/add
 - Missing Widgets for now
   - Radio Button
   - Data Grid
+  - Flex Layout
 
 ## Design
 

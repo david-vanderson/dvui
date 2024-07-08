@@ -5,23 +5,8 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
-add function to set fps limit
-- add slider or similar to debugging part of examples
-
-
-ReorderWidget
-- make startDrag -> dragStart and accept the id_extra of the possibly new element
-  - this way a separate template element can produce draggable things to add to the list
-  - make sure you can add something to an empty list
-- make a simpler api to use when you just want a list
-- test debugging window when selecting the reorderable id
-- test on a hidpi machine
-- change landing color to the theme accent
-- add 3 samples to examples:
- - one vertical
- - one horizontal
- - one with separators and templates and removal
-
+reorderable list simple example: replace vertical/horizontal dropdown with radio buttons
+- add flex as option after making a FlexWidget
 
 test ability to scroll_drag on a touch screen - do we need a curtain area around the edge of the scrollarea/screen where touch events will cause a scroll drag?
 
