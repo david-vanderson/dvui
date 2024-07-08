@@ -312,6 +312,12 @@ pub fn demo() !void {
         try layoutText();
     }
 
+    if (try dvui.expander(@src(), "Reorderable Lists", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        try reorderLists();
+    }
+
     if (try dvui.expander(@src(), "Menus", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
@@ -921,6 +927,248 @@ pub fn layoutText() !void {
         try tl.addText("ugly text ", .{ .font_style = .title_1, .color_text = .{ .color = .{ .r = 100, .g = 100 } } });
         try tl.addText("that shows styling.\n", .{ .font_style = .caption, .color_text = .{ .color = .{ .r = 100, .g = 50, .b = 50 } } });
     }
+}
+
+pub fn reorderLists() !void {
+    const g = struct {
+        var dir_entry: usize = 0;
+    };
+
+    if (try dvui.expander(@src(), "Simple", .{}, .{ .expand = .horizontal })) {
+        const dir: dvui.enums.Direction = if (g.dir_entry == 0) .vertical else .horizontal;
+
+        var vbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
+        defer vbox.deinit();
+
+        const entries = [_][]const u8{ "Vertical", "Horizontal" };
+        _ = try dvui.dropdown(@src(), &entries, &g.dir_entry, .{ .min_size_content = .{ .w = 120 } });
+
+        {
+            var hbox2 = try dvui.box(@src(), .horizontal, .{});
+            defer hbox2.deinit();
+            try dvui.label(@src(), "Drag", .{}, .{});
+            try dvui.icon(@src(), "drag_icon", dvui.entypo.menu, .{ .min_size_content = .{ .h = 22 } });
+            try dvui.label(@src(), "to reorder.", .{}, .{});
+        }
+
+        try reorderListsSimple(dir);
+    }
+
+    if (try dvui.expander(@src(), "Advanced", .{}, .{ .expand = .horizontal })) {
+        var vbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
+        defer vbox.deinit();
+
+        try dvui.label(@src(), "Drag off list to remove.", .{}, .{});
+        try reorderListsAdvanced();
+    }
+}
+
+pub fn reorderListsSimple(dir: dvui.enums.Direction) !void {
+    const g = struct {
+        var dir_entry: usize = 0;
+        var strings = [6][]const u8{ "zero", "one", "two", "three", "four", "five" };
+
+        pub fn reorder(removed_idx: ?usize, insert_before_idx: ?usize) void {
+            if (removed_idx) |ri| {
+                if (insert_before_idx) |ibi| {
+                    // save this index
+                    const removed = strings[ri];
+                    if (ri < ibi) {
+                        // moving down, shift others up
+                        for (ri..ibi - 1) |i| {
+                            strings[i] = strings[i + 1];
+                        }
+                        strings[ibi - 1] = removed;
+                    } else {
+                        // moving up, shift others down
+                        for (ibi..ri, 0..) |_, i| {
+                            strings[ri - i] = strings[ri - i - 1];
+                        }
+                        strings[ibi] = removed;
+                    }
+                }
+            }
+        }
+    };
+
+    var removed_idx: ?usize = null;
+    var insert_before_idx: ?usize = null;
+
+    // container for list, this determines layout of list
+    var vbox = try dvui.box(@src(), dir, .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
+    defer vbox.deinit();
+
+    var reorder = try dvui.reorder(@src(), .{});
+    defer reorder.deinit();
+
+    for (g.strings[0..g.strings.len], 0..) |s, i| {
+        var reorderable = try reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
+        defer reorderable.deinit();
+
+        if (reorderable.removed()) {
+            removed_idx = i;
+        } else if (reorderable.insertBefore()) {
+            insert_before_idx = i;
+        }
+
+        // actual content of the list entry
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "{s}", .{s}, .{});
+
+        _ = try dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 });
+    }
+
+    if (reorder.needFinalSlot()) {
+        var reorderable = try reorder.reorderable(@src(), .{ .last_slot = true }, .{});
+        defer reorderable.deinit();
+
+        if (reorderable.insertBefore()) {
+            insert_before_idx = g.strings.len;
+        }
+    }
+
+    g.reorder(removed_idx, insert_before_idx);
+}
+
+pub fn reorderListsAdvanced() !void {
+    const g = struct {
+        var strings_template = [6][]const u8{ "zero", "one", "two", "three", "four", "five" };
+        var strings = [6][]const u8{ "zero", "one", "two", "three", "", "" };
+        var strings_len: usize = 4;
+
+        pub fn reorder(removed_idx: ?usize, insert_before_idx: ?usize) void {
+            if (removed_idx) |ri| {
+                if (insert_before_idx) |ibi| {
+                    // save this index
+                    const removed = strings[ri];
+                    if (ri < ibi) {
+                        // moving down, shift others up
+                        for (ri..ibi - 1) |i| {
+                            strings[i] = strings[i + 1];
+                        }
+                        strings[ibi - 1] = removed;
+                    } else {
+                        // moving up, shift others down
+                        for (ibi..ri, 0..) |_, i| {
+                            strings[ri - i] = strings[ri - i - 1];
+                        }
+                        strings[ibi] = removed;
+                    }
+                } else {
+                    // just removing, shift others up
+                    for (ri..strings_len - 1) |i| {
+                        strings[i] = strings[i + 1];
+                    }
+                    strings_len -= 1;
+                }
+            }
+        }
+    };
+
+    var hbox = try dvui.box(@src(), .horizontal, .{});
+    defer hbox.deinit();
+
+    // template you can drag to add to list
+    var added_idx: ?usize = null;
+    var added_idx_p: ?dvui.Point = null;
+
+    if (g.strings_len == g.strings.len) {
+        try dvui.label(@src(), "List Full", .{}, .{ .gravity_x = 1.0 });
+    } else {
+        var hbox2 = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0, .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .color_fill = .{ .name = .fill_window } });
+        defer hbox2.deinit();
+
+        try dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
+
+        if (try dvui.ReorderWidget.draggable(@src(), .{ .top_left = hbox2.wd.rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+            // add to list, but will be removed if not dropped onto a list slot
+            g.strings[g.strings_len] = g.strings_template[g.strings_len];
+            added_idx = g.strings_len;
+            added_idx_p = p;
+            g.strings_len += 1;
+        }
+    }
+
+    var removed_idx: ?usize = null;
+    var insert_before_idx: ?usize = null;
+
+    // container for list, this determines layout of list
+    var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
+    defer vbox.deinit();
+
+    var reorder = try dvui.reorder(@src(), .{});
+    defer reorder.deinit();
+
+    if (added_idx) |ai| {
+        reorder.dragStart(ai, added_idx_p.?); // reorder grabs capture
+    }
+
+    var seen_non_floating = false;
+    for (g.strings[0..g.strings_len], 0..) |s, i| {
+        // overriding the reorder id used so that it doesn't use the widget ids
+        // (this allows adding a list element above without making a widget)
+        var reorderable = dvui.Reorderable.init(@src(), reorder, .{ .reorder_id = i, .draw_target = false, .reinstall = false }, .{ .id_extra = i, .expand = .horizontal });
+        defer reorderable.deinit();
+
+        if (!reorderable.floating()) {
+            if (seen_non_floating) {
+                // we've had a non floating one already, and we are non floating, so add a separator
+                try dvui.separator(@src(), .{ .id_extra = i, .expand = .horizontal, .margin = dvui.Rect.all(6) });
+            } else {
+                seen_non_floating = true;
+            }
+        }
+
+        try reorderable.install();
+
+        if (reorderable.removed()) {
+            removed_idx = i;
+        } else if (reorderable.insertBefore()) {
+            insert_before_idx = i;
+        }
+
+        if (reorderable.targetRectScale()) |rs| {
+            // user is dragging a reorderable over this rect, could draw anything here
+            try dvui.pathAddRect(rs.r, .{});
+            try dvui.pathFillConvex(.{ .r = 0, .g = 255, .b = 0 });
+
+            // reset to use next space, need a separator
+            try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
+            try reorderable.reinstall();
+        }
+
+        // actual content of the list entry
+        var hbox2 = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+        defer hbox2.deinit();
+
+        try dvui.label(@src(), "{s}", .{s}, .{});
+
+        if (try dvui.ReorderWidget.draggable(@src(), .{ .top_left = reorderable.wd.rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+            reorder.dragStart(i, p); // reorder grabs capture
+        }
+    }
+
+    if (reorder.needFinalSlot()) {
+        if (seen_non_floating) {
+            try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
+        }
+        var reorderable = try reorder.reorderable(@src(), .{ .last_slot = true, .draw_target = false }, .{});
+        defer reorderable.deinit();
+
+        if (reorderable.insertBefore()) {
+            insert_before_idx = g.strings_len;
+        }
+
+        if (reorderable.targetRectScale()) |rs| {
+            // user is dragging a reorderable over this rect
+            try dvui.pathAddRect(rs.r, .{});
+            try dvui.pathFillConvex(.{ .r = 0, .g = 255, .b = 0 });
+        }
+    }
+
+    g.reorder(removed_idx, insert_before_idx);
 }
 
 pub fn menus() !void {

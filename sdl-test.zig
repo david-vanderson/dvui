@@ -29,6 +29,7 @@ pub fn main() !void {
         b.* = [_]bool{true} ** 6;
     }
 
+    var fps_limit: ?f32 = null;
     var floats: [6]bool = [_]bool{false} ** 6;
     var scale_val: f32 = 1.0;
     var scale_mod: dvui.enums.Mod = .none;
@@ -103,6 +104,18 @@ pub fn main() !void {
             {
                 var win_scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
                 defer win_scroll.deinit();
+
+                {
+                    var hbox = try dvui.box(@src(), .horizontal, .{});
+                    defer hbox.deinit();
+
+                    var fps_percent = (fps_limit orelse 100.0) / 100.0;
+                    if (try dvui.slider(@src(), .horizontal, &fps_percent, .{ .min_size_content = .{ .w = 200, .h = 20 }, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) })) {
+                        fps_limit = if (fps_percent > 0.99) null else if (fps_percent < 0.01) 1.0 else fps_percent * 100.0;
+                    }
+
+                    try dvui.label(@src(), "FPS Limit: {?d}", .{fps_limit}, .{});
+                }
 
                 {
                     const entries = [_][]const u8{
@@ -208,136 +221,136 @@ pub fn main() !void {
                     }
                 }
 
-                {
-                    const glob = struct {
-                        var strings_template = [10][]const u8{ "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
-                        var strings = [10][]const u8{ "0", "1", "2", "3", "4", "5", "", "", "", "" };
-                        var strings_len: usize = 6;
-                    };
+                //{
+                //    const g = struct {
+                //        var strings_template = [10][]const u8{ "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
+                //        var strings = [10][]const u8{ "0", "1", "2", "3", "4", "5", "", "", "", "" };
+                //        var strings_len: usize = 6;
+                //    };
 
-                    var added_idx: ?usize = null;
-                    var added_idx_p: ?dvui.Point = null;
-                    {
-                        var hbox = try dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+                //    var added_idx: ?usize = null;
+                //    var added_idx_p: ?dvui.Point = null;
+                //    {
+                //        var hbox = try dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
 
-                        try dvui.label(@src(), "Drag to add : {d}", .{glob.strings_len}, .{});
+                //        try dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
 
-                        if (try dvui.ReorderWidget.draggable(@src(), hbox.wd.rectScale().r.topLeft(), .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
-                            if (glob.strings_len == glob.strings.len) {
-                                try dvui.toast(@src(), .{ .message = "List Full" });
-                                dvui.captureMouse(null);
-                            } else {
-                                glob.strings[glob.strings_len] = glob.strings_template[glob.strings_len];
-                                added_idx = glob.strings_len;
-                                added_idx_p = p;
-                                glob.strings_len += 1;
-                            }
-                        }
+                //        if (try dvui.ReorderWidget.draggable(@src(), .{ .top_left = hbox.wd.rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+                //            if (g.strings_len == g.strings.len) {
+                //                try dvui.toast(@src(), .{ .message = "List Full" });
+                //                dvui.captureMouse(null);
+                //            } else {
+                //                g.strings[g.strings_len] = g.strings_template[g.strings_len];
+                //                added_idx = g.strings_len;
+                //                added_idx_p = p;
+                //                g.strings_len += 1;
+                //            }
+                //        }
 
-                        hbox.deinit();
-                    }
+                //        hbox.deinit();
+                //    }
 
-                    var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 300 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
-                    defer vbox.deinit();
+                //    var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 300 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
+                //    defer vbox.deinit();
 
-                    var reorder = try dvui.reorder(@src(), .{});
+                //    var reorder = try dvui.reorder(@src(), .{});
 
-                    if (added_idx) |ai| {
-                        reorder.dragStart(ai, added_idx_p.?); // reorder grabs capture
-                    }
+                //    if (added_idx) |ai| {
+                //        reorder.dragStart(ai, added_idx_p.?); // reorder grabs capture
+                //    }
 
-                    var reorderable: dvui.Reorderable = undefined;
+                //    var reorderable: dvui.Reorderable = undefined;
 
-                    var removed_idx: ?usize = null;
-                    var insert_before_idx: ?usize = null;
+                //    var removed_idx: ?usize = null;
+                //    var insert_before_idx: ?usize = null;
 
-                    var seen_non_floating = false;
-                    for (glob.strings[0..glob.strings_len], 0..) |s, i| {
-                        reorderable = dvui.Reorderable.init(@src(), reorder, .{ .reorder_id = i }, .{ .id_extra = i, .expand = .horizontal });
+                //    var seen_non_floating = false;
+                //    for (g.strings[0..g.strings_len], 0..) |s, i| {
+                //        reorderable = dvui.Reorderable.init(@src(), reorder, .{ .reorder_id = i, .draw_target = false, .reinstall = false }, .{ .id_extra = i, .expand = .horizontal });
 
-                        if (!reorderable.floating()) {
-                            if (seen_non_floating) {
-                                try dvui.separator(@src(), .{ .id_extra = i, .expand = .horizontal, .margin = dvui.Rect.all(10) });
-                            } else {
-                                seen_non_floating = true;
-                            }
-                        }
+                //        if (!reorderable.floating()) {
+                //            if (seen_non_floating) {
+                //                try dvui.separator(@src(), .{ .id_extra = i, .expand = .horizontal, .margin = dvui.Rect.all(10) });
+                //            } else {
+                //                seen_non_floating = true;
+                //            }
+                //        }
 
-                        try reorderable.install();
+                //        try reorderable.install();
 
-                        if (reorderable.removed()) {
-                            removed_idx = i;
-                        } else if (reorderable.insertBefore()) {
-                            insert_before_idx = i;
-                        }
+                //        if (reorderable.removed()) {
+                //            removed_idx = i;
+                //        } else if (reorderable.insertBefore()) {
+                //            insert_before_idx = i;
+                //        }
 
-                        if (reorderable.targetRectScale()) |rs| {
-                            // user is dragging a reorderable over this rect
-                            try dvui.pathAddRect(rs.r, .{});
-                            try dvui.pathFillConvex(.{ .r = 0, .g = 255, .b = 0 });
+                //        if (reorderable.targetRectScale()) |rs| {
+                //            // user is dragging a reorderable over this rect
+                //            try dvui.pathAddRect(rs.r, .{});
+                //            try dvui.pathFillConvex(.{ .r = 0, .g = 255, .b = 0 });
 
-                            // reset to use next space
-                            try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(10) });
-                            try reorderable.reinstall();
-                        }
+                //            // reset to use next space
+                //            try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(10) });
+                //            try reorderable.reinstall();
+                //        }
 
-                        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+                //        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
 
-                        try dvui.label(@src(), "String : {s}", .{s}, .{});
+                //        try dvui.label(@src(), "String : {s}", .{s}, .{});
 
-                        if (try dvui.ReorderWidget.draggable(@src(), reorderable.wd.rectScale().r.topLeft(), .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
-                            reorder.dragStart(i, p); // reorder grabs capture
-                        }
+                //        if (try dvui.ReorderWidget.draggable(@src(), .{ .top_left = reorderable.wd.rectScale().r.topLeft() }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+                //            reorder.dragStart(i, p); // reorder grabs capture
+                //        }
 
-                        hbox.deinit();
-                        reorderable.deinit();
-                    }
+                //        hbox.deinit();
+                //        reorderable.deinit();
+                //    }
 
-                    if (reorder.needFinalSlot()) {
-                        if (seen_non_floating) {
-                            try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(10) });
-                        }
-                        reorderable = dvui.Reorderable.init(@src(), reorder, .{ .reorder_id = glob.strings_len, .last_slot = true }, .{});
-                        try reorderable.install();
-                        if (reorderable.insertBefore()) {
-                            insert_before_idx = glob.strings_len;
-                        }
-                        if (reorderable.targetRectScale()) |rs| {
-                            // user is dragging a reorderable over this rect
-                            try dvui.pathAddRect(rs.r, .{});
-                            try dvui.pathFillConvex(.{ .r = 0, .g = 255, .b = 0 });
-                        }
-                        reorderable.deinit();
-                    }
+                //    if (reorder.needFinalSlot()) {
+                //        if (seen_non_floating) {
+                //            try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(10) });
+                //        }
+                //        reorderable = dvui.Reorderable.init(@src(), reorder, .{ .reorder_id = g.strings_len, .draw_target = false, .reinstall = false, .last_slot = true }, .{});
+                //        try reorderable.install();
+                //        if (reorderable.insertBefore()) {
+                //            insert_before_idx = g.strings_len;
+                //        }
+                //        if (reorderable.targetRectScale()) |rs| {
+                //            // user is dragging a reorderable over this rect
+                //            try dvui.pathAddRect(rs.r, .{});
+                //            try dvui.pathFillConvex(.{ .r = 0, .g = 255, .b = 0 });
+                //        }
+                //        reorderable.deinit();
+                //    }
 
-                    reorder.deinit();
+                //    reorder.deinit();
 
-                    if (removed_idx) |ri| {
-                        if (insert_before_idx) |ibi| {
-                            // save this index
-                            const removed = glob.strings[ri];
-                            if (ri < ibi) {
-                                // moving down, shift others up
-                                for (ri..ibi - 1) |i| {
-                                    glob.strings[i] = glob.strings[i + 1];
-                                }
-                                glob.strings[ibi - 1] = removed;
-                            } else {
-                                // moving up, shift others down
-                                for (ibi..ri, 0..) |_, i| {
-                                    glob.strings[ri - i] = glob.strings[ri - i - 1];
-                                }
-                                glob.strings[ibi] = removed;
-                            }
-                        } else {
-                            // just removing, shift others up
-                            for (ri..glob.strings_len - 1) |i| {
-                                glob.strings[i] = glob.strings[i + 1];
-                            }
-                            glob.strings_len -= 1;
-                        }
-                    }
-                }
+                //    if (removed_idx) |ri| {
+                //        if (insert_before_idx) |ibi| {
+                //            // save this index
+                //            const removed = g.strings[ri];
+                //            if (ri < ibi) {
+                //                // moving down, shift others up
+                //                for (ri..ibi - 1) |i| {
+                //                    g.strings[i] = g.strings[i + 1];
+                //                }
+                //                g.strings[ibi - 1] = removed;
+                //            } else {
+                //                // moving up, shift others down
+                //                for (ibi..ri, 0..) |_, i| {
+                //                    g.strings[ri - i] = g.strings[ri - i - 1];
+                //                }
+                //                g.strings[ibi] = removed;
+                //            }
+                //        } else {
+                //            // just removing, shift others up
+                //            for (ri..g.strings_len - 1) |i| {
+                //                g.strings[i] = g.strings[i + 1];
+                //            }
+                //            g.strings_len -= 1;
+                //        }
+                //    }
+                //}
 
                 //{
                 //    var hbox = try dvui.box(@src(), .horizontal, .{});
@@ -548,7 +561,7 @@ pub fn main() !void {
 
         backend.renderPresent();
 
-        const wait_event_micros = win.waitTime(end_micros, null);
+        const wait_event_micros = win.waitTime(end_micros, fps_limit);
 
         backend.waitEventTimeout(wait_event_micros);
     }
