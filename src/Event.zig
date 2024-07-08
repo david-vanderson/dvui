@@ -87,17 +87,29 @@ pub const ClosePopup = struct {
     intentional: bool = true,
 };
 
+/// Event bubbled from inside a scrollarea to ensure scrolling while dragging
+/// if the mouse moves to the edge or outside the scrollarea.
+///
+/// During dragging, a widget should bubble this on each pointer motion event.
 pub const ScrollDrag = struct {
-    // bubbled up from a child to tell a containing scrollarea to
-    // possibly scroll to show more of the child
+
+    // mouse point from motion event
     mouse_pt: Point,
+
+    // rect in screen coords of the widget doing the drag (scrolling will stop
+    // if it wouldn't show more of this rect)
     screen_rect: Rect,
+
+    // id of the widget that has mouse capture during the drag (needed to
+    // inject synthetic motion events into the next frame to keep scrolling)
     capture_id: u32,
 };
 
+/// Event bubbled from inside a scrollarea to scroll to a specific place.
 pub const ScrollTo = struct {
-    // bubbled up from a child to tell a containing scrollarea to
-    // scroll to show the given rect
+
+    // rect in screen coords we want to be visible (might be outside
+    // scrollarea's clipping region - we want to scroll to bring it inside)
     screen_rect: Rect,
 
     // whether to scroll outside the current scroll bounds (useful if the
