@@ -2058,7 +2058,7 @@ pub const Window = struct {
     frame_time_ns: i128 = 0,
     loop_wait_target: ?i128 = null,
     loop_wait_target_event: bool = false,
-    loop_target_slop: i32 = 0,
+    loop_target_slop: i32 = 1000, // 1ms frame overhead seems a good place to start
     loop_target_slop_frames: i32 = 0,
     frame_times: [30]u32 = [_]u32{0} ** 30,
 
