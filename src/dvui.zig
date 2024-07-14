@@ -4892,8 +4892,9 @@ pub var checkbox_defaults: Options = .{
     .padding = Rect.all(4),
 };
 
-pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, opts: Options) !void {
+pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, opts: Options) !bool {
     const options = checkbox_defaults.override(opts);
+    var ret = false;
 
     var bw = ButtonWidget.init(src, .{}, options.strip().override(options));
 
@@ -4905,6 +4906,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 
     if (bw.clicked()) {
         target.* = !target.*;
+        ret = true;
     }
 
     var b = try box(@src(), .horizontal, options.strip().override(.{ .expand = .both }));
@@ -4924,6 +4926,8 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
         _ = spacer(@src(), .{ .w = checkbox_defaults.paddingGet().w }, .{});
         try labelNoFmt(@src(), str, options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
     }
+
+    return ret;
 }
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {

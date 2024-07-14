@@ -379,7 +379,7 @@ pub fn basicWidgets() !void {
         }
     }
 
-    try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
+    _ = try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
@@ -434,10 +434,10 @@ pub fn basicWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{ .padding = .{ .x = 10 } });
         defer hbox.deinit();
 
-        try dvui.checkbox(@src(), &slider_entry_min, "Min", .{});
-        try dvui.checkbox(@src(), &slider_entry_max, "Max", .{});
-        try dvui.checkbox(@src(), &slider_entry_interval, "Interval", .{});
-        try dvui.checkbox(@src(), &slider_entry_vector, "Vector", .{});
+        _ = try dvui.checkbox(@src(), &slider_entry_min, "Min", .{});
+        _ = try dvui.checkbox(@src(), &slider_entry_max, "Max", .{});
+        _ = try dvui.checkbox(@src(), &slider_entry_interval, "Interval", .{});
+        _ = try dvui.checkbox(@src(), &slider_entry_vector, "Vector", .{});
     }
 
     _ = dvui.spacer(@src(), .{ .h = 4 }, .{});
@@ -751,8 +751,8 @@ pub fn layout() !void {
         try dvui.label(@src(), "Gravity", .{}, .{});
         _ = try dvui.sliderEntry(@src(), "X: {d:0.2}", .{ .value = &layout_gravity_x, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
         _ = try dvui.sliderEntry(@src(), "Y: {d:0.2}", .{ .value = &layout_gravity_y, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
-        try dvui.checkbox(@src(), &layout_expand_horizontal, "Expand Horizontal", .{});
-        try dvui.checkbox(@src(), &layout_expand_vertical, "Expand Vertical", .{});
+        _ = try dvui.checkbox(@src(), &layout_expand_horizontal, "Expand Horizontal", .{});
+        _ = try dvui.checkbox(@src(), &layout_expand_vertical, "Expand Vertical", .{});
         vbox.deinit();
     }
 
@@ -1220,7 +1220,7 @@ pub fn menus() !void {
 
             try submenus();
 
-            try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
+            _ = try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
             if (try dvui.menuItemLabel(@src(), "Dialog", .{}, .{ .expand = .horizontal }) != null) {
                 dvui.menuGet().?.close();
@@ -1510,12 +1510,12 @@ fn makeLabels(src: std.builtin.SourceLocation, count: usize) !void {
 }
 
 pub fn debuggingErrors() !void {
-    try dvui.checkbox(@src(), &dvui.currentWindow().snap_to_pixels, "Snap to pixels", .{});
+    _ = try dvui.checkbox(@src(), &dvui.currentWindow().snap_to_pixels, "Snap to pixels", .{});
     try dvui.label(@src(), "on non-hdpi screens watch the window title \"DVUI Demo\"", .{}, .{ .margin = .{ .x = 10 } });
     try dvui.label(@src(), "- text, icons, and images rounded to nearest pixel", .{}, .{ .margin = .{ .x = 10 } });
     try dvui.label(@src(), "- text rendered at the closest smaller font (not stretched)", .{}, .{ .margin = .{ .x = 10 } });
 
-    try dvui.checkbox(@src(), &dvui.currentWindow().debug_touch_simulate_events, "Convert mouse events to touch", .{});
+    _ = try dvui.checkbox(@src(), &dvui.currentWindow().debug_touch_simulate_events, "Convert mouse events to touch", .{});
     try dvui.label(@src(), "- mouse drag will scroll", .{}, .{ .margin = .{ .x = 10 } });
     try dvui.label(@src(), "- mouse click in text layout/entry shows touch draggables and menu", .{}, .{ .margin = .{ .x = 10 } });
 
