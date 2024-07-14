@@ -5,6 +5,11 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
+make checkbox return a bool that's true if it changed
+
+replace cachebuster step with actual file rewriting step
+
+
 reorderable list simple example: replace vertical/horizontal dropdown with radio buttons
 - add flex as option after making a FlexWidget
 

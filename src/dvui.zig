@@ -4887,6 +4887,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 }
 
 pub var checkbox_defaults: Options = .{
+    .name = "Checkbox",
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(4),
 };
@@ -4965,6 +4966,81 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
         try pathAddPoint(Point{ .x = x - third, .y = y - third });
         try pathAddPoint(Point{ .x = x, .y = y });
         try pathAddPoint(Point{ .x = x + third * 2, .y = y - third * 2 });
+        try pathStroke(false, thick, .square, options.color(.text));
+    }
+}
+
+pub var radio_defaults: Options = .{
+    .name = "Radio",
+    .corner_radius = dvui.Rect.all(2),
+    .padding = Rect.all(4),
+};
+
+pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const u8, opts: Options) !bool {
+    const options = radio_defaults.override(opts);
+    var ret = false;
+
+    var bw = ButtonWidget.init(src, .{}, options.strip().override(options));
+
+    try bw.install();
+    bw.processEvents();
+    // don't call button drawBackground(), it wouldn't do anything anyway because we stripped the options so no border/background
+    // don't call button drawFocus(), we don't want a focus ring around the label
+    defer bw.deinit();
+
+    if (bw.clicked()) {
+        ret = true;
+    }
+
+    var b = try box(@src(), .horizontal, options.strip().override(.{ .expand = .both }));
+    defer b.deinit();
+
+    const radio_size = try options.fontGet().lineHeight();
+    const s = spacer(@src(), Size.all(radio_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+
+    const rs = s.borderRectScale();
+
+    if (bw.wd.visible()) {
+        try radioCircle(active, bw.focused(), rs, bw.capture(), bw.hovered(), options);
+    }
+
+    if (label_str) |str| {
+        _ = spacer(@src(), .{ .w = radio_defaults.paddingGet().w }, .{});
+        try labelNoFmt(@src(), str, options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
+    }
+
+    return ret;
+}
+
+pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
+    try pathAddRect(rs.r, Rect.all(1000));
+    try pathFillConvex(opts.color(.border));
+
+    if (focused) {
+        try pathAddRect(rs.r, Rect.all(1000));
+        try pathStroke(true, 2 * rs.s, .none, opts.color(.accent));
+    }
+
+    var options = opts;
+    if (active) {
+        options = opts.override(themeGet().style_accent);
+        try pathAddRect(rs.r.insetAll(0.5 * rs.s), Rect.all(1000));
+    } else {
+        try pathAddRect(rs.r.insetAll(rs.s), Rect.all(1000));
+    }
+
+    if (pressed) {
+        try pathFillConvex(options.color(.fill_press));
+    } else if (hovered) {
+        try pathFillConvex(options.color(.fill_hover));
+    } else {
+        try pathFillConvex(options.color(.fill));
+    }
+
+    if (active) {
+        const thick = @max(1.0, rs.r.w / 6);
+
+        try pathAddPoint(Point{ .x = rs.r.x + rs.r.w / 2, .y = rs.r.y + rs.r.h / 2 });
         try pathStroke(false, thick, .square, options.color(.text));
     }
 }

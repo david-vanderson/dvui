@@ -22,6 +22,12 @@ const zig_favicon = @embedFile("zig-favicon.png");
 
 pub var show_demo_window: bool = false;
 var checkbox_bool: bool = false;
+const RadioChoice = enum(u8) {
+    one = 1,
+    two,
+    _,
+};
+var radio_choice: RadioChoice = @enumFromInt(0);
 var icon_image_size_extra: f32 = 0;
 var icon_image_rotation: f32 = 0;
 var slider_vector_array = [_]f32{ 0, 1, 2 };
@@ -382,6 +388,12 @@ pub fn basicWidgets() !void {
         try dvui.label(@src(), "Text Entry", .{}, .{ .gravity_y = 0.5 });
         var te = try dvui.textEntry(@src(), .{ .text = &text_entry_buf }, .{});
         te.deinit();
+    }
+
+    inline for (@typeInfo(RadioChoice).Enum.fields, 0..) |field, i| {
+        if (try dvui.radio(@src(), radio_choice == @as(RadioChoice, @enumFromInt(field.value)), "Radio " ++ field.name, .{ .id_extra = i })) {
+            radio_choice = @enumFromInt(field.value);
+        }
     }
 
     {
@@ -940,8 +952,17 @@ pub fn reorderLists() !void {
         var vbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer vbox.deinit();
 
-        const entries = [_][]const u8{ "Vertical", "Horizontal" };
-        _ = try dvui.dropdown(@src(), &entries, &g.dir_entry, .{ .min_size_content = .{ .w = 120 } });
+        {
+            var hbox2 = try dvui.box(@src(), .horizontal, .{});
+            defer hbox2.deinit();
+
+            const entries = [_][]const u8{ "Vertical", "Horizontal" };
+            for (0..2) |i| {
+                if (try dvui.radio(@src(), g.dir_entry == i, entries[i], .{ .id_extra = i })) {
+                    g.dir_entry = i;
+                }
+            }
+        }
 
         {
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
