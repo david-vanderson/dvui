@@ -5,8 +5,6 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
-make checkbox return a bool that's true if it changed
-
 replace cachebuster step with actual file rewriting step
 
 
