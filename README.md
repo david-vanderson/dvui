@@ -103,15 +103,16 @@ pub fn build(b: *std.Build) void {
   - SliderEntry
     - Combo slider and text entry
   - Checkbox
+  - Radio Buttons
   - Toast
   - Panes with draggable sash
   - Dropdown
   - Reorderable Lists
     - Drag to reorder/remove/add
 - Missing Widgets for now
-  - Radio Button
   - Data Grid
   - Flex Layout
+  - Docking
 
 ## Design
 
