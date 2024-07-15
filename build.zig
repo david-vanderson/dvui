@@ -167,24 +167,25 @@ pub fn build(b: *std.Build) !void {
         wasm.root_module.addImport("WebBackend", web_mod);
         web_mod.addImport("dvui", dvui_mod_web);
 
-        const install_step = b.addInstallArtifact(wasm, .{
+        const install_wasm = b.addInstallArtifact(wasm, .{
             .dest_dir = .{ .override = .{ .custom = "bin" } },
         });
 
-        cacheBusterStep = std.Build.Step.init(.{
-            .id = .custom,
-            .name = "cache-buster",
-            .owner = b,
-            .makeFn = cacheBuster,
-            .first_ret_addr = @returnAddress(),
+        const cb = b.addExecutable(.{
+            .name = "cacheBuster",
+            .root_source_file = b.path("cacheBuster.zig"),
+            .target = b.host,
         });
-        cacheBusterStep.dependOn(&install_step.step);
+        const cb_run = b.addRunArtifact(cb);
+        cb_run.addFileArg(b.path("src/backends/index.html"));
+        cb_run.addFileArg(b.path("src/backends/WebBackend.js"));
+        cb_run.addFileArg(wasm.getEmittedBin());
+        const output = cb_run.captureStdOut();
 
         const compile_step = b.step("web-test", "Compile the Web test");
-        compile_step.dependOn(&cacheBusterStep);
-
-        compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/index.html"), .prefix, "bin/index.html").step);
+        compile_step.dependOn(&b.addInstallFileWithDir(output, .prefix, "bin/index.html").step);
         compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/WebBackend.js"), .prefix, "bin/WebBackend.js").step);
+        compile_step.dependOn(&install_wasm.step);
 
         b.getInstallStep().dependOn(compile_step);
     }
@@ -216,32 +217,6 @@ pub fn build(b: *std.Build) !void {
     //    const run_step = b.step("test_color", "Run test_color");
     //    run_step.dependOn(&run_exe.step);
     //}
-}
-
-var cacheBusterStep: std.Build.Step = undefined;
-
-fn cacheBuster(step: *std.Build.Step, _: std.Progress.Node) !void {
-    _ = step;
-    std.debug.print("cacheBuster\n", .{});
-
-    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const arena = arena_allocator.allocator();
-    defer arena_allocator.deinit();
-
-    const path = "zig-out/bin/index.html";
-    const needle = "TIMESTAMP";
-    var file = try std.fs.cwd().openFile(path, .{});
-    var contents = try file.reader().readAllAlloc(arena, 100 * 1024 * 1024);
-    const index = std.mem.indexOf(u8, contents, needle);
-    file.close();
-
-    if (index) |idx| {
-        var newfile = try std.fs.cwd().createFile(path, .{});
-        defer newfile.close();
-        try newfile.writer().writeAll(contents[0..idx]);
-        try newfile.writer().print("{d}", .{std.time.nanoTimestamp()});
-        try newfile.writer().writeAll(contents[idx + needle.len ..]);
-    }
 }
 
 fn linkSDL(b: *std.Build, mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {

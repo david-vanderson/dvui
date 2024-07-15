@@ -10,11 +10,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <title>DVUI WebBackend</title>
-    <script src="WebBackend.js?cache-buster=TIMESTAMP"></script> <!-- cache-buster string modified by build.zig -->
+    <script src="WebBackend.js?cache-buster=TEMPLATE_HASH"></script> <!-- TEMPLATE_HASH replaced by build.zig -->
   </head>
 
   <body style="height: 100%; margin: 0; padding: 0;" onload='dvui("#dvui-canvas", "web-test.wasm");'>
-    <!-- need contenteditable for the canvas to receive keydown/keyup/beforeinput events -->
+    <!-- need tabIndex for the canvas to receive keydown/keyup/beforeinput events -->
     <canvas id="dvui-canvas" tabIndex="1" style="display: block; width: 100%; height: 100%; outline: none; caret-color: transparent;"></canvas>
   </body>
 </html>
