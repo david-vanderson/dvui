@@ -5,9 +5,7 @@ const SDLBackend = @import("SDLBackend");
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
-pub const c = @cImport({
-    @cInclude("SDL2/SDL.h");
-});
+pub const c = SDLBackend.c;
 
 var window: *c.SDL_Window = undefined;
 var renderer: *c.SDL_Renderer = undefined;
@@ -20,7 +18,7 @@ pub fn main() !void {
     try app_init();
 
     // create SDL backend using existing window and renderer
-    var backend = SDLBackend{ .window = @as(*SDLBackend.c.SDL_Window, @ptrCast(window)), .renderer = @as(*SDLBackend.c.SDL_Renderer, @ptrCast(renderer)) };
+    var backend = SDLBackend{ .window = @as(*c.SDL_Window, @ptrCast(window)), .renderer = @as(*c.SDL_Renderer, @ptrCast(renderer)) };
     // your app will do the SDL deinit
 
     // init dvui Window (maps onto a single OS window)
@@ -33,8 +31,8 @@ pub fn main() !void {
         try win.begin(std.time.nanoTimestamp());
 
         // send events to dvui if they belong to floating windows
-        var event: SDLBackend.c.SDL_Event = undefined;
-        while (SDLBackend.c.SDL_PollEvent(&event) != 0) {
+        var event: c.SDL_Event = undefined;
+        while (c.SDL_PollEvent(&event) != 0) {
             // some global quitting shortcuts
             switch (event.type) {
                 c.SDL_KEYDOWN => {
