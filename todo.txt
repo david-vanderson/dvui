@@ -5,11 +5,10 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
-replace cachebuster step with actual file rewriting step
 
-
-reorderable list simple example: replace vertical/horizontal dropdown with radio buttons
-- add flex as option after making a FlexWidget
+FlexWidget
+- layout widget that lays out children on a row by row (or col by col) basis
+- add flex as option for reorderable example
 
 test ability to scroll_drag on a touch screen - do we need a curtain area around the edge of the scrollarea/screen where touch events will cause a scroll drag?
 

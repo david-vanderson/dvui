@@ -4,10 +4,14 @@ const Compile = std.Build.Step.Compile;
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+    const optimize = b.standardOptimizeOption(.{
+        .preferred_optimize_mode = .ReleaseFast,
+    });
 
     const dvui_mod = b.addModule("dvui", .{
         .root_source_file = b.path("src/dvui.zig"),
+        .target = target,
+        .optimize = optimize,
     });
 
     dvui_mod.addCSourceFiles(.{ .files = &.{
@@ -17,13 +21,17 @@ pub fn build(b: *std.Build) !void {
 
     dvui_mod.addIncludePath(b.path("src/stb"));
 
-    const freetype_dep = b.lazyDependency("freetype", .{
-        .target = target,
-        .optimize = optimize,
-    });
+    if (b.systemIntegrationOption("freetype", .{})) {
+        dvui_mod.linkSystemLibrary("freetype", .{});
+    } else {
+        const freetype_dep = b.lazyDependency("freetype", .{
+            .target = target,
+            .optimize = optimize,
+        });
 
-    if (freetype_dep) |fd| {
-        dvui_mod.linkLibrary(fd.artifact("freetype"));
+        if (freetype_dep) |fd| {
+            dvui_mod.linkLibrary(fd.artifact("freetype"));
+        }
     }
 
     const sdl_mod = b.addModule("SDLBackend", .{
@@ -33,7 +41,19 @@ pub fn build(b: *std.Build) !void {
         .link_libc = true,
     });
     sdl_mod.addImport("dvui", dvui_mod);
-    linkSDL(b, sdl_mod, target, optimize);
+
+    if (b.systemIntegrationOption("sdl2", .{}) or target.result.os.tag == .linux) {
+        sdl_mod.linkSystemLibrary("SDL2", .{});
+    } else {
+        const sdl_dep = b.lazyDependency("sdl", .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        if (sdl_dep) |sd| {
+            sdl_mod.linkLibrary(sd.artifact("SDL2"));
+        }
+    }
 
     // mach example
     //{
@@ -78,7 +98,6 @@ pub fn build(b: *std.Build) !void {
 
         exe.root_module.addImport("dvui", dvui_mod);
         exe.root_module.addImport("SDLBackend", sdl_mod);
-        linkSDL(b, &exe.root_module, target, optimize);
 
         const compile_step = b.step(ex, "Compile " ++ ex);
         compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
@@ -217,50 +236,4 @@ pub fn build(b: *std.Build) !void {
     //    const run_step = b.step("test_color", "Run test_color");
     //    run_step.dependOn(&run_exe.step);
     //}
-}
-
-fn linkSDL(b: *std.Build, mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
-    if (target.result.cpu.arch == .wasm32) {
-        // nothing
-    } else if (target.result.os.tag == .windows) {
-        const sdl_dep = b.lazyDependency("sdl", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
-        if (sdl_dep) |sd| {
-            mod.linkLibrary(sd.artifact("SDL2"));
-        }
-
-        mod.linkSystemLibrary("setupapi", .{});
-        mod.linkSystemLibrary("winmm", .{});
-        mod.linkSystemLibrary("gdi32", .{});
-        mod.linkSystemLibrary("imm32", .{});
-        mod.linkSystemLibrary("version", .{});
-        mod.linkSystemLibrary("oleaut32", .{});
-        mod.linkSystemLibrary("ole32", .{});
-    } else {
-        if (target.result.os.tag.isDarwin()) {
-            mod.linkSystemLibrary("z", .{});
-            mod.linkSystemLibrary("bz2", .{});
-            mod.linkSystemLibrary("iconv", .{});
-            mod.linkFramework("AppKit", .{});
-            mod.linkFramework("AudioToolbox", .{});
-            mod.linkFramework("Carbon", .{});
-            mod.linkFramework("Cocoa", .{});
-            mod.linkFramework("CoreAudio", .{});
-            mod.linkFramework("CoreFoundation", .{});
-            mod.linkFramework("CoreGraphics", .{});
-            mod.linkFramework("CoreHaptics", .{});
-            mod.linkFramework("CoreVideo", .{});
-            mod.linkFramework("ForceFeedback", .{});
-            mod.linkFramework("GameController", .{});
-            mod.linkFramework("IOKit", .{});
-            mod.linkFramework("Metal", .{});
-        }
-
-        mod.linkSystemLibrary("SDL2", .{});
-        //mod.addIncludePath(.{.path = "/Users/dvanderson/SDL2-2.24.1/include"});
-        //mod.addObjectFile(.{.path = "/Users/dvanderson/SDL2-2.24.1/build/.libs/libSDL2.a"});
-    }
 }
