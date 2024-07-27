@@ -4,9 +4,7 @@ const Compile = std.Build.Step.Compile;
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{
-        .preferred_optimize_mode = .ReleaseFast,
-    });
+    const optimize = b.standardOptimizeOption(.{});
 
     const dvui_mod = b.addModule("dvui", .{
         .root_source_file = b.path("src/dvui.zig"),
