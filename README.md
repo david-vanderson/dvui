@@ -50,40 +50,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 
 [DVUI Demo](https://github.com/david-vanderson/dvui-demo) is a template project you can use as a starting point.
 
-If you already have a Zig project, you can modify or create the two files listed below to use DVUI.
-
-`build.zig`:
-
-```zig
-const std = @import("std");
-
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-
-    const dep_dvui = b.dependency("dvui", .{ .target = target, .optimize = optimize });
-
-    const exe = ...;
-
-    exe.root_module.addImport("dvui", dvui_dep.module("dvui"));
-    exe.root_module.addImport("SDLBackend", dvui_dep.module("SDLBackend"));
-}
-```
-
-`build.zig.zon`:
-
-```
-.{
-    .name = "your-project-name",
-    .version = "0.0.0",
-    .dependencies = .{
-        .dvui = .{
-            .url = "https://github.com/david-vanderson/dvui/archive/COMMIT_HASH_HERE.tar.gz",
-            .hash = "FILE_HASH_HERE",
-        },
-    },
-}
-```
+The build.zig and build.zig.zon files there show how to reference dvui as a zig dependency.
 
 ## Built-in Widgets
 
@@ -161,6 +128,7 @@ pub fn colorSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: O
   * dvui includes a retained mode space for dialogs and toasts for this
 * Hard to do dialog sequence
   * retained mode guis can run a modal dialog recursively so that dialog code can only exist in a single function
+  * dvui retained dialogs can be chained together for this
 
 ### Handle All Events
 DVUI processes every input event, making it useable in low framerate situations.  A button can receive a mouse-down event and a mouse-up event in the same frame and correctly report a click.  A custom button could even report multiple clicks per frame.  (the higher level `dvui.button()` function only reports 1 click per frame)
@@ -195,7 +163,7 @@ If you want to only render frames when needed, add `window.beginWait()` at the s
 
 `window.beginWait()` and `window.waitTime()` maintain an internal estimate of how much time is spent outside of the rendering code.  This is used in the calculation for how long to sleep for the next frame.
 
-The estimate is visible in the demo window Animations > Clock > "Estimate of frame overhead".  The estimate is only updated on frames caused by a timer expiring (like the clock example), so typically you'll see it start at zero.
+The estimate is visible in the demo window Animations > Clock > "Estimate of frame overhead".  The estimate is only updated on frames caused by a timer expiring (like the clock example), and it starts at 1ms.
 
 ### Widget init and deinit
 The easiest way to use widgets is through the high-level functions that create and install them:
