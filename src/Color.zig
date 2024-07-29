@@ -20,13 +20,25 @@ pub const HSLuv = struct {
 
     pub fn fromColor(c: Color) HSLuv {
         var ret: HSLuv = undefined;
-        hsluv.rgb2hsluv(@as(f32, @floatFromInt(c.r)) / 255.0, @as(f32, @floatFromInt(c.g)) / 255.0, @as(f32, @floatFromInt(c.b)) / 255.0, &ret.h, &ret.s, &ret.l);
+        hsluv.rgb2hsluv(
+            @as(f32, @floatFromInt(c.r)) / 255.0,
+            @as(f32, @floatFromInt(c.g)) / 255.0,
+            @as(f32, @floatFromInt(c.b)) / 255.0,
+            &ret.h,
+            &ret.s,
+            &ret.l,
+        );
         ret.a = @as(f32, @floatFromInt(c.a)) * 100.0 / 255.0;
         return ret;
     }
 
     pub fn lighten(self: HSLuv, deltal: f32) HSLuv {
-        return .{ .h = self.h, .s = self.s, .l = std.math.clamp(self.l + deltal, 0, 100), .a = self.a };
+        return .{
+            .h = self.h,
+            .s = self.s,
+            .l = std.math.clamp(self.l + deltal, 0, 100),
+            .a = self.a,
+        };
     }
 };
 
