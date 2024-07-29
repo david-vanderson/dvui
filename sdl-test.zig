@@ -191,16 +191,6 @@ pub fn main() !void {
                         }
                     }
 
-                    if (try dvui.button(@src(), "Toggle Theme", .{}, .{})) {
-                        if (dvui.themeGet() == &dvui.Adwaita.light) {
-                            dvui.themeSet(&dvui.Adwaita.dark);
-                        } else if (dvui.themeGet() == &dvui.Adwaita.dark) {
-                            dvui.themeSet(&dvui.Jungle.jungle);
-                        } else {
-                            dvui.themeSet(&dvui.Adwaita.light);
-                        }
-                    }
-
                     if (try dvui.button(@src(), if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window", .{}, .{})) {
                         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
                     }
