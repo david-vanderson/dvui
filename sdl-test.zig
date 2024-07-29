@@ -35,6 +35,7 @@ pub fn main() !void {
     var scale_mod: dvui.enums.Mod = .none;
     var dropdown_choice: usize = 1;
     var num_windows: usize = 0;
+    var theme_choice: usize = 1;
 
     //var rng = std.rand.DefaultPrng.init(0);
 
@@ -167,6 +168,28 @@ pub fn main() !void {
 
                 {
                     try dvui.label(@src(), "Theme: {s}", .{dvui.themeGet().name}, .{});
+
+                    {
+                        const entries = [_][]const u8{
+                            "Adwaita Light",
+                            "Adwaita Dark",
+                            "Jungle",
+                            "Dracula",
+                        };
+
+                        const themes = [_]*dvui.Theme{
+                            &dvui.Adwaita.light,
+                            &dvui.Adwaita.dark,
+                            &dvui.Jungle.jungle,
+                            &dvui.Dracula.dracula,
+                        };
+
+                        _ = try dvui.dropdown(@src(), &entries, &theme_choice, .{ .min_size_content = .{ .w = 120 }, .id_extra = 1 });
+
+                        if (dvui.themeGet() != themes[theme_choice]) {
+                            dvui.themeSet(themes[theme_choice]);
+                        }
+                    }
 
                     if (try dvui.button(@src(), "Toggle Theme", .{}, .{})) {
                         if (dvui.themeGet() == &dvui.Adwaita.light) {
