@@ -21,21 +21,21 @@ const border_err = Color{ .r = 0xff, .g = 0x55, .b = 0x55, .a = 0xff }; // color
 const err = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // color7
 const background = Color{ .r = 0x28, .g = 0x2a, .b = 0x36, .a = 0xff }; // background
 
-const size = 13;
+const size = 15;
 
 pub var dracula = Theme{
     .name = "Dracula",
     .dark = true,
 
-    .font_body = .{ .size = 13, .name = "hack", .ttf_bytes = hack },
-    .font_heading = .{ .size = 13, .name = "hack", .ttf_bytes = hack },
-    .font_caption = .{ .size = 10, .name = "hack", .ttf_bytes = hack },
-    .font_caption_heading = .{ .size = 10, .name = "hack", .ttf_bytes = hack },
-    .font_title = .{ .size = 28, .name = "hack", .ttf_bytes = hack },
-    .font_title_1 = .{ .size = 23, .name = "hack", .ttf_bytes = hack },
-    .font_title_2 = .{ .size = 20, .name = "hack", .ttf_bytes = hack },
-    .font_title_3 = .{ .size = 17, .name = "hack", .ttf_bytes = hack },
-    .font_title_4 = .{ .size = 15, .name = "hack", .ttf_bytes = hack },
+    .font_body = .{ .size = size, .name = "hack", .ttf_bytes = hack.Hack },
+    .font_heading = .{ .size = size, .name = "hack", .ttf_bytes = hack.HackBd },
+    .font_caption = .{ .size = size * 0.8, .name = "hack", .ttf_bytes = hack.Hack },
+    .font_caption_heading = .{ .size = size * 0.8, .name = "hack", .ttf_bytes = hack.HackBd },
+    .font_title = .{ .size = size * 2, .name = "hack", .ttf_bytes = hack.Hack },
+    .font_title_1 = .{ .size = size * 1.8, .name = "hack", .ttf_bytes = hack.HackBd },
+    .font_title_2 = .{ .size = size * 1.6, .name = "hack", .ttf_bytes = hack.HackBd },
+    .font_title_3 = .{ .size = size * 1.4, .name = "hack", .ttf_bytes = hack.HackBd },
+    .font_title_4 = .{ .size = size * 1.2, .name = "hack", .ttf_bytes = hack.HackBd },
 
     .color_accent = accent,
     .color_err = err,
