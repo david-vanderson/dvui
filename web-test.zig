@@ -217,6 +217,31 @@ fn dvui_frame() !void {
     // look at demo() for examples of dvui widgets, shows in a floating window
     try dvui.Examples.demo();
 
+    {
+        const Data = struct {
+            var theme_choice: usize = 1;
+        };
+        const entries = [_][]const u8{
+            "Adwaita Light",
+            "Adwaita Dark",
+            "Jungle",
+            "Dracula",
+        };
+
+        const themes = [_]*dvui.Theme{
+            &dvui.Adwaita.light,
+            &dvui.Adwaita.dark,
+            &dvui.Jungle.jungle,
+            &dvui.Dracula.dracula,
+        };
+
+        _ = try dvui.dropdown(@src(), &entries, &Data.theme_choice, .{ .min_size_content = .{ .w = 120 }, .id_extra = 1 });
+
+        if (dvui.themeGet() != themes[Data.theme_choice]) {
+            dvui.themeSet(themes[Data.theme_choice]);
+        }
+    }
+
     if (new_content_scale) |ns| {
         win.content_scale = ns;
     }
