@@ -70,3 +70,30 @@ pub fn format(self: *const Color, comptime _: []const u8, _: std.fmt.FormatOptio
 
 pub const white = Color{ .r = 0xff, .g = 0xff, .b = 0xff };
 pub const black = Color{ .r = 0x00, .g = 0x00, .b = 0x00 };
+
+const clamp = std.math.clamp;
+
+const FieldEnum = std.meta.FieldEnum(@This());
+
+///extracts clamped field multiplied by a value
+pub fn extract(self: Color, field: FieldEnum) u16 {
+    const a: f32 = @floatFromInt(self.a);
+    const normalized_a = a / 255.0;
+    const value: f32 = @floatFromInt(switch (field) {
+        .r => self.r,
+        .g => self.g,
+        .b => self.b,
+        .a => @compileError("cannot extract a field from color"),
+    });
+    const result = normalized_a * value;
+    return @intFromFloat(@floor(result));
+}
+
+pub fn merge(self: Color, other: Color) Color {
+    return Color{
+        .r = @intCast(clamp(self.extract(.r) + other.extract(.r), 0, 255)),
+        .g = @intCast(clamp(self.extract(.g) + other.extract(.g), 0, 255)),
+        .b = @intCast(clamp(self.extract(.b) + other.extract(.b), 0, 255)),
+        .a = 255,
+    };
+}

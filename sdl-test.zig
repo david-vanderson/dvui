@@ -184,9 +184,9 @@ pub fn main() !void {
                             &dvui.Dracula.dracula,
                         };
 
-                        _ = try dvui.dropdown(@src(), &entries, &theme_choice, .{ .min_size_content = .{ .w = 120 }, .id_extra = 1 });
+                        const changed = try dvui.dropdown(@src(), &entries, &theme_choice, .{ .min_size_content = .{ .w = 120 }, .id_extra = 1 });
 
-                        if (dvui.themeGet() != themes[theme_choice]) {
+                        if (dvui.themeGet() != themes[theme_choice] and changed) {
                             dvui.themeSet(themes[theme_choice]);
                         }
                     }
