@@ -23,6 +23,7 @@ pub const WidgetData = @import("WidgetData.zig");
 pub const bitstream_vera = @import("fonts/bitstream_vera.zig");
 pub const entypo = @import("icons/entypo.zig");
 pub const Adwaita = @import("themes/Adwaita.zig");
+pub const Jungle = @import("themes/Jungle.zig");
 pub const AnimateWidget = @import("widgets/AnimateWidget.zig");
 pub const BoxWidget = @import("widgets/BoxWidget.zig");
 pub const ReorderWidget = @import("widgets/ReorderWidget.zig");
