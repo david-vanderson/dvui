@@ -225,6 +225,8 @@ pub fn demo() !void {
     var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = @min(440, dvui.windowRect().w), .h = @min(400, dvui.windowRect().h) } });
     defer float.deinit();
 
+    var theme_choice: usize = 1;
+
     // pad the fps label so that it doesn't trigger refresh when the number
     // changes widths
     var buf: [100]u8 = undefined;
@@ -261,17 +263,28 @@ pub fn demo() !void {
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
-
         if (try dvui.button(@src(), "Debug Window", .{}, .{})) {
             dvui.toggleDebugWindow();
         }
 
-        if (try dvui.button(@src(), "Toggle Theme", .{}, .{})) {
-            if (dvui.themeGet() == &Adwaita.light) {
-                dvui.themeSet(&Adwaita.dark);
-            } else {
-                dvui.themeSet(&Adwaita.light);
-            }
+        const entries = [_][]const u8{
+            "Adwaita Light",
+            "Adwaita Dark",
+            "Jungle",
+            "Dracula",
+        };
+
+        const themes = [_]*dvui.Theme{
+            &dvui.Adwaita.light,
+            &dvui.Adwaita.dark,
+            &dvui.Jungle.jungle,
+            &dvui.Dracula.dracula,
+        };
+
+        const changed = try dvui.dropdown(@src(), &entries, &theme_choice, .{ .min_size_content = .{ .w = 120 }, .id_extra = 1 });
+
+        if (dvui.themeGet() != themes[theme_choice] and changed) {
+            dvui.themeSet(themes[theme_choice]);
         }
     }
 
