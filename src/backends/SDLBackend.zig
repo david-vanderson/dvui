@@ -228,6 +228,11 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) void {
         // wait with a timeout
         const timeout = @min((timeout_micros + 999) / 1000, std.math.maxInt(c_int));
         _ = c.SDL_WaitEventTimeout(null, @as(c_int, @intCast(timeout)));
+
+        // TODO: this call to SDL_PollEvent can be removed after resolution of
+        // https://github.com/libsdl-org/SDL/issues/6539
+        // maintaining this a little longer for people with older SDL versions
+        _ = c.SDL_PollEvent(null);
     } else {
         // don't wait
     }
@@ -443,6 +448,7 @@ pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui
 }
 
 pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
+    // TODO: is SDL converting to premultiplied alpha internally?
     var surface: *c.SDL_Surface = undefined;
     if (sdl3) {
         surface = c.SDL_CreateSurfaceFrom(pixels, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), @as(c_int, @intCast(4 * width)), c.SDL_PIXELFORMAT_ABGR8888);
