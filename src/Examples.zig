@@ -361,12 +361,50 @@ pub fn demo() !void {
         try debuggingErrors();
     }
 
+    if (try dvui.expander(@src(), "Theme Serialization and Parsing", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        try themeSerialization(float.data().id);
+    }
+
     if (show_dialog) {
         try dialogDirect();
     }
 
     if (IconBrowser.show) {
         try icon_browser();
+    }
+}
+
+pub fn themeSerialization(demo_win_id: u32) !void {
+    {
+        var serialize_box = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer serialize_box.deinit();
+
+        // Demonstrate serializing a theme
+        const Static = struct {
+            var bytes: [4096]u8 = undefined;
+            var buffer = std.io.fixedBufferStream(&bytes);
+        };
+
+        if (try dvui.button(@src(), "Serialize Active Theme", .{}, .{})) {
+            Static.buffer.reset();
+            _ = try std.json.stringify(dvui.themeGet(), .{}, Static.buffer.writer());
+        }
+
+        if (try dvui.expander(@src(), "Serialized Theme", .{}, .{ .expand = .horizontal })) {
+            var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+
+            if (try dvui.button(@src(), "Copy To Clipboard", .{}, .{})) {
+                try dvui.clipboardTextSet(Static.buffer.getWritten());
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Copied!" });
+            }
+
+            var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
+            try tl.addText(Static.buffer.getWritten(), .{});
+            tl.deinit();
+            defer b.deinit();
+        }
     }
 }
 
@@ -640,28 +678,6 @@ pub fn styling() !void {
         _ = try dvui.button(@src(), "Window", .{}, .{ .color_fill = .{ .name = .fill_window } });
         _ = try dvui.button(@src(), "Content", .{}, .{ .color_fill = .{ .name = .fill } });
         _ = try dvui.button(@src(), "Control", .{}, .{});
-    }
-
-    {
-        // Demonstrate serializing a theme
-        const Static = struct {
-            var bytes: [4096]u8 = undefined;
-            var buffer = std.io.fixedBufferStream(&bytes);
-        };
-        const clicked = try dvui.button(@src(), "Serialize Active Theme", .{}, .{});
-        if (clicked) {
-            Static.buffer.reset();
-            _ = try std.json.stringify(dvui.themeGet(), .{}, Static.buffer.writer());
-        }
-
-        if (try dvui.expander(@src(), "Serialized Theme", .{}, .{ .expand = .horizontal })) {
-            var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-
-            var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
-            try tl.addText(Static.buffer.getWritten(), .{});
-            tl.deinit();
-            defer b.deinit();
-        }
     }
 
     try dvui.label(@src(), "separators", .{}, .{});

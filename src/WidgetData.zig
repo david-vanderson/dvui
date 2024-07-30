@@ -41,13 +41,13 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
 
     if (self.options.rect) |r| {
         self.rect = r;
-        if (self.options.expandGet().horizontal()) {
+        if (self.options.expandGet().isHorizontal()) {
             self.rect.w = self.parent.data().contentRect().w;
         } else if (self.rect.w == 0) {
             self.rect.w = dvui.minSize(self.id, self.min_size).w;
         }
 
-        if (self.options.expandGet().vertical()) {
+        if (self.options.expandGet().isVertical()) {
             self.rect.h = self.parent.data().contentRect().h;
         } else if (self.rect.h == 0) {
             self.rect.h = dvui.minSize(self.id, self.min_size).h;
