@@ -4,7 +4,7 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Theme = dvui.Theme;
 const Options = dvui.Options;
-const pixelify = Font.TTFBytesId.Pixelify;
+const pixelify = "Pixelify";
 
 const accent = Color{ .r = 0x63, .g = 0x84, .b = 0x65, .a = 0xff };
 const err = Color.white;

@@ -4,8 +4,8 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Theme = dvui.Theme;
 const Options = dvui.Options;
-const Vera = Font.TTFBytesId.Vera;
-const VeraBd = Font.TTFBytesId.VeraBd;
+const Vera = "Vera";
+const VeraBd = "VeraBd";
 
 //Colors inspired by the flow neovim theme
 const accent = Color{ .r = 0xff, .g = 0x33, .b = 0x99, .a = 0xff }; // colors.fluo.pink

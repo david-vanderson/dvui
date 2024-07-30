@@ -4,8 +4,8 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Theme = dvui.Theme;
 const Options = dvui.Options;
-const Hack = Font.TTFBytesId.Hack;
-const HackBd = Font.TTFBytesId.HackBd;
+const Hack = "Hack";
+const HackBd = "HackBd";
 
 const accent = Color{ .r = 0xff, .g = 0x79, .b = 0xc6, .a = 0xff };
 const err = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // color7
