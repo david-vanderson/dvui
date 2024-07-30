@@ -11,9 +11,9 @@ const accent = Color{ .r = 0xfe, .g = 0x80, .b = 0x19, .a = 0xff }; // s:gb.brig
 const err = Color{ .r = 0xcc, .g = 0x24, .b = 0x1d, .a = 0xff }; // s:gb.neutral_red
 const text = Color{ .r = 0xeb, .g = 0xdb, .b = 0xb2, .a = 0xff }; // s:gb.light1
 const text_press = Color{ .r = 0x1d, .g = 0x20, .b = 0x21, .a = 0xff }; // s:gb.dark0_hard
-const fill = Color{ .r = 0x28, .g = 0x28, .b = 0x28, .a = 0xff }; // s:gb.dark0
-const fill_window = Color{ .r = 0x7c, .g = 0x6f, .b = 0x64, .a = 0xff }; // s:gb.dark4
-const fill_control = Color{ .r = 0x66, .g = 0x5c, .b = 0x54, .a = 0xff }; // s:gb.dark3
+const fill = fill_control;
+const fill_window = Color{ .r = 0x66, .g = 0x5c, .b = 0x54, .a = 0xff }; // s:gb.dark3
+const fill_control = Color{ .r = 0x7c, .g = 0x6f, .b = 0x64, .a = 0xff }; // s:gb.dark4
 const fill_hover = border;
 const fill_press = accent;
 const border = Color{ .r = 0x83, .g = 0xa5, .b = 0x98, .a = 0xff }; // s:gb.bright_blue
