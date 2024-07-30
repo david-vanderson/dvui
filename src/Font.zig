@@ -83,6 +83,7 @@ pub fn lineHeight(self: *const Font) !f32 {
 pub const bitstream_vera = @import("fonts/bitstream_vera.zig");
 pub const pixelify_sans = @import("fonts/pixelify-sans.zig");
 pub const hack = @import("fonts/hack.zig");
+pub const aleo = @import("fonts/aleo.zig");
 
 pub const default_ttf_bytes = bitstream_vera.Vera;
 
@@ -100,6 +101,8 @@ pub const TTFBytes = struct {
     pub const HackBd = hack.HackBd;
     pub const HackIt = hack.HackIt;
     pub const HackBdIt = hack.HackBdIt;
+    pub const Aleo = aleo.Aleo;
+    pub const AleoBd = aleo.AleoBd;
 };
 
 pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap([]const u8) {
