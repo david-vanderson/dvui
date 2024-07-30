@@ -13,5 +13,10 @@
             .hash = "12203988c200e30d2fbc2678bb3e49eb3f117cc79faf8d228b63e54d8cdf278378e1",
             .lazy = true,
         },
+        .raylib = .{
+            .url = "https://github.com/raysan5/raylib/archive/f5d2f8d.tar.gz",
+            .hash = "12201c7e120800ecf29429560eefb2f2df58a176ee1f949e9e275944df048e0c22b2",
+            .lazy = true,
+        },
     },
 }

@@ -32,6 +32,18 @@ pub fn build(b: *std.Build) !void {
         }
     }
 
+    //Raylib dependency
+    const raylib_dep = b.lazyDependency("raylib", .{});
+    const raylib_mod = b.addModule("RaylibBackend", .{
+        .root_source_file = b.path("src/backends/RaylibBackend.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    raylib_mod.addImport("dvui", dvui_mod);
+    raylib_mod.linkLibrary(raylib_dep.?.artifact("raylib"));
+
+    //SDL Module and Dependency
     const sdl_mod = b.addModule("SDLBackend", .{
         .root_source_file = b.path("src/backends/SDLBackend.zig"),
         .target = target,
