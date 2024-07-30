@@ -19,7 +19,7 @@ const border = Color{ .r = 0x60, .g = 0x82, .b = 0x7d, .a = 0xff }; // default_b
 
 const size = 18;
 
-pub var jungle = Theme{
+pub const jungle = Theme{
     .name = "Jungle",
     .dark = true,
 

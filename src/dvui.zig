@@ -24,9 +24,6 @@ pub const entypo = @import("icons/entypo.zig");
 pub const bitstream_vera = @import("fonts/bitstream_vera.zig");
 pub const pixelify_sans = @import("fonts/pixelify-sans.zig");
 pub const hack = @import("fonts/hack.zig");
-pub const Adwaita = @import("themes/Adwaita.zig");
-pub const Jungle = @import("themes/Jungle.zig");
-pub const Dracula = @import("themes/Dracula.zig");
 pub const AnimateWidget = @import("widgets/AnimateWidget.zig");
 pub const BoxWidget = @import("widgets/BoxWidget.zig");
 pub const ReorderWidget = @import("widgets/ReorderWidget.zig");
@@ -2075,7 +2072,7 @@ pub const Window = struct {
 
     menu_current: ?*MenuWidget = null,
     popup_current: ?*FloatingMenuWidget = null,
-    theme: *Theme = &Adwaita.light,
+    theme: *Theme = &Theme.AdwaitaLight,
 
     min_sizes: std.AutoHashMap(u32, SavedSize),
     data_mutex: std.Thread.Mutex,

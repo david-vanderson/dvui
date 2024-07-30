@@ -4,6 +4,13 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Options = dvui.Options;
 
+//builtin themes
+pub var AdwaitaDark = @import("themes/Adwaita.zig").dark;
+pub var AdwaitaLight = @import("themes/Adwaita.zig").light;
+pub var Jungle = @import("themes/Jungle.zig").jungle;
+pub var Dracula = @import("themes/Dracula.zig").dracula;
+pub var Flow = @import("themes/Flow.zig").flow;
+
 const Theme = @This();
 
 name: []const u8,

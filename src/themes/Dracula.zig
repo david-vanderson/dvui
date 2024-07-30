@@ -7,21 +7,6 @@ const Options = dvui.Options;
 const Hack = Font.TTFBytesId.Hack;
 const HackBd = Font.TTFBytesId.HackBd;
 
-//Colors Derived from Dracula theme for Kitty
-//const border = Color{ .r = 0x62, .g = 0x72, .b = 0xa4, .a = 0xff }; // inactive_border_color
-//const fill = Color{ .r = 0x44, .g = 0x47, .b = 0x5a, .a = 0xff }; // selection_background
-//const text = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // foreground
-//const border_hover = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // active_border_color
-//const fill_hover = Color{ .r = 0x62, .g = 0x72, .b = 0xa4, .a = 0xff }; // inactive_tab_background
-//const text_hover = Color{ .r = 0xff, .g = 0xff, .b = 0xff, .a = 0xff }; // selection_foreground
-//const border_pressed = Color{ .r = 0x28, .g = 0x2a, .b = 0x36, .a = 0xff }; // active_tab_foreground
-//const accent = Color{ .r = 0xff, .g = 0x79, .b = 0xc6, .a = 0xff };
-//const fill_pressed = accent;
-//const text_accent = Color{ .r = 0x8b, .g = 0xe9, .b = 0xfd, .a = 0xff }; // url_color
-//const border_err = Color{ .r = 0xff, .g = 0x55, .b = 0x55, .a = 0xff }; // color1
-//const err = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // color7
-//const background = Color{ .r = 0x28, .g = 0x2a, .b = 0x36, .a = 0xff }; // background
-
 const accent = Color{ .r = 0xff, .g = 0x79, .b = 0xc6, .a = 0xff };
 const err = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // color7
 const text = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // foreground
@@ -35,7 +20,7 @@ const border = Color{ .r = 0x62, .g = 0x72, .b = 0xa4, .a = 0xff }; // inactive_
 
 const size = 15;
 
-pub var dracula = Theme{
+pub const dracula = Theme{
     .name = "Dracula",
     .dark = true,
 
