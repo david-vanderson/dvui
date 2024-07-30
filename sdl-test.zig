@@ -35,7 +35,7 @@ pub fn main() !void {
     var scale_mod: dvui.enums.Mod = .none;
     var dropdown_choice: usize = 1;
     var num_windows: usize = 0;
-    var theme_choice: usize = 1;
+    var theme_choice: usize = 0;
 
     //var rng = std.rand.DefaultPrng.init(0);
 
