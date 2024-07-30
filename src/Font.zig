@@ -79,30 +79,31 @@ pub fn lineHeight(self: *const Font) !f32 {
     return s.h;
 }
 
+// default bytes if font id is not found in database
+pub const default_ttf_bytes = TTFBytes.Vera;
+
 // functionality for accessing builtin fonts
-pub const bitstream_vera = @import("fonts/bitstream_vera.zig");
-pub const pixelify_sans = @import("fonts/pixelify-sans.zig");
-pub const hack = @import("fonts/hack.zig");
-pub const aleo = @import("fonts/aleo.zig");
-
-pub const default_ttf_bytes = bitstream_vera.Vera;
-
 pub const TTFBytes = struct {
-    pub const Vera = bitstream_vera.Vera;
-    pub const VeraBd = bitstream_vera.VeraBd;
-    pub const VeraBI = bitstream_vera.VeraBI;
-    pub const VeraMoBi = bitstream_vera.VeraMoBI;
-    pub const VeraMono = bitstream_vera.VeraMono;
-    pub const Pixelify = pixelify_sans.PixelifySans;
-    pub const PixelifyBd = pixelify_sans.PixelifySansBd;
-    pub const PixelifyMe = pixelify_sans.PixelifySansMe;
-    pub const PixelifySeBd = pixelify_sans.PixelifySansSeBd;
-    pub const Hack = hack.Hack;
-    pub const HackBd = hack.HackBd;
-    pub const HackIt = hack.HackIt;
-    pub const HackBdIt = hack.HackBdIt;
-    pub const Aleo = aleo.Aleo;
-    pub const AleoBd = aleo.AleoBd;
+    pub const Aleo = @embedFile("fonts/Aleo/static/Aleo-Regular.ttf");
+    pub const AleoBd = @embedFile("fonts/Aleo/static/Aleo-Bold.ttf");
+    pub const Vera = @embedFile("fonts/bitstream-vera/Vera.ttf");
+    pub const VeraBI = @embedFile("fonts/bitstream-vera/VeraBI.ttf");
+    pub const VeraBd = @embedFile("fonts/bitstream-vera/VeraBd.ttf");
+    pub const VeraIt = @embedFile("fonts/bitstream-vera/VeraIt.ttf");
+    pub const VeraMoBI = @embedFile("fonts/bitstream-vera/VeraMoBI.ttf");
+    pub const VeraMoBd = @embedFile("fonts/bitstream-vera/VeraMoBd.ttf");
+    pub const VeraMoIt = @embedFile("fonts/bitstream-vera/VeraMoIt.ttf");
+    pub const VeraMono = @embedFile("fonts/bitstream-vera/VeraMono.ttf");
+    pub const VeraSe = @embedFile("fonts/bitstream-vera/VeraSe.ttf");
+    pub const VeraSeBd = @embedFile("fonts/bitstream-vera/VeraSeBd.ttf");
+    pub const Pixelify = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Regular.ttf");
+    pub const PixelifyBd = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Bold.ttf");
+    pub const PixelifyMe = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Medium.ttf");
+    pub const PixelifySeBd = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-SemiBold.ttf");
+    pub const Hack = @embedFile("fonts/hack/Hack-Regular.ttf");
+    pub const HackBd = @embedFile("fonts/hack/Hack-Bold.ttf");
+    pub const HackIt = @embedFile("fonts/hack/Hack-Italic.ttf");
+    pub const HackBdIt = @embedFile("fonts/hack/Hack-BoldItalic.ttf");
 };
 
 pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap([]const u8) {
