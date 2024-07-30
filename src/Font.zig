@@ -9,14 +9,15 @@ const Font = @This();
 size: f32,
 line_height_factor: f32 = 1.0,
 name: []const u8,
-ttf_bytes: []const u8,
+ttf_bytes_id: TTFBytesId,
+//ttf_bytes: []const u8,
 
 pub fn resize(self: *const Font, s: f32) Font {
-    return Font{ .size = s, .line_height_factor = self.line_height_factor, .name = self.name, .ttf_bytes = self.ttf_bytes };
+    return Font{ .size = s, .line_height_factor = self.line_height_factor, .name = self.name, .ttf_bytes_id = self.ttf_bytes_id };
 }
 
 pub fn lineHeightFactor(self: *const Font, factor: f32) Font {
-    return Font{ .size = self.size, .line_height_factor = factor, .name = self.name, .ttf_bytes = self.ttf_bytes };
+    return Font{ .size = self.size, .line_height_factor = factor, .name = self.name, .ttf_bytes_id = self.ttf_bytes_id };
 }
 
 // handles multiple lines
@@ -77,4 +78,36 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
 pub fn lineHeight(self: *const Font) !f32 {
     const s = try self.textSizeEx(" ", null, null, .before);
     return s.h;
+}
+
+// functionality for accessing builtin fonts
+pub const bitstream_vera = @import("fonts/bitstream_vera.zig");
+pub const pixelify_sans = @import("fonts/pixelify-sans.zig");
+pub const hack = @import("fonts/hack.zig");
+
+pub const FontBytes = struct {
+    pub const Vera = bitstream_vera.Vera;
+    pub const VeraBd = bitstream_vera.VeraBd;
+    pub const VeraBI = bitstream_vera.VeraBI;
+    pub const VeraMoBi = bitstream_vera.VeraMoBI;
+    pub const VeraMono = bitstream_vera.VeraMono;
+    pub const Pixelify = pixelify_sans.PixelifySans;
+    pub const PixelifyBd = pixelify_sans.PixelifySansBd;
+    pub const PixelifyMe = pixelify_sans.PixelifySansMe;
+    pub const PixelifySeBd = pixelify_sans.PixelifySansSeBd;
+    pub const Hack = hack.Hack;
+    pub const HackBd = hack.HackBd;
+    pub const HackIt = hack.HackIt;
+    pub const HackBdIt = hack.HackBdIt;
+};
+
+pub const TTFBytesId = std.meta.DeclEnum(FontBytes);
+
+pub fn getFontBytes(ttf_bytes_id: TTFBytesId) []const u8 {
+    inline for (@typeInfo(FontBytes).Struct.decls, 0..) |decl, i| {
+        if (@intFromEnum(ttf_bytes_id) == i) {
+            return @field(FontBytes, decl.name);
+        }
+    }
+    unreachable;
 }
