@@ -24,7 +24,7 @@ const light_err_fill = err_hsl.color();
 const light_err_fill_hover = err_hsl.lighten(-10).color();
 const light_err_border = err_hsl.lighten(-20).color();
 
-pub var light = Theme{
+pub const light = Theme{
     .name = "Adwaita",
     .dark = false,
 
@@ -84,7 +84,7 @@ const dark_err_fill_hover = err_hsl.lighten(9).color();
 const dark_err_fill_press = err_hsl.lighten(16).color();
 const dark_err_border = err_hsl.lighten(20).color();
 
-pub var dark = Theme{
+pub const dark = Theme{
     .name = "Adwaita Dark",
     .dark = true,
 

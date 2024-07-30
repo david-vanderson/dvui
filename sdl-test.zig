@@ -175,15 +175,16 @@ pub fn main() !void {
                             "Adwaita Dark",
                             "Jungle",
                             "Dracula",
+                            "Flow",
                         };
 
                         const themes = [_]*dvui.Theme{
-                            &dvui.Adwaita.light,
-                            &dvui.Adwaita.dark,
-                            &dvui.Jungle.jungle,
-                            &dvui.Dracula.dracula,
+                            &dvui.Theme.AdwaitaLight,
+                            &dvui.Theme.AdwaitaDark,
+                            &dvui.Theme.Jungle,
+                            &dvui.Theme.Dracula,
+                            &dvui.Theme.Flow,
                         };
-
                         const changed = try dvui.dropdown(@src(), &entries, &theme_choice, .{ .min_size_content = .{ .w = 120 }, .id_extra = 1 });
 
                         if (dvui.themeGet() != themes[theme_choice] and changed) {
