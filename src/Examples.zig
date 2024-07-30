@@ -642,6 +642,31 @@ pub fn styling() !void {
         _ = try dvui.button(@src(), "Control", .{}, .{});
     }
 
+    {
+        // Demonstrate serializing a theme
+        const Static = struct {
+            var bytes: [4096]u8 = undefined;
+            var buffer = std.io.fixedBufferStream(&bytes);
+            var writer = buffer.writer();
+            var open: bool = false;
+        };
+        const clicked = try dvui.button(@src(), "Serialize Active Theme", .{}, .{});
+        if (clicked) {
+            Static.buffer.reset();
+            _ = try std.json.stringify(dvui.themeGet(), .{}, Static.writer);
+            Static.open = true;
+        }
+
+        if (try dvui.expander(@src(), "Serialized Theme", .{}, .{ .expand = .horizontal })) {
+            var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+
+            var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
+            try tl.addText(Static.buffer.getWritten(), .{});
+            tl.deinit();
+            defer b.deinit();
+        }
+    }
+
     try dvui.label(@src(), "separators", .{}, .{});
     {
         var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 9 } });
