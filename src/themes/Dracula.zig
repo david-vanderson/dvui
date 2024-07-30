@@ -4,7 +4,8 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Theme = dvui.Theme;
 const Options = dvui.Options;
-const hack = dvui.hack;
+const Hack = Font.TTFBytesId.Hack;
+const HackBd = Font.TTFBytesId.HackBd;
 
 //Colors Derived from Dracula theme for Kitty
 const border = Color{ .r = 0x62, .g = 0x72, .b = 0xa4, .a = 0xff }; // inactive_border_color
@@ -27,15 +28,15 @@ pub var dracula = Theme{
     .name = "Dracula",
     .dark = true,
 
-    .font_body = .{ .size = size, .name = "hack", .ttf_bytes = hack.Hack },
-    .font_heading = .{ .size = size, .name = "hack", .ttf_bytes = hack.HackBd },
-    .font_caption = .{ .size = size * 0.8, .name = "hack", .ttf_bytes = hack.Hack },
-    .font_caption_heading = .{ .size = size * 0.8, .name = "hack", .ttf_bytes = hack.HackBd },
-    .font_title = .{ .size = size * 2, .name = "hack", .ttf_bytes = hack.Hack },
-    .font_title_1 = .{ .size = size * 1.8, .name = "hack", .ttf_bytes = hack.HackBd },
-    .font_title_2 = .{ .size = size * 1.6, .name = "hack", .ttf_bytes = hack.HackBd },
-    .font_title_3 = .{ .size = size * 1.4, .name = "hack", .ttf_bytes = hack.HackBd },
-    .font_title_4 = .{ .size = size * 1.2, .name = "hack", .ttf_bytes = hack.HackBd },
+    .font_body = .{ .size = size, .name = "hack", .ttf_bytes_id = Hack },
+    .font_heading = .{ .size = size, .name = "hack", .ttf_bytes_id = HackBd },
+    .font_caption = .{ .size = size * 0.8, .name = "hack", .ttf_bytes_id = Hack },
+    .font_caption_heading = .{ .size = size * 0.8, .name = "hack", .ttf_bytes_id = HackBd },
+    .font_title = .{ .size = size * 2, .name = "hack", .ttf_bytes_id = Hack },
+    .font_title_1 = .{ .size = size * 1.8, .name = "hack", .ttf_bytes_id = HackBd },
+    .font_title_2 = .{ .size = size * 1.6, .name = "hack", .ttf_bytes_id = HackBd },
+    .font_title_3 = .{ .size = size * 1.4, .name = "hack", .ttf_bytes_id = HackBd },
+    .font_title_4 = .{ .size = size * 1.2, .name = "hack", .ttf_bytes_id = HackBd },
 
     .color_accent = accent,
     .color_err = err,
