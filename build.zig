@@ -33,15 +33,16 @@ pub fn build(b: *std.Build) !void {
     }
 
     //Raylib dependency
-    const raylib_dep = b.lazyDependency("raylib", .{});
+    const ray = b.lazyDependency("raylib", .{ .target = target, .optimize = optimize });
     const raylib_mod = b.addModule("RaylibBackend", .{
         .root_source_file = b.path("src/backends/RaylibBackend.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
+    raylib_mod.linkLibrary(ray.?.artifact("raylib"));
+    raylib_mod.addIncludePath(ray.?.path("src"));
     raylib_mod.addImport("dvui", dvui_mod);
-    raylib_mod.linkLibrary(raylib_dep.?.artifact("raylib"));
 
     //SDL Module and Dependency
     const sdl_mod = b.addModule("SDLBackend", .{
@@ -117,6 +118,31 @@ pub fn build(b: *std.Build) !void {
         run_cmd.step.dependOn(compile_step);
 
         const run_step = b.step("run-" ++ ex, "Run " ++ ex);
+        run_step.dependOn(&run_cmd.step);
+    }
+
+    // raylib test
+    {
+        const exe = b.addExecutable(.{
+            .name = "raylib-test",
+            .root_source_file = b.path("raylib-test.zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+
+        exe.root_module.addImport("dvui", dvui_mod);
+        exe.root_module.addImport("RaylibBackend", raylib_mod);
+
+        const exe_install = b.addInstallArtifact(exe, .{});
+
+        const compile_step = b.step("compile-raylib-test", "Compile the Raylib test");
+        compile_step.dependOn(&exe_install.step);
+        b.getInstallStep().dependOn(compile_step);
+
+        const run_cmd = b.addRunArtifact(exe);
+        run_cmd.step.dependOn(compile_step);
+
+        const run_step = b.step("raylib-test", "Run the Raylib test");
         run_step.dependOn(&run_cmd.step);
     }
 
