@@ -4,8 +4,8 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Theme = dvui.Theme;
 const Options = dvui.Options;
-const Vera = "Vera";
-const VeraBd = "VeraBd";
+const Aleo = "Aleo";
+const AleoBd = "AleoBd";
 
 const accent = Color{ .r = 0xfe, .g = 0x80, .b = 0x19, .a = 0xff }; // s:gb.bright_orange
 const err = Color{ .r = 0xcc, .g = 0x24, .b = 0x1d, .a = 0xff }; // s:gb.neutral_red
@@ -17,21 +17,21 @@ const fill_control = Color{ .r = 0x7c, .g = 0x6f, .b = 0x64, .a = 0xff }; // s:g
 const fill_hover = border;
 const fill_press = accent;
 const border = Color{ .r = 0x83, .g = 0xa5, .b = 0x98, .a = 0xff }; // s:gb.bright_blue
-const size = 15;
+const size = 16;
 
 pub const gruvbox = Theme{
     .name = "Gruvbox",
     .dark = true,
 
-    .font_body = .{ .size = 13, .name = "Vera", .ttf_bytes_id = Vera },
-    .font_heading = .{ .size = 13, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_caption = .{ .size = 10, .name = "Vera", .ttf_bytes_id = Vera },
-    .font_caption_heading = .{ .size = 10, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title = .{ .size = 28, .name = "Vera", .ttf_bytes_id = Vera },
-    .font_title_1 = .{ .size = 23, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title_2 = .{ .size = 20, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title_3 = .{ .size = 17, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title_4 = .{ .size = 15, .name = "VeraBd", .ttf_bytes_id = VeraBd },
+    .font_body = .{ .size = size, .name = "Aleo", .ttf_bytes_id = Aleo },
+    .font_heading = .{ .size = size, .name = "Aleo", .ttf_bytes_id = AleoBd },
+    .font_caption = .{ .size = size * 0.8, .name = "Aleo", .ttf_bytes_id = Aleo },
+    .font_caption_heading = .{ .size = size * 0.8, .name = "Aleo", .ttf_bytes_id = AleoBd },
+    .font_title = .{ .size = size * 2, .name = "Aleo", .ttf_bytes_id = Aleo },
+    .font_title_1 = .{ .size = size * 1.8, .name = "Aleo", .ttf_bytes_id = AleoBd },
+    .font_title_2 = .{ .size = size * 1.6, .name = "Aleo", .ttf_bytes_id = AleoBd },
+    .font_title_3 = .{ .size = size * 1.4, .name = "Aleo", .ttf_bytes_id = AleoBd },
+    .font_title_4 = .{ .size = size * 1.2, .name = "Aleo", .ttf_bytes_id = AleoBd },
 
     .color_accent = accent,
     .color_err = err,
