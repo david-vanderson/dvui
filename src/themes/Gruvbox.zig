@@ -4,8 +4,8 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Theme = dvui.Theme;
 const Options = dvui.Options;
-const Vera = Font.TTFBytesId.Vera;
-const VeraBd = Font.TTFBytesId.VeraBd;
+const Vera = "Vera";
+const VeraBd = "VeraBd";
 
 const accent = Color{ .r = 0xfe, .g = 0x80, .b = 0x19, .a = 0xff }; // s:gb.bright_orange
 const err = Color{ .r = 0xcc, .g = 0x24, .b = 0x1d, .a = 0xff }; // s:gb.neutral_red

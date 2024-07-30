@@ -343,10 +343,14 @@ const FontCacheEntry = struct {
 
     pub fn hash(font: Font) u32 {
         var h = fnv.init();
-        const bytes = Font.getFontBytes(font.ttf_bytes_id);
-        h.update(std.mem.asBytes(&bytes.ptr));
-        h.update(std.mem.asBytes(&font.size));
-        return h.final();
+        if (current_window) |win| {
+            const bytes = win.ttf_bytes_database.get(font.ttf_bytes_id) orelse Font.default_ttf_bytes;
+            h.update(std.mem.asBytes(&bytes.ptr));
+            h.update(std.mem.asBytes(&font.size));
+            return h.final();
+        } else {
+            @panic("Current window not initialized");
+        }
     }
 
     pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32, font_name: []const u8) !GlyphInfo {
@@ -490,7 +494,8 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     }
 
     //ttf bytes
-    const bytes = Font.getFontBytes(font.ttf_bytes_id);
+    if (current_window == null) @panic("Window is null");
+    const bytes = current_window.?.ttf_bytes_database.get(font.ttf_bytes_id) orelse Font.default_ttf_bytes;
     log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
 
     var entry: FontCacheEntry = undefined;
@@ -2081,6 +2086,7 @@ pub const Window = struct {
     tab_index_prev: std.ArrayList(TabIndex),
     tab_index: std.ArrayList(TabIndex),
     font_cache: std.AutoHashMap(u32, FontCacheEntry),
+    ttf_bytes_database: std.StringHashMap([]const u8),
     texture_cache: std.AutoHashMap(u32, TextureCacheEntry),
     dialog_mutex: std.Thread.Mutex,
     dialogs: std.ArrayList(Dialog),
@@ -2146,6 +2152,7 @@ pub const Window = struct {
             .debug_refresh_mutex = std.Thread.Mutex{},
             .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
             .backend = backend,
+            .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
         };
 
         const winSize = self.backend.windowSize();
@@ -2204,6 +2211,7 @@ pub const Window = struct {
         self.dialogs.deinit();
         self.toasts.deinit();
         self._arena.deinit();
+        self.ttf_bytes_database.deinit();
     }
 
     // called from any thread

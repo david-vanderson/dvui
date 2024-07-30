@@ -9,8 +9,7 @@ const Font = @This();
 size: f32,
 line_height_factor: f32 = 1.0,
 name: []const u8,
-ttf_bytes_id: TTFBytesId,
-//ttf_bytes: []const u8,
+ttf_bytes_id: []const u8,
 
 pub fn resize(self: *const Font, s: f32) Font {
     return Font{ .size = s, .line_height_factor = self.line_height_factor, .name = self.name, .ttf_bytes_id = self.ttf_bytes_id };
@@ -85,7 +84,9 @@ pub const bitstream_vera = @import("fonts/bitstream_vera.zig");
 pub const pixelify_sans = @import("fonts/pixelify-sans.zig");
 pub const hack = @import("fonts/hack.zig");
 
-pub const FontBytes = struct {
+pub const default_ttf_bytes = bitstream_vera.Vera;
+
+pub const TTFBytes = struct {
     pub const Vera = bitstream_vera.Vera;
     pub const VeraBd = bitstream_vera.VeraBd;
     pub const VeraBI = bitstream_vera.VeraBI;
@@ -101,13 +102,10 @@ pub const FontBytes = struct {
     pub const HackBdIt = hack.HackBdIt;
 };
 
-pub const TTFBytesId = std.meta.DeclEnum(FontBytes);
-
-pub fn getFontBytes(ttf_bytes_id: TTFBytesId) []const u8 {
-    inline for (@typeInfo(FontBytes).Struct.decls, 0..) |decl, i| {
-        if (@intFromEnum(ttf_bytes_id) == i) {
-            return @field(FontBytes, decl.name);
-        }
+pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap([]const u8) {
+    var result = std.StringHashMap([]const u8).init(allocator);
+    inline for (@typeInfo(TTFBytes).Struct.decls) |decl| {
+        try result.put(decl.name, @field(TTFBytes, decl.name));
     }
-    unreachable;
+    return result;
 }

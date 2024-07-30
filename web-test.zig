@@ -46,8 +46,8 @@ var orig_content_scale: f32 = 1.0;
 const zig_favicon = @embedFile("src/zig-favicon.png");
 
 export fn app_init() i32 {
-    dvui.Adwaita.light = dvui.Adwaita.light.fontSizeAdd(2);
-    dvui.Adwaita.dark = dvui.Adwaita.dark.fontSizeAdd(2);
+    dvui.Theme.AdwaitaLight = dvui.Theme.AdwaitaLight.fontSizeAdd(2);
+    dvui.Theme.AdwaitaDark = dvui.Theme.AdwaitaDark.fontSizeAdd(2);
 
     backend = WebBackend.init() catch {
         return 1;
@@ -219,22 +219,26 @@ fn dvui_frame() !void {
 
     {
         const Data = struct {
-            var theme_choice: usize = 1;
+            var theme_choice: usize = 0;
         };
+
         const entries = [_][]const u8{
             "Adwaita Light",
             "Adwaita Dark",
             "Jungle",
             "Dracula",
+            "Flow",
+            "Gruvbox",
         };
 
         const themes = [_]*dvui.Theme{
-            &dvui.Adwaita.light,
-            &dvui.Adwaita.dark,
-            &dvui.Jungle.jungle,
-            &dvui.Dracula.dracula,
+            &dvui.Theme.AdwaitaLight,
+            &dvui.Theme.AdwaitaDark,
+            &dvui.Theme.Jungle,
+            &dvui.Theme.Dracula,
+            &dvui.Theme.Flow,
+            &dvui.Theme.Gruvbox,
         };
-
         _ = try dvui.dropdown(@src(), &entries, &Data.theme_choice, .{ .min_size_content = .{ .w = 120 }, .id_extra = 1 });
 
         if (dvui.themeGet() != themes[Data.theme_choice]) {
