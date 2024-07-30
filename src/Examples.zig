@@ -647,14 +647,11 @@ pub fn styling() !void {
         const Static = struct {
             var bytes: [4096]u8 = undefined;
             var buffer = std.io.fixedBufferStream(&bytes);
-            var writer = buffer.writer();
-            var open: bool = false;
         };
         const clicked = try dvui.button(@src(), "Serialize Active Theme", .{}, .{});
         if (clicked) {
             Static.buffer.reset();
-            _ = try std.json.stringify(dvui.themeGet(), .{}, Static.writer);
-            Static.open = true;
+            _ = try std.json.stringify(dvui.themeGet(), .{}, Static.buffer.writer());
         }
 
         if (try dvui.expander(@src(), "Serialized Theme", .{}, .{ .expand = .horizontal })) {
