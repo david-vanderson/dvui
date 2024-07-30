@@ -4,7 +4,7 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Theme = dvui.Theme;
 const Options = dvui.Options;
-const pixelify = dvui.pixelify_sans.PixelifySans;
+const pixelify = Font.TTFBytesId.Pixelify;
 
 const accent = Color{ .r = 0x63, .g = 0x84, .b = 0x65, .a = 0xff };
 const err = Color.white;
@@ -24,15 +24,15 @@ pub var jungle = Theme{
     .name = "Jungle",
     .dark = true,
 
-    .font_body = .{ .size = size, .name = "pixelify", .ttf_bytes = pixelify },
-    .font_heading = .{ .size = size, .name = "pixelify", .ttf_bytes = pixelify },
-    .font_caption = .{ .size = size, .name = "pixelify", .ttf_bytes = pixelify },
-    .font_caption_heading = .{ .size = size, .name = "pixelify", .ttf_bytes = pixelify },
-    .font_title = .{ .size = size * 2, .name = "pixelify", .ttf_bytes = pixelify },
-    .font_title_1 = .{ .size = size * 1.8, .name = "pixelify", .ttf_bytes = pixelify },
-    .font_title_2 = .{ .size = size * 1.6, .name = "pixelify", .ttf_bytes = pixelify },
-    .font_title_3 = .{ .size = size * 1.4, .name = "pixelify", .ttf_bytes = pixelify },
-    .font_title_4 = .{ .size = size * 1.2, .name = "pixelify", .ttf_bytes = pixelify },
+    .font_body = .{ .size = size, .name = "pixelify", .ttf_bytes_id = pixelify },
+    .font_heading = .{ .size = size, .name = "pixelify", .ttf_bytes_id = pixelify },
+    .font_caption = .{ .size = size, .name = "pixelify", .ttf_bytes_id = pixelify },
+    .font_caption_heading = .{ .size = size, .name = "pixelify", .ttf_bytes_id = pixelify },
+    .font_title = .{ .size = size * 2, .name = "pixelify", .ttf_bytes_id = pixelify },
+    .font_title_1 = .{ .size = size * 1.8, .name = "pixelify", .ttf_bytes_id = pixelify },
+    .font_title_2 = .{ .size = size * 1.6, .name = "pixelify", .ttf_bytes_id = pixelify },
+    .font_title_3 = .{ .size = size * 1.4, .name = "pixelify", .ttf_bytes_id = pixelify },
+    .font_title_4 = .{ .size = size * 1.2, .name = "pixelify", .ttf_bytes_id = pixelify },
 
     .color_accent = accent,
     .color_err = err,

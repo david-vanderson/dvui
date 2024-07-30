@@ -20,10 +20,10 @@ pub const Theme = @import("Theme.zig");
 pub const Vertex = @import("Vertex.zig");
 pub const Widget = @import("Widget.zig");
 pub const WidgetData = @import("WidgetData.zig");
+pub const entypo = @import("icons/entypo.zig");
 pub const bitstream_vera = @import("fonts/bitstream_vera.zig");
 pub const pixelify_sans = @import("fonts/pixelify-sans.zig");
 pub const hack = @import("fonts/hack.zig");
-pub const entypo = @import("icons/entypo.zig");
 pub const Adwaita = @import("themes/Adwaita.zig");
 pub const Jungle = @import("themes/Jungle.zig");
 pub const Dracula = @import("themes/Dracula.zig");
@@ -346,7 +346,8 @@ const FontCacheEntry = struct {
 
     pub fn hash(font: Font) u32 {
         var h = fnv.init();
-        h.update(std.mem.asBytes(&font.ttf_bytes.ptr));
+        const bytes = Font.getFontBytes(font.ttf_bytes_id);
+        h.update(std.mem.asBytes(&bytes.ptr));
         h.update(std.mem.asBytes(&font.size));
         return h.final();
     }
@@ -491,7 +492,9 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         return fce;
     }
 
-    log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, font.ttf_bytes.ptr, font.size, font.name });
+    //ttf bytes
+    const bytes = Font.getFontBytes(font.ttf_bytes_id);
+    log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
 
     var entry: FontCacheEntry = undefined;
 
@@ -506,8 +509,8 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         var face: c.FT_Face = undefined;
         var args: c.FT_Open_Args = undefined;
         args.flags = @as(u32, @bitCast(FontCacheEntry.OpenFlags{ .memory = true }));
-        args.memory_base = font.ttf_bytes.ptr;
-        args.memory_size = @as(u31, @intCast(font.ttf_bytes.len));
+        args.memory_base = bytes.ptr;
+        args.memory_size = @as(u31, @intCast(bytes.len));
         FontCacheEntry.intToError(c.FT_Open_Face(ft2lib, &args, 0, &face)) catch |err| {
             log.warn("fontCacheGet freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, font.name });
             return error.freetypeError;
@@ -547,7 +550,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         }
     } else {
         var face: c.stbtt_fontinfo = undefined;
-        _ = c.stbtt_InitFont(&face, font.ttf_bytes.ptr, c.stbtt_GetFontOffsetForIndex(font.ttf_bytes.ptr, 0));
+        _ = c.stbtt_InitFont(&face, bytes.ptr, c.stbtt_GetFontOffsetForIndex(bytes.ptr, 0));
         const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, @max(min_pixel_size, @floor(font.size)));
 
         var face2_ascent: c_int = undefined;
