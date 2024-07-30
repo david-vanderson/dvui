@@ -8,19 +8,30 @@ const Hack = Font.TTFBytesId.Hack;
 const HackBd = Font.TTFBytesId.HackBd;
 
 //Colors Derived from Dracula theme for Kitty
-const border = Color{ .r = 0x62, .g = 0x72, .b = 0xa4, .a = 0xff }; // inactive_border_color
-const fill = Color{ .r = 0x44, .g = 0x47, .b = 0x5a, .a = 0xff }; // selection_background
-const text = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // foreground
-const border_hover = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // active_border_color
-const fill_hover = Color{ .r = 0x62, .g = 0x72, .b = 0xa4, .a = 0xff }; // inactive_tab_background
-const text_hover = Color{ .r = 0xff, .g = 0xff, .b = 0xff, .a = 0xff }; // selection_foreground
-const border_pressed = Color{ .r = 0x28, .g = 0x2a, .b = 0x36, .a = 0xff }; // active_tab_foreground
+//const border = Color{ .r = 0x62, .g = 0x72, .b = 0xa4, .a = 0xff }; // inactive_border_color
+//const fill = Color{ .r = 0x44, .g = 0x47, .b = 0x5a, .a = 0xff }; // selection_background
+//const text = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // foreground
+//const border_hover = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // active_border_color
+//const fill_hover = Color{ .r = 0x62, .g = 0x72, .b = 0xa4, .a = 0xff }; // inactive_tab_background
+//const text_hover = Color{ .r = 0xff, .g = 0xff, .b = 0xff, .a = 0xff }; // selection_foreground
+//const border_pressed = Color{ .r = 0x28, .g = 0x2a, .b = 0x36, .a = 0xff }; // active_tab_foreground
+//const accent = Color{ .r = 0xff, .g = 0x79, .b = 0xc6, .a = 0xff };
+//const fill_pressed = accent;
+//const text_accent = Color{ .r = 0x8b, .g = 0xe9, .b = 0xfd, .a = 0xff }; // url_color
+//const border_err = Color{ .r = 0xff, .g = 0x55, .b = 0x55, .a = 0xff }; // color1
+//const err = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // color7
+//const background = Color{ .r = 0x28, .g = 0x2a, .b = 0x36, .a = 0xff }; // background
+
 const accent = Color{ .r = 0xff, .g = 0x79, .b = 0xc6, .a = 0xff };
-const fill_pressed = accent;
-const text_accent = Color{ .r = 0x8b, .g = 0xe9, .b = 0xfd, .a = 0xff }; // url_color
-const border_err = Color{ .r = 0xff, .g = 0x55, .b = 0x55, .a = 0xff }; // color1
 const err = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // color7
-const background = Color{ .r = 0x28, .g = 0x2a, .b = 0x36, .a = 0xff }; // background
+const text = Color{ .r = 0xf8, .g = 0xf8, .b = 0xf2, .a = 0xff }; // foreground
+const text_press = Color{ .r = 0x21, .g = 0x22, .b = 0x2c, .a = 0xff }; // color0
+const fill = Color{ .r = 0x28, .g = 0x2a, .b = 0x36, .a = 0xff }; // background
+const fill_window = fill; //Color{ .r = 0x62, .g = 0x72, .b = 0xa4, .a = 0xff }; // inactive_tab_background
+const fill_control = Color{ .r = 0x44, .g = 0x47, .b = 0x5a, .a = 0xff }; // selection_background
+const fill_hover = border;
+const fill_press = accent;
+const border = Color{ .r = 0x62, .g = 0x72, .b = 0xa4, .a = 0xff }; // inactive_border_color
 
 const size = 15;
 
@@ -41,32 +52,32 @@ pub var dracula = Theme{
     .color_accent = accent,
     .color_err = err,
     .color_text = text,
-    .color_text_press = text_accent,
+    .color_text_press = text_press,
     .color_fill = fill,
-    .color_fill_window = background,
-    .color_fill_control = fill,
+    .color_fill_window = fill_window,
+    .color_fill_control = fill_control,
     .color_fill_hover = fill_hover,
-    .color_fill_press = accent,
+    .color_fill_press = fill_press,
     .color_border = border,
 
     .style_accent = Options{
-        .color_accent = .{ .color = accent },
-        .color_text = .{ .color = text_accent },
-        .color_text_press = .{ .color = Color.white },
-        .color_fill = .{ .color = fill },
-        .color_fill_hover = .{ .color = fill_hover },
-        .color_fill_press = .{ .color = fill_pressed },
-        .color_border = .{ .color = border_pressed },
+        .color_accent = .{ .color = Color.merge(accent, accent) },
+        .color_text = .{ .color = Color.merge(accent, text) },
+        .color_text_press = .{ .color = Color.merge(accent, text_press) },
+        .color_fill = .{ .color = Color.merge(accent, fill) },
+        .color_fill_hover = .{ .color = Color.merge(accent, fill_hover) },
+        .color_fill_press = .{ .color = Color.merge(accent, fill_press) },
+        .color_border = .{ .color = Color.merge(accent, border) },
     },
 
     .style_err = Options{
-        .color_accent = .{ .color = accent },
-        .color_text = .{ .color = Color.white },
-        .color_text_press = .{ .color = Color.white },
-        .color_fill = .{ .color = err },
-        .color_fill_hover = .{ .color = fill_hover },
-        .color_fill_press = .{ .color = fill_pressed },
-        .color_border = .{ .color = border_pressed },
+        .color_accent = .{ .color = Color.merge(err, accent) },
+        .color_text = .{ .color = Color.merge(err, text) },
+        .color_text_press = .{ .color = Color.merge(err, text_press) },
+        .color_fill = .{ .color = Color.merge(err, fill) },
+        .color_fill_hover = .{ .color = Color.merge(err, fill_hover) },
+        .color_fill_press = .{ .color = Color.merge(err, fill_press) },
+        .color_border = .{ .color = Color.merge(err, border) },
     },
 };
 

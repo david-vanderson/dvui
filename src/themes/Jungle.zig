@@ -15,7 +15,6 @@ const fill_window = Color{ .r = 0x2b, .g = 0x3a, .b = 0x3a, .a = 0xff }; //defau
 const fill_control = Color{ .r = 0x2c, .g = 0x33, .b = 0x34, .a = 0xff }; // default_base_color_normal
 const fill_hover = Color{ .r = 0x33, .g = 0x4e, .b = 0x57, .a = 0xff }; // default_base_color_focused
 const fill_press = Color{ .r = 0x3b, .g = 0x63, .b = 0x57, .a = 0xff }; // DEFAULT_BASE_COLOR_PRESSED
-
 const border = Color{ .r = 0x60, .g = 0x82, .b = 0x7d, .a = 0xff }; // default_border_color_normal
 
 const size = 18;
@@ -56,12 +55,12 @@ pub var jungle = Theme{
     },
 
     .style_err = Options{
-        .color_accent = .{ .color = Color.merge(Color.white, accent) },
-        .color_text = .{ .color = Color.merge(Color.white, text) },
-        .color_text_press = .{ .color = Color.merge(Color.white, text_press) },
-        .color_fill = .{ .color = Color.merge(Color.white, fill) },
-        .color_fill_hover = .{ .color = Color.merge(Color.white, fill_hover) },
-        .color_fill_press = .{ .color = Color.merge(Color.white, fill_press) },
-        .color_border = .{ .color = Color.merge(Color.white, border) },
+        .color_accent = .{ .color = Color.merge(err, accent) },
+        .color_text = .{ .color = Color.merge(err, text) },
+        .color_text_press = .{ .color = Color.merge(err, text_press) },
+        .color_fill = .{ .color = Color.merge(err, fill) },
+        .color_fill_hover = .{ .color = Color.merge(err, fill_hover) },
+        .color_fill_press = .{ .color = Color.merge(err, fill_press) },
+        .color_border = .{ .color = Color.merge(err, border) },
     },
 };

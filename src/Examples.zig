@@ -225,7 +225,7 @@ pub fn demo() !void {
     var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = @min(440, dvui.windowRect().w), .h = @min(400, dvui.windowRect().h) } });
     defer float.deinit();
 
-    var theme_choice: usize = 1;
+    var theme_choice: usize = 0;
 
     // pad the fps label so that it doesn't trigger refresh when the number
     // changes widths
