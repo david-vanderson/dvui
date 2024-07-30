@@ -10,6 +10,7 @@ pub var AdwaitaLight = @import("themes/Adwaita.zig").light;
 pub var Jungle = @import("themes/Jungle.zig").jungle;
 pub var Dracula = @import("themes/Dracula.zig").dracula;
 pub var Flow = @import("themes/Flow.zig").flow;
+pub var Gruvbox = @import("themes/Gruvbox.zig").gruvbox;
 
 const Theme = @This();
 

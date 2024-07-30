@@ -273,6 +273,7 @@ pub fn demo() !void {
             "Jungle",
             "Dracula",
             "Flow",
+            "Gruvbox",
         };
 
         const themes = [_]*dvui.Theme{
@@ -281,6 +282,7 @@ pub fn demo() !void {
             &dvui.Theme.Jungle,
             &dvui.Theme.Dracula,
             &dvui.Theme.Flow,
+            &dvui.Theme.Gruvbox,
         };
 
         const changed = try dvui.dropdown(@src(), &entries, &theme_choice, .{ .min_size_content = .{ .w = 120 }, .id_extra = 1 });
