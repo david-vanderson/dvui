@@ -14,25 +14,11 @@ pub fn build(b: *std.Build) !void {
 
     dvui_mod.addCSourceFiles(.{
         .files = &.{
-            //"src/stb/stb_image_impl.c",
             "src/stb/stb_truetype_impl.c",
         },
     });
 
     dvui_mod.addIncludePath(b.path("src/stb"));
-
-    if (b.systemIntegrationOption("freetype", .{})) {
-        dvui_mod.linkSystemLibrary("freetype", .{});
-    } else {
-        const freetype_dep = b.lazyDependency("freetype", .{
-            .target = target,
-            .optimize = optimize,
-        });
-
-        if (freetype_dep) |fd| {
-            dvui_mod.linkLibrary(fd.artifact("freetype"));
-        }
-    }
 
     //Raylib dependency
     const ray = b.lazyDependency("raylib", .{ .target = target, .optimize = optimize });
@@ -48,7 +34,6 @@ pub fn build(b: *std.Build) !void {
         dvui_mod.addCSourceFiles(.{
             .files = &.{
                 "src/stb/stb_image_impl.c",
-                //"src/stb/stb_truetype_impl.c",
             },
         });
     }
@@ -57,31 +42,18 @@ pub fn build(b: *std.Build) !void {
     raylib_mod.addIncludePath(ray.?.path("src"));
     raylib_mod.addImport("dvui", dvui_mod);
 
-    //{
-    //    const exe = b.addExecutable(.{
-    //        .name = "raylib-minimum-test",
-    //        .root_source_file = b.path("raylib-test-minimum.zig"),
-    //        .target = target,
-    //        .optimize = optimize,
-    //    });
+    if (b.systemIntegrationOption("freetype", .{})) {
+        dvui_mod.linkSystemLibrary("freetype", .{});
+    } else {
+        const freetype_dep = b.lazyDependency("freetype", .{
+            .target = target,
+            .optimize = optimize,
+        });
 
-    //    exe.root_module.addImport("dvui", dvui_mod);
-    //    exe.linkSystemLibrary("raylib");
-    //    exe.linkSystemLibrary("glfw");
-    //    exe.linkSystemLibrary("gl");
-
-    //    const exe_install = b.addInstallArtifact(exe, .{});
-
-    //    const compile_step = b.step("compile-raylib-test", "Compile the Raylib test");
-    //    compile_step.dependOn(&exe_install.step);
-    //    b.getInstallStep().dependOn(compile_step);
-
-    //    const run_cmd = b.addRunArtifact(exe);
-    //    run_cmd.step.dependOn(compile_step);
-
-    //    const run_step = b.step("raylib-test", "Run the Raylib test");
-    //    run_step.dependOn(&run_cmd.step);
-    //}
+        if (freetype_dep) |fd| {
+            dvui_mod.linkLibrary(fd.artifact("freetype"));
+        }
+    }
 
     //SDL Module and Dependency
     const sdl_mod = b.addModule("SDLBackend", .{
