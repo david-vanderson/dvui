@@ -35,3 +35,11 @@ pub fn scale(self: *const Size, s: f32) Size {
 pub fn format(self: *const Size, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
     try std.fmt.format(writer, "Size{{ {d} {d} }}", .{ self.w, self.h });
 }
+
+pub fn intWidth(self: *const Size) c_int {
+    return @intFromFloat(self.w);
+}
+
+pub fn intHeight(self: *const Size) c_int {
+    return @intFromFloat(self.h);
+}
