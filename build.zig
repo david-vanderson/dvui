@@ -12,15 +12,34 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
-    dvui_mod.addCSourceFiles(.{ .files = &.{
-        "src/stb/stb_image_impl.c",
-        "src/stb/stb_truetype_impl.c",
-    } });
+    dvui_mod.addCSourceFiles(.{
+        .files = &.{
+            "src/stb/stb_image_impl.c",
+            "src/stb/stb_truetype_impl.c",
+        },
+    });
 
     dvui_mod.addIncludePath(b.path("src/stb"));
 
+    // need a separate module that doesn't include stb_image since raylib
+    // bundles it (otherwise duplicate symbols)
+    const dvui_mod_raylib = b.addModule("dvui", .{
+        .root_source_file = b.path("src/dvui.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    dvui_mod_raylib.addCSourceFiles(.{
+        .files = &.{
+            "src/stb/stb_truetype_impl.c",
+        },
+    });
+
+    dvui_mod_raylib.addIncludePath(b.path("src/stb"));
+
     if (b.systemIntegrationOption("freetype", .{})) {
         dvui_mod.linkSystemLibrary("freetype", .{});
+        dvui_mod_raylib.linkSystemLibrary("freetype", .{});
     } else {
         const freetype_dep = b.lazyDependency("freetype", .{
             .target = target,
@@ -29,6 +48,7 @@ pub fn build(b: *std.Build) !void {
 
         if (freetype_dep) |fd| {
             dvui_mod.linkLibrary(fd.artifact("freetype"));
+            dvui_mod_raylib.linkLibrary(fd.artifact("freetype"));
         }
     }
 
@@ -52,6 +72,19 @@ pub fn build(b: *std.Build) !void {
             sdl_mod.linkLibrary(sd.artifact("SDL2"));
         }
     }
+
+    // EXPERIMENTAL: for now I make a raylib symlink that points to the raylib git checkout
+    const raylib_mod = b.addModule("RaylibBackend", .{
+        .root_source_file = b.path("src/backends/RaylibBackend.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    raylib_mod.addImport("dvui", dvui_mod_raylib);
+    raylib_mod.addIncludePath(b.path("raylib/src"));
+    raylib_mod.addObjectFile(b.path("raylib/src/libraylib.a"));
+    raylib_mod.linkSystemLibrary("GL", .{});
+    // TODO: systemIntegration for raylib
 
     // mach example
     //{
@@ -130,6 +163,31 @@ pub fn build(b: *std.Build) !void {
         run_cmd.step.dependOn(compile_step);
 
         const run_step = b.step("sdl-test", "Run the SDL test");
+        run_step.dependOn(&run_cmd.step);
+    }
+
+    // raylib example
+    {
+        const exe = b.addExecutable(.{
+            .name = "raylib-standalone",
+            .root_source_file = b.path("raylib-standalone.zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+
+        exe.root_module.addImport("dvui", dvui_mod_raylib);
+        exe.root_module.addImport("RaylibBackend", raylib_mod);
+
+        const exe_install = b.addInstallArtifact(exe, .{});
+
+        const compile_step = b.step("compile-raylib-standalone", "Compile the Raylib standalone example");
+        compile_step.dependOn(&exe_install.step);
+        b.getInstallStep().dependOn(compile_step);
+
+        const run_cmd = b.addRunArtifact(exe);
+        run_cmd.step.dependOn(compile_step);
+
+        const run_step = b.step("raylib-standalone", "Run the Raylib standalone example");
         run_step.dependOn(&run_cmd.step);
     }
 
