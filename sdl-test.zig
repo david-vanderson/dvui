@@ -170,27 +170,15 @@ pub fn main() !void {
                     try dvui.label(@src(), "Theme: {s}", .{dvui.themeGet().name}, .{});
 
                     {
-                        const entries = [_][]const u8{
-                            "Adwaita Light",
-                            "Adwaita Dark",
-                            "Jungle",
-                            "Dracula",
-                            "Flow",
-                            "Gruvbox",
-                        };
+                        const changed = try dvui.dropdown(
+                            @src(),
+                            &dvui.Theme.names,
+                            &theme_choice,
+                            .{ .min_size_content = .{ .w = 120 }, .id_extra = 1 },
+                        );
 
-                        const themes = [_]*dvui.Theme{
-                            &dvui.Theme.AdwaitaLight,
-                            &dvui.Theme.AdwaitaDark,
-                            &dvui.Theme.Jungle,
-                            &dvui.Theme.Dracula,
-                            &dvui.Theme.Flow,
-                            &dvui.Theme.Gruvbox,
-                        };
-                        const changed = try dvui.dropdown(@src(), &entries, &theme_choice, .{ .min_size_content = .{ .w = 120 }, .id_extra = 1 });
-
-                        if (dvui.themeGet() != themes[theme_choice] and changed) {
-                            dvui.themeSet(themes[theme_choice]);
+                        if (dvui.themeGet() != dvui.Theme.ptrs[theme_choice] and changed) {
+                            dvui.themeSet(dvui.Theme.ptrs[theme_choice]);
                         }
                     }
 

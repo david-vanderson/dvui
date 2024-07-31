@@ -21,6 +21,8 @@ pub const Vertex = @import("Vertex.zig");
 pub const Widget = @import("Widget.zig");
 pub const WidgetData = @import("WidgetData.zig");
 pub const entypo = @import("icons/entypo.zig");
+///Deprecated - Use Theme.AdwaitaLight or Theme.AdwaitaDark
+pub const Adwaita = @import("themes/Adwaita.zig");
 pub const AnimateWidget = @import("widgets/AnimateWidget.zig");
 pub const BoxWidget = @import("widgets/BoxWidget.zig");
 pub const ReorderWidget = @import("widgets/ReorderWidget.zig");
