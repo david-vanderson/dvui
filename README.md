@@ -245,10 +245,10 @@ dvui.ButtonWidget.defaults.background = false;
 Themes can be changed between frames or even within a frame.  The theme controls the fonts and colors referenced by font_style and named colors.
 ```zig
 if (theme_dark) {
-    win.theme = &dvui.Adwaita.dark;
+    win.theme = &dvui.Theme.AdwaitaDark;
 }
 else {
-    win.theme = &dvui.Adwaita.light;
+    win.theme = &dvui.Theme.AdwaitaLight;
 }
 ```
 The theme's color_accent is also used to show keyboard focus.
