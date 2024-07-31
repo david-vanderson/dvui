@@ -68,7 +68,6 @@ pub const c = @cImport({
     } else {
         @cInclude("stb_truetype.h");
     }
-
     @cInclude("stb_image.h");
 });
 

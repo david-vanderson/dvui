@@ -6,7 +6,7 @@ const ray = @cImport({
     @cInclude("raylib.h");
 });
 
-const conversion_factor = 1000000000.0;
+const conversion_factor = 1000000000;
 
 initial_scale: f32 = 1.0,
 arena: std.mem.Allocator,
@@ -60,7 +60,7 @@ pub fn renderGeometry(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const d
 
     if (texture == null) return;
 
-    const ptr: *ray.RenderTexture = @ptrCast(texture.?);
+    const ptr: *ray.RenderTexture = @alignCast(@ptrCast(texture.?));
     ray.BeginTextureMode(ptr.*);
     defer ray.EndTextureMode();
     //Render Geometry here
@@ -75,14 +75,14 @@ pub fn renderGeometry(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const d
 }
 
 pub fn textureCreate(self: *RaylibBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
-    const texture = try self.arena.create(ray.RenderTexture);
+    const texture = self.arena.create(ray.RenderTexture) catch @panic("out of memory");
     texture.* = ray.LoadRenderTexture(@intCast(width), @intCast(height));
     ray.UpdateTexture(texture.texture, pixels);
     return texture;
 }
 
 pub fn textureDestroy(self: *RaylibBackend, texture: *anyopaque) void {
-    const ptr: *ray.RenderTexture = @ptrCast(texture);
+    const ptr: *ray.RenderTexture = @alignCast(@ptrCast(texture));
     ray.UnloadRenderTexture(ptr.*);
     self.arena.destroy(ptr);
 }
@@ -164,8 +164,34 @@ pub fn setIconFromFileContent(self: *RaylibBackend, file_content: []const u8) vo
 
 pub fn hasEvent(self: *RaylibBackend) bool {
     _ = self; // autofix
+    // TODO implement
+    return false;
 }
 
-pub fn clear(self: *RaylibBackend) bool {
+pub fn clear(self: *RaylibBackend) void {
     _ = self; // autofix
+}
+
+pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
+    _ = self; // autofix
+    _ = win; // autofix
+
+    //TODO implement
+    return false;
+}
+
+pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
+    _ = self; // autofix
+    _ = cursor; // autofix
+    //TODO implement
+}
+
+pub fn renderPresent(self: *RaylibBackend) void {
+    _ = self; // autofix
+}
+
+pub fn waitEventTimeout(self: *RaylibBackend, ms: u32) void {
+    _ = self; // autofix
+    _ = ms; // autofix
+
 }
