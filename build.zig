@@ -12,10 +12,12 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
-    dvui_mod.addCSourceFiles(.{ .files = &.{
-        "src/stb/stb_image_impl.c",
-        "src/stb/stb_truetype_impl.c",
-    } });
+    dvui_mod.addCSourceFiles(.{
+        .files = &.{
+            //"src/stb/stb_image_impl.c",
+            "src/stb/stb_truetype_impl.c",
+        },
+    });
 
     dvui_mod.addIncludePath(b.path("src/stb"));
 
@@ -40,9 +42,46 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .link_libc = true,
     });
+    dvui_mod.linkLibrary(ray.?.artifact("raylib"));
+
+    if (ray == null) {
+        dvui_mod.addCSourceFiles(.{
+            .files = &.{
+                "src/stb/stb_image_impl.c",
+                //"src/stb/stb_truetype_impl.c",
+            },
+        });
+    }
+
     raylib_mod.linkLibrary(ray.?.artifact("raylib"));
     raylib_mod.addIncludePath(ray.?.path("src"));
     raylib_mod.addImport("dvui", dvui_mod);
+
+    //{
+    //    const exe = b.addExecutable(.{
+    //        .name = "raylib-minimum-test",
+    //        .root_source_file = b.path("raylib-test-minimum.zig"),
+    //        .target = target,
+    //        .optimize = optimize,
+    //    });
+
+    //    exe.root_module.addImport("dvui", dvui_mod);
+    //    exe.linkSystemLibrary("raylib");
+    //    exe.linkSystemLibrary("glfw");
+    //    exe.linkSystemLibrary("gl");
+
+    //    const exe_install = b.addInstallArtifact(exe, .{});
+
+    //    const compile_step = b.step("compile-raylib-test", "Compile the Raylib test");
+    //    compile_step.dependOn(&exe_install.step);
+    //    b.getInstallStep().dependOn(compile_step);
+
+    //    const run_cmd = b.addRunArtifact(exe);
+    //    run_cmd.step.dependOn(compile_step);
+
+    //    const run_step = b.step("raylib-test", "Run the Raylib test");
+    //    run_step.dependOn(&run_cmd.step);
+    //}
 
     //SDL Module and Dependency
     const sdl_mod = b.addModule("SDLBackend", .{
@@ -121,7 +160,7 @@ pub fn build(b: *std.Build) !void {
         run_step.dependOn(&run_cmd.step);
     }
 
-    // raylib test
+    //raylib test
     {
         const exe = b.addExecutable(.{
             .name = "raylib-test",
