@@ -1713,11 +1713,11 @@ pub fn placeIn(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravit
     size.w = @min(size.w, avail.w);
     size.h = @min(size.h, avail.h);
 
-    if (e.isHorizontal()) {
+    if (e.horizontal()) {
         size.w = avail.w;
     }
 
-    if (e.isVertical()) {
+    if (e.vertical()) {
         size.h = avail.h;
     }
 

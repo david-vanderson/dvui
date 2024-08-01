@@ -15,11 +15,11 @@ pub const Expand = enum {
     vertical,
     both,
 
-    pub fn isHorizontal(self: Expand) bool {
+    pub fn horizontal(self: Expand) bool {
         return (self == .horizontal or self == .both);
     }
 
-    pub fn isVertical(self: Expand) bool {
+    pub fn vertical(self: Expand) bool {
         return (self == .vertical or self == .both);
     }
 };
