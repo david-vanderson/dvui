@@ -6,8 +6,8 @@ Tested with [Zig](https://ziglang.org/) 0.13
 
 How to run the built-in examples:
 
-- ```zig build run-standalone-sdl```
-- ```zig build run-ontop-sdl```
+- ```zig build sdl-standalone```
+- ```zig build sdl-ontop```
 - ```zig build web-test```
   - then load `zig-out/bin/index.html`
   - [online demo](https://david-vanderson.github.io)
