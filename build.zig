@@ -85,6 +85,11 @@ pub fn build(b: *std.Build) !void {
     raylib_mod.addObjectFile(b.path("raylib/src/libraylib.a"));
     raylib_mod.linkSystemLibrary("GL", .{});
     // TODO: systemIntegration for raylib
+    // In the future we'll use something like this:
+    //const ray = b.lazyDependency("raylib", .{ .target = target, .optimize = optimize });
+    //dvui_mod_raylib.linkLibrary(ray.?.artifact("raylib"));
+    //raylib_mod.linkLibrary(ray.?.artifact("raylib"));
+    //raylib_mod.addIncludePath(ray.?.path("src"));
 
     // mach example
     //{
@@ -182,7 +187,8 @@ pub fn build(b: *std.Build) !void {
 
         const compile_step = b.step("compile-raylib-standalone", "Compile the Raylib standalone example");
         compile_step.dependOn(&exe_install.step);
-        b.getInstallStep().dependOn(compile_step);
+        // not ready for this to be in a standard zig build
+        //b.getInstallStep().dependOn(compile_step);
 
         const run_cmd = b.addRunArtifact(exe);
         run_cmd.step.dependOn(compile_step);
