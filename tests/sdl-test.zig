@@ -5,7 +5,7 @@ const SDLBackend = @import("SDLBackend");
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
-const window_icon_png = @embedFile("src/zig-favicon.png");
+const window_icon_png = @embedFile("zig-favicon");
 
 pub fn main() !void {
     defer _ = gpa_instance.deinit();

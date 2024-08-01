@@ -127,13 +127,17 @@ pub fn build(b: *std.Build) !void {
     inline for (examples) |ex| {
         const exe = b.addExecutable(.{
             .name = ex,
-            .root_source_file = b.path(ex ++ ".zig"),
+            .root_source_file = b.path("tests/" ++ ex ++ ".zig"),
             .target = target,
             .optimize = optimize,
         });
 
         exe.root_module.addImport("dvui", dvui_mod);
         exe.root_module.addImport("SDLBackend", sdl_mod);
+
+        exe.root_module.addAnonymousImport("zig-favicon", .{
+            .root_source_file = b.path("src/zig-favicon.png"),
+        });
 
         const compile_step = b.step(ex, "Compile " ++ ex);
         compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
@@ -150,13 +154,17 @@ pub fn build(b: *std.Build) !void {
     {
         const exe = b.addExecutable(.{
             .name = "sdl-test",
-            .root_source_file = b.path("sdl-test.zig"),
+            .root_source_file = b.path("tests/sdl-test.zig"),
             .target = target,
             .optimize = optimize,
         });
 
         exe.root_module.addImport("dvui", dvui_mod);
         exe.root_module.addImport("SDLBackend", sdl_mod);
+
+        exe.root_module.addAnonymousImport("zig-favicon", .{
+            .root_source_file = b.path("src/zig-favicon.png"),
+        });
 
         const exe_install = b.addInstallArtifact(exe, .{});
 
@@ -175,7 +183,7 @@ pub fn build(b: *std.Build) !void {
     {
         const exe = b.addExecutable(.{
             .name = "raylib-standalone",
-            .root_source_file = b.path("raylib-standalone.zig"),
+            .root_source_file = b.path("tests/raylib-standalone.zig"),
             .target = target,
             .optimize = optimize,
         });
@@ -223,7 +231,7 @@ pub fn build(b: *std.Build) !void {
 
         const wasm = b.addExecutable(.{
             .name = "web-test",
-            .root_source_file = b.path("web-test.zig"),
+            .root_source_file = b.path("tests/web-test.zig"),
             .target = b.resolveTargetQuery(webtarget),
             .optimize = optimize,
             .link_libc = true,
