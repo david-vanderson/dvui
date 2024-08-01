@@ -485,7 +485,7 @@ pub fn main() !void {
                     defer fwin.deinit();
                     try dvui.labelNoFmt(@src(), "Floating Window", .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-                    try dvui.label(@src(), "Pretty Cool", .{}, .{ .font = .{ .name = "VeraMono", .ttf_bytes_id = "VeraMono", .size = 20 } });
+                    try dvui.label(@src(), "Pretty Cool", .{}, .{ .font = .{ .name = "VeraMono", .size = 20 } });
 
                     if (try dvui.button(@src(), "button", .{}, .{})) {
                         floats[0] = true;

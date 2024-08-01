@@ -4,8 +4,6 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Theme = dvui.Theme;
 const Options = dvui.Options;
-const Aleo = "Aleo";
-const AleoBd = "AleoBd";
 
 const accent = Color{ .r = 0xfe, .g = 0x80, .b = 0x19, .a = 0xff }; // s:gb.bright_orange
 const err = Color{ .r = 0xcc, .g = 0x24, .b = 0x1d, .a = 0xff }; // s:gb.neutral_red
@@ -23,15 +21,15 @@ pub const gruvbox = Theme{
     .name = "Gruvbox",
     .dark = true,
 
-    .font_body = .{ .size = size, .name = "Aleo", .ttf_bytes_id = Aleo },
-    .font_heading = .{ .size = size, .name = "Aleo", .ttf_bytes_id = AleoBd },
-    .font_caption = .{ .size = size * 0.8, .name = "Aleo", .ttf_bytes_id = Aleo },
-    .font_caption_heading = .{ .size = size * 0.8, .name = "Aleo", .ttf_bytes_id = AleoBd },
-    .font_title = .{ .size = size * 2, .name = "Aleo", .ttf_bytes_id = Aleo },
-    .font_title_1 = .{ .size = size * 1.8, .name = "Aleo", .ttf_bytes_id = AleoBd },
-    .font_title_2 = .{ .size = size * 1.6, .name = "Aleo", .ttf_bytes_id = AleoBd },
-    .font_title_3 = .{ .size = size * 1.4, .name = "Aleo", .ttf_bytes_id = AleoBd },
-    .font_title_4 = .{ .size = size * 1.2, .name = "Aleo", .ttf_bytes_id = AleoBd },
+    .font_body = .{ .size = size, .name = "Aleo" },
+    .font_heading = .{ .size = size, .name = "AleoBd" },
+    .font_caption = .{ .size = size * 0.8, .name = "Aleo" },
+    .font_caption_heading = .{ .size = size * 0.8, .name = "AleoBd" },
+    .font_title = .{ .size = size * 2, .name = "Aleo" },
+    .font_title_1 = .{ .size = size * 1.8, .name = "AleoBd" },
+    .font_title_2 = .{ .size = size * 1.6, .name = "AleoBd" },
+    .font_title_3 = .{ .size = size * 1.4, .name = "AleoBd" },
+    .font_title_4 = .{ .size = size * 1.2, .name = "AleoBd" },
 
     .color_accent = accent,
     .color_err = err,

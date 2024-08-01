@@ -4,8 +4,6 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Theme = dvui.Theme;
 const Options = dvui.Options;
-const Vera = "Vera";
-const VeraBd = "VeraBd";
 
 const accent = Color{ .r = 0x35, .g = 0x84, .b = 0xe4 };
 const accent_hsl = Color.HSLuv.fromColor(accent);
@@ -28,15 +26,15 @@ pub const light = Theme{
     .name = "Adwaita",
     .dark = false,
 
-    .font_body = .{ .size = 13, .name = "Vera", .ttf_bytes_id = Vera },
-    .font_heading = .{ .size = 13, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_caption = .{ .size = 10, .name = "Vera", .ttf_bytes_id = Vera },
-    .font_caption_heading = .{ .size = 10, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title = .{ .size = 28, .name = "Vera", .ttf_bytes_id = Vera },
-    .font_title_1 = .{ .size = 23, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title_2 = .{ .size = 20, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title_3 = .{ .size = 17, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title_4 = .{ .size = 15, .name = "VeraBd", .ttf_bytes_id = VeraBd },
+    .font_body = .{ .size = 13, .name = "Vera" },
+    .font_heading = .{ .size = 13, .name = "VeraBd" },
+    .font_caption = .{ .size = 10, .name = "Vera" },
+    .font_caption_heading = .{ .size = 10, .name = "VeraBd" },
+    .font_title = .{ .size = 28, .name = "Vera" },
+    .font_title_1 = .{ .size = 23, .name = "VeraBd" },
+    .font_title_2 = .{ .size = 20, .name = "VeraBd" },
+    .font_title_3 = .{ .size = 17, .name = "VeraBd" },
+    .font_title_4 = .{ .size = 15, .name = "VeraBd" },
 
     .color_accent = accent_hsl.color(),
     .color_err = err_hsl.color(),
@@ -88,15 +86,15 @@ pub const dark = Theme{
     .name = "Adwaita Dark",
     .dark = true,
 
-    .font_body = .{ .size = 13, .name = "Vera", .ttf_bytes_id = Vera },
-    .font_heading = .{ .size = 13, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_caption = .{ .size = 10, .name = "Vera", .ttf_bytes_id = Vera },
-    .font_caption_heading = .{ .size = 10, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title = .{ .size = 28, .name = "Vera", .ttf_bytes_id = Vera },
-    .font_title_1 = .{ .size = 23, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title_2 = .{ .size = 20, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title_3 = .{ .size = 17, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title_4 = .{ .size = 15, .name = "VeraBd", .ttf_bytes_id = VeraBd },
+    .font_body = .{ .size = 13, .name = "Vera" },
+    .font_heading = .{ .size = 13, .name = "VeraBd" },
+    .font_caption = .{ .size = 10, .name = "Vera" },
+    .font_caption_heading = .{ .size = 10, .name = "VeraBd" },
+    .font_title = .{ .size = 28, .name = "Vera" },
+    .font_title_1 = .{ .size = 23, .name = "VeraBd" },
+    .font_title_2 = .{ .size = 20, .name = "VeraBd" },
+    .font_title_3 = .{ .size = 17, .name = "VeraBd" },
+    .font_title_4 = .{ .size = 15, .name = "VeraBd" },
 
     .color_accent = accent_hsl.color(),
     .color_err = dark_err,

@@ -9,14 +9,13 @@ const Font = @This();
 size: f32,
 line_height_factor: f32 = 1.0,
 name: []const u8,
-ttf_bytes_id: []const u8,
 
 pub fn resize(self: *const Font, s: f32) Font {
-    return Font{ .size = s, .line_height_factor = self.line_height_factor, .name = self.name, .ttf_bytes_id = self.ttf_bytes_id };
+    return Font{ .size = s, .line_height_factor = self.line_height_factor, .name = self.name };
 }
 
 pub fn lineHeightFactor(self: *const Font, factor: f32) Font {
-    return Font{ .size = self.size, .line_height_factor = factor, .name = self.name, .ttf_bytes_id = self.ttf_bytes_id };
+    return Font{ .size = self.size, .line_height_factor = factor, .name = self.name };
 }
 
 // handles multiple lines
