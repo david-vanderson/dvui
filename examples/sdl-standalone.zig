@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("dvui");
 const Backend = @import("SDLBackend");
 
-const window_icon_png = @embedFile("src/zig-favicon.png");
+const window_icon_png = @embedFile("zig-favicon.png");
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();

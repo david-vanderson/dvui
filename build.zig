@@ -119,15 +119,15 @@ pub fn build(b: *std.Build) !void {
     //    run_step.dependOn(run_cmd);
     //}
 
-    const examples = [_][]const u8{
-        "standalone-sdl",
-        "ontop-sdl",
+    const sdl_examples = [_][]const u8{
+        "sdl-standalone",
+        "sdl-ontop",
     };
 
-    inline for (examples) |ex| {
+    inline for (sdl_examples) |ex| {
         const exe = b.addExecutable(.{
             .name = ex,
-            .root_source_file = b.path(ex ++ ".zig"),
+            .root_source_file = b.path("examples/" ++ ex ++ ".zig"),
             .target = target,
             .optimize = optimize,
         });
@@ -135,39 +135,14 @@ pub fn build(b: *std.Build) !void {
         exe.root_module.addImport("dvui", dvui_mod);
         exe.root_module.addImport("SDLBackend", sdl_mod);
 
-        const compile_step = b.step(ex, "Compile " ++ ex);
+        const compile_step = b.step("compile-" ++ ex, "Compile " ++ ex);
         compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
         b.getInstallStep().dependOn(compile_step);
 
         const run_cmd = b.addRunArtifact(exe);
         run_cmd.step.dependOn(compile_step);
 
-        const run_step = b.step("run-" ++ ex, "Run " ++ ex);
-        run_step.dependOn(&run_cmd.step);
-    }
-
-    // sdl test
-    {
-        const exe = b.addExecutable(.{
-            .name = "sdl-test",
-            .root_source_file = b.path("sdl-test.zig"),
-            .target = target,
-            .optimize = optimize,
-        });
-
-        exe.root_module.addImport("dvui", dvui_mod);
-        exe.root_module.addImport("SDLBackend", sdl_mod);
-
-        const exe_install = b.addInstallArtifact(exe, .{});
-
-        const compile_step = b.step("compile-sdl-test", "Compile the SDL test");
-        compile_step.dependOn(&exe_install.step);
-        b.getInstallStep().dependOn(compile_step);
-
-        const run_cmd = b.addRunArtifact(exe);
-        run_cmd.step.dependOn(compile_step);
-
-        const run_step = b.step("sdl-test", "Run the SDL test");
+        const run_step = b.step(ex, "Run " ++ ex);
         run_step.dependOn(&run_cmd.step);
     }
 
@@ -223,7 +198,7 @@ pub fn build(b: *std.Build) !void {
 
         const wasm = b.addExecutable(.{
             .name = "web-test",
-            .root_source_file = b.path("web-test.zig"),
+            .root_source_file = b.path("examples/web-test.zig"),
             .target = b.resolveTargetQuery(webtarget),
             .optimize = optimize,
             .link_libc = true,
@@ -254,7 +229,7 @@ pub fn build(b: *std.Build) !void {
 
         const cb = b.addExecutable(.{
             .name = "cacheBuster",
-            .root_source_file = b.path("cacheBuster.zig"),
+            .root_source_file = b.path("src/cacheBuster.zig"),
             .target = b.host,
         });
         const cb_run = b.addRunArtifact(cb);
@@ -270,32 +245,4 @@ pub fn build(b: *std.Build) !void {
 
         b.getInstallStep().dependOn(compile_step);
     }
-
-    // color conversion test
-    //{
-    //    const exe = b.addExecutable(.{
-    //        .name = "test_color",
-    //        .root_source_file = .{ .path = "src/test_color.zig" },
-    //        .target = target,
-    //        .optimize = optimize,
-    //    });
-
-    //    const c_lib = b.addStaticLibrary(.{
-    //        .name = "hsluv",
-    //        .target = target,
-    //        .optimize = optimize,
-    //    });
-    //    c_lib.addCSourceFile(.{ .file = .{ .path = "src/hsluv.c" }, .flags = &.{} });
-    //    c_lib.linkLibC();
-    //    exe.linkLibrary(c_lib);
-
-    //    exe.addIncludePath(.{ .path = "src" });
-    //    exe.linkLibC();
-    //    b.installArtifact(exe);
-
-    //    const run_exe = b.addRunArtifact(exe);
-
-    //    const run_step = b.step("test_color", "Run test_color");
-    //    run_step.dependOn(&run_exe.step);
-    //}
 }
