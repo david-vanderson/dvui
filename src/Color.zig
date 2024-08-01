@@ -75,7 +75,7 @@ const clamp = std.math.clamp;
 
 const FieldEnum = std.meta.FieldEnum(@This());
 
-///extracts clamped field multiplied by alpha value
+/// extracts clamped field multiplied by alpha value
 pub fn extract(self: Color, field: FieldEnum) u16 {
     const a: f32 = @floatFromInt(self.a);
     const normalized_a = a / 255.0;
@@ -89,7 +89,8 @@ pub fn extract(self: Color, field: FieldEnum) u16 {
     return @intFromFloat(@floor(result));
 }
 
-pub fn merge(self: Color, other: Color) Color {
+/// Adds two colors rgb component-wise premultiplied by alpha
+pub fn alphaAdd(self: Color, other: Color) Color {
     return Color{
         .r = @intCast(clamp(self.extract(.r) + other.extract(.r), 0, 255)),
         .g = @intCast(clamp(self.extract(.g) + other.extract(.g), 0, 255)),
