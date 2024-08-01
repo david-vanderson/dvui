@@ -4,8 +4,6 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Theme = dvui.Theme;
 const Options = dvui.Options;
-const Vera = "Vera";
-const VeraBd = "VeraBd";
 
 //Colors inspired by the flow neovim theme
 const accent = Color{ .r = 0xff, .g = 0x33, .b = 0x99, .a = 0xff }; // colors.fluo.pink
@@ -24,15 +22,15 @@ pub const flow = Theme{
     .name = "Flow",
     .dark = true,
 
-    .font_body = .{ .size = 13, .name = "Vera", .ttf_bytes_id = Vera },
-    .font_heading = .{ .size = 13, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_caption = .{ .size = 10, .name = "Vera", .ttf_bytes_id = Vera },
-    .font_caption_heading = .{ .size = 10, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title = .{ .size = 28, .name = "Vera", .ttf_bytes_id = Vera },
-    .font_title_1 = .{ .size = 23, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title_2 = .{ .size = 20, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title_3 = .{ .size = 17, .name = "VeraBd", .ttf_bytes_id = VeraBd },
-    .font_title_4 = .{ .size = 15, .name = "VeraBd", .ttf_bytes_id = VeraBd },
+    .font_body = .{ .size = 13, .name = "Vera" },
+    .font_heading = .{ .size = 13, .name = "VeraBd" },
+    .font_caption = .{ .size = 10, .name = "Vera" },
+    .font_caption_heading = .{ .size = 10, .name = "VeraBd" },
+    .font_title = .{ .size = 28, .name = "Vera" },
+    .font_title_1 = .{ .size = 23, .name = "VeraBd" },
+    .font_title_2 = .{ .size = 20, .name = "VeraBd" },
+    .font_title_3 = .{ .size = 17, .name = "VeraBd" },
+    .font_title_4 = .{ .size = 15, .name = "VeraBd" },
 
     .color_accent = accent,
     .color_err = err,

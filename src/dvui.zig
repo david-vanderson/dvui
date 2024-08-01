@@ -342,14 +342,15 @@ const FontCacheEntry = struct {
 
     pub fn hash(font: Font) u32 {
         var h = fnv.init();
-        if (current_window) |win| {
-            const bytes = win.ttf_bytes_database.get(font.ttf_bytes_id) orelse Font.default_ttf_bytes;
-            h.update(std.mem.asBytes(&bytes.ptr));
-            h.update(std.mem.asBytes(&font.size));
-            return h.final();
+        var bytes: []const u8 = undefined;
+        if (currentWindow().ttf_bytes_database.get(font.name)) |ttf_bytes| {
+            bytes = ttf_bytes;
         } else {
-            @panic("Current window not initialized");
+            bytes = Font.default_ttf_bytes;
         }
+        h.update(std.mem.asBytes(&bytes.ptr));
+        h.update(std.mem.asBytes(&font.size));
+        return h.final();
     }
 
     pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32, font_name: []const u8) !GlyphInfo {
@@ -493,8 +494,14 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     }
 
     //ttf bytes
-    if (current_window == null) @panic("Window is null");
-    const bytes = current_window.?.ttf_bytes_database.get(font.ttf_bytes_id) orelse Font.default_ttf_bytes;
+    const bytes = blk: {
+        if (currentWindow().ttf_bytes_database.get(font.name)) |ttf_bytes| {
+            break :blk ttf_bytes;
+        } else {
+            log.warn("Font \"{s}\" not in dvui database, using default", .{font.name});
+            break :blk Font.default_ttf_bytes;
+        }
+    };
     log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
 
     var entry: FontCacheEntry = undefined;
