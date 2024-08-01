@@ -75,7 +75,7 @@ const clamp = std.math.clamp;
 
 const FieldEnum = std.meta.FieldEnum(@This());
 
-///extracts clamped field multiplied by a value
+///extracts clamped field multiplied by alpha value
 pub fn extract(self: Color, field: FieldEnum) u16 {
     const a: f32 = @floatFromInt(self.a);
     const normalized_a = a / 255.0;
@@ -83,7 +83,7 @@ pub fn extract(self: Color, field: FieldEnum) u16 {
         .r => self.r,
         .g => self.g,
         .b => self.b,
-        .a => @compileError("cannot extract a field from color"),
+        .a => @compileError("cannot extract alpha field from color"),
     });
     const result = normalized_a * value;
     return @intFromFloat(@floor(result));
