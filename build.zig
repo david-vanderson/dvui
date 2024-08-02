@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) !void {
 
     // need a separate module that doesn't include stb_image since raylib
     // bundles it (otherwise duplicate symbols)
-    const dvui_mod_raylib = b.addModule("dvui", .{
+    const dvui_mod_raylib = b.addModule("dvui_raylib", .{
         .root_source_file = b.path("src/dvui.zig"),
         .target = target,
         .optimize = optimize,
