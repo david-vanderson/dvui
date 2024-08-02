@@ -385,6 +385,7 @@ pub fn themeSerialization(demo_win_id: u32) !void {
 
         if (try dvui.expander(@src(), "Serialized Theme", .{}, .{ .expand = .horizontal })) {
             var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+            defer b.deinit();
 
             if (try dvui.button(@src(), "Copy To Clipboard", .{}, .{})) {
                 try dvui.clipboardTextSet(Static.buffer.getWritten());
@@ -394,7 +395,6 @@ pub fn themeSerialization(demo_win_id: u32) !void {
             var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
             try tl.addText(Static.buffer.getWritten(), .{});
             tl.deinit();
-            defer b.deinit();
         }
     }
 }
