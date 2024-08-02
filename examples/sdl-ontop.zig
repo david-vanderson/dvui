@@ -105,14 +105,9 @@ fn dvui_stuff() !void {
     }
     tl2.deinit();
 
-    if (dvui.Examples.show_demo_window) {
-        if (try dvui.button(@src(), "Hide Demo Window", .{}, .{})) {
-            dvui.Examples.show_demo_window = false;
-        }
-    } else {
-        if (try dvui.button(@src(), "Show Demo Window", .{}, .{})) {
-            dvui.Examples.show_demo_window = true;
-        }
+    const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
+    if (try dvui.button(@src(), label, .{}, .{})) {
+        dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
     // look at demo() for examples of dvui widgets, shows in a floating window
