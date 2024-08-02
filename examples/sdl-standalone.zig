@@ -20,7 +20,7 @@ pub fn main() !void {
     // init SDL backend (creates OS window)
     var backend = try Backend.init(.{
         .allocator = gpa,
-        .size = .{ .w = 500.0, .h = 600.0 },
+        .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = vsync,
         .title = "DVUI SDL Standalone Example",
