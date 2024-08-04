@@ -7,139 +7,69 @@ const Vertex = dvui.Vertex;
 const Backend = @This();
 
 ptr: *anyopaque,
-vtable: *const VTable,
+vtable: VTable,
 
-const VTable = struct {
-    nanoTime: *const fn (ptr: *anyopaque) i128,
-    sleep: *const fn (ptr: *anyopaque, ns: u64) void,
-    begin: *const fn (ptr: *anyopaque, arena: std.mem.Allocator) void,
-    end: *const fn (ptr: *anyopaque) void,
-    pixelSize: *const fn (ptr: *anyopaque) Size,
-    windowSize: *const fn (ptr: *anyopaque) Size,
-    contentScale: *const fn (ptr: *anyopaque) f32,
-    renderGeometry: *const fn (ptr: *anyopaque, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void,
-    textureCreate: *const fn (ptr: *anyopaque, pixels: [*]u8, width: u32, height: u32) *anyopaque,
-    textureDestroy: *const fn (ptr: *anyopaque, texture: *anyopaque) void,
-    clipboardText: *const fn (ptr: *anyopaque) error{OutOfMemory}![]const u8,
-    clipboardTextSet: *const fn (ptr: *anyopaque, text: []const u8) error{OutOfMemory}!void,
-    openURL: *const fn (ptr: *anyopaque, url: []const u8) error{OutOfMemory}!void,
-    refresh: *const fn (ptr: *anyopaque) void,
+pub fn VTableTypes(comptime Ptr: type) type {
+    return struct {
+        pub const nanoTime = *const fn (ptr: Ptr) i128;
+        pub const sleep = *const fn (ptr: Ptr, ns: u64) void;
+        pub const begin = *const fn (ptr: Ptr, arena: std.mem.Allocator) void;
+        pub const end = *const fn (ptr: Ptr) void;
+        pub const pixelSize = *const fn (ptr: Ptr) Size;
+        pub const windowSize = *const fn (ptr: Ptr) Size;
+        pub const contentScale = *const fn (ptr: Ptr) f32;
+        pub const renderGeometry = *const fn (ptr: Ptr, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void;
+        pub const textureCreate = *const fn (ptr: Ptr, pixels: [*]u8, width: u32, height: u32) *anyopaque;
+        pub const textureDestroy = *const fn (ptr: Ptr, texture: *anyopaque) void;
+        pub const clipboardText = *const fn (ptr: Ptr) error{OutOfMemory}![]const u8;
+        pub const clipboardTextSet = *const fn (ptr: Ptr, text: []const u8) error{OutOfMemory}!void;
+        pub const openURL = *const fn (ptr: Ptr, url: []const u8) error{OutOfMemory}!void;
+        pub const refresh = *const fn (ptr: Ptr) void;
+    };
+}
+
+pub const VTable = struct {
+    pub const I = VTableTypes(*anyopaque);
+
+    nanoTime: I.nanoTime,
+    sleep: I.sleep,
+    begin: I.begin,
+    end: I.end,
+    pixelSize: I.pixelSize,
+    windowSize: I.windowSize,
+    contentScale: I.contentScale,
+    renderGeometry: I.renderGeometry,
+    textureCreate: I.textureCreate,
+    textureDestroy: I.textureDestroy,
+    clipboardText: I.clipboardText,
+    clipboardTextSet: I.clipboardTextSet,
+    openURL: I.openURL,
+    refresh: I.refresh,
 };
+
+fn compile_assert(comptime x: bool, comptime msg: []const u8) void {
+    if (!x) @compileError(msg);
+}
 
 pub fn init(
     pointer: anytype,
-    comptime nanoTimeFn: fn (ptr: @TypeOf(pointer)) i128,
-    comptime sleepFn: fn (ptr: @TypeOf(pointer), ns: u64) void,
-    comptime beginFn: fn (ptr: @TypeOf(pointer), arena: std.mem.Allocator) void,
-    comptime endFn: fn (ptr: @TypeOf(pointer)) void,
-    comptime pixelSizeFn: fn (ptr: @TypeOf(pointer)) Size,
-    comptime windowSizeFn: fn (ptr: @TypeOf(pointer)) Size,
-    comptime contentScaleFn: fn (ptr: @TypeOf(pointer)) f32,
-    comptime renderGeometryFn: fn (ptr: @TypeOf(pointer), texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void,
-    comptime textureCreateFn: fn (ptr: @TypeOf(pointer), pixels: [*]u8, width: u32, height: u32) *anyopaque,
-    comptime textureDestroyFn: fn (ptr: @TypeOf(pointer), texture: *anyopaque) void,
-    comptime clipboardTextFn: fn (ptr: @TypeOf(pointer)) error{OutOfMemory}![]const u8,
-    comptime clipboardTextSetFn: fn (ptr: @TypeOf(pointer), text: []const u8) error{OutOfMemory}!void,
-    comptime openURLFn: fn (ptr: @TypeOf(pointer), url: []const u8) error{OutOfMemory}!void,
-    comptime refreshFn: fn (ptr: @TypeOf(pointer)) void,
+    comptime interface: anytype,
 ) Backend {
     const Ptr = @TypeOf(pointer);
-    const ptr_info = @typeInfo(Ptr);
-    std.debug.assert(ptr_info == .Pointer); // Must be a pointer
-    std.debug.assert(ptr_info.Pointer.size == .One); // Must be a single-item pointer
+    const I = VTableTypes(Ptr);
 
-    const gen = struct {
-        fn nanoTimeImpl(ptr: *anyopaque) i128 {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            return @call(.always_inline, nanoTimeFn, .{self});
-        }
+    compile_assert(@sizeOf(Ptr) == @sizeOf(usize), "Must be a pointer-sized"); // calling convention dictates that any type can work here after converted to *anyopaque
 
-        fn sleepImpl(ptr: *anyopaque, ns: u64) void {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            return @call(.always_inline, sleepFn, .{ self, ns });
-        }
+    comptime var vtable: VTable = undefined;
 
-        fn beginImpl(ptr: *anyopaque, arena: std.mem.Allocator) void {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            return @call(.always_inline, beginFn, .{ self, arena });
-        }
-
-        fn endImpl(ptr: *anyopaque) void {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            return @call(.always_inline, endFn, .{self});
-        }
-
-        fn pixelSizeImpl(ptr: *anyopaque) Size {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            return @call(.always_inline, pixelSizeFn, .{self});
-        }
-
-        fn windowSizeImpl(ptr: *anyopaque) Size {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            return @call(.always_inline, windowSizeFn, .{self});
-        }
-
-        fn contentScaleImpl(ptr: *anyopaque) f32 {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            return @call(.always_inline, contentScaleFn, .{self});
-        }
-
-        fn renderGeometryImpl(ptr: *anyopaque, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            return @call(.always_inline, renderGeometryFn, .{ self, texture, vtx, idx });
-        }
-
-        fn textureCreateImpl(ptr: *anyopaque, pixels: [*]u8, width: u32, height: u32) *anyopaque {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            return @call(.always_inline, textureCreateFn, .{ self, pixels, width, height });
-        }
-
-        fn textureDestroyImpl(ptr: *anyopaque, texture: *anyopaque) void {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            return @call(.always_inline, textureDestroyFn, .{ self, texture });
-        }
-
-        fn clipboardTextImpl(ptr: *anyopaque) error{OutOfMemory}![]const u8 {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            return @call(.always_inline, clipboardTextFn, .{self});
-        }
-
-        fn clipboardTextSetImpl(ptr: *anyopaque, text: []const u8) error{OutOfMemory}!void {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            try @call(.always_inline, clipboardTextSetFn, .{ self, text });
-        }
-
-        fn openURLImpl(ptr: *anyopaque, url: []const u8) error{OutOfMemory}!void {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            try @call(.always_inline, openURLFn, .{ self, url });
-        }
-
-        fn refreshImpl(ptr: *anyopaque) void {
-            const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
-            return @call(.always_inline, refreshFn, .{self});
-        }
-
-        const vtable = VTable{
-            .nanoTime = nanoTimeImpl,
-            .sleep = sleepImpl,
-            .begin = beginImpl,
-            .end = endImpl,
-            .pixelSize = pixelSizeImpl,
-            .windowSize = windowSizeImpl,
-            .contentScale = contentScaleImpl,
-            .renderGeometry = renderGeometryImpl,
-            .textureCreate = textureCreateImpl,
-            .textureDestroy = textureDestroyImpl,
-            .clipboardText = clipboardTextImpl,
-            .clipboardTextSet = clipboardTextSetImpl,
-            .openURL = openURLImpl,
-            .refresh = refreshImpl,
-        };
-    };
+    inline for (@typeInfo(I).Struct.decls) |decl| {
+        const f: @field(I, decl.name) = &@field(interface, decl.name);
+        @field(vtable, decl.name) = @ptrCast(f);
+    }
 
     return .{
         .ptr = pointer,
-        .vtable = &gen.vtable,
+        .vtable = vtable,
     };
 }
 

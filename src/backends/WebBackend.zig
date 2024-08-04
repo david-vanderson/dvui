@@ -348,7 +348,7 @@ pub fn about(_: *WebBackend) []const u8 {
 }
 
 pub fn backend(self: *WebBackend) dvui.Backend {
-    return dvui.Backend.init(self, nanoTime, sleep, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, openURL, refresh);
+    return dvui.Backend.init(self, @This());
 }
 
 pub fn nanoTime(self: *WebBackend) i128 {
