@@ -96,7 +96,7 @@ pub fn deinit(_: *RaylibBackend) void {
 }
 
 pub fn backend(self: *RaylibBackend) dvui.Backend {
-    return dvui.Backend.init(self, nanoTime, sleep, begin, end, pixelSize, windowSize, contentScale, renderGeometry, textureCreate, textureDestroy, clipboardText, clipboardTextSet, openURL, refresh);
+    return dvui.Backend.init(self, @This());
 }
 
 pub fn nanoTime(self: *RaylibBackend) i128 {
