@@ -804,6 +804,16 @@ pub fn cursorSet(cursor: enums.Cursor) void {
     cw.cursor_requested = cursor;
 }
 
+fn drawClippedTriangles_helper(backend: *Backend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
+    const clipr = dvui.windowRectPixels().intersect(dvui.clipGet());
+    // optimize: invert this logic outside this function. vtx and idx do not need to be built at all when this is true
+    // then, inline clipr and remove this function
+    if (clipr.empty()) {
+        return;
+    }
+    return backend.drawClippedTriangles(texture, vtx, idx, clipr);
+}
+
 pub fn pathAddPoint(p: Point) !void {
     const cw = currentWindow();
     try cw.path.append(p);
@@ -934,7 +944,7 @@ pub fn pathFillConvex(col: Color) !void {
         try idx.append(@as(u32, @intCast(bi * 2)));
     }
 
-    cw.backend.renderGeometry(null, vtx.items, idx.items);
+    drawClippedTriangles_helper(&cw.backend, null, vtx.items, idx.items);
 
     cw.path.clearAndFree();
 }
@@ -1188,7 +1198,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         }
     }
 
-    cw.backend.renderGeometry(null, vtx.items, idx.items);
+    drawClippedTriangles_helper(&cw.backend, null, vtx.items, idx.items);
 
     cw.path.clearAndFree();
 }
@@ -5395,11 +5405,11 @@ pub fn renderText(opts: renderTextOptions) !void {
                 v.uv[0] = 0;
                 v.uv[1] = 0;
             }
-            cw.backend.renderGeometry(null, &sel_vtx, &[_]u32{ 0, 1, 2, 0, 2, 3 });
+            drawClippedTriangles_helper(&cw.backend, null, &sel_vtx, &[_]u32{ 0, 1, 2, 0, 2, 3 });
         }
     }
 
-    cw.backend.renderGeometry(fce.texture_atlas, vtx.items, idx.items);
+    drawClippedTriangles_helper(&cw.backend, fce.texture_atlas, vtx.items, idx.items);
 }
 
 pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
@@ -5455,7 +5465,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
         try idx.append(len + 2);
         try idx.append(len + 3);
 
-        cw.backend.renderGeometry(kv.value_ptr.texture_atlas, vtx.items, idx.items);
+        drawClippedTriangles_helper(&cw.backend, kv.value_ptr.texture_atlas, vtx.items, idx.items);
 
         offset += kv.value_ptr.texture_atlas_size.h;
     }
@@ -5524,7 +5534,7 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Co
     try idx.append(2);
     try idx.append(3);
 
-    cw.backend.renderGeometry(tex, vtx.items, idx.items);
+    drawClippedTriangles_helper(&cw.backend, tex, vtx.items, idx.items);
 }
 
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotation: f32, colormod: Color) !void {

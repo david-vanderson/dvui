@@ -26,7 +26,7 @@ pub fn VTableTypes(comptime Ptr: type) type {
         /// TK
         pub const contentScale = *const fn (ptr: Ptr) f32;
         /// TK
-        pub const renderGeometry = *const fn (ptr: Ptr, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void;
+        pub const drawClippedTriangles = *const fn (ptr: Ptr, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32, clipr: dvui.Rect) void;
         /// Create backend texture
         pub const textureCreate = *const fn (ptr: Ptr, pixels: [*]u8, width: u32, height: u32) *anyopaque;
         /// Destroy backend texture
@@ -52,7 +52,7 @@ pub const VTable = struct {
     pixelSize: I.pixelSize,
     windowSize: I.windowSize,
     contentScale: I.contentScale,
-    renderGeometry: I.renderGeometry,
+    drawClippedTriangles: I.drawClippedTriangles,
     textureCreate: I.textureCreate,
     textureDestroy: I.textureDestroy,
     clipboardText: I.clipboardText,
@@ -111,8 +111,8 @@ pub fn windowSize(self: *Backend) Size {
 pub fn contentScale(self: *Backend) f32 {
     return self.vtable.contentScale(self.ptr);
 }
-pub fn renderGeometry(self: *Backend, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void {
-    return self.vtable.renderGeometry(self.ptr, texture, vtx, idx);
+pub fn drawClippedTriangles(self: *Backend, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32, clipr: dvui.Rect) void {
+    return self.vtable.drawClippedTriangles(self.ptr, texture, vtx, idx, clipr);
 }
 pub fn textureCreate(self: *Backend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
     return self.vtable.textureCreate(self.ptr, pixels, width, height);

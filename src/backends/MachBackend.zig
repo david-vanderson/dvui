@@ -238,7 +238,7 @@ pub fn addAllEvents(self: *MachBackend, win: *dvui.Window) !bool {
 }
 
 pub fn backend(self: *MachBackend) dvui.Backend {
-    return dvui.Backend.init(self, begin, end, pixelSize, windowSize, renderGeometry, textureCreate, textureDestroy);
+    return dvui.Backend.init(self, begin, end, pixelSize, windowSize, drawClippedTriangles, textureCreate, textureDestroy);
 }
 
 pub fn begin(self: *MachBackend, arena: std.mem.Allocator) void {
@@ -274,13 +274,13 @@ pub fn windowSize(self: *MachBackend) dvui.Size {
     return dvui.Size{ .w = @as(f32, @floatFromInt(size.width)), .h = @as(f32, @floatFromInt(size.height)) };
 }
 
-pub fn renderGeometry(self: *MachBackend, tex: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
+pub fn drawClippedTriangles(self: *MachBackend, tex: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
     const clipr = dvui.windowRectPixels().intersect(dvui.clipGet());
     if (clipr.empty()) {
         return;
     }
 
-    //std.debug.print("renderGeometry {} {x}\n", .{clipr, tex});
+    //std.debug.print("drawClippedTriangles {} {x}\n", .{clipr, tex});
 
     if (clipr.x != self.clipr.x or
         clipr.y != self.clipr.y or

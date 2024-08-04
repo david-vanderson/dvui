@@ -209,7 +209,7 @@ function dvui(canvasId, wasmFile) {
             gl.deleteTexture(texture);
         },
         wasm_renderGeometry(textureId, index_ptr, index_len, vertex_ptr, vertex_len, sizeof_vertex, offset_pos, offset_col, offset_uv, x, y, w, h) {
-            //console.log("renderGeometry " + textureId + " sizeof " + sizeof_vertex + " pos " + offset_pos + " col " + offset_col + " uv " + offset_uv);
+            //console.log("drawClippedTriangles " + textureId + " sizeof " + sizeof_vertex + " pos " + offset_pos + " col " + offset_col + " uv " + offset_uv);
 
             const old_scissor = gl.getParameter(gl.SCISSOR_BOX);
             gl.scissor(x, y, w, h);
