@@ -53,7 +53,7 @@ fn compile_assert(comptime x: bool, comptime msg: []const u8) void {
 
 pub fn init(
     pointer: anytype,
-    comptime interface: anytype,
+    comptime Interface: anytype,
 ) Backend {
     const Ptr = @TypeOf(pointer);
     const I = VTableTypes(Ptr);
@@ -63,7 +63,10 @@ pub fn init(
     comptime var vtable: VTable = undefined;
 
     inline for (@typeInfo(I).Struct.decls) |decl| {
-        const f: @field(I, decl.name) = &@field(interface, decl.name);
+        const hasField = @hasDecl(Interface, decl.name);
+        const DeclType = @field(I, decl.name);
+        compile_assert(hasField, "Backend type " ++ @typeName(Interface) ++ " has no declaration '" ++ decl.name ++ ": " ++ @typeName(DeclType) ++ "'");
+        const f: DeclType = &@field(Interface, decl.name);
         @field(vtable, decl.name) = @ptrCast(f);
     }
 
