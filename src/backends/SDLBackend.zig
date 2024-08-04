@@ -19,6 +19,14 @@ cursor_last: dvui.enums.Cursor = .arrow,
 cursor_backing: [@typeInfo(dvui.enums.Cursor).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.enums.Cursor).Enum.fields.len,
 cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(dvui.enums.Cursor).Enum.fields.len,
 arena: std.mem.Allocator = undefined,
+batching_draw_calls: bool = false,
+draw_calls_start: ?*Node = null,
+draw_calls_end: *Node = undefined,
+
+const Node = struct {
+    next: ?*Node,
+    data: DrawCall,
+};
 
 pub const InitOptions = struct {
     /// The allocator used for temporary allocations used during init()
@@ -405,12 +413,58 @@ pub fn contentScale(self: *SDLBackend) f32 {
     return self.initial_scale;
 }
 
+const DrawCall = struct {
+    ?*anyopaque,
+    []const dvui.Vertex,
+    []const u32,
+    dvui.Rect,
+};
+
+pub fn recordDrawCall(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32, clipr: dvui.Rect) !void {
+    const args = DrawCall{ texture, try self.arena.dupe(dvui.Vertex, vtx), try self.arena.dupe(u32, idx), clipr };
+    const node = try self.arena.create(Node);
+    node.* = .{ .next = null, .data = args };
+    // std.log.info("saving  {}", .{node.data});
+
+    if (self.draw_calls_start) |_| {
+        // std.log.info("{} {}", .{ -1, @intFromPtr(self.draw_calls_start) });
+        self.draw_calls_end.next = node;
+    } else {
+        // std.log.info("{} {}", .{ -2, @intFromPtr(self.draw_calls_start) });
+        self.draw_calls_start = node;
+        // std.log.info("{} {}", .{ -3, @intFromPtr(self.draw_calls_start) });
+    }
+    self.draw_calls_end = node;
+}
+
+pub fn clearDrawCalls(self: *SDLBackend) void {
+    self.draw_calls_start = null;
+}
+
+pub fn replayDrawCalls(self: *SDLBackend) void {
+    var curr = self.draw_calls_start;
+    var i: i32 = 0;
+    while (curr) |node| {
+        // std.log.info("drawing step {}  {}", .{ i, node.data });
+        @call(.auto, renderGeometryImmediate, .{self} ++ node.data);
+        curr = node.next;
+        i += 1;
+    }
+}
+
 pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
     const clipr = dvui.windowRectPixels().intersect(dvui.clipGet());
     if (clipr.empty()) {
         return;
     }
+    if (self.batching_draw_calls) {
+        return recordDrawCall(self, texture, vtx, idx, clipr) catch @panic("todo: handle this");
+    } else {
+        return renderGeometryImmediate(self, texture, vtx, idx, clipr);
+    }
+}
 
+pub fn renderGeometryImmediate(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32, clipr: dvui.Rect) void {
     //std.debug.print("renderGeometry:\n", .{});
     //for (vtx) |v, i| {
     //  std.debug.print("  {d} vertex {}\n", .{i, v});

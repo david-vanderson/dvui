@@ -1,6 +1,7 @@
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
+const Allocator = std.mem.Allocator;
 const Size = dvui.Size;
 const Vertex = dvui.Vertex;
 
@@ -16,7 +17,7 @@ pub fn VTableTypes(comptime Ptr: type) type {
         /// Sleep for nanoseconds
         pub const sleep = *const fn (ptr: Ptr, ns: u64) void;
         /// TK
-        pub const begin = *const fn (ptr: Ptr, arena: std.mem.Allocator) void;
+        pub const begin = *const fn (ptr: Ptr, arena: Allocator) void;
         /// TK
         pub const end = *const fn (ptr: Ptr) void;
         /// TK
@@ -32,11 +33,11 @@ pub fn VTableTypes(comptime Ptr: type) type {
         /// Destroy backend texture
         pub const textureDestroy = *const fn (ptr: Ptr, texture: *anyopaque) void;
         /// Get clipboard content (text only)
-        pub const clipboardText = *const fn (ptr: Ptr) error{OutOfMemory}![]const u8;
+        pub const clipboardText = *const fn (ptr: Ptr) Allocator.Error![]const u8;
         /// Set clipboard content (text only)
-        pub const clipboardTextSet = *const fn (ptr: Ptr, text: []const u8) error{OutOfMemory}!void;
+        pub const clipboardTextSet = *const fn (ptr: Ptr, text: []const u8) Allocator.Error!void;
         /// Open URL in system browser
-        pub const openURL = *const fn (ptr: Ptr, url: []const u8) error{OutOfMemory}!void;
+        pub const openURL = *const fn (ptr: Ptr, url: []const u8) Allocator.Error!void;
         /// TK
         pub const refresh = *const fn (ptr: Ptr) void;
     };
@@ -96,7 +97,7 @@ pub fn nanoTime(self: *Backend) i128 {
 pub fn sleep(self: *Backend, ns: u64) void {
     return self.vtable.sleep(self.ptr, ns);
 }
-pub fn begin(self: *Backend, arena: std.mem.Allocator) void {
+pub fn begin(self: *Backend, arena: Allocator) void {
     return self.vtable.begin(self.ptr, arena);
 }
 pub fn end(self: *Backend) void {

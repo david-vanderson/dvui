@@ -27,13 +27,13 @@ pub fn main() !void {
         .icon = window_icon_png, // can also call setIconFromFileContent()
     });
     defer backend.deinit();
+    backend.batching_draw_calls = true;
 
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
     defer win.deinit();
 
     main_loop: while (true) {
-
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(backend.hasEvent());
 
@@ -44,6 +44,8 @@ pub fn main() !void {
         const quit = try backend.addAllEvents(&win);
         if (quit) break :main_loop;
 
+        backend.clearDrawCalls();
+
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
         backend.clear();
@@ -53,6 +55,8 @@ pub fn main() !void {
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
         const end_micros = try win.end(.{});
+
+        backend.replayDrawCalls();
 
         // cursor management
         backend.setCursor(win.cursorRequested());
