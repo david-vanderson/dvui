@@ -11,19 +11,33 @@ vtable: VTable,
 
 pub fn VTableTypes(comptime Ptr: type) type {
     return struct {
+        /// Get monotonic nanosecond timestamp. may not be system time.
         pub const nanoTime = *const fn (ptr: Ptr) i128;
+        /// Sleep for nanoseconds
         pub const sleep = *const fn (ptr: Ptr, ns: u64) void;
+        /// TK
         pub const begin = *const fn (ptr: Ptr, arena: std.mem.Allocator) void;
+        /// TK
         pub const end = *const fn (ptr: Ptr) void;
+        /// TK
         pub const pixelSize = *const fn (ptr: Ptr) Size;
+        /// TK
         pub const windowSize = *const fn (ptr: Ptr) Size;
+        /// TK
         pub const contentScale = *const fn (ptr: Ptr) f32;
+        /// TK
         pub const renderGeometry = *const fn (ptr: Ptr, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void;
+        /// Create backend texture
         pub const textureCreate = *const fn (ptr: Ptr, pixels: [*]u8, width: u32, height: u32) *anyopaque;
+        /// Destroy backend texture
         pub const textureDestroy = *const fn (ptr: Ptr, texture: *anyopaque) void;
+        /// Get clipboard content (text only)
         pub const clipboardText = *const fn (ptr: Ptr) error{OutOfMemory}![]const u8;
+        /// Set clipboard content (text only)
         pub const clipboardTextSet = *const fn (ptr: Ptr, text: []const u8) error{OutOfMemory}!void;
+        /// Open URL in system browser
         pub const openURL = *const fn (ptr: Ptr, url: []const u8) error{OutOfMemory}!void;
+        /// TK
         pub const refresh = *const fn (ptr: Ptr) void;
     };
 }
@@ -79,55 +93,42 @@ pub fn init(
 pub fn nanoTime(self: *Backend) i128 {
     return self.vtable.nanoTime(self.ptr);
 }
-
 pub fn sleep(self: *Backend, ns: u64) void {
     return self.vtable.sleep(self.ptr, ns);
 }
-
 pub fn begin(self: *Backend, arena: std.mem.Allocator) void {
-    self.vtable.begin(self.ptr, arena);
+    return self.vtable.begin(self.ptr, arena);
 }
-
 pub fn end(self: *Backend) void {
-    self.vtable.end(self.ptr);
+    return self.vtable.end(self.ptr);
 }
-
 pub fn pixelSize(self: *Backend) Size {
     return self.vtable.pixelSize(self.ptr);
 }
-
 pub fn windowSize(self: *Backend) Size {
     return self.vtable.windowSize(self.ptr);
 }
-
 pub fn contentScale(self: *Backend) f32 {
     return self.vtable.contentScale(self.ptr);
 }
-
 pub fn renderGeometry(self: *Backend, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32) void {
-    self.vtable.renderGeometry(self.ptr, texture, vtx, idx);
+    return self.vtable.renderGeometry(self.ptr, texture, vtx, idx);
 }
-
 pub fn textureCreate(self: *Backend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
     return self.vtable.textureCreate(self.ptr, pixels, width, height);
 }
-
 pub fn textureDestroy(self: *Backend, texture: *anyopaque) void {
-    self.vtable.textureDestroy(self.ptr, texture);
+    return self.vtable.textureDestroy(self.ptr, texture);
 }
-
 pub fn clipboardText(self: *Backend) error{OutOfMemory}![]const u8 {
     return self.vtable.clipboardText(self.ptr);
 }
-
 pub fn clipboardTextSet(self: *Backend, text: []const u8) error{OutOfMemory}!void {
-    try self.vtable.clipboardTextSet(self.ptr, text);
+    return self.vtable.clipboardTextSet(self.ptr, text);
 }
-
 pub fn openURL(self: *Backend, url: []const u8) error{OutOfMemory}!void {
-    try self.vtable.openURL(self.ptr, url);
+    return self.vtable.openURL(self.ptr, url);
 }
-
 pub fn refresh(self: *Backend) void {
-    self.vtable.refresh(self.ptr);
+    return self.vtable.refresh(self.ptr);
 }
