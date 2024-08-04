@@ -405,13 +405,8 @@ pub fn contentScale(self: *SDLBackend) f32 {
     return self.initial_scale;
 }
 
-pub fn renderGeometry(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
-    const clipr = dvui.windowRectPixels().intersect(dvui.clipGet());
-    if (clipr.empty()) {
-        return;
-    }
-
-    //std.debug.print("renderGeometry:\n", .{});
+pub fn drawClippedTriangles(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32, clipr: dvui.Rect) void {
+    //std.debug.print("drawClippedTriangles:\n", .{});
     //for (vtx) |v, i| {
     //  std.debug.print("  {d} vertex {}\n", .{i, v});
     //}

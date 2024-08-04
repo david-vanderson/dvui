@@ -134,7 +134,8 @@ pub fn contentScale(_: *RaylibBackend) f32 {
     return 1.0;
 }
 
-pub fn renderGeometry(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
+pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32, clipr: dvui.Rect) void {
+    _ = clipr;
     // TODO: scissor
     // TODO: texture
 

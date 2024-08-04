@@ -96,7 +96,7 @@ fn update() !i32 {
     //    .{ .pos = .{ .x = 200, .y = 250 }, .uv = .{ 1.0, 1.0 }, .col = .{ .r = 0, .b = 0, .a = 100 } },
     //    .{ .pos = .{ .x = 100, .y = 250 }, .uv = .{ 0.0, 1.0 }, .col = .{ .r = 0, .g = 0 } },
     //};
-    //backend.renderGeometry(null, vtx, indices);
+    //backend.drawClippedTriangles(null, vtx, indices);
 
     const end_micros = try win.end(.{});
 

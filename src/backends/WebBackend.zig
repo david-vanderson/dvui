@@ -380,12 +380,7 @@ pub fn contentScale(_: *WebBackend) f32 {
     return 1.0;
 }
 
-pub fn renderGeometry(_: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
-    const clipr = dvui.windowRectPixels().intersect(dvui.clipGet());
-    if (clipr.empty()) {
-        return;
-    }
-
+pub fn drawClippedTriangles(_: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32, clipr: dvui.Rect) void {
     // figure out how much we are losing by truncating x and y, need to add that back to w and h
     const x: u32 = @intFromFloat(clipr.x);
     const w: u32 = @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x)));
@@ -395,7 +390,7 @@ pub fn renderGeometry(_: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Ve
     const y: u32 = @intFromFloat(ry);
     const h: u32 = @intFromFloat(@ceil(clipr.h + ry - @floor(ry)));
 
-    //dvui.log.debug("renderGeometry pixels {} clipr {} ry {d} clip {d} {d} {d} {d}", .{ dvui.windowRectPixels(), clipr, ry, x, y, w, h });
+    //dvui.log.debug("drawClippedTriangles pixels {} clipr {} ry {d} clip {d} {d} {d} {d}", .{ dvui.windowRectPixels(), clipr, ry, x, y, w, h });
 
     const index_slice = std.mem.sliceAsBytes(idx);
     const vertex_slice = std.mem.sliceAsBytes(vtx);
