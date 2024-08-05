@@ -1811,6 +1811,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
         .close_popup => unreachable,
         .scroll_drag => unreachable,
         .scroll_to => unreachable,
+        .scroll_propogate => unreachable,
     }
 
     return true;

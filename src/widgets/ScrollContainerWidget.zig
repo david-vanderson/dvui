@@ -86,8 +86,10 @@ pub fn install(self: *ScrollContainerWidget) !void {
 }
 
 pub fn matchEvent(self: *ScrollContainerWidget, e: *Event) bool {
-    // track finger release even if it doesn't happen in our rect
-    if (e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
+    // track finger press/release even if it doesn't happen in our rect
+    if (e.evt == .mouse and e.evt.mouse.action == .press and e.evt.mouse.button.touch()) {
+        self.finger_down = true;
+    } else if (e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
         self.finger_down = false;
     }
 
@@ -220,8 +222,6 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
         .mouse => |me| {
             // for finger down we let the event go through but stop any velocity scrolling
             if (me.action == .press and me.button.touch()) {
-                self.finger_down = true;
-
                 // stop any current scrolling
                 if (self.si.velocity.x != 0 or self.si.velocity.y != 0) {
                     // if we were scrolling, then eat the finger press so it
@@ -356,11 +356,52 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
                 dvui.refresh(null, @src(), self.wd.id);
             }
         },
+        .scroll_propogate => |sp| {
+            self.processMotionScrollEvent(e, sp.motion);
+        },
         else => {},
     }
 
     if (e.bubbleable()) {
         self.wd.parent.processEvent(e, true);
+    }
+}
+
+pub fn processMotionScrollEvent(self: *ScrollContainerWidget, e: *dvui.Event, motion: dvui.Point) void {
+    e.handled = true;
+
+    const rs = self.wd.borderRectScale();
+
+    // Whether to propogate out to any containing scroll
+    // containers. Propogate unless we did the whole scroll
+    // in the main direction of movement.
+    //
+    // This helps prevent spurious propogation from a text
+    // entry box where you are trying to scroll vertically
+    // but the motion event has a small amount of
+    // horizontal.
+    var propogate: bool = true;
+
+    if (self.si.vertical != .none) {
+        self.si.viewport.y -= motion.y / rs.s;
+        self.si.velocity.y = -motion.y / rs.s;
+        dvui.refresh(null, @src(), self.wd.id);
+        if (@abs(motion.y) > @abs(motion.x) and self.si.viewport.y >= 0 and self.si.viewport.y <= self.si.scroll_max(.vertical)) {
+            propogate = false;
+        }
+    }
+    if (self.si.horizontal != .none) {
+        self.si.viewport.x -= motion.x / rs.s;
+        self.si.velocity.x = -motion.x / rs.s;
+        dvui.refresh(null, @src(), self.wd.id);
+        if (@abs(motion.x) > @abs(motion.y) and self.si.viewport.x >= 0 and self.si.viewport.x <= self.si.scroll_max(.horizontal)) {
+            propogate = false;
+        }
+    }
+
+    if (propogate) {
+        var scrollprop = Event{ .evt = .{ .scroll_propogate = .{ .motion = motion } } };
+        self.wd.parent.processEvent(&scrollprop, true);
     }
 }
 
@@ -402,43 +443,19 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     // don't let this event go through to floating window
                     // which would capture the mouse preventing scrolling
                     e.handled = true;
+                    dvui.captureMouse(self.wd.id);
                 } else if (me.action == .release and dvui.captured(self.wd.id)) {
                     e.handled = true;
                     dvui.captureMouse(null);
                 } else if (me.action == .motion and me.button.touch()) {
-                    // Whether to propogate out to any containing scroll
-                    // containers. Propogate unless we did the whole scroll
-                    // in the main direction of movement.
-                    //
-                    // This helps prevent spurious propogation from a text
-                    // entry box where you are trying to scroll vertically
-                    // but the motion event has a small amount of
-                    // horizontal.
-                    var propogate: bool = true;
+                    // Need to capture here because it's common for the touch
+                    // down to happen on top of a different widget.  Example is
+                    // a touch down on a button, which captures.  Then when the
+                    // drag starts the button gives up capture, so we get here,
+                    // never having seen the touch down.
+                    dvui.captureMouse(self.wd.id);
 
-                    if (self.si.vertical != .none) {
-                        self.si.viewport.y -= me.data.motion.y / rs.s;
-                        self.si.velocity.y = -me.data.motion.y / rs.s;
-                        dvui.refresh(null, @src(), self.wd.id);
-                        if (@abs(me.data.motion.y) > @abs(me.data.motion.x) and self.si.viewport.y >= 0 and self.si.viewport.y <= self.si.scroll_max(.vertical)) {
-                            propogate = false;
-                        }
-                    }
-                    if (self.si.horizontal != .none) {
-                        self.si.viewport.x -= me.data.motion.x / rs.s;
-                        self.si.velocity.x = -me.data.motion.x / rs.s;
-                        dvui.refresh(null, @src(), self.wd.id);
-                        if (@abs(me.data.motion.x) > @abs(me.data.motion.y) and self.si.viewport.x >= 0 and self.si.viewport.x <= self.si.scroll_max(.horizontal)) {
-                            propogate = false;
-                        }
-                    }
-
-                    if (propogate) {
-                        dvui.captureMouse(null);
-                    } else {
-                        e.handled = true;
-                        dvui.captureMouse(self.wd.id);
-                    }
+                    self.processMotionScrollEvent(e, me.data.motion);
                 }
             },
             else => {},
