@@ -22,6 +22,7 @@ evt: union(enum) {
     close_popup: ClosePopup,
     scroll_drag: ScrollDrag,
     scroll_to: ScrollTo,
+    scroll_propogate: ScrollPropogate,
 },
 
 // All widgets have to bubble keyboard events if they can have keyboard focus
@@ -115,4 +116,14 @@ pub const ScrollTo = struct {
     // whether to scroll outside the current scroll bounds (useful if the
     // current action might be expanding the scroll area)
     over_scroll: bool = false,
+};
+
+/// Event bubbled from a scrollarea when user tries to scroll farther than it
+/// can.  Containing scrollareas use this to scroll if they can.
+/// Example is scrolling a TextEntry to its top will then scroll the containing
+/// page up.
+pub const ScrollPropogate = struct {
+    /// Motion field from the Mouse event that would have scrolled but we were
+    /// at the edge.
+    motion: Point,
 };
