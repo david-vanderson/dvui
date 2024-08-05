@@ -3792,20 +3792,47 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 
         // only want a mouse-up to choose something if the mouse has moved in the popup
         var eat_mouse_up = dataGet(null, pop.wd.id, "_eat_mouse_up", bool) orelse true;
+        var drag_scroll = dataGet(null, pop.wd.id, "_drag_scroll", bool) orelse false;
 
+        const pop_rs = pop.data().rectScale();
+        const scroll_rs = pop.scroll.data().contentRectScale();
         const evts = events();
         for (evts) |*e| {
-            if (!eventMatch(e, .{ .id = pop.data().id, .r = pop.data().rectScale().r }))
+            if (drag_scroll and e.evt == .mouse and !e.evt.mouse.button.touch() and (e.evt.mouse.action == .motion or e.evt.mouse.action == .position)) {
+                if (e.evt.mouse.p.x >= scroll_rs.r.x and e.evt.mouse.p.x <= scroll_rs.r.x + scroll_rs.r.w and (e.evt.mouse.p.y <= scroll_rs.r.y or e.evt.mouse.p.y >= scroll_rs.r.y + scroll_rs.r.h)) {
+                    if (e.evt.mouse.action == .motion) {
+                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                            .mouse_pt = e.evt.mouse.p,
+                            .screen_rect = pop.menu.data().rectScale().r,
+                            .capture_id = pop.wd.id,
+                        } } };
+                        pop.scroll.scroll.processEvent(&scrolldrag, true);
+                    } else if (e.evt.mouse.action == .position) {
+                        dvui.currentWindow().inject_motion_event = true;
+                    }
+                }
+            }
+
+            if (!eventMatch(e, .{ .id = pop.data().id, .r = pop_rs.r }))
                 continue;
 
-            if (eat_mouse_up and e.evt == .mouse) {
+            if (e.evt == .mouse) {
                 if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
-                    e.handled = true;
-                    eat_mouse_up = false;
-                    dataSet(null, pop.wd.id, "_eat_mouse_up", eat_mouse_up);
+                    if (eat_mouse_up) {
+                        e.handled = true;
+                        eat_mouse_up = false;
+                        dataSet(null, pop.wd.id, "_eat_mouse_up", eat_mouse_up);
+                    }
                 } else if (e.evt.mouse.action == .motion or (e.evt.mouse.action == .press and e.evt.mouse.button.pointer())) {
-                    eat_mouse_up = false;
-                    dataSet(null, pop.wd.id, "_eat_mouse_up", eat_mouse_up);
+                    if (eat_mouse_up) {
+                        eat_mouse_up = false;
+                        dataSet(null, pop.wd.id, "_eat_mouse_up", eat_mouse_up);
+                    }
+
+                    if (!drag_scroll) {
+                        drag_scroll = true;
+                        dataSet(null, pop.wd.id, "_drag_scroll", drag_scroll);
+                    }
                 }
             }
         }
