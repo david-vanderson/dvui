@@ -11,33 +11,64 @@ vtable: VTable,
 
 pub fn VTableTypes(comptime Ptr: type) type {
     return struct {
-        /// Get monotonic nanosecond timestamp. may not be system time.
+
+        /// Get monotonic nanosecond timestamp. Doesn't have to be system time.
         pub const nanoTime = *const fn (ptr: Ptr) i128;
-        /// Sleep for nanoseconds
+
+        /// Sleep for nanoseconds.
         pub const sleep = *const fn (ptr: Ptr, ns: u64) void;
-        /// TK
+
+	/// Called by dvui during Window.begin(), so prior to any dvui
+	/// rendering.  Use to setup anything needed for this frame.  The arena
+	/// arg is cleared before begin is called next, useful for any temporary
+	/// allocations needed only for this frame.
         pub const begin = *const fn (ptr: Ptr, arena: std.mem.Allocator) void;
-        /// TK
+
+        /// Called by dvui during Window.end(), but currently unused by any
+	/// backends.  Probably will be removed.
         pub const end = *const fn (ptr: Ptr) void;
-        /// TK
+
+	/// Return size of the window in physical pixels.  For a 300x200 retina
+	/// window (so actually 600x400), this should return 600x400.
         pub const pixelSize = *const fn (ptr: Ptr) Size;
-        /// TK
+
+	/// Return size of the window in logical pixels.  For a 300x200 retina
+	/// window (so actually 600x400), this should return 300x200.
         pub const windowSize = *const fn (ptr: Ptr) Size;
-        /// TK
+
+	/// Return the detected additional scaling.  This represents the user's
+	/// additional display scaling (usually set in their window system's
+	/// settings).  Currently only called during Window.init(), so currently
+	/// this sets the initial content scale.
         pub const contentScale = *const fn (ptr: Ptr) f32;
-        /// TK
+
+	/// Render a triangle list using the idx indexes into the vtx vertexes
+	/// clipped to to clipr.  Vertex positions and clipr are in physical
+	/// pixels.  If texture is given, the vertexes uv coords are normalized
+	/// (0-1).
         pub const drawClippedTriangles = *const fn (ptr: Ptr, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32, clipr: dvui.Rect) void;
-        /// Create backend texture
+
+	/// Create a texture from the given pixels in RGBA.  The returned
+	/// pointer is what will later be passed to drawClippedTriangles.
         pub const textureCreate = *const fn (ptr: Ptr, pixels: [*]u8, width: u32, height: u32) *anyopaque;
-        /// Destroy backend texture
+
+	/// Destroy texture that was previously made with textureCreate.  After
+	/// this call, this texture pointer will not be used by dvui.
         pub const textureDestroy = *const fn (ptr: Ptr, texture: *anyopaque) void;
+
         /// Get clipboard content (text only)
         pub const clipboardText = *const fn (ptr: Ptr) error{OutOfMemory}![]const u8;
+
         /// Set clipboard content (text only)
         pub const clipboardTextSet = *const fn (ptr: Ptr, text: []const u8) error{OutOfMemory}!void;
+
         /// Open URL in system browser
         pub const openURL = *const fn (ptr: Ptr, url: []const u8) error{OutOfMemory}!void;
-        /// TK
+
+	/// Called by dvui.refresh() when it is called from a background
+	/// thread.  Used to wake up the gui thread.  It only has effect if you
+	/// are using waitTime() or some other method of waiting until a new
+	/// event comes in.
         pub const refresh = *const fn (ptr: Ptr) void;
     };
 }
