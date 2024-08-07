@@ -6,75 +6,74 @@ const Vertex = dvui.Vertex;
 
 const Backend = @This();
 
-ptr: *anyopaque,
+ptr: usize,
 vtable: VTable,
 
-pub fn VTableTypes(comptime Ptr: type) type {
+pub fn VTableTypes(comptime Context: type) type {
     return struct {
-
         /// Get monotonic nanosecond timestamp. Doesn't have to be system time.
-        pub const nanoTime = *const fn (ptr: Ptr) i128;
+        pub const nanoTime = *const fn (ctx: Context) i128;
 
         /// Sleep for nanoseconds.
-        pub const sleep = *const fn (ptr: Ptr, ns: u64) void;
+        pub const sleep = *const fn (ctx: Context, ns: u64) void;
 
-	/// Called by dvui during Window.begin(), so prior to any dvui
-	/// rendering.  Use to setup anything needed for this frame.  The arena
-	/// arg is cleared before begin is called next, useful for any temporary
-	/// allocations needed only for this frame.
-        pub const begin = *const fn (ptr: Ptr, arena: std.mem.Allocator) void;
+        /// Called by dvui during Window.begin(), so prior to any dvui
+        /// rendering.  Use to setup anything needed for this frame.  The arena
+        /// arg is cleared before begin is called next, useful for any temporary
+        /// allocations needed only for this frame.
+        pub const begin = *const fn (ctx: Context, arena: std.mem.Allocator) void;
 
         /// Called by dvui during Window.end(), but currently unused by any
-	/// backends.  Probably will be removed.
-        pub const end = *const fn (ptr: Ptr) void;
+        /// backends.  Probably will be removed.
+        pub const end = *const fn (ctx: Context) void;
 
-	/// Return size of the window in physical pixels.  For a 300x200 retina
-	/// window (so actually 600x400), this should return 600x400.
-        pub const pixelSize = *const fn (ptr: Ptr) Size;
+        /// Return size of the window in physical pixels.  For a 300x200 retina
+        /// window (so actually 600x400), this should return 600x400.
+        pub const pixelSize = *const fn (ctx: Context) Size;
 
-	/// Return size of the window in logical pixels.  For a 300x200 retina
-	/// window (so actually 600x400), this should return 300x200.
-        pub const windowSize = *const fn (ptr: Ptr) Size;
+        /// Return size of the window in logical pixels.  For a 300x200 retina
+        /// window (so actually 600x400), this should return 300x200.
+        pub const windowSize = *const fn (ctx: Context) Size;
 
-	/// Return the detected additional scaling.  This represents the user's
-	/// additional display scaling (usually set in their window system's
-	/// settings).  Currently only called during Window.init(), so currently
-	/// this sets the initial content scale.
-        pub const contentScale = *const fn (ptr: Ptr) f32;
+        /// Return the detected additional scaling.  This represents the user's
+        /// additional display scaling (usually set in their window system's
+        /// settings).  Currently only called during Window.init(), so currently
+        /// this sets the initial content scale.
+        pub const contentScale = *const fn (ctx: Context) f32;
 
-	/// Render a triangle list using the idx indexes into the vtx vertexes
-	/// clipped to to clipr.  Vertex positions and clipr are in physical
-	/// pixels.  If texture is given, the vertexes uv coords are normalized
-	/// (0-1).
-        pub const drawClippedTriangles = *const fn (ptr: Ptr, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32, clipr: dvui.Rect) void;
+        /// Render a triangle list using the idx indexes into the vtx vertexes
+        /// clipped to to clipr.  Vertex positions and clipr are in physical
+        /// pixels.  If texture is given, the vertexes uv coords are normalized
+        /// (0-1).
+        pub const drawClippedTriangles = *const fn (ctx: Context, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32, clipr: dvui.Rect) void;
 
-	/// Create a texture from the given pixels in RGBA.  The returned
-	/// pointer is what will later be passed to drawClippedTriangles.
-        pub const textureCreate = *const fn (ptr: Ptr, pixels: [*]u8, width: u32, height: u32) *anyopaque;
+        /// Create a texture from the given pixels in RGBA.  The returned
+        /// pointer is what will later be passed to drawClippedTriangles.
+        pub const textureCreate = *const fn (ctx: Context, pixels: [*]u8, width: u32, height: u32) *anyopaque;
 
-	/// Destroy texture that was previously made with textureCreate.  After
-	/// this call, this texture pointer will not be used by dvui.
-        pub const textureDestroy = *const fn (ptr: Ptr, texture: *anyopaque) void;
+        /// Destroy texture that was previously made with textureCreate.  After
+        /// this call, this texture pointer will not be used by dvui.
+        pub const textureDestroy = *const fn (ctx: Context, texture: *anyopaque) void;
 
         /// Get clipboard content (text only)
-        pub const clipboardText = *const fn (ptr: Ptr) error{OutOfMemory}![]const u8;
+        pub const clipboardText = *const fn (ctx: Context) error{OutOfMemory}![]const u8;
 
         /// Set clipboard content (text only)
-        pub const clipboardTextSet = *const fn (ptr: Ptr, text: []const u8) error{OutOfMemory}!void;
+        pub const clipboardTextSet = *const fn (ctx: Context, text: []const u8) error{OutOfMemory}!void;
 
         /// Open URL in system browser
-        pub const openURL = *const fn (ptr: Ptr, url: []const u8) error{OutOfMemory}!void;
+        pub const openURL = *const fn (ctx: Context, url: []const u8) error{OutOfMemory}!void;
 
-	/// Called by dvui.refresh() when it is called from a background
-	/// thread.  Used to wake up the gui thread.  It only has effect if you
-	/// are using waitTime() or some other method of waiting until a new
-	/// event comes in.
-        pub const refresh = *const fn (ptr: Ptr) void;
+        /// Called by dvui.refresh() when it is called from a background
+        /// thread.  Used to wake up the gui thread.  It only has effect if you
+        /// are using waitTime() or some other method of waiting until a new
+        /// event comes in.
+        pub const refresh = *const fn (ctx: Context) void;
     };
 }
 
 pub const VTable = struct {
-    pub const I = VTableTypes(*anyopaque);
+    pub const I = VTableTypes(usize);
 
     nanoTime: I.nanoTime,
     sleep: I.sleep,
@@ -96,27 +95,30 @@ fn compile_assert(comptime x: bool, comptime msg: []const u8) void {
     if (!x) @compileError(msg);
 }
 
+/// Create backend (vtable) from implementation
+///
+/// `impl`: the implementation struct. it should have declarations that match `VTableTypes(@TypeOf(context))`
 pub fn init(
-    pointer: anytype,
-    comptime Interface: anytype,
+    context: anytype,
+    comptime implementation: anytype,
 ) Backend {
-    const Ptr = @TypeOf(pointer);
-    const I = VTableTypes(Ptr);
+    const Ctx = @TypeOf(context);
+    const I = VTableTypes(Ctx);
 
-    compile_assert(@sizeOf(Ptr) == @sizeOf(usize), "Must be a pointer-sized"); // calling convention dictates that any type can work here after converted to *anyopaque
+    compile_assert(@sizeOf(Ctx) == @sizeOf(usize), "Must be a pointer-sized"); // calling convention dictates that any type can work here after converted to usize
 
     comptime var vtable: VTable = undefined;
 
     inline for (@typeInfo(I).Struct.decls) |decl| {
-        const hasField = @hasDecl(Interface, decl.name);
+        const hasField = @hasDecl(implementation, decl.name);
         const DeclType = @field(I, decl.name);
-        compile_assert(hasField, "Backend type " ++ @typeName(Interface) ++ " has no declaration '" ++ decl.name ++ ": " ++ @typeName(DeclType) ++ "'");
-        const f: DeclType = &@field(Interface, decl.name);
+        compile_assert(hasField, "Backend type " ++ @typeName(implementation) ++ " has no declaration '" ++ decl.name ++ ": " ++ @typeName(DeclType) ++ "'");
+        const f: DeclType = &@field(implementation, decl.name);
         @field(vtable, decl.name) = @ptrCast(f);
     }
 
     return .{
-        .ptr = pointer,
+        .ptr = std.zig.c_translation.cast(usize, context),
         .vtable = vtable,
     };
 }
