@@ -107,7 +107,7 @@ pub fn init(
 
     compile_assert(
         @sizeOf(Context) == @sizeOf(usize),
-        "(@TypeOf(ctx)) " ++ @typeName(Context) ++ " must be a pointer-sized; has size of " ++ @sizeOf(Context),
+        "(@TypeOf(ctx)) " ++ @typeName(Context) ++ " must be a pointer-sized; has size of " ++ std.fmt.comptimePrint("{d}", .{@sizeOf(Context)}),
     ); // calling convention dictates that any type can work here after converted to usize
 
     comptime var vtable: VTable = undefined;
