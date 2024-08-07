@@ -99,13 +99,16 @@ fn compile_assert(comptime x: bool, comptime msg: []const u8) void {
 ///
 /// `impl`: the implementation struct. it should have declarations that match `VTableTypes(@TypeOf(context))`
 pub fn init(
-    context: anytype,
+    ctx: anytype,
     comptime implementation: anytype,
 ) Backend {
-    const Ctx = @TypeOf(context);
-    const I = VTableTypes(Ctx);
+    const Context = @TypeOf(ctx);
+    const I = VTableTypes(Context);
 
-    compile_assert(@sizeOf(Ctx) == @sizeOf(usize), "Must be a pointer-sized"); // calling convention dictates that any type can work here after converted to usize
+    compile_assert(
+        @sizeOf(Context) == @sizeOf(usize),
+        "(@TypeOf(ctx)) " ++ @typeName(Context) ++ " must be a pointer-sized; has size of " ++ @sizeOf(Context),
+    ); // calling convention dictates that any type can work here after converted to usize
 
     comptime var vtable: VTable = undefined;
 
@@ -118,7 +121,7 @@ pub fn init(
     }
 
     return .{
-        .ptr = std.zig.c_translation.cast(usize, context),
+        .ptr = std.zig.c_translation.cast(usize, ctx),
         .vtable = vtable,
     };
 }
