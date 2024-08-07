@@ -5407,11 +5407,11 @@ pub fn renderText(opts: renderTextOptions) !void {
         try vtx.append(v);
 
         try idx.append(len + 0);
+        try idx.append(len + 2);
         try idx.append(len + 1);
-        try idx.append(len + 2);
         try idx.append(len + 0);
-        try idx.append(len + 2);
         try idx.append(len + 3);
+        try idx.append(len + 2);
 
         x = nextx;
     }
@@ -5433,7 +5433,7 @@ pub fn renderText(opts: renderTextOptions) !void {
                 v.uv[0] = 0;
                 v.uv[1] = 0;
             }
-            drawClippedTriangles_helper(&cw.backend, null, &sel_vtx, &[_]u32{ 0, 1, 2, 0, 2, 3 });
+            drawClippedTriangles_helper(&cw.backend, null, &sel_vtx, &[_]u32{ 0, 2, 1, 0, 3, 2 });
         }
     }
 
@@ -5487,11 +5487,11 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
         try vtx.append(v);
 
         try idx.append(len + 0);
+        try idx.append(len + 2);
         try idx.append(len + 1);
-        try idx.append(len + 2);
         try idx.append(len + 0);
-        try idx.append(len + 2);
         try idx.append(len + 3);
+        try idx.append(len + 2);
 
         drawClippedTriangles_helper(&cw.backend, kv.value_ptr.texture_atlas, vtx.items, idx.items);
 
@@ -5556,11 +5556,11 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Co
     try vtx.append(v);
 
     try idx.append(0);
+    try idx.append(2);
     try idx.append(1);
-    try idx.append(2);
     try idx.append(0);
-    try idx.append(2);
     try idx.append(3);
+    try idx.append(2);
 
     drawClippedTriangles_helper(&cw.backend, tex, vtx.items, idx.items);
 }

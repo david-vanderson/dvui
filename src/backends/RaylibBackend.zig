@@ -4,6 +4,7 @@ const dvui = @import("dvui");
 
 pub const c = @cImport({
     @cInclude("raylib.h");
+    @cInclude("raymath.h");
     @cInclude("rlgl.h");
     @cInclude("GLES3/gl3.h");
 });
@@ -25,7 +26,7 @@ const vertexSource =
     \\{
     \\    fragTexCoord = vertexTexCoord;
     \\    fragColor = vertexColor / 255.0;
-    //\\    fragColor.rgb *= fragColor.a;
+    \\    fragColor.rgb *= fragColor.a;
     \\    gl_Position = mvp*vec4(vertexPosition, 1.0);
     \\}
 ;
@@ -45,11 +46,11 @@ const fragSource =
     //"}                                  \n";
     \\void main()
     \\{
-    \\    if (useTex)
+    \\    if (useTex) {
     \\        finalColor = texture(texture0, fragTexCoord) * fragColor;
-    \\    else
+    \\    } else {
     \\        finalColor = fragColor;
-    //\\        finalColor = fragColor;
+    \\    }
     \\}
 ;
 
@@ -139,34 +140,19 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     // TODO: scissor
     // TODO: texture
 
-    var mat: c.Matrix = undefined; // = c.GetCameraMatrix2D(camera);
-    mat.m0 = 2.0 / @as(f32, @floatFromInt(c.GetRenderWidth()));
-    mat.m1 = 0.0;
-    mat.m2 = 0.0;
-    mat.m3 = 0.0;
-    mat.m4 = 0.0;
-    mat.m5 = -2.0 / @as(f32, @floatFromInt(c.GetRenderHeight()));
-    mat.m6 = 0.0;
-    mat.m7 = 0.0;
-    mat.m8 = 0.0;
-    mat.m9 = 0.0;
-    mat.m10 = 1.0;
-    mat.m11 = 0.0;
-    mat.m12 = -1.0;
-    mat.m13 = 1.0;
-    mat.m14 = 0.0;
-    mat.m15 = 1.0;
-
     const shader = self.shader;
+    c.rlEnableShader(shader.id);
+
+    const mat = c.MatrixOrtho(0, @floatFromInt(c.GetRenderWidth()), @floatFromInt(c.GetRenderHeight()), 0, -1, 1);
     c.SetShaderValueMatrix(shader, @intCast(shader.locs[c.RL_SHADER_LOC_MATRIX_MVP]), mat);
 
     const VAO = c.rlLoadVertexArray();
     _ = c.rlEnableVertexArray(VAO);
 
     const VBO = c.rlLoadVertexBuffer(vtx.ptr, @intCast(vtx.len * @sizeOf(dvui.Vertex)), false);
-    _ = VBO;
+    c.rlEnableVertexBuffer(VBO);
     const EBO = c.rlLoadVertexBufferElement(idx.ptr, @intCast(idx.len * @sizeOf(u32)), false);
-    _ = EBO;
+    c.rlEnableVertexBufferElement(EBO);
 
     c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), @offsetOf(dvui.Vertex, "pos"));
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]));
@@ -177,32 +163,22 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), @offsetOf(dvui.Vertex, "uv"));
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]));
 
-    c.rlEnableShader(shader.id);
-
-    const tex_coord_loc = c.GetShaderLocationAttrib(shader, "vertexTexCoord");
-    //std.debug.print("tex_coord_loc {d}\n", .{tex_coord_loc});
-    c.rlSetVertexAttribute(@intCast(tex_coord_loc), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), @offsetOf(dvui.Vertex, "uv"));
-    c.rlEnableVertexAttribute(@intCast(tex_coord_loc));
-
-    //c.glUniform1i(@intCast(shader.locs[c.RL_SHADER_LOC_MAP_DIFFUSE]), 0); // Active default sampler2D: texture0
+    const usetex_loc = c.GetShaderLocation(shader, "useTex");
 
     if (texture) |tex| {
-        c.glUniform1i(c.GetShaderLocation(shader, "texture0"), 0);
         c.glActiveTexture(c.GL_TEXTURE0);
-        //c.rlActiveTextureSlot(2);
-
         const texid = @intFromPtr(tex);
         c.glBindTexture(c.GL_TEXTURE_2D, @intCast(texid));
-        //c.rlEnableTexture(@intCast(texid));
 
-        c.glUniform1i(2, 1);
+        const tex_loc = c.GetShaderLocation(shader, "texture0");
+        c.glUniform1i(tex_loc, 0);
+
+        c.glUniform1i(usetex_loc, 1);
     } else {
-        c.glUniform1i(2, 0);
+        c.glUniform1i(usetex_loc, 0);
     }
 
     c.glDrawElements(c.GL_TRIANGLES, @intCast(idx.len), c.GL_UNSIGNED_INT, null);
-
-    c.rlDisableTexture();
 }
 
 pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
@@ -234,6 +210,5 @@ pub fn openURL(self: *RaylibBackend, url: []const u8) !void {
 pub fn refresh(_: *RaylibBackend) void {}
 
 pub fn clear(_: *RaylibBackend) void {
-    //c.ClearBackground(c.BLACK);
-    c.ClearBackground(c.BLANK);
+    c.ClearBackground(c.BLACK);
 }
