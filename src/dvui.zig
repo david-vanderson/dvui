@@ -1478,6 +1478,13 @@ pub fn parentReset(id: u32, w: Widget) void {
     cw.wd.parent = w;
 }
 
+pub fn renderingSet(r: bool) bool {
+    const cw = currentWindow();
+    const ret = cw.rendering;
+    cw.rendering = r;
+    return ret;
+}
+
 pub fn popupSet(p: ?*FloatingMenuWidget) ?*FloatingMenuWidget {
     const cw = currentWindow();
     const ret = cw.popup_current;
@@ -2125,7 +2132,7 @@ pub const Window = struct {
     _arena: std.heap.ArenaAllocator,
     arena: std.mem.Allocator = undefined,
     path: std.ArrayList(Point) = undefined,
-    rendering: bool = false,
+    rendering: bool = true,
 
     debug_window_show: bool = false,
     debug_widget_id: u32 = 0, // 0 means no widget is selected
@@ -2615,6 +2622,7 @@ pub const Window = struct {
         self.previous_window = current_window;
         current_window = self;
 
+        self.rendering = true;
         self.cursor_requested = .arrow;
         self.osk_focused_widget_text_rect = null;
         self.debug_info_name_rect = "";
@@ -2894,8 +2902,6 @@ pub const Window = struct {
     }
 
     pub fn renderCommands(self: *Self, queue: *std.ArrayList(RenderCmd)) !void {
-        self.rendering = true;
-        defer self.rendering = false;
         for (queue.items) |*drc| {
             // don't need to reset these after because we reset them after
             // calling renderCommands
@@ -3257,6 +3263,7 @@ pub const Window = struct {
 
         const oldsnap = self.snap_to_pixels;
         const oldclip = clipGet();
+        self.rendering = true;
         for (self.subwindows.items) |*sw| {
             try self.renderCommands(&sw.render_cmds);
             try self.renderCommands(&sw.render_cmds_after);

@@ -22,6 +22,7 @@ pub var defaults: Options = .{
     .color_fill = .{ .name = .fill_window },
 };
 
+prev_rendering: bool = undefined,
 wd: WidgetData = undefined,
 options: Options = undefined,
 prev_windowId: u32 = 0,
@@ -34,6 +35,7 @@ scroll: ScrollAreaWidget = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) FloatingMenuWidget {
     var self = FloatingMenuWidget{};
+    self.prev_rendering = dvui.renderingSet(false);
 
     // options is really for our embedded MenuWidget, so save them for the
     // end of install()
@@ -220,4 +222,5 @@ pub fn deinit(self: *FloatingMenuWidget) void {
     dvui.parentReset(self.wd.id, self.wd.parent);
     _ = dvui.subwindowCurrentSet(self.prev_windowId);
     dvui.clipSet(self.prevClip);
+    _ = dvui.renderingSet(self.prev_rendering);
 }
