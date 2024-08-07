@@ -20,7 +20,6 @@ pub fn main() !void {
     defer _ = gpa_instance.deinit();
 
     // init Raylib backend (creates OS window)
-    c.InitWindow(800, 450, "raylib [core] example - basic window");
     var backend = try RaylibBackend.init(.{
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 450.0 },
@@ -54,11 +53,6 @@ pub fn main() !void {
 
         //c.DrawText("Congrats! You created your first window!", 190, 200, 20, c.LIGHTGRAY);
         try dvui_frame();
-
-        //_ = try dvui.button(@src(), "Test Button", .{}, .{});
-        //try dvui.pathAddRect(.{ .x = 0.2, .y = 0.2, .w = 0.1, .h = 0.1 }, .{});
-        //try dvui.pathAddRect(.{ .x = 100, .y = 100, .w = 200, .h = 100 }, .{});
-        //try dvui.pathFillConvex(.{ .r = 20, .g = 220, .b = 150 });
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()

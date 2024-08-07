@@ -150,7 +150,7 @@ pub fn build(b: *std.Build) !void {
     {
         const exe = b.addExecutable(.{
             .name = "raylib-standalone",
-            .root_source_file = b.path("raylib-standalone.zig"),
+            .root_source_file = b.path("examples/raylib-standalone.zig"),
             .target = target,
             .optimize = optimize,
         });
