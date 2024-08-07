@@ -36,6 +36,7 @@ pub const InitOptions = struct {
     } = .none,
 };
 
+prev_rendering: bool = undefined,
 wd: WidgetData = undefined,
 init_options: InitOptions = undefined,
 options: Options = undefined,
@@ -47,6 +48,7 @@ auto_size: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingWindowWidget {
     var self = FloatingWindowWidget{};
+    self.prev_rendering = dvui.renderingSet(false);
 
     // options is really for our embedded BoxWidget, so save them for the
     // end of install()
@@ -435,4 +437,5 @@ pub fn deinit(self: *FloatingWindowWidget) void {
     dvui.parentReset(self.wd.id, self.wd.parent);
     _ = dvui.subwindowCurrentSet(self.prev_windowId);
     dvui.clipSet(self.prevClip);
+    _ = dvui.renderingSet(self.prev_rendering);
 }

@@ -48,7 +48,7 @@ pub fn main() !void {
         // the previous frame's render
         backend.clear();
 
-        try dvui_frame();
+        try dvui_frame(backend);
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
@@ -72,7 +72,7 @@ pub fn main() !void {
     }
 }
 
-fn dvui_frame() !void {
+fn dvui_frame(backend: Backend) !void {
     {
         var m = try dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();
@@ -132,6 +132,37 @@ fn dvui_frame() !void {
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
     if (try dvui.button(@src(), label, .{}, .{})) {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
+    }
+
+    {
+        try dvui.labelNoFmt(@src(), "These are drawn directly by the backend, not going through DVUI.", .{ .margin = .{ .x = 4 } });
+
+        var box = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
+        defer box.deinit();
+
+        // Here is some arbitrary drawing that doesn't have to go through DVUI.
+        // NOTE: This only works in the main window (not floating subwindows
+        // like dialogs).
+
+        const r = box.data().contentRectScale().r;
+        var rect: Backend.c.SDL_Rect = .{ .x = @intFromFloat(r.x + 4), .y = @intFromFloat(r.y + 4), .w = 10, .h = 10 };
+        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
+
+        rect.x += 14;
+        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
+        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
+
+        rect.x += 14;
+        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 255, 0, 255);
+        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
+
+        rect.x += 14;
+        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 255, 255);
+        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
+
+        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 255, 255);
+
+        _ = Backend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(r.x + 4), @intFromFloat(r.y + 30), @intFromFloat(r.x + r.w - 8), @intFromFloat(r.y + 4));
     }
 
     if (try dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {

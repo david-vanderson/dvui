@@ -15,6 +15,7 @@ pub var defaults: Options = .{
     .name = "Floating",
 };
 
+prev_rendering: bool = undefined,
 wd: WidgetData = undefined,
 prev_windowId: u32 = 0,
 prevClip: Rect = Rect{},
@@ -35,6 +36,8 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) FloatingWidget {
     // rectFor/minSizeForChild which is important because we are outside
     // normal layout
     self.wd = WidgetData.init(src, .{ .subwindow = true }, defaults.override(opts).override(.{ .rect = opts.rect orelse .{} }));
+
+    self.prev_rendering = dvui.renderingSet(false);
 
     return self;
 }
@@ -96,4 +99,5 @@ pub fn deinit(self: *FloatingWidget) void {
     dvui.parentReset(self.wd.id, self.wd.parent);
     _ = dvui.subwindowCurrentSet(self.prev_windowId);
     dvui.clipSet(self.prevClip);
+    _ = dvui.renderingSet(self.prev_rendering);
 }
