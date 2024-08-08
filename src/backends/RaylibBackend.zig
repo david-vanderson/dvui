@@ -217,21 +217,38 @@ pub fn clear(_: *RaylibBackend) void {
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //TODO mouse scrollwheele support
 
+    //var mod_queue: [16]dvui.enums.Mod = undefined;
+    //var mod_queue_len: usize = 0;
+
     while (true) {
-        //TODO fix this implementation to send key input properly to dvui
         const event = c.GetKeyPressed();
         if (event == 0) break;
 
-        const code = raylibKeyToDvui(event);
-
-        if (self.log_events) {
-            std.debug.print("raylib event KEY_PRESSED {}\n", .{raylibKeyToDvui(event)});
+        if (event >= c.KEY_A and event <= c.KEY_Z) {
+            const char: u8 = @intCast(event);
+            const string: []const u8 = &.{std.ascii.toLower(char)};
+            if (self.log_events) {
+                std.debug.print("raylib event text entry {s}\n", .{string});
+            }
+            _ = try win.addEventText(string);
         }
+        //  else {
+        //      const keymod = raylibKeymodToDvui(event);
+        //      if (keymod != .none) {
+        //          mod_queue[mod_queue_len] = keymod;
+        //          mod_queue_len += 1;
+        //      }
+
+        //      const code = raylibKeyToDvui(event);
+        //      if (self.log_events) {
+        //          std.debug.print("raylib event key pressed {}\n", .{raylibKeyToDvui(event)});
+        //      }
+        //      _ = try win.addEventKey(.{ .code = code, .action = .up, .mod = .none });
+        //  }
 
         //TODO need to handle key modifiers here. Probably need to create some sort of
         //modifier queue whenever a modifier key is detected, then keep requesting more
         //keys until a non-modifier key is found
-        _ = try win.addEventKey(.{ .code = code, .action = .repeat, .mod = .none });
     }
 
     const mouse_move = c.GetMouseDelta();
