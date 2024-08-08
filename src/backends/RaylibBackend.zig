@@ -6,7 +6,7 @@ pub const c = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
     @cInclude("rlgl.h");
-    @cInclude("GLES3/gl3.h");
+    //@cInclude("GLES3/gl3.h");
 });
 
 const RaylibBackend = @This();
@@ -475,7 +475,7 @@ pub fn raylibKeyToDvui(key: c_int) dvui.enums.Key {
 fn shiftAscii(ascii: u8) u8 {
     return switch (ascii) {
         // Map lowercase letters to uppercase
-        'a'...'z' => c - 32,
+        'a'...'z' => ascii - 32,
 
         // Map numbers to their corresponding shifted symbols
         '1' => '!',
@@ -503,6 +503,6 @@ fn shiftAscii(ascii: u8) u8 {
         '/' => '?',
 
         // Return the original character if no shift mapping exists
-        else => c,
+        else => ascii,
     };
 }
