@@ -215,36 +215,58 @@ pub fn clear(_: *RaylibBackend) void {
 }
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
-    //TODO mouse scrollwheele support
-
-    //var mod_queue: [16]dvui.enums.Mod = undefined;
-    //var mod_queue_len: usize = 0;
+    //TODO mouse scrollwheel support
+    //TODO touch support
 
     while (true) {
         const event = c.GetKeyPressed();
         if (event == 0) break;
 
+        //check if keymod is pressed
+        //if (isKeymod(raylibKeyToDvui(event))) {
+
+        //    //TODO account for multiple modifier keys
+        //    //maybe make this into its own function?
+        //    const mod = raylibKeymodToDvui(event);
+        //    const char = c.GetKeyPressed();
+        //    if (char == 0) break;
+        //    const code = raylibKeyToDvui(char);
+        //    _ = try win.addEventKey(.{ .code = code, .mod = mod, .action = .down });
+        //    _ = try win.addEventKey(.{ .code = code, .mod = mod, .action = .up });
+
+        //    if (self.log_events) {
+        //        std.debug.print("raylib event key {} with modifier {}\n", .{ code, mod });
+        //    }
+
+        //    //skip text entry if keymod is used
+        //    continue;
+        //}
+
+        //normal alphabet char entry
         if (event >= c.KEY_A and event <= c.KEY_Z) {
             const char: u8 = @intCast(event);
-            const string: []const u8 = &.{std.ascii.toLower(char)};
+            const shifted = if (isShiftDown()) char else std.ascii.toLower(char);
+            const string: []const u8 = &.{shifted};
             if (self.log_events) {
                 std.debug.print("raylib event text entry {s}\n", .{string});
             }
             _ = try win.addEventText(string);
         }
-        //  else {
-        //      const keymod = raylibKeymodToDvui(event);
-        //      if (keymod != .none) {
-        //          mod_queue[mod_queue_len] = keymod;
-        //          mod_queue_len += 1;
-        //      }
 
-        //      const code = raylibKeyToDvui(event);
-        //      if (self.log_events) {
-        //          std.debug.print("raylib event key pressed {}\n", .{raylibKeyToDvui(event)});
-        //      }
-        //      _ = try win.addEventKey(.{ .code = code, .action = .up, .mod = .none });
-        //  }
+        //other char entry
+        //TODO clean up this check
+        if ((event >= c.KEY_ZERO and event <= c.KEY_NINE) or event == c.KEY_SPACE or
+            event == c.KEY_PERIOD or event == c.KEY_COMMA or event == c.KEY_SLASH or event == c.KEY_SEMICOLON or
+            event == c.KEY_LEFT_BRACKET or event == c.KEY_RIGHT_BRACKET)
+        {
+            const char: u8 = @intCast(event);
+            const shifted = if (isShiftDown()) std.ascii.toUpper(char) else char;
+            const string: []const u8 = &.{shifted};
+            if (self.log_events) {
+                std.debug.print("raylib event text entry {s}\n", .{string});
+            }
+            _ = try win.addEventText(string);
+        }
 
         //TODO need to handle key modifiers here. Probably need to create some sort of
         //modifier queue whenever a modifier key is detected, then keep requesting more
@@ -295,6 +317,10 @@ const RaylibMouseButtons = .{
     c.MOUSE_BUTTON_MIDDLE,
 };
 
+fn isShiftDown() bool {
+    return c.IsKeyDown(c.KEY_LEFT_SHIFT) or c.IsKeyDown(c.KEY_RIGHT_SHIFT);
+}
+
 pub fn raylibMouseButtonToDvui(button: c_int) dvui.enums.Button {
     return switch (button) {
         c.MOUSE_BUTTON_LEFT => .left,
@@ -307,6 +333,11 @@ pub fn raylibMouseButtonToDvui(button: c_int) dvui.enums.Button {
             break :blk .six;
         },
     };
+}
+
+fn isKeymod(key: dvui.enums.Key) bool {
+    return key == .left_alt or key == .left_shift or key == .left_command or key == .left_control or
+        key == .right_alt or key == .right_shift or key == .right_command or key == .right_control;
 }
 
 pub fn raylibKeymodToDvui(keymod: c_int) dvui.enums.Mod {
