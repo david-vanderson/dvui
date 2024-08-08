@@ -9,20 +9,29 @@ const enums = dvui.enums;
 const ScrollInfo = @This();
 
 pub const ScrollMode = enum {
-    none, // no scrolling
-    auto, // virtual size calculated from children
-    given, // virtual size left as given
+    /// no scrolling
+    none,
+    /// virtual size calculated from children
+    auto,
+    /// virtual size left as given
+    given,
 };
 
 pub const ScrollBarMode = enum {
-    hide, // no scrollbar
-    auto, // show scrollbar if viewport is smaller than virtual_size
-    show, // always show scrollbar
+    /// no scrollbar
+    hide,
+    /// show scrollbar if viewport is smaller than virtual_size
+    auto,
+    /// always show scrollbar
+    show,
 };
 
 vertical: ScrollMode = .auto,
 horizontal: ScrollMode = .none,
+
+/// Minimum size needed to show all contents without scrolling.
 virtual_size: Size = Size{},
+
 viewport: Rect = Rect{},
 velocity: Point = Point{},
 

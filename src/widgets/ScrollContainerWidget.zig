@@ -188,8 +188,14 @@ pub fn data(self: *ScrollContainerWidget) *WidgetData {
 
 pub fn rectFor(self: *ScrollContainerWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     const y = self.next_widget_ypos;
-    const h = self.si.virtual_size.h - y;
-    const rect = Rect{ .x = 0, .y = y, .w = self.si.virtual_size.w, .h = h };
+
+    // Our virtual size might be smaller than our viewport, and the child could
+    // be expanded, so we want them to take all available space.
+    const maxh = @max(self.si.virtual_size.h, self.si.viewport.h);
+    const maxw = @max(self.si.virtual_size.w, self.si.viewport.w);
+
+    const h = maxh - y;
+    const rect = Rect{ .x = 0, .y = y, .w = maxw, .h = h };
     const ret = dvui.placeIn(rect, dvui.minSize(id, min_size), e, g);
     self.next_widget_ypos = (ret.y + ret.h);
     return ret;
@@ -483,11 +489,9 @@ pub fn deinit(self: *ScrollContainerWidget) void {
 
     dvui.clipSet(self.prevClip);
 
-    const crect = self.wd.contentRect();
     switch (self.si.horizontal) {
         .none => {},
         .auto => {
-            self.nextVirtualSize.w = @max(self.nextVirtualSize.w, crect.w);
             if (self.nextVirtualSize.w != self.si.virtual_size.w) {
                 self.si.virtual_size.w = self.nextVirtualSize.w;
                 dvui.refresh(null, @src(), self.wd.id);
@@ -499,7 +503,6 @@ pub fn deinit(self: *ScrollContainerWidget) void {
     switch (self.si.vertical) {
         .none => {},
         .auto => {
-            self.nextVirtualSize.h = @max(self.nextVirtualSize.h, crect.h);
             if (self.nextVirtualSize.h != self.si.virtual_size.h) {
                 self.si.virtual_size.h = self.nextVirtualSize.h;
                 dvui.refresh(null, @src(), self.wd.id);
