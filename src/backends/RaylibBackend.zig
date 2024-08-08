@@ -7,7 +7,6 @@ pub const c = @cImport({
     @cInclude("raymath.h");
     @cInclude("rlgl.h");
     @cInclude("GLES3/gl3.h");
-    //@cInclude("gl3.h");
 });
 
 const RaylibBackend = @This();
@@ -17,6 +16,7 @@ arena: std.mem.Allocator = undefined,
 log_events: bool = false,
 pressed_keys: std.bit_set.ArrayBitSet(u32, 512) = std.bit_set.ArrayBitSet(u32, 512).initEmpty(),
 pressed_modifier: dvui.enums.Mod = .none,
+mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButtons.len,
 
 const vertexSource =
     \\#version 330
@@ -159,17 +159,19 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     c.rlEnableVertexBufferElement(EBO);
 
     const OffsetType = @typeInfo(@TypeOf(c.rlSetVertexAttribute)).Fn.params[5].type.?;
-    const expects_ptr = @typeInfo(OffsetType) == .Pointer;
+    _ = OffsetType; // autofix
+    //const expects_ptr = @typeInfo(OffsetType) == .Pointer;
+    const expects_ptr = true;
 
-    const pos = if (expects_ptr) @as(*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "pos"))) else @offsetOf(dvui.Vertex, "pos");
+    const pos = if (expects_ptr) @as(?*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "pos"))) else @offsetOf(dvui.Vertex, "pos");
     c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), pos);
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]));
 
-    const col = if (expects_ptr) @as(*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "col"))) else @offsetOf(dvui.Vertex, "col");
+    const col = if (expects_ptr) @as(?*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "col"))) else @offsetOf(dvui.Vertex, "col");
     c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_COLOR]), 4, c.RL_UNSIGNED_BYTE, false, @sizeOf(dvui.Vertex), col);
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_COLOR]));
 
-    const uv = if (expects_ptr) @as(*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "uv"))) else @offsetOf(dvui.Vertex, "uv");
+    const uv = if (expects_ptr) @as(?*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "uv"))) else @offsetOf(dvui.Vertex, "uv");
     c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), uv);
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]));
 
@@ -224,7 +226,6 @@ pub fn clear(_: *RaylibBackend) void {
 }
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
-    //TODO mouse scrollwheel support
     //TODO touch support
 
     //check for key releases
@@ -232,11 +233,16 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     while (iter.next()) |keycode| {
         if (c.IsKeyUp(@intCast(keycode))) {
             self.pressed_keys.unset(keycode);
-            //TODO account for mod
+            //TODO how to account for mod on key release? Is this important
             _ = try win.addEventKey(.{ .code = raylibKeyToDvui(@intCast(keycode)), .mod = .none, .action = .up });
 
             if (self.log_events) {
                 std.debug.print("raylib event key up: {}\n", .{raylibKeyToDvui(@intCast(keycode))});
+            }
+        } else {
+            _ = try win.addEventKey(.{ .code = raylibKeyToDvui(@intCast(keycode)), .mod = .none, .action = .repeat });
+            if (self.log_events) {
+                std.debug.print("raylib event key repeat: {}\n", .{raylibKeyToDvui(@intCast(keycode))});
             }
         }
     }
@@ -294,29 +300,35 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         }
     }
 
-    const Static = struct {
-        var mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButtons.len;
-    };
-
     inline for (RaylibMouseButtons, 0..) |button, i| {
         if (c.IsMouseButtonDown(button)) {
-            if (Static.mouse_button_cache[i] != true) {
+            if (self.mouse_button_cache[i] != true) {
                 _ = try win.addEventMouseButton(raylibMouseButtonToDvui(button), .press);
-                Static.mouse_button_cache[i] = true;
+                self.mouse_button_cache[i] = true;
                 if (self.log_events) {
                     std.debug.print("raylib event Mouse Button Pressed {}\n", .{raylibMouseButtonToDvui(button)});
                 }
             }
         }
         if (c.IsMouseButtonUp(button)) {
-            if (Static.mouse_button_cache[i] != false) {
+            if (self.mouse_button_cache[i] != false) {
                 _ = try win.addEventMouseButton(raylibMouseButtonToDvui(button), .release);
-                Static.mouse_button_cache[i] = false;
+                self.mouse_button_cache[i] = false;
 
                 if (self.log_events) {
                     std.debug.print("raylib event Mouse Button Released {}\n", .{raylibMouseButtonToDvui(button)});
                 }
             }
+        }
+    }
+
+    //scroll wheel movement
+    const scroll_wheel = c.GetMouseWheelMove();
+    if (scroll_wheel != 0) {
+        _ = try win.addEventMouseWheel(scroll_wheel * 25);
+
+        if (self.log_events) {
+            std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});
         }
     }
 
