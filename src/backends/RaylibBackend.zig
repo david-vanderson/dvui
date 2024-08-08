@@ -215,7 +215,7 @@ pub fn clear(_: *RaylibBackend) void {
 }
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
-    //TODO mouse cursor support
+    //TODO mouse scrollwheele support
 
     while (true) {
         //TODO fix this implementation to send key input properly to dvui
@@ -228,6 +228,9 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             std.debug.print("raylib event KEY_PRESSED {}\n", .{raylibKeyToDvui(event)});
         }
 
+        //TODO need to handle key modifiers here. Probably need to create some sort of
+        //modifier queue whenever a modifier key is detected, then keep requesting more
+        //keys until a non-modifier key is found
         _ = try win.addEventKey(.{ .code = code, .action = .repeat, .mod = .none });
     }
 
