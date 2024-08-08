@@ -14,6 +14,7 @@ const RaylibBackend = @This();
 shader: c.Shader = undefined,
 arena: std.mem.Allocator = undefined,
 log_events: bool = false,
+key_press_cache: std.ArrayList(c_int) = undefined,
 
 const vertexSource =
     \\#version 330
@@ -90,10 +91,12 @@ pub fn init(options: InitOptions) !RaylibBackend {
 
     var back = RaylibBackend{};
     back.shader = c.LoadShaderFromMemory(vertexSource, fragSource);
+    back.key_press_cache = std.ArrayList(c_int).init(options.allocator);
     return back;
 }
 
-pub fn deinit(_: *RaylibBackend) void {
+pub fn deinit(self: *RaylibBackend) void {
+    self.key_press_cache.deinit();
     c.CloseWindow();
 }
 
@@ -218,9 +221,23 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //TODO mouse scrollwheel support
     //TODO touch support
 
+    //check for key releases
+    for (self.key_press_cache.items) |key| {
+        if (c.IsKeyUp(key)) {}
+    }
+
+    //self.key_press_cache.clearRetainingCapacity();
+
+    //get key presses
     while (true) {
         const event = c.GetKeyPressed();
         if (event == 0) break;
+
+        try self.key_press_cache.append(event);
+
+        //const code = raylibKeyToDvui(event);
+
+        //@field(key_state_cache, @tagname(event))
 
         //check if keymod is pressed
         //if (isKeymod(raylibKeyToDvui(event))) {
@@ -251,14 +268,10 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
                 std.debug.print("raylib event text entry {s}\n", .{string});
             }
             _ = try win.addEventText(string);
-        }
 
-        //other char entry
-        //TODO clean up this check
-        if ((event >= c.KEY_ZERO and event <= c.KEY_NINE) or event == c.KEY_SPACE or
-            event == c.KEY_PERIOD or event == c.KEY_COMMA or event == c.KEY_SLASH or event == c.KEY_SEMICOLON or
-            event == c.KEY_LEFT_BRACKET or event == c.KEY_RIGHT_BRACKET)
-        {
+            //non-alphabet ascii keys (these need to be separate because of
+            //different shifted defaults rules
+        } else if (isAsciiKey(event)) {
             const char: u8 = @intCast(event);
             const shifted = if (isShiftDown()) std.ascii.toUpper(char) else char;
             const string: []const u8 = &.{shifted};
@@ -470,6 +483,180 @@ pub fn raylibKeyToDvui(key: c_int) dvui.enums.Key {
         else => blk: {
             dvui.log.debug("raylibKeymodToDvui unknown key{}\n", .{key});
             break :blk .unknown;
+        },
+    };
+}
+
+fn isAsciiKey(key: c_int) bool {
+    return switch (key) {
+        c.KEY_A,
+        c.KEY_B,
+        c.KEY_C,
+        c.KEY_D,
+        c.KEY_E,
+        c.KEY_F,
+        c.KEY_G,
+        c.KEY_H,
+        c.KEY_I,
+        c.KEY_J,
+        c.KEY_K,
+        c.KEY_L,
+        c.KEY_M,
+        c.KEY_N,
+        c.KEY_O,
+        c.KEY_P,
+        c.KEY_Q,
+        c.KEY_R,
+        c.KEY_S,
+        c.KEY_T,
+        c.KEY_U,
+        c.KEY_V,
+        c.KEY_W,
+        c.KEY_X,
+        c.KEY_Y,
+        c.KEY_Z,
+        c.KEY_ZERO,
+        c.KEY_ONE,
+        c.KEY_TWO,
+        c.KEY_THREE,
+        c.KEY_FOUR,
+        c.KEY_FIVE,
+        c.KEY_SIX,
+        c.KEY_SEVEN,
+        c.KEY_EIGHT,
+        c.KEY_NINE,
+        c.KEY_SPACE,
+        c.KEY_MINUS,
+        c.KEY_EQUAL,
+        c.KEY_LEFT_BRACKET,
+        c.KEY_RIGHT_BRACKET,
+        c.KEY_BACKSLASH,
+        c.KEY_SEMICOLON,
+        c.KEY_APOSTROPHE,
+        c.KEY_COMMA,
+        c.KEY_PERIOD,
+        c.KEY_SLASH,
+        c.KEY_BACK,
+        => true,
+
+        else => false,
+    };
+}
+
+pub fn dvuiKeyToRaylib(key: dvui.enums.Key) c_int {
+    return switch (key) {
+        .a => c.KEY_A,
+        .b => c.KEY_B,
+        .c => c.KEY_C,
+        .d => c.KEY_D,
+        .e => c.KEY_E,
+        .f => c.KEY_F,
+        .g => c.KEY_G,
+        .h => c.KEY_H,
+        .i => c.KEY_I,
+        .j => c.KEY_J,
+        .k => c.KEY_K,
+        .l => c.KEY_L,
+        .m => c.KEY_M,
+        .n => c.KEY_N,
+        .o => c.KEY_O,
+        .p => c.KEY_P,
+        .q => c.KEY_Q,
+        .r => c.KEY_R,
+        .s => c.KEY_S,
+        .t => c.KEY_T,
+        .u => c.KEY_U,
+        .v => c.KEY_V,
+        .w => c.KEY_W,
+        .x => c.KEY_X,
+        .y => c.KEY_Y,
+        .z => c.KEY_Z,
+
+        .zero => c.KEY_ZERO,
+        .one => c.KEY_ONE,
+        .two => c.KEY_TWO,
+        .three => c.KEY_THREE,
+        .four => c.KEY_FOUR,
+        .five => c.KEY_FIVE,
+        .six => c.KEY_SIX,
+        .seven => c.KEY_SEVEN,
+        .eight => c.KEY_EIGHT,
+        .nine => c.KEY_NINE,
+
+        .f1 => c.KEY_F1,
+        .f2 => c.KEY_F2,
+        .f3 => c.KEY_F3,
+        .f4 => c.KEY_F4,
+        .f5 => c.KEY_F5,
+        .f6 => c.KEY_F6,
+        .f7 => c.KEY_F7,
+        .f8 => c.KEY_F8,
+        .f9 => c.KEY_F9,
+        .f10 => c.KEY_F10,
+        .f11 => c.KEY_F11,
+        .f12 => c.KEY_F12,
+
+        .kp_divide => c.KEY_KP_DIVIDE,
+        .kp_multiply => c.KEY_KP_MULTIPLY,
+        .kp_subtract => c.KEY_KP_SUBTRACT,
+        .kp_add => c.KEY_KP_ADD,
+        .kp_enter => c.KEY_KP_ENTER,
+        .kp_0 => c.KEY_KP_0,
+        .kp_1 => c.KEY_KP_1,
+        .kp_2 => c.KEY_KP_2,
+        .kp_3 => c.KEY_KP_3,
+        .kp_4 => c.KEY_KP_4,
+        .kp_5 => c.KEY_KP_5,
+        .kp_6 => c.KEY_KP_6,
+        .kp_7 => c.KEY_KP_7,
+        .kp_8 => c.KEY_KP_8,
+        .kp_9 => c.KEY_KP_9,
+        .kp_decimal => c.KEY_KP_DECIMAL,
+
+        .enter => c.KEY_ENTER,
+        .escape => c.KEY_ESCAPE,
+        .tab => c.KEY_TAB,
+        .left_shift => c.KEY_LEFT_SHIFT,
+        .right_shift => c.KEY_RIGHT_SHIFT,
+        .left_control => c.KEY_LEFT_CONTROL,
+        .right_control => c.KEY_RIGHT_CONTROL,
+        .left_alt => c.KEY_LEFT_ALT,
+        .right_alt => c.KEY_RIGHT_ALT,
+        .left_command => c.KEY_LEFT_SUPER,
+        .right_command => c.KEY_RIGHT_SUPER,
+        .num_lock => c.KEY_NUM_LOCK,
+        .caps_lock => c.KEY_CAPS_LOCK,
+        .print => c.KEY_PRINT_SCREEN,
+        .scroll_lock => c.KEY_SCROLL_LOCK,
+        .pause => c.KEY_PAUSE,
+        .delete => c.KEY_DELETE,
+        .home => c.KEY_HOME,
+        .end => c.KEY_END,
+        .page_up => c.KEY_PAGE_UP,
+        .page_down => c.KEY_PAGE_DOWN,
+        .insert => c.KEY_INSERT,
+        .left => c.KEY_LEFT,
+        .right => c.KEY_RIGHT,
+        .up => c.KEY_UP,
+        .down => c.KEY_DOWN,
+        .backspace => c.KEY_BACKSPACE,
+        .space => c.KEY_SPACE,
+        .minus => c.KEY_MINUS,
+        .equal => c.KEY_EQUAL,
+        .left_bracket => c.KEY_LEFT_BRACKET,
+        .right_bracket => c.KEY_RIGHT_BRACKET,
+        .backslash => c.KEY_BACKSLASH,
+        .semicolon => c.KEY_SEMICOLON,
+        .apostrophe => c.KEY_APOSTROPHE,
+        .comma => c.KEY_COMMA,
+        .period => c.KEY_PERIOD,
+        .slash => c.KEY_SLASH,
+        .grave => c.KEY_BACK,
+        .menu => c.KEY_MENU,
+
+        else => blk: {
+            dvui.log.debug("dvuiKeyToRaylib unknown key{}\n", .{key});
+            break :blk -1; // Return an invalid keycode for unknown keys
         },
     };
 }
