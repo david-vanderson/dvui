@@ -236,7 +236,8 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
 
     const mouse_move = c.GetMouseDelta();
     if (mouse_move.x != 0 or mouse_move.y != 0) {
-        _ = try win.addEventMouseMotion(mouse_move.x, mouse_move.y);
+        const mouse_pos = c.GetMousePosition();
+        _ = try win.addEventMouseMotion(mouse_pos.x, mouse_pos.y);
         if (self.log_events) {
             //std.debug.print("raylib event Mouse Moved\n", .{});
         }
