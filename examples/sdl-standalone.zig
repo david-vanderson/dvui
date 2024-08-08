@@ -140,29 +140,30 @@ fn dvui_frame(backend: Backend) !void {
         var box = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
         defer box.deinit();
 
-        // Here is some arbitrary drawing that doesn't have to go through DVUI.
+	// Here is some arbitrary drawing that doesn't have to go through DVUI.
+	// It can be interleaved with DVUI drawing.
         // NOTE: This only works in the main window (not floating subwindows
         // like dialogs).
 
-        const r = box.data().contentRectScale().r;
-        var rect: Backend.c.SDL_Rect = .{ .x = @intFromFloat(r.x + 4), .y = @intFromFloat(r.y + 4), .w = 10, .h = 10 };
+        const rs = box.data().contentRectScale();
+        var rect: Backend.c.SDL_Rect = .{ .x = @intFromFloat(rs.r.x + 4 * rs.s), .y = @intFromFloat(rs.r.y + 4 * rs.s), .w = @intFromFloat(10 * rs.s), .h = @intFromFloat(10 * rs.s) };
         _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
 
-        rect.x += 14;
+        rect.x += @intFromFloat(14 * rs.s);
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
         _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
 
-        rect.x += 14;
+        rect.x += @intFromFloat(14 * rs.s);
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 255, 0, 255);
         _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
 
-        rect.x += 14;
+        rect.x += @intFromFloat(14 * rs.s);
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 255, 255);
         _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
 
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 255, 255);
 
-        _ = Backend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(r.x + 4), @intFromFloat(r.y + 30), @intFromFloat(r.x + r.w - 8), @intFromFloat(r.y + 4));
+        _ = Backend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 4 * rs.s));
     }
 
     if (try dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
