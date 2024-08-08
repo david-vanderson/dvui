@@ -28,6 +28,7 @@ pub fn main() !void {
         .icon = window_icon_png, // can also call setIconFromFileContent()
     });
     defer backend.deinit();
+    backend.log_events = true;
 
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
@@ -43,7 +44,7 @@ pub fn main() !void {
         try win.begin(std.time.nanoTimestamp());
 
         // send all SDL events to dvui for processing
-        const quit = c.WindowShouldClose();
+        const quit = try backend.addAllEvents(&win);
         //const quit = try backend.addAllEvents(&win);
         if (quit) break :main_loop;
 
