@@ -6,7 +6,8 @@ pub const c = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
     @cInclude("rlgl.h");
-    //@cInclude("GLES3/gl3.h");
+    @cInclude("GLES3/gl3.h");
+    //@cInclude("gl3.h");
 });
 
 const RaylibBackend = @This();
@@ -157,13 +158,19 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     const EBO = c.rlLoadVertexBufferElement(idx.ptr, @intCast(idx.len * @sizeOf(u32)), false);
     c.rlEnableVertexBufferElement(EBO);
 
-    c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), @ptrFromInt(@offsetOf(dvui.Vertex, "pos")));
+    const OffsetType = @typeInfo(@TypeOf(c.rlSetVertexAttribute)).Fn.params[5].type.?;
+    const expects_ptr = @typeInfo(OffsetType) == .Pointer;
+
+    const pos = if (expects_ptr) @as(*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "pos"))) else @offsetOf(dvui.Vertex, "pos");
+    c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), pos);
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]));
 
-    c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_COLOR]), 4, c.RL_UNSIGNED_BYTE, false, @sizeOf(dvui.Vertex), @ptrFromInt(@offsetOf(dvui.Vertex, "col")));
+    const col = if (expects_ptr) @as(*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "col"))) else @offsetOf(dvui.Vertex, "col");
+    c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_COLOR]), 4, c.RL_UNSIGNED_BYTE, false, @sizeOf(dvui.Vertex), col);
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_COLOR]));
 
-    c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), @ptrFromInt(@offsetOf(dvui.Vertex, "uv")));
+    const uv = if (expects_ptr) @as(*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "uv"))) else @offsetOf(dvui.Vertex, "uv");
+    c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), uv);
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]));
 
     const usetex_loc = c.GetShaderLocation(shader, "useTex");
