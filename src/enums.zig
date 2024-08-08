@@ -1,3 +1,4 @@
+const std = @import("std");
 pub const Button = enum {
     // used for mouse motion events
     none,
@@ -58,6 +59,15 @@ pub const Mod = enum(u16) {
         return (s & t) != 0;
     }
 
+    //returns whether shift is the only modifier
+    pub fn shiftOnly(self: Mod) bool {
+        const lsh = @intFromEnum(Mod.lshift);
+        const rsh = @intFromEnum(Mod.rshift);
+        const mask = lsh | rsh;
+        const input = @intFromEnum(self);
+        return (input & mask) == input;
+    }
+
     pub fn shift(self: Mod) bool {
         return self.is(.lshift) or self.is(.rshift);
     }
@@ -76,6 +86,33 @@ pub const Mod = enum(u16) {
 
     pub fn controlCommand(self: Mod) bool {
         return self.control() or self.command();
+    }
+
+    ///combine two modifiers
+    pub fn combine(self: *Mod, other: Mod) void {
+        const s: u16 = @intFromEnum(self.*);
+        const t: u16 = @intFromEnum(other);
+        self.* = @enumFromInt(s | t);
+    }
+
+    ///for debugging
+    pub fn print(self: Mod) void {
+        std.debug.print("Mod(", .{});
+
+        var found_set = false;
+
+        inline for (@typeInfo(Mod).Enum.fields[0..9]) |field| {
+            if (self.is(@field(Mod, field.name))) {
+                std.debug.print(".{s}, ", .{field.name});
+                found_set = true;
+            }
+        }
+
+        if (found_set == false) {
+            std.debug.print("{}", .{self});
+        }
+
+        std.debug.print(")\n", .{});
     }
 };
 
