@@ -13,6 +13,7 @@ const RaylibBackend = @This();
 
 shader: c.Shader = undefined,
 arena: std.mem.Allocator = undefined,
+log_events: bool = false,
 
 const vertexSource =
     \\#version 330
@@ -154,13 +155,13 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     const EBO = c.rlLoadVertexBufferElement(idx.ptr, @intCast(idx.len * @sizeOf(u32)), false);
     c.rlEnableVertexBufferElement(EBO);
 
-    c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), @offsetOf(dvui.Vertex, "pos"));
+    c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), @ptrFromInt(@offsetOf(dvui.Vertex, "pos")));
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]));
 
-    c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_COLOR]), 4, c.RL_UNSIGNED_BYTE, false, @sizeOf(dvui.Vertex), @offsetOf(dvui.Vertex, "col"));
+    c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_COLOR]), 4, c.RL_UNSIGNED_BYTE, false, @sizeOf(dvui.Vertex), @ptrFromInt(@offsetOf(dvui.Vertex, "col")));
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_COLOR]));
 
-    c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), @offsetOf(dvui.Vertex, "uv"));
+    c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), @ptrFromInt(@offsetOf(dvui.Vertex, "uv")));
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]));
 
     const usetex_loc = c.GetShaderLocation(shader, "useTex");
@@ -211,4 +212,212 @@ pub fn refresh(_: *RaylibBackend) void {}
 
 pub fn clear(_: *RaylibBackend) void {
     c.ClearBackground(c.BLACK);
+}
+
+pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
+    //TODO mouse cursor support
+
+    while (true) {
+        //TODO fix this implementation to send key input properly to dvui
+        const event = c.GetKeyPressed();
+        if (event == 0) break;
+
+        const code = raylibKeyToDvui(event);
+
+        if (self.log_events) {
+            std.debug.print("raylib event KEY_PRESSED {}\n", .{raylibKeyToDvui(event)});
+        }
+
+        _ = try win.addEventKey(.{ .code = code, .action = .repeat, .mod = .none });
+    }
+
+    const mouse_move = c.GetMouseDelta();
+    if (mouse_move.x != 0 or mouse_move.y != 0) {
+        _ = try win.addEventMouseMotion(mouse_move.x, mouse_move.y);
+        if (self.log_events) {
+            //std.debug.print("raylib event Mouse Moved\n", .{});
+        }
+    }
+
+    const Static = struct {
+        var mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButtons.len;
+    };
+
+    inline for (RaylibMouseButtons, 0..) |button, i| {
+        if (c.IsMouseButtonDown(button)) {
+            if (Static.mouse_button_cache[i] != true) {
+                _ = try win.addEventMouseButton(raylibMouseButtonToDvui(button), .press);
+                Static.mouse_button_cache[i] = true;
+                if (self.log_events) {
+                    std.debug.print("raylib event Mouse Button Pressed {}\n", .{raylibMouseButtonToDvui(button)});
+                }
+            }
+        }
+        if (c.IsMouseButtonUp(button)) {
+            if (Static.mouse_button_cache[i] != false) {
+                _ = try win.addEventMouseButton(raylibMouseButtonToDvui(button), .release);
+                Static.mouse_button_cache[i] = false;
+
+                if (self.log_events) {
+                    std.debug.print("raylib event Mouse Button Released {}\n", .{raylibMouseButtonToDvui(button)});
+                }
+            }
+        }
+    }
+
+    return c.WindowShouldClose();
+}
+
+const RaylibMouseButtons = .{
+    c.MOUSE_BUTTON_LEFT,
+    c.MOUSE_BUTTON_RIGHT,
+    c.MOUSE_BUTTON_MIDDLE,
+};
+
+pub fn raylibMouseButtonToDvui(button: c_int) dvui.enums.Button {
+    return switch (button) {
+        c.MOUSE_BUTTON_LEFT => .left,
+        c.MOUSE_BUTTON_MIDDLE => .middle,
+        c.MOUSE_BUTTON_RIGHT => .right,
+        //c.MOUSE_BUTTON_FORWARD => .four,
+        //c.MOUSE_BUTTON_BACK => .five,
+        else => blk: {
+            dvui.log.debug("Raylib unknown button {}\n", .{button});
+            break :blk .six;
+        },
+    };
+}
+
+pub fn raylibKeymodToDvui(keymod: c_int) dvui.enums.Mod {
+    if (keymod == c.KEY_NULL) return dvui.enums.Mod.none;
+
+    var m: u16 = 0;
+    if (keymod & c.KEY_LEFT_SHIFT > 0) m |= @intFromEnum(dvui.enums.Mod.lshift);
+    if (keymod & c.KEY_RIGHT_SHIFT > 0) m |= @intFromEnum(dvui.enums.Mod.rshift);
+    if (keymod & c.KEY_LEFT_CONTROL > 0) m |= @intFromEnum(dvui.enums.Mod.lcontrol);
+    if (keymod & c.KEY_RIGHT_CONTROL > 0) m |= @intFromEnum(dvui.enums.Mod.rcontrol);
+    if (keymod & c.KEY_LEFT_ALT > 0) m |= @intFromEnum(dvui.enums.Mod.lalt);
+    if (keymod & c.KEY_RIGHT_ALT > 0) m |= @intFromEnum(dvui.enums.Mod.ralt);
+    if (keymod & c.KEY_LEFT_SUPER > 0) m |= @intFromEnum(dvui.enums.Mod.lcommand);
+    if (keymod & c.KEY_RIGHT_SUPER > 0) m |= @intFromEnum(dvui.enums.Mod.rcommand);
+
+    return @as(dvui.enums.Mod, @enumFromInt(m));
+}
+
+pub fn raylibKeyToDvui(key: c_int) dvui.enums.Key {
+    return switch (key) {
+        c.KEY_A => .a,
+        c.KEY_B => .b,
+        c.KEY_C => .c,
+        c.KEY_D => .d,
+        c.KEY_E => .e,
+        c.KEY_F => .f,
+        c.KEY_G => .g,
+        c.KEY_H => .h,
+        c.KEY_I => .i,
+        c.KEY_J => .j,
+        c.KEY_K => .k,
+        c.KEY_L => .l,
+        c.KEY_M => .m,
+        c.KEY_N => .n,
+        c.KEY_O => .o,
+        c.KEY_P => .p,
+        c.KEY_Q => .q,
+        c.KEY_R => .r,
+        c.KEY_S => .s,
+        c.KEY_T => .t,
+        c.KEY_U => .u,
+        c.KEY_V => .v,
+        c.KEY_W => .w,
+        c.KEY_X => .x,
+        c.KEY_Y => .y,
+        c.KEY_Z => .z,
+
+        c.KEY_ZERO => .zero,
+        c.KEY_ONE => .one,
+        c.KEY_TWO => .two,
+        c.KEY_THREE => .three,
+        c.KEY_FOUR => .four,
+        c.KEY_FIVE => .five,
+        c.KEY_SIX => .six,
+        c.KEY_SEVEN => .seven,
+        c.KEY_EIGHT => .eight,
+        c.KEY_NINE => .nine,
+
+        c.KEY_F1 => .f1,
+        c.KEY_F2 => .f2,
+        c.KEY_F3 => .f3,
+        c.KEY_F4 => .f4,
+        c.KEY_F5 => .f5,
+        c.KEY_F6 => .f6,
+        c.KEY_F7 => .f7,
+        c.KEY_F8 => .f8,
+        c.KEY_F9 => .f9,
+        c.KEY_F10 => .f10,
+        c.KEY_F11 => .f11,
+        c.KEY_F12 => .f12,
+
+        c.KEY_KP_DIVIDE => .kp_divide,
+        c.KEY_KP_MULTIPLY => .kp_multiply,
+        c.KEY_KP_SUBTRACT => .kp_subtract,
+        c.KEY_KP_ADD => .kp_add,
+        c.KEY_KP_ENTER => .kp_enter,
+        c.KEY_KP_0 => .kp_0,
+        c.KEY_KP_1 => .kp_1,
+        c.KEY_KP_2 => .kp_2,
+        c.KEY_KP_3 => .kp_3,
+        c.KEY_KP_4 => .kp_4,
+        c.KEY_KP_5 => .kp_5,
+        c.KEY_KP_6 => .kp_6,
+        c.KEY_KP_7 => .kp_7,
+        c.KEY_KP_8 => .kp_8,
+        c.KEY_KP_9 => .kp_9,
+        c.KEY_KP_DECIMAL => .kp_decimal,
+
+        c.KEY_ENTER => .enter,
+        c.KEY_ESCAPE => .escape,
+        c.KEY_TAB => .tab,
+        c.KEY_LEFT_SHIFT => .left_shift,
+        c.KEY_RIGHT_SHIFT => .right_shift,
+        c.KEY_LEFT_CONTROL => .left_control,
+        c.KEY_RIGHT_CONTROL => .right_control,
+        c.KEY_LEFT_ALT => .left_alt,
+        c.KEY_RIGHT_ALT => .right_alt,
+        c.KEY_LEFT_SUPER => .left_command,
+        c.KEY_RIGHT_SUPER => .right_command,
+        //c.KEY_MENU => .menu, //it appears menu and r use the same keycode ??
+        c.KEY_NUM_LOCK => .num_lock,
+        c.KEY_CAPS_LOCK => .caps_lock,
+        c.KEY_PRINT_SCREEN => .print,
+        c.KEY_SCROLL_LOCK => .scroll_lock,
+        c.KEY_PAUSE => .pause,
+        c.KEY_DELETE => .delete,
+        c.KEY_HOME => .home,
+        c.KEY_END => .end,
+        c.KEY_PAGE_UP => .page_up,
+        c.KEY_PAGE_DOWN => .page_down,
+        c.KEY_INSERT => .insert,
+        c.KEY_LEFT => .left,
+        c.KEY_RIGHT => .right,
+        c.KEY_UP => .up,
+        c.KEY_DOWN => .down,
+        c.KEY_BACKSPACE => .backspace,
+        c.KEY_SPACE => .space,
+        c.KEY_MINUS => .minus,
+        c.KEY_EQUAL => .equal,
+        c.KEY_LEFT_BRACKET => .left_bracket,
+        c.KEY_RIGHT_BRACKET => .right_bracket,
+        c.KEY_BACKSLASH => .backslash,
+        c.KEY_SEMICOLON => .semicolon,
+        c.KEY_APOSTROPHE => .apostrophe,
+        c.KEY_COMMA => .comma,
+        c.KEY_PERIOD => .period,
+        c.KEY_SLASH => .slash,
+        c.KEY_BACK => .grave, //not sure if this is correct
+
+        else => blk: {
+            dvui.log.debug("raylibKeymodToDvui unknown key{}\n", .{key});
+            break :blk .unknown;
+        },
+    };
 }
