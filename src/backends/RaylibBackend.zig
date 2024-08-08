@@ -251,9 +251,8 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         if ((self.pressed_modifier.shiftOnly() or self.pressed_modifier.is(.none)) and event < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(event))) {
             const char: u8 = @intCast(event);
 
-            //TODO this shifting doesn't seem to work for non-letters
-            //need to figure out how to shift numbers
-            const shifted = if (shift) char else std.ascii.toLower(char);
+            const lowercase_alpha = std.ascii.toLower(char);
+            const shifted = if (shift) shiftAscii(lowercase_alpha) else lowercase_alpha;
             const string: []const u8 = &.{shifted};
             if (self.log_events) {
                 std.debug.print("raylib event text entry {s}\n", .{string});
@@ -470,5 +469,40 @@ pub fn raylibKeyToDvui(key: c_int) dvui.enums.Key {
             dvui.log.debug("raylibKeymodToDvui unknown key{}\n", .{key});
             break :blk .unknown;
         },
+    };
+}
+
+fn shiftAscii(ascii: u8) u8 {
+    return switch (ascii) {
+        // Map lowercase letters to uppercase
+        'a'...'z' => c - 32,
+
+        // Map numbers to their corresponding shifted symbols
+        '1' => '!',
+        '2' => '@',
+        '3' => '#',
+        '4' => '$',
+        '5' => '%',
+        '6' => '^',
+        '7' => '&',
+        '8' => '*',
+        '9' => '(',
+        '0' => ')',
+
+        // Map other relevant symbols to their shifted counterparts
+        '`' => '~',
+        '-' => '_',
+        '=' => '+',
+        '[' => '{',
+        ']' => '}',
+        '\\' => '|',
+        ';' => ':',
+        '\'' => '"',
+        ',' => '<',
+        '.' => '>',
+        '/' => '?',
+
+        // Return the original character if no shift mapping exists
+        else => c,
     };
 }
