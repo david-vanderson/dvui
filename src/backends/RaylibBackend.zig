@@ -17,6 +17,7 @@ log_events: bool = false,
 pressed_keys: std.bit_set.ArrayBitSet(u32, 512) = std.bit_set.ArrayBitSet(u32, 512).initEmpty(),
 pressed_modifier: dvui.enums.Mod = .none,
 mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButtons.len,
+touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
 
 const vertexSource =
     \\#version 330
@@ -226,8 +227,6 @@ pub fn clear(_: *RaylibBackend) void {
 }
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
-    //TODO touch support
-
     //check for key releases
     var iter = self.pressed_keys.iterator(.{});
     while (iter.next()) |keycode| {
@@ -331,6 +330,17 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});
         }
     }
+
+    //TODO fix touch impl
+    //const touch = c.GetTouchPosition(0);
+    //if (touch.x != self.touch_position_cache.x or touch.y != self.touch_position_cache.y) {
+    //    self.touch_position_cache = touch;
+    //    _ = try win.addEventTouchMotion(.touch0, touch.x, touch.y, 1, 1);
+
+    //    if (self.log_events) {
+    //        std.debug.print("raylib event Touch: {}\n", .{touch});
+    //    }
+    //}
 
     return c.WindowShouldClose();
 }
