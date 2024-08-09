@@ -228,8 +228,14 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     while (iter.next()) |keycode| {
         if (c.IsKeyUp(@intCast(keycode))) {
             self.pressed_keys.unset(keycode);
+            const code = raylibKeyToDvui(@intCast(keycode));
             //TODO how to account for mod on key release? Is this important
-            _ = try win.addEventKey(.{ .code = raylibKeyToDvui(@intCast(keycode)), .mod = .none, .action = .up });
+            _ = try win.addEventKey(.{ .code = code, .mod = .none, .action = .up });
+
+            //update pressed_modifier
+            if (isKeymod(code)) {
+                self.pressed_modifier.unset(raylibKeymodToDvui(@intCast(keycode)));
+            }
 
             if (self.log_events) {
                 std.debug.print("raylib event key up: {}\n", .{raylibKeyToDvui(@intCast(keycode))});
@@ -277,7 +283,6 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         } else {
             //add eventKey
             _ = try win.addEventKey(.{ .code = code, .mod = self.pressed_modifier, .action = .down });
-            self.pressed_modifier = .none;
             if (self.log_events) {
                 std.debug.print("raylib event key down: {}\n", .{code});
             }

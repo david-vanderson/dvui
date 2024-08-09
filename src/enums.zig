@@ -95,6 +95,13 @@ pub const Mod = enum(u16) {
         self.* = @enumFromInt(s | t);
     }
 
+    ///remove modifier
+    pub fn unset(self: *Mod, other: Mod) void {
+        const s: u16 = @intFromEnum(self.*);
+        const t: u16 = @intFromEnum(other);
+        self.* = @enumFromInt(s & (~t));
+    }
+
     ///for debugging
     pub fn print(self: Mod) void {
         std.debug.print("Mod(", .{});
