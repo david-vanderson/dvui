@@ -6,7 +6,7 @@ pub const c = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
     @cInclude("rlgl.h");
-    @cInclude("GLES3/gl3.h");
+    @cInclude("glad.h");
 });
 
 const RaylibBackend = @This();
@@ -158,15 +158,15 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     const EBO = c.rlLoadVertexBufferElement(idx.ptr, @intCast(idx.len * @sizeOf(u32)), false);
     c.rlEnableVertexBufferElement(EBO);
 
-    const pos = @as(?*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "pos")));
+    const pos = @offsetOf(dvui.Vertex, "pos");
     c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), pos);
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]));
 
-    const col = @as(?*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "col")));
+    const col = @offsetOf(dvui.Vertex, "col");
     c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_COLOR]), 4, c.RL_UNSIGNED_BYTE, false, @sizeOf(dvui.Vertex), col);
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_COLOR]));
 
-    const uv = @as(?*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "uv")));
+    const uv = @offsetOf(dvui.Vertex, "uv");
     c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), uv);
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]));
 

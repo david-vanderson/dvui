@@ -73,51 +73,20 @@ pub fn build(b: *std.Build) !void {
         }
     }
 
-    // EXPERIMENTAL: for now I make a raylib symlink that points to the raylib git checkout
+    // EXPERIMENTAL raylib backend
     const raylib_mod = b.addModule("RaylibBackend", .{
         .root_source_file = b.path("src/backends/RaylibBackend.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
-    raylib_mod.addImport("dvui", dvui_mod_raylib);
-    raylib_mod.addIncludePath(b.path("raylib/src"));
-    raylib_mod.addObjectFile(b.path("raylib/src/libraylib.a"));
-    raylib_mod.linkSystemLibrary("GL", .{});
-    // TODO: systemIntegration for raylib
-    // In the future we'll use something like this:
-    //const ray = b.lazyDependency("raylib", .{ .target = target, .optimize = optimize });
-    //dvui_mod_raylib.linkLibrary(ray.?.artifact("raylib"));
-    //raylib_mod.linkLibrary(ray.?.artifact("raylib"));
-    //raylib_mod.addIncludePath(ray.?.path("src"));
-
-    // mach example
-    //{
-    //    const name = "mach-test";
-    //    const mach = @import("libs/mach/build.zig");
-    //    const example_app = try mach.App.init(
-    //        b,
-    //        .{
-    //            .name = "mach-test",
-    //            .src = "mach-test.zig",
-    //            .target = target,
-    //            .deps = &[_]Pkg{ Packages.zmath, freetype.pkg },
-    //        },
-    //    );
-    //    example_app.setBuildMode(mode);
-    //    freetype.link(example_app.b, example_app.step, .{});
-    //    try example_app.link(.{});
-
-    //    const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
-    //    compile_step.dependOn(&b.addInstallArtifact(example_app.step).step);
-    //    b.getInstallStep().dependOn(compile_step);
-
-    //    const run_cmd = try example_app.run();
-    //    run_cmd.dependOn(compile_step);
-
-    //    const run_step = b.step(name, "Run " ++ name);
-    //    run_step.dependOn(run_cmd);
-    //}
+    const maybe_ray = b.lazyDependency("raylib", .{ .target = target, .optimize = optimize });
+    if (maybe_ray) |ray| {
+        raylib_mod.linkLibrary(ray.artifact("raylib"));
+        raylib_mod.addIncludePath(ray.path("src"));
+        raylib_mod.addImport("dvui", dvui_mod_raylib);
+        raylib_mod.addIncludePath(ray.path("src/external"));
+    }
 
     const sdl_examples = [_][]const u8{
         "sdl-standalone",
@@ -246,3 +215,33 @@ pub fn build(b: *std.Build) !void {
         b.getInstallStep().dependOn(compile_step);
     }
 }
+
+// mach example build code
+// note: Disabled currently until mach backend is updated
+//
+//{
+//    const name = "mach-test";
+//    const mach = @import("libs/mach/build.zig");
+//    const example_app = try mach.App.init(
+//        b,
+//        .{
+//            .name = "mach-test",
+//            .src = "mach-test.zig",
+//            .target = target,
+//            .deps = &[_]Pkg{ Packages.zmath, freetype.pkg },
+//        },
+//    );
+//    example_app.setBuildMode(mode);
+//    freetype.link(example_app.b, example_app.step, .{});
+//    try example_app.link(.{});
+
+//    const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
+//    compile_step.dependOn(&b.addInstallArtifact(example_app.step).step);
+//    b.getInstallStep().dependOn(compile_step);
+
+//    const run_cmd = try example_app.run();
+//    run_cmd.dependOn(compile_step);
+
+//    const run_step = b.step(name, "Run " ++ name);
+//    run_step.dependOn(run_cmd);
+//}
