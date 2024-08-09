@@ -45,7 +45,6 @@ pub fn main() !void {
 
         // send all SDL events to dvui for processing
         const quit = try backend.addAllEvents(&win);
-        //const quit = try backend.addAllEvents(&win);
         if (quit) break :main_loop;
 
         // if dvui widgets might not cover the whole window, then need to clear
