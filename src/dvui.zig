@@ -929,6 +929,7 @@ pub fn pathFillConvex(col: Color) !void {
         try vtx.append(v);
 
         // indexes for fill
+        // triangles must be counter-clockwise (y going down) to avoid backface culling
         if (i > 1) {
             try idx.append(@as(u32, @intCast(0)));
             try idx.append(@as(u32, @intCast(ai * 2)));
@@ -936,6 +937,7 @@ pub fn pathFillConvex(col: Color) !void {
         }
 
         // indexes for aa fade from inner to outer
+        // triangles must be counter-clockwise (y going down) to avoid backface culling
         try idx.append(@as(u32, @intCast(ai * 2)));
         try idx.append(@as(u32, @intCast(ai * 2 + 1)));
         try idx.append(@as(u32, @intCast(bi * 2)));
@@ -1140,6 +1142,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         v.col = col_trans;
         try vtx.append(v);
 
+        // triangles must be counter-clockwise (y going down) to avoid backface culling
         if (closed or ((i + 1) != cw.path.items.len)) {
             // indexes for fill
             try idx.append(@as(u32, @intCast(vtx_start + bi * 4)));
@@ -5413,6 +5416,7 @@ pub fn renderText(opts: renderTextOptions) !void {
         v.uv[0] = gi.uv[0];
         try vtx.append(v);
 
+        // triangles must be counter-clockwise (y going down) to avoid backface culling
         try idx.append(len + 0);
         try idx.append(len + 2);
         try idx.append(len + 1);
@@ -5440,6 +5444,8 @@ pub fn renderText(opts: renderTextOptions) !void {
                 v.uv[0] = 0;
                 v.uv[1] = 0;
             }
+
+            // triangles must be counter-clockwise (y going down) to avoid backface culling
             drawClippedTriangles_helper(&cw.backend, null, &sel_vtx, &[_]u32{ 0, 2, 1, 0, 3, 2 });
         }
     }
@@ -5493,6 +5499,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
         v.uv[0] = 0;
         try vtx.append(v);
 
+        // triangles must be counter-clockwise (y going down) to avoid backface culling
         try idx.append(len + 0);
         try idx.append(len + 2);
         try idx.append(len + 1);
@@ -5562,6 +5569,7 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Co
     }
     try vtx.append(v);
 
+    // triangles must be counter-clockwise (y going down) to avoid backface culling
     try idx.append(0);
     try idx.append(2);
     try idx.append(1);

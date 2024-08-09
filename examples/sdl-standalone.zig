@@ -140,8 +140,8 @@ fn dvui_frame(backend: Backend) !void {
         var box = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
         defer box.deinit();
 
-	// Here is some arbitrary drawing that doesn't have to go through DVUI.
-	// It can be interleaved with DVUI drawing.
+        // Here is some arbitrary drawing that doesn't have to go through DVUI.
+        // It can be interleaved with DVUI drawing.
         // NOTE: This only works in the main window (not floating subwindows
         // like dialogs).
 
