@@ -143,7 +143,6 @@ pub fn contentScale(_: *RaylibBackend) f32 {
 pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32, clipr: dvui.Rect) void {
     _ = clipr;
     // TODO: scissor
-    // TODO: texture
 
     const shader = self.shader;
     c.rlEnableShader(shader.id);
