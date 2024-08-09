@@ -159,20 +159,15 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     const EBO = c.rlLoadVertexBufferElement(idx.ptr, @intCast(idx.len * @sizeOf(u32)), false);
     c.rlEnableVertexBufferElement(EBO);
 
-    const OffsetType = @typeInfo(@TypeOf(c.rlSetVertexAttribute)).Fn.params[5].type.?;
-    _ = OffsetType; // autofix
-    //const expects_ptr = @typeInfo(OffsetType) == .Pointer;
-    const expects_ptr = true;
-
-    const pos = if (expects_ptr) @as(?*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "pos"))) else @offsetOf(dvui.Vertex, "pos");
+    const pos = @as(?*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "pos")));
     c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), pos);
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_POSITION]));
 
-    const col = if (expects_ptr) @as(?*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "col"))) else @offsetOf(dvui.Vertex, "col");
+    const col = @as(?*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "col")));
     c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_COLOR]), 4, c.RL_UNSIGNED_BYTE, false, @sizeOf(dvui.Vertex), col);
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_COLOR]));
 
-    const uv = if (expects_ptr) @as(?*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "uv"))) else @offsetOf(dvui.Vertex, "uv");
+    const uv = @as(?*anyopaque, @ptrFromInt(@offsetOf(dvui.Vertex, "uv")));
     c.rlSetVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]), 2, c.RL_FLOAT, false, @sizeOf(dvui.Vertex), uv);
     c.rlEnableVertexAttribute(@intCast(shader.locs[c.RL_SHADER_LOC_VERTEX_TEXCOORD01]));
 
@@ -227,6 +222,7 @@ pub fn clear(_: *RaylibBackend) void {
 }
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
+    const shift = c.IsKeyDown(c.KEY_LEFT_SHIFT) or c.IsKeyDown(c.KEY_RIGHT_SHIFT);
     //check for key releases
     var iter = self.pressed_keys.iterator(.{});
     while (iter.next()) |keycode| {
@@ -238,7 +234,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             if (self.log_events) {
                 std.debug.print("raylib event key up: {}\n", .{raylibKeyToDvui(@intCast(keycode))});
             }
-        } else {
+        } else if (c.IsKeyPressedRepeat(@intCast(keycode))) {
             _ = try win.addEventKey(.{ .code = raylibKeyToDvui(@intCast(keycode)), .mod = .none, .action = .repeat });
             if (self.log_events) {
                 std.debug.print("raylib event key repeat: {}\n", .{raylibKeyToDvui(@intCast(keycode))});
@@ -256,8 +252,6 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
 
         //calculate code
         const code = raylibKeyToDvui(event);
-
-        const shift = c.IsKeyDown(c.KEY_LEFT_SHIFT) or c.IsKeyDown(c.KEY_RIGHT_SHIFT);
 
         //text input
         if ((self.pressed_modifier.shiftOnly() or self.pressed_modifier.is(.none)) and event < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(event))) {
@@ -287,6 +281,25 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             if (self.log_events) {
                 std.debug.print("raylib event key down: {}\n", .{code});
             }
+        }
+    }
+
+    //account for key repeat
+    iter = self.pressed_keys.iterator(.{});
+    while (iter.next()) |keycode| {
+        if (c.IsKeyPressedRepeat(@intCast(keycode)) and
+            (self.pressed_modifier.shiftOnly() or self.pressed_modifier.is(.none)) and
+            keycode < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(keycode)))
+        {
+            const char: u8 = @intCast(keycode);
+
+            const lowercase_alpha = std.ascii.toLower(char);
+            const shifted = if (shift) shiftAscii(lowercase_alpha) else lowercase_alpha;
+            const string: []const u8 = &.{shifted};
+            if (self.log_events) {
+                std.debug.print("raylib event text entry {s}\n", .{string});
+            }
+            _ = try win.addEventText(string);
         }
     }
 
@@ -355,8 +368,6 @@ pub fn raylibMouseButtonToDvui(button: c_int) dvui.enums.Button {
         c.MOUSE_BUTTON_LEFT => .left,
         c.MOUSE_BUTTON_MIDDLE => .middle,
         c.MOUSE_BUTTON_RIGHT => .right,
-        //c.MOUSE_BUTTON_FORWARD => .four,
-        //c.MOUSE_BUTTON_BACK => .five,
         else => blk: {
             dvui.log.debug("Raylib unknown button {}\n", .{button});
             break :blk .six;
