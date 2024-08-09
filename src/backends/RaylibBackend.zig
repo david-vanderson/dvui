@@ -233,7 +233,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             _ = try win.addEventKey(.{ .code = code, .mod = .none, .action = .up });
 
             //update pressed_modifier
-            if (isKeymod(code)) {
+            if (isKeymod(@intCast(keycode))) {
                 self.pressed_modifier.unset(raylibKeymodToDvui(@intCast(keycode)));
             }
 
@@ -273,7 +273,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         }
 
         //check if keymod
-        if (isKeymod(code)) {
+        if (isKeymod(event)) {
             const keymod = raylibKeymodToDvui(event);
             self.pressed_modifier.combine(keymod);
 
@@ -380,9 +380,8 @@ pub fn raylibMouseButtonToDvui(button: c_int) dvui.enums.Button {
     };
 }
 
-fn isKeymod(key: dvui.enums.Key) bool {
-    return key == .left_alt or key == .left_shift or key == .left_command or key == .left_control or
-        key == .right_alt or key == .right_shift or key == .right_command or key == .right_control;
+fn isKeymod(key: c_int) bool {
+    return raylibKeymodToDvui(key) != .none;
 }
 
 pub fn raylibKeymodToDvui(keymod: c_int) dvui.enums.Mod {
