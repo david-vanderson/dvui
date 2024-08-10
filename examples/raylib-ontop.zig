@@ -60,7 +60,7 @@ pub fn main() !void {
 
     win.deinit();
     backend.deinit();
-    //ray.CloseWindow();
+    ray.CloseWindow();
 }
 
 fn dvuiFrame() !void {
