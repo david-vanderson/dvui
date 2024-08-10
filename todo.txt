@@ -12,15 +12,12 @@ change examples to show how to do backend rendering in the example
 - raylib-ontop
 
 
-with a narrow window where everything fits, slowly raising the bottom of the window causes flickering
-- a vertical scrollbar is added and then deleted?
-
-
 raylib backend
 - events
 - use default shader?
 - is gl_blend not turned on?  Edges don't seem antialiased - maybe something wrong with alpha?
 - clipping
+- on mac, two-finger scrolling in the demo window a lot hangs?
 
 test all triangles in raylib to make sure they are all being rendered counter-clockwise
 - add comment to each place we do it
