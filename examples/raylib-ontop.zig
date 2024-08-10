@@ -5,8 +5,8 @@ const ray = @cImport({
     @cInclude("raylib.h");
 });
 
-var show_dialog_outside_frame: bool = false;
-var vsync = true;
+//var show_dialog_outside_frame: bool = false;
+//var vsync = true;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
@@ -41,13 +41,21 @@ pub fn main() !void {
         // the previous frame's render
         ray.ClearBackground(ray.BLACK);
 
+        ray.DrawText("Congrats! You Combined Raylib and DVUI!", 190, 200, 20, ray.RAYWHITE);
+
+        const rect = ray.Rectangle{ .x = 300, .y = 300, .width = 300, .height = 100 };
+        ray.DrawRectangleGradientEx(rect, ray.RAYWHITE, ray.BLACK, ray.BLUE, ray.RED);
+
+        //TODO figure out why raylib objects are rendering over dvui objects
+        //raylib objects are drawn first so this shouldn't be happening
+        //maybe its something with the shaders??
+
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(std.time.nanoTimestamp());
 
-        // send all SDL events to dvui for processing
+        // send all Raylib events to dvui for processing
         _ = try backend.addAllEvents(&win);
 
-        //c.DrawText("Congrats! You created your first window!", 190, 200, 20, c.LIGHTGRAY);
         try dvuiFrame();
 
         // marks end of dvui frame, don't call dvui functions after this
@@ -64,69 +72,9 @@ pub fn main() !void {
 }
 
 fn dvuiFrame() !void {
-    {
-        var m = try dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
-        defer m.deinit();
-
-        if (try dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .none })) |r| {
-            var fw = try dvui.floatingMenu(@src(), dvui.Rect.fromPoint(dvui.Point{ .x = r.x, .y = r.y + r.h }), .{});
-            defer fw.deinit();
-
-            if (try dvui.menuItemLabel(@src(), "Close Menu", .{}, .{}) != null) {
-                dvui.menuGet().?.close();
-            }
-        }
-
-        if (try dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .none })) |r| {
-            var fw = try dvui.floatingMenu(@src(), dvui.Rect.fromPoint(dvui.Point{ .x = r.x, .y = r.y + r.h }), .{});
-            defer fw.deinit();
-            _ = try dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
-            _ = try dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
-            _ = try dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
-        }
-    }
-
-    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
-    defer scroll.deinit();
-
-    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
-    const lorem = "This example shows how to use dvui in a normal application.";
-    try tl.addText(lorem, .{});
-    tl.deinit();
-
-    var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    try tl2.addText(
-        \\DVUI
-        \\- paints the entire window
-        \\- can show floating windows and dialogs
-        \\- example menu at the top of the window
-        \\- rest of the window is a scroll area
-    , .{});
-    try tl2.addText("\n\n", .{});
-    try tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
-    try tl2.addText("\n\n", .{});
-    if (vsync) {
-        try tl2.addText("Framerate is capped by vsync.", .{});
-    } else {
-        try tl2.addText("Framerate is uncapped.", .{});
-    }
-    try tl2.addText("\n\n", .{});
-    try tl2.addText("Cursor is always being set by dvui.", .{});
-    try tl2.addText("\n\n", .{});
-    if (dvui.useFreeType) {
-        try tl2.addText("Fonts are being rendered by FreeType 2.", .{});
-    } else {
-        try tl2.addText("Fonts are being rendered by stb_truetype.", .{});
-    }
-    tl2.deinit();
-
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
     if (try dvui.button(@src(), label, .{}, .{})) {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
-    }
-
-    if (try dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
-        show_dialog_outside_frame = true;
     }
 
     // look at demo() for examples of dvui widgets, shows in a floating window
