@@ -18,6 +18,10 @@ pressed_keys: std.bit_set.ArrayBitSet(u32, 512) = std.bit_set.ArrayBitSet(u32, 5
 pressed_modifier: dvui.enums.Mod = .none,
 mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButtons.len,
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
+window_owner: WindowOwner = .dvui,
+
+/// who is responsible for managing the application window?
+const WindowOwner = enum { dvui, user };
 
 const vertexSource =
     \\#version 330
@@ -76,7 +80,15 @@ pub const InitOptions = struct {
     icon: ?[]const u8 = null,
 };
 
-pub fn init(options: InitOptions) !RaylibBackend {
+//==========WINDOW MANAGEMENT FUNCTIONALITY==========
+
+//note:
+//functions in this section can be ignored
+//if window management is handled by the
+//application
+
+/// creates a window using raylib
+pub fn createWindow(options: InitOptions) void {
     // TODO: implement all InitOptions
     c.SetConfigFlags(c.FLAG_WINDOW_RESIZABLE);
     if (options.vsync) {
@@ -91,14 +103,51 @@ pub fn init(options: InitOptions) !RaylibBackend {
     if (options.max_size) |max| {
         c.SetWindowMaxSize(@intFromFloat(max.w), @intFromFloat(max.h));
     }
+}
 
-    var back = RaylibBackend{};
+pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
+    self.arena = arena;
+
+    if (self.window_owner == .dvui) {
+        c.BeginDrawing();
+    }
+}
+
+pub fn end(self: *RaylibBackend) void {
+    if (self.window_owner == .dvui) {
+        c.EndDrawing();
+    }
+}
+
+pub fn clear(_: *RaylibBackend) void {
+    c.ClearBackground(c.BLACK);
+}
+
+//==========DVUI MANAGEMENT FUNCTIONS==========
+
+/// initializes the raylib backend
+/// options are required if dvui is the window_owner
+pub fn init(comptime window_owner: WindowOwner, options: ?InitOptions) !RaylibBackend {
+    var back = RaylibBackend{ .window_owner = window_owner };
+
+    if (back.window_owner == .dvui) {
+        const opt: InitOptions = options.?;
+        createWindow(opt);
+    }
+
+    if (!c.IsWindowReady()) {
+        @panic("OS Window must be created before initializing dvui window. \nNote: Set the window_owner to `.dvui` to automatically create the OS window");
+    }
+
     back.shader = c.LoadShaderFromMemory(vertexSource, fragSource);
     return back;
 }
 
-pub fn deinit(_: *RaylibBackend) void {
-    c.CloseWindow();
+pub fn deinit(self: *RaylibBackend) void {
+    c.UnloadShader(self.shader);
+    if (self.window_owner == .dvui) {
+        c.CloseWindow();
+    }
 }
 
 pub fn backend(self: *RaylibBackend) dvui.Backend {
@@ -111,17 +160,9 @@ pub fn nanoTime(self: *RaylibBackend) i128 {
 }
 
 pub fn sleep(self: *RaylibBackend, ns: u64) void {
-    _ = self;
-    std.time.sleep(ns);
-}
-
-pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
-    self.arena = arena;
-    c.BeginDrawing();
-}
-
-pub fn end(_: *RaylibBackend) void {
-    c.EndDrawing();
+    if (self.window_owner == .dvui) {
+        std.time.sleep(ns);
+    }
 }
 
 pub fn pixelSize(_: *RaylibBackend) dvui.Size {
@@ -204,21 +245,18 @@ pub fn clipboardText(_: *RaylibBackend) ![]const u8 {
 }
 
 pub fn clipboardTextSet(self: *RaylibBackend, text: []const u8) !void {
-    //TODO can I free this memory??
     const c_text = try self.arena.dupeZ(u8, text);
+    defer self.arena.free(c_text);
     c.SetClipboardText(c_text.ptr);
 }
 
 pub fn openURL(self: *RaylibBackend, url: []const u8) !void {
     const c_url = try self.arena.dupeZ(u8, url);
+    defer self.arena.free(c_url);
     c.SetClipboardText(c_url.ptr);
 }
 
 pub fn refresh(_: *RaylibBackend) void {}
-
-pub fn clear(_: *RaylibBackend) void {
-    c.ClearBackground(c.BLACK);
-}
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     const shift = c.IsKeyDown(c.KEY_LEFT_SHIFT) or c.IsKeyDown(c.KEY_RIGHT_SHIFT);
