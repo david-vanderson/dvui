@@ -1,83 +1,69 @@
 const std = @import("std");
 const dvui = @import("dvui");
 const RaylibBackend = @import("RaylibBackend");
+const ray = @cImport({
+    @cInclude("raylib.h");
+});
+
+var show_dialog_outside_frame: bool = false;
+var vsync = true;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
-
-const vsync = true;
-
-var show_dialog_outside_frame: bool = false;
-
-pub const c = RaylibBackend.c;
-
-/// This example shows how to use the dvui for a normal application:
-/// - dvui renders the whole application
-/// - render frames only when needed
 pub fn main() !void {
+    var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+    const gpa = gpa_instance.allocator();
+
     defer _ = gpa_instance.deinit();
 
-    // init Raylib backend (creates OS window)
-    var backend = try RaylibBackend.init(.dvui, .{
-        .allocator = gpa,
-        .size = .{ .w = 800.0, .h = 450.0 },
-        .vsync = vsync,
-        .title = "DVUI Raylib Standalone Example",
-        .icon = window_icon_png, // can also call setIconFromFileContent()
-    });
-    defer backend.deinit();
+    //create actual OS window with raylib
+    ray.SetConfigFlags(ray.FLAG_WINDOW_RESIZABLE);
+    ray.SetConfigFlags(ray.FLAG_VSYNC_HINT);
+    ray.InitWindow(800, 450, "DVUI Raylib Ontop Example");
+
+    // init Raylib backend
+    var backend = try RaylibBackend.init(.user, null);
     backend.log_events = true;
 
     // init dvui Window (maps onto a single OS window)
+    // OS window is managed by raylib, not dvui
     var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
-    defer win.deinit();
 
-    main_loop: while (true) {
+    while (!ray.WindowShouldClose()) {
 
         // beginWait coordinates with waitTime below to run frames only when needed
         //const nstime = win.beginWait(backend.hasEvent());
 
-        // marks the beginning of a frame for dvui, can call dvui functions after this
         //try win.begin(nstime);
-        try win.begin(std.time.nanoTimestamp());
-
-        // send all SDL events to dvui for processing
-        const quit = try backend.addAllEvents(&win);
-        if (quit) break :main_loop;
+        ray.BeginDrawing();
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        backend.clear();
+        ray.ClearBackground(ray.BLACK);
+
+        // marks the beginning of a frame for dvui, can call dvui functions after this
+        try win.begin(std.time.nanoTimestamp());
+
+        // send all SDL events to dvui for processing
+        _ = try backend.addAllEvents(&win);
 
         //c.DrawText("Congrats! You created your first window!", 190, 200, 20, c.LIGHTGRAY);
-        try dvui_frame();
+        try dvuiFrame();
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
         const end_micros = try win.end(.{});
         _ = end_micros;
 
-        // cursor management
-        //backend.setCursor(win.cursorRequested());
-
-        // render frame to OS
-        //backend.renderPresent();
-
-        // waitTime and beginWait combine to achieve variable framerates
-        //const wait_event_micros = win.waitTime(end_micros, null);
-        //backend.waitEventTimeout(wait_event_micros);
-
-        // Example of how to show a dialog from another thread (outside of win.begin/win.end)
-        //if (show_dialog_outside_frame) {
-        //show_dialog_outside_frame = false;
-        //try dvui.dialog(@src(), .{ .window = &win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
-        //}
+        ray.EndDrawing();
     }
+
+    win.deinit();
+    backend.deinit();
+    //ray.CloseWindow();
 }
 
-fn dvui_frame() !void {
+fn dvuiFrame() !void {
     {
         var m = try dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();

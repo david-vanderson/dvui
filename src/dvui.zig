@@ -2017,1386 +2017,6 @@ pub fn wantOnScreenKeyboard(r: Rect) void {
     cw.osk_focused_widget_text_rect = r;
 }
 
-// maps to OS window
-pub const Window = struct {
-    const Self = @This();
-
-    pub const Subwindow = struct {
-        id: u32 = 0,
-        rect: Rect = Rect{},
-        rect_pixels: Rect = Rect{},
-        focused_widgetId: ?u32 = null,
-        render_cmds: std.ArrayList(RenderCmd),
-        render_cmds_after: std.ArrayList(RenderCmd),
-        used: bool = true,
-        modal: bool = false,
-        stay_above_parent_window: ?u32 = null,
-    };
-
-    const SavedSize = struct {
-        size: Size,
-        used: bool = true,
-    };
-
-    const SavedData = struct {
-        used: bool = true,
-        alignment: u8,
-        data: []u8,
-
-        type_str: if (builtin.mode == .Debug) []const u8 else void = undefined,
-        copy_slice: if (builtin.mode == .Debug) bool else void = undefined,
-
-        pub fn free(self: *const SavedData, allocator: std.mem.Allocator) void {
-            if (self.data.len != 0) {
-                allocator.rawFree(self.data, @ctz(self.alignment), @returnAddress());
-            }
-        }
-    };
-
-    backend: Backend,
-    previous_window: ?*Window = null,
-
-    // list of subwindows including base, later windows are on top of earlier
-    // windows
-    subwindows: std.ArrayList(Subwindow),
-
-    // id of the subwindow widgets are being added to
-    subwindow_currentId: u32 = 0,
-
-    // id of the subwindow that has focus
-    focused_subwindowId: u32 = 0,
-
-    // handling the OSK (on screen keyboard)
-    osk_focused_widget_text_rect: ?Rect = null,
-
-    snap_to_pixels: bool = true,
-    alpha: f32 = 1.0,
-
-    events: std.ArrayList(Event) = undefined,
-    event_num: u16 = 0,
-    // mouse_pt tracks the last position we got a mouse event for
-    // 1) used to add position info to mouse wheel events
-    // 2) used to highlight the widget under the mouse (Event.Mouse.Action.position event)
-    // 3) used to change the cursor (Event.Mouse.Action.position event)
-    // Start off screen so nothing is highlighted on the first frame
-    mouse_pt: Point = Point{ .x = -1, .y = -1 },
-    mouse_pt_prev: Point = Point{ .x = -1, .y = -1 },
-    inject_motion_event: bool = false,
-
-    drag_state: enum {
-        none,
-        prestart,
-        dragging,
-    } = .none,
-    drag_pt: Point = Point{},
-    drag_offset: Point = Point{},
-
-    frame_time_ns: i128 = 0,
-    loop_wait_target: ?i128 = null,
-    loop_wait_target_event: bool = false,
-    loop_target_slop: i32 = 1000, // 1ms frame overhead seems a good place to start
-    loop_target_slop_frames: i32 = 0,
-    frame_times: [30]u32 = [_]u32{0} ** 30,
-
-    secs_since_last_frame: f32 = 0,
-    extra_frames_needed: u8 = 0,
-    clipRect: Rect = Rect{},
-
-    menu_current: ?*MenuWidget = null,
-    popup_current: ?*FloatingMenuWidget = null,
-    theme: *Theme = &Theme.AdwaitaLight,
-
-    min_sizes: std.AutoHashMap(u32, SavedSize),
-    data_mutex: std.Thread.Mutex,
-    datas: std.AutoHashMap(u32, SavedData),
-    animations: std.AutoHashMap(u32, Animation),
-    tab_index_prev: std.ArrayList(TabIndex),
-    tab_index: std.ArrayList(TabIndex),
-    font_cache: std.AutoHashMap(u32, FontCacheEntry),
-    ttf_bytes_database: std.StringHashMap([]const u8),
-    texture_cache: std.AutoHashMap(u32, TextureCacheEntry),
-    dialog_mutex: std.Thread.Mutex,
-    dialogs: std.ArrayList(Dialog),
-    toasts: std.ArrayList(Toast),
-
-    cursor_requested: enums.Cursor = .arrow,
-    cursor_dragging: ?enums.Cursor = null,
-
-    wd: WidgetData = undefined,
-    rect_pixels: Rect = Rect{}, // pixels
-    natural_scale: f32 = 1.0,
-    content_scale: f32 = 1.0, // can set seperately but gets folded into natural_scale
-    next_widget_ypos: f32 = 0,
-
-    captureID: ?u32 = null,
-    captured_last_frame: bool = false,
-
-    gpa: std.mem.Allocator,
-    _arena: std.heap.ArenaAllocator,
-    arena: std.mem.Allocator = undefined,
-    path: std.ArrayList(Point) = undefined,
-    rendering: bool = true,
-
-    debug_window_show: bool = false,
-    debug_widget_id: u32 = 0, // 0 means no widget is selected
-    debug_info_name_rect: []const u8 = "",
-    debug_info_src_id_extra: []const u8 = "",
-    debug_under_mouse: bool = false,
-    debug_under_mouse_esc_needed: bool = false,
-    debug_under_mouse_quitting: bool = false,
-    debug_under_mouse_info: []u8 = "",
-
-    debug_refresh_mutex: std.Thread.Mutex,
-    debug_refresh: bool = false,
-
-    debug_touch_simulate_events: bool = false, // when true, left mouse button works like a finger
-    debug_touch_simulate_down: bool = false,
-
-    pub fn init(
-        src: std.builtin.SourceLocation,
-        id_extra: usize,
-        gpa: std.mem.Allocator,
-        backend: Backend,
-    ) !Self {
-        const hashval = hashSrc(src, id_extra);
-        const arena = std.heap.ArenaAllocator.init(gpa);
-
-        var self = Self{
-            .gpa = gpa,
-            ._arena = arena,
-            .subwindows = std.ArrayList(Subwindow).init(gpa),
-            .min_sizes = std.AutoHashMap(u32, SavedSize).init(gpa),
-            .data_mutex = std.Thread.Mutex{},
-            .datas = std.AutoHashMap(u32, SavedData).init(gpa),
-            .animations = std.AutoHashMap(u32, Animation).init(gpa),
-            .tab_index_prev = std.ArrayList(TabIndex).init(gpa),
-            .tab_index = std.ArrayList(TabIndex).init(gpa),
-            .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
-            .texture_cache = std.AutoHashMap(u32, TextureCacheEntry).init(gpa),
-            .dialog_mutex = std.Thread.Mutex{},
-            .dialogs = std.ArrayList(Dialog).init(gpa),
-            .toasts = std.ArrayList(Toast).init(gpa),
-            .debug_refresh_mutex = std.Thread.Mutex{},
-            .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
-            .backend = backend,
-            .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
-        };
-
-        const winSize = self.backend.windowSize();
-        const pxSize = self.backend.pixelSize();
-        self.content_scale = self.backend.contentScale();
-        const total_scale = self.content_scale * pxSize.w / winSize.w;
-        if (total_scale >= 2.0) {
-            self.snap_to_pixels = false;
-        }
-
-        log.info("window logical {} pixels {} natural scale {d} initial content scale {d} snap_to_pixels {}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels });
-
-        errdefer self.deinit();
-
-        self.focused_subwindowId = self.wd.id;
-        self.frame_time_ns = 1;
-
-        if (useFreeType) {
-            FontCacheEntry.intToError(c.FT_Init_FreeType(&ft2lib)) catch |err| {
-                dvui.log.err("freetype error {!} trying to init freetype library\n", .{err});
-                return error.freetypeError;
-            };
-        }
-
-        return self;
-    }
-
-    pub fn deinit(self: *Self) void {
-        {
-            var it = self.datas.iterator();
-            while (it.next()) |item| item.value_ptr.free(self.gpa);
-            self.datas.deinit();
-        }
-
-        if (self.debug_under_mouse_info.len > 0) {
-            self.gpa.free(self.debug_under_mouse_info);
-            self.debug_under_mouse_info = "";
-        }
-
-        self.subwindows.deinit();
-        self.min_sizes.deinit();
-        self.animations.deinit();
-        self.tab_index_prev.deinit();
-        self.tab_index.deinit();
-
-        {
-            var it = self.font_cache.iterator();
-            while (it.next()) |item| {
-                item.value_ptr.glyph_info.deinit();
-                item.value_ptr.deinit();
-            }
-            self.font_cache.deinit();
-        }
-
-        self.texture_cache.deinit();
-        self.dialogs.deinit();
-        self.toasts.deinit();
-        self._arena.deinit();
-        self.ttf_bytes_database.deinit();
-    }
-
-    // called from any thread
-    pub fn debugRefresh(self: *Self, val: ?bool) bool {
-        self.debug_refresh_mutex.lock();
-        defer self.debug_refresh_mutex.unlock();
-
-        const previous = self.debug_refresh;
-        if (val) |v| {
-            self.debug_refresh = v;
-        }
-
-        return previous;
-    }
-
-    // called from gui thread
-    pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?u32) void {
-        if (self.debugRefresh(null)) {
-            log.debug("{s}:{d} refresh {?x}", .{ src.file, src.line, id });
-        }
-        self.extra_frames_needed = 1;
-    }
-
-    // called from any thread
-    pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?u32) void {
-        if (self.debugRefresh(null)) {
-            log.debug("{s}:{d} refreshBackend {?x}", .{ src.file, src.line, id });
-        }
-        self.backend.refresh();
-    }
-
-    pub fn addEventKey(self: *Self, event: Event.Key) !bool {
-        if (self.debug_under_mouse and self.debug_under_mouse_esc_needed and event.action == .down and event.code == .escape) {
-            // a left click will stop the debug stuff from following the mouse,
-            // but need to stop it at the end of the frame when we've gotten
-            // the info
-            self.debug_under_mouse_quitting = true;
-            return true;
-        }
-
-        self.positionMouseEventRemove();
-
-        self.event_num += 1;
-        try self.events.append(Event{
-            .num = self.event_num,
-            .evt = .{ .key = event },
-            .focus_windowId = self.focused_subwindowId,
-            .focus_widgetId = self.subwindowFocused().focused_widgetId,
-        });
-
-        const ret = (self.wd.id != self.focused_subwindowId);
-        try self.positionMouseEventAdd();
-        return ret;
-    }
-
-    pub fn addEventText(self: *Self, text: []const u8) !bool {
-        self.positionMouseEventRemove();
-
-        self.event_num += 1;
-        try self.events.append(Event{
-            .num = self.event_num,
-            .evt = .{ .text = try self.arena.dupe(u8, text) },
-            .focus_windowId = self.focused_subwindowId,
-            .focus_widgetId = self.subwindowFocused().focused_widgetId,
-        });
-
-        const ret = (self.wd.id != self.focused_subwindowId);
-        try self.positionMouseEventAdd();
-        return ret;
-    }
-
-    // this is only for mouse - for touch use addEventTouchMotion
-    pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) !bool {
-        self.positionMouseEventRemove();
-
-        const newpt = (Point{ .x = x, .y = y }).scale(self.natural_scale / self.content_scale);
-        //log.debug("mouse motion {d} {d} -> {d} {d}", .{ x, y, newpt.x, newpt.y });
-        const dp = newpt.diff(self.mouse_pt);
-        self.mouse_pt = newpt;
-        const winId = self.windowFor(self.mouse_pt);
-
-        // maybe could do focus follows mouse here
-        // - generate a .focus event here instead of just doing focusWindow(winId, null);
-        // - how to make it optional?
-
-        self.event_num += 1;
-        try self.events.append(Event{ .num = self.event_num, .evt = .{
-            .mouse = .{
-                .action = .motion,
-                .button = if (self.debug_touch_simulate_events and self.debug_touch_simulate_down) .touch0 else .none,
-                .p = self.mouse_pt,
-                .floating_win = winId,
-                .data = .{ .motion = dp },
-            },
-        } });
-
-        const ret = (self.wd.id != winId);
-        try self.positionMouseEventAdd();
-        return ret;
-    }
-
-    pub fn addEventMouseButton(self: *Self, b: enums.Button, action: Event.Mouse.Action) !bool {
-        return addEventPointer(self, b, action, null);
-    }
-
-    pub fn addEventPointer(self: *Self, b: enums.Button, action: Event.Mouse.Action, xynorm: ?Point) !bool {
-        if (self.debug_under_mouse and !self.debug_under_mouse_esc_needed and action == .press and b.pointer()) {
-            // a left click or touch will stop the debug stuff from following
-            // the mouse, but need to stop it at the end of the frame when
-            // we've gotten the info
-            self.debug_under_mouse_quitting = true;
-            return true;
-        }
-
-        var bb = b;
-        if (self.debug_touch_simulate_events and bb == .left) {
-            bb = .touch0;
-            if (action == .press) {
-                self.debug_touch_simulate_down = true;
-            } else if (action == .release) {
-                self.debug_touch_simulate_down = false;
-            }
-        }
-
-        self.positionMouseEventRemove();
-
-        if (xynorm) |xyn| {
-            const newpt = (Point{ .x = xyn.x * self.wd.rect.w, .y = xyn.y * self.wd.rect.h }).scale(self.natural_scale);
-            self.mouse_pt = newpt;
-        }
-
-        const winId = self.windowFor(self.mouse_pt);
-
-        if (action == .press and bb.pointer()) {
-            // normally the focus event is what focuses windows, but since the
-            // base window is instantiated before events are added, it has to
-            // do any event processing as the events come in, right now
-            if (winId == self.wd.id) {
-                // focus the window here so any more key events get routed
-                // properly
-                focusSubwindow(self.wd.id, null);
-            }
-
-            // add focus event
-            self.event_num += 1;
-            try self.events.append(Event{ .num = self.event_num, .evt = .{
-                .mouse = .{
-                    .action = .focus,
-                    .button = bb,
-                    .p = self.mouse_pt,
-                    .floating_win = winId,
-                },
-            } });
-        }
-
-        self.event_num += 1;
-        try self.events.append(Event{ .num = self.event_num, .evt = .{
-            .mouse = .{
-                .action = action,
-                .button = bb,
-                .p = self.mouse_pt,
-                .floating_win = winId,
-            },
-        } });
-
-        const ret = (self.wd.id != winId);
-        try self.positionMouseEventAdd();
-        return ret;
-    }
-
-    pub fn addEventMouseWheel(self: *Self, ticks: f32) !bool {
-        self.positionMouseEventRemove();
-
-        const winId = self.windowFor(self.mouse_pt);
-
-        //std.debug.print("mouse wheel {d}\n", .{ticks_adj});
-
-        self.event_num += 1;
-        try self.events.append(Event{ .num = self.event_num, .evt = .{
-            .mouse = .{
-                .action = .wheel_y,
-                .button = .none,
-                .p = self.mouse_pt,
-                .floating_win = winId,
-                .data = .{ .wheel_y = ticks },
-            },
-        } });
-
-        const ret = (self.wd.id != winId);
-        try self.positionMouseEventAdd();
-        return ret;
-    }
-
-    pub fn addEventTouchMotion(self: *Self, finger: enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) !bool {
-        self.positionMouseEventRemove();
-
-        const newpt = (Point{ .x = xnorm * self.wd.rect.w, .y = ynorm * self.wd.rect.h }).scale(self.natural_scale);
-        //std.debug.print("touch motion {} {d} {d}\n", .{ finger, newpt.x, newpt.y });
-        self.mouse_pt = newpt;
-
-        const dp = (Point{ .x = dxnorm * self.wd.rect.w, .y = dynorm * self.wd.rect.h }).scale(self.natural_scale);
-
-        const winId = self.windowFor(self.mouse_pt);
-
-        self.event_num += 1;
-        try self.events.append(Event{ .num = self.event_num, .evt = .{
-            .mouse = .{
-                .action = .motion,
-                .button = finger,
-                .p = self.mouse_pt,
-                .floating_win = winId,
-                .data = .{ .motion = dp },
-            },
-        } });
-
-        const ret = (self.wd.id != winId);
-        try self.positionMouseEventAdd();
-        return ret;
-    }
-
-    pub fn FPS(self: *const Self) f32 {
-        const diff = self.frame_times[0];
-        if (diff == 0) {
-            return 0;
-        }
-
-        const avg = @as(f32, @floatFromInt(diff)) / @as(f32, @floatFromInt(self.frame_times.len - 1));
-        const fps = 1_000_000.0 / avg;
-        return fps;
-    }
-
-    /// beginWait coordinates with waitTime() to run frames only when needed
-    pub fn beginWait(self: *Self, has_event: bool) i128 {
-        var new_time = @max(self.frame_time_ns, self.backend.nanoTime());
-
-        if (self.loop_wait_target) |target| {
-            if (self.loop_wait_target_event and has_event) {
-                // interrupted by event, so don't adjust slop for target
-                //std.debug.print("beginWait interrupted by event\n", .{});
-                return new_time;
-            }
-
-            //std.debug.print("beginWait adjusting slop\n", .{});
-            // we were trying to sleep for a specific amount of time, adjust slop to
-            // compensate if we didn't hit our target
-            if (new_time > target) {
-                // woke up later than expected
-                self.loop_target_slop_frames = @max(1, self.loop_target_slop_frames * 2);
-                self.loop_target_slop += self.loop_target_slop_frames;
-            } else if (new_time < target) {
-                // woke up sooner than expected
-                self.loop_target_slop_frames = @min(-1, self.loop_target_slop_frames * 2);
-                self.loop_target_slop += self.loop_target_slop_frames;
-
-                // since we are early, spin a bit to guarantee that we never run before
-                // the target
-                //var i: usize = 0;
-                //var first_time = new_time;
-                while (new_time < target) {
-                    //i += 1;
-                    self.backend.sleep(0);
-                    new_time = @max(self.frame_time_ns, self.backend.nanoTime());
-                }
-
-                //if (i > 0) {
-                //  std.debug.print("    begin {d} spun {d} {d}us\n", .{self.loop_target_slop, i, @divFloor(new_time - first_time, 1000)});
-                //}
-            }
-        }
-
-        //std.debug.print("beginWait {d:6} {d}\n", .{ self.loop_target_slop, self.loop_target_slop_frames });
-        return new_time;
-    }
-
-    // Takes output of end() and optionally a max fps.  Returns microseconds
-    // the app should wait (with event interruption) before running the render
-    // loop again.  Pass return value to backend.waitEventTimeout().
-    // Cooperates with beginWait() to estimate how much time is being spent
-    // outside the render loop and account for that.
-    pub fn waitTime(self: *Self, end_micros: ?u32, maxFPS: ?f32) u32 {
-        // end_micros is the naive value we want to be between last begin and next begin
-
-        // minimum time to wait to hit max fps target
-        var min_micros: u32 = 0;
-        if (maxFPS) |mfps| {
-            min_micros = @as(u32, @intFromFloat(1_000_000.0 / mfps));
-        }
-
-        //std.debug.print("  end {d:6} min {d:6}", .{end_micros, min_micros});
-
-        // wait_micros is amount on top of min_micros we will conditionally wait
-        var wait_micros = (end_micros orelse 0) -| min_micros;
-
-        // assume that we won't target a specific time to sleep but if we do
-        // calculate the targets before removing so_far and slop
-        self.loop_wait_target = null;
-        self.loop_wait_target_event = false;
-        const target_min = min_micros;
-        const target = min_micros + wait_micros;
-
-        // how long it's taken from begin to here
-        const so_far_nanos = @max(self.frame_time_ns, self.backend.nanoTime()) - self.frame_time_ns;
-        var so_far_micros = @as(u32, @intCast(@divFloor(so_far_nanos, 1000)));
-        //std.debug.print("  far {d:6}", .{so_far_micros});
-
-        // take time from min_micros first
-        const min_so_far = @min(so_far_micros, min_micros);
-        so_far_micros -= min_so_far;
-        min_micros -= min_so_far;
-
-        // then take time from wait_micros
-        const min_so_far2 = @min(so_far_micros, wait_micros);
-        so_far_micros -= min_so_far2;
-        wait_micros -= min_so_far2;
-
-        var slop = self.loop_target_slop;
-
-        // get slop we can take out of min_micros
-        const min_us_slop = @min(slop, @as(i32, @intCast(min_micros)));
-        slop -= min_us_slop;
-        if (min_us_slop >= 0) {
-            min_micros -= @as(u32, @intCast(min_us_slop));
-        } else {
-            min_micros += @as(u32, @intCast(-min_us_slop));
-        }
-
-        // remaining slop we can take out of wait_micros
-        const wait_us_slop = @min(slop, @as(i32, @intCast(wait_micros)));
-        slop -= wait_us_slop;
-        if (wait_us_slop >= 0) {
-            wait_micros -= @as(u32, @intCast(wait_us_slop));
-        } else {
-            wait_micros += @as(u32, @intCast(-wait_us_slop));
-        }
-
-        //std.debug.print("  min {d:6}", .{min_micros});
-        if (min_micros > 0) {
-            // wait unconditionally for fps target
-            self.backend.sleep(min_micros * 1000);
-            self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target_min)) * 1000);
-        }
-
-        if (end_micros == null) {
-            // no target, wait indefinitely for next event
-            self.loop_wait_target = null;
-            //std.debug.print("  wait indef\n", .{});
-            return std.math.maxInt(u32);
-        } else if (wait_micros > 0) {
-            // wait conditionally
-            // since we have a timeout we will try to hit that target but set our
-            // flag so that we don't adjust for the target if we wake up to an event
-            self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target)) * 1000);
-            self.loop_wait_target_event = true;
-            //std.debug.print("  wait {d:6}\n", .{wait_micros});
-            return wait_micros;
-        } else {
-            // trying to hit the target but ran out of time
-            //std.debug.print("  wait none\n", .{});
-            return 0;
-            // if we had a wait target from min_micros leave it
-        }
-    }
-
-    pub fn begin(
-        self: *Self,
-        time_ns: i128,
-    ) !void {
-        var micros_since_last: u32 = 1;
-        if (time_ns > self.frame_time_ns) {
-            // enforce monotinicity
-            var nanos_since_last = time_ns - self.frame_time_ns;
-
-            // make sure the @intCast below doesn't panic
-            const max_nanos_since_last: i128 = std.math.maxInt(u32) * std.time.ns_per_us;
-            nanos_since_last = @min(nanos_since_last, max_nanos_since_last);
-
-            micros_since_last = @as(u32, @intCast(@divFloor(nanos_since_last, std.time.ns_per_us)));
-            micros_since_last = @max(1, micros_since_last);
-            self.frame_time_ns = time_ns;
-        }
-
-        //std.debug.print(" frame_time_ns {d}\n", .{self.frame_time_ns});
-
-        self.previous_window = current_window;
-        current_window = self;
-
-        self.rendering = true;
-        self.cursor_requested = .arrow;
-        self.osk_focused_widget_text_rect = null;
-        self.debug_info_name_rect = "";
-        self.debug_info_src_id_extra = "";
-        if (self.debug_under_mouse) {
-            if (self.debug_under_mouse_info.len > 0) {
-                self.gpa.free(self.debug_under_mouse_info);
-            }
-            self.debug_under_mouse_info = "";
-        }
-
-        _ = self._arena.reset(.retain_capacity);
-        const arena = self._arena.allocator();
-        self.arena = arena;
-
-        self.path = std.ArrayList(Point).init(arena);
-
-        {
-            var i: usize = 0;
-            while (i < self.subwindows.items.len) {
-                var sw = &self.subwindows.items[i];
-                if (sw.used) {
-                    sw.used = false;
-                    i += 1;
-                } else {
-                    _ = self.subwindows.orderedRemove(i);
-                }
-            }
-        }
-
-        self.event_num = 0;
-        self.events = std.ArrayList(Event).init(arena);
-
-        for (self.frame_times, 0..) |_, i| {
-            if (i == (self.frame_times.len - 1)) {
-                self.frame_times[i] = 0;
-            } else {
-                self.frame_times[i] = self.frame_times[i + 1] +| micros_since_last;
-            }
-        }
-
-        {
-            var deadSizes = std.ArrayList(u32).init(arena);
-            defer deadSizes.deinit();
-            var it = self.min_sizes.iterator();
-            while (it.next()) |kv| {
-                if (kv.value_ptr.used) {
-                    kv.value_ptr.used = false;
-                } else {
-                    try deadSizes.append(kv.key_ptr.*);
-                }
-            }
-
-            for (deadSizes.items) |id| {
-                _ = self.min_sizes.remove(id);
-            }
-
-            //std.debug.print("min_sizes {d}\n", .{self.min_sizes.count()});
-        }
-
-        {
-            self.data_mutex.lock();
-            defer self.data_mutex.unlock();
-
-            var deadDatas = std.ArrayList(u32).init(arena);
-            defer deadDatas.deinit();
-            var it = self.datas.iterator();
-            while (it.next()) |kv| {
-                if (kv.value_ptr.used) {
-                    kv.value_ptr.used = false;
-                } else {
-                    try deadDatas.append(kv.key_ptr.*);
-                }
-            }
-
-            for (deadDatas.items) |id| {
-                var dd = self.datas.fetchRemove(id).?;
-                dd.value.free(self.gpa);
-            }
-
-            //std.debug.print("datas {d}\n", .{self.datas.count()});
-        }
-
-        self.tab_index_prev.deinit();
-        self.tab_index_prev = self.tab_index;
-        self.tab_index = @TypeOf(self.tab_index).init(self.tab_index.allocator);
-
-        self.rect_pixels = self.backend.pixelSize().rect();
-        clipSet(self.rect_pixels);
-
-        self.wd.rect = self.backend.windowSize().rect().scale(1.0 / self.content_scale);
-        self.natural_scale = self.rect_pixels.w / self.wd.rect.w;
-
-        //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
-
-        try subwindowAdd(self.wd.id, self.wd.rect, self.rect_pixels, false, null);
-
-        _ = subwindowCurrentSet(self.wd.id);
-
-        self.extra_frames_needed -|= 1;
-        self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
-
-        {
-            const micros: i32 = if (micros_since_last > math.maxInt(i32)) math.maxInt(i32) else @as(i32, @intCast(micros_since_last));
-            var deadAnimations = std.ArrayList(u32).init(arena);
-            defer deadAnimations.deinit();
-            var it = self.animations.iterator();
-            while (it.next()) |kv| {
-                if (!kv.value_ptr.used or kv.value_ptr.end_time <= 0) {
-                    try deadAnimations.append(kv.key_ptr.*);
-                } else {
-                    kv.value_ptr.used = false;
-                    kv.value_ptr.start_time -|= micros;
-                    kv.value_ptr.end_time -|= micros;
-                    if (kv.value_ptr.start_time <= 0 and kv.value_ptr.end_time > 0) {
-                        refresh(null, @src(), null);
-                    }
-                }
-            }
-
-            for (deadAnimations.items) |id| {
-                _ = self.animations.remove(id);
-            }
-        }
-
-        {
-            var deadFonts = std.ArrayList(u32).init(arena);
-            defer deadFonts.deinit();
-            var it = self.font_cache.iterator();
-            while (it.next()) |kv| {
-                if (kv.value_ptr.used) {
-                    kv.value_ptr.used = false;
-                } else {
-                    try deadFonts.append(kv.key_ptr.*);
-                }
-            }
-
-            for (deadFonts.items) |id| {
-                var tce = self.font_cache.fetchRemove(id).?;
-                tce.value.glyph_info.deinit();
-                tce.value.deinit();
-            }
-
-            //std.debug.print("font_cache {d}\n", .{self.font_cache.count()});
-        }
-
-        {
-            var deadIcons = std.ArrayList(u32).init(arena);
-            defer deadIcons.deinit();
-            var it = self.texture_cache.iterator();
-            while (it.next()) |kv| {
-                if (kv.value_ptr.used) {
-                    kv.value_ptr.used = false;
-                } else {
-                    try deadIcons.append(kv.key_ptr.*);
-                }
-            }
-
-            for (deadIcons.items) |id| {
-                const ice = self.texture_cache.fetchRemove(id).?;
-                self.backend.textureDestroy(ice.value.texture);
-            }
-
-            //std.debug.print("texture_cache {d}\n", .{self.texture_cache.count()});
-        }
-
-        if (!self.captured_last_frame) {
-            // widget that had capture went away, also end any drag that might
-            // have been happening
-            self.captureID = null;
-            self.drag_state = .none;
-        }
-        self.captured_last_frame = false;
-
-        self.wd.parent = self.widget();
-        try self.wd.register();
-        self.menu_current = null;
-
-        self.next_widget_ypos = self.wd.rect.y;
-
-        // We want a position mouse event to do mouse cursors.  It needs to be
-        // final so if there was a drag end the cursor will still be set
-        // correctly.  We don't know when the client gives us the last event,
-        // so make our position event now, and addEvent* functions will remove
-        // and re-add to keep it as the final event.
-        try self.positionMouseEventAdd();
-
-        if (self.inject_motion_event) {
-            self.inject_motion_event = false;
-            const pt = self.mouse_pt.scale(self.content_scale / self.natural_scale);
-            _ = try self.addEventMouseMotion(pt.x, pt.y);
-        }
-
-        self.backend.begin(arena);
-    }
-
-    fn positionMouseEventAdd(self: *Self) !void {
-        try self.events.append(.{ .evt = .{ .mouse = .{
-            .action = .position,
-            .button = .none,
-            .p = self.mouse_pt,
-            .floating_win = self.windowFor(self.mouse_pt),
-        } } });
-    }
-
-    fn positionMouseEventRemove(self: *Self) void {
-        const e = self.events.pop();
-        if (e.evt != .mouse or e.evt.mouse.action != .position) {
-            log.err("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
-        }
-    }
-
-    pub fn windowFor(self: *const Self, p: Point) u32 {
-        var i = self.subwindows.items.len;
-        while (i > 0) : (i -= 1) {
-            const sw = &self.subwindows.items[i - 1];
-            if (sw.modal or sw.rect_pixels.contains(p)) {
-                return sw.id;
-            }
-        }
-
-        return self.wd.id;
-    }
-
-    pub fn subwindowCurrent(self: *const Self) *Subwindow {
-        var i = self.subwindows.items.len;
-        while (i > 0) : (i -= 1) {
-            const sw = &self.subwindows.items[i - 1];
-            if (sw.id == self.subwindow_currentId) {
-                return sw;
-            }
-        }
-
-        log.warn("subwindowCurrent failed to find the current subwindow, returning base window\n", .{});
-        return &self.subwindows.items[0];
-    }
-
-    pub fn subwindowFocused(self: *const Self) *Subwindow {
-        var i = self.subwindows.items.len;
-        while (i > 0) : (i -= 1) {
-            const sw = &self.subwindows.items[i - 1];
-            if (sw.id == self.focused_subwindowId) {
-                return sw;
-            }
-        }
-
-        log.warn("subwindowFocused failed to find the focused subwindow, returning base window\n", .{});
-        return &self.subwindows.items[0];
-    }
-
-    // Return the cursor the gui wants.  Client code should cache this if
-    // switching the platform's cursor is expensive.
-    pub fn cursorRequested(self: *const Self) enums.Cursor {
-        if (self.drag_state == .dragging and self.cursor_dragging != null) {
-            return self.cursor_dragging.?;
-        } else {
-            return self.cursor_requested;
-        }
-    }
-
-    // Return the cursor the gui wants or null if mouse is not in gui windows.
-    // Client code should cache this if switching the platform's cursor is
-    // expensive.
-    pub fn cursorRequestedFloating(self: *const Self) ?enums.Cursor {
-        if (self.captureID != null or self.windowFor(self.mouse_pt) != self.wd.id) {
-            // gui owns the cursor if we have mouse capture or if the mouse is above
-            // a floating window
-            return self.cursorRequested();
-        } else {
-            // no capture, not above a floating window, so client owns the cursor
-            return null;
-        }
-    }
-
-    pub fn OSKRequested(self: *const Self) ?Rect {
-        return self.osk_focused_widget_text_rect;
-    }
-
-    pub fn renderCommands(self: *Self, queue: *std.ArrayList(RenderCmd)) !void {
-        for (queue.items) |*drc| {
-            // don't need to reset these after because we reset them after
-            // calling renderCommands
-            currentWindow().snap_to_pixels = drc.snap;
-            clipSet(drc.clip);
-            switch (drc.cmd) {
-                .text => |t| {
-                    try renderText(t);
-                },
-                .debug_font_atlases => |t| {
-                    try debugRenderFontAtlases(t.rs, t.color);
-                },
-                .icon => |i| {
-                    try renderIcon(i.name, i.tvg_bytes, i.rs, i.rotation, i.colormod);
-                },
-                .image => |i| {
-                    try renderImage(i.name, i.image_bytes, i.rs, i.rotation, i.colormod);
-                },
-                .pathFillConvex => |pf| {
-                    try self.path.appendSlice(pf.path.items);
-                    try pathFillConvex(pf.color);
-                    pf.path.deinit();
-                },
-                .pathStroke => |ps| {
-                    try self.path.appendSlice(ps.path.items);
-                    try pathStrokeRaw(ps.closed, ps.thickness, ps.endcap_style, ps.color);
-                    ps.path.deinit();
-                },
-            }
-        }
-
-        queue.clearAndFree();
-    }
-
-    // data is copied into internal storage
-    pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, comptime copy_slice: bool) void {
-        const hash = hashIdKey(id, key);
-
-        const dt = @typeInfo(@TypeOf(data_in));
-        const dt_type_str = @typeName(@TypeOf(data_in));
-        var bytes: []const u8 = undefined;
-        if (copy_slice) {
-            bytes = std.mem.sliceAsBytes(data_in);
-            if (dt.Pointer.sentinel != null) {
-                bytes.len += @sizeOf(dt.Pointer.child);
-            }
-        } else {
-            bytes = std.mem.asBytes(&data_in);
-        }
-
-        const alignment = comptime blk: {
-            if (copy_slice) {
-                break :blk dt.Pointer.alignment;
-            } else {
-                break :blk @alignOf(@TypeOf(data_in));
-            }
-        };
-
-        self.data_mutex.lock();
-        defer self.data_mutex.unlock();
-
-        if (self.datas.getPtr(hash)) |sd| {
-            if (sd.data.len == bytes.len) {
-                sd.used = true;
-                if (builtin.mode == .Debug) {
-                    sd.type_str = dt_type_str;
-                    sd.copy_slice = copy_slice;
-                }
-                @memcpy(sd.data, bytes);
-                return;
-            } else {
-                //std.debug.print("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, key });
-                sd.free(self.gpa);
-            }
-        }
-
-        var sd = SavedData{ .alignment = alignment, .data = self.gpa.allocWithOptions(u8, bytes.len, alignment, null) catch |err| switch (err) {
-            error.OutOfMemory => {
-                log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
-                return;
-            },
-        } };
-
-        @memcpy(sd.data, bytes);
-
-        if (builtin.mode == .Debug) {
-            sd.type_str = dt_type_str;
-            sd.copy_slice = copy_slice;
-        }
-
-        self.datas.put(hash, sd) catch |err| switch (err) {
-            error.OutOfMemory => {
-                log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
-                sd.free(self.gpa);
-                return;
-            },
-        };
-    }
-
-    // returns the backing byte slice if we have one
-    pub fn dataGetInternal(self: *Self, id: u32, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
-        const hash = hashIdKey(id, key);
-
-        self.data_mutex.lock();
-        defer self.data_mutex.unlock();
-
-        if (self.datas.getPtr(hash)) |sd| {
-            if (builtin.mode == .Debug) {
-                if (!std.mem.eql(u8, sd.type_str, @typeName(T)) or sd.copy_slice != slice) {
-                    std.debug.panic("dataGetInternal: stored type {s} (slice {}) doesn't match asked for type {s} (slice {})", .{ sd.type_str, sd.copy_slice, @typeName(T), slice });
-                }
-            }
-
-            sd.used = true;
-            return sd.data;
-        } else {
-            return null;
-        }
-    }
-
-    pub fn dataRemove(self: *Self, id: u32, key: []const u8) void {
-        const hash = hashIdKey(id, key);
-
-        self.data_mutex.lock();
-        defer self.data_mutex.unlock();
-
-        if (self.datas.fetchRemove(hash)) |dd| {
-            dd.value.free(self.gpa);
-        }
-    }
-
-    // Add a dialog to be displayed on the GUI thread during Window.end(). Can
-    // be called from any thread. Returns a locked mutex that must be unlocked
-    // by the caller.  If calling from a non-GUI thread, do any dataSet() calls
-    // before unlocking the mutex to ensure that data is available before the
-    // dialog is displayed.
-    pub fn dialogAdd(self: *Self, id: u32, display: DialogDisplayFn) !*std.Thread.Mutex {
-        self.dialog_mutex.lock();
-
-        for (self.dialogs.items) |*d| {
-            if (d.id == id) {
-                d.display = display;
-                break;
-            }
-        } else {
-            try self.dialogs.append(Dialog{ .id = id, .display = display });
-        }
-
-        return &self.dialog_mutex;
-    }
-
-    // Only called from gui thread.
-    pub fn dialogRemove(self: *Self, id: u32) void {
-        self.dialog_mutex.lock();
-        defer self.dialog_mutex.unlock();
-
-        for (self.dialogs.items, 0..) |*d, i| {
-            if (d.id == id) {
-                _ = self.dialogs.orderedRemove(i);
-                return;
-            }
-        }
-    }
-
-    fn dialogsShow(self: *Self) !void {
-        var i: usize = 0;
-        var dia: ?Dialog = null;
-        while (true) {
-            self.dialog_mutex.lock();
-            if (i < self.dialogs.items.len and
-                dia != null and
-                dia.?.id == self.dialogs.items[i].id)
-            {
-                // we just did this one, move to the next
-                i += 1;
-            }
-
-            if (i < self.dialogs.items.len) {
-                dia = self.dialogs.items[i];
-            } else {
-                dia = null;
-            }
-            self.dialog_mutex.unlock();
-
-            if (dia) |d| {
-                try d.display(d.id);
-            } else {
-                break;
-            }
-        }
-    }
-
-    pub fn timer(self: *Self, id: u32, micros: i32) !void {
-        // when start_time is in the future, we won't spam frames, so this will
-        // cause a single frame and then expire
-        const a = Animation{ .start_time = micros, .end_time = micros };
-        const h = hashIdKey(id, "_timer");
-        try self.animations.put(h, a);
-    }
-
-    pub fn timerRemove(self: *Self, id: u32) void {
-        const h = hashIdKey(id, "_timer");
-        _ = self.animations.remove(h);
-    }
-
-    // Add a toast to be displayed on the GUI thread. Can be called from any
-    // thread. Returns a locked mutex that must be unlocked by the caller.  If
-    // calling from a non-GUI thread, do any dataSet() calls before unlocking
-    // the mutex to ensure that data is available before the dialog is
-    // displayed.
-    pub fn toastAdd(self: *Self, id: u32, subwindow_id: ?u32, display: DialogDisplayFn, timeout: ?i32) !*std.Thread.Mutex {
-        self.dialog_mutex.lock();
-
-        for (self.toasts.items) |*t| {
-            if (t.id == id) {
-                t.display = display;
-                t.subwindow_id = subwindow_id;
-                break;
-            }
-        } else {
-            try self.toasts.append(Toast{ .id = id, .subwindow_id = subwindow_id, .display = display });
-        }
-
-        if (timeout) |tt| {
-            try self.timer(id, tt);
-        } else {
-            self.timerRemove(id);
-        }
-
-        return &self.dialog_mutex;
-    }
-
-    pub fn toastRemove(self: *Self, id: u32) void {
-        self.dialog_mutex.lock();
-        defer self.dialog_mutex.unlock();
-
-        for (self.toasts.items, 0..) |*t, i| {
-            if (t.id == id) {
-                _ = self.toasts.orderedRemove(i);
-                return;
-            }
-        }
-    }
-
-    // show any toasts that didn't have a subwindow_id set
-    fn toastsShow(self: *Self) !void {
-        var ti = dvui.toastsFor(null);
-        if (ti) |*it| {
-            var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent_window = true, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
-            defer toast_win.deinit();
-
-            toast_win.data().rect = dvui.placeIn(self.wd.rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-            toast_win.autoSize();
-            try toast_win.install();
-            try toast_win.drawBackground();
-
-            var vbox = try dvui.box(@src(), .vertical, .{});
-            defer vbox.deinit();
-
-            while (it.next()) |t| {
-                try t.display(t.id);
-            }
-        }
-    }
-
-    fn debugWindowShow(self: *Self) !void {
-        if (self.debug_under_mouse_quitting) {
-            self.debug_under_mouse = false;
-            self.debug_under_mouse_quitting = false;
-        }
-
-        // disable so the widgets we are about to use to display this data
-        // don't modify the data, otherwise our iterator will get corrupted and
-        // even if you search for a widget here, the data won't be available
-        var dum = self.debug_under_mouse;
-        self.debug_under_mouse = false;
-        defer self.debug_under_mouse = dum;
-
-        var float = try dvui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
-        defer float.deinit();
-
-        try dvui.windowHeader("DVUI Debug", "", &self.debug_window_show);
-
-        {
-            var hbox = try dvui.box(@src(), .horizontal, .{});
-            defer hbox.deinit();
-
-            try dvui.labelNoFmt(@src(), "Hex id of widget to highlight:", .{ .gravity_y = 0.5 });
-
-            var buf = [_]u8{0} ** 20;
-            if (self.debug_widget_id != 0) {
-                _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
-            }
-            var te = try dvui.textEntry(@src(), .{
-                .text = &buf,
-            }, .{});
-            te.deinit();
-
-            self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(&buf, 0), 16) catch 0;
-        }
-
-        var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
-        try tl.addText(self.debug_info_name_rect, .{});
-        try tl.addText("\n\n", .{});
-        try tl.addText(self.debug_info_src_id_extra, .{});
-        tl.deinit();
-
-        if (try dvui.button(@src(), if (dum) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
-            dum = !dum;
-        }
-
-        if (try dvui.button(@src(), if (dum) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{}, .{})) {
-            dum = !dum;
-            self.debug_under_mouse_esc_needed = dum;
-        }
-
-        const logit = self.debugRefresh(null);
-        if (try dvui.button(@src(), if (logit) "Stop Refresh Logging" else "Start Refresh Logging", .{}, .{})) {
-            _ = self.debugRefresh(!logit);
-        }
-
-        var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
-        defer scroll.deinit();
-
-        var iter = std.mem.split(u8, self.debug_under_mouse_info, "\n");
-        var i: usize = 0;
-        while (iter.next()) |line| : (i += 1) {
-            if (line.len > 0) {
-                var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
-                defer hbox.deinit();
-
-                if (try dvui.buttonIcon(@src(), "find", entypo.magnifying_glass, .{}, .{ .min_size_content = .{ .h = 12 } })) {
-                    self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(line, ' '), 16) catch 0;
-                }
-
-                try dvui.labelNoFmt(@src(), line, .{ .gravity_y = 0.5 });
-            }
-        }
-    }
-
-    pub const endOptions = struct {
-        show_toasts: bool = true,
-    };
-
-    // End of this window gui's rendering.  Renders retained dialogs and all
-    // deferred rendering (subwindows, focus highlights).  Returns micros we
-    // want between last call to begin() and next call to begin() (or null
-    // meaning wait for event).  If wanted, pass return value to waitTime() to
-    // get a useful time to wait between render loops.
-    pub fn end(self: *Self, opts: endOptions) !?u32 {
-        if (opts.show_toasts) {
-            try self.toastsShow();
-        }
-        try self.dialogsShow();
-
-        if (self.debug_window_show) {
-            try self.debugWindowShow();
-        }
-
-        const oldsnap = self.snap_to_pixels;
-        const oldclip = clipGet();
-        self.rendering = true;
-        for (self.subwindows.items) |*sw| {
-            try self.renderCommands(&sw.render_cmds);
-            try self.renderCommands(&sw.render_cmds_after);
-        }
-        clipSet(oldclip);
-        self.snap_to_pixels = oldsnap;
-
-        // events may have been tagged with a focus widget that never showed up, so
-        // we wouldn't even get them bubbled
-        const evts = events();
-        for (evts) |*e| {
-            if (!eventMatch(e, .{ .id = self.wd.id, .r = self.rect_pixels, .cleanup = true }))
-                continue;
-
-            // doesn't matter if we mark events has handled or not because this is
-            // the end of the line for all events
-            if (e.evt == .mouse) {
-                if (e.evt.mouse.action == .focus) {
-                    // unhandled click, clear focus
-                    focusWidget(null, null, null);
-                }
-            } else if (e.evt == .key) {
-                if (e.evt.key.code == .tab and e.evt.key.action == .down) {
-                    if (e.evt.key.mod.shift()) {
-                        tabIndexPrev(e.num);
-                    } else {
-                        tabIndexNext(e.num);
-                    }
-                }
-            }
-        }
-
-        self.mouse_pt_prev = self.mouse_pt;
-
-        if (!self.subwindowFocused().used) {
-            // our focused subwindow didn't show this frame, focus the highest one that did
-            var i = self.subwindows.items.len;
-            while (i > 0) : (i -= 1) {
-                const sw = self.subwindows.items[i - 1];
-                if (sw.used) {
-                    //std.debug.print("focused subwindow lost, focusing {d}\n", .{i - 1});
-                    focusSubwindow(sw.id, null);
-                    break;
-                }
-            }
-
-            refresh(null, @src(), null);
-        }
-
-        // Check that the final event was our synthetic mouse position event.
-        // If one of the addEvent* functions forgot to add the synthetic mouse
-        // event to the end this will print a debug message.
-        self.positionMouseEventRemove();
-
-        self.backend.end();
-
-        defer current_window = self.previous_window;
-
-        // This is what refresh affects
-        if (self.extra_frames_needed > 0) {
-            return 0;
-        }
-
-        // If there are current animations, return 0 so we go as fast as we can.
-        // If all animations are scheduled in the future, pick the soonest start.
-        var ret: ?u32 = null;
-        var it = self.animations.iterator();
-        while (it.next()) |kv| {
-            if (kv.value_ptr.used) {
-                if (kv.value_ptr.start_time > 0) {
-                    const st = @as(u32, @intCast(kv.value_ptr.start_time));
-                    ret = @min(ret orelse st, st);
-                } else if (kv.value_ptr.end_time > 0) {
-                    ret = 0;
-                    break;
-                }
-            }
-        }
-
-        return ret;
-    }
-
-    pub fn widget(self: *Self) Widget {
-        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
-    }
-
-    pub fn data(self: *Self) *WidgetData {
-        return &self.wd;
-    }
-
-    pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        var r = self.wd.rect;
-        r.y = self.next_widget_ypos;
-        r.h -= r.y;
-        const ret = placeIn(r, minSize(id, min_size), e, g);
-        self.next_widget_ypos += ret.h;
-        return ret;
-    }
-
-    pub fn screenRectScale(self: *Self, r: Rect) RectScale {
-        const scaled = r.scale(self.natural_scale);
-        return RectScale{ .r = scaled.offset(self.rect_pixels), .s = self.natural_scale };
-    }
-
-    pub fn minSizeForChild(self: *Self, s: Size) void {
-        // os window doesn't size itself based on children
-        _ = self;
-        _ = s;
-    }
-
-    pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
-        // window does cleanup events, but not normal events
-        switch (e.evt) {
-            .close_popup => |cp| {
-                e.handled = true;
-                if (cp.intentional) {
-                    // when a popup is closed due to a menu item being chosen,
-                    // the window that spawned it (which had focus previously)
-                    // should become focused again
-                    focusSubwindow(self.wd.id, null);
-                }
-            },
-            else => {},
-        }
-
-        // can't bubble past the base window
-        _ = bubbling;
-    }
-};
-
 pub const popup = @compileError("popup renamed to floatingMenu");
 
 pub fn floatingMenu(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) !*FloatingMenuWidget {
@@ -5671,3 +4291,1383 @@ pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, rot
     const tce = imageTexture(name, image_bytes) catch return;
     try renderTexture(tce.texture, rs, rotation, colormod);
 }
+
+// maps to OS window
+pub const Window = struct {
+    const Self = @This();
+
+    pub const Subwindow = struct {
+        id: u32 = 0,
+        rect: Rect = Rect{},
+        rect_pixels: Rect = Rect{},
+        focused_widgetId: ?u32 = null,
+        render_cmds: std.ArrayList(RenderCmd),
+        render_cmds_after: std.ArrayList(RenderCmd),
+        used: bool = true,
+        modal: bool = false,
+        stay_above_parent_window: ?u32 = null,
+    };
+
+    const SavedSize = struct {
+        size: Size,
+        used: bool = true,
+    };
+
+    const SavedData = struct {
+        used: bool = true,
+        alignment: u8,
+        data: []u8,
+
+        type_str: if (builtin.mode == .Debug) []const u8 else void = undefined,
+        copy_slice: if (builtin.mode == .Debug) bool else void = undefined,
+
+        pub fn free(self: *const SavedData, allocator: std.mem.Allocator) void {
+            if (self.data.len != 0) {
+                allocator.rawFree(self.data, @ctz(self.alignment), @returnAddress());
+            }
+        }
+    };
+
+    backend: Backend,
+    previous_window: ?*Window = null,
+
+    // list of subwindows including base, later windows are on top of earlier
+    // windows
+    subwindows: std.ArrayList(Subwindow),
+
+    // id of the subwindow widgets are being added to
+    subwindow_currentId: u32 = 0,
+
+    // id of the subwindow that has focus
+    focused_subwindowId: u32 = 0,
+
+    // handling the OSK (on screen keyboard)
+    osk_focused_widget_text_rect: ?Rect = null,
+
+    snap_to_pixels: bool = true,
+    alpha: f32 = 1.0,
+
+    events: std.ArrayList(Event) = undefined,
+    event_num: u16 = 0,
+    // mouse_pt tracks the last position we got a mouse event for
+    // 1) used to add position info to mouse wheel events
+    // 2) used to highlight the widget under the mouse (Event.Mouse.Action.position event)
+    // 3) used to change the cursor (Event.Mouse.Action.position event)
+    // Start off screen so nothing is highlighted on the first frame
+    mouse_pt: Point = Point{ .x = -1, .y = -1 },
+    mouse_pt_prev: Point = Point{ .x = -1, .y = -1 },
+    inject_motion_event: bool = false,
+
+    drag_state: enum {
+        none,
+        prestart,
+        dragging,
+    } = .none,
+    drag_pt: Point = Point{},
+    drag_offset: Point = Point{},
+
+    frame_time_ns: i128 = 0,
+    loop_wait_target: ?i128 = null,
+    loop_wait_target_event: bool = false,
+    loop_target_slop: i32 = 1000, // 1ms frame overhead seems a good place to start
+    loop_target_slop_frames: i32 = 0,
+    frame_times: [30]u32 = [_]u32{0} ** 30,
+
+    secs_since_last_frame: f32 = 0,
+    extra_frames_needed: u8 = 0,
+    clipRect: Rect = Rect{},
+
+    menu_current: ?*MenuWidget = null,
+    popup_current: ?*FloatingMenuWidget = null,
+    theme: *Theme = &Theme.AdwaitaLight,
+
+    min_sizes: std.AutoHashMap(u32, SavedSize),
+    data_mutex: std.Thread.Mutex,
+    datas: std.AutoHashMap(u32, SavedData),
+    animations: std.AutoHashMap(u32, Animation),
+    tab_index_prev: std.ArrayList(TabIndex),
+    tab_index: std.ArrayList(TabIndex),
+    font_cache: std.AutoHashMap(u32, FontCacheEntry),
+    ttf_bytes_database: std.StringHashMap([]const u8),
+    texture_cache: std.AutoHashMap(u32, TextureCacheEntry),
+    dialog_mutex: std.Thread.Mutex,
+    dialogs: std.ArrayList(Dialog),
+    toasts: std.ArrayList(Toast),
+
+    cursor_requested: enums.Cursor = .arrow,
+    cursor_dragging: ?enums.Cursor = null,
+
+    wd: WidgetData = undefined,
+    rect_pixels: Rect = Rect{}, // pixels
+    natural_scale: f32 = 1.0,
+    content_scale: f32 = 1.0, // can set seperately but gets folded into natural_scale
+    next_widget_ypos: f32 = 0,
+
+    captureID: ?u32 = null,
+    captured_last_frame: bool = false,
+
+    gpa: std.mem.Allocator,
+    _arena: std.heap.ArenaAllocator,
+    arena: std.mem.Allocator = undefined,
+    path: std.ArrayList(Point) = undefined,
+    rendering: bool = true,
+
+    debug_window_show: bool = false,
+    debug_widget_id: u32 = 0, // 0 means no widget is selected
+    debug_info_name_rect: []const u8 = "",
+    debug_info_src_id_extra: []const u8 = "",
+    debug_under_mouse: bool = false,
+    debug_under_mouse_esc_needed: bool = false,
+    debug_under_mouse_quitting: bool = false,
+    debug_under_mouse_info: []u8 = "",
+
+    debug_refresh_mutex: std.Thread.Mutex,
+    debug_refresh: bool = false,
+
+    debug_touch_simulate_events: bool = false, // when true, left mouse button works like a finger
+    debug_touch_simulate_down: bool = false,
+
+    pub fn init(
+        src: std.builtin.SourceLocation,
+        id_extra: usize,
+        gpa: std.mem.Allocator,
+        backend: Backend,
+    ) !Self {
+        const hashval = hashSrc(src, id_extra);
+        const arena = std.heap.ArenaAllocator.init(gpa);
+
+        var self = Self{
+            .gpa = gpa,
+            ._arena = arena,
+            .subwindows = std.ArrayList(Subwindow).init(gpa),
+            .min_sizes = std.AutoHashMap(u32, SavedSize).init(gpa),
+            .data_mutex = std.Thread.Mutex{},
+            .datas = std.AutoHashMap(u32, SavedData).init(gpa),
+            .animations = std.AutoHashMap(u32, Animation).init(gpa),
+            .tab_index_prev = std.ArrayList(TabIndex).init(gpa),
+            .tab_index = std.ArrayList(TabIndex).init(gpa),
+            .font_cache = std.AutoHashMap(u32, FontCacheEntry).init(gpa),
+            .texture_cache = std.AutoHashMap(u32, TextureCacheEntry).init(gpa),
+            .dialog_mutex = std.Thread.Mutex{},
+            .dialogs = std.ArrayList(Dialog).init(gpa),
+            .toasts = std.ArrayList(Toast).init(gpa),
+            .debug_refresh_mutex = std.Thread.Mutex{},
+            .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
+            .backend = backend,
+            .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
+        };
+
+        const winSize = self.backend.windowSize();
+        const pxSize = self.backend.pixelSize();
+        self.content_scale = self.backend.contentScale();
+        const total_scale = self.content_scale * pxSize.w / winSize.w;
+        if (total_scale >= 2.0) {
+            self.snap_to_pixels = false;
+        }
+
+        log.info("window logical {} pixels {} natural scale {d} initial content scale {d} snap_to_pixels {}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels });
+
+        errdefer self.deinit();
+
+        self.focused_subwindowId = self.wd.id;
+        self.frame_time_ns = 1;
+
+        if (useFreeType) {
+            FontCacheEntry.intToError(c.FT_Init_FreeType(&ft2lib)) catch |err| {
+                dvui.log.err("freetype error {!} trying to init freetype library\n", .{err});
+                return error.freetypeError;
+            };
+        }
+
+        return self;
+    }
+
+    pub fn deinit(self: *Self) void {
+        {
+            var it = self.datas.iterator();
+            while (it.next()) |item| item.value_ptr.free(self.gpa);
+            self.datas.deinit();
+        }
+
+        if (self.debug_under_mouse_info.len > 0) {
+            self.gpa.free(self.debug_under_mouse_info);
+            self.debug_under_mouse_info = "";
+        }
+
+        self.subwindows.deinit();
+        self.min_sizes.deinit();
+        self.animations.deinit();
+        self.tab_index_prev.deinit();
+        self.tab_index.deinit();
+
+        {
+            var it = self.font_cache.iterator();
+            while (it.next()) |item| {
+                item.value_ptr.glyph_info.deinit();
+                item.value_ptr.deinit();
+            }
+            self.font_cache.deinit();
+        }
+
+        self.texture_cache.deinit();
+        self.dialogs.deinit();
+        self.toasts.deinit();
+        self._arena.deinit();
+        self.ttf_bytes_database.deinit();
+    }
+
+    // called from any thread
+    pub fn debugRefresh(self: *Self, val: ?bool) bool {
+        self.debug_refresh_mutex.lock();
+        defer self.debug_refresh_mutex.unlock();
+
+        const previous = self.debug_refresh;
+        if (val) |v| {
+            self.debug_refresh = v;
+        }
+
+        return previous;
+    }
+
+    // called from gui thread
+    pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?u32) void {
+        if (self.debugRefresh(null)) {
+            log.debug("{s}:{d} refresh {?x}", .{ src.file, src.line, id });
+        }
+        self.extra_frames_needed = 1;
+    }
+
+    // called from any thread
+    pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?u32) void {
+        if (self.debugRefresh(null)) {
+            log.debug("{s}:{d} refreshBackend {?x}", .{ src.file, src.line, id });
+        }
+        self.backend.refresh();
+    }
+
+    pub fn addEventKey(self: *Self, event: Event.Key) !bool {
+        if (self.debug_under_mouse and self.debug_under_mouse_esc_needed and event.action == .down and event.code == .escape) {
+            // a left click will stop the debug stuff from following the mouse,
+            // but need to stop it at the end of the frame when we've gotten
+            // the info
+            self.debug_under_mouse_quitting = true;
+            return true;
+        }
+
+        self.positionMouseEventRemove();
+
+        self.event_num += 1;
+        try self.events.append(Event{
+            .num = self.event_num,
+            .evt = .{ .key = event },
+            .focus_windowId = self.focused_subwindowId,
+            .focus_widgetId = self.subwindowFocused().focused_widgetId,
+        });
+
+        const ret = (self.wd.id != self.focused_subwindowId);
+        try self.positionMouseEventAdd();
+        return ret;
+    }
+
+    pub fn addEventText(self: *Self, text: []const u8) !bool {
+        self.positionMouseEventRemove();
+
+        self.event_num += 1;
+        try self.events.append(Event{
+            .num = self.event_num,
+            .evt = .{ .text = try self.arena.dupe(u8, text) },
+            .focus_windowId = self.focused_subwindowId,
+            .focus_widgetId = self.subwindowFocused().focused_widgetId,
+        });
+
+        const ret = (self.wd.id != self.focused_subwindowId);
+        try self.positionMouseEventAdd();
+        return ret;
+    }
+
+    // this is only for mouse - for touch use addEventTouchMotion
+    pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) !bool {
+        self.positionMouseEventRemove();
+
+        const newpt = (Point{ .x = x, .y = y }).scale(self.natural_scale / self.content_scale);
+        //log.debug("mouse motion {d} {d} -> {d} {d}", .{ x, y, newpt.x, newpt.y });
+        const dp = newpt.diff(self.mouse_pt);
+        self.mouse_pt = newpt;
+        const winId = self.windowFor(self.mouse_pt);
+
+        // maybe could do focus follows mouse here
+        // - generate a .focus event here instead of just doing focusWindow(winId, null);
+        // - how to make it optional?
+
+        self.event_num += 1;
+        try self.events.append(Event{ .num = self.event_num, .evt = .{
+            .mouse = .{
+                .action = .motion,
+                .button = if (self.debug_touch_simulate_events and self.debug_touch_simulate_down) .touch0 else .none,
+                .p = self.mouse_pt,
+                .floating_win = winId,
+                .data = .{ .motion = dp },
+            },
+        } });
+
+        const ret = (self.wd.id != winId);
+        try self.positionMouseEventAdd();
+        return ret;
+    }
+
+    pub fn addEventMouseButton(self: *Self, b: enums.Button, action: Event.Mouse.Action) !bool {
+        return addEventPointer(self, b, action, null);
+    }
+
+    pub fn addEventPointer(self: *Self, b: enums.Button, action: Event.Mouse.Action, xynorm: ?Point) !bool {
+        if (self.debug_under_mouse and !self.debug_under_mouse_esc_needed and action == .press and b.pointer()) {
+            // a left click or touch will stop the debug stuff from following
+            // the mouse, but need to stop it at the end of the frame when
+            // we've gotten the info
+            self.debug_under_mouse_quitting = true;
+            return true;
+        }
+
+        var bb = b;
+        if (self.debug_touch_simulate_events and bb == .left) {
+            bb = .touch0;
+            if (action == .press) {
+                self.debug_touch_simulate_down = true;
+            } else if (action == .release) {
+                self.debug_touch_simulate_down = false;
+            }
+        }
+
+        self.positionMouseEventRemove();
+
+        if (xynorm) |xyn| {
+            const newpt = (Point{ .x = xyn.x * self.wd.rect.w, .y = xyn.y * self.wd.rect.h }).scale(self.natural_scale);
+            self.mouse_pt = newpt;
+        }
+
+        const winId = self.windowFor(self.mouse_pt);
+
+        if (action == .press and bb.pointer()) {
+            // normally the focus event is what focuses windows, but since the
+            // base window is instantiated before events are added, it has to
+            // do any event processing as the events come in, right now
+            if (winId == self.wd.id) {
+                // focus the window here so any more key events get routed
+                // properly
+                focusSubwindow(self.wd.id, null);
+            }
+
+            // add focus event
+            self.event_num += 1;
+            try self.events.append(Event{ .num = self.event_num, .evt = .{
+                .mouse = .{
+                    .action = .focus,
+                    .button = bb,
+                    .p = self.mouse_pt,
+                    .floating_win = winId,
+                },
+            } });
+        }
+
+        self.event_num += 1;
+        try self.events.append(Event{ .num = self.event_num, .evt = .{
+            .mouse = .{
+                .action = action,
+                .button = bb,
+                .p = self.mouse_pt,
+                .floating_win = winId,
+            },
+        } });
+
+        const ret = (self.wd.id != winId);
+        try self.positionMouseEventAdd();
+        return ret;
+    }
+
+    pub fn addEventMouseWheel(self: *Self, ticks: f32) !bool {
+        self.positionMouseEventRemove();
+
+        const winId = self.windowFor(self.mouse_pt);
+
+        //std.debug.print("mouse wheel {d}\n", .{ticks_adj});
+
+        self.event_num += 1;
+        try self.events.append(Event{ .num = self.event_num, .evt = .{
+            .mouse = .{
+                .action = .wheel_y,
+                .button = .none,
+                .p = self.mouse_pt,
+                .floating_win = winId,
+                .data = .{ .wheel_y = ticks },
+            },
+        } });
+
+        const ret = (self.wd.id != winId);
+        try self.positionMouseEventAdd();
+        return ret;
+    }
+
+    pub fn addEventTouchMotion(self: *Self, finger: enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) !bool {
+        self.positionMouseEventRemove();
+
+        const newpt = (Point{ .x = xnorm * self.wd.rect.w, .y = ynorm * self.wd.rect.h }).scale(self.natural_scale);
+        //std.debug.print("touch motion {} {d} {d}\n", .{ finger, newpt.x, newpt.y });
+        self.mouse_pt = newpt;
+
+        const dp = (Point{ .x = dxnorm * self.wd.rect.w, .y = dynorm * self.wd.rect.h }).scale(self.natural_scale);
+
+        const winId = self.windowFor(self.mouse_pt);
+
+        self.event_num += 1;
+        try self.events.append(Event{ .num = self.event_num, .evt = .{
+            .mouse = .{
+                .action = .motion,
+                .button = finger,
+                .p = self.mouse_pt,
+                .floating_win = winId,
+                .data = .{ .motion = dp },
+            },
+        } });
+
+        const ret = (self.wd.id != winId);
+        try self.positionMouseEventAdd();
+        return ret;
+    }
+
+    pub fn FPS(self: *const Self) f32 {
+        const diff = self.frame_times[0];
+        if (diff == 0) {
+            return 0;
+        }
+
+        const avg = @as(f32, @floatFromInt(diff)) / @as(f32, @floatFromInt(self.frame_times.len - 1));
+        const fps = 1_000_000.0 / avg;
+        return fps;
+    }
+
+    /// beginWait coordinates with waitTime() to run frames only when needed
+    pub fn beginWait(self: *Self, has_event: bool) i128 {
+        var new_time = @max(self.frame_time_ns, self.backend.nanoTime());
+
+        if (self.loop_wait_target) |target| {
+            if (self.loop_wait_target_event and has_event) {
+                // interrupted by event, so don't adjust slop for target
+                //std.debug.print("beginWait interrupted by event\n", .{});
+                return new_time;
+            }
+
+            //std.debug.print("beginWait adjusting slop\n", .{});
+            // we were trying to sleep for a specific amount of time, adjust slop to
+            // compensate if we didn't hit our target
+            if (new_time > target) {
+                // woke up later than expected
+                self.loop_target_slop_frames = @max(1, self.loop_target_slop_frames * 2);
+                self.loop_target_slop += self.loop_target_slop_frames;
+            } else if (new_time < target) {
+                // woke up sooner than expected
+                self.loop_target_slop_frames = @min(-1, self.loop_target_slop_frames * 2);
+                self.loop_target_slop += self.loop_target_slop_frames;
+
+                // since we are early, spin a bit to guarantee that we never run before
+                // the target
+                //var i: usize = 0;
+                //var first_time = new_time;
+                while (new_time < target) {
+                    //i += 1;
+                    self.backend.sleep(0);
+                    new_time = @max(self.frame_time_ns, self.backend.nanoTime());
+                }
+
+                //if (i > 0) {
+                //  std.debug.print("    begin {d} spun {d} {d}us\n", .{self.loop_target_slop, i, @divFloor(new_time - first_time, 1000)});
+                //}
+            }
+        }
+
+        //std.debug.print("beginWait {d:6} {d}\n", .{ self.loop_target_slop, self.loop_target_slop_frames });
+        return new_time;
+    }
+
+    // Takes output of end() and optionally a max fps.  Returns microseconds
+    // the app should wait (with event interruption) before running the render
+    // loop again.  Pass return value to backend.waitEventTimeout().
+    // Cooperates with beginWait() to estimate how much time is being spent
+    // outside the render loop and account for that.
+    pub fn waitTime(self: *Self, end_micros: ?u32, maxFPS: ?f32) u32 {
+        // end_micros is the naive value we want to be between last begin and next begin
+
+        // minimum time to wait to hit max fps target
+        var min_micros: u32 = 0;
+        if (maxFPS) |mfps| {
+            min_micros = @as(u32, @intFromFloat(1_000_000.0 / mfps));
+        }
+
+        //std.debug.print("  end {d:6} min {d:6}", .{end_micros, min_micros});
+
+        // wait_micros is amount on top of min_micros we will conditionally wait
+        var wait_micros = (end_micros orelse 0) -| min_micros;
+
+        // assume that we won't target a specific time to sleep but if we do
+        // calculate the targets before removing so_far and slop
+        self.loop_wait_target = null;
+        self.loop_wait_target_event = false;
+        const target_min = min_micros;
+        const target = min_micros + wait_micros;
+
+        // how long it's taken from begin to here
+        const so_far_nanos = @max(self.frame_time_ns, self.backend.nanoTime()) - self.frame_time_ns;
+        var so_far_micros = @as(u32, @intCast(@divFloor(so_far_nanos, 1000)));
+        //std.debug.print("  far {d:6}", .{so_far_micros});
+
+        // take time from min_micros first
+        const min_so_far = @min(so_far_micros, min_micros);
+        so_far_micros -= min_so_far;
+        min_micros -= min_so_far;
+
+        // then take time from wait_micros
+        const min_so_far2 = @min(so_far_micros, wait_micros);
+        so_far_micros -= min_so_far2;
+        wait_micros -= min_so_far2;
+
+        var slop = self.loop_target_slop;
+
+        // get slop we can take out of min_micros
+        const min_us_slop = @min(slop, @as(i32, @intCast(min_micros)));
+        slop -= min_us_slop;
+        if (min_us_slop >= 0) {
+            min_micros -= @as(u32, @intCast(min_us_slop));
+        } else {
+            min_micros += @as(u32, @intCast(-min_us_slop));
+        }
+
+        // remaining slop we can take out of wait_micros
+        const wait_us_slop = @min(slop, @as(i32, @intCast(wait_micros)));
+        slop -= wait_us_slop;
+        if (wait_us_slop >= 0) {
+            wait_micros -= @as(u32, @intCast(wait_us_slop));
+        } else {
+            wait_micros += @as(u32, @intCast(-wait_us_slop));
+        }
+
+        //std.debug.print("  min {d:6}", .{min_micros});
+        if (min_micros > 0) {
+            // wait unconditionally for fps target
+            self.backend.sleep(min_micros * 1000);
+            self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target_min)) * 1000);
+        }
+
+        if (end_micros == null) {
+            // no target, wait indefinitely for next event
+            self.loop_wait_target = null;
+            //std.debug.print("  wait indef\n", .{});
+            return std.math.maxInt(u32);
+        } else if (wait_micros > 0) {
+            // wait conditionally
+            // since we have a timeout we will try to hit that target but set our
+            // flag so that we don't adjust for the target if we wake up to an event
+            self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target)) * 1000);
+            self.loop_wait_target_event = true;
+            //std.debug.print("  wait {d:6}\n", .{wait_micros});
+            return wait_micros;
+        } else {
+            // trying to hit the target but ran out of time
+            //std.debug.print("  wait none\n", .{});
+            return 0;
+            // if we had a wait target from min_micros leave it
+        }
+    }
+
+    pub fn begin(
+        self: *Self,
+        time_ns: i128,
+    ) !void {
+        var micros_since_last: u32 = 1;
+        if (time_ns > self.frame_time_ns) {
+            // enforce monotinicity
+            var nanos_since_last = time_ns - self.frame_time_ns;
+
+            // make sure the @intCast below doesn't panic
+            const max_nanos_since_last: i128 = std.math.maxInt(u32) * std.time.ns_per_us;
+            nanos_since_last = @min(nanos_since_last, max_nanos_since_last);
+
+            micros_since_last = @as(u32, @intCast(@divFloor(nanos_since_last, std.time.ns_per_us)));
+            micros_since_last = @max(1, micros_since_last);
+            self.frame_time_ns = time_ns;
+        }
+
+        //std.debug.print(" frame_time_ns {d}\n", .{self.frame_time_ns});
+
+        self.previous_window = current_window;
+        current_window = self;
+
+        self.rendering = true;
+        self.cursor_requested = .arrow;
+        self.osk_focused_widget_text_rect = null;
+        self.debug_info_name_rect = "";
+        self.debug_info_src_id_extra = "";
+        if (self.debug_under_mouse) {
+            if (self.debug_under_mouse_info.len > 0) {
+                self.gpa.free(self.debug_under_mouse_info);
+            }
+            self.debug_under_mouse_info = "";
+        }
+
+        _ = self._arena.reset(.retain_capacity);
+        const arena = self._arena.allocator();
+        self.arena = arena;
+
+        self.path = std.ArrayList(Point).init(arena);
+
+        {
+            var i: usize = 0;
+            while (i < self.subwindows.items.len) {
+                var sw = &self.subwindows.items[i];
+                if (sw.used) {
+                    sw.used = false;
+                    i += 1;
+                } else {
+                    _ = self.subwindows.orderedRemove(i);
+                }
+            }
+        }
+
+        self.event_num = 0;
+        self.events = std.ArrayList(Event).init(arena);
+
+        for (self.frame_times, 0..) |_, i| {
+            if (i == (self.frame_times.len - 1)) {
+                self.frame_times[i] = 0;
+            } else {
+                self.frame_times[i] = self.frame_times[i + 1] +| micros_since_last;
+            }
+        }
+
+        {
+            var deadSizes = std.ArrayList(u32).init(arena);
+            defer deadSizes.deinit();
+            var it = self.min_sizes.iterator();
+            while (it.next()) |kv| {
+                if (kv.value_ptr.used) {
+                    kv.value_ptr.used = false;
+                } else {
+                    try deadSizes.append(kv.key_ptr.*);
+                }
+            }
+
+            for (deadSizes.items) |id| {
+                _ = self.min_sizes.remove(id);
+            }
+
+            //std.debug.print("min_sizes {d}\n", .{self.min_sizes.count()});
+        }
+
+        {
+            self.data_mutex.lock();
+            defer self.data_mutex.unlock();
+
+            var deadDatas = std.ArrayList(u32).init(arena);
+            defer deadDatas.deinit();
+            var it = self.datas.iterator();
+            while (it.next()) |kv| {
+                if (kv.value_ptr.used) {
+                    kv.value_ptr.used = false;
+                } else {
+                    try deadDatas.append(kv.key_ptr.*);
+                }
+            }
+
+            for (deadDatas.items) |id| {
+                var dd = self.datas.fetchRemove(id).?;
+                dd.value.free(self.gpa);
+            }
+
+            //std.debug.print("datas {d}\n", .{self.datas.count()});
+        }
+
+        self.tab_index_prev.deinit();
+        self.tab_index_prev = self.tab_index;
+        self.tab_index = @TypeOf(self.tab_index).init(self.tab_index.allocator);
+
+        self.rect_pixels = self.backend.pixelSize().rect();
+        clipSet(self.rect_pixels);
+
+        self.wd.rect = self.backend.windowSize().rect().scale(1.0 / self.content_scale);
+        self.natural_scale = self.rect_pixels.w / self.wd.rect.w;
+
+        //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
+
+        try subwindowAdd(self.wd.id, self.wd.rect, self.rect_pixels, false, null);
+
+        _ = subwindowCurrentSet(self.wd.id);
+
+        self.extra_frames_needed -|= 1;
+        self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
+
+        {
+            const micros: i32 = if (micros_since_last > math.maxInt(i32)) math.maxInt(i32) else @as(i32, @intCast(micros_since_last));
+            var deadAnimations = std.ArrayList(u32).init(arena);
+            defer deadAnimations.deinit();
+            var it = self.animations.iterator();
+            while (it.next()) |kv| {
+                if (!kv.value_ptr.used or kv.value_ptr.end_time <= 0) {
+                    try deadAnimations.append(kv.key_ptr.*);
+                } else {
+                    kv.value_ptr.used = false;
+                    kv.value_ptr.start_time -|= micros;
+                    kv.value_ptr.end_time -|= micros;
+                    if (kv.value_ptr.start_time <= 0 and kv.value_ptr.end_time > 0) {
+                        refresh(null, @src(), null);
+                    }
+                }
+            }
+
+            for (deadAnimations.items) |id| {
+                _ = self.animations.remove(id);
+            }
+        }
+
+        {
+            var deadFonts = std.ArrayList(u32).init(arena);
+            defer deadFonts.deinit();
+            var it = self.font_cache.iterator();
+            while (it.next()) |kv| {
+                if (kv.value_ptr.used) {
+                    kv.value_ptr.used = false;
+                } else {
+                    try deadFonts.append(kv.key_ptr.*);
+                }
+            }
+
+            for (deadFonts.items) |id| {
+                var tce = self.font_cache.fetchRemove(id).?;
+                tce.value.glyph_info.deinit();
+                tce.value.deinit();
+            }
+
+            //std.debug.print("font_cache {d}\n", .{self.font_cache.count()});
+        }
+
+        {
+            var deadIcons = std.ArrayList(u32).init(arena);
+            defer deadIcons.deinit();
+            var it = self.texture_cache.iterator();
+            while (it.next()) |kv| {
+                if (kv.value_ptr.used) {
+                    kv.value_ptr.used = false;
+                } else {
+                    try deadIcons.append(kv.key_ptr.*);
+                }
+            }
+
+            for (deadIcons.items) |id| {
+                const ice = self.texture_cache.fetchRemove(id).?;
+                self.backend.textureDestroy(ice.value.texture);
+            }
+
+            //std.debug.print("texture_cache {d}\n", .{self.texture_cache.count()});
+        }
+
+        if (!self.captured_last_frame) {
+            // widget that had capture went away, also end any drag that might
+            // have been happening
+            self.captureID = null;
+            self.drag_state = .none;
+        }
+        self.captured_last_frame = false;
+
+        self.wd.parent = self.widget();
+        try self.wd.register();
+        self.menu_current = null;
+
+        self.next_widget_ypos = self.wd.rect.y;
+
+        // We want a position mouse event to do mouse cursors.  It needs to be
+        // final so if there was a drag end the cursor will still be set
+        // correctly.  We don't know when the client gives us the last event,
+        // so make our position event now, and addEvent* functions will remove
+        // and re-add to keep it as the final event.
+        try self.positionMouseEventAdd();
+
+        if (self.inject_motion_event) {
+            self.inject_motion_event = false;
+            const pt = self.mouse_pt.scale(self.content_scale / self.natural_scale);
+            _ = try self.addEventMouseMotion(pt.x, pt.y);
+        }
+
+        self.backend.begin(arena);
+    }
+
+    fn positionMouseEventAdd(self: *Self) !void {
+        try self.events.append(.{ .evt = .{ .mouse = .{
+            .action = .position,
+            .button = .none,
+            .p = self.mouse_pt,
+            .floating_win = self.windowFor(self.mouse_pt),
+        } } });
+    }
+
+    fn positionMouseEventRemove(self: *Self) void {
+        const e = self.events.pop();
+        if (e.evt != .mouse or e.evt.mouse.action != .position) {
+            log.err("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
+        }
+    }
+
+    pub fn windowFor(self: *const Self, p: Point) u32 {
+        var i = self.subwindows.items.len;
+        while (i > 0) : (i -= 1) {
+            const sw = &self.subwindows.items[i - 1];
+            if (sw.modal or sw.rect_pixels.contains(p)) {
+                return sw.id;
+            }
+        }
+
+        return self.wd.id;
+    }
+
+    pub fn subwindowCurrent(self: *const Self) *Subwindow {
+        var i = self.subwindows.items.len;
+        while (i > 0) : (i -= 1) {
+            const sw = &self.subwindows.items[i - 1];
+            if (sw.id == self.subwindow_currentId) {
+                return sw;
+            }
+        }
+
+        log.warn("subwindowCurrent failed to find the current subwindow, returning base window\n", .{});
+        return &self.subwindows.items[0];
+    }
+
+    pub fn subwindowFocused(self: *const Self) *Subwindow {
+        var i = self.subwindows.items.len;
+        while (i > 0) : (i -= 1) {
+            const sw = &self.subwindows.items[i - 1];
+            if (sw.id == self.focused_subwindowId) {
+                return sw;
+            }
+        }
+
+        log.warn("subwindowFocused failed to find the focused subwindow, returning base window\n", .{});
+        return &self.subwindows.items[0];
+    }
+
+    // Return the cursor the gui wants.  Client code should cache this if
+    // switching the platform's cursor is expensive.
+    pub fn cursorRequested(self: *const Self) enums.Cursor {
+        if (self.drag_state == .dragging and self.cursor_dragging != null) {
+            return self.cursor_dragging.?;
+        } else {
+            return self.cursor_requested;
+        }
+    }
+
+    // Return the cursor the gui wants or null if mouse is not in gui windows.
+    // Client code should cache this if switching the platform's cursor is
+    // expensive.
+    pub fn cursorRequestedFloating(self: *const Self) ?enums.Cursor {
+        if (self.captureID != null or self.windowFor(self.mouse_pt) != self.wd.id) {
+            // gui owns the cursor if we have mouse capture or if the mouse is above
+            // a floating window
+            return self.cursorRequested();
+        } else {
+            // no capture, not above a floating window, so client owns the cursor
+            return null;
+        }
+    }
+
+    pub fn OSKRequested(self: *const Self) ?Rect {
+        return self.osk_focused_widget_text_rect;
+    }
+
+    pub fn renderCommands(self: *Self, queue: *std.ArrayList(RenderCmd)) !void {
+        for (queue.items) |*drc| {
+            // don't need to reset these after because we reset them after
+            // calling renderCommands
+            currentWindow().snap_to_pixels = drc.snap;
+            clipSet(drc.clip);
+            switch (drc.cmd) {
+                .text => |t| {
+                    try renderText(t);
+                },
+                .debug_font_atlases => |t| {
+                    try debugRenderFontAtlases(t.rs, t.color);
+                },
+                .icon => |i| {
+                    try renderIcon(i.name, i.tvg_bytes, i.rs, i.rotation, i.colormod);
+                },
+                .image => |i| {
+                    try renderImage(i.name, i.image_bytes, i.rs, i.rotation, i.colormod);
+                },
+                .pathFillConvex => |pf| {
+                    try self.path.appendSlice(pf.path.items);
+                    try pathFillConvex(pf.color);
+                    pf.path.deinit();
+                },
+                .pathStroke => |ps| {
+                    try self.path.appendSlice(ps.path.items);
+                    try pathStrokeRaw(ps.closed, ps.thickness, ps.endcap_style, ps.color);
+                    ps.path.deinit();
+                },
+            }
+        }
+
+        queue.clearAndFree();
+    }
+
+    // data is copied into internal storage
+    pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, comptime copy_slice: bool) void {
+        const hash = hashIdKey(id, key);
+
+        const dt = @typeInfo(@TypeOf(data_in));
+        const dt_type_str = @typeName(@TypeOf(data_in));
+        var bytes: []const u8 = undefined;
+        if (copy_slice) {
+            bytes = std.mem.sliceAsBytes(data_in);
+            if (dt.Pointer.sentinel != null) {
+                bytes.len += @sizeOf(dt.Pointer.child);
+            }
+        } else {
+            bytes = std.mem.asBytes(&data_in);
+        }
+
+        const alignment = comptime blk: {
+            if (copy_slice) {
+                break :blk dt.Pointer.alignment;
+            } else {
+                break :blk @alignOf(@TypeOf(data_in));
+            }
+        };
+
+        self.data_mutex.lock();
+        defer self.data_mutex.unlock();
+
+        if (self.datas.getPtr(hash)) |sd| {
+            if (sd.data.len == bytes.len) {
+                sd.used = true;
+                if (builtin.mode == .Debug) {
+                    sd.type_str = dt_type_str;
+                    sd.copy_slice = copy_slice;
+                }
+                @memcpy(sd.data, bytes);
+                return;
+            } else {
+                //std.debug.print("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, key });
+                sd.free(self.gpa);
+            }
+        }
+
+        var sd = SavedData{ .alignment = alignment, .data = self.gpa.allocWithOptions(u8, bytes.len, alignment, null) catch |err| switch (err) {
+            error.OutOfMemory => {
+                log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
+                return;
+            },
+        } };
+
+        @memcpy(sd.data, bytes);
+
+        if (builtin.mode == .Debug) {
+            sd.type_str = dt_type_str;
+            sd.copy_slice = copy_slice;
+        }
+
+        self.datas.put(hash, sd) catch |err| switch (err) {
+            error.OutOfMemory => {
+                log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
+                sd.free(self.gpa);
+                return;
+            },
+        };
+    }
+
+    // returns the backing byte slice if we have one
+    pub fn dataGetInternal(self: *Self, id: u32, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
+        const hash = hashIdKey(id, key);
+
+        self.data_mutex.lock();
+        defer self.data_mutex.unlock();
+
+        if (self.datas.getPtr(hash)) |sd| {
+            if (builtin.mode == .Debug) {
+                if (!std.mem.eql(u8, sd.type_str, @typeName(T)) or sd.copy_slice != slice) {
+                    std.debug.panic("dataGetInternal: stored type {s} (slice {}) doesn't match asked for type {s} (slice {})", .{ sd.type_str, sd.copy_slice, @typeName(T), slice });
+                }
+            }
+
+            sd.used = true;
+            return sd.data;
+        } else {
+            return null;
+        }
+    }
+
+    pub fn dataRemove(self: *Self, id: u32, key: []const u8) void {
+        const hash = hashIdKey(id, key);
+
+        self.data_mutex.lock();
+        defer self.data_mutex.unlock();
+
+        if (self.datas.fetchRemove(hash)) |dd| {
+            dd.value.free(self.gpa);
+        }
+    }
+
+    // Add a dialog to be displayed on the GUI thread during Window.end(). Can
+    // be called from any thread. Returns a locked mutex that must be unlocked
+    // by the caller.  If calling from a non-GUI thread, do any dataSet() calls
+    // before unlocking the mutex to ensure that data is available before the
+    // dialog is displayed.
+    pub fn dialogAdd(self: *Self, id: u32, display: DialogDisplayFn) !*std.Thread.Mutex {
+        self.dialog_mutex.lock();
+
+        for (self.dialogs.items) |*d| {
+            if (d.id == id) {
+                d.display = display;
+                break;
+            }
+        } else {
+            try self.dialogs.append(Dialog{ .id = id, .display = display });
+        }
+
+        return &self.dialog_mutex;
+    }
+
+    // Only called from gui thread.
+    pub fn dialogRemove(self: *Self, id: u32) void {
+        self.dialog_mutex.lock();
+        defer self.dialog_mutex.unlock();
+
+        for (self.dialogs.items, 0..) |*d, i| {
+            if (d.id == id) {
+                _ = self.dialogs.orderedRemove(i);
+                return;
+            }
+        }
+    }
+
+    fn dialogsShow(self: *Self) !void {
+        var i: usize = 0;
+        var dia: ?Dialog = null;
+        while (true) {
+            self.dialog_mutex.lock();
+            if (i < self.dialogs.items.len and
+                dia != null and
+                dia.?.id == self.dialogs.items[i].id)
+            {
+                // we just did this one, move to the next
+                i += 1;
+            }
+
+            if (i < self.dialogs.items.len) {
+                dia = self.dialogs.items[i];
+            } else {
+                dia = null;
+            }
+            self.dialog_mutex.unlock();
+
+            if (dia) |d| {
+                try d.display(d.id);
+            } else {
+                break;
+            }
+        }
+    }
+
+    pub fn timer(self: *Self, id: u32, micros: i32) !void {
+        // when start_time is in the future, we won't spam frames, so this will
+        // cause a single frame and then expire
+        const a = Animation{ .start_time = micros, .end_time = micros };
+        const h = hashIdKey(id, "_timer");
+        try self.animations.put(h, a);
+    }
+
+    pub fn timerRemove(self: *Self, id: u32) void {
+        const h = hashIdKey(id, "_timer");
+        _ = self.animations.remove(h);
+    }
+
+    // Add a toast to be displayed on the GUI thread. Can be called from any
+    // thread. Returns a locked mutex that must be unlocked by the caller.  If
+    // calling from a non-GUI thread, do any dataSet() calls before unlocking
+    // the mutex to ensure that data is available before the dialog is
+    // displayed.
+    pub fn toastAdd(self: *Self, id: u32, subwindow_id: ?u32, display: DialogDisplayFn, timeout: ?i32) !*std.Thread.Mutex {
+        self.dialog_mutex.lock();
+
+        for (self.toasts.items) |*t| {
+            if (t.id == id) {
+                t.display = display;
+                t.subwindow_id = subwindow_id;
+                break;
+            }
+        } else {
+            try self.toasts.append(Toast{ .id = id, .subwindow_id = subwindow_id, .display = display });
+        }
+
+        if (timeout) |tt| {
+            try self.timer(id, tt);
+        } else {
+            self.timerRemove(id);
+        }
+
+        return &self.dialog_mutex;
+    }
+
+    pub fn toastRemove(self: *Self, id: u32) void {
+        self.dialog_mutex.lock();
+        defer self.dialog_mutex.unlock();
+
+        for (self.toasts.items, 0..) |*t, i| {
+            if (t.id == id) {
+                _ = self.toasts.orderedRemove(i);
+                return;
+            }
+        }
+    }
+
+    // show any toasts that didn't have a subwindow_id set
+    fn toastsShow(self: *Self) !void {
+        var ti = dvui.toastsFor(null);
+        if (ti) |*it| {
+            var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent_window = true, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
+            defer toast_win.deinit();
+
+            toast_win.data().rect = dvui.placeIn(self.wd.rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
+            toast_win.autoSize();
+            try toast_win.install();
+            try toast_win.drawBackground();
+
+            var vbox = try dvui.box(@src(), .vertical, .{});
+            defer vbox.deinit();
+
+            while (it.next()) |t| {
+                try t.display(t.id);
+            }
+        }
+    }
+
+    fn debugWindowShow(self: *Self) !void {
+        if (self.debug_under_mouse_quitting) {
+            self.debug_under_mouse = false;
+            self.debug_under_mouse_quitting = false;
+        }
+
+        // disable so the widgets we are about to use to display this data
+        // don't modify the data, otherwise our iterator will get corrupted and
+        // even if you search for a widget here, the data won't be available
+        var dum = self.debug_under_mouse;
+        self.debug_under_mouse = false;
+        defer self.debug_under_mouse = dum;
+
+        var float = try dvui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
+        defer float.deinit();
+
+        try dvui.windowHeader("DVUI Debug", "", &self.debug_window_show);
+
+        {
+            var hbox = try dvui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
+
+            try dvui.labelNoFmt(@src(), "Hex id of widget to highlight:", .{ .gravity_y = 0.5 });
+
+            var buf = [_]u8{0} ** 20;
+            if (self.debug_widget_id != 0) {
+                _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
+            }
+            var te = try dvui.textEntry(@src(), .{
+                .text = &buf,
+            }, .{});
+            te.deinit();
+
+            self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(&buf, 0), 16) catch 0;
+        }
+
+        var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
+        try tl.addText(self.debug_info_name_rect, .{});
+        try tl.addText("\n\n", .{});
+        try tl.addText(self.debug_info_src_id_extra, .{});
+        tl.deinit();
+
+        if (try dvui.button(@src(), if (dum) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
+            dum = !dum;
+        }
+
+        if (try dvui.button(@src(), if (dum) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{}, .{})) {
+            dum = !dum;
+            self.debug_under_mouse_esc_needed = dum;
+        }
+
+        const logit = self.debugRefresh(null);
+        if (try dvui.button(@src(), if (logit) "Stop Refresh Logging" else "Start Refresh Logging", .{}, .{})) {
+            _ = self.debugRefresh(!logit);
+        }
+
+        var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
+        defer scroll.deinit();
+
+        var iter = std.mem.split(u8, self.debug_under_mouse_info, "\n");
+        var i: usize = 0;
+        while (iter.next()) |line| : (i += 1) {
+            if (line.len > 0) {
+                var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
+                defer hbox.deinit();
+
+                if (try dvui.buttonIcon(@src(), "find", entypo.magnifying_glass, .{}, .{ .min_size_content = .{ .h = 12 } })) {
+                    self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(line, ' '), 16) catch 0;
+                }
+
+                try dvui.labelNoFmt(@src(), line, .{ .gravity_y = 0.5 });
+            }
+        }
+    }
+
+    pub const endOptions = struct {
+        show_toasts: bool = true,
+    };
+
+    // End of this window gui's rendering.  Renders retained dialogs and all
+    // deferred rendering (subwindows, focus highlights).  Returns micros we
+    // want between last call to begin() and next call to begin() (or null
+    // meaning wait for event).  If wanted, pass return value to waitTime() to
+    // get a useful time to wait between render loops.
+    pub fn end(self: *Self, opts: endOptions) !?u32 {
+        if (opts.show_toasts) {
+            try self.toastsShow();
+        }
+        try self.dialogsShow();
+
+        if (self.debug_window_show) {
+            try self.debugWindowShow();
+        }
+
+        const oldsnap = self.snap_to_pixels;
+        const oldclip = clipGet();
+        self.rendering = true;
+        for (self.subwindows.items) |*sw| {
+            try self.renderCommands(&sw.render_cmds);
+            try self.renderCommands(&sw.render_cmds_after);
+        }
+        clipSet(oldclip);
+        self.snap_to_pixels = oldsnap;
+
+        // events may have been tagged with a focus widget that never showed up, so
+        // we wouldn't even get them bubbled
+        const evts = events();
+        for (evts) |*e| {
+            if (!eventMatch(e, .{ .id = self.wd.id, .r = self.rect_pixels, .cleanup = true }))
+                continue;
+
+            // doesn't matter if we mark events has handled or not because this is
+            // the end of the line for all events
+            if (e.evt == .mouse) {
+                if (e.evt.mouse.action == .focus) {
+                    // unhandled click, clear focus
+                    focusWidget(null, null, null);
+                }
+            } else if (e.evt == .key) {
+                if (e.evt.key.code == .tab and e.evt.key.action == .down) {
+                    if (e.evt.key.mod.shift()) {
+                        tabIndexPrev(e.num);
+                    } else {
+                        tabIndexNext(e.num);
+                    }
+                }
+            }
+        }
+
+        self.mouse_pt_prev = self.mouse_pt;
+
+        if (!self.subwindowFocused().used) {
+            // our focused subwindow didn't show this frame, focus the highest one that did
+            var i = self.subwindows.items.len;
+            while (i > 0) : (i -= 1) {
+                const sw = self.subwindows.items[i - 1];
+                if (sw.used) {
+                    //std.debug.print("focused subwindow lost, focusing {d}\n", .{i - 1});
+                    focusSubwindow(sw.id, null);
+                    break;
+                }
+            }
+
+            refresh(null, @src(), null);
+        }
+
+        // Check that the final event was our synthetic mouse position event.
+        // If one of the addEvent* functions forgot to add the synthetic mouse
+        // event to the end this will print a debug message.
+        self.positionMouseEventRemove();
+
+        self.backend.end();
+
+        defer current_window = self.previous_window;
+
+        // This is what refresh affects
+        if (self.extra_frames_needed > 0) {
+            return 0;
+        }
+
+        // If there are current animations, return 0 so we go as fast as we can.
+        // If all animations are scheduled in the future, pick the soonest start.
+        var ret: ?u32 = null;
+        var it = self.animations.iterator();
+        while (it.next()) |kv| {
+            if (kv.value_ptr.used) {
+                if (kv.value_ptr.start_time > 0) {
+                    const st = @as(u32, @intCast(kv.value_ptr.start_time));
+                    ret = @min(ret orelse st, st);
+                } else if (kv.value_ptr.end_time > 0) {
+                    ret = 0;
+                    break;
+                }
+            }
+        }
+
+        return ret;
+    }
+
+    pub fn widget(self: *Self) Widget {
+        return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    }
+
+    pub fn data(self: *Self) *WidgetData {
+        return &self.wd;
+    }
+
+    pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+        var r = self.wd.rect;
+        r.y = self.next_widget_ypos;
+        r.h -= r.y;
+        const ret = placeIn(r, minSize(id, min_size), e, g);
+        self.next_widget_ypos += ret.h;
+        return ret;
+    }
+
+    pub fn screenRectScale(self: *Self, r: Rect) RectScale {
+        const scaled = r.scale(self.natural_scale);
+        return RectScale{ .r = scaled.offset(self.rect_pixels), .s = self.natural_scale };
+    }
+
+    pub fn minSizeForChild(self: *Self, s: Size) void {
+        // os window doesn't size itself based on children
+        _ = self;
+        _ = s;
+    }
+
+    pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
+        // window does cleanup events, but not normal events
+        switch (e.evt) {
+            .close_popup => |cp| {
+                e.handled = true;
+                if (cp.intentional) {
+                    // when a popup is closed due to a menu item being chosen,
+                    // the window that spawned it (which had focus previously)
+                    // should become focused again
+                    focusSubwindow(self.wd.id, null);
+                }
+            },
+            else => {},
+        }
+
+        // can't bubble past the base window
+        _ = bubbling;
+    }
+};

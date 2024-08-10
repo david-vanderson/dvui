@@ -116,28 +116,32 @@ pub fn build(b: *std.Build) !void {
     }
 
     // raylib example
-    {
+    const raylib_examples = [_][]const u8{
+        "raylib-standalone",
+        "raylib-ontop",
+    };
+
+    inline for (raylib_examples) |ex| {
         const exe = b.addExecutable(.{
-            .name = "raylib-standalone",
-            .root_source_file = b.path("examples/raylib-standalone.zig"),
+            .name = ex,
+            .root_source_file = b.path("examples/" ++ ex ++ ".zig"),
             .target = target,
             .optimize = optimize,
         });
 
         exe.root_module.addImport("dvui", dvui_mod_raylib);
         exe.root_module.addImport("RaylibBackend", raylib_mod);
+        if (maybe_ray) |ray| {
+            exe.addIncludePath(ray.path("src"));
+        }
 
-        const exe_install = b.addInstallArtifact(exe, .{});
-
-        const compile_step = b.step("compile-raylib-standalone", "Compile the Raylib standalone example");
-        compile_step.dependOn(&exe_install.step);
-        // not ready for this to be in a standard zig build
-        //b.getInstallStep().dependOn(compile_step);
+        const compile_step = b.step("compile-" ++ ex, "Compile " ++ ex);
+        compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
 
         const run_cmd = b.addRunArtifact(exe);
         run_cmd.step.dependOn(compile_step);
 
-        const run_step = b.step("raylib-standalone", "Run the Raylib standalone example");
+        const run_step = b.step(ex, "Run " ++ ex);
         run_step.dependOn(&run_cmd.step);
     }
 
