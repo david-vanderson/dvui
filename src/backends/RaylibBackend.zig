@@ -188,6 +188,12 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     }
 
     c.rlDrawVertexArrayElements(0, @intCast(idx.len), null);
+
+    c.rlUnloadVertexArray(VAO);
+    c.rlUnloadVertexBuffer(VBO);
+
+    // There is no rlUnloadVertexBufferElement - EBO is a buffer just like VBO
+    c.rlUnloadVertexBuffer(EBO);
 }
 
 pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
