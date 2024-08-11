@@ -2234,7 +2234,14 @@ pub const Window = struct {
             self.font_cache.deinit();
         }
 
-        self.texture_cache.deinit();
+        {
+            var it = self.texture_cache.iterator();
+            while (it.next()) |item| {
+                self.backend.textureDestroy(item.value_ptr.texture);
+            }
+            self.texture_cache.deinit();
+        }
+
         self.dialogs.deinit();
         self.toasts.deinit();
         self._arena.deinit();

@@ -106,6 +106,7 @@ pub fn createWindow(options: InitOptions) void {
 }
 
 pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
+    c.rlDrawRenderBatchActive();
     self.arena = arena;
 
     if (self.window_owner == .dvui) {
