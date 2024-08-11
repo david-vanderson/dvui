@@ -18,10 +18,9 @@ pressed_keys: std.bit_set.ArrayBitSet(u32, 512) = std.bit_set.ArrayBitSet(u32, 5
 pressed_modifier: dvui.enums.Mod = .none,
 mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButtons.len,
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
-window_owner: WindowOwner = .dvui,
+window_mode: WindowMode = .standalone,
 
-/// who is responsible for managing the application window?
-const WindowOwner = enum { dvui, user };
+const WindowMode = enum { ontop, standalone };
 
 const vertexSource =
     \\#version 330
@@ -124,9 +123,9 @@ pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
 
     self.arena = arena;
 
-    //only call Begin drawing
-    //if the window is managed by dvui
-    if (self.window_owner == .dvui) {
+    // Only call BeginDrawing() if the window standalone and managed by dvui
+    // The user is responsible for calling this function in ontop mode
+    if (self.window_mode == .standalone) {
         c.BeginDrawing();
     }
 }
@@ -135,9 +134,9 @@ pub fn end(self: *RaylibBackend) void {
     // reset blend mode so raylib text rendering works
     c.rlSetBlendMode(c.RL_BLEND_ALPHA);
 
-    //only call end drawing
-    //if the window is managed by dvui
-    if (self.window_owner == .dvui) {
+    // Only call EndDrawing if the window standalone and managed by dvui
+    // The user is responsible for calling this function in ontop mode
+    if (self.window_mode == .standalone) {
         c.EndDrawing();
     }
 }
@@ -148,16 +147,21 @@ pub fn clear(_: *RaylibBackend) void {
 
 /// initializes the raylib backend
 /// options are required if dvui is the window_owner
-pub fn init(comptime window_owner: WindowOwner, options: ?InitOptions) !RaylibBackend {
-    var back = RaylibBackend{ .window_owner = window_owner };
+pub fn init(comptime window_mode: WindowMode, options: ?InitOptions) !RaylibBackend {
+    var back = RaylibBackend{ .window_mode = window_mode };
 
-    if (back.window_owner == .dvui) {
+    // Only create an OS window in standalone mode
+    // Calling this function in ontop mode asserts an OS window already exists
+    if (back.window_mode == .standalone) {
         const opt: InitOptions = options.?;
         createWindow(opt);
     }
 
     if (!c.IsWindowReady()) {
-        @panic("OS Window must be created before initializing dvui window. \nNote: Set the window_owner to `.dvui` to automatically create the OS window");
+        @panic(
+            \\OS Window must be created before initializing dvui window.
+            \\\nNote: Set the window_owner to `.dvui` to automatically create the OS window"
+        );
     }
 
     back.shader = c.LoadShaderFromMemory(vertexSource, fragSource);
@@ -167,10 +171,13 @@ pub fn init(comptime window_owner: WindowOwner, options: ?InitOptions) !RaylibBa
 
 pub fn deinit(self: *RaylibBackend) void {
     c.UnloadShader(self.shader);
-    if (self.window_owner == .dvui) {
+    c.rlUnloadVertexArray(@intCast(self.VAO));
+
+    // Only close the OS window in standalone mode
+    // User must close the window in ontop mode
+    if (self.window_mode == .standalone) {
         c.CloseWindow();
     }
-    c.rlUnloadVertexArray(@intCast(self.VAO));
 }
 
 pub fn backend(self: *RaylibBackend) dvui.Backend {
@@ -183,7 +190,10 @@ pub fn nanoTime(self: *RaylibBackend) i128 {
 }
 
 pub fn sleep(self: *RaylibBackend, ns: u64) void {
-    if (self.window_owner == .dvui) {
+
+    // Don't use sleep for FPS control unless in standalone mode
+    // In ontop mode the application is responsible for managing FPS
+    if (self.window_mode == .standalone) {
         std.time.sleep(ns);
     }
 }

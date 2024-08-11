@@ -22,7 +22,7 @@ pub fn main() !void {
     ray.InitWindow(800, 450, "DVUI Raylib Ontop Example");
 
     // init Raylib backend
-    var backend = try RaylibBackend.init(.user, null);
+    var backend = try RaylibBackend.init(.ontop, null);
     backend.log_events = true;
 
     // init dvui Window (maps onto a single OS window)

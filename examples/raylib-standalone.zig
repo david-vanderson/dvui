@@ -20,7 +20,7 @@ pub fn main() !void {
     defer _ = gpa_instance.deinit();
 
     // init Raylib backend (creates OS window)
-    var backend = try RaylibBackend.init(.dvui, .{
+    var backend = try RaylibBackend.init(.standalone, .{
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 450.0 },
         .vsync = vsync,
