@@ -380,7 +380,7 @@ pub fn contentScale(_: *WebBackend) f32 {
     return 1.0;
 }
 
-pub fn drawClippedTriangles(_: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32, clipr: dvui.Rect) void {
+pub fn drawClippedTriangles(_: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr: dvui.Rect) void {
     // figure out how much we are losing by truncating x and y, need to add that back to w and h
     const x: u32 = @intFromFloat(clipr.x);
     const w: u32 = @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x)));

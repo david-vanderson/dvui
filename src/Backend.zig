@@ -45,7 +45,7 @@ pub fn VTableTypes(comptime Context: type) type {
         /// clipped to to clipr.  Vertex positions and clipr are in physical
         /// pixels.  If texture is given, the vertexes uv coords are normalized
         /// (0-1).
-        pub const drawClippedTriangles = *const fn (ctx: Context, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32, clipr: dvui.Rect) void;
+        pub const drawClippedTriangles = *const fn (ctx: Context, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u16, clipr: dvui.Rect) void;
 
         /// Create a texture from the given pixels in RGBA.  The returned
         /// pointer is what will later be passed to drawClippedTriangles.
@@ -147,7 +147,7 @@ pub fn windowSize(self: *Backend) Size {
 pub fn contentScale(self: *Backend) f32 {
     return self.vtable.contentScale(self.ptr);
 }
-pub fn drawClippedTriangles(self: *Backend, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u32, clipr: dvui.Rect) void {
+pub fn drawClippedTriangles(self: *Backend, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u16, clipr: dvui.Rect) void {
     return self.vtable.drawClippedTriangles(self.ptr, texture, vtx, idx, clipr);
 }
 pub fn textureCreate(self: *Backend, pixels: [*]u8, width: u32, height: u32) *anyopaque {

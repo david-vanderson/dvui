@@ -6,7 +6,6 @@ pub const c = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
     @cInclude("rlgl.h");
-    @cInclude("glad.h");
 });
 
 const RaylibBackend = @This();
@@ -140,7 +139,7 @@ pub fn contentScale(_: *RaylibBackend) f32 {
     return 1.0;
 }
 
-pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32, clipr: dvui.Rect) void {
+pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr: dvui.Rect) void {
     _ = clipr;
     // TODO: scissor
 
@@ -155,7 +154,7 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
 
     const VBO = c.rlLoadVertexBuffer(vtx.ptr, @intCast(vtx.len * @sizeOf(dvui.Vertex)), false);
     c.rlEnableVertexBuffer(VBO);
-    const EBO = c.rlLoadVertexBufferElement(idx.ptr, @intCast(idx.len * @sizeOf(u32)), false);
+    const EBO = c.rlLoadVertexBufferElement(idx.ptr, @intCast(idx.len * @sizeOf(u16)), false);
     c.rlEnableVertexBufferElement(EBO);
 
     const pos = @offsetOf(dvui.Vertex, "pos");
@@ -173,19 +172,22 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     const usetex_loc = c.GetShaderLocation(shader, "useTex");
 
     if (texture) |tex| {
-        c.glActiveTexture(c.GL_TEXTURE0);
+        c.rlActiveTextureSlot(0);
         const texid = @intFromPtr(tex);
-        c.glBindTexture(c.GL_TEXTURE_2D, @intCast(texid));
+        c.rlEnableTexture(@intCast(texid));
 
         const tex_loc = c.GetShaderLocation(shader, "texture0");
-        c.glUniform1i(tex_loc, 0);
+        const tex_val: c_int = 0;
+        c.rlSetUniform(tex_loc, &tex_val, c.RL_SHADER_UNIFORM_SAMPLER2D, 1);
 
-        c.glUniform1i(usetex_loc, 1);
+        const usetex_val: c_int = 1;
+        c.rlSetUniform(usetex_loc, &usetex_val, c.RL_SHADER_UNIFORM_INT, 1);
     } else {
-        c.glUniform1i(usetex_loc, 0);
+        const usetex_val: c_int = 0;
+        c.rlSetUniform(usetex_loc, &usetex_val, c.RL_SHADER_UNIFORM_INT, 1);
     }
 
-    c.glDrawElements(c.GL_TRIANGLES, @intCast(idx.len), c.GL_UNSIGNED_INT, null);
+    c.rlDrawVertexArrayElements(0, @intCast(idx.len), null);
 }
 
 pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
