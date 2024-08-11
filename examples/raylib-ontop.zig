@@ -5,10 +5,10 @@ const ray = @cImport({
     @cInclude("raylib.h");
 });
 
-//var show_dialog_outside_frame: bool = false;
-//var vsync = true;
-
 const window_icon_png = @embedFile("zig-favicon.png");
+
+//TODO:
+//Figure out the best way to integrate raylib and dvui Event Handling
 
 pub fn main() !void {
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
@@ -46,11 +46,9 @@ pub fn main() !void {
         const rect = ray.Rectangle{ .x = 300, .y = 300, .width = 300, .height = 100 };
         ray.DrawRectangleGradientEx(rect, ray.RAYWHITE, ray.BLACK, ray.BLUE, ray.RED);
 
-        //TODO figure out why raylib objects are rendering over dvui objects
-        //raylib objects are drawn first so this shouldn't be happening
-        //maybe its something with the shaders??
-
         // marks the beginning of a frame for dvui, can call dvui functions after this
+        // This function does NOT call ray.BeginDrawing because this backend was set as
+        // user managed rather than dvui managed. Otherwise ray.BeginDrawing would be called
         try win.begin(std.time.nanoTimestamp());
 
         // send all Raylib events to dvui for processing
@@ -60,6 +58,8 @@ pub fn main() !void {
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
+        // This function does NOT call ray.EndDrawing because this backend was set as
+        // user managed rather than dvui managed
         const end_micros = try win.end(.{});
         _ = end_micros;
 
