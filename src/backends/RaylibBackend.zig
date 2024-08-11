@@ -6,12 +6,12 @@ pub const c = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
     @cInclude("rlgl.h");
-    @cInclude("glad.h");
 });
 
 const RaylibBackend = @This();
 
 shader: c.Shader = undefined,
+VAO: u32 = undefined,
 arena: std.mem.Allocator = undefined,
 log_events: bool = false,
 pressed_keys: std.bit_set.ArrayBitSet(u32, 512) = std.bit_set.ArrayBitSet(u32, 512).initEmpty(),
@@ -35,7 +35,7 @@ const vertexSource =
     \\{
     \\    fragTexCoord = vertexTexCoord;
     \\    fragColor = vertexColor / 255.0;
-    \\    fragColor.rgb *= fragColor.a;
+    \\    fragColor.rgb *= fragColor.a;  // convert to premultiplied alpha
     \\    gl_Position = mvp*vec4(vertexPosition, 1.0);
     \\}
 ;
@@ -141,6 +141,8 @@ pub fn init(comptime window_owner: WindowOwner, options: ?InitOptions) !RaylibBa
     }
 
     back.shader = c.LoadShaderFromMemory(vertexSource, fragSource);
+    back.VAO = @intCast(c.rlLoadVertexArray());
+    c.rlSetBlendMode(c.RL_BLEND_ALPHA_PREMULTIPLY);
     return back;
 }
 
@@ -149,6 +151,7 @@ pub fn deinit(self: *RaylibBackend) void {
     if (self.window_owner == .dvui) {
         c.CloseWindow();
     }
+    c.rlUnloadVertexArray(@intCast(self.VAO));
 }
 
 pub fn backend(self: *RaylibBackend) dvui.Backend {
@@ -182,7 +185,7 @@ pub fn contentScale(_: *RaylibBackend) f32 {
     return 1.0;
 }
 
-pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32, clipr: dvui.Rect) void {
+pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr: dvui.Rect) void {
     _ = clipr;
     // TODO: scissor
 
@@ -192,12 +195,11 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     const mat = c.MatrixOrtho(0, @floatFromInt(c.GetRenderWidth()), @floatFromInt(c.GetRenderHeight()), 0, -1, 1);
     c.SetShaderValueMatrix(shader, @intCast(shader.locs[c.RL_SHADER_LOC_MATRIX_MVP]), mat);
 
-    const VAO = c.rlLoadVertexArray();
-    _ = c.rlEnableVertexArray(VAO);
+    _ = c.rlEnableVertexArray(@intCast(self.VAO));
 
     const VBO = c.rlLoadVertexBuffer(vtx.ptr, @intCast(vtx.len * @sizeOf(dvui.Vertex)), false);
     c.rlEnableVertexBuffer(VBO);
-    const EBO = c.rlLoadVertexBufferElement(idx.ptr, @intCast(idx.len * @sizeOf(u32)), false);
+    const EBO = c.rlLoadVertexBufferElement(idx.ptr, @intCast(idx.len * @sizeOf(u16)), false);
     c.rlEnableVertexBufferElement(EBO);
 
     const pos = @offsetOf(dvui.Vertex, "pos");
@@ -215,23 +217,40 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     const usetex_loc = c.GetShaderLocation(shader, "useTex");
 
     if (texture) |tex| {
-        c.glActiveTexture(c.GL_TEXTURE0);
+        c.rlActiveTextureSlot(0);
         const texid = @intFromPtr(tex);
-        c.glBindTexture(c.GL_TEXTURE_2D, @intCast(texid));
+        c.rlEnableTexture(@intCast(texid));
 
         const tex_loc = c.GetShaderLocation(shader, "texture0");
-        c.glUniform1i(tex_loc, 0);
+        const tex_val: c_int = 0;
+        c.rlSetUniform(tex_loc, &tex_val, c.RL_SHADER_UNIFORM_SAMPLER2D, 1);
 
-        c.glUniform1i(usetex_loc, 1);
+        const usetex_val: c_int = 1;
+        c.rlSetUniform(usetex_loc, &usetex_val, c.RL_SHADER_UNIFORM_INT, 1);
     } else {
-        c.glUniform1i(usetex_loc, 0);
+        const usetex_val: c_int = 0;
+        c.rlSetUniform(usetex_loc, &usetex_val, c.RL_SHADER_UNIFORM_INT, 1);
     }
 
-    c.glDrawElements(c.GL_TRIANGLES, @intCast(idx.len), c.GL_UNSIGNED_INT, null);
+    c.rlDrawVertexArrayElements(0, @intCast(idx.len), null);
+
+    c.rlUnloadVertexBuffer(VBO);
+
+    // There is no rlUnloadVertexBufferElement - EBO is a buffer just like VBO
+    c.rlUnloadVertexBuffer(EBO);
 }
 
 pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
-    // TODO: do we need to convert to premultiplied alpha?
+    // convert to premultiplied alpha
+    for (0..height) |h| {
+        for (0..width) |w| {
+            const i = (h * width + w) * 4;
+            const a: u16 = pixels[i + 3];
+            pixels[i] = @intCast(@divTrunc(@as(u16, pixels[i]) * a, 255));
+            pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * a, 255));
+            pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * a, 255));
+        }
+    }
     const texid = c.rlLoadTexture(pixels, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
     return @ptrFromInt(texid);
 }

@@ -804,7 +804,7 @@ pub fn cursorSet(cursor: enums.Cursor) void {
     cw.cursor_requested = cursor;
 }
 
-fn drawClippedTriangles_helper(backend: *Backend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u32) void {
+fn drawClippedTriangles_helper(backend: *Backend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16) void {
     const clipr = dvui.windowRectPixels().intersect(dvui.clipGet());
     // optimize: invert this logic outside this function. vtx and idx do not need to be built at all when this is true
     // then, inline clipr and remove this function
@@ -896,7 +896,7 @@ pub fn pathFillConvex(col: Color) !void {
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, cw.path.items.len * 2);
     defer vtx.deinit();
     const idx_count = (cw.path.items.len - 2) * 3 + cw.path.items.len * 6;
-    var idx = try std.ArrayList(u32).initCapacity(cw.arena, idx_count);
+    var idx = try std.ArrayList(u16).initCapacity(cw.arena, idx_count);
     defer idx.deinit();
     var col_trans = col;
     col_trans.a = 0;
@@ -931,19 +931,19 @@ pub fn pathFillConvex(col: Color) !void {
         // indexes for fill
         // triangles must be counter-clockwise (y going down) to avoid backface culling
         if (i > 1) {
-            try idx.append(@as(u32, @intCast(0)));
-            try idx.append(@as(u32, @intCast(ai * 2)));
-            try idx.append(@as(u32, @intCast(bi * 2)));
+            try idx.append(@as(u16, @intCast(0)));
+            try idx.append(@as(u16, @intCast(ai * 2)));
+            try idx.append(@as(u16, @intCast(bi * 2)));
         }
 
         // indexes for aa fade from inner to outer
         // triangles must be counter-clockwise (y going down) to avoid backface culling
-        try idx.append(@as(u32, @intCast(ai * 2)));
-        try idx.append(@as(u32, @intCast(ai * 2 + 1)));
-        try idx.append(@as(u32, @intCast(bi * 2)));
-        try idx.append(@as(u32, @intCast(ai * 2 + 1)));
-        try idx.append(@as(u32, @intCast(bi * 2 + 1)));
-        try idx.append(@as(u32, @intCast(bi * 2)));
+        try idx.append(@as(u16, @intCast(ai * 2)));
+        try idx.append(@as(u16, @intCast(ai * 2 + 1)));
+        try idx.append(@as(u16, @intCast(bi * 2)));
+        try idx.append(@as(u16, @intCast(ai * 2 + 1)));
+        try idx.append(@as(u16, @intCast(bi * 2 + 1)));
+        try idx.append(@as(u16, @intCast(bi * 2)));
     }
 
     drawClippedTriangles_helper(&cw.backend, null, vtx.items, idx.items);
@@ -1024,7 +1024,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     } else {
         idx_count += 8 * 3;
     }
-    var idx = try std.ArrayList(u32).initCapacity(cw.arena, idx_count);
+    var idx = try std.ArrayList(u16).initCapacity(cw.arena, idx_count);
     defer idx.deinit();
     var col_trans = col;
     col_trans.a = 0;
@@ -1071,21 +1071,21 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
                 try vtx.append(v);
 
                 // add indexes for endcap fringe
-                try idx.append(@as(u32, @intCast(0)));
-                try idx.append(@as(u32, @intCast(vtx_start)));
-                try idx.append(@as(u32, @intCast(vtx_start + 1)));
+                try idx.append(@as(u16, @intCast(0)));
+                try idx.append(@as(u16, @intCast(vtx_start)));
+                try idx.append(@as(u16, @intCast(vtx_start + 1)));
 
-                try idx.append(@as(u32, @intCast(0)));
-                try idx.append(@as(u32, @intCast(1)));
-                try idx.append(@as(u32, @intCast(vtx_start)));
+                try idx.append(@as(u16, @intCast(0)));
+                try idx.append(@as(u16, @intCast(1)));
+                try idx.append(@as(u16, @intCast(vtx_start)));
 
-                try idx.append(@as(u32, @intCast(1)));
-                try idx.append(@as(u32, @intCast(vtx_start)));
-                try idx.append(@as(u32, @intCast(vtx_start + 2)));
+                try idx.append(@as(u16, @intCast(1)));
+                try idx.append(@as(u16, @intCast(vtx_start)));
+                try idx.append(@as(u16, @intCast(vtx_start + 2)));
 
-                try idx.append(@as(u32, @intCast(1)));
-                try idx.append(@as(u32, @intCast(vtx_start + 2)));
-                try idx.append(@as(u32, @intCast(vtx_start + 2 + 1)));
+                try idx.append(@as(u16, @intCast(1)));
+                try idx.append(@as(u16, @intCast(vtx_start + 2)));
+                try idx.append(@as(u16, @intCast(vtx_start + 2 + 1)));
             } else if ((i + 1) == cw.path.items.len) {
                 diffab = Point.diff(aa, bb).normalize();
                 // rotate by 90 to get normal
@@ -1145,31 +1145,31 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         // triangles must be counter-clockwise (y going down) to avoid backface culling
         if (closed or ((i + 1) != cw.path.items.len)) {
             // indexes for fill
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u32, @intCast(vtx_start + ci * 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
+            try idx.append(@as(u16, @intCast(vtx_start + ci * 4)));
 
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u32, @intCast(vtx_start + ci * 4 + 2)));
-            try idx.append(@as(u32, @intCast(vtx_start + ci * 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
+            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 2)));
+            try idx.append(@as(u16, @intCast(vtx_start + ci * 4)));
 
             // indexes for aa fade from inner to outer side 1
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 1)));
-            try idx.append(@as(u32, @intCast(vtx_start + ci * 4 + 1)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
+            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 1)));
 
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u32, @intCast(vtx_start + ci * 4 + 1)));
-            try idx.append(@as(u32, @intCast(vtx_start + ci * 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 1)));
+            try idx.append(@as(u16, @intCast(vtx_start + ci * 4)));
 
             // indexes for aa fade from inner to outer side 2
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 3)));
-            try idx.append(@as(u32, @intCast(vtx_start + ci * 4 + 3)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 3)));
+            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 3)));
 
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u32, @intCast(vtx_start + ci * 4 + 2)));
-            try idx.append(@as(u32, @intCast(vtx_start + ci * 4 + 3)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
+            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 2)));
+            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 3)));
         } else if (!closed and (i + 1) == cw.path.items.len) {
             // add 2 extra vertexes for endcap fringe
             v.pos.x = bb.x - halfnorm.x * (thickness + 1.0) - diffab.x;
@@ -1183,21 +1183,21 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
             try vtx.append(v);
 
             // add indexes for endcap fringe
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 1)));
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 4)));
 
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 4)));
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
 
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 4)));
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 5)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 5)));
 
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 3)));
-            try idx.append(@as(u32, @intCast(vtx_start + bi * 4 + 5)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 3)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 5)));
         }
     }
 
@@ -5342,7 +5342,7 @@ pub fn renderText(opts: renderTextOptions) !void {
 
     var vtx = std.ArrayList(Vertex).init(cw.arena);
     defer vtx.deinit();
-    var idx = std.ArrayList(u32).init(cw.arena);
+    var idx = std.ArrayList(u16).init(cw.arena);
     defer idx.deinit();
 
     var x: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
@@ -5424,12 +5424,12 @@ pub fn renderText(opts: renderTextOptions) !void {
         try vtx.append(v);
 
         // triangles must be counter-clockwise (y going down) to avoid backface culling
-        try idx.append(len + 0);
-        try idx.append(len + 2);
-        try idx.append(len + 1);
-        try idx.append(len + 0);
-        try idx.append(len + 3);
-        try idx.append(len + 2);
+        try idx.append(@as(u16, @intCast(len + 0)));
+        try idx.append(@as(u16, @intCast(len + 2)));
+        try idx.append(@as(u16, @intCast(len + 1)));
+        try idx.append(@as(u16, @intCast(len + 0)));
+        try idx.append(@as(u16, @intCast(len + 3)));
+        try idx.append(@as(u16, @intCast(len + 2)));
 
         x = nextx;
     }
@@ -5453,7 +5453,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             }
 
             // triangles must be counter-clockwise (y going down) to avoid backface culling
-            drawClippedTriangles_helper(&cw.backend, null, &sel_vtx, &[_]u32{ 0, 2, 1, 0, 3, 2 });
+            drawClippedTriangles_helper(&cw.backend, null, &sel_vtx, &[_]u16{ 0, 2, 1, 0, 3, 2 });
         }
     }
 
@@ -5483,7 +5483,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
     while (it.next()) |kv| {
         var vtx = std.ArrayList(Vertex).init(cw.arena);
         defer vtx.deinit();
-        var idx = std.ArrayList(u32).init(cw.arena);
+        var idx = std.ArrayList(u16).init(cw.arena);
         defer idx.deinit();
 
         const len = @as(u32, @intCast(vtx.items.len));
@@ -5507,12 +5507,12 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
         try vtx.append(v);
 
         // triangles must be counter-clockwise (y going down) to avoid backface culling
-        try idx.append(len + 0);
-        try idx.append(len + 2);
-        try idx.append(len + 1);
-        try idx.append(len + 0);
-        try idx.append(len + 3);
-        try idx.append(len + 2);
+        try idx.append(@as(u16, @intCast(len + 0)));
+        try idx.append(@as(u16, @intCast(len + 2)));
+        try idx.append(@as(u16, @intCast(len + 1)));
+        try idx.append(@as(u16, @intCast(len + 0)));
+        try idx.append(@as(u16, @intCast(len + 3)));
+        try idx.append(@as(u16, @intCast(len + 2)));
 
         drawClippedTriangles_helper(&cw.backend, kv.value_ptr.texture_atlas, vtx.items, idx.items);
 
@@ -5528,7 +5528,7 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Co
 
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, 4);
     defer vtx.deinit();
-    var idx = try std.ArrayList(u32).initCapacity(cw.arena, 6);
+    var idx = try std.ArrayList(u16).initCapacity(cw.arena, 6);
     defer idx.deinit();
 
     const x: f32 = if (cw.snap_to_pixels) @round(rs.r.x) else rs.r.x;
