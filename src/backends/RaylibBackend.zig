@@ -109,8 +109,13 @@ pub fn createWindow(options: InitOptions) void {
     }
 }
 
+//==========DVUI MANAGEMENT FUNCTIONS==========
+
 pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
-    c.rlDrawRenderBatchActive();
+
+    //make sure all raylib draw calls are rendered
+    //before rendering dvui elements
+    self.processRaylibDrawCalls();
 
     //note: moved this function call here instead of init
     //because if blend mode was always set this way it
@@ -140,8 +145,6 @@ pub fn end(self: *RaylibBackend) void {
 pub fn clear(_: *RaylibBackend) void {
     c.ClearBackground(c.BLACK);
 }
-
-//==========DVUI MANAGEMENT FUNCTIONS==========
 
 /// initializes the raylib backend
 /// options are required if dvui is the window_owner
@@ -290,6 +293,16 @@ pub fn openURL(self: *RaylibBackend, url: []const u8) !void {
     const c_url = try self.arena.dupeZ(u8, url);
     defer self.arena.free(c_url);
     c.SetClipboardText(c_url.ptr);
+}
+
+/// Always call this function after raylib draw calls
+/// before you call dvui rendering functions
+/// otherwise the raylib rendering will be
+/// deferred until ray.EndDrawing is called
+/// and the dvui elements will be rendered under
+/// the raylib ones
+pub fn processRaylibDrawCalls(_: *const RaylibBackend) void {
+    c.rlDrawRenderBatchActive();
 }
 
 //TODO implement this function
