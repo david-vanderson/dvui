@@ -97,7 +97,7 @@ pub fn createWindow(options: InitOptions) void {
     c.InitWindow(@as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), options.title);
 
     if (options.icon) |image_bytes| {
-        const icon = c.LoadImageFromMemory(".png", image_bytes.ptr, image_bytes.len);
+        const icon = c.LoadImageFromMemory(".png", image_bytes.ptr, @intCast(image_bytes.len));
         c.SetWindowIcon(icon);
     }
 
