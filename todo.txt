@@ -15,9 +15,10 @@ change examples to show how to do backend rendering in the example
 raylib backend
 - events
 - use default shader?
-- is gl_blend not turned on?  Edges don't seem antialiased - maybe something wrong with alpha?
 - clipping
 - on mac, two-finger scrolling in the demo window a lot hangs?
+- on linux, slowly moving mouse over dropdown (or File or Edit menu items) causes them to flicker (extra mouse events?)
+- cursors
 
 test all triangles in raylib to make sure they are all being rendered counter-clockwise
 - add comment to each place we do it

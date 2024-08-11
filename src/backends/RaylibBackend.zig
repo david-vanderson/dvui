@@ -31,7 +31,7 @@ const vertexSource =
     \\{
     \\    fragTexCoord = vertexTexCoord;
     \\    fragColor = vertexColor / 255.0;
-    \\    fragColor.rgb *= fragColor.a;
+    \\    fragColor.rgb *= fragColor.a;  // convert to premultiplied alpha
     \\    gl_Position = mvp*vec4(vertexPosition, 1.0);
     \\}
 ;
@@ -95,6 +95,7 @@ pub fn init(options: InitOptions) !RaylibBackend {
     var back = RaylibBackend{};
     back.shader = c.LoadShaderFromMemory(vertexSource, fragSource);
     back.VAO = @intCast(c.rlLoadVertexArray());
+    c.rlSetBlendMode(c.RL_BLEND_ALPHA_PREMULTIPLY);
     return back;
 }
 
@@ -198,7 +199,16 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
 }
 
 pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
-    // TODO: do we need to convert to premultiplied alpha?
+    // convert to premultiplied alpha
+    for (0..height) |h| {
+        for (0..width) |w| {
+            const i = (h * width + w) * 4;
+            const a: u16 = pixels[i + 3];
+            pixels[i] = @intCast(@divTrunc(@as(u16, pixels[i]) * a, 255));
+            pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * a, 255));
+            pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * a, 255));
+        }
+    }
     const texid = c.rlLoadTexture(pixels, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
     return @ptrFromInt(texid);
 }
