@@ -77,7 +77,7 @@ pub const InitOptions = struct {
     title: [:0]const u8,
     /// content of a PNG image (or any other format stb_image can load)
     /// tip: use @embedFile
-    icon: ?[]const u8 = null,
+    icon: ?[:0]const u8 = null,
 };
 
 //==========WINDOW MANAGEMENT FUNCTIONALITY==========
@@ -89,13 +89,17 @@ pub const InitOptions = struct {
 
 /// creates a window using raylib
 pub fn createWindow(options: InitOptions) void {
-    // TODO: implement all InitOptions
     c.SetConfigFlags(c.FLAG_WINDOW_RESIZABLE);
     if (options.vsync) {
         c.SetConfigFlags(c.FLAG_VSYNC_HINT);
     }
 
     c.InitWindow(@as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), options.title);
+
+    if (options.icon) |image_bytes| {
+        const icon = c.LoadImageFromMemory(".png", image_bytes.ptr, image_bytes.len);
+        c.SetWindowIcon(icon);
+    }
 
     if (options.min_size) |min| {
         c.SetWindowMinSize(@intFromFloat(min.w), @intFromFloat(min.h));
@@ -107,14 +111,27 @@ pub fn createWindow(options: InitOptions) void {
 
 pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
     c.rlDrawRenderBatchActive();
+
+    //note: moved this function call here instead of init
+    //because if blend mode was always set this way it
+    //interfered with raylib's builtin text rendering
+    c.rlSetBlendMode(c.RL_BLEND_ALPHA_PREMULTIPLY);
+
     self.arena = arena;
 
+    //only call Begin drawing
+    //if the window is managed by dvui
     if (self.window_owner == .dvui) {
         c.BeginDrawing();
     }
 }
 
 pub fn end(self: *RaylibBackend) void {
+    // reset blend mode so raylib text rendering works
+    c.rlSetBlendMode(c.RL_BLEND_ALPHA);
+
+    //only call end drawing
+    //if the window is managed by dvui
     if (self.window_owner == .dvui) {
         c.EndDrawing();
     }
@@ -142,7 +159,6 @@ pub fn init(comptime window_owner: WindowOwner, options: ?InitOptions) !RaylibBa
 
     back.shader = c.LoadShaderFromMemory(vertexSource, fragSource);
     back.VAO = @intCast(c.rlLoadVertexArray());
-    c.rlSetBlendMode(c.RL_BLEND_ALPHA_PREMULTIPLY);
     return back;
 }
 
@@ -276,6 +292,7 @@ pub fn openURL(self: *RaylibBackend, url: []const u8) !void {
     c.SetClipboardText(c_url.ptr);
 }
 
+//TODO implement this function
 pub fn refresh(_: *RaylibBackend) void {}
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
