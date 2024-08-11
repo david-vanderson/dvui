@@ -11,6 +11,7 @@ pub const c = @cImport({
 const RaylibBackend = @This();
 
 shader: c.Shader = undefined,
+VAO: u32 = undefined,
 arena: std.mem.Allocator = undefined,
 log_events: bool = false,
 pressed_keys: std.bit_set.ArrayBitSet(u32, 512) = std.bit_set.ArrayBitSet(u32, 512).initEmpty(),
@@ -93,10 +94,12 @@ pub fn init(options: InitOptions) !RaylibBackend {
 
     var back = RaylibBackend{};
     back.shader = c.LoadShaderFromMemory(vertexSource, fragSource);
+    back.VAO = @intCast(c.rlLoadVertexArray());
     return back;
 }
 
-pub fn deinit(_: *RaylibBackend) void {
+pub fn deinit(self: *RaylibBackend) void {
+    c.rlUnloadVertexArray(@intCast(self.VAO));
     c.CloseWindow();
 }
 
@@ -149,8 +152,7 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     const mat = c.MatrixOrtho(0, @floatFromInt(c.GetRenderWidth()), @floatFromInt(c.GetRenderHeight()), 0, -1, 1);
     c.SetShaderValueMatrix(shader, @intCast(shader.locs[c.RL_SHADER_LOC_MATRIX_MVP]), mat);
 
-    const VAO = c.rlLoadVertexArray();
-    _ = c.rlEnableVertexArray(VAO);
+    _ = c.rlEnableVertexArray(@intCast(self.VAO));
 
     const VBO = c.rlLoadVertexBuffer(vtx.ptr, @intCast(vtx.len * @sizeOf(dvui.Vertex)), false);
     c.rlEnableVertexBuffer(VBO);
@@ -189,7 +191,6 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
 
     c.rlDrawVertexArrayElements(0, @intCast(idx.len), null);
 
-    c.rlUnloadVertexArray(VAO);
     c.rlUnloadVertexBuffer(VBO);
 
     // There is no rlUnloadVertexBufferElement - EBO is a buffer just like VBO
