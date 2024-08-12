@@ -72,7 +72,7 @@ pub fn main() !void {
 
                 //TODO I think I am getting the widget rectangle size wrong here
                 //need to figure out how to ask dvui to allocate a minimum amount of empty space
-                const bounds = RaylibBackend.dvuiRectToRaylib(overlay.data().borderRect());
+                const bounds = RaylibBackend.dvuiRectToRaylib(overlay.data().contentRect());
                 _ = ray.GuiColorPicker(bounds, "Pick Color", &selected_color);
             }
         }
