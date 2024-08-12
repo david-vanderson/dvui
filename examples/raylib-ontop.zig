@@ -63,12 +63,15 @@ pub fn main() !void {
             try dvui.label(@src(), "DVUI layout and RAYGUI Widget", .{}, .{ .gravity_y = 0.5 });
 
             if (try dvui.expander(@src(), "Pick Color", .{}, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 10 } })) {
-                var hbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 300, .h = 300 } });
+                var hbox = try dvui.box(@src(), .vertical, .{});
                 defer hbox.deinit();
+
+                var overlay = try dvui.overlay(@src(), .{ .min_size_content = .{ .w = 300, .h = 300 } });
+                defer overlay.deinit();
 
                 //TODO I think I am getting the widget rectangle size wrong here
                 //need to figure out how to ask dvui to allocate a minimum amount of empty space
-                const bounds = RaylibBackend.dvuiRectToRaylib(hbox.childRect);
+                const bounds = RaylibBackend.dvuiRectToRaylib(overlay.data().rect);
                 _ = ray.GuiColorPicker(bounds, "Pick Color", &selected_color);
             }
         }
