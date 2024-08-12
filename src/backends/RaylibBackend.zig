@@ -108,7 +108,7 @@ pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
 pub fn end(_: *RaylibBackend) void {}
 
 pub fn clear(_: *RaylibBackend) void {
-    c.ClearBackground(c.BLACK);
+    c.ClearBackground(dvuiColorToRaylib(dvui.themeGet().color_fill_window));
 }
 
 /// initializes the raylib backend
@@ -599,4 +599,12 @@ fn shiftAscii(ascii: u8) u8 {
         // Return the original character if no shift mapping exists
         else => ascii,
     };
+}
+
+pub fn raylibColorToDvui(color: c.Color) dvui.Color {
+    return dvui.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
+}
+
+pub fn dvuiColorToRaylib(color: dvui.Color) c.Color {
+    return c.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
 }
