@@ -27,25 +27,30 @@ pub fn main() !void {
     // OS window is managed by raylib, not dvui
     var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
 
+    var selected_color: ray.Color = ray.RAYWHITE;
+
     while (!ray.WindowShouldClose()) {
         ray.BeginDrawing();
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(std.time.nanoTimestamp());
 
+        dvui.themeSet(&dvui.Theme.Jungle);
+
         // send all Raylib events to dvui for processing
         _ = try backend.addAllEvents(&win);
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        ray.ClearBackground(ray.BLACK);
+        //ray.ClearBackground(ray.BLACK);
+        backend.clear();
 
-        ray.DrawText("Congrats! You Combined Raylib and DVUI!", 40, 20, 20, ray.RAYWHITE);
+        ray.DrawText("Congrats! You Combined Raylib, Raygui and DVUI!", 40, 20, 20, ray.RAYWHITE);
 
-        const rect = ray.Rectangle{ .x = 340, .y = 100, .width = 300, .height = 100 };
-        ray.DrawRectangleGradientEx(rect, ray.RAYWHITE, ray.BLACK, ray.BLUE, ray.RED);
+        const rect = ray.Rectangle{ .x = 40, .y = 60, .width = 300, .height = 300 };
+        _ = ray.GuiColorPicker(rect, "Pick Color", &selected_color);
 
-        try dvui_stuff();
+        try dvuiStuff();
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before EndDrawing()
@@ -59,7 +64,7 @@ pub fn main() !void {
     ray.CloseWindow();
 }
 
-fn dvui_stuff() !void {
+fn dvuiStuff() !void {
     var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 300 } });
     defer float.deinit();
 

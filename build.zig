@@ -82,7 +82,8 @@ pub fn build(b: *std.Build) !void {
     });
     const maybe_ray = b.lazyDependency("raylib", .{ .target = target, .optimize = optimize });
     if (maybe_ray) |ray| {
-        raylib_mod.linkLibrary(ray.artifact("raylib"));
+        const raylib_lib = try @import("raylib").addRaylib(b, target, optimize, .{ .raygui = true });
+        raylib_mod.linkLibrary(raylib_lib);
         raylib_mod.addIncludePath(ray.path("src"));
         raylib_mod.addImport("dvui", dvui_mod_raylib);
         raylib_mod.addIncludePath(ray.path("src/external"));
