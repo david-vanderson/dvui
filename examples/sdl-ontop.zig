@@ -53,11 +53,31 @@ pub fn main() !void {
             }
         }
 
-        // this is where the application would do it's normal rendering with
-        // dvui calls interleaved
-        backend.clear();
+        // clear the window
+        _ = c.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        _ = c.SDL_RenderClear(renderer);
+
+        // draw some SDL stuff with dvui floating stuff whenever
+        var rect: c.SDL_Rect = .{ .x = 10, .y = 10, .w = 20, .h = 20 };
+        _ = c.SDL_RenderFillRect(renderer, &rect);
+
+        rect.x += 24;
+        _ = c.SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        _ = c.SDL_RenderFillRect(renderer, &rect);
 
         try dvui_stuff();
+
+        rect.x += 24;
+        _ = c.SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        _ = c.SDL_RenderFillRect(renderer, &rect);
+
+        rect.x += 24;
+        _ = c.SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+        _ = c.SDL_RenderFillRect(renderer, &rect);
+
+        _ = c.SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
+
+        _ = c.SDL_RenderDrawLine(renderer, rect.x + 4, rect.y + 30, rect.x + 100, rect.y + 4);
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
