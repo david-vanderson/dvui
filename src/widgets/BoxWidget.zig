@@ -25,7 +25,7 @@ max_thick: f32 = 0,
 data_prev: Data = Data{},
 min_space_taken: f32 = 0,
 total_weight: f32 = 0,
-childRect: Rect = Rect{},
+childRect: Rect = Rect{}, //TODO rename this to child_rect for naming consistency
 extra_pixels: f32 = 0,
 
 pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, equal_space: bool, opts: Options) BoxWidget {

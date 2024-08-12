@@ -38,17 +38,42 @@ pub fn main() !void {
         dvui.themeSet(&dvui.Theme.Jungle);
 
         // send all Raylib events to dvui for processing
-        _ = try backend.addAllEvents(&win);
+        const lock_raygui = try backend.addAllEvents(&win);
+
+        // NOTE locking raygui this way does not seem to work yet, it might be something with timing
+        // TODO figure this out
+        if (lock_raygui and !ray.GuiIsLocked()) {
+            std.debug.print("raygui input disabled\n", .{});
+
+            // NOTE: I am using raygui here because it has a simple lock-unlock system
+            // Non-raygui raylib apps could also easily implement such a system
+            ray.GuiLock();
+        } else if (ray.GuiIsLocked()) {
+            std.debug.print("raygui input enabled\n", .{});
+            ray.GuiUnlock();
+        }
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        //ray.ClearBackground(ray.BLACK);
         backend.clear();
 
-        ray.DrawText("Congrats! You Combined Raylib, Raygui and DVUI!", 40, 20, 20, ray.RAYWHITE);
+        {
+            var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+            defer b.deinit();
+            try dvui.label(@src(), "DVUI layout and RAYGUI Widget", .{}, .{ .gravity_y = 0.5 });
 
-        const rect = ray.Rectangle{ .x = 40, .y = 60, .width = 300, .height = 300 };
-        _ = ray.GuiColorPicker(rect, "Pick Color", &selected_color);
+            if (try dvui.expander(@src(), "Pick Color", .{}, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 10 } })) {
+                var hbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 300, .h = 300 } });
+                defer hbox.deinit();
+
+                //TODO I think I am getting the widget rectangle size wrong here
+                //need to figure out how to ask dvui to allocate a minimum amount of empty space
+                const bounds = RaylibBackend.dvuiRectToRaylib(hbox.childRect);
+                _ = ray.GuiColorPicker(bounds, "Pick Color", &selected_color);
+            }
+        }
+
+        ray.DrawText("Congrats! You Combined Raylib, Raygui and DVUI!", 20, 400, 20, ray.RAYWHITE);
 
         try dvuiStuff();
 
