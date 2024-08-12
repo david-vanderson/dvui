@@ -20,13 +20,14 @@ pub fn main() !void {
     defer _ = gpa_instance.deinit();
 
     // init Raylib backend (creates OS window)
-    var backend = try RaylibBackend.init(.standalone, .{
+    var backend = try RaylibBackend.initWindow(.{
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 450.0 },
         .vsync = vsync,
         .title = "DVUI Raylib Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
     });
+    defer c.CloseWindow();
     defer backend.deinit();
     backend.log_events = true;
 
@@ -35,15 +36,14 @@ pub fn main() !void {
     defer win.deinit();
 
     main_loop: while (true) {
+        c.BeginDrawing();
 
-        // beginWait coordinates with waitTime below to run frames only when needed
-        //const nstime = win.beginWait(backend.hasEvent());
-
-        // marks the beginning of a frame for dvui, can call dvui functions after this
-        //try win.begin(nstime);
+        // Raylib does not support waiting with event interruption, so dvui
+        // can't do variable framerate.  So can't call win.beginWait() or
+        // win.waitTime().
         try win.begin(std.time.nanoTimestamp());
 
-        // send all SDL events to dvui for processing
+        // send all events to dvui for processing
         const quit = try backend.addAllEvents(&win);
         if (quit) break :main_loop;
 
@@ -51,29 +51,23 @@ pub fn main() !void {
         // the previous frame's render
         backend.clear();
 
-        //c.DrawText("Congrats! You created your first window!", 190, 200, 20, c.LIGHTGRAY);
         try dvui_frame();
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
-        const end_micros = try win.end(.{});
-        _ = end_micros;
+        _ = try win.end(.{});
 
-        // cursor management
+        // TODO: cursor management
         //backend.setCursor(win.cursorRequested());
 
         // render frame to OS
-        //backend.renderPresent();
-
-        // waitTime and beginWait combine to achieve variable framerates
-        //const wait_event_micros = win.waitTime(end_micros, null);
-        //backend.waitEventTimeout(wait_event_micros);
+        c.EndDrawing();
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
-        //if (show_dialog_outside_frame) {
-        //show_dialog_outside_frame = false;
-        //try dvui.dialog(@src(), .{ .window = &win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
-        //}
+        if (show_dialog_outside_frame) {
+            show_dialog_outside_frame = false;
+            try dvui.dialog(@src(), .{ .window = &win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
+        }
     }
 }
 
@@ -117,7 +111,7 @@ fn dvui_frame() !void {
         \\- rest of the window is a scroll area
     , .{});
     try tl2.addText("\n\n", .{});
-    try tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
+    try tl2.addText("Framerate is set by Raylib.", .{});
     try tl2.addText("\n\n", .{});
     if (vsync) {
         try tl2.addText("Framerate is capped by vsync.", .{});
@@ -133,6 +127,22 @@ fn dvui_frame() !void {
         try tl2.addText("Fonts are being rendered by stb_truetype.", .{});
     }
     tl2.deinit();
+
+    {
+        try dvui.labelNoFmt(@src(), "These are drawn directly by the backend, not going through DVUI.", .{ .margin = .{ .x = 4 } });
+
+        var box = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
+        defer box.deinit();
+
+        // Here is some arbitrary drawing that doesn't have to go through DVUI.
+        // It can be interleaved with DVUI drawing.
+        // NOTE: This only works in the main window (not floating subwindows
+        // like dialogs).
+
+        const rs = box.data().contentRectScale();
+
+        c.DrawText("Congrats! You created your first window!", @intFromFloat(rs.r.x + 10 * rs.s), @intFromFloat(rs.r.y + 10 * rs.s), @intFromFloat(20 * rs.s), c.LIGHTGRAY);
+    }
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
     if (try dvui.button(@src(), label, .{}, .{})) {

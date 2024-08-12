@@ -18,9 +18,6 @@ pressed_keys: std.bit_set.ArrayBitSet(u32, 512) = std.bit_set.ArrayBitSet(u32, 5
 pressed_modifier: dvui.enums.Mod = .none,
 mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButtons.len,
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
-window_mode: WindowMode = .standalone,
-
-const WindowMode = enum { ontop, standalone };
 
 const vertexSource =
     \\#version 330
@@ -46,12 +43,6 @@ const fragSource =
     \\out vec4 finalColor;
     \\uniform sampler2D texture0;
     \\uniform bool useTex;
-    //"uniform vec4 colDiffuse;           \n"
-    //"void main()                        \n"
-    //"{                                  \n"
-    //"    vec4 texelColor = texture(texture0, fragTexCoord);   \n"
-    //"    finalColor = texelColor*colDiffuse*fragColor;        \n"
-    //"}                                  \n";
     \\void main()
     \\{
     \\    if (useTex) {
@@ -111,35 +102,10 @@ pub fn createWindow(options: InitOptions) void {
 //==========DVUI MANAGEMENT FUNCTIONS==========
 
 pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
-
-    //make sure all raylib draw calls are rendered
-    //before rendering dvui elements
-    self.processRaylibDrawCalls();
-
-    //note: moved this function call here instead of init
-    //because if blend mode was always set this way it
-    //interfered with raylib's builtin text rendering
-    c.rlSetBlendMode(c.RL_BLEND_ALPHA_PREMULTIPLY);
-
     self.arena = arena;
-
-    // Only call BeginDrawing() if the window standalone and managed by dvui
-    // The user is responsible for calling this function in ontop mode
-    if (self.window_mode == .standalone) {
-        c.BeginDrawing();
-    }
 }
 
-pub fn end(self: *RaylibBackend) void {
-    // reset blend mode so raylib text rendering works
-    c.rlSetBlendMode(c.RL_BLEND_ALPHA);
-
-    // Only call EndDrawing if the window standalone and managed by dvui
-    // The user is responsible for calling this function in ontop mode
-    if (self.window_mode == .standalone) {
-        c.EndDrawing();
-    }
-}
+pub fn end(_: *RaylibBackend) void {}
 
 pub fn clear(_: *RaylibBackend) void {
     c.ClearBackground(c.BLACK);
@@ -147,37 +113,28 @@ pub fn clear(_: *RaylibBackend) void {
 
 /// initializes the raylib backend
 /// options are required if dvui is the window_owner
-pub fn init(comptime window_mode: WindowMode, options: ?InitOptions) !RaylibBackend {
-    var back = RaylibBackend{ .window_mode = window_mode };
+pub fn initWindow(options: InitOptions) !RaylibBackend {
+    createWindow(options);
 
-    // Only create an OS window in standalone mode
-    // Calling this function in ontop mode asserts an OS window already exists
-    if (back.window_mode == .standalone) {
-        const opt: InitOptions = options.?;
-        createWindow(opt);
-    }
+    return init();
+}
 
+pub fn init() !RaylibBackend {
     if (!c.IsWindowReady()) {
         @panic(
-            \\OS Window must be created before initializing dvui window.
-            \\\nNote: Set the window_owner to `.dvui` to automatically create the OS window"
+            \\OS Window must be created before initializing dvui raylib backend.
         );
     }
 
-    back.shader = c.LoadShaderFromMemory(vertexSource, fragSource);
-    back.VAO = @intCast(c.rlLoadVertexArray());
-    return back;
+    return RaylibBackend{
+        .shader = c.LoadShaderFromMemory(vertexSource, fragSource),
+        .VAO = @intCast(c.rlLoadVertexArray()),
+    };
 }
 
 pub fn deinit(self: *RaylibBackend) void {
     c.UnloadShader(self.shader);
     c.rlUnloadVertexArray(@intCast(self.VAO));
-
-    // Only close the OS window in standalone mode
-    // User must close the window in ontop mode
-    if (self.window_mode == .standalone) {
-        c.CloseWindow();
-    }
 }
 
 pub fn backend(self: *RaylibBackend) dvui.Backend {
@@ -189,13 +146,8 @@ pub fn nanoTime(self: *RaylibBackend) i128 {
     return std.time.nanoTimestamp();
 }
 
-pub fn sleep(self: *RaylibBackend, ns: u64) void {
-
-    // Don't use sleep for FPS control unless in standalone mode
-    // In ontop mode the application is responsible for managing FPS
-    if (self.window_mode == .standalone) {
-        std.time.sleep(ns);
-    }
+pub fn sleep(_: *RaylibBackend, ns: u64) void {
+    std.time.sleep(ns);
 }
 
 pub fn pixelSize(_: *RaylibBackend) dvui.Size {
@@ -217,6 +169,13 @@ pub fn contentScale(_: *RaylibBackend) f32 {
 pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr: dvui.Rect) void {
     _ = clipr;
     // TODO: scissor
+
+    //make sure all raylib draw calls are rendered
+    //before rendering dvui elements
+    c.rlDrawRenderBatchActive();
+
+    // our shader and textures are alpha premultiplied
+    c.rlSetBlendMode(c.RL_BLEND_ALPHA_PREMULTIPLY);
 
     const shader = self.shader;
     c.rlEnableShader(shader.id);
@@ -267,6 +226,9 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
 
     // There is no rlUnloadVertexBufferElement - EBO is a buffer just like VBO
     c.rlUnloadVertexBuffer(EBO);
+
+    // reset blend mode back to default so raylib text rendering works
+    c.rlSetBlendMode(c.RL_BLEND_ALPHA);
 }
 
 pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
@@ -302,17 +264,7 @@ pub fn clipboardTextSet(self: *RaylibBackend, text: []const u8) !void {
 pub fn openURL(self: *RaylibBackend, url: []const u8) !void {
     const c_url = try self.arena.dupeZ(u8, url);
     defer self.arena.free(c_url);
-    c.SetClipboardText(c_url.ptr);
-}
-
-/// Always call this function after raylib draw calls
-/// before you call dvui rendering functions
-/// otherwise the raylib rendering will be
-/// deferred until ray.EndDrawing is called
-/// and the dvui elements will be rendered under
-/// the raylib ones
-pub fn processRaylibDrawCalls(_: *const RaylibBackend) void {
-    c.rlDrawRenderBatchActive();
+    c.OpenURL(c_url.ptr);
 }
 
 //TODO implement this function

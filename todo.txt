@@ -5,23 +5,18 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
-change examples to show how to do backend rendering in the example
-!- sdl-standalone
-- sdl-ontop
-- raylib-standalone
-- raylib-ontop
+sdl backend
+- split out init and initWindow like in raylib backend
 
 
 raylib backend
 - events
-- use default shader?
+- instead of useTex, preload (or use raylib's) a 1x1 white texture
+- use raylib's default shader (have to give up premultiplied alpha)
 - clipping
 - on mac, two-finger scrolling in the demo window a lot hangs?
 - on linux, slowly moving mouse over dropdown (or File or Edit menu items) causes them to flicker (extra mouse events?)
 - cursors
-
-test all triangles in raylib to make sure they are all being rendered counter-clockwise
-- add comment to each place we do it
 
 new theme fields
 
