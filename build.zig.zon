@@ -19,5 +19,10 @@
             .hash = "122051da01fbb000a51f6e03bba5b4177667d374c87720c9a353b1e270c60e118055",
             .lazy = true,
         },
+        //used in the raylib-ontop example
+        .raygui = .{
+            .url = "https://github.com/raysan5/raygui/archive/33f1659.tar.gz",
+            .hash = "12205f060d3476715771890d6e30bc052ca2d420dcae7875db2a4bd876ac506008a9",
+        },
     },
 }

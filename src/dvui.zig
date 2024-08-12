@@ -90,7 +90,9 @@ pub fn themeGet() *Theme {
 }
 
 pub fn themeSet(theme: *Theme) void {
-    currentWindow().theme = theme;
+    if (currentWindow().theme != theme) {
+        currentWindow().theme = theme;
+    }
 }
 
 pub fn toggleDebugWindow() void {
