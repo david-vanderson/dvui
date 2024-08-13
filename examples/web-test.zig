@@ -84,8 +84,6 @@ fn update() !i32 {
 
     try backend.addAllEvents(&win);
 
-    backend.clear();
-
     try dvui_frame();
     //try dvui.label(@src(), "test", .{}, .{ .color_text = .{ .color = dvui.Color.white } });
 

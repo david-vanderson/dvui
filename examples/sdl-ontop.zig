@@ -57,11 +57,8 @@ pub fn main() !void {
         _ = c.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         _ = c.SDL_RenderClear(renderer);
 
-        // draw some SDL stuff with dvui floating stuff whenever
+        // draw some SDL stuff with dvui floating stuff in the middle
         var rect: c.SDL_Rect = .{ .x = 10, .y = 10, .w = 20, .h = 20 };
-        _ = c.SDL_RenderFillRect(renderer, &rect);
-
-        rect.x += 24;
         _ = c.SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         _ = c.SDL_RenderFillRect(renderer, &rect);
 
