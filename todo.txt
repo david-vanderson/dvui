@@ -5,14 +5,18 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
-remove clear() from backends
+on sdl-ontop linux, slowly moving mouse over dropdown (or File or Edit menu items) causes them to flicker (extra mouse events?)
+- also raylib and web
 
 make examples clearer on how to do custom drawing and explain the RectScale functions
+
+checkbox default outline position seems off by half a pixel - too fuzzy
 
 
 sdl backend
 - split out init and initWindow like in raylib backend
 
+update dvui-demo
 
 
 raylib backend
@@ -22,7 +26,6 @@ raylib backend
 - use raylib's default shader (have to give up premultiplied alpha)
 - clipping
 - on mac, two-finger scrolling in the demo window a lot hangs?
-- on linux, slowly moving mouse over dropdown (or File or Edit menu items) causes them to flicker (extra mouse events?)
 - cursors
 
 new theme fields

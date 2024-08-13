@@ -46,7 +46,8 @@ pub fn main() !void {
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        backend.clear();
+        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
+        _ = Backend.c.SDL_RenderClear(backend.renderer);
 
         try dvui_frame(backend);
 
@@ -147,9 +148,6 @@ fn dvui_frame(backend: Backend) !void {
 
         const rs = box.data().contentRectScale();
         var rect: Backend.c.SDL_Rect = .{ .x = @intFromFloat(rs.r.x + 4 * rs.s), .y = @intFromFloat(rs.r.y + 4 * rs.s), .w = @intFromFloat(20 * rs.s), .h = @intFromFloat(20 * rs.s) };
-        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
-
-        rect.x += @intFromFloat(24 * rs.s);
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
         _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
 

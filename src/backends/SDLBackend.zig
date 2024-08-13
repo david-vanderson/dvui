@@ -334,11 +334,6 @@ pub fn hasEvent(_: *SDLBackend) bool {
     return c.SDL_PollEvent(null) == 1;
 }
 
-pub fn clear(self: *SDLBackend) void {
-    _ = c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 255);
-    _ = c.SDL_RenderClear(self.renderer);
-}
-
 pub fn backend(self: *SDLBackend) dvui.Backend {
     return dvui.Backend.init(self, @This());
 }
