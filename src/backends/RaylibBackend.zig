@@ -19,6 +19,7 @@ pressed_keys: std.bit_set.ArrayBitSet(u32, 512) = std.bit_set.ArrayBitSet(u32, 5
 pressed_modifier: dvui.enums.Mod = .none,
 mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButtons.len,
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
+dvui_consumed_events: bool = false,
 
 const vertexSource =
     \\#version 330
@@ -131,6 +132,10 @@ pub fn init() !RaylibBackend {
         .shader = c.LoadShaderFromMemory(vertexSource, fragSource),
         .VAO = @intCast(c.rlLoadVertexArray()),
     };
+}
+
+pub fn shouldBlockRaylibInput(self: *RaylibBackend) bool {
+    return (dvui.currentWindow().drag_state != .none or self.dvui_consumed_events);
 }
 
 pub fn deinit(self: *RaylibBackend) void {
@@ -413,8 +418,9 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //    }
     //}
 
-    //return c.WindowShouldClose();
-    return disable_raylib_input;
+    self.dvui_consumed_events = disable_raylib_input;
+
+    return c.WindowShouldClose();
 }
 
 const RaylibMouseButtons = .{
