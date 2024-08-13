@@ -7,15 +7,17 @@ pub const IntFieldOptions = struct {
 
 fn intFieldWidget(
     comptime src: std.builtin.SourceLocation,
+    comptime name: []const u8,
     comptime T: type,
     result: *T,
     id_extra_range: IdExtraRange,
     int_opt: IntFieldOptions,
 ) !void {
+    _ = int_opt; // autofix
     _ = result; // autofix
     var box = try dvui.box(src, .vertical, .{ .id_extra = id_extra_range.start });
     defer box.deinit();
-    try dvui.label(src, "{s} {}", .{ @typeName(T), int_opt }, .{ .id_extra = id_extra_range.start + 1 });
+    try dvui.label(src, "{s}: {s}", .{ name, @typeName(T) }, .{ .id_extra = id_extra_range.start + 1 });
 }
 
 pub const FloatFieldOptions = struct {
@@ -24,16 +26,18 @@ pub const FloatFieldOptions = struct {
 
 pub fn floatFieldWidget(
     comptime src: std.builtin.SourceLocation,
+    comptime name: []const u8,
     comptime T: type,
     result: *T,
     id_extra_range: IdExtraRange,
     float_opt: FloatFieldOptions,
 ) !void {
+    _ = float_opt; // autofix
     _ = result; // autofix
     //
     var box = try dvui.box(src, .vertical, .{ .id_extra = id_extra_range.start });
     defer box.deinit();
-    try dvui.label(src, "{s} {}", .{ @typeName(T), float_opt }, .{ .id_extra = id_extra_range.start + 1 });
+    try dvui.label(src, "{s}: {s}", .{ name, @typeName(T) }, .{ .id_extra = id_extra_range.start + 1 });
 }
 
 pub const EnumFieldOptions = struct {
@@ -42,15 +46,17 @@ pub const EnumFieldOptions = struct {
 
 fn enumFieldWidget(
     comptime src: std.builtin.SourceLocation,
+    comptime name: []const u8,
     comptime T: type,
     result: *T,
     id_extra_range: IdExtraRange,
     enum_opt: EnumFieldOptions,
 ) !void {
+    _ = enum_opt; // autofix
     _ = result; // autofix
     var box = try dvui.box(src, .vertical, .{ .id_extra = id_extra_range.start });
     defer box.deinit();
-    try dvui.label(src, "{s} {}", .{ @typeName(T), enum_opt }, .{ .id_extra = id_extra_range.start + 1 });
+    try dvui.label(src, "{s}: {s}", .{ name, @typeName(T) }, .{ .id_extra = id_extra_range.start + 1 });
 }
 
 pub const BoolFieldOptions = struct {
@@ -59,15 +65,17 @@ pub const BoolFieldOptions = struct {
 
 fn boolFieldWidget(
     comptime src: std.builtin.SourceLocation,
+    comptime name: []const u8,
     retult: *bool,
     id_extra_range: IdExtraRange,
     bool_opt: BoolFieldOptions,
 ) !void {
+    _ = bool_opt; // autofix
     _ = retult; // autofix
     //
     var box = try dvui.box(src, .vertical, .{ .id_extra = id_extra_range.start });
     defer box.deinit();
-    try dvui.label(src, "bool {}", .{bool_opt}, .{ .id_extra = id_extra_range.start + 1 });
+    try dvui.label(src, "{s}: bool", .{name}, .{ .id_extra = id_extra_range.start + 1 });
 }
 
 pub fn StructFieldOptions(comptime T: type) type {
@@ -121,7 +129,7 @@ const RecursionDepthTracker = struct {
     }
 
     pub fn descend(comptime self: RecursionDepthTracker) RecursionDepthTracker {
-        if (self.depth < max_bits_per_struct) {
+        if (self.depth < max_recursion_depth) {
             return .{ .depth = self.depth + 1 };
         } else {
             @compileError("Struct has too much recursion");
@@ -137,6 +145,7 @@ const IdExtraRange = struct {
 
 fn structFieldWidget(
     comptime src: std.builtin.SourceLocation,
+    comptime name: []const u8,
     comptime T: type,
     result: *T,
     comptime struct_opts: StructFieldOptions(T),
@@ -144,22 +153,27 @@ fn structFieldWidget(
 ) !void {
     if (@typeInfo(T) != .Struct) @compileError("Input Type Must Be A Struct");
 
-    inline for (@typeInfo(T).Struct.fields, 0..) |field, i| {
-        const options = @field(struct_opts, field.name);
-        const result_ptr = &@field(result.*, field.name);
-        const id_extra_range = depth.getIdExtraRange(i);
+    if (depth.depth == 0 or try dvui.expander(
+        src,
+        name,
+        .{},
+        .{ .id_extra = depth.getIdExtraRange(0).start + 1 },
+    )) {
+        inline for (@typeInfo(T).Struct.fields, 1..) |field, i| {
+            const options = @field(struct_opts, field.name);
+            const result_ptr = &@field(result.*, field.name);
+            const id_extra_range = depth.getIdExtraRange(i);
 
-        // zig fmt: off
-        switch (@typeInfo(field.type)) {
-            .Int => try intFieldWidget(      src, field.type, result_ptr, id_extra_range, options),
-            .Float => try floatFieldWidget(  src, field.type, result_ptr, id_extra_range, options),
-            .Bool => try boolFieldWidget(    src,             result_ptr, id_extra_range, options),
-            .Enum => try enumFieldWidget(    src, field.type, result_ptr, id_extra_range, options),
-            .Struct => try structFieldWidget(src, field.type, result_ptr, options, depth.descend()),
-            //TODO more types
-            else => @compileError("Invalid type given"),
+            switch (@typeInfo(field.type)) {
+                .Int => try intFieldWidget(src, field.name, field.type, result_ptr, id_extra_range, options),
+                .Float => try floatFieldWidget(src, field.name, field.type, result_ptr, id_extra_range, options),
+                .Bool => try boolFieldWidget(src, field.name, result_ptr, id_extra_range, options),
+                .Enum => try enumFieldWidget(src, field.name, field.type, result_ptr, id_extra_range, options),
+                .Struct => try structFieldWidget(src, field.name, field.type, result_ptr, options, depth.descend()),
+                //TODO more types
+                else => @compileError("Invalid type given"),
+            }
         }
-        // zig fmt: on
     }
 }
 
@@ -169,5 +183,5 @@ pub fn structWidget(
     result: *T,
     comptime field_options: StructFieldOptions(T),
 ) !void {
-    try structFieldWidget(src, T, result, field_options, .{});
+    try structFieldWidget(src, "", T, result, field_options, .{});
 }
