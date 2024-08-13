@@ -60,14 +60,17 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
     // this must be synced with dvui.renderText()
     const target_fraction = if (dvui.currentWindow().snap_to_pixels) 1.0 / ss else self.size / fce.height;
 
-    // convert max_width into font units
-    const max_width_sized = (max_width orelse 1000000.0) / target_fraction;
+    var max_width_sized: ?f32 = null;
+    if (max_width) |mwidth| {
+        // convert max_width into font units
+        max_width_sized = mwidth / target_fraction;
+    }
 
     var s = try fce.textSizeRaw(self.name, text, max_width_sized, end_idx, end_metric);
     s.h *= self.line_height_factor;
 
     // do this check after calling textSizeRaw so that end_idx is set
-    if (ss == 0) return Size{};
+    if (ask_size == 0.0) return Size{};
 
     // convert size back from font units
     return s.scale(target_fraction);

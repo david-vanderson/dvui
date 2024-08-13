@@ -484,7 +484,7 @@ const FontCacheEntry = struct {
     }
 };
 
-// Will get a font at an integer size that might be larger than font.size
+// Will get a font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
 pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     var cw = currentWindow();
     const fontHash = FontCacheEntry.hash(font);
