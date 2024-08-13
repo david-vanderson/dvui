@@ -38,11 +38,11 @@ pub fn main() !void {
         dvui.themeSet(&dvui.Theme.Jungle);
 
         // send all Raylib events to dvui for processing
-        const lock_raygui = try backend.addAllEvents(&win);
+        _ = try backend.addAllEvents(&win);
 
         // NOTE locking raygui this way does not seem to work yet, it might be something with timing
         // TODO figure this out
-        if (win.drag_state != .none or lock_raygui) {
+        if (backend.shouldBlockRaylibInput()) {
             // NOTE: I am using raygui here because it has a simple lock-unlock system
             // Non-raygui raylib apps could also easily implement such a system
             ray.GuiLock();
