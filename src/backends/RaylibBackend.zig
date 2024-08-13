@@ -168,7 +168,7 @@ pub fn contentScale(_: *RaylibBackend) f32 {
 }
 
 pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr: dvui.Rect) void {
-    _ = clipr;
+    _ = clipr; // autofix
     // TODO: scissor
 
     //make sure all raylib draw calls are rendered

@@ -42,17 +42,13 @@ pub fn main() !void {
 
         // NOTE locking raygui this way does not seem to work yet, it might be something with timing
         // TODO figure this out
-        if (lock_raygui and !ray.GuiIsLocked()) {
-            std.debug.print("raygui input disabled\n", .{});
-
+        if (win.drag_state != .none or lock_raygui) {
             // NOTE: I am using raygui here because it has a simple lock-unlock system
             // Non-raygui raylib apps could also easily implement such a system
             ray.GuiLock();
-        } else if (ray.GuiIsLocked()) {
-            std.debug.print("raygui input enabled\n", .{});
+        } else {
             ray.GuiUnlock();
         }
-
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
         backend.clear();
@@ -61,18 +57,23 @@ pub fn main() !void {
             var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
             defer b.deinit();
             try dvui.label(@src(), "DVUI layout and RAYGUI Widget", .{}, .{ .gravity_y = 0.5 });
+            if (ray.GuiIsLocked()) {
+                try dvui.label(@src(), "Raygui Locked", .{}, .{ .gravity_y = 0.5 });
+            } else {
+                try dvui.label(@src(), "Raygui Unlocked", .{}, .{ .gravity_y = 0.5 });
+            }
 
-            if (try dvui.expander(@src(), "Pick Color", .{}, .{ .expand = .horizontal, .margin = .{ .x = 10, .y = 10 } })) {
-                var hbox = try dvui.box(@src(), .vertical, .{});
-                defer hbox.deinit();
+            if (try dvui.expander(@src(), "Pick Color", .{}, .{})) {
+                //var hbox = try dvui.box(@src(), .vertical, .{});
+                //defer hbox.deinit();
 
-                var overlay = try dvui.overlay(@src(), .{ .min_size_content = .{ .w = 300, .h = 300 } });
+                var overlay = try dvui.overlay(@src(), .{ .min_size_content = .{ .w = 100, .h = 100 } });
                 defer overlay.deinit();
-                try overlay.install();
+                //try overlay.install();
 
                 //TODO I think I am getting the widget rectangle size wrong here
                 //need to figure out how to ask dvui to allocate a minimum amount of empty space
-                const bounds = RaylibBackend.dvuiRectToRaylib(overlay.data().contentRect());
+                const bounds = RaylibBackend.dvuiRectToRaylib(overlay.data().contentRectScale().r);
                 _ = ray.GuiColorPicker(bounds, "Pick Color", &selected_color);
             }
         }
