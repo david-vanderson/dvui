@@ -360,7 +360,17 @@ pub fn demo() !void {
     if (try dvui.expander(@src(), "Struct UI Widget", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
-        const result = try dvui.structWidget(@src(), dvui.Color, null);
+
+        const TestType = struct {
+            a: i8,
+            b: u16,
+            c: f32,
+            g: f64,
+            foo: bool,
+            bar: dvui.Color,
+            bap: enum { red, green, blue, bip },
+        };
+        const result = try dvui.structWidget(@src(), TestType, .{});
         _ = result; // autofix
     }
 
