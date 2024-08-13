@@ -357,6 +357,13 @@ pub fn demo() !void {
         try themeSerialization(float.data().id);
     }
 
+    if (try dvui.expander(@src(), "Struct UI Widget", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        const result = try dvui.structWidget(@src(), dvui.Color, null);
+        _ = result; // autofix
+    }
+
     if (show_dialog) {
         try dialogDirect();
     }
