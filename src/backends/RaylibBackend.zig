@@ -109,9 +109,7 @@ pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
 
 pub fn end(_: *RaylibBackend) void {}
 
-pub fn clear(_: *RaylibBackend) void {
-    c.ClearBackground(dvuiColorToRaylib(dvui.themeGet().color_fill_window));
-}
+pub fn clear(_: *RaylibBackend) void {}
 
 /// initializes the raylib backend
 /// options are required if dvui is the window_owner
