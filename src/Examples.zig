@@ -370,8 +370,16 @@ pub fn demo() !void {
             bar: dvui.Color,
             bap: enum { red, green, blue, bip },
         };
-        const result = try dvui.structWidget(@src(), TestType, .{});
-        _ = result; // autofix
+        var result: TestType = undefined;
+        try dvui.structWidget(@src(), TestType, &result, .{
+            .a = .{ .widget_type = .slider },
+            .foo = .{ .widget_type = .toggle },
+            .bar = .{
+                .r = .{ .widget_type = .slider },
+                .g = .{ .widget_type = .slider },
+                .b = .{ .widget_type = .slider },
+            },
+        });
     }
 
     if (show_dialog) {
