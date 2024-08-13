@@ -27,7 +27,7 @@ pub fn main() !void {
     // OS window is managed by raylib, not dvui
     var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
 
-    var selected_color: ray.Color = ray.RAYWHITE;
+    var selected_color: dvui.Color = dvui.Color.white;
 
     while (!ray.WindowShouldClose()) {
         ray.BeginDrawing();
@@ -40,8 +40,6 @@ pub fn main() !void {
         // send all Raylib events to dvui for processing
         _ = try backend.addAllEvents(&win);
 
-        // NOTE locking raygui this way does not seem to work yet, it might be something with timing
-        // TODO figure this out
         if (backend.shouldBlockRaylibInput()) {
             // NOTE: I am using raygui here because it has a simple lock-unlock system
             // Non-raygui raylib apps could also easily implement such a system
@@ -51,30 +49,20 @@ pub fn main() !void {
         }
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        backend.clear();
+        ray.ClearBackground(RaylibBackend.dvuiColorToRaylib(dvui.themeGet().color_fill_window));
 
         {
             var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
             defer b.deinit();
-            try dvui.label(@src(), "DVUI layout and RAYGUI Widget", .{}, .{ .gravity_y = 0.5 });
+
             if (ray.GuiIsLocked()) {
-                try dvui.label(@src(), "Raygui Locked", .{}, .{ .gravity_y = 0.5 });
+                try dvui.label(@src(), "Raygui Status: Locked", .{}, .{ .gravity_y = 0.5 });
             } else {
-                try dvui.label(@src(), "Raygui Unlocked", .{}, .{ .gravity_y = 0.5 });
+                try dvui.label(@src(), "Raygui Status: Unlocked", .{}, .{ .gravity_y = 0.5 });
             }
 
-            if (try dvui.expander(@src(), "Pick Color", .{}, .{})) {
-                //var hbox = try dvui.box(@src(), .vertical, .{});
-                //defer hbox.deinit();
-
-                var overlay = try dvui.overlay(@src(), .{ .min_size_content = .{ .w = 100, .h = 100 } });
-                defer overlay.deinit();
-                //try overlay.install();
-
-                //TODO I think I am getting the widget rectangle size wrong here
-                //need to figure out how to ask dvui to allocate a minimum amount of empty space
-                const bounds = RaylibBackend.dvuiRectToRaylib(overlay.data().contentRectScale().r);
-                _ = ray.GuiColorPicker(bounds, "Pick Color", &selected_color);
+            if (try dvui.expander(@src(), "Pick Color Using Raygui", .{}, .{})) {
+                try colorPicker(@src(), &selected_color);
             }
         }
 
@@ -92,6 +80,52 @@ pub fn main() !void {
     win.deinit();
     backend.deinit();
     ray.CloseWindow();
+}
+
+fn colorPicker(src: std.builtin.SourceLocation, result: *dvui.Color) !void {
+    var vbox = try dvui.box(src, .vertical, .{
+        .id_extra = 0,
+        .margin = .{ .y = 10 },
+    });
+    defer vbox.deinit();
+    {
+        var overlay = try dvui.overlay(src, .{ .min_size_content = .{ .w = 100, .h = 100 }, .id_extra = 1 });
+        defer overlay.deinit();
+
+        const bounds = RaylibBackend.dvuiRectToRaylib(overlay.data().contentRectScale().r);
+        var c_color: ray.Color = RaylibBackend.dvuiColorToRaylib(result.*);
+        _ = ray.GuiColorPicker(bounds, "Pick Color", &c_color);
+        result.* = RaylibBackend.raylibColorToDvui(c_color);
+    }
+
+    const color_hex = try result.toHexString();
+
+    {
+        var hbox = try dvui.box(src, .horizontal, .{ .id_extra = 7 });
+        defer hbox.deinit();
+        {
+            var box = try dvui.box(src, .vertical, .{
+                .id_extra = 2,
+                .min_size_content = .{ .w = 100 },
+            });
+            defer box.deinit();
+
+            try dvui.labelNoFmt(src, &color_hex, .{
+                .id_extra = 3,
+                .color_text = .{ .color = result.* },
+            });
+        }
+
+        const copy = try dvui.button(src, "Copy", .{}, .{
+            .id_extra = 4,
+            .background = true,
+        });
+
+        if (copy) {
+            try dvui.currentWindow().backend.clipboardTextSet(&color_hex);
+            try dvui.toast(src, .{ .id_extra = 5, .message = "Copied!" });
+        }
+    }
 }
 
 fn dvuiStuff() !void {

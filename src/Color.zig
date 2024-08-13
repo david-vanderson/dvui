@@ -98,3 +98,9 @@ pub fn alphaAdd(self: Color, other: Color) Color {
         .a = 255,
     };
 }
+
+pub fn toHexString(self: Color) ![7]u8 {
+    var result: [7]u8 = .{0} ** 7;
+    _ = try std.fmt.bufPrint(&result, "#{x}{x}{x}", .{ self.r, self.g, self.b });
+    return result;
+}
