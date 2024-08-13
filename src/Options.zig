@@ -43,7 +43,7 @@ pub const FontStyle = enum {
 };
 
 // used to adjust widget id when @src() is not enough (like in a loop)
-id_extra: ?usize = null,
+id_extra: ?u64 = null,
 
 // used in debugging to give widgets a name, especially in compound widgets
 name: ?[]const u8 = null,
@@ -187,7 +187,7 @@ pub fn fontGet(self: *const Options) Font {
     };
 }
 
-pub fn idExtra(self: *const Options) usize {
+pub fn idExtra(self: *const Options) u64 {
     return self.id_extra orelse 0;
 }
 
