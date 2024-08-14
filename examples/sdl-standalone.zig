@@ -29,7 +29,7 @@ pub fn main() !void {
     defer backend.deinit();
 
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
+    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
     defer win.deinit();
 
     main_loop: while (true) {

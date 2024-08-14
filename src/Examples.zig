@@ -21,7 +21,6 @@ const enums = dvui.enums;
 const zig_favicon = @embedFile("zig-favicon.png");
 
 pub var show_demo_window: bool = false;
-var theme_choice: usize = 0;
 var checkbox_bool: bool = false;
 const RadioChoice = enum(u8) {
     one = 1,
@@ -265,6 +264,15 @@ pub fn demo() !void {
             dvui.toggleDebugWindow();
         }
 
+        var theme_choice: usize = blk: {
+            for (dvui.Theme.ptrs, 0..) |tptr, i| {
+                if (dvui.themeGet() == tptr) {
+                    break :blk i;
+                }
+            }
+            break :blk 0;
+        };
+
         const changed = try dvui.dropdown(
             @src(),
             &dvui.Theme.names,
@@ -272,7 +280,7 @@ pub fn demo() !void {
             .{ .min_size_content = .{ .w = 120 }, .id_extra = 1 },
         );
 
-        if (dvui.themeGet() != dvui.Theme.ptrs[theme_choice] and changed) {
+        if (changed) {
             dvui.themeSet(dvui.Theme.ptrs[theme_choice]);
         }
     }

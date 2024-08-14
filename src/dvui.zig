@@ -21,8 +21,6 @@ pub const Vertex = @import("Vertex.zig");
 pub const Widget = @import("Widget.zig");
 pub const WidgetData = @import("WidgetData.zig");
 pub const entypo = @import("icons/entypo.zig");
-///Deprecated - Use Theme.AdwaitaLight or Theme.AdwaitaDark
-pub const Adwaita = @import("themes/Adwaita.zig");
 pub const AnimateWidget = @import("widgets/AnimateWidget.zig");
 pub const BoxWidget = @import("widgets/BoxWidget.zig");
 pub const ReorderWidget = @import("widgets/ReorderWidget.zig");
@@ -1426,7 +1424,7 @@ pub fn clipboardText() error{OutOfMemory}![]const u8 {
     return cw.backend.clipboardText();
 }
 
-pub fn clipboardTextSet(text: []u8) error{OutOfMemory}!void {
+pub fn clipboardTextSet(text: []const u8) error{OutOfMemory}!void {
     const cw = currentWindow();
     try cw.backend.clipboardTextSet(text);
 }
@@ -2155,14 +2153,20 @@ pub const Window = struct {
     debug_touch_simulate_events: bool = false, // when true, left mouse button works like a finger
     debug_touch_simulate_down: bool = false,
 
+    pub const InitOptions = struct {
+        id_extra: usize = 0,
+        arena: ?std.heap.ArenaAllocator = null,
+        theme: ?*Theme = null,
+    };
+
     pub fn init(
         src: std.builtin.SourceLocation,
-        id_extra: usize,
         gpa: std.mem.Allocator,
         backend: Backend,
+        init_opts: InitOptions,
     ) !Self {
-        const hashval = hashSrc(src, id_extra);
-        const arena = std.heap.ArenaAllocator.init(gpa);
+        const hashval = hashSrc(src, init_opts.id_extra);
+        const arena = init_opts.arena orelse std.heap.ArenaAllocator.init(gpa);
 
         var self = Self{
             .gpa = gpa,
@@ -2183,6 +2187,7 @@ pub const Window = struct {
             .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
             .backend = backend,
             .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
+            .theme = init_opts.theme orelse &Theme.AdwaitaLight,
         };
 
         const winSize = self.backend.windowSize();

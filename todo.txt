@@ -1,6 +1,7 @@
 
 zig 0.14:
 - if sliceAsBytes/bytesAsSlice includes sentinel, then need to update our use
+- if @src() gained a module field, then include it in the hash
 
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 

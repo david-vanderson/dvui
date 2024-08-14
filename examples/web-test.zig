@@ -52,7 +52,7 @@ export fn app_init() i32 {
     backend = WebBackend.init() catch {
         return 1;
     };
-    win = dvui.Window.init(@src(), 0, gpa, backend.backend()) catch {
+    win = dvui.Window.init(@src(), gpa, backend.backend(), .{}) catch {
         return 2;
     };
 
