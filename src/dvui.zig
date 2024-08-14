@@ -4988,8 +4988,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     const check_size = try options.fontGet().lineHeight();
     const s = spacer(@src(), Size.all(check_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-    var rs = s.borderRectScale();
-    rs.r = rs.r.insetAll(0.5 * rs.s);
+    const rs = s.borderRectScale();
 
     if (bw.wd.visible()) {
         try checkmark(target.*, bw.focused(), rs, bw.capture(), bw.hovered(), options);
