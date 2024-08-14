@@ -20,6 +20,7 @@ pub fn main() !void {
     defer _ = gpa_instance.deinit();
 
     // init Raylib backend (creates OS window)
+    // initWindow() means the backend calls CloseWindow for you in deinit()
     var backend = try RaylibBackend.initWindow(.{
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 450.0 },
@@ -27,12 +28,11 @@ pub fn main() !void {
         .title = "DVUI Raylib Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
     });
-    defer c.CloseWindow();
     defer backend.deinit();
     backend.log_events = true;
 
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
+    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
     defer win.deinit();
 
     main_loop: while (true) {
@@ -139,8 +139,10 @@ fn dvui_frame() !void {
         // NOTE: This only works in the main window (not floating subwindows
         // like dialogs).
 
+        // get the screen rectangle for the box
         const rs = box.data().contentRectScale();
 
+        // rs.r is the pixel rectangle, rs.s is the scale factor (like for hidpi screens or display scaling)
         c.DrawText("Congrats! You created your first window!", @intFromFloat(rs.r.x + 10 * rs.s), @intFromFloat(rs.r.y + 10 * rs.s), @intFromFloat(20 * rs.s), c.LIGHTGRAY);
     }
 

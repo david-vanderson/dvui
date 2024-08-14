@@ -14,18 +14,22 @@ pub fn main() !void {
 
     defer _ = gpa_instance.deinit();
 
-    //create actual OS window with raylib
+    // create OS window directly with raylib
     ray.SetConfigFlags(ray.FLAG_WINDOW_RESIZABLE);
     ray.SetConfigFlags(ray.FLAG_VSYNC_HINT);
     ray.InitWindow(800, 600, "DVUI Raylib Ontop Example");
+    defer ray.CloseWindow();
 
     // init Raylib backend
-    var backend = try RaylibBackend.init();
+    // init() means the app owns the window (and must call CloseWindow itself)
+    var backend = RaylibBackend.init();
+    defer backend.deinit();
     backend.log_events = true;
 
     // init dvui Window (maps onto a single OS window)
     // OS window is managed by raylib, not dvui
-    var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
+    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{ .theme = &dvui.Theme.Jungle });
+    defer win.deinit();
 
     var selected_color: dvui.Color = dvui.Color.white;
 
@@ -34,8 +38,6 @@ pub fn main() !void {
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(std.time.nanoTimestamp());
-
-        dvui.themeSet(&dvui.Theme.Jungle);
 
         // send all Raylib events to dvui for processing
         _ = try backend.addAllEvents(&win);
@@ -62,7 +64,7 @@ pub fn main() !void {
             }
 
             if (try dvui.expander(@src(), "Pick Color Using Raygui", .{}, .{})) {
-                try colorPicker(@src(), &selected_color);
+                try colorPicker(&selected_color);
             }
         }
 
@@ -76,20 +78,12 @@ pub fn main() !void {
 
         ray.EndDrawing();
     }
-
-    win.deinit();
-    backend.deinit();
-    ray.CloseWindow();
 }
 
-fn colorPicker(src: std.builtin.SourceLocation, result: *dvui.Color) !void {
-    var vbox = try dvui.box(src, .vertical, .{
-        .id_extra = 0,
-        .margin = .{ .y = 10 },
-    });
-    defer vbox.deinit();
+fn colorPicker(result: *dvui.Color) !void {
+    _ = dvui.spacer(@src(), .{ .w = 10, .h = 10 }, .{});
     {
-        var overlay = try dvui.overlay(src, .{ .min_size_content = .{ .w = 100, .h = 100 }, .id_extra = 1 });
+        var overlay = try dvui.overlay(@src(), .{ .min_size_content = .{ .w = 100, .h = 100 } });
         defer overlay.deinit();
 
         const bounds = RaylibBackend.dvuiRectToRaylib(overlay.data().contentRectScale().r);
@@ -101,29 +95,19 @@ fn colorPicker(src: std.builtin.SourceLocation, result: *dvui.Color) !void {
     const color_hex = try result.toHexString();
 
     {
-        var hbox = try dvui.box(src, .horizontal, .{ .id_extra = 7 });
+        var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
-        {
-            var box = try dvui.box(src, .vertical, .{
-                .id_extra = 2,
-                .min_size_content = .{ .w = 100 },
-            });
-            defer box.deinit();
 
-            try dvui.labelNoFmt(src, &color_hex, .{
-                .id_extra = 3,
-                .color_text = .{ .color = result.* },
-            });
-        }
-
-        const copy = try dvui.button(src, "Copy", .{}, .{
-            .id_extra = 4,
-            .background = true,
+        try dvui.labelNoFmt(@src(), &color_hex, .{
+            .color_text = .{ .color = result.* },
+            .gravity_y = 0.5,
         });
 
+        const copy = try dvui.button(@src(), "Copy", .{}, .{});
+
         if (copy) {
-            try dvui.currentWindow().backend.clipboardTextSet(&color_hex);
-            try dvui.toast(src, .{ .id_extra = 5, .message = "Copied!" });
+            try dvui.clipboardTextSet(&color_hex);
+            try dvui.toast(@src(), .{ .message = "Copied!" });
         }
     }
 }

@@ -11,6 +11,7 @@ pub const c = @cImport({
 
 const RaylibBackend = @This();
 
+we_own_window: bool = false,
 shader: c.Shader = undefined,
 VAO: u32 = undefined,
 arena: std.mem.Allocator = undefined,
@@ -116,10 +117,12 @@ pub fn clear(_: *RaylibBackend) void {}
 pub fn initWindow(options: InitOptions) !RaylibBackend {
     createWindow(options);
 
-    return init();
+    var back = init();
+    back.we_own_window = true;
+    return back;
 }
 
-pub fn init() !RaylibBackend {
+pub fn init() RaylibBackend {
     if (!c.IsWindowReady()) {
         @panic(
             \\OS Window must be created before initializing dvui raylib backend.
@@ -139,6 +142,10 @@ pub fn shouldBlockRaylibInput(self: *RaylibBackend) bool {
 pub fn deinit(self: *RaylibBackend) void {
     c.UnloadShader(self.shader);
     c.rlUnloadVertexArray(@intCast(self.VAO));
+
+    if (self.we_own_window) {
+        c.CloseWindow();
+    }
 }
 
 pub fn backend(self: *RaylibBackend) dvui.Backend {
