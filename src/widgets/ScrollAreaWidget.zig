@@ -30,6 +30,7 @@ pub const InitOpts = struct {
     horizontal: ?ScrollInfo.ScrollMode = null, // .none is default
     horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
     focus_id: ?u32 = null, // clicking on a scrollbar will focus this id, or the scroll container if null
+    expand_to_fit: bool = false,
 };
 
 hbox: BoxWidget = undefined,
@@ -124,6 +125,7 @@ pub fn install(self: *ScrollAreaWidget) !void {
 
     const container_opts = self.hbox.data().options.strip().override(.{ .expand = .both });
     self.scroll = ScrollContainerWidget.init(@src(), self.si, container_opts);
+    self.scroll.expand_to_fit = self.init_opts.expand_to_fit;
 
     try self.scroll.install();
     self.scroll.processEvents();

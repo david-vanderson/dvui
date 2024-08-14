@@ -3774,7 +3774,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
     defer hbox.deinit();
 
     var lw = try LabelWidget.initNoFmt(@src(), entries[choice.*], options.strip().override(.{ .gravity_y = 0.5 }));
-    const lw_rect = lw.wd.contentRectScale().r.scale(1 / windowNaturalScale());
+    const lwrs = lw.wd.contentRectScale();
     try lw.install();
     try lw.draw();
     lw.deinit();
@@ -3782,14 +3782,17 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 
     var ret = false;
     if (b.activeRect()) |r| {
+        const lw_rect = lwrs.r.scale(1 / windowNaturalScale());
         var pop = FloatingMenuWidget.init(@src(), lw_rect, .{ .min_size_content = r.size() });
         const first_frame = firstFrame(pop.wd.id);
 
+        const s = pop.scale_val;
+
         // move popup to align first item with b
-        pop.initialRect.x -= MenuItemWidget.defaults.borderGet().x;
-        pop.initialRect.x -= MenuItemWidget.defaults.paddingGet().x;
-        pop.initialRect.y -= MenuItemWidget.defaults.borderGet().y;
-        pop.initialRect.y -= MenuItemWidget.defaults.paddingGet().y;
+        pop.initialRect.x -= MenuItemWidget.defaults.borderGet().x * s;
+        pop.initialRect.x -= MenuItemWidget.defaults.paddingGet().x * s;
+        pop.initialRect.y -= MenuItemWidget.defaults.borderGet().y * s;
+        pop.initialRect.y -= MenuItemWidget.defaults.paddingGet().y * s;
 
         pop.initialRect.x -= pop.options.borderGet().x;
         pop.initialRect.x -= pop.options.paddingGet().x;
