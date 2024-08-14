@@ -110,7 +110,6 @@ const AnimatingDialog = struct {
                 win.data().rect = r;
 
                 if (a.done() and a.end_val == 0) {
-                    win.close();
                     dvui.dialogRemove(id);
 
                     if (callafter) |ca| {
