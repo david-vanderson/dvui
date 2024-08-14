@@ -5,12 +5,7 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
-on sdl-ontop linux, slowly moving mouse over dropdown (or File or Edit menu items) causes them to flicker (extra mouse events?)
-- also raylib and web
-
 make examples clearer on how to do custom drawing and explain the RectScale functions
-
-checkbox default outline position seems off by half a pixel - too fuzzy
 
 
 sdl backend
