@@ -5,11 +5,6 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
-make examples clearer on how to do custom drawing and explain the RectScale functions
-
-
-sdl backend
-- split out init and initWindow like in raylib backend
 
 update dvui-demo
 

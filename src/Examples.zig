@@ -250,11 +250,11 @@ pub fn demo() !void {
         }
     }
 
+    var scaler = try dvui.scale(@src(), scale_val, .{ .expand = .both });
+    defer scaler.deinit();
+
     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
     defer scroll.deinit();
-
-    var scaler = try dvui.scale(@src(), scale_val, .{ .expand = .horizontal });
-    defer scaler.deinit();
 
     var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
     defer vbox.deinit();
@@ -978,7 +978,7 @@ pub fn layoutText() !void {
         try tl.addText("Here ", .{ .font_style = .title, .color_text = .{ .color = .{ .r = 100, .b = 100 } } });
         try tl.addText("is some ", .{ .font_style = .title_2, .color_text = .{ .color = .{ .b = 100, .g = 100 } } });
         try tl.addText("ugly text ", .{ .font_style = .title_1, .color_text = .{ .color = .{ .r = 100, .g = 100 } } });
-        try tl.addText("that shows styling.\n", .{ .font_style = .caption, .color_text = .{ .color = .{ .r = 100, .g = 50, .b = 50 } } });
+        try tl.addText("that shows styling.", .{ .font_style = .caption, .color_text = .{ .color = .{ .r = 100, .g = 50, .b = 50 } } });
     }
 }
 
