@@ -6,6 +6,7 @@ pub const c = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
     @cInclude("rlgl.h");
+    @cInclude("raygui.h");
 });
 
 const RaylibBackend = @This();
@@ -18,6 +19,7 @@ pressed_keys: std.bit_set.ArrayBitSet(u32, 512) = std.bit_set.ArrayBitSet(u32, 5
 pressed_modifier: dvui.enums.Mod = .none,
 mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButtons.len,
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
+dvui_consumed_events: bool = false,
 
 const vertexSource =
     \\#version 330
@@ -107,9 +109,7 @@ pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
 
 pub fn end(_: *RaylibBackend) void {}
 
-pub fn clear(_: *RaylibBackend) void {
-    c.ClearBackground(c.BLACK);
-}
+pub fn clear(_: *RaylibBackend) void {}
 
 /// initializes the raylib backend
 /// options are required if dvui is the window_owner
@@ -130,6 +130,10 @@ pub fn init() !RaylibBackend {
         .shader = c.LoadShaderFromMemory(vertexSource, fragSource),
         .VAO = @intCast(c.rlLoadVertexArray()),
     };
+}
+
+pub fn shouldBlockRaylibInput(self: *RaylibBackend) bool {
+    return (dvui.currentWindow().drag_state != .none or self.dvui_consumed_events);
 }
 
 pub fn deinit(self: *RaylibBackend) void {
@@ -167,7 +171,7 @@ pub fn contentScale(_: *RaylibBackend) f32 {
 }
 
 pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr: dvui.Rect) void {
-    _ = clipr;
+    _ = clipr; // autofix
     // TODO: scissor
 
     //make sure all raylib draw calls are rendered
@@ -271,6 +275,8 @@ pub fn openURL(self: *RaylibBackend, url: []const u8) !void {
 pub fn refresh(_: *RaylibBackend) void {}
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
+    var disable_raylib_input: bool = false;
+
     const shift = c.IsKeyDown(c.KEY_LEFT_SHIFT) or c.IsKeyDown(c.KEY_RIGHT_SHIFT);
     //check for key releases
     var iter = self.pressed_keys.iterator(.{});
@@ -285,13 +291,13 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
 
             //send key release event
             const code = raylibKeyToDvui(@intCast(keycode));
-            _ = try win.addEventKey(.{ .code = code, .mod = self.pressed_modifier, .action = .up });
+            if (try win.addEventKey(.{ .code = code, .mod = self.pressed_modifier, .action = .up })) disable_raylib_input = true;
 
             if (self.log_events) {
                 std.debug.print("raylib event key up: {}\n", .{raylibKeyToDvui(@intCast(keycode))});
             }
         } else if (c.IsKeyPressedRepeat(@intCast(keycode))) {
-            _ = try win.addEventKey(.{ .code = raylibKeyToDvui(@intCast(keycode)), .mod = .none, .action = .repeat });
+            if (try win.addEventKey(.{ .code = raylibKeyToDvui(@intCast(keycode)), .mod = .none, .action = .repeat })) disable_raylib_input = true;
             if (self.log_events) {
                 std.debug.print("raylib event key repeat: {}\n", .{raylibKeyToDvui(@intCast(keycode))});
             }
@@ -319,7 +325,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             if (self.log_events) {
                 std.debug.print("raylib event text entry {s}\n", .{string});
             }
-            _ = try win.addEventText(string);
+            if (try win.addEventText(string)) disable_raylib_input = true;
         }
 
         //check if keymod
@@ -332,7 +338,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             }
         } else {
             //add eventKey
-            _ = try win.addEventKey(.{ .code = code, .mod = self.pressed_modifier, .action = .down });
+            if (try win.addEventKey(.{ .code = code, .mod = self.pressed_modifier, .action = .down })) disable_raylib_input = true;
             if (self.log_events) {
                 std.debug.print("raylib event key down: {}\n", .{code});
             }
@@ -354,14 +360,14 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             if (self.log_events) {
                 std.debug.print("raylib event text entry {s}\n", .{string});
             }
-            _ = try win.addEventText(string);
+            if (try win.addEventText(string)) disable_raylib_input = true;
         }
     }
 
     const mouse_move = c.GetMouseDelta();
     if (mouse_move.x != 0 or mouse_move.y != 0) {
         const mouse_pos = c.GetMousePosition();
-        _ = try win.addEventMouseMotion(mouse_pos.x, mouse_pos.y);
+        if (try win.addEventMouseMotion(mouse_pos.x, mouse_pos.y)) disable_raylib_input = true;
         if (self.log_events) {
             //std.debug.print("raylib event Mouse Moved\n", .{});
         }
@@ -370,7 +376,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     inline for (RaylibMouseButtons, 0..) |button, i| {
         if (c.IsMouseButtonDown(button)) {
             if (self.mouse_button_cache[i] != true) {
-                _ = try win.addEventMouseButton(raylibMouseButtonToDvui(button), .press);
+                if (try win.addEventMouseButton(raylibMouseButtonToDvui(button), .press)) disable_raylib_input = true;
                 self.mouse_button_cache[i] = true;
                 if (self.log_events) {
                     std.debug.print("raylib event Mouse Button Pressed {}\n", .{raylibMouseButtonToDvui(button)});
@@ -379,7 +385,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         }
         if (c.IsMouseButtonUp(button)) {
             if (self.mouse_button_cache[i] != false) {
-                _ = try win.addEventMouseButton(raylibMouseButtonToDvui(button), .release);
+                if (try win.addEventMouseButton(raylibMouseButtonToDvui(button), .release)) disable_raylib_input = true;
                 self.mouse_button_cache[i] = false;
 
                 if (self.log_events) {
@@ -392,7 +398,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //scroll wheel movement
     const scroll_wheel = c.GetMouseWheelMove();
     if (scroll_wheel != 0) {
-        _ = try win.addEventMouseWheel(scroll_wheel * 25);
+        if (try win.addEventMouseWheel(scroll_wheel * 25)) disable_raylib_input = true;
 
         if (self.log_events) {
             std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});
@@ -409,6 +415,8 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //        std.debug.print("raylib event Touch: {}\n", .{touch});
     //    }
     //}
+
+    self.dvui_consumed_events = disable_raylib_input;
 
     return c.WindowShouldClose();
 }
@@ -599,4 +607,20 @@ fn shiftAscii(ascii: u8) u8 {
         // Return the original character if no shift mapping exists
         else => ascii,
     };
+}
+
+pub fn raylibColorToDvui(color: c.Color) dvui.Color {
+    return dvui.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
+}
+
+pub fn dvuiColorToRaylib(color: dvui.Color) c.Color {
+    return c.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
+}
+
+pub fn dvuiRectToRaylib(rect: dvui.Rect) c.Rectangle {
+    return c.Rectangle{ .x = rect.x, .y = rect.y, .width = rect.w, .height = rect.h };
+}
+
+pub fn raylibRectToDvui(rect: c.Rectangle) dvui.Rect {
+    return dvui.Rect{ .x = rect.x, .y = rect.y, .w = rect.width, .h = rect.height };
 }
