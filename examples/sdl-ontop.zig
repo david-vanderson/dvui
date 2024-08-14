@@ -17,9 +17,9 @@ pub fn main() !void {
     // app_init is a stand-in for what your application is already doing to set things up
     try app_init();
 
-    // create SDL backend using existing window and renderer
-    var backend = SDLBackend{ .window = @as(*c.SDL_Window, @ptrCast(window)), .renderer = @as(*c.SDL_Renderer, @ptrCast(renderer)) };
-    // your app will do the SDL deinit
+    // create SDL backend using existing window and renderer, app still owns the window/renderer
+    var backend = SDLBackend.init(window, renderer);
+    defer backend.deinit();
 
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
@@ -62,7 +62,7 @@ pub fn main() !void {
         _ = c.SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         _ = c.SDL_RenderFillRect(renderer, &rect);
 
-        try dvui_stuff();
+        try dvui_floating_stuff();
 
         rect.x += 24;
         _ = c.SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
@@ -92,9 +92,13 @@ pub fn main() !void {
         // render frame to OS
         backend.renderPresent();
     }
+
+    c.SDL_DestroyRenderer(renderer);
+    c.SDL_DestroyWindow(window);
+    c.SDL_Quit();
 }
 
-fn dvui_stuff() !void {
+fn dvui_floating_stuff() !void {
     var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 400 } });
     defer float.deinit();
 
