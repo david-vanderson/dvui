@@ -1031,6 +1031,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     var col_trans = col;
     col_trans.a = 0;
 
+    const aa_size = 1.0;
     var vtx_start: usize = 0;
     var i: usize = 0;
     while (i < cw.path.items.len) : (i += 1) {
@@ -1062,13 +1063,13 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
                 // add 2 extra vertexes for endcap fringe
                 vtx_start += 2;
 
-                v.pos.x = bb.x - halfnorm.x * (thickness + 1.0) + diffbc.x;
-                v.pos.y = bb.y - halfnorm.y * (thickness + 1.0) + diffbc.y;
+                v.pos.x = bb.x - halfnorm.x * (thickness + aa_size) + diffbc.x * aa_size;
+                v.pos.y = bb.y - halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size;
                 v.col = col_trans;
                 try vtx.append(v);
 
-                v.pos.x = bb.x + halfnorm.x * (thickness + 1.0) + diffbc.x;
-                v.pos.y = bb.y + halfnorm.y * (thickness + 1.0) + diffbc.y;
+                v.pos.x = bb.x + halfnorm.x * (thickness + aa_size) + diffbc.x * aa_size;
+                v.pos.y = bb.y + halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size;
                 v.col = col_trans;
                 try vtx.append(v);
 
@@ -1082,12 +1083,12 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
                 try idx.append(@as(u16, @intCast(vtx_start)));
 
                 try idx.append(@as(u16, @intCast(1)));
-                try idx.append(@as(u16, @intCast(vtx_start)));
                 try idx.append(@as(u16, @intCast(vtx_start + 2)));
+                try idx.append(@as(u16, @intCast(vtx_start)));
 
                 try idx.append(@as(u16, @intCast(1)));
-                try idx.append(@as(u16, @intCast(vtx_start + 2)));
                 try idx.append(@as(u16, @intCast(vtx_start + 2 + 1)));
+                try idx.append(@as(u16, @intCast(vtx_start + 2)));
             } else if ((i + 1) == cw.path.items.len) {
                 diffab = Point.diff(aa, bb).normalize();
                 // rotate by 90 to get normal
@@ -1127,8 +1128,8 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         try vtx.append(v);
 
         // side 1 AA vertex
-        v.pos.x = bb.x - halfnorm.x * (thickness + 1.0);
-        v.pos.y = bb.y - halfnorm.y * (thickness + 1.0);
+        v.pos.x = bb.x - halfnorm.x * (thickness + aa_size);
+        v.pos.y = bb.y - halfnorm.y * (thickness + aa_size);
         v.col = col_trans;
         try vtx.append(v);
 
@@ -1139,8 +1140,8 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         try vtx.append(v);
 
         // side 2 AA vertex
-        v.pos.x = bb.x + halfnorm.x * (thickness + 1.0);
-        v.pos.y = bb.y + halfnorm.y * (thickness + 1.0);
+        v.pos.x = bb.x + halfnorm.x * (thickness + aa_size);
+        v.pos.y = bb.y + halfnorm.y * (thickness + aa_size);
         v.col = col_trans;
         try vtx.append(v);
 
@@ -1157,12 +1158,12 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
 
             // indexes for aa fade from inner to outer side 1
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
             try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 1)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
 
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 1)));
             try idx.append(@as(u16, @intCast(vtx_start + ci * 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 1)));
 
             // indexes for aa fade from inner to outer side 2
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
@@ -1170,24 +1171,24 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
             try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 3)));
 
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 2)));
             try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 3)));
+            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 2)));
         } else if (!closed and (i + 1) == cw.path.items.len) {
             // add 2 extra vertexes for endcap fringe
-            v.pos.x = bb.x - halfnorm.x * (thickness + 1.0) - diffab.x;
-            v.pos.y = bb.y - halfnorm.y * (thickness + 1.0) - diffab.y;
+            v.pos.x = bb.x - halfnorm.x * (thickness + aa_size) - diffab.x * aa_size;
+            v.pos.y = bb.y - halfnorm.y * (thickness + aa_size) - diffab.y * aa_size;
             v.col = col_trans;
             try vtx.append(v);
 
-            v.pos.x = bb.x + halfnorm.x * (thickness + 1.0) - diffab.x;
-            v.pos.y = bb.y + halfnorm.y * (thickness + 1.0) - diffab.y;
+            v.pos.x = bb.x + halfnorm.x * (thickness + aa_size) - diffab.x * aa_size;
+            v.pos.y = bb.y + halfnorm.y * (thickness + aa_size) - diffab.y * aa_size;
             v.col = col_trans;
             try vtx.append(v);
 
             // add indexes for endcap fringe
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
 
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 4)));
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));

@@ -1585,6 +1585,14 @@ pub fn debuggingErrors() !void {
     if (try dvui.expander(@src(), "Show Font Atlases", .{}, .{ .expand = .horizontal })) {
         try dvui.debugFontAtlases(@src(), .{});
     }
+
+    if (try dvui.button(@src(), "Stroke Test", .{}, .{})) {
+        StrokeTest.show = true;
+    }
+
+    if (StrokeTest.show) {
+        try show_stroke_test_window();
+    }
 }
 
 pub fn dialogDirect() !void {
@@ -1703,3 +1711,181 @@ fn background_progress(win: *dvui.Window, delay_ns: u64) !void {
         dvui.refresh(win, @src(), null);
     }
 }
+
+pub fn show_stroke_test_window() !void {
+    var win = try dvui.floatingWindow(@src(), .{ .rect = &StrokeTest.show_rect, .open_flag = &StrokeTest.show }, .{});
+    defer win.deinit();
+    try dvui.windowHeader("Stroke Test", "", &StrokeTest.show);
+
+    try dvui.label(@src(), "Stroke Test", .{}, .{});
+    _ = try dvui.checkbox(@src(), &stroke_test_closed, "Closed", .{});
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Endcap Style", .{}, .{});
+
+        if (try dvui.radio(@src(), StrokeTest.endcap_style == .none, "None", .{})) {
+            StrokeTest.endcap_style = .none;
+        }
+
+        if (try dvui.radio(@src(), StrokeTest.endcap_style == .square, "Square", .{})) {
+            StrokeTest.endcap_style = .square;
+        }
+    }
+
+    var st = StrokeTest{};
+    try st.install(@src(), .{ .min_size_content = .{ .w = 400, .h = 400 }, .expand = .both });
+    st.deinit();
+}
+
+var stroke_test_closed: bool = false;
+
+pub const StrokeTest = struct {
+    const Self = @This();
+    var show: bool = false;
+    var show_rect = dvui.Rect{};
+    var pointsArray: [10]dvui.Point = [1]dvui.Point{.{}} ** 10;
+    var points: []dvui.Point = pointsArray[0..0];
+    var dragi: ?usize = null;
+    var thickness: f32 = 1.0;
+    var endcap_style: dvui.EndCapStyle = .none;
+
+    wd: dvui.WidgetData = undefined,
+
+    pub fn install(self: *Self, src: std.builtin.SourceLocation, options: dvui.Options) !void {
+        _ = try dvui.sliderEntry(@src(), "thick: {d:0.2}", .{ .value = &thickness }, .{ .expand = .horizontal });
+
+        const defaults = dvui.Options{ .name = "StrokeTest" };
+        self.wd = dvui.WidgetData.init(src, .{}, defaults.override(options));
+        try self.wd.register();
+
+        const evts = dvui.events();
+        for (evts) |*e| {
+            if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
+                continue;
+
+            self.processEvent(e, false);
+        }
+
+        try self.wd.borderAndBackground(.{});
+
+        _ = dvui.parentSet(self.widget());
+
+        const rs = self.wd.contentRectScale();
+        const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
+        for (points, 0..) |p, i| {
+            var rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
+            const rsrect = rect.scale(rs.s).offset(rs.r);
+            try dvui.pathAddRect(rsrect, dvui.Rect.all(1));
+            try dvui.pathFillConvex(fill_color);
+
+            _ = i;
+            //_ = try dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });
+        }
+
+        for (points) |p| {
+            const rsp = rs.pointToScreen(p);
+            try dvui.pathAddPoint(rsp);
+        }
+
+        const stroke_color = dvui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
+        try dvui.pathStroke(stroke_test_closed, rs.s * thickness, StrokeTest.endcap_style, stroke_color);
+    }
+
+    pub fn widget(self: *Self) dvui.Widget {
+        return dvui.Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    }
+
+    pub fn data(self: *Self) *dvui.WidgetData {
+        return &self.wd;
+    }
+
+    pub fn rectFor(self: *Self, id: u32, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
+        return dvui.placeIn(self.wd.contentRect().justSize(), dvui.minSize(id, min_size), e, g);
+    }
+
+    pub fn screenRectScale(self: *Self, r: dvui.Rect) dvui.RectScale {
+        const rs = self.wd.contentRectScale();
+        return dvui.RectScale{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };
+    }
+
+    pub fn minSizeForChild(self: *Self, s: dvui.Size) void {
+        self.wd.minSizeMax(self.wd.padSize(s));
+    }
+
+    pub fn processEvent(self: *Self, e: *dvui.Event, bubbling: bool) void {
+        _ = bubbling;
+        switch (e.evt) {
+            .mouse => |me| {
+                const rs = self.wd.contentRectScale();
+                const mp = rs.pointFromScreen(me.p);
+                switch (me.action) {
+                    .press => {
+                        if (me.button == .left) {
+                            e.handled = true;
+                            dragi = null;
+
+                            for (points, 0..) |p, i| {
+                                const dp = dvui.Point.diff(p, mp);
+                                if (@abs(dp.x) < 5 and @abs(dp.y) < 5) {
+                                    dragi = i;
+                                    break;
+                                }
+                            }
+
+                            if (dragi == null and points.len < pointsArray.len) {
+                                dragi = points.len;
+                                points.len += 1;
+                                points[dragi.?] = mp;
+                            }
+
+                            if (dragi != null) {
+                                _ = dvui.captureMouse(self.wd.id);
+                                dvui.dragPreStart(me.p, .crosshair, .{});
+                            }
+                        }
+                    },
+                    .release => {
+                        if (me.button == .left) {
+                            e.handled = true;
+                            _ = dvui.captureMouse(null);
+                            dvui.dragEnd();
+                        }
+                    },
+                    .motion => {
+                        e.handled = true;
+                        if (dvui.dragging(me.p)) |dps| {
+                            const dp = dps.scale(1 / rs.s);
+                            points[dragi.?].x += dp.x;
+                            points[dragi.?].y += dp.y;
+                            dvui.refresh(null, @src(), self.wd.id);
+                        }
+                    },
+                    .wheel_y => {
+                        e.handled = true;
+                        const base: f32 = 1.02;
+                        const zs = @exp(@log(base) * me.data.wheel_y);
+                        if (zs != 1.0) {
+                            thickness *= zs;
+                            dvui.refresh(null, @src(), self.wd.id);
+                        }
+                    },
+                    else => {},
+                }
+            },
+            else => {},
+        }
+
+        if (e.bubbleable()) {
+            self.wd.parent.processEvent(e, true);
+        }
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.wd.minSizeSetAndRefresh();
+        self.wd.minSizeReportToParent();
+
+        dvui.parentReset(self.wd.id, self.wd.parent);
+    }
+};
