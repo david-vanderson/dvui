@@ -82,7 +82,12 @@ pub fn build(b: *std.Build) !void {
     });
     const maybe_ray = b.lazyDependency("raylib", .{ .target = target, .optimize = optimize });
     if (maybe_ray) |ray| {
-        const raylib_lib = try @import("raylib").addRaylib(b, target, optimize, .{ .raygui = true });
+        var wayland: bool = true;
+        _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
+            error.EnvironmentVariableNotFound => wayland = false,
+            else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
+        };
+        const raylib_lib = try @import("raylib").addRaylib(b, target, optimize, .{ .raygui = true, .linux_display_backend = if (wayland) .Both else .X11 });
         raylib_mod.linkLibrary(raylib_lib);
         raylib_mod.addIncludePath(ray.path("src"));
         raylib_mod.addImport("dvui", dvui_mod_raylib);
