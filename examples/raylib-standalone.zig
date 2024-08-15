@@ -8,6 +8,7 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 const vsync = true;
+var scale_val: f32 = 1.0;
 
 var show_dialog_outside_frame: bool = false;
 
@@ -129,9 +130,25 @@ fn dvui_frame() !void {
     tl2.deinit();
 
     {
-        try dvui.labelNoFmt(@src(), "These are drawn directly by the backend, not going through DVUI.", .{ .margin = .{ .x = 4 } });
+        var scaler = try dvui.scale(@src(), scale_val, .{ .expand = .horizontal });
+        defer scaler.deinit();
 
-        var box = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
+        {
+            var hbox = try dvui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
+
+            if (try dvui.button(@src(), "Zoom In", .{}, .{})) {
+                scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
+            }
+
+            if (try dvui.button(@src(), "Zoom Out", .{}, .{})) {
+                scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
+            }
+        }
+
+        try dvui.labelNoFmt(@src(), "Below is drawn directly by the backend, not going through DVUI.", .{ .margin = .{ .x = 4 } });
+
+        var box = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
         defer box.deinit();
 
         // Here is some arbitrary drawing that doesn't have to go through DVUI.
@@ -142,8 +159,13 @@ fn dvui_frame() !void {
         // get the screen rectangle for the box
         const rs = box.data().contentRectScale();
 
-        // rs.r is the pixel rectangle, rs.s is the scale factor (like for hidpi screens or display scaling)
-        c.DrawText("Congrats! You created your first window!", @intFromFloat(rs.r.x + 10 * rs.s), @intFromFloat(rs.r.y + 10 * rs.s), @intFromFloat(20 * rs.s), c.LIGHTGRAY);
+        // rs.r is the pixel rectangle, rs.s is the scale factor (like for
+        // hidpi screens or display scaling)
+        // raylib multiplies everything internally by the monitor scale, so we
+        // have to divide by that
+        const r = RaylibBackend.dvuiRectToRaylib(rs.r);
+        const s = rs.s / dvui.windowNaturalScale();
+        c.DrawText("Congrats! You created your first window!", @intFromFloat(r.x + 10 * s), @intFromFloat(r.y + 10 * s), @intFromFloat(20 * s), c.LIGHTGRAY);
     }
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
