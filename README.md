@@ -8,6 +8,8 @@ How to run the built-in examples:
 
 - ```zig build sdl-standalone```
 - ```zig build sdl-ontop```
+- ```zig build raylib-standalone```
+- ```zig build raylib-ontop```
 - ```zig build web-test```
   - then load `zig-out/bin/index.html`
   - [online demo](https://david-vanderson.github.io)
@@ -33,6 +35,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 - Existing backends
   - [SDL](https://libsdl.org/)
   - [Web](https://david-vanderson.github.io)
+  - [Raylib](https://www.raylib.com/)
   - [Mach](https://machengine.org/)
     - note: Mach backend is currently out of date
 - Icon support via [TinyVG](https://tinyvg.tech/)

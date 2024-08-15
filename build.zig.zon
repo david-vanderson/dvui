@@ -13,7 +13,6 @@
             .hash = "12203988c200e30d2fbc2678bb3e49eb3f117cc79faf8d228b63e54d8cdf278378e1",
             .lazy = true,
         },
-        // raylib is still experimental
         .raylib = .{
             .url = "https://github.com/raysan5/raylib/archive/63ae57d2e31afa8bc8cab7f17f0e44afa4e7552d.tar.gz",
             .hash = "122078aed9bcba3e2319105d04324bf923a52c65405c3662457cf73e7ef28f445e52",

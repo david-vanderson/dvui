@@ -73,7 +73,6 @@ pub fn build(b: *std.Build) !void {
         }
     }
 
-    // EXPERIMENTAL raylib backend
     const raylib_mod = b.addModule("RaylibBackend", .{
         .root_source_file = b.path("src/backends/RaylibBackend.zig"),
         .target = target,
