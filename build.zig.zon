@@ -17,7 +17,10 @@
         .raylib = .{
             .url = "https://github.com/raysan5/raylib/archive/9e39788e077f1d35c5fe54600f2143423a80bb3d.tar.gz",
             .hash = "122051da01fbb000a51f6e03bba5b4177667d374c87720c9a353b1e270c60e118055",
-            .lazy = true,
+            // Would like this to be lazy, but that currently doesn't work
+            // because (I think) raylib doesn't have a build.zig.zon, so its
+            // build.zig is not accessible to our build.zig
+            //.lazy = true,
         },
         //used in the raylib-ontop example
         .raygui = .{
