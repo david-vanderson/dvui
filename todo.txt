@@ -12,9 +12,7 @@ raylib backend
 - events
 - instead of useTex, preload (or use raylib's) a 1x1 white texture
 - use raylib's default shader (have to give up premultiplied alpha)
-- clipping
 - on mac, two-finger scrolling in the demo window a lot hangs?
-- cursors
 - enable by default
 
 new theme fields

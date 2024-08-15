@@ -21,6 +21,7 @@ pressed_modifier: dvui.enums.Mod = .none,
 mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButtons.len,
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
 dvui_consumed_events: bool = false,
+cursor_last: dvui.enums.Cursor = .arrow,
 
 const vertexSource =
     \\#version 330
@@ -283,6 +284,29 @@ pub fn openURL(self: *RaylibBackend, url: []const u8) !void {
     const c_url = try self.arena.dupeZ(u8, url);
     defer self.arena.free(c_url);
     c.OpenURL(c_url.ptr);
+}
+
+pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
+    if (cursor != self.cursor_last) {
+        self.cursor_last = cursor;
+
+        const raylib_cursor = switch (cursor) {
+            .arrow => c.MOUSE_CURSOR_ARROW,
+            .ibeam => c.MOUSE_CURSOR_IBEAM,
+            .wait => c.MOUSE_CURSOR_DEFAULT, // raylib doesn't have this
+            .wait_arrow => c.MOUSE_CURSOR_DEFAULT, // raylib doesn't have this
+            .crosshair => c.MOUSE_CURSOR_CROSSHAIR,
+            .arrow_nw_se => c.MOUSE_CURSOR_RESIZE_NWSE,
+            .arrow_ne_sw => c.MOUSE_CURSOR_RESIZE_NESW,
+            .arrow_w_e => c.MOUSE_CURSOR_RESIZE_EW,
+            .arrow_n_s => c.MOUSE_CURSOR_RESIZE_NS,
+            .arrow_all => c.MOUSE_CURSOR_RESIZE_ALL,
+            .bad => c.MOUSE_CURSOR_NOT_ALLOWED,
+            .hand => c.MOUSE_CURSOR_POINTING_HAND,
+        };
+
+        c.SetMouseCursor(raylib_cursor);
+    }
 }
 
 //TODO implement this function
