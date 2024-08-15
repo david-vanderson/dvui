@@ -15,17 +15,15 @@
         },
         // raylib is still experimental
         .raylib = .{
-            .url = "https://github.com/raysan5/raylib/archive/9e39788e077f1d35c5fe54600f2143423a80bb3d.tar.gz",
-            .hash = "122051da01fbb000a51f6e03bba5b4177667d374c87720c9a353b1e270c60e118055",
-            // Would like this to be lazy, but that currently doesn't work
-            // because (I think) raylib doesn't have a build.zig.zon, so its
-            // build.zig is not accessible to our build.zig
-            //.lazy = true,
+            .url = "https://github.com/raysan5/raylib/archive/63ae57d2e31afa8bc8cab7f17f0e44afa4e7552d.tar.gz",
+            .hash = "122078aed9bcba3e2319105d04324bf923a52c65405c3662457cf73e7ef28f445e52",
+            .lazy = true,
         },
         //used in the raylib-ontop example
         .raygui = .{
             .url = "https://github.com/raysan5/raygui/archive/33f1659.tar.gz",
             .hash = "12205f060d3476715771890d6e30bc052ca2d420dcae7875db2a4bd876ac506008a9",
+            .lazy = true,
         },
     },
 }
