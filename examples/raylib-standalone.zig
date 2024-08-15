@@ -57,8 +57,8 @@ pub fn main() !void {
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
         _ = try win.end(.{});
 
-        // TODO: cursor management
-        //backend.setCursor(win.cursorRequested());
+        // cursor management
+        backend.setCursor(win.cursorRequested());
 
         // render frame to OS
         c.EndDrawing();
