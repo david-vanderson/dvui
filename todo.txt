@@ -7,9 +7,6 @@ check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
 
-update dvui-demo
-
-
 raylib backend
 - directly call glfw.waitEventsTimeout?
 - events
@@ -18,12 +15,15 @@ raylib backend
 - clipping
 - on mac, two-finger scrolling in the demo window a lot hangs?
 - cursors
+- enable by default
 
 new theme fields
 
 dropdown:
 - don't need a separate list of theme names, should get them from the themes themselves
   - dropdown probably needs something to produce a string from an object?  Or maybe split it like reorderable?
+
+build needs an option to select backend?
 
 touch dragging should probably not work when the size of the stuff inside the scroll area is less than the scroll area's size?
 - otherwise you get lots of meaningless off-the-edge scrolling
