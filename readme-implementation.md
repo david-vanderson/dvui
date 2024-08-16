@@ -2,7 +2,16 @@
 
 This document describes the internals of DVUI and is useful for people extending or writing new widgets.  See [readme](/README.md) for a broad overview.
 
-### Example: button()
+If you want to make a widget that doesn't need to have child widgets inside it, then a function that combines existing widgets is the best approach.  Good examples are:
+* textEntryNumber
+* buttonIcon
+* windowHeader
+
+If you want to support child widgets, then you'll need to implement the Widget interface.  Good examples are:
+* BoxWidget
+* ButtonWidget
+
+### Example: button() function combines ButtonWidget and label
 
 ```zig
 pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) !bool {
