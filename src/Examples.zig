@@ -373,14 +373,20 @@ pub fn demo() !void {
             b: u16,
             c: f32,
             g: f64,
-            foo: bool,
+            foo_a: bool,
+            foo_b: bool,
+            foo_c: bool,
             bar: dvui.Color,
             bap: enum { red, green, blue, bip },
         };
-        var result: TestType = undefined;
-        try dvui.structWidgetEx(@src(), TestType, &result, .{
+        const Static = struct {
+            var result: TestType = undefined;
+        };
+        try dvui.structWidgetEx(@src(), TestType, &Static.result, .{
             .a = .{ .widget_type = .slider },
-            .foo = .{ .widget_type = .toggle },
+            .foo_a = .{ .widget_type = .toggle },
+            .foo_b = .{ .widget_type = .dropdown },
+            .foo_c = .{ .widget_type = .checkbox },
             .bar = .{
                 .r = .{ .widget_type = .slider },
                 .g = .{ .widget_type = .slider },
