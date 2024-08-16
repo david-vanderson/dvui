@@ -5,6 +5,7 @@ zig 0.14:
 
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
+test compiling sdl on linux
 
 text entry:
 - add getText
