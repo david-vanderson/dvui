@@ -12,6 +12,10 @@ const WidgetData = dvui.WidgetData;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
 const TextEntryWidget = dvui.TextEntryWidget;
 
+//TODO The text box briefly flickers whenever a permitted character is input in
+//an invalid location (eg, more than one decimal point). I am not sure why this happens
+//as I clear the buffer before I set the text to render
+
 pub fn NumberEntryWidget(comptime T: type) type {
     return struct {
         wd: WidgetData = undefined,
@@ -69,12 +73,11 @@ pub fn NumberEntryWidget(comptime T: type) type {
 
         pub fn install(self: *@This()) !void {
             try self.wd.register();
+            dvui.parentSet(self.widget());
 
             if (self.wd.visible()) {
                 try dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
             }
-
-            dvui.parentSet(self.widget());
 
             try self.wd.borderAndBackground(.{});
 
@@ -91,10 +94,23 @@ pub fn NumberEntryWidget(comptime T: type) type {
             }
 
             const text = self.getText();
+            const value = self.getValue();
             if (text.len >= 2) {
-                _ = self.getValue() catch {
+                if (value == null) {
                     std.mem.copyForwards(u8, text, buffer_backup[0..text.len]);
-                };
+                }
+            }
+            if (value) |num| {
+                if (self.init_opts.min) |min| {
+                    if (num < min) {
+                        std.mem.copyForwards(u8, text, buffer_backup[0..text.len]);
+                    }
+                }
+                if (self.init_opts.max) |max| {
+                    if (num > max) {
+                        std.mem.copyForwards(u8, text, buffer_backup[0..text.len]);
+                    }
+                }
             }
 
             try self.text_box.draw();
@@ -107,10 +123,10 @@ pub fn NumberEntryWidget(comptime T: type) type {
             return std.mem.sliceTo(self.text_box.init_opts.text, 0);
         }
 
-        pub fn getValue(self: *const @This()) !T {
+        pub fn getValue(self: *const @This()) ?T {
             return switch (@typeInfo(T)) {
-                .Int => try std.fmt.parseInt(T, self.getText(), 10),
-                .Float => try std.fmt.parseFloat(T, self.getText()),
+                .Int => std.fmt.parseInt(T, self.getText(), 10) catch null,
+                .Float => std.fmt.parseFloat(T, self.getText()) catch null,
                 else => unreachable,
             };
         }
