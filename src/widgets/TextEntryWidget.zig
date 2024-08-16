@@ -331,9 +331,10 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
     self.scroll_to_cursor = true;
 }
 
-// Designed to run after event processing and before drawing
-pub fn filterOut(self: *TextEntryWidget, filter: []const u8) void {
-    if (filter.len == 0) {
+/// Remove all characters that not present in filter_chars.
+/// Designed to run after event processing and before drawing.
+pub fn filterIn(self: *TextEntryWidget, filter_chars: []const u8) void {
+    if (filter_chars.len == 0) {
         return;
     }
 
@@ -341,14 +342,44 @@ pub fn filterOut(self: *TextEntryWidget, filter: []const u8) void {
     var j: usize = 0;
     const n = self.len;
     while (i < n) {
-        if (std.mem.startsWith(u8, self.init_opts.text[i..], filter)) {
-            self.len -= filter.len;
+        if (std.mem.indexOfScalar(u8, filter_chars, self.init_opts.text[i]) == null) {
+            self.len -= 1;
             var sel = self.textLayout.selection;
-            if (sel.start > i) sel.start -= filter.len;
-            if (sel.cursor > i) sel.cursor -= filter.len;
-            if (sel.end > i) sel.end -= filter.len;
+            if (sel.start > i) sel.start -= 1;
+            if (sel.cursor > i) sel.cursor -= 1;
+            if (sel.end > i) sel.end -= 1;
 
-            i += filter.len;
+            i += 1;
+        } else {
+            self.init_opts.text[j] = self.init_opts.text[i];
+            i += 1;
+            j += 1;
+        }
+    }
+
+    if (j < self.init_opts.text.len)
+        self.init_opts.text[j] = 0;
+}
+
+/// Remove all instances of the string needle.
+/// Designed to run after event processing and before drawing.
+pub fn filterOut(self: *TextEntryWidget, needle: []const u8) void {
+    if (needle.len == 0) {
+        return;
+    }
+
+    var i: usize = 0;
+    var j: usize = 0;
+    const n = self.len;
+    while (i < n) {
+        if (std.mem.startsWith(u8, self.init_opts.text[i..], needle)) {
+            self.len -= needle.len;
+            var sel = self.textLayout.selection;
+            if (sel.start > i) sel.start -= needle.len;
+            if (sel.cursor > i) sel.cursor -= needle.len;
+            if (sel.end > i) sel.end -= needle.len;
+
+            i += needle.len;
         } else {
             self.init_opts.text[j] = self.init_opts.text[i];
             i += 1;
@@ -557,6 +588,10 @@ pub fn cut(self: *TextEntryWidget) void {
         sel.cursor = sel.start;
         self.scroll_to_cursor = true;
     }
+}
+
+pub fn getText(self: *const TextEntryWidget) []u8 {
+    return std.mem.sliceTo(self.init_opts.text, 0);
 }
 
 pub fn deinit(self: *TextEntryWidget) void {

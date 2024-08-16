@@ -31,6 +31,8 @@ have_popup_child: bool = false,
 menu: MenuWidget = undefined,
 initialRect: Rect = Rect{},
 prevClip: Rect = Rect{},
+scale_val: f32 = undefined,
+scaler: dvui.ScaleWidget = undefined,
 scroll: ScrollAreaWidget = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) FloatingMenuWidget {
@@ -47,6 +49,9 @@ pub fn init(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) F
     // rectFor/minSizeForChild which is important because we are outside
     // normal layout
     self.wd = WidgetData.init(src, .{ .subwindow = true }, .{ .id_extra = opts.id_extra, .rect = .{} });
+
+    // get scale from parent
+    self.scale_val = self.wd.parent.screenRectScale(Rect{}).s / dvui.windowNaturalScale();
 
     self.initialRect = initialRect;
     return self;
@@ -83,9 +88,12 @@ pub fn install(self: *FloatingMenuWidget) !void {
     self.prevClip = dvui.clipGet();
     dvui.clipSet(rs.r);
 
-    // we are using scroll to do border/background but floating windows
+    // we are using scale to do border/background but floating windows
     // don't have margin, so turn that off
-    self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none }, self.options.override(.{ .margin = .{}, .expand = .both }));
+    self.scaler = dvui.ScaleWidget.init(@src(), self.scale_val, self.options.override(.{ .margin = .{}, .expand = .both }));
+    try self.scaler.install();
+
+    self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none, .expand_to_fit = true }, .{ .background = false, .expand = .both });
     try self.scroll.install();
 
     if (dvui.menuGet()) |pm| {
@@ -167,9 +175,7 @@ pub fn chainFocused(self: *FloatingMenuWidget, self_call: bool) bool {
 pub fn deinit(self: *FloatingMenuWidget) void {
     self.menu.deinit();
     self.scroll.deinit();
-
-    self.options.min_size_content = self.scroll.si.virtual_size;
-    self.wd.minSizeMax(self.options.min_sizeGet());
+    self.scaler.deinit();
 
     const rs = self.wd.rectScale();
     const evts = dvui.events();

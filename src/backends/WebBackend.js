@@ -164,10 +164,6 @@ function dvui(canvasId, wasmFile) {
         wasm_canvas_height() {
             return gl.canvas.clientHeight;
         },
-        wasm_clear() {
-            gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
-            gl.clear(gl.COLOR_BUFFER_BIT);
-        },
         wasm_textureCreate(pixels, width, height) {
             const pixelData = new Uint8Array(wasmResult.instance.exports.memory.buffer, pixels, width * height * 4);
 
@@ -451,6 +447,9 @@ function dvui(canvasId, wasmFile) {
             gl.canvas.height = Math.round(h * scale);
             gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
             gl.scissor(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
+            gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
+            gl.clear(gl.COLOR_BUFFER_BIT);
 
             if (!app_initialized) {
                 app_initialized = true;

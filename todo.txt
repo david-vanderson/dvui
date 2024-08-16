@@ -1,18 +1,24 @@
 
 zig 0.14:
 - if sliceAsBytes/bytesAsSlice includes sentinel, then need to update our use
+- if @src() gained a module field, then include it in the hash
 
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
+test compiling sdl on linux
 
-remove clear() from backends
+add something to docs about creating widgets parent vs. not
 
-make examples clearer on how to do custom drawing and explain the RectScale functions
-
-
-sdl backend
-- split out init and initWindow like in raylib backend
-
+text entry:
+- add getText
+        pub fn getText(self: *const @This()) []u8 {
+            return std.mem.sliceTo(self.init_opts.text, 0);
+        }
+- add filterIn that filters out anything not in a given set (for numbers, etc.)
+- filterOut and filterIn should return a bool if they changed something
+- add better docs for filterOut and filterIn
+- add flag that tells the app if the text changed
+- add example for numbers only
 
 
 raylib backend
@@ -20,16 +26,16 @@ raylib backend
 - events
 - instead of useTex, preload (or use raylib's) a 1x1 white texture
 - use raylib's default shader (have to give up premultiplied alpha)
-- clipping
 - on mac, two-finger scrolling in the demo window a lot hangs?
-- on linux, slowly moving mouse over dropdown (or File or Edit menu items) causes them to flicker (extra mouse events?)
-- cursors
+- enable by default
 
 new theme fields
 
 dropdown:
 - don't need a separate list of theme names, should get them from the themes themselves
   - dropdown probably needs something to produce a string from an object?  Or maybe split it like reorderable?
+
+build needs an option to select backend?
 
 touch dragging should probably not work when the size of the stuff inside the scroll area is less than the scroll area's size?
 - otherwise you get lots of meaningless off-the-edge scrolling

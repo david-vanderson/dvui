@@ -33,6 +33,7 @@ process_events: bool = true,
 prevClip: Rect = Rect{},
 
 nextVirtualSize: Size = Size{},
+expand_to_fit: bool = false,
 next_widget_ypos: f32 = 0, // goes from 0 to viritualSize.h
 
 inject_capture_id: ?u32 = null,
@@ -215,11 +216,21 @@ pub fn minSizeForChild(self: *ScrollContainerWidget, s: Size) void {
     const padded = self.wd.padSize(self.nextVirtualSize);
     switch (self.si.vertical) {
         .none => self.wd.min_size.h = padded.h,
-        .auto, .given => {},
+        .auto => {
+            if (self.expand_to_fit) {
+                self.wd.min_size.h = padded.h;
+            }
+        },
+        .given => {},
     }
     switch (self.si.horizontal) {
         .none => self.wd.min_size.w = padded.w,
-        .auto, .given => {},
+        .auto => {
+            if (self.expand_to_fit) {
+                self.wd.min_size.w = padded.w;
+            }
+        },
+        .given => {},
     }
 }
 

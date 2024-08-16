@@ -173,12 +173,12 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                 }
             } else if (me.action == .position) {
                 e.handled = true;
+                self.highlight = true;
 
                 // We get a .position mouse event every frame.  If we
                 // focus the menu item under the mouse even if it's not
                 // moving then it breaks keyboard navigation.
                 if (dvui.mouseTotalMotion().nonZero()) {
-                    self.highlight = true;
                     self.mouse_over = true;
                     if (dvui.menuGet().?.submenus_activated) {
                         // we shouldn't have gotten this event if the motion

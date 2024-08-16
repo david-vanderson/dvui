@@ -19,6 +19,8 @@ prev_rendering: bool = undefined,
 wd: WidgetData = undefined,
 prev_windowId: u32 = 0,
 prevClip: Rect = Rect{},
+scale_val: f32 = undefined,
+scaler: dvui.ScaleWidget = undefined,
 
 /// FloatingWidget is a subwindow to show any temporary floating thing.
 /// It doesn't focus itself (as a subwindow), and whether it is shown or not is
@@ -29,8 +31,15 @@ prevClip: Rect = Rect{},
 ///
 /// Use FloatingWindowWidget for a floating window that the user can change
 /// size, move around, and adjust stacking.
-pub fn init(src: std.builtin.SourceLocation, opts: Options) FloatingWidget {
+pub fn init(src: std.builtin.SourceLocation, opts_in: Options) FloatingWidget {
     var self = FloatingWidget{};
+
+    // get scale from parent
+    self.scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
+    var opts = opts_in;
+    if (opts.min_size_content) |msc| {
+        opts.min_size_content = msc.scale(self.scale_val);
+    }
 
     // passing options.rect will stop WidgetData.init from calling
     // rectFor/minSizeForChild which is important because we are outside
@@ -56,6 +65,9 @@ pub fn install(self: *FloatingWidget) !void {
     // clip to just our window (using clipSet since we are not inside our parent)
     self.prevClip = dvui.clipGet();
     dvui.clipSet(rs.r);
+
+    self.scaler = dvui.ScaleWidget.init(@src(), self.scale_val, .{ .expand = .both });
+    try self.scaler.install();
 }
 
 pub fn widget(self: *FloatingWidget) Widget {
@@ -92,6 +104,7 @@ pub fn processEvent(self: *FloatingWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *FloatingWidget) void {
+    self.scaler.deinit();
     self.wd.minSizeSetAndRefresh();
 
     // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();

@@ -12,6 +12,7 @@ const SDLBackend = @This();
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
+we_own_window: bool = false,
 touch_mouse_events: bool = false,
 log_events: bool = false,
 initial_scale: f32 = 1.0,
@@ -37,7 +38,7 @@ pub const InitOptions = struct {
     icon: ?[]const u8 = null,
 };
 
-pub fn init(options: InitOptions) !SDLBackend {
+pub fn initWindow(options: InitOptions) !SDLBackend {
     _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
     // use the string version instead of the #define so we compile with SDL < 2.24
@@ -76,7 +77,8 @@ pub fn init(options: InitOptions) !SDLBackend {
 
     _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_BLEND);
 
-    var back = SDLBackend{ .window = window, .renderer = renderer };
+    var back = init(window, renderer);
+    back.we_own_window = true;
 
     if (sdl3) {
         back.initial_scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(window));
@@ -200,6 +202,10 @@ pub fn init(options: InitOptions) !SDLBackend {
     return back;
 }
 
+pub fn init(window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
+    return SDLBackend{ .window = window, .renderer = renderer };
+}
+
 pub fn setIconFromFileContent(self: *SDLBackend, file_content: []const u8) void {
     var icon_w: c_int = undefined;
     var icon_h: c_int = undefined;
@@ -317,9 +323,12 @@ pub fn deinit(self: *SDLBackend) void {
             }
         }
     }
-    c.SDL_DestroyRenderer(self.renderer);
-    c.SDL_DestroyWindow(self.window);
-    c.SDL_Quit();
+
+    if (self.we_own_window) {
+        c.SDL_DestroyRenderer(self.renderer);
+        c.SDL_DestroyWindow(self.window);
+        c.SDL_Quit();
+    }
 }
 
 pub fn renderPresent(self: *SDLBackend) void {
@@ -332,11 +341,6 @@ pub fn renderPresent(self: *SDLBackend) void {
 
 pub fn hasEvent(_: *SDLBackend) bool {
     return c.SDL_PollEvent(null) == 1;
-}
-
-pub fn clear(self: *SDLBackend) void {
-    _ = c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 255);
-    _ = c.SDL_RenderClear(self.renderer);
 }
 
 pub fn backend(self: *SDLBackend) dvui.Backend {

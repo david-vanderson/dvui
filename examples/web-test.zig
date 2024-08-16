@@ -52,7 +52,7 @@ export fn app_init() i32 {
     backend = WebBackend.init() catch {
         return 1;
     };
-    win = dvui.Window.init(@src(), 0, gpa, backend.backend()) catch {
+    win = dvui.Window.init(@src(), gpa, backend.backend(), .{}) catch {
         return 2;
     };
 
@@ -83,8 +83,6 @@ fn update() !i32 {
     try win.begin(nstime);
 
     try backend.addAllEvents(&win);
-
-    backend.clear();
 
     try dvui_frame();
     //try dvui.label(@src(), "test", .{}, .{ .color_text = .{ .color = dvui.Color.white } });
