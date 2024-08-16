@@ -6,10 +6,12 @@ pub const c = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
     @cInclude("rlgl.h");
+    @cInclude("raygui.h");
 });
 
 const RaylibBackend = @This();
 
+we_own_window: bool = false,
 shader: c.Shader = undefined,
 VAO: u32 = undefined,
 arena: std.mem.Allocator = undefined,
@@ -18,6 +20,8 @@ pressed_keys: std.bit_set.ArrayBitSet(u32, 512) = std.bit_set.ArrayBitSet(u32, 5
 pressed_modifier: dvui.enums.Mod = .none,
 mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButtons.len,
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
+dvui_consumed_events: bool = false,
+cursor_last: dvui.enums.Cursor = .arrow,
 
 const vertexSource =
     \\#version 330
@@ -107,19 +111,19 @@ pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) void {
 
 pub fn end(_: *RaylibBackend) void {}
 
-pub fn clear(_: *RaylibBackend) void {
-    c.ClearBackground(c.BLACK);
-}
+pub fn clear(_: *RaylibBackend) void {}
 
 /// initializes the raylib backend
 /// options are required if dvui is the window_owner
 pub fn initWindow(options: InitOptions) !RaylibBackend {
     createWindow(options);
 
-    return init();
+    var back = init();
+    back.we_own_window = true;
+    return back;
 }
 
-pub fn init() !RaylibBackend {
+pub fn init() RaylibBackend {
     if (!c.IsWindowReady()) {
         @panic(
             \\OS Window must be created before initializing dvui raylib backend.
@@ -132,9 +136,17 @@ pub fn init() !RaylibBackend {
     };
 }
 
+pub fn shouldBlockRaylibInput(self: *RaylibBackend) bool {
+    return (dvui.currentWindow().drag_state != .none or self.dvui_consumed_events);
+}
+
 pub fn deinit(self: *RaylibBackend) void {
     c.UnloadShader(self.shader);
     c.rlUnloadVertexArray(@intCast(self.VAO));
+
+    if (self.we_own_window) {
+        c.CloseWindow();
+    }
 }
 
 pub fn backend(self: *RaylibBackend) dvui.Backend {
@@ -166,13 +178,22 @@ pub fn contentScale(_: *RaylibBackend) f32 {
     return 1.0;
 }
 
-pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr: dvui.Rect) void {
-    _ = clipr;
-    // TODO: scissor
+pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr_in: dvui.Rect) void {
 
     //make sure all raylib draw calls are rendered
     //before rendering dvui elements
     c.rlDrawRenderBatchActive();
+
+    // clipr is in pixels, but raylib multiplies by GetWindowScaleDPI(), so we
+    // have to divide by that here
+    const clipr = dvuiRectToRaylib(clipr_in);
+
+    // figure out how much we are losing by truncating x and y, need to add that back to w and h
+    const clipx: c_int = @intFromFloat(clipr.x);
+    const clipy: c_int = @intFromFloat(clipr.y);
+    const clipw: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.width + clipr.x - @floor(clipr.x)))));
+    const cliph: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.height + clipr.y - @floor(clipr.y)))));
+    c.BeginScissorMode(clipx, clipy, clipw, cliph);
 
     // our shader and textures are alpha premultiplied
     c.rlSetBlendMode(c.RL_BLEND_ALPHA_PREMULTIPLY);
@@ -229,6 +250,8 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
 
     // reset blend mode back to default so raylib text rendering works
     c.rlSetBlendMode(c.RL_BLEND_ALPHA);
+
+    c.EndScissorMode();
 }
 
 pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
@@ -267,10 +290,35 @@ pub fn openURL(self: *RaylibBackend, url: []const u8) !void {
     c.OpenURL(c_url.ptr);
 }
 
+pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
+    if (cursor != self.cursor_last) {
+        self.cursor_last = cursor;
+
+        const raylib_cursor = switch (cursor) {
+            .arrow => c.MOUSE_CURSOR_ARROW,
+            .ibeam => c.MOUSE_CURSOR_IBEAM,
+            .wait => c.MOUSE_CURSOR_DEFAULT, // raylib doesn't have this
+            .wait_arrow => c.MOUSE_CURSOR_DEFAULT, // raylib doesn't have this
+            .crosshair => c.MOUSE_CURSOR_CROSSHAIR,
+            .arrow_nw_se => c.MOUSE_CURSOR_RESIZE_NWSE,
+            .arrow_ne_sw => c.MOUSE_CURSOR_RESIZE_NESW,
+            .arrow_w_e => c.MOUSE_CURSOR_RESIZE_EW,
+            .arrow_n_s => c.MOUSE_CURSOR_RESIZE_NS,
+            .arrow_all => c.MOUSE_CURSOR_RESIZE_ALL,
+            .bad => c.MOUSE_CURSOR_NOT_ALLOWED,
+            .hand => c.MOUSE_CURSOR_POINTING_HAND,
+        };
+
+        c.SetMouseCursor(raylib_cursor);
+    }
+}
+
 //TODO implement this function
 pub fn refresh(_: *RaylibBackend) void {}
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
+    var disable_raylib_input: bool = false;
+
     const shift = c.IsKeyDown(c.KEY_LEFT_SHIFT) or c.IsKeyDown(c.KEY_RIGHT_SHIFT);
     //check for key releases
     var iter = self.pressed_keys.iterator(.{});
@@ -285,13 +333,13 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
 
             //send key release event
             const code = raylibKeyToDvui(@intCast(keycode));
-            _ = try win.addEventKey(.{ .code = code, .mod = self.pressed_modifier, .action = .up });
+            if (try win.addEventKey(.{ .code = code, .mod = self.pressed_modifier, .action = .up })) disable_raylib_input = true;
 
             if (self.log_events) {
                 std.debug.print("raylib event key up: {}\n", .{raylibKeyToDvui(@intCast(keycode))});
             }
         } else if (c.IsKeyPressedRepeat(@intCast(keycode))) {
-            _ = try win.addEventKey(.{ .code = raylibKeyToDvui(@intCast(keycode)), .mod = .none, .action = .repeat });
+            if (try win.addEventKey(.{ .code = raylibKeyToDvui(@intCast(keycode)), .mod = .none, .action = .repeat })) disable_raylib_input = true;
             if (self.log_events) {
                 std.debug.print("raylib event key repeat: {}\n", .{raylibKeyToDvui(@intCast(keycode))});
             }
@@ -319,7 +367,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             if (self.log_events) {
                 std.debug.print("raylib event text entry {s}\n", .{string});
             }
-            _ = try win.addEventText(string);
+            if (try win.addEventText(string)) disable_raylib_input = true;
         }
 
         //check if keymod
@@ -332,7 +380,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             }
         } else {
             //add eventKey
-            _ = try win.addEventKey(.{ .code = code, .mod = self.pressed_modifier, .action = .down });
+            if (try win.addEventKey(.{ .code = code, .mod = self.pressed_modifier, .action = .down })) disable_raylib_input = true;
             if (self.log_events) {
                 std.debug.print("raylib event key down: {}\n", .{code});
             }
@@ -354,14 +402,14 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
             if (self.log_events) {
                 std.debug.print("raylib event text entry {s}\n", .{string});
             }
-            _ = try win.addEventText(string);
+            if (try win.addEventText(string)) disable_raylib_input = true;
         }
     }
 
     const mouse_move = c.GetMouseDelta();
     if (mouse_move.x != 0 or mouse_move.y != 0) {
         const mouse_pos = c.GetMousePosition();
-        _ = try win.addEventMouseMotion(mouse_pos.x, mouse_pos.y);
+        if (try win.addEventMouseMotion(mouse_pos.x, mouse_pos.y)) disable_raylib_input = true;
         if (self.log_events) {
             //std.debug.print("raylib event Mouse Moved\n", .{});
         }
@@ -370,7 +418,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     inline for (RaylibMouseButtons, 0..) |button, i| {
         if (c.IsMouseButtonDown(button)) {
             if (self.mouse_button_cache[i] != true) {
-                _ = try win.addEventMouseButton(raylibMouseButtonToDvui(button), .press);
+                if (try win.addEventMouseButton(raylibMouseButtonToDvui(button), .press)) disable_raylib_input = true;
                 self.mouse_button_cache[i] = true;
                 if (self.log_events) {
                     std.debug.print("raylib event Mouse Button Pressed {}\n", .{raylibMouseButtonToDvui(button)});
@@ -379,7 +427,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         }
         if (c.IsMouseButtonUp(button)) {
             if (self.mouse_button_cache[i] != false) {
-                _ = try win.addEventMouseButton(raylibMouseButtonToDvui(button), .release);
+                if (try win.addEventMouseButton(raylibMouseButtonToDvui(button), .release)) disable_raylib_input = true;
                 self.mouse_button_cache[i] = false;
 
                 if (self.log_events) {
@@ -392,7 +440,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //scroll wheel movement
     const scroll_wheel = c.GetMouseWheelMove();
     if (scroll_wheel != 0) {
-        _ = try win.addEventMouseWheel(scroll_wheel * 25);
+        if (try win.addEventMouseWheel(scroll_wheel * 25)) disable_raylib_input = true;
 
         if (self.log_events) {
             std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});
@@ -409,6 +457,8 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //        std.debug.print("raylib event Touch: {}\n", .{touch});
     //    }
     //}
+
+    self.dvui_consumed_events = disable_raylib_input;
 
     return c.WindowShouldClose();
 }
@@ -599,4 +649,19 @@ fn shiftAscii(ascii: u8) u8 {
         // Return the original character if no shift mapping exists
         else => ascii,
     };
+}
+
+pub fn raylibColorToDvui(color: c.Color) dvui.Color {
+    return dvui.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
+}
+
+pub fn dvuiColorToRaylib(color: dvui.Color) c.Color {
+    return c.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
+}
+
+pub fn dvuiRectToRaylib(rect: dvui.Rect) c.Rectangle {
+    // raylib multiplies everything internally by the monitor scale, so we
+    // have to divide by that
+    const r = rect.scale(1 / dvui.windowNaturalScale());
+    return c.Rectangle{ .x = r.x, .y = r.y, .width = r.w, .height = r.h };
 }

@@ -21,7 +21,6 @@ const enums = dvui.enums;
 const zig_favicon = @embedFile("zig-favicon.png");
 
 pub var show_demo_window: bool = false;
-var theme_choice: usize = 0;
 var checkbox_bool: bool = false;
 const RadioChoice = enum(u8) {
     one = 1,
@@ -110,7 +109,6 @@ const AnimatingDialog = struct {
                 win.data().rect = r;
 
                 if (a.done() and a.end_val == 0) {
-                    win.close();
                     dvui.dialogRemove(id);
 
                     if (callafter) |ca| {
@@ -250,11 +248,11 @@ pub fn demo() !void {
         }
     }
 
+    var scaler = try dvui.scale(@src(), scale_val, .{ .expand = .both });
+    defer scaler.deinit();
+
     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
     defer scroll.deinit();
-
-    var scaler = try dvui.scale(@src(), scale_val, .{ .expand = .horizontal });
-    defer scaler.deinit();
 
     var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
     defer vbox.deinit();
@@ -266,6 +264,15 @@ pub fn demo() !void {
             dvui.toggleDebugWindow();
         }
 
+        var theme_choice: usize = blk: {
+            for (dvui.Theme.ptrs, 0..) |tptr, i| {
+                if (dvui.themeGet() == tptr) {
+                    break :blk i;
+                }
+            }
+            break :blk 0;
+        };
+
         const changed = try dvui.dropdown(
             @src(),
             &dvui.Theme.names,
@@ -273,7 +280,7 @@ pub fn demo() !void {
             .{ .min_size_content = .{ .w = 120 }, .id_extra = 1 },
         );
 
-        if (dvui.themeGet() != dvui.Theme.ptrs[theme_choice] and changed) {
+        if (changed) {
             dvui.themeSet(dvui.Theme.ptrs[theme_choice]);
         }
     }
@@ -571,8 +578,12 @@ pub fn textEntryWidgets() !void {
 
         try dvui.label(@src(), "Singleline", .{}, .{ .gravity_y = 0.5 });
 
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_buf }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
-        left_alignment.record(hbox.data().id, te.data());
+        // align text entry
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
+
+        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_buf }, .{});
 
         const teid = te.data().id;
         try te.install();
@@ -615,12 +626,15 @@ pub fn textEntryWidgets() !void {
 
         try dvui.label(@src(), "Password", .{}, .{ .gravity_y = 0.5 });
 
+        // align text entry
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
+
         var te = try dvui.textEntry(@src(), .{
             .text = &text_entry_password_buf,
             .password_char = if (text_entry_password_buf_obf_enable) "*" else null,
-        }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
-
-        left_alignment.record(hbox.data().id, te.data());
+        }, .{});
 
         te.deinit();
 
@@ -639,45 +653,48 @@ pub fn textEntryWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        const buf = dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8) orelse blk: {
-            dvui.dataSetSlice(null, hbox.wd.id, "buffer", &[_]u8{0} ** 30);
-            break :blk dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8).?;
-        };
-        var filter_buf = dvui.dataGetSlice(null, hbox.wd.id, "filter_buffer", []u8) orelse blk: {
-            dvui.dataSetSlice(null, hbox.wd.id, "filter_buffer", &[_]u8{0} ** 30);
-            break :blk dvui.dataGetSlice(null, hbox.wd.id, "filter_buffer", []u8).?;
-        };
+        try dvui.label(@src(), "Multiline", .{}, .{ .gravity_y = 0.5 });
 
-        try dvui.label(@src(), "Filtered", .{}, .{ .gravity_y = 0.5 });
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = buf }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
-        left_alignment.record(hbox.data().id, te.data());
+        // align text entry
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        try te.install();
-        te.processEvents();
-
-        // filter before drawing
-        for (std.mem.sliceTo(filter_buf, 0), 0..) |_, i| {
-            te.filterOut(filter_buf[i..][0..1]);
-        }
-
-        try te.draw();
+        var te = try dvui.textEntry(
+            @src(),
+            .{ .text = &text_entry_multiline_buf, .multiline = true },
+            .{
+                .min_size_content = .{ .w = 150, .h = 80 },
+            },
+        );
         te.deinit();
-
-        try dvui.label(@src(), "Filter", .{}, .{ .gravity_y = 0.5 });
-        var te2 = try dvui.textEntry(@src(), .{
-            .text = filter_buf,
-        }, .{});
-        te2.deinit();
     }
 
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
+    inline for ([_]type{ u8, i16, f32 }, 0..) |T, i| {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
         defer hbox.deinit();
 
-        try dvui.label(@src(), "Multiline", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .multiline = true }, .{ .min_size_content = .{ .w = 150, .h = 80 }, .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
-        left_alignment.record(hbox.data().id, te.data());
-        te.deinit();
+        try dvui.label(@src(), "Parse " ++ @typeName(T), .{}, .{ .gravity_y = 0.5 });
+
+        // align text entry
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
+
+        const buf = dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8) orelse blk: {
+            dvui.dataSetSlice(null, hbox.wd.id, "buffer", &[_]u8{0} ** 20);
+            break :blk dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8).?;
+        };
+
+        const num = try dvui.textEntryNumber(@src(), T, .{ .text = buf }, .{});
+
+        if (num) |n| {
+            try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
+        } else if (std.mem.sliceTo(buf, 0).len == 0) {
+            try dvui.label(@src(), "empty", .{}, .{ .gravity_y = 0.5 });
+        } else {
+            try dvui.label(@src(), "invalid", .{}, .{ .gravity_y = 0.5 });
+        }
     }
 
     try dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});
@@ -1003,7 +1020,7 @@ pub fn layoutText() !void {
         try tl.addText("Here ", .{ .font_style = .title, .color_text = .{ .color = .{ .r = 100, .b = 100 } } });
         try tl.addText("is some ", .{ .font_style = .title_2, .color_text = .{ .color = .{ .b = 100, .g = 100 } } });
         try tl.addText("ugly text ", .{ .font_style = .title_1, .color_text = .{ .color = .{ .r = 100, .g = 100 } } });
-        try tl.addText("that shows styling.\n", .{ .font_style = .caption, .color_text = .{ .color = .{ .r = 100, .g = 50, .b = 50 } } });
+        try tl.addText("that shows styling.", .{ .font_style = .caption, .color_text = .{ .color = .{ .r = 100, .g = 50, .b = 50 } } });
     }
 }
 
@@ -1610,6 +1627,14 @@ pub fn debuggingErrors() !void {
     if (try dvui.expander(@src(), "Show Font Atlases", .{}, .{ .expand = .horizontal })) {
         try dvui.debugFontAtlases(@src(), .{});
     }
+
+    if (try dvui.button(@src(), "Stroke Test", .{}, .{})) {
+        StrokeTest.show = true;
+    }
+
+    if (StrokeTest.show) {
+        try show_stroke_test_window();
+    }
 }
 
 pub fn dialogDirect() !void {
@@ -1728,3 +1753,181 @@ fn background_progress(win: *dvui.Window, delay_ns: u64) !void {
         dvui.refresh(win, @src(), null);
     }
 }
+
+pub fn show_stroke_test_window() !void {
+    var win = try dvui.floatingWindow(@src(), .{ .rect = &StrokeTest.show_rect, .open_flag = &StrokeTest.show }, .{});
+    defer win.deinit();
+    try dvui.windowHeader("Stroke Test", "", &StrokeTest.show);
+
+    try dvui.label(@src(), "Stroke Test", .{}, .{});
+    _ = try dvui.checkbox(@src(), &stroke_test_closed, "Closed", .{});
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Endcap Style", .{}, .{});
+
+        if (try dvui.radio(@src(), StrokeTest.endcap_style == .none, "None", .{})) {
+            StrokeTest.endcap_style = .none;
+        }
+
+        if (try dvui.radio(@src(), StrokeTest.endcap_style == .square, "Square", .{})) {
+            StrokeTest.endcap_style = .square;
+        }
+    }
+
+    var st = StrokeTest{};
+    try st.install(@src(), .{ .min_size_content = .{ .w = 400, .h = 400 }, .expand = .both });
+    st.deinit();
+}
+
+var stroke_test_closed: bool = false;
+
+pub const StrokeTest = struct {
+    const Self = @This();
+    var show: bool = false;
+    var show_rect = dvui.Rect{};
+    var pointsArray: [10]dvui.Point = [1]dvui.Point{.{}} ** 10;
+    var points: []dvui.Point = pointsArray[0..0];
+    var dragi: ?usize = null;
+    var thickness: f32 = 1.0;
+    var endcap_style: dvui.EndCapStyle = .none;
+
+    wd: dvui.WidgetData = undefined,
+
+    pub fn install(self: *Self, src: std.builtin.SourceLocation, options: dvui.Options) !void {
+        _ = try dvui.sliderEntry(@src(), "thick: {d:0.2}", .{ .value = &thickness }, .{ .expand = .horizontal });
+
+        const defaults = dvui.Options{ .name = "StrokeTest" };
+        self.wd = dvui.WidgetData.init(src, .{}, defaults.override(options));
+        try self.wd.register();
+
+        const evts = dvui.events();
+        for (evts) |*e| {
+            if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
+                continue;
+
+            self.processEvent(e, false);
+        }
+
+        try self.wd.borderAndBackground(.{});
+
+        _ = dvui.parentSet(self.widget());
+
+        const rs = self.wd.contentRectScale();
+        const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
+        for (points, 0..) |p, i| {
+            var rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
+            const rsrect = rect.scale(rs.s).offset(rs.r);
+            try dvui.pathAddRect(rsrect, dvui.Rect.all(1));
+            try dvui.pathFillConvex(fill_color);
+
+            _ = i;
+            //_ = try dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });
+        }
+
+        for (points) |p| {
+            const rsp = rs.pointToScreen(p);
+            try dvui.pathAddPoint(rsp);
+        }
+
+        const stroke_color = dvui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
+        try dvui.pathStroke(stroke_test_closed, rs.s * thickness, StrokeTest.endcap_style, stroke_color);
+    }
+
+    pub fn widget(self: *Self) dvui.Widget {
+        return dvui.Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
+    }
+
+    pub fn data(self: *Self) *dvui.WidgetData {
+        return &self.wd;
+    }
+
+    pub fn rectFor(self: *Self, id: u32, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
+        return dvui.placeIn(self.wd.contentRect().justSize(), dvui.minSize(id, min_size), e, g);
+    }
+
+    pub fn screenRectScale(self: *Self, r: dvui.Rect) dvui.RectScale {
+        const rs = self.wd.contentRectScale();
+        return dvui.RectScale{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };
+    }
+
+    pub fn minSizeForChild(self: *Self, s: dvui.Size) void {
+        self.wd.minSizeMax(self.wd.padSize(s));
+    }
+
+    pub fn processEvent(self: *Self, e: *dvui.Event, bubbling: bool) void {
+        _ = bubbling;
+        switch (e.evt) {
+            .mouse => |me| {
+                const rs = self.wd.contentRectScale();
+                const mp = rs.pointFromScreen(me.p);
+                switch (me.action) {
+                    .press => {
+                        if (me.button == .left) {
+                            e.handled = true;
+                            dragi = null;
+
+                            for (points, 0..) |p, i| {
+                                const dp = dvui.Point.diff(p, mp);
+                                if (@abs(dp.x) < 5 and @abs(dp.y) < 5) {
+                                    dragi = i;
+                                    break;
+                                }
+                            }
+
+                            if (dragi == null and points.len < pointsArray.len) {
+                                dragi = points.len;
+                                points.len += 1;
+                                points[dragi.?] = mp;
+                            }
+
+                            if (dragi != null) {
+                                _ = dvui.captureMouse(self.wd.id);
+                                dvui.dragPreStart(me.p, .crosshair, .{});
+                            }
+                        }
+                    },
+                    .release => {
+                        if (me.button == .left) {
+                            e.handled = true;
+                            _ = dvui.captureMouse(null);
+                            dvui.dragEnd();
+                        }
+                    },
+                    .motion => {
+                        e.handled = true;
+                        if (dvui.dragging(me.p)) |dps| {
+                            const dp = dps.scale(1 / rs.s);
+                            points[dragi.?].x += dp.x;
+                            points[dragi.?].y += dp.y;
+                            dvui.refresh(null, @src(), self.wd.id);
+                        }
+                    },
+                    .wheel_y => {
+                        e.handled = true;
+                        const base: f32 = 1.02;
+                        const zs = @exp(@log(base) * me.data.wheel_y);
+                        if (zs != 1.0) {
+                            thickness *= zs;
+                            dvui.refresh(null, @src(), self.wd.id);
+                        }
+                    },
+                    else => {},
+                }
+            },
+            else => {},
+        }
+
+        if (e.bubbleable()) {
+            self.wd.parent.processEvent(e, true);
+        }
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.wd.minSizeSetAndRefresh();
+        self.wd.minSizeReportToParent();
+
+        dvui.parentReset(self.wd.id, self.wd.parent);
+    }
+};

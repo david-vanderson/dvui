@@ -21,8 +21,6 @@ pub const Vertex = @import("Vertex.zig");
 pub const Widget = @import("Widget.zig");
 pub const WidgetData = @import("WidgetData.zig");
 pub const entypo = @import("icons/entypo.zig");
-///Deprecated - Use Theme.AdwaitaLight or Theme.AdwaitaDark
-pub const Adwaita = @import("themes/Adwaita.zig");
 pub const AnimateWidget = @import("widgets/AnimateWidget.zig");
 pub const BoxWidget = @import("widgets/BoxWidget.zig");
 pub const ReorderWidget = @import("widgets/ReorderWidget.zig");
@@ -91,7 +89,9 @@ pub fn themeGet() *Theme {
 }
 
 pub fn themeSet(theme: *Theme) void {
-    currentWindow().theme = theme;
+    if (currentWindow().theme != theme) {
+        currentWindow().theme = theme;
+    }
 }
 
 pub fn toggleDebugWindow() void {
@@ -1030,6 +1030,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     var col_trans = col;
     col_trans.a = 0;
 
+    const aa_size = 1.0;
     var vtx_start: usize = 0;
     var i: usize = 0;
     while (i < cw.path.items.len) : (i += 1) {
@@ -1061,13 +1062,13 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
                 // add 2 extra vertexes for endcap fringe
                 vtx_start += 2;
 
-                v.pos.x = bb.x - halfnorm.x * (thickness + 1.0) + diffbc.x;
-                v.pos.y = bb.y - halfnorm.y * (thickness + 1.0) + diffbc.y;
+                v.pos.x = bb.x - halfnorm.x * (thickness + aa_size) + diffbc.x * aa_size;
+                v.pos.y = bb.y - halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size;
                 v.col = col_trans;
                 try vtx.append(v);
 
-                v.pos.x = bb.x + halfnorm.x * (thickness + 1.0) + diffbc.x;
-                v.pos.y = bb.y + halfnorm.y * (thickness + 1.0) + diffbc.y;
+                v.pos.x = bb.x + halfnorm.x * (thickness + aa_size) + diffbc.x * aa_size;
+                v.pos.y = bb.y + halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size;
                 v.col = col_trans;
                 try vtx.append(v);
 
@@ -1081,12 +1082,12 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
                 try idx.append(@as(u16, @intCast(vtx_start)));
 
                 try idx.append(@as(u16, @intCast(1)));
-                try idx.append(@as(u16, @intCast(vtx_start)));
                 try idx.append(@as(u16, @intCast(vtx_start + 2)));
+                try idx.append(@as(u16, @intCast(vtx_start)));
 
                 try idx.append(@as(u16, @intCast(1)));
-                try idx.append(@as(u16, @intCast(vtx_start + 2)));
                 try idx.append(@as(u16, @intCast(vtx_start + 2 + 1)));
+                try idx.append(@as(u16, @intCast(vtx_start + 2)));
             } else if ((i + 1) == cw.path.items.len) {
                 diffab = Point.diff(aa, bb).normalize();
                 // rotate by 90 to get normal
@@ -1126,8 +1127,8 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         try vtx.append(v);
 
         // side 1 AA vertex
-        v.pos.x = bb.x - halfnorm.x * (thickness + 1.0);
-        v.pos.y = bb.y - halfnorm.y * (thickness + 1.0);
+        v.pos.x = bb.x - halfnorm.x * (thickness + aa_size);
+        v.pos.y = bb.y - halfnorm.y * (thickness + aa_size);
         v.col = col_trans;
         try vtx.append(v);
 
@@ -1138,8 +1139,8 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         try vtx.append(v);
 
         // side 2 AA vertex
-        v.pos.x = bb.x + halfnorm.x * (thickness + 1.0);
-        v.pos.y = bb.y + halfnorm.y * (thickness + 1.0);
+        v.pos.x = bb.x + halfnorm.x * (thickness + aa_size);
+        v.pos.y = bb.y + halfnorm.y * (thickness + aa_size);
         v.col = col_trans;
         try vtx.append(v);
 
@@ -1156,12 +1157,12 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
 
             // indexes for aa fade from inner to outer side 1
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
             try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 1)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
 
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 1)));
             try idx.append(@as(u16, @intCast(vtx_start + ci * 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 1)));
 
             // indexes for aa fade from inner to outer side 2
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
@@ -1169,24 +1170,24 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
             try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 3)));
 
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 2)));
             try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 3)));
+            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 2)));
         } else if (!closed and (i + 1) == cw.path.items.len) {
             // add 2 extra vertexes for endcap fringe
-            v.pos.x = bb.x - halfnorm.x * (thickness + 1.0) - diffab.x;
-            v.pos.y = bb.y - halfnorm.y * (thickness + 1.0) - diffab.y;
+            v.pos.x = bb.x - halfnorm.x * (thickness + aa_size) - diffab.x * aa_size;
+            v.pos.y = bb.y - halfnorm.y * (thickness + aa_size) - diffab.y * aa_size;
             v.col = col_trans;
             try vtx.append(v);
 
-            v.pos.x = bb.x + halfnorm.x * (thickness + 1.0) - diffab.x;
-            v.pos.y = bb.y + halfnorm.y * (thickness + 1.0) - diffab.y;
+            v.pos.x = bb.x + halfnorm.x * (thickness + aa_size) - diffab.x * aa_size;
+            v.pos.y = bb.y + halfnorm.y * (thickness + aa_size) - diffab.y * aa_size;
             v.col = col_trans;
             try vtx.append(v);
 
             // add indexes for endcap fringe
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 4)));
+            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
 
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 4)));
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
@@ -1424,7 +1425,7 @@ pub fn clipboardText() error{OutOfMemory}![]const u8 {
     return cw.backend.clipboardText();
 }
 
-pub fn clipboardTextSet(text: []u8) error{OutOfMemory}!void {
+pub fn clipboardTextSet(text: []const u8) error{OutOfMemory}!void {
     const cw = currentWindow();
     try cw.backend.clipboardTextSet(text);
 }
@@ -2153,14 +2154,20 @@ pub const Window = struct {
     debug_touch_simulate_events: bool = false, // when true, left mouse button works like a finger
     debug_touch_simulate_down: bool = false,
 
+    pub const InitOptions = struct {
+        id_extra: usize = 0,
+        arena: ?std.heap.ArenaAllocator = null,
+        theme: ?*Theme = null,
+    };
+
     pub fn init(
         src: std.builtin.SourceLocation,
-        id_extra: usize,
         gpa: std.mem.Allocator,
         backend: Backend,
+        init_opts: InitOptions,
     ) !Self {
-        const hashval = hashSrc(src, id_extra);
-        const arena = std.heap.ArenaAllocator.init(gpa);
+        const hashval = hashSrc(src, init_opts.id_extra);
+        const arena = init_opts.arena orelse std.heap.ArenaAllocator.init(gpa);
 
         var self = Self{
             .gpa = gpa,
@@ -2181,6 +2188,7 @@ pub const Window = struct {
             .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
             .backend = backend,
             .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
+            .theme = init_opts.theme orelse &Theme.AdwaitaLight,
         };
 
         const winSize = self.backend.windowSize();
@@ -3775,7 +3783,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
     defer hbox.deinit();
 
     var lw = try LabelWidget.initNoFmt(@src(), entries[choice.*], options.strip().override(.{ .gravity_y = 0.5 }));
-    const lw_rect = lw.wd.contentRectScale().r.scale(1 / windowNaturalScale());
+    const lwrs = lw.wd.contentRectScale();
     try lw.install();
     try lw.draw();
     lw.deinit();
@@ -3783,14 +3791,17 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 
     var ret = false;
     if (b.activeRect()) |r| {
+        const lw_rect = lwrs.r.scale(1 / windowNaturalScale());
         var pop = FloatingMenuWidget.init(@src(), lw_rect, .{ .min_size_content = r.size() });
         const first_frame = firstFrame(pop.wd.id);
 
+        const s = pop.scale_val;
+
         // move popup to align first item with b
-        pop.initialRect.x -= MenuItemWidget.defaults.borderGet().x;
-        pop.initialRect.x -= MenuItemWidget.defaults.paddingGet().x;
-        pop.initialRect.y -= MenuItemWidget.defaults.borderGet().y;
-        pop.initialRect.y -= MenuItemWidget.defaults.paddingGet().y;
+        pop.initialRect.x -= MenuItemWidget.defaults.borderGet().x * s;
+        pop.initialRect.x -= MenuItemWidget.defaults.paddingGet().x * s;
+        pop.initialRect.y -= MenuItemWidget.defaults.borderGet().y * s;
+        pop.initialRect.y -= MenuItemWidget.defaults.paddingGet().y * s;
 
         pop.initialRect.x -= pop.options.borderGet().x;
         pop.initialRect.x -= pop.options.paddingGet().x;
@@ -4989,8 +5000,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     const check_size = try options.fontGet().lineHeight();
     const s = spacer(@src(), Size.all(check_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-    var rs = s.borderRectScale();
-    rs.r = rs.r.insetAll(0.5 * rs.s);
+    const rs = s.borderRectScale();
 
     if (bw.wd.visible()) {
         try checkmark(target.*, bw.focused(), rs, bw.capture(), bw.hovered(), options);
@@ -5155,6 +5165,53 @@ pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Ini
     ret.processEvents();
     try ret.draw();
     return ret;
+}
+
+pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryWidget.InitOptions, opts: Options) !?T {
+    const base_filter = "1234567890";
+    const filter = switch (@typeInfo(T)) {
+        .Int => |int| switch (int.signedness) {
+            .signed => base_filter ++ "+-",
+            .unsigned => base_filter ++ "+",
+        },
+        .Float => base_filter ++ "+-.e",
+        else => unreachable,
+    };
+
+    const cw = currentWindow();
+    var te = try cw.arena.create(TextEntryWidget);
+    te.* = TextEntryWidget.init(src, init_opts, opts);
+    try te.install();
+    te.processEvents();
+
+    // filter before drawing
+    te.filterIn(filter);
+
+    // validation
+    const text = te.getText();
+    const num = switch (@typeInfo(T)) {
+        .Int => std.fmt.parseInt(T, text, 10) catch null,
+        .Float => std.fmt.parseFloat(T, text) catch null,
+        else => unreachable,
+    };
+
+    var valid = true;
+    if (text.len > 0 and num == null) {
+        valid = false;
+    }
+
+    try te.draw();
+
+    if (!valid) {
+        const rs = te.data().borderRectScale();
+        try dvui.pathAddRect(rs.r.outsetAll(1), te.data().options.corner_radiusGet());
+        const color = dvui.themeGet().color_err;
+        try dvui.pathStrokeAfter(true, true, 3 * rs.s, .none, color);
+    }
+
+    te.deinit();
+
+    return num;
 }
 
 pub const renderTextOptions = struct {

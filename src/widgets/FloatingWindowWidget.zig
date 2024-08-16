@@ -369,6 +369,8 @@ pub fn autoSize(self: *FloatingWindowWidget) void {
 pub fn close(self: *FloatingWindowWidget) void {
     if (self.init_options.open_flag) |of| {
         of.* = false;
+    } else {
+        dvui.log.warn("{s}:{d} FloatingWindowWidget.close() was called but it has no open_flag", .{ self.wd.src.file, self.wd.src.line });
     }
     dvui.refresh(null, @src(), self.wd.id);
 }
