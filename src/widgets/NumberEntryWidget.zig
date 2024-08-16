@@ -91,7 +91,7 @@ pub fn NumberEntryWidget(comptime T: type) type {
             try self.text_box.install();
 
             var buffer_backup: [256]u8 = .{0} ** 256;
-            std.mem.copyForwards(u8, &buffer_backup, self.getText());
+            @memcpy(&buffer_backup, self.init_opts.buffer);
 
             self.text_box.processEvents();
 
@@ -103,18 +103,18 @@ pub fn NumberEntryWidget(comptime T: type) type {
             const value = self.getValue();
             if (text.len >= 2) {
                 if (value == null) {
-                    std.mem.copyForwards(u8, text, buffer_backup[0..text.len]);
+                    @memcpy(self.init_opts.buffer, &buffer_backup);
                 }
             }
             if (value) |num| {
                 if (self.init_opts.min) |min| {
                     if (num < min) {
-                        std.mem.copyForwards(u8, text, buffer_backup[0..text.len]);
+                        @memcpy(self.init_opts.buffer, &buffer_backup);
                     }
                 }
                 if (self.init_opts.max) |max| {
                     if (num > max) {
-                        std.mem.copyForwards(u8, text, buffer_backup[0..text.len]);
+                        @memcpy(self.init_opts.buffer, &buffer_backup);
                     }
                 }
             }
