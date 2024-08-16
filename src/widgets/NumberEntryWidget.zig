@@ -93,7 +93,7 @@ pub fn NumberEntryWidget(comptime T: type) type {
             self.text_box.filterIn(filter);
 
             var valid: bool = true;
-            const text = self.getText();
+            const text = self.text_box.getText();
             const value = self.getValue();
             if (@typeInfo(T) == .Int) {
                 if (value) |num| {
@@ -144,14 +144,10 @@ pub fn NumberEntryWidget(comptime T: type) type {
             }
         }
 
-        pub fn getText(self: *const @This()) []u8 {
-            return std.mem.sliceTo(self.text_box.init_opts.text, 0);
-        }
-
         pub fn getValue(self: *const @This()) ?T {
             return switch (@typeInfo(T)) {
-                .Int => std.fmt.parseInt(T, self.getText(), 10) catch null,
-                .Float => std.fmt.parseFloat(T, self.getText()) catch null,
+                .Int => std.fmt.parseInt(T, self.text_box.getText(), 10) catch null,
+                .Float => std.fmt.parseFloat(T, self.text_box.getText()) catch null,
                 else => unreachable,
             };
         }
