@@ -28,6 +28,12 @@ pub fn NumberEntryWidget(comptime T: type) type {
             buffer: []u8,
             min: ?T = null,
             max: ?T = null,
+
+            pub fn audit(self: InitOptions) void {
+                if (self.max != null and self.min != null) {
+                    std.debug.assert(self.max.? > self.min.?);
+                }
+            }
         };
 
         const base_filter = "abcdfghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`~!@#$%^&*()_=[{]}\\|;:'\",<>/?] ";
@@ -136,6 +142,7 @@ pub fn NumberEntryWidget(comptime T: type) type {
             init_opts: InitOptions,
             options: Options,
         ) !@This() {
+            init_opts.audit();
             var self = @This(){ .init_opts = init_opts, .src = src };
             self.wd = WidgetData.init(src, .{}, options);
 
