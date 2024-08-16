@@ -97,37 +97,25 @@ pub fn NumberEntryWidget(comptime T: type) type {
             const value = self.getValue();
             if (@typeInfo(T) == .Int) {
                 if (value) |num| {
-                    if (self.init_opts.min) |min| {
-                        if (num < min) {
-                            @memcpy(self.init_opts.buffer, &buffer_backup);
-                            self.text_box.filterIn(filter);
-                        }
+                    if ((self.init_opts.min != null and num < self.init_opts.min.?) or
+                        (self.init_opts.max != null and num > self.init_opts.max.?))
+                    {
+                        @memcpy(self.init_opts.buffer, &buffer_backup);
+                        self.text_box.filterIn(filter);
                     }
-                    if (self.init_opts.max) |max| {
-                        if (num > max) {
-                            @memcpy(self.init_opts.buffer, &buffer_backup);
-                            self.text_box.filterIn(filter);
-                        }
-                    }
-                } else if (text.len >= 2) {
+                } else if (text.len > 1) {
                     @memcpy(self.init_opts.buffer, &buffer_backup);
-
                     self.text_box.filterIn(filter);
                 }
             } else if (@typeInfo(T) == .Float) {
                 if (value) |num| {
-                    if (self.init_opts.min) |min| {
-                        if (num < min) {
-                            valid = false;
-                        }
+                    if ((self.init_opts.min != null and num < self.init_opts.min.?) or
+                        (self.init_opts.max != null and num > self.init_opts.max.?))
+                    {
+                        valid = false;
+                    } else if (text.len > 1) {
+                        valid = false;
                     }
-                    if (self.init_opts.max) |max| {
-                        if (num > max) {
-                            valid = false;
-                        }
-                    }
-                } else if (text.len >= 2) {
-                    valid = false;
                 }
             }
 
