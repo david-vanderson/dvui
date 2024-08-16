@@ -21,6 +21,7 @@ pressed_modifier: dvui.enums.Mod = .none,
 mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButtons.len,
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
 dvui_consumed_events: bool = false,
+cursor_last: dvui.enums.Cursor = .arrow,
 
 const vertexSource =
     \\#version 330
@@ -177,13 +178,22 @@ pub fn contentScale(_: *RaylibBackend) f32 {
     return 1.0;
 }
 
-pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr: dvui.Rect) void {
-    _ = clipr; // autofix
-    // TODO: scissor
+pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr_in: dvui.Rect) void {
 
     //make sure all raylib draw calls are rendered
     //before rendering dvui elements
     c.rlDrawRenderBatchActive();
+
+    // clipr is in pixels, but raylib multiplies by GetWindowScaleDPI(), so we
+    // have to divide by that here
+    const clipr = dvuiRectToRaylib(clipr_in);
+
+    // figure out how much we are losing by truncating x and y, need to add that back to w and h
+    const clipx: c_int = @intFromFloat(clipr.x);
+    const clipy: c_int = @intFromFloat(clipr.y);
+    const clipw: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.width + clipr.x - @floor(clipr.x)))));
+    const cliph: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.height + clipr.y - @floor(clipr.y)))));
+    c.BeginScissorMode(clipx, clipy, clipw, cliph);
 
     // our shader and textures are alpha premultiplied
     c.rlSetBlendMode(c.RL_BLEND_ALPHA_PREMULTIPLY);
@@ -240,6 +250,8 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
 
     // reset blend mode back to default so raylib text rendering works
     c.rlSetBlendMode(c.RL_BLEND_ALPHA);
+
+    c.EndScissorMode();
 }
 
 pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
@@ -276,6 +288,29 @@ pub fn openURL(self: *RaylibBackend, url: []const u8) !void {
     const c_url = try self.arena.dupeZ(u8, url);
     defer self.arena.free(c_url);
     c.OpenURL(c_url.ptr);
+}
+
+pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
+    if (cursor != self.cursor_last) {
+        self.cursor_last = cursor;
+
+        const raylib_cursor = switch (cursor) {
+            .arrow => c.MOUSE_CURSOR_ARROW,
+            .ibeam => c.MOUSE_CURSOR_IBEAM,
+            .wait => c.MOUSE_CURSOR_DEFAULT, // raylib doesn't have this
+            .wait_arrow => c.MOUSE_CURSOR_DEFAULT, // raylib doesn't have this
+            .crosshair => c.MOUSE_CURSOR_CROSSHAIR,
+            .arrow_nw_se => c.MOUSE_CURSOR_RESIZE_NWSE,
+            .arrow_ne_sw => c.MOUSE_CURSOR_RESIZE_NESW,
+            .arrow_w_e => c.MOUSE_CURSOR_RESIZE_EW,
+            .arrow_n_s => c.MOUSE_CURSOR_RESIZE_NS,
+            .arrow_all => c.MOUSE_CURSOR_RESIZE_ALL,
+            .bad => c.MOUSE_CURSOR_NOT_ALLOWED,
+            .hand => c.MOUSE_CURSOR_POINTING_HAND,
+        };
+
+        c.SetMouseCursor(raylib_cursor);
+    }
 }
 
 //TODO implement this function
@@ -625,9 +660,8 @@ pub fn dvuiColorToRaylib(color: dvui.Color) c.Color {
 }
 
 pub fn dvuiRectToRaylib(rect: dvui.Rect) c.Rectangle {
-    return c.Rectangle{ .x = rect.x, .y = rect.y, .width = rect.w, .height = rect.h };
-}
-
-pub fn raylibRectToDvui(rect: c.Rectangle) dvui.Rect {
-    return dvui.Rect{ .x = rect.x, .y = rect.y, .w = rect.width, .h = rect.height };
+    // raylib multiplies everything internally by the monitor scale, so we
+    // have to divide by that
+    const r = rect.scale(1 / dvui.windowNaturalScale());
+    return c.Rectangle{ .x = r.x, .y = r.y, .width = r.w, .height = r.h };
 }
