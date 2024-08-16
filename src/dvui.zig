@@ -44,7 +44,6 @@ pub const ScrollContainerWidget = @import("widgets/ScrollContainerWidget.zig");
 pub const TextEntryWidget = @import("widgets/TextEntryWidget.zig");
 pub const TextLayoutWidget = @import("widgets/TextLayoutWidget.zig");
 pub const VirtualParentWidget = @import("widgets/VirtualParentWidget.zig");
-pub const NumberEntryWidget = @import("widgets/NumberEntryWidget.zig").NumberEntryWidget;
 
 pub const enums = @import("enums.zig");
 
@@ -5735,18 +5734,4 @@ pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, rot
 
     const tce = imageTexture(name, image_bytes) catch return;
     try renderTexture(tce.texture, rs, rotation, colormod);
-}
-
-pub fn numberEntry(
-    src: std.builtin.SourceLocation,
-    comptime T: type,
-    init_opts: NumberEntryWidget(T).InitOptions,
-    opts: Options,
-) !*NumberEntryWidget(T) {
-    const cw = currentWindow();
-    var ret = try cw.arena.create(NumberEntryWidget(T));
-    ret.* = try NumberEntryWidget(T).init(src, init_opts, opts);
-    try ret.install();
-
-    return ret;
 }
