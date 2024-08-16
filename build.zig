@@ -73,25 +73,29 @@ pub fn build(b: *std.Build) !void {
         }
     }
 
-    // EXPERIMENTAL raylib backend
     const raylib_mod = b.addModule("RaylibBackend", .{
         .root_source_file = b.path("src/backends/RaylibBackend.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
-    const maybe_ray = b.lazyDependency("raylib", .{ .target = target, .optimize = optimize });
+
+    var raylib_linux_display: []const u8 = "Both";
+    _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
+        error.EnvironmentVariableNotFound => raylib_linux_display = "X11",
+        else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
+    };
+    const maybe_ray = b.lazyDependency("raylib", .{ .target = target, .optimize = optimize, .linux_display_backend = raylib_linux_display });
     if (maybe_ray) |ray| {
-        var wayland: bool = true;
-        _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
-            error.EnvironmentVariableNotFound => wayland = false,
-            else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
-        };
-        const raylib_lib = try @import("raylib").addRaylib(b, target, optimize, .{ .raygui = true, .linux_display_backend = if (wayland) .Both else .X11 });
-        raylib_mod.linkLibrary(raylib_lib);
-        raylib_mod.addIncludePath(ray.path("src"));
+        raylib_mod.linkLibrary(ray.artifact("raylib"));
         raylib_mod.addImport("dvui", dvui_mod_raylib);
-        raylib_mod.addIncludePath(ray.path("src/external"));
+
+        // This seems wonky to me, but is copied from raylib's src/build.zig
+        if (b.lazyDependency("raygui", .{})) |raygui_dep| {
+            if (b.lazyImport(@This(), "raylib")) |raylib_build| {
+                raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
+            }
+        }
     }
 
     const sdl_examples = [_][]const u8{
