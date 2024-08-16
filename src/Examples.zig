@@ -694,11 +694,17 @@ pub fn textEntryWidgets() !void {
         };
 
         try dvui.label(@src(), "8 Bit Unsigned Int", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.numberEntry(@src(), u8, .{ .buffer = &Static.buffer }, .{
-            .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)),
-        });
-        left_alignment.record(hbox.data().id, te.data());
-        te.deinit();
+
+        // align text entry
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
+
+        const num = try dvui.textEntryNumber(@src(), u8, .{ .text = &Static.buffer }, .{});
+
+        if (num) |n| {
+            try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
+        }
     }
 
     {
@@ -710,12 +716,17 @@ pub fn textEntryWidgets() !void {
         };
 
         try dvui.label(@src(), "16 Bit Signed Int", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.numberEntry(@src(), i16, .{ .buffer = &Static.buffer }, .{
-            .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)),
-        });
 
-        left_alignment.record(hbox.data().id, te.data());
-        te.deinit();
+        // align text entry
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
+
+        const num = try dvui.textEntryNumber(@src(), i16, .{ .text = &Static.buffer }, .{});
+
+        if (num) |n| {
+            try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
+        }
     }
 
     {
@@ -727,23 +738,6 @@ pub fn textEntryWidgets() !void {
         };
 
         try dvui.label(@src(), "32 Bit Float", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.numberEntry(@src(), f32, .{ .buffer = &Static.buffer }, .{
-            .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)),
-        });
-
-        left_alignment.record(hbox.data().id, te.data());
-        te.deinit();
-    }
-
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        const Static = struct {
-            var buffer: [256]u8 = .{0} ** 256;
-        };
-
-        try dvui.label(@src(), "textEntryFilter f32", .{}, .{ .gravity_y = 0.5 });
 
         // align text entry
         var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
