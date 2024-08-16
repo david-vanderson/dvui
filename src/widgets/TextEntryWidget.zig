@@ -590,7 +590,7 @@ pub fn cut(self: *TextEntryWidget) void {
     }
 }
 
-pub fn getText(self: *TextEntryWidget) []u8 {
+pub fn getText(self: *const TextEntryWidget) []u8 {
     return std.mem.sliceTo(self.init_opts.text, 0);
 }
 
