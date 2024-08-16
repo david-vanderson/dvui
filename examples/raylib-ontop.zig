@@ -76,6 +76,15 @@ pub fn main() !void {
         // - sends all dvui stuff to backend for rendering, must be called before EndDrawing()
         _ = try win.end(.{});
 
+        // cursor management
+        if (win.cursorRequestedFloating()) |cursor| {
+            // cursor is over floating window, dvui sets it
+            backend.setCursor(cursor);
+        } else {
+            // cursor should be handled by application
+            backend.setCursor(.arrow);
+        }
+
         ray.EndDrawing();
     }
 }
