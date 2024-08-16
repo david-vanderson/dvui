@@ -59,6 +59,8 @@ The build.zig and build.zig.zon files there show how to reference dvui as a zig 
 
   - Text Entry (single and multiline)
     - Includes touch support (selection draggables and menu)
+  - Number Entry
+    - Supports all Integer and Floating Point types
   - Text Layout
     - Parts can be clickable
     - Parts separately styled

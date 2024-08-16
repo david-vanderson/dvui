@@ -5166,6 +5166,53 @@ pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Ini
     return ret;
 }
 
+pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryWidget.InitOptions, opts: Options) !?T {
+    const base_filter = "1234567890";
+    const filter = switch (@typeInfo(T)) {
+        .Int => |int| switch (int.signedness) {
+            .signed => base_filter ++ "+-",
+            .unsigned => base_filter ++ "+",
+        },
+        .Float => base_filter ++ "+-.e",
+        else => unreachable,
+    };
+
+    const cw = currentWindow();
+    var te = try cw.arena.create(TextEntryWidget);
+    te.* = TextEntryWidget.init(src, init_opts, opts);
+    try te.install();
+    te.processEvents();
+
+    // filter before drawing
+    te.filterIn(filter);
+
+    // validation
+    const text = te.getText();
+    const num = switch (@typeInfo(T)) {
+        .Int => std.fmt.parseInt(T, text, 10) catch null,
+        .Float => std.fmt.parseFloat(T, text) catch null,
+        else => unreachable,
+    };
+
+    var valid = true;
+    if (text.len > 0 and num == null) {
+        valid = false;
+    }
+
+    try te.draw();
+
+    if (!valid) {
+        const rs = te.data().borderRectScale();
+        try dvui.pathAddRect(rs.r.outsetAll(1), te.data().options.corner_radiusGet());
+        const color = dvui.themeGet().color_err;
+        try dvui.pathStrokeAfter(true, true, 3 * rs.s, .none, color);
+    }
+
+    te.deinit();
+
+    return num;
+}
+
 pub const renderTextOptions = struct {
     font: Font,
     text: []const u8,

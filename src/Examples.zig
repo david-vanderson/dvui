@@ -553,8 +553,12 @@ pub fn textEntryWidgets() !void {
 
         try dvui.label(@src(), "Singleline", .{}, .{ .gravity_y = 0.5 });
 
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_buf }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
-        left_alignment.record(hbox.data().id, te.data());
+        // align text entry
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
+
+        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_buf }, .{});
 
         const teid = te.data().id;
         try te.install();
@@ -597,12 +601,15 @@ pub fn textEntryWidgets() !void {
 
         try dvui.label(@src(), "Password", .{}, .{ .gravity_y = 0.5 });
 
+        // align text entry
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
+
         var te = try dvui.textEntry(@src(), .{
             .text = &text_entry_password_buf,
             .password_char = if (text_entry_password_buf_obf_enable) "*" else null,
-        }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
-
-        left_alignment.record(hbox.data().id, te.data());
+        }, .{});
 
         te.deinit();
 
@@ -621,45 +628,48 @@ pub fn textEntryWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        const buf = dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8) orelse blk: {
-            dvui.dataSetSlice(null, hbox.wd.id, "buffer", &[_]u8{0} ** 30);
-            break :blk dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8).?;
-        };
-        var filter_buf = dvui.dataGetSlice(null, hbox.wd.id, "filter_buffer", []u8) orelse blk: {
-            dvui.dataSetSlice(null, hbox.wd.id, "filter_buffer", &[_]u8{0} ** 30);
-            break :blk dvui.dataGetSlice(null, hbox.wd.id, "filter_buffer", []u8).?;
-        };
+        try dvui.label(@src(), "Multiline", .{}, .{ .gravity_y = 0.5 });
 
-        try dvui.label(@src(), "Filtered", .{}, .{ .gravity_y = 0.5 });
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = buf }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
-        left_alignment.record(hbox.data().id, te.data());
+        // align text entry
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        try te.install();
-        te.processEvents();
-
-        // filter before drawing
-        for (std.mem.sliceTo(filter_buf, 0), 0..) |_, i| {
-            te.filterOut(filter_buf[i..][0..1]);
-        }
-
-        try te.draw();
+        var te = try dvui.textEntry(
+            @src(),
+            .{ .text = &text_entry_multiline_buf, .multiline = true },
+            .{
+                .min_size_content = .{ .w = 150, .h = 80 },
+            },
+        );
         te.deinit();
-
-        try dvui.label(@src(), "Filter", .{}, .{ .gravity_y = 0.5 });
-        var te2 = try dvui.textEntry(@src(), .{
-            .text = filter_buf,
-        }, .{});
-        te2.deinit();
     }
 
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
+    inline for ([_]type{ u8, i16, f32 }, 0..) |T, i| {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
         defer hbox.deinit();
 
-        try dvui.label(@src(), "Multiline", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .multiline = true }, .{ .min_size_content = .{ .w = 150, .h = 80 }, .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
-        left_alignment.record(hbox.data().id, te.data());
-        te.deinit();
+        try dvui.label(@src(), "Parse " ++ @typeName(T), .{}, .{ .gravity_y = 0.5 });
+
+        // align text entry
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
+
+        const buf = dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8) orelse blk: {
+            dvui.dataSetSlice(null, hbox.wd.id, "buffer", &[_]u8{0} ** 20);
+            break :blk dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8).?;
+        };
+
+        const num = try dvui.textEntryNumber(@src(), T, .{ .text = buf }, .{});
+
+        if (num) |n| {
+            try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
+        } else if (std.mem.sliceTo(buf, 0).len == 0) {
+            try dvui.label(@src(), "empty", .{}, .{ .gravity_y = 0.5 });
+        } else {
+            try dvui.label(@src(), "invalid", .{}, .{ .gravity_y = 0.5 });
+        }
     }
 
     try dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});
