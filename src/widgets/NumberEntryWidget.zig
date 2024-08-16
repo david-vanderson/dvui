@@ -12,10 +12,6 @@ const WidgetData = dvui.WidgetData;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
 const TextEntryWidget = dvui.TextEntryWidget;
 
-// TODO The text box briefly flickers whenever a permitted character is input in
-// an invalid location (eg, more than one decimal point). I am not sure why this
-// happens as I clear the buffer before I set the text to render
-
 pub fn NumberEntryWidget(comptime T: type) type {
     return struct {
         wd: WidgetData = undefined,
@@ -36,13 +32,13 @@ pub fn NumberEntryWidget(comptime T: type) type {
             }
         };
 
-        const base_filter = "abcdfghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`~!@#$%^&*()_=[{]}\\|;:'\",<>/?] ";
+        const base_filter = "1234567890";
         const filter = switch (@typeInfo(T)) {
             .Int => |int| switch (int.signedness) {
-                .signed => base_filter ++ ".e",
-                .unsigned => base_filter ++ "+-.e",
+                .signed => base_filter ++ "+-",
+                .unsigned => base_filter,
             },
-            .Float => base_filter,
+            .Float => base_filter ++ "+-.",
             else => unreachable,
         };
 
@@ -79,7 +75,6 @@ pub fn NumberEntryWidget(comptime T: type) type {
 
         pub fn install(self: *@This()) !void {
             try self.wd.register();
-            dvui.parentSet(self.widget());
 
             if (self.wd.visible()) {
                 try dvui.tabIndexSet(self.wd.id, self.wd.options.tab_index);
@@ -95,27 +90,44 @@ pub fn NumberEntryWidget(comptime T: type) type {
 
             self.text_box.processEvents();
 
-            for (std.mem.sliceTo(filter, 0), 0..) |_, i| {
-                self.text_box.filterOut(filter[i..][0..1]);
-            }
+            self.text_box.filterIn(filter);
 
+            var valid: bool = true;
             const text = self.getText();
             const value = self.getValue();
-            if (text.len >= 2) {
-                if (value == null) {
+            if (@typeInfo(T) == .Int) {
+                if (value) |num| {
+                    if (self.init_opts.min) |min| {
+                        if (num < min) {
+                            @memcpy(self.init_opts.buffer, &buffer_backup);
+                            self.text_box.filterIn(filter);
+                        }
+                    }
+                    if (self.init_opts.max) |max| {
+                        if (num > max) {
+                            @memcpy(self.init_opts.buffer, &buffer_backup);
+                            self.text_box.filterIn(filter);
+                        }
+                    }
+                } else if (text.len >= 2) {
                     @memcpy(self.init_opts.buffer, &buffer_backup);
+
+                    self.text_box.filterIn(filter);
                 }
-            }
-            if (value) |num| {
-                if (self.init_opts.min) |min| {
-                    if (num < min) {
-                        @memcpy(self.init_opts.buffer, &buffer_backup);
+            } else if (@typeInfo(T) == .Float) {
+                if (value) |num| {
+                    if (self.init_opts.min) |min| {
+                        if (num < min) {
+                            valid = false;
+                        }
                     }
-                }
-                if (self.init_opts.max) |max| {
-                    if (num > max) {
-                        @memcpy(self.init_opts.buffer, &buffer_backup);
+                    if (self.init_opts.max) |max| {
+                        if (num > max) {
+                            valid = false;
+                        }
                     }
+                } else if (text.len >= 2) {
+                    valid = false;
                 }
             }
 
@@ -123,6 +135,13 @@ pub fn NumberEntryWidget(comptime T: type) type {
 
             const borderClip = dvui.clipGet();
             dvui.clipSet(borderClip);
+
+            if (!valid) {
+                const rs = self.text_box.data().borderRectScale();
+                try dvui.pathAddRect(rs.r, self.text_box.data().options.corner_radiusGet());
+                const color = dvui.themeGet().color_err;
+                try dvui.pathStrokeAfter(true, true, 1 * rs.s, .none, color);
+            }
         }
 
         pub fn getText(self: *const @This()) []u8 {
@@ -153,7 +172,6 @@ pub fn NumberEntryWidget(comptime T: type) type {
             self.text_box.deinit();
             self.wd.minSizeSetAndRefresh();
             self.wd.minSizeReportToParent();
-            dvui.parentReset(self.wd.id, self.wd.parent);
         }
     };
 }
