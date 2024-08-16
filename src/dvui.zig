@@ -45,7 +45,6 @@ pub const TextEntryWidget = @import("widgets/TextEntryWidget.zig");
 pub const TextLayoutWidget = @import("widgets/TextLayoutWidget.zig");
 pub const VirtualParentWidget = @import("widgets/VirtualParentWidget.zig");
 pub const NumberEntryWidget = @import("widgets/NumberEntryWidget.zig").NumberEntryWidget;
-const _ = &NumberEntryWidget;
 
 pub const enums = @import("enums.zig");
 
