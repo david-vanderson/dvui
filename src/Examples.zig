@@ -743,32 +743,18 @@ pub fn textEntryWidgets() !void {
             var buffer: [256]u8 = .{0} ** 256;
         };
 
-        try dvui.label(@src(), "numberEntryFloat", .{}, .{ .gravity_y = 0.5 });
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &Static.buffer }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
-        left_alignment.record(hbox.data().id, te.data());
+        try dvui.label(@src(), "textEntryFilter f32", .{}, .{ .gravity_y = 0.5 });
 
-        try te.install();
-        te.processEvents();
+        // align text entry
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        // filter before drawing
-        te.filterIn("1234567890.");
+        const num = try dvui.textEntryNumber(@src(), f32, .{ .text = &Static.buffer }, .{});
 
-        // test validation
-        var valid = true;
-        if (te.getText().len > 0 and (std.fmt.parseFloat(f32, te.getText()) catch null) == null) {
-            valid = false;
+        if (num) |n| {
+            try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
         }
-
-        try te.draw();
-
-        if (!valid) {
-            const rs = te.data().borderRectScale();
-            try dvui.pathAddRect(rs.r, te.data().options.corner_radiusGet());
-            const color = dvui.themeGet().color_err;
-            try dvui.pathStrokeAfter(true, true, 1 * rs.s, .none, color);
-        }
-
-        te.deinit();
     }
 
     try dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});
