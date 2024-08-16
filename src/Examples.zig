@@ -719,6 +719,42 @@ pub fn textEntryWidgets() !void {
         te.deinit();
     }
 
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        const Static = struct {
+            var buffer: [256]u8 = .{0} ** 256;
+        };
+
+        try dvui.label(@src(), "numberEntryFloat", .{}, .{ .gravity_y = 0.5 });
+        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &Static.buffer }, .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
+        left_alignment.record(hbox.data().id, te.data());
+
+        try te.install();
+        te.processEvents();
+
+        // filter before drawing
+        te.filterIn("1234567890.");
+
+        // test validation
+        var valid = true;
+        if (te.getText().len > 0 and (std.fmt.parseFloat(f32, te.getText()) catch null) == null) {
+            valid = false;
+        }
+
+        try te.draw();
+
+        if (!valid) {
+            const rs = te.data().borderRectScale();
+            try dvui.pathAddRect(rs.r, te.data().options.corner_radiusGet());
+            const color = dvui.themeGet().color_err;
+            try dvui.pathStrokeAfter(true, true, 1 * rs.s, .none, color);
+        }
+
+        te.deinit();
+    }
+
     try dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});
 }
 
