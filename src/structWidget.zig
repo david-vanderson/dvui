@@ -181,6 +181,14 @@ pub fn structWidget(
     comptime src: std.builtin.SourceLocation,
     comptime T: type,
     result: *T,
+) !void {
+    try structWidgetEx(src, "", T, result, .{}, .{});
+}
+
+pub fn structWidgetEx(
+    comptime src: std.builtin.SourceLocation,
+    comptime T: type,
+    result: *T,
     comptime field_options: StructFieldOptions(T),
 ) !void {
     try structFieldWidget(src, "", T, result, field_options, .{});
