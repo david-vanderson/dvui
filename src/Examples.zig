@@ -628,46 +628,6 @@ pub fn textEntryWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        const buf = dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8) orelse blk: {
-            dvui.dataSetSlice(null, hbox.wd.id, "buffer", &[_]u8{0} ** 30);
-            break :blk dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8).?;
-        };
-        var filter_buf = dvui.dataGetSlice(null, hbox.wd.id, "filter_buffer", []u8) orelse blk: {
-            dvui.dataSetSlice(null, hbox.wd.id, "filter_buffer", &[_]u8{0} ** 30);
-            break :blk dvui.dataGetSlice(null, hbox.wd.id, "filter_buffer", []u8).?;
-        };
-
-        try dvui.label(@src(), "Filtered", .{}, .{ .gravity_y = 0.5 });
-
-        // align text entry
-        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
-        defer hbox_aligned.deinit();
-        left_alignment.record(hbox.data().id, hbox_aligned.data());
-
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = buf }, .{});
-
-        try te.install();
-        te.processEvents();
-
-        // filter before drawing
-        for (std.mem.sliceTo(filter_buf, 0), 0..) |_, i| {
-            te.filterOut(filter_buf[i..][0..1]);
-        }
-
-        try te.draw();
-        te.deinit();
-
-        try dvui.label(@src(), "Filter", .{}, .{ .gravity_y = 0.5 });
-        var te2 = try dvui.textEntry(@src(), .{
-            .text = filter_buf,
-        }, .{});
-        te2.deinit();
-    }
-
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
         try dvui.label(@src(), "Multiline", .{}, .{ .gravity_y = 0.5 });
 
         // align text entry
@@ -685,69 +645,30 @@ pub fn textEntryWidgets() !void {
         te.deinit();
     }
 
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
+    inline for ([_]type{ u8, i16, f32 }, 0..) |T, i| {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
         defer hbox.deinit();
 
-        const Static = struct {
-            var buffer: [256]u8 = .{0} ** 256;
-        };
-
-        try dvui.label(@src(), "8 Bit Unsigned Int", .{}, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "Parse " ++ @typeName(T), .{}, .{ .gravity_y = 0.5 });
 
         // align text entry
         var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        const num = try dvui.textEntryNumber(@src(), u8, .{ .text = &Static.buffer }, .{});
-
-        if (num) |n| {
-            try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
-        }
-    }
-
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        const Static = struct {
-            var buffer: [256]u8 = .{0} ** 256;
+        const buf = dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8) orelse blk: {
+            dvui.dataSetSlice(null, hbox.wd.id, "buffer", &[_]u8{0} ** 20);
+            break :blk dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8).?;
         };
 
-        try dvui.label(@src(), "16 Bit Signed Int", .{}, .{ .gravity_y = 0.5 });
-
-        // align text entry
-        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
-        defer hbox_aligned.deinit();
-        left_alignment.record(hbox.data().id, hbox_aligned.data());
-
-        const num = try dvui.textEntryNumber(@src(), i16, .{ .text = &Static.buffer }, .{});
+        const num = try dvui.textEntryNumber(@src(), T, .{ .text = buf }, .{});
 
         if (num) |n| {
             try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
-        }
-    }
-
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        const Static = struct {
-            var buffer: [256]u8 = .{0} ** 256;
-        };
-
-        try dvui.label(@src(), "32 Bit Float", .{}, .{ .gravity_y = 0.5 });
-
-        // align text entry
-        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
-        defer hbox_aligned.deinit();
-        left_alignment.record(hbox.data().id, hbox_aligned.data());
-
-        const num = try dvui.textEntryNumber(@src(), f32, .{ .text = &Static.buffer }, .{});
-
-        if (num) |n| {
-            try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
+        } else if (std.mem.sliceTo(buf, 0).len == 0) {
+            try dvui.label(@src(), "empty", .{}, .{ .gravity_y = 0.5 });
+        } else {
+            try dvui.label(@src(), "invalid", .{}, .{ .gravity_y = 0.5 });
         }
     }
 
