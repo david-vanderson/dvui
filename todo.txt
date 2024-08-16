@@ -6,6 +6,17 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
+text entry:
+- add getText
+        pub fn getText(self: *const @This()) []u8 {
+            return std.mem.sliceTo(self.init_opts.text, 0);
+        }
+- add filterIn that filters out anything not in a given set (for numbers, etc.)
+- filterOut and filterIn should return a bool if they changed something
+- add better docs for filterOut and filterIn
+- add flag that tells the app if the text changed
+- add example for numbers only
+
 
 raylib backend
 - directly call glfw.waitEventsTimeout?
