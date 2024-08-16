@@ -657,12 +657,18 @@ pub fn textEntryWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Multiline", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_multiline_buf, .multiline = true }, .{ .min_size_content = .{ .w = 150, .h = 80 }, .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)) });
+        var te = try dvui.textEntry(
+            @src(),
+            .{ .text = &text_entry_multiline_buf, .multiline = true },
+            .{
+                .min_size_content = .{ .w = 150, .h = 80 },
+                .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)),
+            },
+        );
         left_alignment.record(hbox.data().id, te.data());
         te.deinit();
     }
 
-    //Note, these don't seem to be aligning too well
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -672,7 +678,9 @@ pub fn textEntryWidgets() !void {
         };
 
         try dvui.label(@src(), "8 Bit Unsigned Int", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.numberEntry(@src(), u8, .{ .buffer = &Static.buffer }, .{});
+        var te = try dvui.numberEntry(@src(), u8, .{ .buffer = &Static.buffer }, .{
+            .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)),
+        });
         left_alignment.record(hbox.data().id, te.data());
         te.deinit();
     }
@@ -686,7 +694,9 @@ pub fn textEntryWidgets() !void {
         };
 
         try dvui.label(@src(), "16 Bit Signed Int", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.numberEntry(@src(), i16, .{ .buffer = &Static.buffer }, .{});
+        var te = try dvui.numberEntry(@src(), i16, .{ .buffer = &Static.buffer }, .{
+            .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)),
+        });
 
         left_alignment.record(hbox.data().id, te.data());
         te.deinit();
@@ -701,7 +711,9 @@ pub fn textEntryWidgets() !void {
         };
 
         try dvui.label(@src(), "32 Bit Float", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.numberEntry(@src(), f32, .{ .buffer = &Static.buffer }, .{});
+        var te = try dvui.numberEntry(@src(), f32, .{ .buffer = &Static.buffer }, .{
+            .margin = dvui.TextEntryWidget.defaults.marginGet().plus(left_alignment.margin(hbox.data().id)),
+        });
 
         left_alignment.record(hbox.data().id, te.data());
         te.deinit();
