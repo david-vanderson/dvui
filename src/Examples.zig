@@ -371,7 +371,7 @@ pub fn demo() !void {
             bap: enum { red, green, blue, bip },
         };
         var result: TestType = undefined;
-        try dvui.structWidget(@src(), TestType, &result, .{
+        try dvui.structWidgetEx(@src(), TestType, &result, .{
             .a = .{ .widget_type = .slider },
             .foo = .{ .widget_type = .toggle },
             .bar = .{
