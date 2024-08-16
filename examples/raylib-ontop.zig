@@ -82,7 +82,7 @@ pub fn main() !void {
             backend.setCursor(cursor);
         } else {
             // cursor should be handled by application
-            backend.setCursor(.bad);
+            backend.setCursor(.arrow);
         }
 
         ray.EndDrawing();
