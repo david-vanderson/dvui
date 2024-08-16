@@ -12,9 +12,9 @@ const WidgetData = dvui.WidgetData;
 const ScrollAreaWidget = dvui.ScrollAreaWidget;
 const TextEntryWidget = dvui.TextEntryWidget;
 
-//TODO The text box briefly flickers whenever a permitted character is input in
-//an invalid location (eg, more than one decimal point). I am not sure why this happens
-//as I clear the buffer before I set the text to render
+// TODO The text box briefly flickers whenever a permitted character is input in
+// an invalid location (eg, more than one decimal point). I am not sure why this
+// happens as I clear the buffer before I set the text to render
 
 pub fn NumberEntryWidget(comptime T: type) type {
     return struct {
