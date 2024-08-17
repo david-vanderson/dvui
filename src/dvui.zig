@@ -5267,7 +5267,14 @@ pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Ini
     return ret;
 }
 
-pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryWidget.InitOptions, opts: Options) !?T {
+pub fn TextEntryNumberInitOptions(comptime T: type) type {
+    return struct {
+        min: ?T = null,
+        max: ?T = null,
+    };
+}
+
+pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryNumberInitOptions(T), opts: Options) !?T {
     const base_filter = "1234567890";
     const filter = switch (@typeInfo(T)) {
         .Int => |int| switch (int.signedness) {
@@ -5278,11 +5285,23 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         else => unreachable,
     };
 
+    var hbox = try dvui.box(src, .horizontal, .{ .id_extra = 1 });
+    defer hbox.deinit();
+
+    const buffer = dataGetSliceDefault(currentWindow(), hbox.widget().data().id, "buffer", []u8, &[_]u8{0} ** 32);
+
     const cw = currentWindow();
     var te = try cw.arena.create(TextEntryWidget);
-    te.* = TextEntryWidget.init(src, init_opts, opts);
+    te.* = TextEntryWidget.init(src, .{ .text = buffer }, opts);
     try te.install();
     te.processEvents();
+
+    // label
+    if (te.getText().len == 0) {
+        if (init_opts.min != null and init_opts.max != null) {
+            try dvui.label(src, "({}-{})", .{}, .{ .id_extra = 2 });
+        }
+    }
 
     // filter before drawing
     te.filterIn(filter);
@@ -5296,7 +5315,11 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     };
 
     var valid = true;
-    if (text.len > 0 and num == null) {
+    if (num == null) {
+        if (text.len > 0) valid = false;
+    } else if ((init_opts.min != null and num.? < init_opts.min.?) or
+        (init_opts.max != null and num.? > init_opts.max.?))
+    {
         valid = false;
     }
 
