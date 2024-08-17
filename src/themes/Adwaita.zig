@@ -23,7 +23,7 @@ const light_err_fill_hover = err_hsl.lighten(-10).color();
 const light_err_border = err_hsl.lighten(-20).color();
 
 pub const light = Theme{
-    .name = "Adwaita",
+    .name = "Adwaita Light",
     .dark = false,
 
     .font_body = .{ .size = 13, .name = "Vera" },
