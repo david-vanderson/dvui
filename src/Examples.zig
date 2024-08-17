@@ -733,14 +733,29 @@ pub fn textEntryWidgets() !void {
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        const buf: []u8 = dvui.dataGetSliceDefault(null, hbox.wd.id, "buffer", []u8, &[_]u8{0} ** 20);
-
-        const num = try dvui.textEntryNumber(@src(), T, .{ .text = buf }, .{});
+        const num = try dvui.textEntryNumber(@src(), T, .{}, .{});
 
         if (num) |n| {
             try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
-        } else if (std.mem.sliceTo(buf, 0).len == 0) {
-            try dvui.label(@src(), "empty", .{}, .{ .gravity_y = 0.5 });
+        } else {
+            try dvui.label(@src(), "invalid", .{}, .{ .gravity_y = 0.5 });
+        }
+    }
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Parse Normal", .{}, .{ .gravity_y = 0.5 });
+
+        // align text entry
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
+
+        const num = try dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 1 }, .{});
+
+        if (num) |n| {
+            try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
         } else {
             try dvui.label(@src(), "invalid", .{}, .{ .gravity_y = 0.5 });
         }
