@@ -656,8 +656,7 @@ pub fn textEntryWidgets() !void {
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        var buf_temp: [20]u8 = [_]u8{0} ** 20;
-        const buf: []u8 = dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8) orelse &buf_temp;
+        const buf: []u8 = dvui.dataGetSliceDefault(null, hbox.wd.id, "buffer", []u8, &[_]u8{0} ** 20);
 
         const num = try dvui.textEntryNumber(@src(), T, .{ .text = buf }, .{});
 
@@ -668,8 +667,6 @@ pub fn textEntryWidgets() !void {
         } else {
             try dvui.label(@src(), "invalid", .{}, .{ .gravity_y = 0.5 });
         }
-
-        dvui.dataSetSlice(null, hbox.wd.id, "buffer", buf);
     }
 
     try dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});

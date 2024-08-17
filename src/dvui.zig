@@ -1688,6 +1688,26 @@ pub fn dataGetSlice(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?
     }
 }
 
+/// Retrieve slice contents for given key associated with id.
+///
+/// If the id/key doesn't exist yet, store the default slice into internal
+/// storage, and then return the internal storage slice.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside window.begin()/end(), you must
+/// pass a pointer to the Window you want to add the data to.
+///
+/// The returned slice points to internal storage, which will be freed after
+/// a frame where there is no call to any dataGet/dataSet functions for that
+/// id/key combination.
+pub fn dataGetSliceDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: []const @typeInfo(T).Pointer.child) T {
+    return dataGetSlice(win, id, key, T) orelse blk: {
+        dataSetSlice(win, id, key, default);
+        break :blk dataGetSlice(win, id, key, T).?;
+    };
+}
+
 // returns the backing slice of bytes if we have it
 pub fn dataGetInternal(win: ?*Window, id: u32, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
     if (win) |w| {
