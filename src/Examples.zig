@@ -377,7 +377,9 @@ pub fn demo() !void {
             foo_b: bool,
             foo_c: bool,
             bar: dvui.Color,
-            bap: enum { red, green, blue, bip },
+            fizz: enum { bap, bep, bip, bop, bup },
+            buzz: enum { bap, bep, bip, bop, bup },
+            text: []const u8,
         };
         const Static = struct {
             var result: TestType = undefined;
@@ -392,6 +394,7 @@ pub fn demo() !void {
                 .g = .{ .widget_type = .slider },
                 .b = .{ .widget_type = .slider },
             },
+            .buzz = .{ .widget_type = .radio },
         });
     }
 
