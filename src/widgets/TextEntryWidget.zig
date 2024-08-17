@@ -233,8 +233,11 @@ pub fn draw(self: *TextEntryWidget) !void {
 
     if (focused) {
         try self.drawCursor();
+    }
 
-        dvui.clipSet(self.prevClip);
+    dvui.clipSet(self.prevClip);
+
+    if (focused) {
         try self.wd.focusBorder();
     }
 }
