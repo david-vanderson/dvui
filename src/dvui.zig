@@ -44,7 +44,7 @@ pub const ScrollContainerWidget = @import("widgets/ScrollContainerWidget.zig");
 pub const TextEntryWidget = @import("widgets/TextEntryWidget.zig");
 pub const TextLayoutWidget = @import("widgets/TextLayoutWidget.zig");
 pub const VirtualParentWidget = @import("widgets/VirtualParentWidget.zig");
-pub const structWidgetEx = @import("structWidget.zig").structEntryEx;
+pub const structWidgetEx = @import("structEntry.zig").structEntryEx;
 
 pub const enums = @import("enums.zig");
 
@@ -1636,6 +1636,24 @@ pub fn dataGet(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
         return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
     } else {
         return null;
+    }
+}
+
+pub fn dataGetDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: T) T {
+    if (dataGetInternal(win, id, key, T, false)) |bytes| {
+        return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
+    } else {
+        dataSet(win, id, key, default);
+        return default;
+    }
+}
+
+pub fn dataGetPtrDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: T) *T {
+    if (dataGetPtr(win, id, key, T)) |ptr| {
+        return ptr;
+    } else {
+        dataSet(win, id, key, default);
+        return dataGetPtr(win, id, key, T).?;
     }
 }
 
@@ -4419,7 +4437,10 @@ pub var slider_defaults: Options = .{
 };
 
 // returns true if percent was changed
-pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f32, opts: Options) !bool {
+pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, normalized_percent: *f32, opts: Options) !bool {
+    std.debug.assert(normalized_percent.* >= 0);
+    std.debug.assert(normalized_percent.* <= 1);
+
     const options = slider_defaults.override(opts);
 
     var b = try box(src, dir, options);
@@ -4487,8 +4508,8 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
 
                     if (max > min) {
                         const v = if (dir == .horizontal) pp.x else (trackrs.r.y + trackrs.r.h - pp.y);
-                        percent.* = (v - min) / (max - min);
-                        percent.* = @max(0, @min(1, percent.*));
+                        normalized_percent.* = (v - min) / (max - min);
+                        normalized_percent.* = @max(0, @min(1, normalized_percent.*));
                         ret = true;
                     }
                 }
@@ -4498,12 +4519,12 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
                     switch (ke.code) {
                         .left, .down => {
                             e.handled = true;
-                            percent.* = @max(0, @min(1, percent.* - 0.05));
+                            normalized_percent.* = @max(0, @min(1, normalized_percent.* - 0.05));
                             ret = true;
                         },
                         .right, .up => {
                             e.handled = true;
-                            percent.* = @max(0, @min(1, percent.* + 0.05));
+                            normalized_percent.* = @max(0, @min(1, normalized_percent.* + 0.05));
                             ret = true;
                         },
                         else => {},
@@ -4514,7 +4535,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
         }
     }
 
-    const perc = @max(0, @min(1, percent.*));
+    const perc = @max(0, @min(1, normalized_percent.*));
 
     var part = trackrs.r;
     switch (dir) {
