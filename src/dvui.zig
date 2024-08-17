@@ -2988,7 +2988,12 @@ pub const Window = struct {
                     sd.type_str = dt_type_str;
                     sd.copy_slice = copy_slice;
                 }
-                @memcpy(sd.data, bytes);
+
+                // Someone might do dataSetSlice on the slice they got from
+                // dataGetSlice, and @memcpy would complain about aliasing
+                if (sd.data.ptr != bytes.ptr) {
+                    @memcpy(sd.data, bytes);
+                }
                 return;
             } else {
                 //std.debug.print("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, key });
