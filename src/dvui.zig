@@ -4417,8 +4417,8 @@ pub var slider_defaults: Options = .{
     .color_fill = .{ .name = .fill_control },
 };
 
-// returns true if percent was changed
-pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f32, opts: Options) !bool {
+// returns true if normalized_percent (0-1) was changed
+pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, normalized_percent: *f32, opts: Options) !bool {
     const options = slider_defaults.override(opts);
 
     var b = try box(src, dir, options);
@@ -4486,8 +4486,8 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
 
                     if (max > min) {
                         const v = if (dir == .horizontal) pp.x else (trackrs.r.y + trackrs.r.h - pp.y);
-                        percent.* = (v - min) / (max - min);
-                        percent.* = @max(0, @min(1, percent.*));
+                        normalized_percent.* = (v - min) / (max - min);
+                        normalized_percent.* = @max(0, @min(1, normalized_percent.*));
                         ret = true;
                     }
                 }
@@ -4497,12 +4497,12 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
                     switch (ke.code) {
                         .left, .down => {
                             e.handled = true;
-                            percent.* = @max(0, @min(1, percent.* - 0.05));
+                            normalized_percent.* = @max(0, @min(1, normalized_percent.* - 0.05));
                             ret = true;
                         },
                         .right, .up => {
                             e.handled = true;
-                            percent.* = @max(0, @min(1, percent.* + 0.05));
+                            normalized_percent.* = @max(0, @min(1, normalized_percent.* + 0.05));
                             ret = true;
                         },
                         else => {},
@@ -4513,7 +4513,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, percent: *f
         }
     }
 
-    const perc = @max(0, @min(1, percent.*));
+    const perc = @max(0, @min(1, normalized_percent.*));
 
     var part = trackrs.r;
     switch (dir) {
@@ -4590,7 +4590,7 @@ pub const SliderEntryInitOptions = struct {
 
 /// Combines a slider and a text entry box on key press.  Displays value on top of slider.
 ///
-/// Returns true if percent was changed.
+/// Returns true if value was changed.
 pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const u8, init_opts: SliderEntryInitOptions, opts: Options) !bool {
 
     // This widget swaps between either a slider with a label or a text entry.
