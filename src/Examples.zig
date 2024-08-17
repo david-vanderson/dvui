@@ -687,10 +687,7 @@ pub fn textEntryWidgets() !void {
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        const buf = dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8) orelse blk: {
-            dvui.dataSetSlice(null, hbox.wd.id, "buffer", &[_]u8{0} ** 20);
-            break :blk dvui.dataGetSlice(null, hbox.wd.id, "buffer", []u8).?;
-        };
+        const buf: []u8 = dvui.dataGetSliceDefault(null, hbox.wd.id, "buffer", []u8, &[_]u8{0} ** 20);
 
         const num = try dvui.textEntryNumber(@src(), T, .{ .text = buf }, .{});
 
