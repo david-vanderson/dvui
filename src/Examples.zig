@@ -742,7 +742,7 @@ pub fn textEntryWidgets() !void {
         }
     }
 
-    try dvui.label(@src(), "Parse f32 With Min and Max", .{}, .{ .gravity_y = 0.5 });
+    try dvui.label(@src(), "Parse f32 with Min and Max", .{}, .{ .gravity_y = 0.5 });
     const init_options: [3]dvui.TextEntryNumberInitOptions(f32) = .{ .{ .min = 0 }, .{ .max = 1 }, .{ .min = 0, .max = 1 } };
     inline for (init_options, 0..) |opt, i| {
         {
