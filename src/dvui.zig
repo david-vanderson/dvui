@@ -5271,10 +5271,21 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
     return struct {
         min: ?T = null,
         max: ?T = null,
+        initialize: ?T = null,
     };
 }
 
-pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryNumberInitOptions(T), opts: Options) !?T {
+pub fn TextEntryNumberResult(comptime T: type) type {
+    return union(enum) {
+        Valid: T,
+        ParseFailure: void,
+        TooBig: void,
+        TooSmall: void,
+        Empty: void,
+    };
+}
+
+pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryNumberInitOptions(T), opts: Options) !TextEntryNumberResult(T) {
     const base_filter = "1234567890";
     const filter = switch (@typeInfo(T)) {
         .Int => |int| switch (int.signedness) {
@@ -5290,6 +5301,11 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     const buffer = dataGetSliceDefault(currentWindow(), hbox.widget().data().id, "buffer", []u8, &[_]u8{0} ** 32);
 
+    //initialize with input number
+    if (init_opts.initialize) |num| {
+        _ = try std.fmt.bufPrint(buffer, "{}", .{num});
+    }
+
     const cw = currentWindow();
     var te = try cw.arena.create(TextEntryWidget);
     te.* = TextEntryWidget.init(src, .{ .text = buffer }, opts);
@@ -5299,31 +5315,38 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     // filter before drawing
     te.filterIn(filter);
 
+    var result: TextEntryNumberResult(T) = .Empty;
+
     // validation
     const text = te.getText();
-    var num = switch (@typeInfo(T)) {
+    const num = switch (@typeInfo(T)) {
         .Int => std.fmt.parseInt(T, text, 10) catch null,
         .Float => std.fmt.parseFloat(T, text) catch null,
         else => unreachable,
     };
 
-    var valid = true;
-    if (num == null) {
-        if (text.len > 0) valid = false;
-    } else if ((init_opts.min != null and num.? < init_opts.min.?) or
-        (init_opts.max != null and num.? > init_opts.max.?))
-    {
-        valid = false;
+    //determine error if any
+    if (text.len == 0 and num == null) {
+        result = .Empty;
+    } else if (num == null) {
+        result = .ParseFailure;
+    } else if (num != null) {
+        if (init_opts.min != null and num.? < init_opts.min.?) {
+            result = .TooSmall;
+        } else if (init_opts.max != null and num.? > init_opts.max.?) {
+            result = .TooBig;
+        }
+    } else {
+        result.Valid = num.?;
     }
 
     try te.draw();
 
-    if (!valid) {
+    if (result != .Empty and result != .Valid) {
         const rs = te.data().borderRectScale();
         try dvui.pathAddRect(rs.r.outsetAll(1), te.data().options.corner_radiusGet());
         const color = dvui.themeGet().color_err;
         try dvui.pathStrokeAfter(true, true, 3 * rs.s, .none, color);
-        num = null;
     }
 
     // display min/max
@@ -5342,7 +5365,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     te.deinit();
 
-    return num;
+    return result;
 }
 
 pub const renderTextOptions = struct {
