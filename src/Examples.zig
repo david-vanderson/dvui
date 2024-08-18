@@ -733,12 +733,24 @@ pub fn textEntryWidgets() !void {
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        const num = try dvui.textEntryNumber(@src(), T, .{}, .{});
+        const result = try dvui.textEntryNumber(@src(), f32, .{}, .{});
 
-        if (num) |n| {
-            try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
-        } else {
-            try dvui.label(@src(), "invalid", .{}, .{ .gravity_y = 0.5 });
+        switch (result) {
+            .TooBig => {
+                try dvui.label(@src(), "Too Big", .{}, .{ .gravity_y = 0.5 });
+            },
+            .TooSmall => {
+                try dvui.label(@src(), "Too Small", .{}, .{ .gravity_y = 0.5 });
+            },
+            .Empty => {
+                try dvui.label(@src(), "Empty", .{}, .{ .gravity_y = 0.5 });
+            },
+            .ParseFailure => {
+                try dvui.label(@src(), "Invalid", .{}, .{ .gravity_y = 0.5 });
+            },
+            .Valid => |num| {
+                try dvui.label(@src(), "{d}", .{num}, .{ .gravity_y = 0.5 });
+            },
         }
     }
 
@@ -754,12 +766,24 @@ pub fn textEntryWidgets() !void {
             defer hbox_aligned.deinit();
             left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-            const num = try dvui.textEntryNumber(@src(), f32, opt, .{});
+            const result = try dvui.textEntryNumber(@src(), f32, opt, .{});
 
-            if (num) |n| {
-                try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
-            } else {
-                try dvui.label(@src(), "invalid", .{}, .{ .gravity_y = 0.5 });
+            switch (result) {
+                .TooBig => {
+                    try dvui.label(@src(), "Too Big", .{}, .{ .gravity_y = 0.5 });
+                },
+                .TooSmall => {
+                    try dvui.label(@src(), "Too Small", .{}, .{ .gravity_y = 0.5 });
+                },
+                .Empty => {
+                    try dvui.label(@src(), "Empty", .{}, .{ .gravity_y = 0.5 });
+                },
+                .ParseFailure => {
+                    try dvui.label(@src(), "Invalid", .{}, .{ .gravity_y = 0.5 });
+                },
+                .Valid => |num| {
+                    try dvui.label(@src(), "{d}", .{num}, .{ .gravity_y = 0.5 });
+                },
             }
         }
     }
