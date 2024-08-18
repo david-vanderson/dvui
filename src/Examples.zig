@@ -733,25 +733,8 @@ pub fn textEntryWidgets() !void {
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        const result = try dvui.textEntryNumber(@src(), f32, .{}, .{});
-
-        switch (result) {
-            .TooBig => {
-                try dvui.label(@src(), "Too Big", .{}, .{ .gravity_y = 0.5 });
-            },
-            .TooSmall => {
-                try dvui.label(@src(), "Too Small", .{}, .{ .gravity_y = 0.5 });
-            },
-            .Empty => {
-                try dvui.label(@src(), "Empty", .{}, .{ .gravity_y = 0.5 });
-            },
-            .ParseFailure => {
-                try dvui.label(@src(), "Invalid", .{}, .{ .gravity_y = 0.5 });
-            },
-            .Valid => |num| {
-                try dvui.label(@src(), "{d}", .{num}, .{ .gravity_y = 0.5 });
-            },
-        }
+        const result = try dvui.textEntryNumber(@src(), T, .{}, .{});
+        try displayTextEntryNumberResult(result);
     }
 
     try dvui.label(@src(), "Parse f32 with Min and Max", .{}, .{ .gravity_y = 0.5 });
@@ -767,28 +750,31 @@ pub fn textEntryWidgets() !void {
             left_alignment.record(hbox.data().id, hbox_aligned.data());
 
             const result = try dvui.textEntryNumber(@src(), f32, opt, .{});
-
-            switch (result) {
-                .TooBig => {
-                    try dvui.label(@src(), "Too Big", .{}, .{ .gravity_y = 0.5 });
-                },
-                .TooSmall => {
-                    try dvui.label(@src(), "Too Small", .{}, .{ .gravity_y = 0.5 });
-                },
-                .Empty => {
-                    try dvui.label(@src(), "Empty", .{}, .{ .gravity_y = 0.5 });
-                },
-                .ParseFailure => {
-                    try dvui.label(@src(), "Invalid", .{}, .{ .gravity_y = 0.5 });
-                },
-                .Valid => |num| {
-                    try dvui.label(@src(), "{d}", .{num}, .{ .gravity_y = 0.5 });
-                },
-            }
+            try displayTextEntryNumberResult(result);
         }
     }
 
     try dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});
+}
+
+pub fn displayTextEntryNumberResult(result: anytype) !void {
+    switch (result) {
+        .TooBig => {
+            try dvui.label(@src(), "Too Big", .{}, .{ .gravity_y = 0.5 });
+        },
+        .TooSmall => {
+            try dvui.label(@src(), "Too Small", .{}, .{ .gravity_y = 0.5 });
+        },
+        .Empty => {
+            try dvui.label(@src(), "Empty", .{}, .{ .gravity_y = 0.5 });
+        },
+        .Invalid => {
+            try dvui.label(@src(), "Invalid", .{}, .{ .gravity_y = 0.5 });
+        },
+        .Valid => |num| {
+            try dvui.label(@src(), "{d}", .{num}, .{ .gravity_y = 0.5 });
+        },
+    }
 }
 
 pub fn styling() !void {

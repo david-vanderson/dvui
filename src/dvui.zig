@@ -5278,7 +5278,7 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
 pub fn TextEntryNumberResult(comptime T: type) type {
     return union(enum) {
         Valid: T,
-        ParseFailure: void,
+        Invalid: void,
         TooBig: void,
         TooSmall: void,
         Empty: void,
@@ -5303,7 +5303,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     //initialize with input number
     if (init_opts.initialize) |num| {
-        _ = try std.fmt.bufPrint(buffer, "{}", .{num});
+        _ = try std.fmt.bufPrint(buffer, "{d}", .{num});
     }
 
     const cw = currentWindow();
@@ -5315,7 +5315,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     // filter before drawing
     te.filterIn(filter);
 
-    var result: TextEntryNumberResult(T) = .Empty;
+    var result: TextEntryNumberResult(T) = .Invalid;
 
     // validation
     const text = te.getText();
@@ -5329,15 +5329,13 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     if (text.len == 0 and num == null) {
         result = .Empty;
     } else if (num == null) {
-        result = .ParseFailure;
-    } else if (num != null) {
-        if (init_opts.min != null and num.? < init_opts.min.?) {
-            result = .TooSmall;
-        } else if (init_opts.max != null and num.? > init_opts.max.?) {
-            result = .TooBig;
-        }
+        result = .Invalid;
+    } else if (num != null and init_opts.min != null and num.? < init_opts.min.?) {
+        result = .TooSmall;
+    } else if (num != null and init_opts.max != null and num.? > init_opts.max.?) {
+        result = .TooBig;
     } else {
-        result.Valid = num.?;
+        result = .{ .Valid = num.? };
     }
 
     try te.draw();
