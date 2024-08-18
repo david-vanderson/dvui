@@ -741,23 +741,26 @@ pub fn textEntryWidgets() !void {
             try dvui.label(@src(), "invalid", .{}, .{ .gravity_y = 0.5 });
         }
     }
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
 
-        try dvui.label(@src(), "Parse Normal", .{}, .{ .gravity_y = 0.5 });
+    try dvui.label(@src(), "Parse f32 With Min and Max", .{}, .{ .gravity_y = 0.5 });
+    const init_options: [3]dvui.TextEntryNumberInitOptions(f32) = .{ .{ .min = 0 }, .{ .max = 1 }, .{ .min = 0, .max = 1 } };
+    inline for (init_options, 0..) |opt, i| {
+        {
+            var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
+            defer hbox.deinit();
 
-        // align text entry
-        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
-        defer hbox_aligned.deinit();
-        left_alignment.record(hbox.data().id, hbox_aligned.data());
+            // align text entry
+            var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+            defer hbox_aligned.deinit();
+            left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        const num = try dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 1 }, .{});
+            const num = try dvui.textEntryNumber(@src(), f32, opt, .{});
 
-        if (num) |n| {
-            try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
-        } else {
-            try dvui.label(@src(), "invalid", .{}, .{ .gravity_y = 0.5 });
+            if (num) |n| {
+                try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
+            } else {
+                try dvui.label(@src(), "invalid", .{}, .{ .gravity_y = 0.5 });
+            }
         }
     }
 

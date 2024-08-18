@@ -5296,19 +5296,12 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     try te.install();
     te.processEvents();
 
-    // label
-    if (te.getText().len == 0) {
-        if (init_opts.min != null and init_opts.max != null) {
-            try dvui.label(src, "({}-{})", .{}, .{ .id_extra = 2 });
-        }
-    }
-
     // filter before drawing
     te.filterIn(filter);
 
     // validation
     const text = te.getText();
-    const num = switch (@typeInfo(T)) {
+    var num = switch (@typeInfo(T)) {
         .Int => std.fmt.parseInt(T, text, 10) catch null,
         .Float => std.fmt.parseFloat(T, text) catch null,
         else => unreachable,
@@ -5330,6 +5323,21 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         try dvui.pathAddRect(rs.r.outsetAll(1), te.data().options.corner_radiusGet());
         const color = dvui.themeGet().color_err;
         try dvui.pathStrokeAfter(true, true, 3 * rs.s, .none, color);
+        num = null;
+    }
+
+    // display min/max
+    if (te.getText().len == 0) {
+        var minmax_buffer: [64]u8 = undefined;
+        var minmax_text: []const u8 = "";
+        if (init_opts.min != null and init_opts.max != null) {
+            minmax_text = try std.fmt.bufPrint(&minmax_buffer, "(min: {d}, max: {d})", .{ init_opts.min.?, init_opts.max.? });
+        } else if (init_opts.min != null) {
+            minmax_text = try std.fmt.bufPrint(&minmax_buffer, "(min: {d})", .{init_opts.min.?});
+        } else if (init_opts.max != null) {
+            minmax_text = try std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?});
+        }
+        try te.textLayout.addText(minmax_text, .{ .id_extra = 2, .color_text = .{ .name = .fill_hover } });
     }
 
     te.deinit();
