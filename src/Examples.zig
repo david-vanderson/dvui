@@ -264,7 +264,7 @@ pub fn demo() !void {
             dvui.toggleDebugWindow();
         }
 
-        var theme_choice: usize = blk: {
+        const theme_choice: usize = blk: {
             for (dvui.Theme.ptrs, 0..) |tptr, i| {
                 if (dvui.themeGet() == tptr) {
                     break :blk i;
@@ -273,16 +273,19 @@ pub fn demo() !void {
             break :blk 0;
         };
 
-        const changed = try dvui.dropdown(
-            @src(),
-            &dvui.Theme.names,
-            &theme_choice,
-            .{ .min_size_content = .{ .w = 120 }, .id_extra = 1 },
-        );
+        var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = theme_choice, .label = dvui.themeGet().name }, .{ .min_size_content = .{ .w = 120 } });
+        try dd.install();
 
-        if (changed) {
-            dvui.themeSet(dvui.Theme.ptrs[theme_choice]);
+        if (try dd.dropped()) {
+            for (dvui.Theme.ptrs) |tptr| {
+                if (try dd.addChoiceLabel(tptr.name)) {
+                    dvui.themeSet(tptr);
+                    break;
+                }
+            }
         }
+
+        dd.deinit();
     }
 
     {
@@ -352,16 +355,16 @@ pub fn demo() !void {
         try animations();
     }
 
-    if (try dvui.expander(@src(), "Debugging and Errors", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try debuggingErrors();
-    }
-
     if (try dvui.expander(@src(), "Theme Serialization and Parsing", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         try themeSerialization(float.data().id);
+    }
+
+    if (try dvui.expander(@src(), "Debugging and Errors", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        try debuggingErrors();
     }
 
     if (try dvui.expander(@src(), "Struct UI Widget", .{}, .{ .expand = .horizontal })) {
@@ -484,11 +487,11 @@ pub fn basicWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        try dvui.label(@src(), "Dropdown", .{}, .{ .gravity_y = 0.5 });
-
         const entries = [_][]const u8{ "First", "Second", "Third is a really long one that doesn't fit" };
 
-        _ = try dvui.dropdown(@src(), &entries, &dropdown_val, .{ .min_size_content = .{ .w = 120 } });
+        _ = try dvui.dropdown(@src(), &entries, &dropdown_val, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
+
+        try dropdownAdvanced();
     }
 
     {
@@ -578,6 +581,80 @@ pub fn basicWidgets() !void {
             icon_image_rotation = icon_image_rotation - 5 * std.math.pi / 180.0;
         }
     }
+}
+
+pub fn dropdownAdvanced() !void {
+    const g = struct {
+        var choice: ?usize = null;
+    };
+
+    var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = g.choice }, .{ .min_size_content = .{ .w = 100 } });
+    try dd.install();
+
+    // Here's what is shown when the dropdown is not dropped
+    {
+        var hbox2 = try dvui.box(@src(), .horizontal, .{ .expand = .both });
+        try dvui.icon(@src(), "air", entypo.air, .{ .gravity_y = 0.5 });
+
+        var lw: LabelWidget = undefined;
+        if (g.choice) |c| {
+            lw = try LabelWidget.init(@src(), "Dropdown Choice {d}", .{c}, .{ .gravity_y = 0.5 });
+        } else {
+            lw = try LabelWidget.init(@src(), "Advanced Dropdown", .{}, .{ .gravity_y = 0.5 });
+        }
+
+        try lw.install();
+        try lw.draw();
+        lw.deinit();
+        try dvui.icon(@src(), "dropdown_triangle", entypo.chevron_small_down, .{ .gravity_y = 0.5 });
+
+        hbox2.deinit();
+    }
+
+    if (try dd.dropped()) {
+        // The dropdown is dropped, now add all the choices
+        {
+            var mi = try dd.addChoice();
+            defer mi.deinit();
+
+            var hbox2 = try dvui.box(@src(), .horizontal, .{ .expand = .both });
+            defer hbox2.deinit();
+
+            var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
+
+            try dvui.icon(@src(), "aircraft landing", entypo.aircraft_landing, opts.override(.{ .gravity_y = 0.5 }));
+            try dvui.labelNoFmt(@src(), "icon with text", opts);
+
+            if (mi.activeRect()) |_| {
+                dvui.menuGet().?.close();
+                g.choice = 0;
+            }
+        }
+
+        if (try dd.addChoiceLabel("just text")) {
+            g.choice = 1;
+        }
+
+        {
+            var mi = try dd.addChoice();
+            defer mi.deinit();
+
+            var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both });
+            defer vbox.deinit();
+
+            var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
+
+            try dvui.image(@src(), "zig favicon", zig_favicon, opts.override(.{ .gravity_x = 0.5 }));
+            try dvui.labelNoFmt(@src(), "image above text", opts.override(.{ .gravity_x = 0.5 }));
+
+            if (mi.activeRect()) |_| {
+                dvui.menuGet().?.close();
+                g.choice = 2;
+            }
+        }
+    }
+
+    dd.deinit();
 }
 
 pub fn textEntryWidgets() !void {
@@ -692,20 +769,48 @@ pub fn textEntryWidgets() !void {
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        const buf: []u8 = dvui.dataGetSliceDefault(null, hbox.wd.id, "buffer", []u8, &[_]u8{0} ** 20);
+        const result = try dvui.textEntryNumber(@src(), T, .{}, .{});
+        try displayTextEntryNumberResult(result);
+    }
 
-        const num = try dvui.textEntryNumber(@src(), T, .{ .text = buf }, .{});
+    try dvui.label(@src(), "Parse f32 with Min and Max", .{}, .{ .gravity_y = 0.5 });
+    const init_options: [3]dvui.TextEntryNumberInitOptions(f32) = .{ .{ .min = 0 }, .{ .max = 1 }, .{ .min = 0, .max = 1 } };
+    inline for (init_options, 0..) |opt, i| {
+        {
+            var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
+            defer hbox.deinit();
 
-        if (num) |n| {
-            try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
-        } else if (std.mem.sliceTo(buf, 0).len == 0) {
-            try dvui.label(@src(), "empty", .{}, .{ .gravity_y = 0.5 });
-        } else {
-            try dvui.label(@src(), "invalid", .{}, .{ .gravity_y = 0.5 });
+            // align text entry
+            var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+            defer hbox_aligned.deinit();
+            left_alignment.record(hbox.data().id, hbox_aligned.data());
+
+            const result = try dvui.textEntryNumber(@src(), f32, opt, .{});
+            try displayTextEntryNumberResult(result);
         }
     }
 
     try dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});
+}
+
+pub fn displayTextEntryNumberResult(result: anytype) !void {
+    switch (result) {
+        .TooBig => {
+            try dvui.label(@src(), "Too Big", .{}, .{ .gravity_y = 0.5 });
+        },
+        .TooSmall => {
+            try dvui.label(@src(), "Too Small", .{}, .{ .gravity_y = 0.5 });
+        },
+        .Empty => {
+            try dvui.label(@src(), "Empty", .{}, .{ .gravity_y = 0.5 });
+        },
+        .Invalid => {
+            try dvui.label(@src(), "Invalid", .{}, .{ .gravity_y = 0.5 });
+        },
+        .Valid => |num| {
+            try dvui.label(@src(), "{d}", .{num}, .{ .gravity_y = 0.5 });
+        },
+    }
 }
 
 pub fn styling() !void {
