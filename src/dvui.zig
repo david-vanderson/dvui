@@ -44,7 +44,12 @@ pub const ScrollContainerWidget = @import("widgets/ScrollContainerWidget.zig");
 pub const TextEntryWidget = @import("widgets/TextEntryWidget.zig");
 pub const TextLayoutWidget = @import("widgets/TextLayoutWidget.zig");
 pub const VirtualParentWidget = @import("widgets/VirtualParentWidget.zig");
-pub const structWidgetEx = @import("structEntry.zig").structEntryEx;
+
+const se = @import("structEntry.zig");
+pub const structEntry = se.structEntry;
+pub const structEntryEx = se.structEntryEx;
+pub const structEntryAlloc = se.structEntryAlloc;
+pub const structEntryExAlloc = se.structEntryExAlloc;
 
 pub const enums = @import("enums.zig");
 

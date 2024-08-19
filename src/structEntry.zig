@@ -255,7 +255,8 @@ pub fn pointerFieldWidget(
     }
 }
 
-pub fn StructFieldOptions(comptime T: type) type {
+//==========Struct Field Widget and Options
+pub fn StructFieldWidgetOptions(comptime T: type) type {
     var fields: [@typeInfo(T).Struct.fields.len]std.builtin.Type.StructField = undefined;
     inline for (@typeInfo(T).Struct.fields, 0..) |field, i| {
         const FieldOptionType = switch (@typeInfo(field.type)) {
@@ -264,7 +265,7 @@ pub fn StructFieldOptions(comptime T: type) type {
             .Bool => BoolFieldOptions,
             .Enum => EnumFieldOptions,
             .Pointer => PointerFieldOptions(field.type),
-            .Struct => StructFieldOptions(field.type),
+            .Struct => StructFieldWidgetOptions(field.type),
             else => @compileError("Invalid type for field"),
         };
         fields[i] = .{
@@ -286,56 +287,13 @@ pub fn StructFieldOptions(comptime T: type) type {
     });
 }
 
-const IdExtraType = u64;
-const IdAllocator = struct {
-    active_id: *IdExtraType,
-
-    pub fn next(self: @This()) IdExtraType {
-        const result = self.active_id.*;
-        self.active_id.* += 1;
-        return result;
-    }
-};
-
-pub fn FieldOptions(comptime T: type) type {
-    return switch (@typeInfo(T)) {
-        .Int => IntFieldOptions,
-        .Float => FloatFieldOptions,
-        .Enum => EnumFieldOptions,
-        .Bool => BoolFieldOptions,
-        .Struct => StructFieldOptions(T),
-        .Pointer => PointerFieldOptions(T),
-    };
-}
-
-pub fn fieldWidget(
-    comptime src: std.builtin.SourceLocation,
-    comptime name: []const u8,
-    comptime T: type,
-    result: *T,
-    id_allocator: IdAllocator,
-    comptime options: FieldOptions(T),
-    comptime alloc: bool,
-    allocator: ?std.mem.Allocator,
-) !void {
-    switch (@typeInfo(T)) {
-        .Int => try intFieldWidget(src, name, T, result, id_allocator, options),
-        .Float => try floatFieldWidget(src, name, T, result, id_allocator, options),
-        .Bool => try boolFieldWidget(src, name, result, id_allocator, options),
-        .Enum => try enumFieldWidget(src, name, T, result, id_allocator, options),
-        .Pointer => try pointerFieldWidget(src, name, T, result, id_allocator, options, alloc, allocator),
-        .Struct => try structFieldWidget(src, name, T, result, id_allocator, options, true, alloc, allocator),
-        else => @compileError("Invalid type given"),
-    }
-}
-
 fn structFieldWidget(
     comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
     id_allocator: IdAllocator,
-    comptime struct_opts: StructFieldOptions(T),
+    comptime struct_opts: StructFieldWidgetOptions(T),
     comptime expander: bool,
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
@@ -356,11 +314,58 @@ fn structFieldWidget(
     }
 }
 
+//=========Generic Field Widget and Options===========
+pub fn FieldOptions(comptime T: type) type {
+    return switch (@typeInfo(T)) {
+        .Int => IntFieldOptions,
+        .Float => FloatFieldOptions,
+        .Enum => EnumFieldOptions,
+        .Bool => BoolFieldOptions,
+        .Struct => StructFieldWidgetOptions(T),
+        .Pointer => PointerFieldOptions(T),
+        else => @compileError("Invalid Type"),
+    };
+}
+
+pub fn fieldWidget(
+    comptime src: std.builtin.SourceLocation,
+    comptime name: []const u8,
+    comptime T: type,
+    result: *T,
+    id_allocator: IdAllocator,
+    comptime options: FieldOptions(T),
+    comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
+) !void {
+    switch (@typeInfo(T)) {
+        .Int => try intFieldWidget(src, name, T, result, id_allocator, options),
+        .Float => try floatFieldWidget(src, name, T, result, id_allocator, options),
+        .Bool => try boolFieldWidget(src, name, result, id_allocator, options),
+        .Enum => try enumFieldWidget(src, name, T, result, id_allocator, options),
+        .Pointer => try pointerFieldWidget(src, name, T, result, id_allocator, options, alloc, allocator),
+        .Struct => try structFieldWidget(src, name, T, result, id_allocator, options, true, alloc, allocator),
+        else => @compileError("Invalid type"),
+    }
+}
+
+//==========For Allocating Extra Ids===========
+const IdExtraType = u64;
+const IdAllocator = struct {
+    active_id: *IdExtraType,
+
+    pub fn next(self: @This()) IdExtraType {
+        const result = self.active_id.*;
+        self.active_id.* += 1;
+        return result;
+    }
+};
+
+//========Internal Struct Entry Entrypoint=========
 fn structEntryInternal(
     comptime src: std.builtin.SourceLocation,
     comptime T: type,
     result: *T,
-    comptime field_options: StructFieldOptions(T),
+    comptime field_options: StructFieldWidgetOptions(T),
     comptime alloc: bool,
     base_allocator: ?std.mem.Allocator,
 ) !?std.heap.ArenaAllocator {
@@ -377,47 +382,44 @@ fn structEntryInternal(
     var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next(), .color_border = .{ .name = .border } });
     defer box.deinit();
 
-    try structFieldWidget(
-        src,
-        "",
-        T,
-        result,
-        id_allocator,
-        field_options,
-        .{ .expander = false, .alloc = alloc },
-        allocator,
-    );
+    try structFieldWidget(src, "", T, result, id_allocator, field_options, false, alloc, allocator);
 
     return arena;
 }
 
+//=========PUBLIC API FUNCTIONS===========
 pub fn structEntry(
     comptime src: std.builtin.SourceLocation,
     comptime T: type,
     result: *T,
 ) !void {
-    try structEntryEx(src, "", T, result, .{}, .{});
+    _ = try structEntryInternal(src, T, result, .{}, false, null);
 }
 
 pub fn structEntryEx(
     comptime src: std.builtin.SourceLocation,
     comptime T: type,
     result: *T,
-    comptime field_options: StructFieldOptions(T),
+    comptime field_options: StructFieldWidgetOptions(T),
 ) !void {
-    var starting_id_extra: IdExtraType = 1;
-    const id_allocator = IdAllocator{ .active_id = &starting_id_extra };
+    _ = try structEntryInternal(src, T, result, field_options, false, null);
+}
 
-    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next(), .color_border = .{ .name = .border } });
-    defer box.deinit();
+pub fn structEntryAlloc(
+    comptime src: std.builtin.SourceLocation,
+    allocator: std.mem.Allocator,
+    comptime T: type,
+    result: *T,
+) !std.heap.ArenaAllocator {
+    return try structEntryInternal(src, T, result, .{}, true, allocator);
+}
 
-    try structFieldWidget(
-        src,
-        "",
-        T,
-        result,
-        id_allocator,
-        field_options,
-        false,
-    );
+pub fn structEntryExAlloc(
+    comptime src: std.builtin.SourceLocation,
+    allocator: std.mem.Allocator,
+    comptime T: type,
+    result: *T,
+    comptime field_options: StructFieldWidgetOptions(T),
+) !std.heap.ArenaAllocator {
+    return try structEntryInternal(src, T, result, field_options, true, allocator);
 }
