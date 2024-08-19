@@ -5271,7 +5271,7 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
     return struct {
         min: ?T = null,
         max: ?T = null,
-        initialize: ?T = null,
+        value: ?*T = null,
     };
 }
 
@@ -5302,8 +5302,8 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     const buffer = dataGetSliceDefault(currentWindow(), hbox.widget().data().id, "buffer", []u8, &[_]u8{0} ** 32);
 
     //initialize with input number
-    if (init_opts.initialize) |num| {
-        _ = try std.fmt.bufPrint(buffer, "{d}", .{num});
+    if (init_opts.value) |num| {
+        _ = try std.fmt.bufPrint(buffer, "{d}", .{num.*});
     }
 
     const cw = currentWindow();
@@ -5336,6 +5336,9 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         result = .TooBig;
     } else {
         result = .{ .Valid = num.? };
+        if (init_opts.value) |value_ptr| {
+            value_ptr.* = num.?;
+        }
     }
 
     try te.draw();
