@@ -386,20 +386,21 @@ pub fn demo() !void {
             buzz: enum { bap, bep, bip, bop, bup },
             text: []const u8,
         };
+        _ = TestType; // autofix
         const Static = struct {
-            var result: TestType = undefined;
+            var result: dvui.Theme = undefined;
         };
-        try dvui.structEntryEx(@src(), TestType, &Static.result, .{
-            .a = .{ .widget_type = .slider },
-            .foo_a = .{ .widget_type = .toggle },
-            .foo_b = .{ .widget_type = .dropdown },
-            .foo_c = .{ .widget_type = .checkbox },
-            .bar = .{
-                .r = .{ .widget_type = .slider },
-                .g = .{ .widget_type = .slider },
-                .b = .{ .widget_type = .slider },
-            },
-            .buzz = .{ .widget_type = .radio },
+        try dvui.structEntryEx(@src(), dvui.Theme, &Static.result, .{
+            //    .a = .{ .widget_type = .slider },
+            //    .foo_a = .{ .widget_type = .toggle },
+            //    .foo_b = .{ .widget_type = .dropdown },
+            //    .foo_c = .{ .widget_type = .checkbox },
+            //    .bar = .{
+            //        .r = .{ .widget_type = .slider },
+            //        .g = .{ .widget_type = .slider },
+            //        .b = .{ .widget_type = .slider },
+            //    },
+            //    .buzz = .{ .widget_type = .radio },
         });
     }
 
