@@ -368,6 +368,8 @@ pub fn demo() !void {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
 
+        //structUi
+
         const TestType = struct {
             a: i8,
             b: u16,
@@ -384,7 +386,7 @@ pub fn demo() !void {
         const Static = struct {
             var result: TestType = undefined;
         };
-        try dvui.structWidgetEx(@src(), TestType, &Static.result, .{
+        try dvui.structEntryEx(@src(), TestType, &Static.result, .{
             .a = .{ .widget_type = .slider },
             .foo_a = .{ .widget_type = .toggle },
             .foo_b = .{ .widget_type = .dropdown },
