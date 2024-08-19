@@ -191,7 +191,7 @@ pub fn unionFieldWidget(
     comptime alloc: bool,
 ) !void {
     _ = options; // autofix
-    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
 
     const FieldEnum = std.meta.FieldEnum(T);
@@ -415,6 +415,9 @@ fn structFieldWidget(
     comptime alloc: bool,
 ) !void {
     if (@typeInfo(T) != .Struct) @compileError("Input Type Must Be A Struct");
+
+    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
+    defer box.deinit();
 
     var render: bool = true;
     if (expander) {
