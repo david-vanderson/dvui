@@ -390,7 +390,7 @@ pub fn demo() !void {
         const Static = struct {
             var result: dvui.Theme = undefined;
         };
-        try dvui.structEntryEx(@src(), dvui.Theme, &Static.result, .{
+        try dvui.structEntryExAlloc(@src(), dvui.Theme, &Static.result, .{
             //    .a = .{ .widget_type = .slider },
             //    .foo_a = .{ .widget_type = .toggle },
             //    .foo_b = .{ .widget_type = .dropdown },
