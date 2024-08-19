@@ -131,7 +131,7 @@ fn enumFieldWidget(
 }
 
 pub const BoolFieldOptions = struct {
-    widget_type: enum { checkbox, dropdown, toggle } = .checkbox,
+    widget_type: enum { checkbox, dropdown, toggle } = .toggle,
 };
 
 fn boolFieldWidget(
@@ -190,14 +190,29 @@ pub fn unionFieldWidget(
     comptime options: UnionFieldOptions(T),
     comptime alloc: bool,
 ) !void {
-    _ = result; // autofix
     _ = options; // autofix
-    _ = alloc; // autofix
-    var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
 
-    try dvui.label(src, "Union Field: {s}", .{name}, .{ .id_extra = id_allocator.next() });
-    //try fieldWidget(src, name, Child, @ptrCast(result), id_allocator, options.child_opts, alloc);
+    const FieldEnum = std.meta.FieldEnum(T);
+
+    const entries = std.meta.fieldNames(T);
+    var choice: usize = @intFromEnum(std.meta.activeTag(result.*));
+
+    try dvui.label(src, "{s}", .{name}, .{ .id_extra = id_allocator.next() });
+    _ = try dvui.dropdown(src, entries, &choice, .{ .id_extra = id_allocator.next() });
+
+    inline for (@typeInfo(T).Union.fields, 0..) |field, i| {
+        if (choice == i) {
+            if (std.meta.activeTag(result.*) != @as(FieldEnum, @enumFromInt(i))) {
+                result.* = @unionInit(T, field.name, undefined);
+            }
+            const field_result: *field.type = &@field(result.*, field.name);
+            //TODO support child opts
+            try fieldWidget(src, field.name, field.type, @ptrCast(field_result), id_allocator, .{}, alloc);
+            //result.* = @unionInit(T, field.name, field_result.*);
+        }
+    }
 }
 
 //=======Optional Field Widget and Options=======
@@ -216,13 +231,24 @@ pub fn optionalFieldWidget(
     comptime options: OptionalFieldOptions(T),
     comptime alloc: bool,
 ) !void {
-    var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
 
     const Child = @typeInfo(T).Optional.child;
 
-    try dvui.label(src, "Optional Field", .{}, .{ .id_extra = id_allocator.next() });
-    try fieldWidget(src, name, Child, @ptrCast(result), id_allocator, options.child_opts, alloc);
+    const checkbox_state = dvui.dataGetPtrDefault(dvui.currentWindow(), box.widget().data().id, "checked", bool, false);
+    {
+        var hbox = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+        defer hbox.deinit();
+        try dvui.label(src, "{s}?", .{name}, .{ .id_extra = id_allocator.next() });
+        _ = try dvui.checkbox(src, checkbox_state, null, .{ .id_extra = id_allocator.next() });
+    }
+
+    if (checkbox_state.*) {
+        try fieldWidget(src, name, Child, @ptrCast(result), id_allocator, options.child_opts, alloc);
+    } else {
+        result.* = null;
+    }
 }
 
 //==========Text Field Widget and Options============
@@ -239,6 +265,8 @@ fn textFieldWidget(
     comptime text_opt: TextFieldOptions,
     comptime alloc: bool,
 ) !void {
+
+    //TODO respect alloc setting
     _ = alloc; // autofix
     var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
@@ -251,8 +279,10 @@ fn textFieldWidget(
         []u8,
         &([_]u8{0} ** text_opt.max_len),
     );
+
     const text_box = try dvui.textEntry(src, .{ .text = buffer }, .{ .id_extra = id_allocator.next() });
     defer text_box.deinit();
+
     result.* = text_box.getText();
 }
 
@@ -268,8 +298,6 @@ pub fn PointerFieldOptions(comptime T: type) type {
     } else if (info.size == .C or info.size == .Many) {
         @compileError("Many item pointers disallowed");
     }
-
-    @compileError("todo");
 }
 
 pub fn pointerFieldWidget(
@@ -286,9 +314,9 @@ pub fn pointerFieldWidget(
     if (info.size == .Slice and info.child == u8) {
         try textFieldWidget(src, name, result, id_allocator, options, alloc);
     } else if (info.size == .Slice) {
-        try sliceFieldWidget(src, name, result, id_allocator, options, alloc);
+        try sliceFieldWidget(src, name, T, result, id_allocator, options, alloc);
     } else if (info.size == .One) {
-        try singlePointerFieldWidget(src, name, result, id_allocator, options, alloc);
+        try singlePointerFieldWidget(src, T, name, result, id_allocator, options, alloc);
     } else if (info.size == .C or info.size == .Many) {
         @compileError("structEntry does not support *C or Many pointers");
     }
@@ -360,16 +388,6 @@ pub fn sliceFieldWidget(
 pub fn StructFieldOptions(comptime T: type) type {
     var fields: [@typeInfo(T).Struct.fields.len]std.builtin.Type.StructField = undefined;
     inline for (@typeInfo(T).Struct.fields, 0..) |field, i| {
-        // const FieldOptionType = switch (@typeInfo(field.type)) {
-        //     .Int => IntFieldOptions,
-        //     .Float => FloatFieldOptions,
-        //     .Bool => BoolFieldOptions,
-        //     .Enum => EnumFieldOptions,
-        //     .Pointer => PointerFieldOptions(field.type),
-        //     .Optional => OptionalFieldOptions(field.type),
-        //     .Struct => StructFieldOptions(field.type),
-        //     else => @compileError("Invalid type for field: " ++ @typeName(field.type)),
-        // };
         fields[i] = .{
             .alignment = 1,
             .default_value = @alignCast(@ptrCast(&(FieldOptions(field.type){}))),
@@ -378,15 +396,12 @@ pub fn StructFieldOptions(comptime T: type) type {
             .type = FieldOptions(field.type),
         };
     }
-
-    return @Type(.{
-        .Struct = .{
-            .decls = &.{},
-            .fields = &fields,
-            .is_tuple = false,
-            .layout = .auto,
-        },
-    });
+    return @Type(.{ .Struct = .{
+        .decls = &.{},
+        .fields = &fields,
+        .is_tuple = false,
+        .layout = .auto,
+    } });
 }
 
 fn structFieldWidget(
