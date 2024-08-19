@@ -214,6 +214,47 @@ fn textFieldWidget(
     result.* = text_box.getText();
 }
 
+pub fn PointerFieldOptions(comptime T: type) type {
+    const info = @typeInfo(T).Pointer;
+
+    if (info.size == .Slice and info.child == u8) {
+        return TextFieldOptions;
+    } else if (info.size == .Slice) {
+        //return SliceFieldOptions(T);
+    } else if (info.size == .One) {
+        //return SinglePointerFieldOptions(T);
+    } else if (info.size == .C or info.size == .Many) {
+        //return ManyPointerFieldOptions(T);
+    }
+
+    @compileError("todo");
+}
+
+pub fn pointerFieldWidget(
+    comptime src: std.builtin.SourceLocation,
+    comptime name: []const u8,
+    comptime T: type,
+    result: *T,
+    id_allocator: IdAllocator,
+    options: PointerFieldOptions(T),
+    comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
+) !void {
+    if (!alloc) @compileError("allocator must exist for pointers");
+
+    const info = @typeInfo(T).Pointer;
+
+    if (info.size == .Slice and info.child == u8) {
+        try textFieldWidget(src, name, result, id_allocator, options, allocator.?);
+    } else if (info.size == .Slice) {
+        //return SliceFieldOptions(T);
+    } else if (info.size == .One) {
+        //return SinglePointerFieldOptions(T);
+    } else if (info.size == .C or info.size == .Many) {
+        //return ManyPointerFieldOptions(T);
+    }
+}
+
 pub fn StructFieldOptions(comptime T: type) type {
     var fields: [@typeInfo(T).Struct.fields.len]std.builtin.Type.StructField = undefined;
     inline for (@typeInfo(T).Struct.fields, 0..) |field, i| {
@@ -222,13 +263,7 @@ pub fn StructFieldOptions(comptime T: type) type {
             .Float => FloatFieldOptions,
             .Bool => BoolFieldOptions,
             .Enum => EnumFieldOptions,
-            .Pointer => |ptr| blk: {
-                if (ptr.child == u8 and (ptr.size == .Slice)) {
-                    break :blk TextFieldOptions;
-                } else {
-                    @compileError("Invalid type for field");
-                }
-            },
+            .Pointer => PointerFieldOptions(field.type),
             .Struct => StructFieldOptions(field.type),
             else => @compileError("Invalid type for field"),
         };
@@ -251,7 +286,7 @@ pub fn StructFieldOptions(comptime T: type) type {
     });
 }
 
-const IdExtraType = u64; //@typeInfo(@TypeOf(dvui.Options.id_extra)).Optional.child;
+const IdExtraType = u64;
 const IdAllocator = struct {
     active_id: *IdExtraType,
 
@@ -262,6 +297,38 @@ const IdAllocator = struct {
     }
 };
 
+pub fn FieldOptions(comptime T: type) type {
+    return switch (@typeInfo(T)) {
+        .Int => IntFieldOptions,
+        .Float => FloatFieldOptions,
+        .Enum => EnumFieldOptions,
+        .Bool => BoolFieldOptions,
+        .Struct => StructFieldOptions(T),
+        .Pointer => PointerFieldOptions(T),
+    };
+}
+
+pub fn fieldWidget(
+    comptime src: std.builtin.SourceLocation,
+    comptime name: []const u8,
+    comptime T: type,
+    result: *T,
+    id_allocator: IdAllocator,
+    comptime options: FieldOptions(T),
+    comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
+) !void {
+    switch (@typeInfo(T)) {
+        .Int => try intFieldWidget(src, name, T, result, id_allocator, options),
+        .Float => try floatFieldWidget(src, name, T, result, id_allocator, options),
+        .Bool => try boolFieldWidget(src, name, result, id_allocator, options),
+        .Enum => try enumFieldWidget(src, name, T, result, id_allocator, options),
+        .Pointer => try pointerFieldWidget(src, name, T, result, id_allocator, options, alloc, allocator),
+        .Struct => try structFieldWidget(src, name, T, result, id_allocator, options, true, alloc, allocator),
+        else => @compileError("Invalid type given"),
+    }
+}
+
 fn structFieldWidget(
     comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
@@ -270,6 +337,8 @@ fn structFieldWidget(
     id_allocator: IdAllocator,
     comptime struct_opts: StructFieldOptions(T),
     comptime expander: bool,
+    comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     if (@typeInfo(T) != .Struct) @compileError("Input Type Must Be A Struct");
 
@@ -282,18 +351,44 @@ fn structFieldWidget(
         inline for (@typeInfo(T).Struct.fields) |field| {
             const options = @field(struct_opts, field.name);
             const result_ptr = &@field(result.*, field.name);
-
-            switch (@typeInfo(field.type)) {
-                .Int => try intFieldWidget(src, field.name, field.type, result_ptr, id_allocator, options),
-                .Float => try floatFieldWidget(src, field.name, field.type, result_ptr, id_allocator, options),
-                .Bool => try boolFieldWidget(src, field.name, result_ptr, id_allocator, options),
-                .Enum => try enumFieldWidget(src, field.name, field.type, result_ptr, id_allocator, options),
-                .Pointer => try textFieldWidget(src, field.name, result_ptr, id_allocator, options),
-                .Struct => try structFieldWidget(src, field.name, field.type, result_ptr, id_allocator, options, true),
-                else => @compileError("Invalid type given"),
-            }
+            try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options, alloc, allocator);
         }
     }
+}
+
+fn structEntryInternal(
+    comptime src: std.builtin.SourceLocation,
+    comptime T: type,
+    result: *T,
+    comptime field_options: StructFieldOptions(T),
+    comptime alloc: bool,
+    base_allocator: ?std.mem.Allocator,
+) !?std.heap.ArenaAllocator {
+    var arena: ?std.heap.ArenaAllocator = null;
+    var allocator: ?std.mem.Allocator = null;
+    if (alloc) {
+        arena = std.heap.ArenaAllocator.init(base_allocator);
+        allocator = arena.?.allocator();
+    }
+
+    var starting_id_extra: IdExtraType = 1;
+    const id_allocator = IdAllocator{ .active_id = &starting_id_extra };
+
+    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next(), .color_border = .{ .name = .border } });
+    defer box.deinit();
+
+    try structFieldWidget(
+        src,
+        "",
+        T,
+        result,
+        id_allocator,
+        field_options,
+        .{ .expander = false, .alloc = alloc },
+        allocator,
+    );
+
+    return arena;
 }
 
 pub fn structEntry(
