@@ -255,6 +255,11 @@ pub fn pointerFieldWidget(
     }
 }
 
+//=======Single Item pointer and options=======
+pub fn SinglePointerFieldOptions(comptime T: type) {
+    
+}
+
 //==========Struct Field Widget and Options
 pub fn StructFieldWidgetOptions(comptime T: type) type {
     var fields: [@typeInfo(T).Struct.fields.len]std.builtin.Type.StructField = undefined;
@@ -364,27 +369,20 @@ const IdAllocator = struct {
 fn structEntryInternal(
     comptime src: std.builtin.SourceLocation,
     comptime T: type,
-    result: *T,
     comptime field_options: StructFieldWidgetOptions(T),
     comptime alloc: bool,
-    base_allocator: ?std.mem.Allocator,
-) !?std.heap.ArenaAllocator {
-    var arena: ?std.heap.ArenaAllocator = null;
-    var allocator: ?std.mem.Allocator = null;
-    if (alloc) {
-        arena = std.heap.ArenaAllocator.init(base_allocator);
-        allocator = arena.?.allocator();
-    }
-
+) !StructEntryAllocResult(T){
+    var result: StructEntryAllocResult(T) = .{.value = undefined};
+    
     var starting_id_extra: IdExtraType = 1;
     const id_allocator = IdAllocator{ .active_id = &starting_id_extra };
 
     var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next(), .color_border = .{ .name = .border } });
     defer box.deinit();
 
-    try structFieldWidget(src, "", T, result, id_allocator, field_options, false, alloc, allocator);
+    try structFieldWidget(src, "", T, &result.value, id_allocator, field_options, false, alloc);
 
-    return arena;
+    return result;
 }
 
 //=========PUBLIC API FUNCTIONS===========
@@ -393,7 +391,7 @@ pub fn structEntry(
     comptime T: type,
     result: *T,
 ) !void {
-    _ = try structEntryInternal(src, T, result, .{}, false, null);
+    result.* = (try structEntryInternal(src, T, .{}, false)).value;
 }
 
 pub fn structEntryEx(
@@ -402,24 +400,83 @@ pub fn structEntryEx(
     result: *T,
     comptime field_options: StructFieldWidgetOptions(T),
 ) !void {
-    _ = try structEntryInternal(src, T, result, field_options, false, null);
+    result.* = (try structEntryInternal(src, T, field_options, false)).value;
 }
 
 pub fn structEntryAlloc(
     comptime src: std.builtin.SourceLocation,
-    allocator: std.mem.Allocator,
     comptime T: type,
-    result: *T,
-) !std.heap.ArenaAllocator {
-    return try structEntryInternal(src, T, result, .{}, true, allocator);
+) !StructEntryAllocResult(T) {
+    return try structEntryInternal(src, T, .{}, true);
 }
 
 pub fn structEntryExAlloc(
     comptime src: std.builtin.SourceLocation,
-    allocator: std.mem.Allocator,
     comptime T: type,
-    result: *T,
     comptime field_options: StructFieldWidgetOptions(T),
-) !std.heap.ArenaAllocator {
-    return try structEntryInternal(src, T, result, field_options, true, allocator);
+) !StructEntryAllocResult(T) {
+    return structEntryInternal(src, T, field_options, true);
+}
+
+//============Alloc result type========
+pub fn StructEntryAllocResult(comptime T: type) type {
+    return struct {
+        result: T,
+
+        pub fn getOwnedCopy(self: *@This(), a: std.mem.Allocator) !Parsed(T) {
+            var arena = std.heap.ArenaAllocator.init(a);
+
+            //perform deep copy
+            const value = try deepCopyStruct(arena.allocator(), self.result.*);
+
+            return .{ .value = value, .arena = arena };
+        }
+    };
+}
+
+//==========Deep Copy Function==========
+pub fn Parsed(comptime T: type) type {
+    return struct {
+        arena: std.heap.ArenaAllocator,
+        value: T,
+
+        pub fn deinit(self: @This()) void {
+            self.arena.deinit();
+        }
+    };
+}
+
+pub fn deepCopyStruct(allocator: std.mem.Allocator, value: anytype) !@TypeOf(value) {
+    const T = @TypeOf(value);
+    var result: T = undefined;
+
+    inline for (@typeInfo(T).Struct.fields) |field| {
+        const info = @typeInfo(field.type);
+        if (info == .Pointer) {
+            switch (info.size) {
+                .Slice => {
+                    @field(result, field.name) = try allocator.dupe(info.child, @field(value, field.name));
+                    if (@typeInfo(info.child) == .Struct) {
+                        for (@field(result, field.name), 0..) |*val, i| {
+                            val.* = try deepCopyStruct(allocator, @field(value, field.name)[i]);
+                        }
+                    }
+                },
+                .One => {
+                    @field(result, field.name) = try allocator.create(info.child);
+                    if (@typeInfo(info.child) == .Struct) {
+                        @field(result, field.name).* = try deepCopyStruct(allocator, @field(value, field.name));
+                    } else {
+                        @field(result, field.name).* = @field(value, field.name);
+                    }
+                },
+                else => @compileError("Cannot copy *C and Many pointers"),
+            }
+        } else if (info == .Struct) {
+            @field(result, field.name) = try deepCopyStruct(allocator, @field(value, field.name));
+        } else {
+            @field(result, field.name) = @field(value, field.name);
+        }
+    }
+    return result;
 }
