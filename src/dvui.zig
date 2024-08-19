@@ -3806,137 +3806,213 @@ pub fn animate(src: std.builtin.SourceLocation, kind: AnimateWidget.Kind, durati
     return ret;
 }
 
-pub var dropdown_defaults: Options = .{
-    .color_fill = .{ .name = .fill_control },
-    .margin = Rect.all(4),
-    .corner_radius = Rect.all(5),
-    .padding = Rect.all(4),
-    .background = true,
-    .name = "Dropdown",
-};
+pub const DropdownWidget = struct {
+    pub var defaults: Options = .{
+        .color_fill = .{ .name = .fill_control },
+        .margin = Rect.all(4),
+        .corner_radius = Rect.all(5),
+        .padding = Rect.all(4),
+        .background = true,
+        .name = "Dropdown",
+    };
 
-pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: *usize, opts: Options) !bool {
-    const options = dropdown_defaults.override(opts);
+    pub const InitOptions = struct {
+        label: ?[]const u8 = null,
+        selected_index: ?usize = null,
+    };
 
-    var m = try dvui.menu(@src(), .horizontal, options.wrapOuter());
-    defer m.deinit();
+    options: Options = undefined,
+    init_options: InitOptions = undefined,
+    menu: MenuWidget = undefined,
+    menuItem: MenuItemWidget = undefined,
+    drop: ?FloatingMenuWidget = null,
+    drop_first_frame: bool = false,
+    drop_mi: ?MenuItemWidget = null,
+    drop_mi_index: usize = 0,
+    drop_height: f32 = 0,
+    drop_adjust: f32 = undefined,
 
-    var b = MenuItemWidget.init(src, .{ .submenu = true }, options.wrapInner());
-    try b.install();
-    b.processEvents();
-    try b.drawBackground(.{ .focus_as_outline = true });
-    defer b.deinit();
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) DropdownWidget {
+        var self = DropdownWidget{};
+        self.options = defaults.override(opts);
+        self.init_options = init_opts;
+        self.menu = MenuWidget.init(src, .{ .dir = .horizontal }, self.options.wrapOuter());
+        self.drop_adjust = dvui.dataGet(null, self.menu.wd.id, "_drop_adjust", f32) orelse 0;
+        return self;
+    }
 
-    var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both });
-    defer hbox.deinit();
+    pub fn install(self: *DropdownWidget) !void {
+        try self.menu.install();
 
-    var lw = try LabelWidget.initNoFmt(@src(), entries[choice.*], options.strip().override(.{ .gravity_y = 0.5 }));
-    const lwrs = lw.wd.contentRectScale();
-    try lw.install();
-    try lw.draw();
-    lw.deinit();
-    try icon(@src(), "dropdown_triangle", entypo.chevron_small_down, options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }));
+        self.menuItem = MenuItemWidget.init(@src(), .{ .submenu = true }, self.options.wrapInner());
+        try self.menuItem.install();
+        self.menuItem.processEvents();
+        try self.menuItem.drawBackground(.{ .focus_as_outline = true });
 
-    var ret = false;
-    if (b.activeRect()) |r| {
-        const lw_rect = lwrs.r.scale(1 / windowNaturalScale());
-        var pop = FloatingMenuWidget.init(@src(), lw_rect, .{ .min_size_content = r.size() });
-        const first_frame = firstFrame(pop.wd.id);
+        if (self.init_options.label) |ll| {
+            var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both });
 
-        const s = pop.scale_val;
+            var lw = try LabelWidget.initNoFmt(@src(), ll, self.options.strip().override(.{ .gravity_y = 0.5 }));
+            try lw.install();
+            try lw.draw();
+            lw.deinit();
+            try icon(@src(), "dropdown_triangle", entypo.chevron_small_down, self.options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }));
 
-        // move popup to align first item with b
-        pop.initialRect.x -= MenuItemWidget.defaults.borderGet().x * s;
-        pop.initialRect.x -= MenuItemWidget.defaults.paddingGet().x * s;
-        pop.initialRect.y -= MenuItemWidget.defaults.borderGet().y * s;
-        pop.initialRect.y -= MenuItemWidget.defaults.paddingGet().y * s;
+            hbox.deinit();
+        }
+    }
 
-        pop.initialRect.x -= pop.options.borderGet().x;
-        pop.initialRect.x -= pop.options.paddingGet().x;
-        pop.initialRect.y -= pop.options.borderGet().y;
-        pop.initialRect.y -= pop.options.paddingGet().y;
+    pub fn dropped(self: *DropdownWidget) !bool {
+        if (self.drop != null) {
+            // protect against calling this multiple times
+            return true;
+        }
 
-        // move popup up so selected entry is aligned with b
-        const h = pop.wd.contentRect().inset(pop.options.borderGet()).inset(pop.options.paddingGet()).h;
-        pop.initialRect.y -= (h / @as(f32, @floatFromInt(entries.len))) * @as(f32, @floatFromInt(choice.*));
+        if (self.menuItem.activeRect()) |r| {
+            self.drop = FloatingMenuWidget.init(@src(), r, .{ .min_size_content = r.size() });
+            var drop = &self.drop.?;
+            self.drop_first_frame = firstFrame(drop.wd.id);
 
-        try pop.install();
-        defer pop.deinit();
+            const s = drop.scale_val;
 
-        // without this, if you trigger the dropdown with the keyboard and then
-        // move the mouse, the entries are highlighted but not focused
-        pop.menu.submenus_activated = true;
+            // move drop up to align first item
+            drop.initialRect.x -= drop.options.borderGet().x * s;
+            drop.initialRect.x -= drop.options.paddingGet().x * s;
+            drop.initialRect.y -= drop.options.borderGet().y * s;
+            drop.initialRect.y -= drop.options.paddingGet().y * s;
 
-        // only want a mouse-up to choose something if the mouse has moved in the popup
-        var eat_mouse_up = dataGet(null, pop.wd.id, "_eat_mouse_up", bool) orelse true;
-        var drag_scroll = dataGet(null, pop.wd.id, "_drag_scroll", bool) orelse false;
+            // move drop up so selected entry is aligned
+            drop.initialRect.y -= self.drop_adjust * s;
 
-        const pop_rs = pop.data().rectScale();
-        const scroll_rs = pop.scroll.data().contentRectScale();
-        const evts = events();
-        for (evts) |*e| {
-            if (drag_scroll and e.evt == .mouse and !e.evt.mouse.button.touch() and (e.evt.mouse.action == .motion or e.evt.mouse.action == .position)) {
-                if (e.evt.mouse.p.x >= scroll_rs.r.x and e.evt.mouse.p.x <= scroll_rs.r.x + scroll_rs.r.w and (e.evt.mouse.p.y <= scroll_rs.r.y or e.evt.mouse.p.y >= scroll_rs.r.y + scroll_rs.r.h)) {
-                    if (e.evt.mouse.action == .motion) {
-                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
-                            .mouse_pt = e.evt.mouse.p,
-                            .screen_rect = pop.menu.data().rectScale().r,
-                            .capture_id = pop.wd.id,
-                        } } };
-                        pop.scroll.scroll.processEvent(&scrolldrag, true);
-                    } else if (e.evt.mouse.action == .position) {
-                        dvui.currentWindow().inject_motion_event = true;
+            try drop.install();
+
+            // without this, if you trigger the dropdown with the keyboard and then
+            // move the mouse, the entries are highlighted but not focused
+            drop.menu.submenus_activated = true;
+
+            // only want a mouse-up to choose something if the mouse has moved in the dropup
+            var eat_mouse_up = dataGet(null, drop.wd.id, "_eat_mouse_up", bool) orelse true;
+            var drag_scroll = dataGet(null, drop.wd.id, "_drag_scroll", bool) orelse false;
+
+            const drop_rs = drop.data().rectScale();
+            const scroll_rs = drop.scroll.data().contentRectScale();
+            const evts = events();
+            for (evts) |*e| {
+                if (drag_scroll and e.evt == .mouse and !e.evt.mouse.button.touch() and (e.evt.mouse.action == .motion or e.evt.mouse.action == .position)) {
+                    if (e.evt.mouse.p.x >= scroll_rs.r.x and e.evt.mouse.p.x <= scroll_rs.r.x + scroll_rs.r.w and (e.evt.mouse.p.y <= scroll_rs.r.y or e.evt.mouse.p.y >= scroll_rs.r.y + scroll_rs.r.h)) {
+                        if (e.evt.mouse.action == .motion) {
+                            var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                                .mouse_pt = e.evt.mouse.p,
+                                .screen_rect = drop.menu.data().rectScale().r,
+                                .capture_id = drop.wd.id,
+                            } } };
+                            drop.scroll.scroll.processEvent(&scrolldrag, true);
+                        } else if (e.evt.mouse.action == .position) {
+                            dvui.currentWindow().inject_motion_event = true;
+                        }
                     }
                 }
-            }
 
-            if (!eventMatch(e, .{ .id = pop.data().id, .r = pop_rs.r }))
-                continue;
+                if (!eventMatch(e, .{ .id = drop.data().id, .r = drop_rs.r }))
+                    continue;
 
-            if (e.evt == .mouse) {
-                if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
-                    if (eat_mouse_up) {
-                        e.handled = true;
-                        eat_mouse_up = false;
-                        dataSet(null, pop.wd.id, "_eat_mouse_up", eat_mouse_up);
-                    }
-                } else if (e.evt.mouse.action == .motion or (e.evt.mouse.action == .press and e.evt.mouse.button.pointer())) {
-                    if (eat_mouse_up) {
-                        eat_mouse_up = false;
-                        dataSet(null, pop.wd.id, "_eat_mouse_up", eat_mouse_up);
-                    }
+                if (e.evt == .mouse) {
+                    if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
+                        if (eat_mouse_up) {
+                            e.handled = true;
+                            eat_mouse_up = false;
+                            dataSet(null, drop.wd.id, "_eat_mouse_up", eat_mouse_up);
+                        }
+                    } else if (e.evt.mouse.action == .motion or (e.evt.mouse.action == .press and e.evt.mouse.button.pointer())) {
+                        if (eat_mouse_up) {
+                            eat_mouse_up = false;
+                            dataSet(null, drop.wd.id, "_eat_mouse_up", eat_mouse_up);
+                        }
 
-                    if (!drag_scroll) {
-                        drag_scroll = true;
-                        dataSet(null, pop.wd.id, "_drag_scroll", drag_scroll);
+                        if (!drag_scroll) {
+                            drag_scroll = true;
+                            dataSet(null, drop.wd.id, "_drag_scroll", drag_scroll);
+                        }
                     }
                 }
             }
         }
 
-        for (entries, 0..) |_, i| {
-            var mi = try menuItem(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
-            if (first_frame and (i == choice.*)) {
-                focusWidget(mi.wd.id, null, null);
+        if (self.drop != null) {
+            return true;
+        }
+
+        return false;
+    }
+
+    pub fn addChoiceLabel(self: *DropdownWidget, label_text: []const u8) !bool {
+        var mi = try self.addChoice();
+        defer mi.deinit();
+
+        var opts = self.options.strip();
+        if (mi.show_active) {
+            opts = opts.override(dvui.themeGet().style_accent);
+        }
+
+        try labelNoFmt(@src(), label_text, opts);
+
+        if (mi.activeRect()) |_| {
+            dvui.menuGet().?.close();
+            return true;
+        }
+
+        return false;
+    }
+
+    pub fn addChoice(self: *DropdownWidget) !*MenuItemWidget {
+        // record how far down in our parent we would be
+        if (self.drop_mi) |*mi| {
+            self.drop_height += mi.data().min_size.h;
+        }
+
+        self.drop_mi = MenuItemWidget.init(@src(), .{}, .{ .id_extra = self.drop_mi_index, .expand = .horizontal });
+        try self.drop_mi.?.install();
+        self.drop_mi.?.processEvents();
+        try self.drop_mi.?.drawBackground(.{});
+
+        if (self.drop_first_frame) {
+            if (self.init_options.selected_index) |si| {
+                if (si == self.drop_mi_index) {
+                    focusWidget(self.drop_mi.?.wd.id, null, null);
+                    dvui.dataSet(null, self.menu.wd.id, "_drop_adjust", self.drop_height);
+                }
             }
-            defer mi.deinit();
+        }
+        self.drop_mi_index += 1;
 
-            var labelopts = options.strip();
+        return &self.drop_mi.?;
+    }
 
-            if (mi.show_active) {
-                labelopts = labelopts.override(dvui.themeGet().style_accent);
-            }
+    pub fn deinit(self: *DropdownWidget) void {
+        if (self.drop != null) {
+            self.drop.?.deinit();
+            self.drop = null;
+        }
+        self.menuItem.deinit();
+        self.menu.deinit();
+    }
+};
 
-            try labelNoFmt(@src(), entries[i], labelopts);
+pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: *usize, opts: Options) !bool {
+    var dd = dvui.DropdownWidget.init(src, .{ .selected_index = choice.*, .label = entries[choice.*] }, opts);
+    try dd.install();
 
-            if (mi.activeRect()) |_| {
+    var ret = false;
+    if (try dd.dropped()) {
+        for (entries, 0..) |e, i| {
+            if (try dd.addChoiceLabel(e)) {
                 choice.* = i;
                 ret = true;
-                dvui.menuGet().?.close();
             }
         }
     }
 
+    dd.deinit();
     return ret;
 }
 
@@ -4441,7 +4517,7 @@ pub var slider_defaults: Options = .{
     .color_fill = .{ .name = .fill_control },
 };
 
-// returns true if percent was changed
+// returns true if normalized_percent (0-1) was changed
 pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, normalized_percent: *f32, opts: Options) !bool {
     std.debug.assert(normalized_percent.* >= 0);
     std.debug.assert(normalized_percent.* <= 1);
@@ -4617,7 +4693,7 @@ pub const SliderEntryInitOptions = struct {
 
 /// Combines a slider and a text entry box on key press.  Displays value on top of slider.
 ///
-/// Returns true if percent was changed.
+/// Returns true if value was changed.
 pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const u8, init_opts: SliderEntryInitOptions, opts: Options) !bool {
 
     // This widget swaps between either a slider with a label or a text entry.
@@ -5218,7 +5294,25 @@ pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Ini
     return ret;
 }
 
-pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryWidget.InitOptions, opts: Options) !?T {
+pub fn TextEntryNumberInitOptions(comptime T: type) type {
+    return struct {
+        min: ?T = null,
+        max: ?T = null,
+        value: ?*T = null,
+    };
+}
+
+pub fn TextEntryNumberResult(comptime T: type) type {
+    return union(enum) {
+        Valid: T,
+        Invalid: void,
+        TooBig: void,
+        TooSmall: void,
+        Empty: void,
+    };
+}
+
+pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryNumberInitOptions(T), opts: Options) !TextEntryNumberResult(T) {
     const base_filter = "1234567890";
     const filter = switch (@typeInfo(T)) {
         .Int => |int| switch (int.signedness) {
@@ -5229,14 +5323,26 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         else => unreachable,
     };
 
+    var hbox = try dvui.box(src, .horizontal, .{ .id_extra = 1 });
+    defer hbox.deinit();
+
+    const buffer = dataGetSliceDefault(currentWindow(), hbox.widget().data().id, "buffer", []u8, &[_]u8{0} ** 32);
+
+    //initialize with input number
+    if (init_opts.value) |num| {
+        _ = try std.fmt.bufPrint(buffer, "{d}", .{num.*});
+    }
+
     const cw = currentWindow();
     var te = try cw.arena.create(TextEntryWidget);
-    te.* = TextEntryWidget.init(src, init_opts, opts);
+    te.* = TextEntryWidget.init(src, .{ .text = buffer }, opts);
     try te.install();
     te.processEvents();
 
     // filter before drawing
     te.filterIn(filter);
+
+    var result: TextEntryNumberResult(T) = .Invalid;
 
     // validation
     const text = te.getText();
@@ -5246,23 +5352,48 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         else => unreachable,
     };
 
-    var valid = true;
-    if (text.len > 0 and num == null) {
-        valid = false;
+    //determine error if any
+    if (text.len == 0 and num == null) {
+        result = .Empty;
+    } else if (num == null) {
+        result = .Invalid;
+    } else if (num != null and init_opts.min != null and num.? < init_opts.min.?) {
+        result = .TooSmall;
+    } else if (num != null and init_opts.max != null and num.? > init_opts.max.?) {
+        result = .TooBig;
+    } else {
+        result = .{ .Valid = num.? };
+        if (init_opts.value) |value_ptr| {
+            value_ptr.* = num.?;
+        }
     }
 
     try te.draw();
 
-    if (!valid) {
+    if (result != .Empty and result != .Valid) {
         const rs = te.data().borderRectScale();
         try dvui.pathAddRect(rs.r.outsetAll(1), te.data().options.corner_radiusGet());
         const color = dvui.themeGet().color_err;
         try dvui.pathStrokeAfter(true, true, 3 * rs.s, .none, color);
     }
 
+    // display min/max
+    if (te.getText().len == 0) {
+        var minmax_buffer: [64]u8 = undefined;
+        var minmax_text: []const u8 = "";
+        if (init_opts.min != null and init_opts.max != null) {
+            minmax_text = try std.fmt.bufPrint(&minmax_buffer, "(min: {d}, max: {d})", .{ init_opts.min.?, init_opts.max.? });
+        } else if (init_opts.min != null) {
+            minmax_text = try std.fmt.bufPrint(&minmax_buffer, "(min: {d})", .{init_opts.min.?});
+        } else if (init_opts.max != null) {
+            minmax_text = try std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?});
+        }
+        try te.textLayout.addText(minmax_text, .{ .id_extra = 2, .color_text = .{ .name = .fill_hover } });
+    }
+
     te.deinit();
 
-    return num;
+    return result;
 }
 
 pub const renderTextOptions = struct {

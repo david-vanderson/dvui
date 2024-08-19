@@ -39,7 +39,7 @@ pub fn init(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) F
     var self = FloatingMenuWidget{};
     self.prev_rendering = dvui.renderingSet(false);
 
-    // options is really for our embedded MenuWidget, so save them for the
+    // options is really for our embedded ScrollAreaWidget, so save them for the
     // end of install()
     self.options = defaults.override(opts);
 
@@ -88,12 +88,12 @@ pub fn install(self: *FloatingMenuWidget) !void {
     self.prevClip = dvui.clipGet();
     dvui.clipSet(rs.r);
 
-    // we are using scale to do border/background but floating windows
-    // don't have margin, so turn that off
-    self.scaler = dvui.ScaleWidget.init(@src(), self.scale_val, self.options.override(.{ .margin = .{}, .expand = .both }));
+    self.scaler = dvui.ScaleWidget.init(@src(), self.scale_val, .{ .margin = .{}, .expand = .both });
     try self.scaler.install();
 
-    self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none, .expand_to_fit = true }, .{ .background = false, .expand = .both });
+    // we are using scroll to do border/background but floating windows
+    // don't have margin, so turn that off
+    self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none, .expand_to_fit = true }, self.options.override(.{ .margin = .{}, .expand = .both, .min_size_content = .{} }));
     try self.scroll.install();
 
     if (dvui.menuGet()) |pm| {

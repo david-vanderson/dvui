@@ -453,7 +453,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                     }
                 },
                 .enter => {
-                    if (self.init_opts.multiline and ke.action == .down or ke.action == .repeat) {
+                    if (self.init_opts.multiline and (ke.action == .down or ke.action == .repeat)) {
                         e.handled = true;
                         self.textTyped("\n");
                     }

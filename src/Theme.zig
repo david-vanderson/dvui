@@ -4,16 +4,6 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Options = dvui.Options;
 
-/// List of theme names
-pub const names = [_][]const u8{
-    "Adwaita Light",
-    "Adwaita Dark",
-    "Jungle",
-    "Dracula",
-    "Flow",
-    "Gruvbox",
-};
-
 /// List of theme pointers
 pub const ptrs = [_]*dvui.Theme{
     &AdwaitaLight,
@@ -25,8 +15,8 @@ pub const ptrs = [_]*dvui.Theme{
 };
 
 //builtin themes
-pub var AdwaitaDark = @import("themes/Adwaita.zig").dark;
 pub var AdwaitaLight = @import("themes/Adwaita.zig").light;
+pub var AdwaitaDark = @import("themes/Adwaita.zig").dark;
 pub var Jungle = @import("themes/Jungle.zig").jungle;
 pub var Dracula = @import("themes/Dracula.zig").dracula;
 pub var Flow = @import("themes/Flow.zig").flow;
