@@ -5267,7 +5267,25 @@ pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Ini
     return ret;
 }
 
-pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryWidget.InitOptions, opts: Options) !?T {
+pub fn TextEntryNumberInitOptions(comptime T: type) type {
+    return struct {
+        min: ?T = null,
+        max: ?T = null,
+        value: ?*T = null,
+    };
+}
+
+pub fn TextEntryNumberResult(comptime T: type) type {
+    return union(enum) {
+        Valid: T,
+        Invalid: void,
+        TooBig: void,
+        TooSmall: void,
+        Empty: void,
+    };
+}
+
+pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryNumberInitOptions(T), opts: Options) !TextEntryNumberResult(T) {
     const base_filter = "1234567890";
     const filter = switch (@typeInfo(T)) {
         .Int => |int| switch (int.signedness) {
@@ -5278,14 +5296,26 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         else => unreachable,
     };
 
+    var hbox = try dvui.box(src, .horizontal, .{ .id_extra = 1 });
+    defer hbox.deinit();
+
+    const buffer = dataGetSliceDefault(currentWindow(), hbox.widget().data().id, "buffer", []u8, &[_]u8{0} ** 32);
+
+    //initialize with input number
+    if (init_opts.value) |num| {
+        _ = try std.fmt.bufPrint(buffer, "{d}", .{num.*});
+    }
+
     const cw = currentWindow();
     var te = try cw.arena.create(TextEntryWidget);
-    te.* = TextEntryWidget.init(src, init_opts, opts);
+    te.* = TextEntryWidget.init(src, .{ .text = buffer }, opts);
     try te.install();
     te.processEvents();
 
     // filter before drawing
     te.filterIn(filter);
+
+    var result: TextEntryNumberResult(T) = .Invalid;
 
     // validation
     const text = te.getText();
@@ -5295,23 +5325,48 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         else => unreachable,
     };
 
-    var valid = true;
-    if (text.len > 0 and num == null) {
-        valid = false;
+    //determine error if any
+    if (text.len == 0 and num == null) {
+        result = .Empty;
+    } else if (num == null) {
+        result = .Invalid;
+    } else if (num != null and init_opts.min != null and num.? < init_opts.min.?) {
+        result = .TooSmall;
+    } else if (num != null and init_opts.max != null and num.? > init_opts.max.?) {
+        result = .TooBig;
+    } else {
+        result = .{ .Valid = num.? };
+        if (init_opts.value) |value_ptr| {
+            value_ptr.* = num.?;
+        }
     }
 
     try te.draw();
 
-    if (!valid) {
+    if (result != .Empty and result != .Valid) {
         const rs = te.data().borderRectScale();
         try dvui.pathAddRect(rs.r.outsetAll(1), te.data().options.corner_radiusGet());
         const color = dvui.themeGet().color_err;
         try dvui.pathStrokeAfter(true, true, 3 * rs.s, .none, color);
     }
 
+    // display min/max
+    if (te.getText().len == 0) {
+        var minmax_buffer: [64]u8 = undefined;
+        var minmax_text: []const u8 = "";
+        if (init_opts.min != null and init_opts.max != null) {
+            minmax_text = try std.fmt.bufPrint(&minmax_buffer, "(min: {d}, max: {d})", .{ init_opts.min.?, init_opts.max.? });
+        } else if (init_opts.min != null) {
+            minmax_text = try std.fmt.bufPrint(&minmax_buffer, "(min: {d})", .{init_opts.min.?});
+        } else if (init_opts.max != null) {
+            minmax_text = try std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?});
+        }
+        try te.textLayout.addText(minmax_text, .{ .id_extra = 2, .color_text = .{ .name = .fill_hover } });
+    }
+
     te.deinit();
 
-    return num;
+    return result;
 }
 
 pub const renderTextOptions = struct {

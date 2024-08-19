@@ -733,20 +733,48 @@ pub fn textEntryWidgets() !void {
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        const buf: []u8 = dvui.dataGetSliceDefault(null, hbox.wd.id, "buffer", []u8, &[_]u8{0} ** 20);
+        const result = try dvui.textEntryNumber(@src(), T, .{}, .{});
+        try displayTextEntryNumberResult(result);
+    }
 
-        const num = try dvui.textEntryNumber(@src(), T, .{ .text = buf }, .{});
+    try dvui.label(@src(), "Parse f32 with Min and Max", .{}, .{ .gravity_y = 0.5 });
+    const init_options: [3]dvui.TextEntryNumberInitOptions(f32) = .{ .{ .min = 0 }, .{ .max = 1 }, .{ .min = 0, .max = 1 } };
+    inline for (init_options, 0..) |opt, i| {
+        {
+            var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
+            defer hbox.deinit();
 
-        if (num) |n| {
-            try dvui.label(@src(), "{d}", .{n}, .{ .gravity_y = 0.5 });
-        } else if (std.mem.sliceTo(buf, 0).len == 0) {
-            try dvui.label(@src(), "empty", .{}, .{ .gravity_y = 0.5 });
-        } else {
-            try dvui.label(@src(), "invalid", .{}, .{ .gravity_y = 0.5 });
+            // align text entry
+            var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+            defer hbox_aligned.deinit();
+            left_alignment.record(hbox.data().id, hbox_aligned.data());
+
+            const result = try dvui.textEntryNumber(@src(), f32, opt, .{});
+            try displayTextEntryNumberResult(result);
         }
     }
 
     try dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});
+}
+
+pub fn displayTextEntryNumberResult(result: anytype) !void {
+    switch (result) {
+        .TooBig => {
+            try dvui.label(@src(), "Too Big", .{}, .{ .gravity_y = 0.5 });
+        },
+        .TooSmall => {
+            try dvui.label(@src(), "Too Small", .{}, .{ .gravity_y = 0.5 });
+        },
+        .Empty => {
+            try dvui.label(@src(), "Empty", .{}, .{ .gravity_y = 0.5 });
+        },
+        .Invalid => {
+            try dvui.label(@src(), "Invalid", .{}, .{ .gravity_y = 0.5 });
+        },
+        .Valid => |num| {
+            try dvui.label(@src(), "{d}", .{num}, .{ .gravity_y = 0.5 });
+        },
+    }
 }
 
 pub fn styling() !void {
