@@ -189,9 +189,10 @@ pub fn unionFieldWidget(
     id_allocator: IdAllocator,
     comptime options: UnionFieldOptions(T),
     comptime alloc: bool,
+    paned: *dvui.PanedWidget,
 ) !void {
     _ = options; // autofix
-    var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
 
     const FieldEnum = std.meta.FieldEnum(T);
@@ -209,7 +210,7 @@ pub fn unionFieldWidget(
             }
             const field_result: *field.type = &@field(result.*, field.name);
             //TODO support child opts
-            try fieldWidget(src, field.name, field.type, @ptrCast(field_result), id_allocator, .{}, alloc);
+            try fieldWidget(src, field.name, field.type, @ptrCast(field_result), id_allocator, .{}, alloc, paned);
             //result.* = @unionInit(T, field.name, field_result.*);
         }
     }
@@ -230,6 +231,7 @@ pub fn optionalFieldWidget(
     id_allocator: IdAllocator,
     comptime options: OptionalFieldOptions(T),
     comptime alloc: bool,
+    paned: *dvui.PanedWidget,
 ) !void {
     var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
@@ -245,7 +247,7 @@ pub fn optionalFieldWidget(
     }
 
     if (checkbox_state.*) {
-        try fieldWidget(src, name, Child, @ptrCast(result), id_allocator, options.child_opts, alloc);
+        try fieldWidget(src, "", Child, @ptrCast(result), id_allocator, options.child_opts, alloc, paned);
     } else {
         result.* = null;
     }
@@ -308,15 +310,16 @@ pub fn pointerFieldWidget(
     id_allocator: IdAllocator,
     comptime options: PointerFieldOptions(T),
     comptime alloc: bool,
+    paned: *dvui.PanedWidget,
 ) !void {
     const info = @typeInfo(T).Pointer;
 
     if (info.size == .Slice and info.child == u8) {
         try textFieldWidget(src, name, result, id_allocator, options, alloc);
     } else if (info.size == .Slice) {
-        try sliceFieldWidget(src, name, T, result, id_allocator, options, alloc);
+        try sliceFieldWidget(src, name, T, result, id_allocator, options, alloc, paned);
     } else if (info.size == .One) {
-        try singlePointerFieldWidget(src, T, name, result, id_allocator, options, alloc);
+        try singlePointerFieldWidget(src, T, name, result, id_allocator, options, alloc, paned);
     } else if (info.size == .C or info.size == .Many) {
         @compileError("structEntry does not support *C or Many pointers");
     }
@@ -337,6 +340,7 @@ pub fn singlePointerFieldWidget(
     id_allocator: IdAllocator,
     options: SinglePointerFieldOptions(T),
     comptime alloc: bool,
+    paned: *dvui.PanedWidget,
 ) !void {
     var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
@@ -349,7 +353,7 @@ pub fn singlePointerFieldWidget(
         result;
     result.* = destination;
 
-    try fieldWidget(src, name, Child, result.*, id_allocator, options.child_opts, alloc);
+    try fieldWidget(src, name, Child, result.*, id_allocator, options.child_opts, alloc, paned);
 }
 
 //=======Single Item pointer and options=======
@@ -368,6 +372,7 @@ pub fn sliceFieldWidget(
     id_allocator: IdAllocator,
     options: SliceFieldOptions(T),
     comptime alloc: bool,
+    paned: *dvui.PanedWidget,
 ) !void {
     var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
@@ -380,7 +385,7 @@ pub fn sliceFieldWidget(
         result.*;
 
     for (0..result.*.len) |i| {
-        try fieldWidget(src, name, Child, &(result.*[i]), id_allocator, options.child_opts, alloc);
+        try fieldWidget(src, name, Child, &(result.*[i]), id_allocator, options.child_opts, alloc, paned);
     }
 }
 
@@ -411,24 +416,60 @@ fn structFieldWidget(
     result: *T,
     id_allocator: IdAllocator,
     comptime struct_opts: StructFieldOptions(T),
-    comptime expander: bool,
     comptime alloc: bool,
+    paned: *dvui.PanedWidget,
 ) !void {
     if (@typeInfo(T) != .Struct) @compileError("Input Type Must Be A Struct");
+    const fields = @typeInfo(T).Struct.fields;
 
-    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
-    defer box.deinit();
+    const border = dvui.Rect{ .h = 1, .w = 1, .x = 1, .y = 1 };
 
-    var render: bool = true;
-    if (expander) {
-        render = try dvui.expander(src, name, .{}, .{ .id_extra = id_allocator.next() });
+    var hbox = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next(), .border = border, .expand = .both, .background = true });
+    defer hbox.deinit();
+
+    var selected: *?usize = undefined;
+    {
+        var box = try dvui.box(src, .vertical, .{
+            .id_extra = id_allocator.next(),
+            .border = border,
+            .background = true,
+            .expand = .both,
+        });
+        defer box.deinit();
+
+        if (name.len != 0) {
+            try dvui.label(src, "{s}", .{name}, .{ .id_extra = id_allocator.next(), .border = border, .background = true });
+        }
+
+        selected = dvui.dataGetPtrDefault(dvui.currentWindow(), box.widget().data().id, "selected", ?usize, null);
+        inline for (fields, 0..) |field, i| {
+            const options: dvui.Options = .{ .id_extra = id_allocator.next(), .background = true, .border = if (selected.* == i) border else .{} };
+            if (try dvui.button(src, field.name, .{}, options)) {
+                if (selected.* != i) {
+                    selected.* = i;
+                } else {
+                    selected.* = null;
+                }
+            }
+        }
+
+        if (paned.collapsed()) {
+            paned.animateSplit(1.0);
+        }
     }
 
-    if (render) {
-        inline for (@typeInfo(T).Struct.fields) |field| {
-            const options = @field(struct_opts, field.name);
-            const result_ptr = &@field(result.*, field.name);
-            try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options, alloc);
+    {
+        inline for (fields, 0..) |field, i| {
+            if (i == selected.*) {
+                const options = @field(struct_opts, field.name);
+                const result_ptr = &@field(result.*, field.name);
+
+                if (@typeInfo(field.type) == .Struct) {
+                    try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options, alloc, paned);
+                } else {
+                    try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options, alloc, paned);
+                }
+            }
         }
     }
 }
@@ -456,16 +497,17 @@ pub fn fieldWidget(
     id_allocator: IdAllocator,
     comptime options: FieldOptions(T),
     comptime alloc: bool,
+    paned: *dvui.PanedWidget,
 ) !void {
     switch (@typeInfo(T)) {
         .Int => try intFieldWidget(src, name, T, result, id_allocator, options),
         .Float => try floatFieldWidget(src, name, T, result, id_allocator, options),
         .Bool => try boolFieldWidget(src, name, result, id_allocator, options),
         .Enum => try enumFieldWidget(src, name, T, result, id_allocator, options),
-        .Pointer => try pointerFieldWidget(src, name, T, result, id_allocator, options, alloc),
-        .Optional => try optionalFieldWidget(src, name, T, result, id_allocator, options, alloc),
-        .Union => try unionFieldWidget(src, name, T, result, id_allocator, options, alloc),
-        .Struct => try structFieldWidget(src, name, T, result, id_allocator, options, true, alloc),
+        .Pointer => try pointerFieldWidget(src, name, T, result, id_allocator, options, alloc, paned),
+        .Optional => try optionalFieldWidget(src, name, T, result, id_allocator, options, alloc, paned),
+        .Union => try unionFieldWidget(src, name, T, result, id_allocator, options, alloc, paned),
+        .Struct => try structFieldWidget(src, name, T, result, id_allocator, options, alloc, paned),
         else => @compileError("Invalid type: " ++ @typeName(T)),
     }
 }
@@ -493,10 +535,15 @@ fn structEntryInternal(
     var starting_id_extra: IdExtraType = 1;
     const id_allocator = IdAllocator{ .active_id = &starting_id_extra };
 
-    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next(), .color_border = .{ .name = .border } });
+    var box = try dvui.boxEqual(src, .vertical, .{ .id_extra = id_allocator.next(), .color_border = .{ .name = .border }, .expand = .both });
     defer box.deinit();
 
-    try structFieldWidget(src, "", T, result, id_allocator, field_options, false, alloc);
+    var pane = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = 10 }, .{ .id_extra = id_allocator.next(), .background = true });
+    defer pane.deinit();
+
+    pane.collapsing = false;
+    pane.collapsed_state = false;
+    try structFieldWidget(src, "", T, result, id_allocator, field_options, alloc, pane);
 }
 
 //=========PUBLIC API FUNCTIONS===========
