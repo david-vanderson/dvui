@@ -390,18 +390,24 @@ pub fn demo() !void {
         const Static = struct {
             var result: dvui.Theme = undefined;
         };
-        try dvui.structEntryExAlloc(@src(), dvui.Theme, &Static.result, .{
-            //    .a = .{ .widget_type = .slider },
-            //    .foo_a = .{ .widget_type = .toggle },
-            //    .foo_b = .{ .widget_type = .dropdown },
-            //    .foo_c = .{ .widget_type = .checkbox },
-            //    .bar = .{
-            //        .r = .{ .widget_type = .slider },
-            //        .g = .{ .widget_type = .slider },
-            //        .b = .{ .widget_type = .slider },
-            //    },
-            //    .buzz = .{ .widget_type = .radio },
-        });
+        try dvui.structEntryExAlloc(
+            @src(),
+            "dvui.Theme",
+            dvui.Theme,
+            &Static.result,
+            .{
+                //    .a = .{ .widget_type = .slider },
+                //    .foo_a = .{ .widget_type = .toggle },
+                //    .foo_b = .{ .widget_type = .dropdown },
+                //    .foo_c = .{ .widget_type = .checkbox },
+                //    .bar = .{
+                //        .r = .{ .widget_type = .slider },
+                //        .g = .{ .widget_type = .slider },
+                //        .b = .{ .widget_type = .slider },
+                //    },
+                //    .buzz = .{ .widget_type = .radio },
+            },
+        );
     }
 
     if (show_dialog) {
