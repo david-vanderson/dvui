@@ -272,10 +272,10 @@ fn textFieldWidget(
 
     //TODO respect alloc setting
     _ = alloc; // autofix
-    var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
 
-    try dvui.label(src, "{s}", .{name}, .{ .id_extra = id_allocator.next(), .border = border, .background = true });
+    try dvui.label(src, "{s}", .{name}, .{ .id_extra = id_allocator.next(), .border = border, .background = true, .expand = .horizontal });
     const buffer = dvui.dataGetSliceDefault(
         dvui.currentWindow(),
         box.widget().data().id,
@@ -366,6 +366,7 @@ pub fn SliceFieldOptions(comptime T: type) type {
     };
 }
 
+//TODO implement this using reorderable lists and use this as the backend for array and vector widgets
 pub fn sliceFieldWidget(
     comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
@@ -394,13 +395,15 @@ pub fn sliceFieldWidget(
 //==========Struct Field Widget and Options
 pub fn StructFieldOptions(comptime T: type) type {
     var fields: [@typeInfo(T).Struct.fields.len]std.builtin.Type.StructField = undefined;
+
     inline for (@typeInfo(T).Struct.fields, 0..) |field, i| {
+        const FieldType = FieldOptions(field.type);
         fields[i] = .{
             .alignment = 1,
-            .default_value = @alignCast(@ptrCast(&(FieldOptions(field.type){}))),
+            .default_value = @alignCast(@ptrCast(&(@as(?FieldType, FieldType{})))),
             .is_comptime = false,
             .name = field.name,
-            .type = FieldOptions(field.type),
+            .type = ?FieldType,
         };
     }
     return @Type(.{ .Struct = .{
@@ -477,10 +480,13 @@ fn structFieldWidget(
                 const options = @field(struct_opts, field.name);
                 const result_ptr = &@field(result.*, field.name);
 
-                if (@typeInfo(field.type) == .Struct) {
-                    try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options, alloc, paned);
-                } else {
-                    try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options, alloc, paned);
+                //skip widget if set to null
+                if (options != null) {
+                    if (@typeInfo(field.type) == .Struct) {
+                        try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options.?, alloc, paned);
+                    } else {
+                        try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options.?, alloc, paned);
+                    }
                 }
             }
         }
