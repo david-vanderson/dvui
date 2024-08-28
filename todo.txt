@@ -6,8 +6,6 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
-example for animating the alpha of "Enter!" needs rework to not globally alter the theme alpha
-
 text entry:
 - filterOut and filterIn should return a bool if they changed something
 - add flag that tells the app if the text changed
