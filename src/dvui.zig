@@ -132,6 +132,12 @@ pub const Alignment = struct {
 
     pub fn deinit(self: *Alignment) void {
         dvui.dataSet(null, self.id, "_max_align", self.next);
+        if (self.max) |m| {
+            if (self.next != m) {
+                // something changed
+                refresh(null, @src(), self.id);
+            }
+        }
     }
 };
 
