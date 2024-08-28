@@ -722,36 +722,52 @@ pub fn textEntryWidgets() !void {
         te.deinit();
     }
 
-    inline for ([_]type{ u8, i16, f32 }, 0..) |T, i| {
-        var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
+    const S = struct {
+        var type_dropdown_val: usize = 0;
+        var min: bool = false;
+        var max: bool = false;
+    };
+    const parse_types = [_]type{ u8, i8, u16, i16, u32, i32, f32, f64 };
+    const parse_typenames: [parse_types.len][]const u8 = blk: {
+        var temp: [parse_types.len][]const u8 = undefined;
+        inline for (parse_types, 0..) |T, i| {
+            temp[i] = @typeName(T);
+        }
+        break :blk temp;
+    };
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        try dvui.label(@src(), "Parse " ++ @typeName(T), .{}, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "Parse", .{}, .{ .gravity_y = 0.5 });
+
+        _ = try dvui.dropdown(@src(), &parse_typenames, &S.type_dropdown_val, .{ .min_size_content = .{ .w = 20 }, .gravity_y = 0.5 });
 
         // align text entry
         var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        const result = try dvui.textEntryNumber(@src(), T, .{}, .{});
-        try displayTextEntryNumberResult(result);
+        inline for (parse_types, 0..) |T, i| {
+            if (i == S.type_dropdown_val) {
+                const result = try dvui.textEntryNumber(@src(), T, .{ .min = if (S.min) 0 else null, .max = if (S.max) 100 else null }, .{});
+                try displayTextEntryNumberResult(result);
+            }
+        }
     }
 
-    try dvui.label(@src(), "Parse f32 with Min and Max", .{}, .{ .gravity_y = 0.5 });
-    const init_options: [3]dvui.TextEntryNumberInitOptions(f32) = .{ .{ .min = 0 }, .{ .max = 1 }, .{ .min = 0, .max = 1 } };
-    inline for (init_options, 0..) |opt, i| {
-        {
-            var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
-            defer hbox.deinit();
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
 
-            // align text entry
-            var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
-            defer hbox_aligned.deinit();
-            left_alignment.record(hbox.data().id, hbox_aligned.data());
+        // align with text entries
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-            const result = try dvui.textEntryNumber(@src(), f32, opt, .{});
-            try displayTextEntryNumberResult(result);
-        }
+        _ = try dvui.checkbox(@src(), &S.min, "Min", .{});
+        _ = try dvui.checkbox(@src(), &S.max, "Max", .{});
     }
 
     try dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});
