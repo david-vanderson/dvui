@@ -1164,48 +1164,29 @@ pub fn reorderListsSimple(dir: dvui.enums.Direction) !void {
     const g = struct {
         var dir_entry: usize = 0;
         var strings = [6][]const u8{ "zero", "one", "two", "three", "four", "five" };
-
-        pub fn reorder(removed_idx: ?usize, insert_before_idx: ?usize) void {
-            if (removed_idx) |ri| {
-                if (insert_before_idx) |ibi| {
-                    // save this index
-                    const removed = strings[ri];
-                    if (ri < ibi) {
-                        // moving down, shift others up
-                        for (ri..ibi - 1) |i| {
-                            strings[i] = strings[i + 1];
-                        }
-                        strings[ibi - 1] = removed;
-                    } else {
-                        // moving up, shift others down
-                        for (ibi..ri, 0..) |_, i| {
-                            strings[ri - i] = strings[ri - i - 1];
-                        }
-                        strings[ibi] = removed;
-                    }
-                }
-            }
-        }
     };
 
     var removed_idx: ?usize = null;
     var insert_before_idx: ?usize = null;
 
-    // container for list, this determines layout of list
-    var vbox = try dvui.box(@src(), dir, .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
-    defer vbox.deinit();
-
-    var reorder = try dvui.reorder(@src(), .{});
+    // reorder widget must wrap entire list
+    var reorder = try dvui.reorder(@src(), .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
     defer reorder.deinit();
 
+    // this box determines layout of list - could be any layout widget
+    var vbox = try dvui.box(@src(), dir, .{ .expand = .both });
+    defer vbox.deinit();
+
     for (g.strings[0..g.strings.len], 0..) |s, i| {
+
+        // make a reorderable for each entry in the list
         var reorderable = try reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
         defer reorderable.deinit();
 
         if (reorderable.removed()) {
-            removed_idx = i;
+            removed_idx = i; // this entry is being dragged
         } else if (reorderable.insertBefore()) {
-            insert_before_idx = i;
+            insert_before_idx = i; // this entry was dropped onto
         }
 
         // actual content of the list entry
@@ -1214,19 +1195,18 @@ pub fn reorderListsSimple(dir: dvui.enums.Direction) !void {
 
         try dvui.label(@src(), "{s}", .{s}, .{});
 
+        // this helper shows the triple-line icon, detects the start of a drag,
+        // and hands off the drag to the ReorderWidget
         _ = try dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 });
     }
 
-    if (reorder.needFinalSlot()) {
-        var reorderable = try reorder.reorderable(@src(), .{ .last_slot = true }, .{});
-        defer reorderable.deinit();
-
-        if (reorderable.insertBefore()) {
-            insert_before_idx = g.strings.len;
-        }
+    // show a final slot that allows dropping an entry at the end of the list
+    if (try reorder.finalSlot()) {
+        insert_before_idx = g.strings.len; // entry was dropped into the final slot
     }
 
-    g.reorder(removed_idx, insert_before_idx);
+    // returns true if the slice was reordered
+    _ = dvui.ReorderWidget.reorderSlice([]const u8, &g.strings, removed_idx, insert_before_idx);
 }
 
 pub fn reorderListsAdvanced() !void {
@@ -1291,12 +1271,13 @@ pub fn reorderListsAdvanced() !void {
     var removed_idx: ?usize = null;
     var insert_before_idx: ?usize = null;
 
-    // container for list, this determines layout of list
-    var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
-    defer vbox.deinit();
-
-    var reorder = try dvui.reorder(@src(), .{});
+    // reorder widget must wrap entire list
+    var reorder = try dvui.reorder(@src(), .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
     defer reorder.deinit();
+
+    // determines layout of list
+    var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both });
+    defer vbox.deinit();
 
     if (added_idx) |ai| {
         reorder.dragStart(ai, added_idx_p.?); // reorder grabs capture
