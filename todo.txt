@@ -8,9 +8,12 @@ check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 text entry:
 - filterOut and filterIn should return a bool if they changed something
-- add flag that tells the app if the text changed
+- add flag that tells the app if the text changed and add to example
 
 textEntryNumber example - show how to initialize with number and write back if the number validates?
+
+
+
 
 raylib backend
 - directly call glfw.waitEventsTimeout?
