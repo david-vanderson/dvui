@@ -45,34 +45,23 @@ pub const Selection = struct {
         self.end = std.math.maxInt(usize);
     }
 
-    pub fn incCursor(self: *Selection) void {
-        self.cursor += 1;
-    }
-
-    pub fn decCursor(self: *Selection) void {
-        if (self.cursor <= 0) {
-            self.cursor = 0;
-        } else self.cursor -= 1;
-    }
-
-    pub fn incStart(self: *Selection) void {
-        self.start += 1;
-    }
-
-    pub fn decStart(self: *Selection) void {
-        if (self.start <= 0) {
-            self.start = 0;
-        } else self.start -= 1;
-    }
-
-    pub fn incEnd(self: *Selection) void {
-        self.end += 1;
-    }
-
-    pub fn decEnd(self: *Selection) void {
-        if (self.end <= 0) {
-            self.end = 0;
-        } else self.end -= 1;
+    pub fn moveCursor(self: *Selection, idx: usize, shift: bool) void {
+        if (shift) {
+            if (self.cursor == self.start) {
+                // move the start
+                self.cursor = idx;
+                self.start = idx;
+            } else {
+                // move the end
+                self.cursor = idx;
+                self.end = idx;
+            }
+        } else {
+            // not an expanded selection
+            self.cursor = idx;
+            self.start = idx;
+            self.end = idx;
+        }
     }
 
     pub fn order(self: *Selection) void {
@@ -470,25 +459,16 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
 
         if (self.sel_left_right != 0 and !self.cursor_seen and self.selection.cursor <= self.bytes_seen + end) {
             while (self.sel_left_right < 0 and self.selection.cursor > self.bytes_seen) {
-                var move_start: bool = undefined;
-                if (self.selection.cursor == self.selection.start) {
-                    move_start = true;
-                } else {
-                    move_start = false;
-                }
+                var cur = self.selection.cursor;
 
                 // move cursor one utf8 char left
-                self.selection.cursor -|= 1;
-                while (self.selection.cursor > self.bytes_seen and txt[self.selection.cursor - self.bytes_seen] & 0xc0 == 0x80) {
+                cur -|= 1;
+                while (cur > self.bytes_seen and txt[cur - self.bytes_seen] & 0xc0 == 0x80) {
                     // in the middle of a multibyte char
-                    self.selection.cursor -|= 1;
+                    cur -|= 1;
                 }
 
-                if (move_start) {
-                    self.selection.start = self.selection.cursor;
-                } else {
-                    self.selection.end = self.selection.cursor;
-                }
+                self.selection.moveCursor(cur, true);
                 self.sel_left_right += 1;
             }
 
@@ -497,21 +477,12 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             }
 
             while (self.sel_left_right > 0 and self.selection.cursor < (self.bytes_seen + end)) {
-                var move_start: bool = undefined;
-                if (self.selection.cursor == self.selection.end) {
-                    move_start = false;
-                } else {
-                    move_start = true;
-                }
+                var cur = self.selection.cursor;
 
                 // move cursor one utf8 char right
-                self.selection.cursor += std.unicode.utf8ByteSequenceLength(txt[self.selection.cursor - self.bytes_seen]) catch 1;
+                cur += std.unicode.utf8ByteSequenceLength(txt[cur - self.bytes_seen]) catch 1;
 
-                if (move_start) {
-                    self.selection.start = self.selection.cursor;
-                } else {
-                    self.selection.end = self.selection.cursor;
-                }
+                self.selection.moveCursor(cur, true);
                 self.sel_left_right -= 1;
             }
         }
@@ -601,19 +572,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                 const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
                 if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
                     // point is before this text
-                    if (self.cursor_updown_drag) {
-                        if (self.selection.cursor == self.selection.start) {
-                            self.selection.cursor = self.bytes_seen;
-                            self.selection.start = self.bytes_seen;
-                        } else {
-                            self.selection.cursor = self.bytes_seen;
-                            self.selection.end = self.bytes_seen;
-                        }
-                    } else {
-                        self.selection.cursor = self.bytes_seen;
-                        self.selection.start = self.bytes_seen;
-                        self.selection.end = self.bytes_seen;
-                    }
+                    self.selection.moveCursor(self.bytes_seen, self.cursor_updown_drag);
                     self.cursor_updown_pt = null;
                     self.selection.order();
                     self.scroll_to_cursor = true;
@@ -622,54 +581,18 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                     const how_far = p.x - rs.x;
                     var pt_end: usize = undefined;
                     _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
-                    if (self.cursor_updown_drag) {
-                        if (self.selection.cursor == self.selection.start) {
-                            self.selection.cursor = self.bytes_seen + pt_end;
-                            self.selection.start = self.bytes_seen + pt_end;
-                        } else {
-                            self.selection.cursor = self.bytes_seen + pt_end;
-                            self.selection.end = self.bytes_seen + pt_end;
-                        }
-                    } else {
-                        self.selection.cursor = self.bytes_seen + pt_end;
-                        self.selection.start = self.bytes_seen + pt_end;
-                        self.selection.end = self.bytes_seen + pt_end;
-                    }
+                    self.selection.moveCursor(self.bytes_seen + pt_end, self.cursor_updown_drag);
                     self.cursor_updown_pt = null;
                     self.selection.order();
                     self.scroll_to_cursor = true;
                 } else {
                     if (newline and p.y < (rs.y + rs.h)) {
                         // point is after this text on this same horizontal line
-                        if (self.cursor_updown_drag) {
-                            if (self.selection.cursor == self.selection.start) {
-                                self.selection.cursor = self.bytes_seen + end - 1;
-                                self.selection.start = self.bytes_seen + end - 1;
-                            } else {
-                                self.selection.cursor = self.bytes_seen + end - 1;
-                                self.selection.end = self.bytes_seen + end - 1;
-                            }
-                        } else {
-                            self.selection.cursor = self.bytes_seen + end - 1;
-                            self.selection.start = self.bytes_seen + end - 1;
-                            self.selection.end = self.bytes_seen + end - 1;
-                        }
+                        self.selection.moveCursor(self.bytes_seen + end - 1, self.cursor_updown_drag);
                         self.cursor_updown_pt = null;
                     } else {
                         // point is after this text, but we might not get anymore
-                        if (self.cursor_updown_drag) {
-                            if (self.selection.cursor == self.selection.start) {
-                                self.selection.cursor = self.bytes_seen + end;
-                                self.selection.start = self.bytes_seen + end;
-                            } else {
-                                self.selection.cursor = self.bytes_seen + end;
-                                self.selection.end = self.bytes_seen + end;
-                            }
-                        } else {
-                            self.selection.cursor = self.bytes_seen + end;
-                            self.selection.start = self.bytes_seen + end;
-                            self.selection.end = self.bytes_seen + end;
-                        }
+                        self.selection.moveCursor(self.bytes_seen + end, self.cursor_updown_drag);
                     }
                     self.selection.order();
                     self.scroll_to_cursor = true;
@@ -1084,8 +1007,11 @@ pub fn processEvents(self: *TextLayoutWidget) void {
         self.cursor_updown_pt = null;
         self.sel_left_right = 0;
         self.scroll_to_cursor = false;
-    } else if (self.cursor_updown != 0 or self.cursor_updown_pt != null) {
-        // moving cursor vertically
+    } else if (self.cursor_updown_pt != null) {
+        // moving cursor vertically frame 2
+        self.cursor_updown = 0;
+    } else if (self.cursor_updown != 0) {
+        // moving cursor vertically frame 1
         self.sel_left_right = 0;
     }
 }
@@ -1248,7 +1174,7 @@ pub fn deinit(self: *TextLayoutWidget) void {
         dvui.dataRemove(null, self.wd.id, "_click_num");
     } else {
         dvui.dataSet(null, self.wd.id, "_click_num", self.click_num);
-    } 
+    }
     dvui.clipSet(self.prevClip);
 
     // check if the widgets are taller than the text
