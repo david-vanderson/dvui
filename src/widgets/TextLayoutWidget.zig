@@ -97,6 +97,7 @@ touch_edit_just_focused: bool = undefined,
 
 cursor_pt: ?Point = null,
 click_pt: ?Point = null,
+click_num: u8 = 0,
 
 bytes_seen: usize = 0,
 selection_in: ?*Selection = null,
@@ -146,6 +147,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 
     self.sel_start_r = dvui.dataGet(null, self.wd.id, "_sel_start_r", Rect) orelse .{};
     self.sel_end_r = dvui.dataGet(null, self.wd.id, "_sel_end_r", Rect) orelse .{};
+
+    self.click_num = dvui.dataGet(null, self.wd.id, "_click_num", u8) orelse 0;
 
     return self;
 }
@@ -1072,6 +1075,19 @@ pub fn processEvents(self: *TextLayoutWidget) void {
 
         self.processEvent(e, false);
     }
+
+    // we could have gotten multiple conflicting keyboard/mouse movements, so
+    // here we decide which to actually do
+    if (self.sel_mouse_down_pt != null or self.sel_mouse_drag_pt != null) {
+        // doing mouse click-drag selection, turn off other stuff
+        self.cursor_updown = 0;
+        self.cursor_updown_pt = null;
+        self.sel_left_right = 0;
+        self.scroll_to_cursor = false;
+    } else if (self.cursor_updown != 0 or self.cursor_updown_pt != null) {
+        // moving cursor vertically
+        self.sel_left_right = 0;
+    }
 }
 
 pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
@@ -1098,8 +1114,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             } else {
                 self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
                 self.sel_mouse_drag_pt = null;
-                self.cursor_updown = 0;
-                self.cursor_updown_pt = null;
             }
         } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
             e.handled = true;
@@ -1108,6 +1122,11 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 if (!self.touch_editing and dvui.dragging(e.evt.mouse.p) == null) {
                     // click without drag
                     self.click_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                    self.click_num += 1;
+                    if (self.click_num == 4) {
+                        self.click_num = 1;
+                    }
+                    //std.debug.print("click_num {d}\n", .{self.click_num});
                 }
 
                 if (e.evt.mouse.button.touch()) {
@@ -1136,11 +1155,10 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             }
         } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
             if (dvui.dragging(e.evt.mouse.p)) |_| {
+                self.click_num = 0;
                 if (!e.evt.mouse.button.touch()) {
                     e.handled = true;
                     self.sel_mouse_drag_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-                    self.cursor_updown = 0;
-                    self.cursor_updown_pt = null;
                     var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
                         .mouse_pt = e.evt.mouse.p,
                         .screen_rect = self.wd.rectScale().r,
@@ -1152,6 +1170,8 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     dvui.captureMouse(null); // stop possible drag and capture
                 }
             }
+        } else if (e.evt.mouse.action == .motion) {
+            self.click_num = 0;
         } else if (e.evt.mouse.action == .position) {
             e.handled = true;
             self.cursor_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
@@ -1160,25 +1180,17 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
         switch (e.evt.key.code) {
             .left => {
                 e.handled = true;
-                if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null and self.cursor_updown == 0) {
-                    // only change selection if mouse isn't trying to change it
-                    self.sel_left_right -= 1;
-                    self.scroll_to_cursor = true;
-                }
+                self.sel_left_right -= 1;
+                self.scroll_to_cursor = true;
             },
             .right => {
                 e.handled = true;
-                if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null and self.cursor_updown == 0) {
-                    // only change selection if mouse isn't trying to change it
-                    self.sel_left_right += 1;
-                    self.scroll_to_cursor = true;
-                }
+                self.sel_left_right += 1;
+                self.scroll_to_cursor = true;
             },
             .up, .down => |code| {
                 e.handled = true;
-                if (self.sel_mouse_down_pt == null and self.sel_mouse_drag_pt == null and self.cursor_updown_pt == null) {
-                    self.cursor_updown += if (code == .down) 1 else -1;
-                }
+                self.cursor_updown += if (code == .down) 1 else -1;
             },
             else => {},
         }
@@ -1232,6 +1244,11 @@ pub fn deinit(self: *TextLayoutWidget) void {
         dvui.dataSet(null, self.wd.id, "_cursor_updown_pt", self.cursor_updown_pt.?);
         dvui.dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
     }
+    if (self.click_num == 0) {
+        dvui.dataRemove(null, self.wd.id, "_click_num");
+    } else {
+        dvui.dataSet(null, self.wd.id, "_click_num", self.click_num);
+    } 
     dvui.clipSet(self.prevClip);
 
     // check if the widgets are taller than the text
