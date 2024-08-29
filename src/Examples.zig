@@ -40,7 +40,14 @@ var slider_entry_vector: bool = false;
 var text_entry_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
-var text_entry_multiline_buf = std.mem.zeroes([500]u8);
+var text_entry_multiline_buf = blk: {
+    var temp = std.mem.zeroes([500]u8);
+    const temp2 = "This multiline text\nentry can scroll\nin both directions.";
+    for (temp2, 0..) |c, i| {
+        temp[i] = c;
+    }
+    break :blk temp;
+};
 var dropdown_val: usize = 1;
 var layout_margin: Rect = Rect.all(4);
 var layout_border: Rect = Rect.all(0);
