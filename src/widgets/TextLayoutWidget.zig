@@ -536,33 +536,31 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             // we are already doing a scroll_drag in processEvent
         }
 
-        if (self.cursor_updown == 0) {
-            if (self.cursor_updown_pt) |p| {
-                const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
-                if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
-                    // point is before this text
-                    self.selection.moveCursor(self.bytes_seen, self.cursor_updown_drag);
+        if (self.cursor_updown_pt) |p| {
+            const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
+            if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
+                // point is before this text
+                self.selection.moveCursor(self.bytes_seen, self.cursor_updown_drag);
+                self.cursor_updown_pt = null;
+                self.scroll_to_cursor = true;
+            } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
+                // point is in this text
+                const how_far = p.x - rs.x;
+                var pt_end: usize = undefined;
+                _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
+                self.selection.moveCursor(self.bytes_seen + pt_end, self.cursor_updown_drag);
+                self.cursor_updown_pt = null;
+                self.scroll_to_cursor = true;
+            } else {
+                if (newline and p.y < (rs.y + rs.h)) {
+                    // point is after this text on this same horizontal line
+                    self.selection.moveCursor(self.bytes_seen + end - 1, self.cursor_updown_drag);
                     self.cursor_updown_pt = null;
-                    self.scroll_to_cursor = true;
-                } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
-                    // point is in this text
-                    const how_far = p.x - rs.x;
-                    var pt_end: usize = undefined;
-                    _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
-                    self.selection.moveCursor(self.bytes_seen + pt_end, self.cursor_updown_drag);
-                    self.cursor_updown_pt = null;
-                    self.scroll_to_cursor = true;
                 } else {
-                    if (newline and p.y < (rs.y + rs.h)) {
-                        // point is after this text on this same horizontal line
-                        self.selection.moveCursor(self.bytes_seen + end - 1, self.cursor_updown_drag);
-                        self.cursor_updown_pt = null;
-                    } else {
-                        // point is after this text, but we might not get anymore
-                        self.selection.moveCursor(self.bytes_seen + end, self.cursor_updown_drag);
-                    }
-                    self.scroll_to_cursor = true;
+                    // point is after this text, but we might not get anymore
+                    self.selection.moveCursor(self.bytes_seen + end, self.cursor_updown_drag);
                 }
+                self.scroll_to_cursor = true;
             }
         }
 
@@ -643,7 +641,13 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
 
             if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
                 const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
-                self.cursor_updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
+                const updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
+                self.cursor_updown = 0;
+
+                // forward the pixel position we want the cursor to be in to
+                // the next frame
+                dvui.dataSet(null, self.wd.id, "_cursor_updown_pt", updown_pt);
+                dvui.dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
 
                 // might have already passed, so need to go again next frame
                 dvui.refresh(null, @src(), self.wd.id);
@@ -863,7 +867,13 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
 
         if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
             const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
-            self.cursor_updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
+            const updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
+            self.cursor_updown = 0;
+
+            // forward the pixel position we want the cursor to be in to
+            // the next frame
+            dvui.dataSet(null, self.wd.id, "_cursor_updown_pt", updown_pt);
+            dvui.dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
 
             // might have already passed, so need to go again next frame
             dvui.refresh(null, @src(), self.wd.id);
@@ -1032,11 +1042,8 @@ pub fn processEvents(self: *TextLayoutWidget) void {
         self.cursor_updown_pt = null;
         self.sel_left_right = 0;
         self.scroll_to_cursor = false;
-    } else if (self.cursor_updown_pt != null) {
-        // moving cursor vertically frame 2
-        self.cursor_updown = 0;
-    } else if (self.cursor_updown != 0) {
-        // moving cursor vertically frame 1
+    } else if (self.cursor_updown != 0 or self.cursor_updown_pt != null) {
+        // moving cursor vertically
         self.sel_left_right = 0;
     }
 }
@@ -1179,14 +1186,6 @@ pub fn deinit(self: *TextLayoutWidget) void {
         // once we figure out where the mousedown was, we need to save it
         // as long as we are dragging
         dvui.dataSet(null, self.wd.id, "_sel_mouse_down_bytes", self.sel_mouse_down_bytes.?);
-    }
-    if (self.cursor_updown != 0) {
-        // user pressed keys to move the cursor up/down, and on this frame
-        // we figured out the pixel position where the new cursor should
-        // be, but need to save this for next frame to figure out the byte
-        // position based on this pixel position
-        dvui.dataSet(null, self.wd.id, "_cursor_updown_pt", self.cursor_updown_pt.?);
-        dvui.dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
     }
     if (self.click_num == 0) {
         dvui.dataRemove(null, self.wd.id, "_click_num");
