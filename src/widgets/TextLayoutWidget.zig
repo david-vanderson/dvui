@@ -104,6 +104,8 @@ sel_start_r_new: ?Rect = null,
 sel_end_r: Rect = .{},
 sel_end_r_new: ?Rect = null,
 sel_pts: [2]?Point = [2]?Point{ null, null },
+sel_word: enum { none, precursor, aftcursor } = .none,
+sel_word_last_space: usize = 0,
 
 cursor_seen: bool = false,
 cursor_rect: ?Rect = null,
@@ -620,20 +622,6 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             self.sel_end_r_new = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
-        const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });
-        //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
-        const rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
-        try dvui.renderText(.{
-            .font = options.fontGet(),
-            .text = rtxt,
-            .rs = rs,
-            .color = options.color(.text),
-            .sel_start = self.selection.start -| self.bytes_seen,
-            .sel_end = self.selection.end -| self.bytes_seen,
-            .sel_color = options.color(.fill),
-            .sel_color_bg = options.color(.accent),
-        });
-
         if (!self.cursor_seen and self.selection.cursor < self.bytes_seen + end) {
             self.cursor_seen = true;
             const size = try options.fontGet().textSize(txt[0 .. self.selection.cursor - self.bytes_seen]);
@@ -667,6 +655,43 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
 
             if (self.selection.start == self.selection.end) {
                 self.cursor_rect = cr;
+            }
+        }
+
+        loop: while (self.sel_word != .none) {
+            switch (self.sel_word) {
+                .precursor => {
+                    // maintain index of last space/newline we saw
+                    const sofar = txt[0..@min(self.selection.cursor -| self.bytes_seen, end)];
+                    const space = std.mem.lastIndexOfScalar(u8, sofar, ' ');
+                    const nline = std.mem.lastIndexOfScalar(u8, sofar, '\n');
+                    if (space != null or nline != null) {
+                        const last = @max(space orelse 0, nline orelse 0);
+                        self.sel_word_last_space = last + self.bytes_seen + 1;
+                    }
+
+                    if (self.cursor_seen) {
+                        self.selection.moveCursor(self.sel_word_last_space, true);
+                        self.selection.cursor = self.selection.end; // put cursor at end for the aftcursor logic
+                        self.sel_word = .aftcursor;
+                    } else {
+                        break :loop;
+                    }
+                },
+                .aftcursor => {
+                    // find next space/newline
+                    const space = std.mem.indexOfScalarPos(u8, txt, self.selection.cursor -| self.bytes_seen, ' ');
+                    const nline = std.mem.indexOfScalarPos(u8, txt, self.selection.cursor -| self.bytes_seen, '\n');
+                    if (space != null or nline != null) {
+                        const first = @min(space orelse std.math.maxInt(usize), nline orelse std.math.maxInt(usize));
+                        self.selection.moveCursor(self.bytes_seen + first, true);
+                        self.sel_word = .none;
+                        dvui.refresh(null, @src(), self.wd.id);
+                    }
+
+                    break :loop;
+                },
+                .none => {},
             }
         }
 
@@ -715,9 +740,23 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             dvui.refresh(null, @src(), self.wd.id);
         }
 
-        // even if we don't actually render, need to update insert_pt and minSize
-        // like we did because our parent might size based on that (might be in a
-        // scroll area)
+        const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });
+        //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
+        const rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
+        try dvui.renderText(.{
+            .font = options.fontGet(),
+            .text = rtxt,
+            .rs = rs,
+            .color = options.color(.text),
+            .sel_start = self.selection.start -| self.bytes_seen,
+            .sel_end = self.selection.end -| self.bytes_seen,
+            .sel_color = options.color(.fill),
+            .sel_color_bg = options.color(.accent),
+        });
+
+        // Even if we don't actually render (might be outside clipping region),
+        // need to update insert_pt and minSize like we did because our parent
+        // might size based on that (might be in a scroll area)
         self.insert_pt.x += s.w;
         const size = self.wd.padSize(.{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h });
         if (!self.break_lines) {
@@ -857,6 +896,12 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
     self.selection.cursor = @min(self.selection.cursor, self.bytes_seen);
     self.selection.start = @min(self.selection.start, self.bytes_seen);
     self.selection.end = @min(self.selection.end, self.bytes_seen);
+
+    if (self.sel_word == .aftcursor) {
+        self.selection.moveCursor(self.bytes_seen, true);
+        self.sel_word = .none;
+        dvui.refresh(null, @src(), self.wd.id);
+    }
 
     if (!self.cursor_seen) {
         self.cursor_seen = true;
@@ -1072,6 +1117,11 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             } else {
                 self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
                 self.sel_mouse_drag_pt = null;
+
+                self.sel_word = .none;
+                if (self.click_num == 1) {
+                    self.sel_word = .precursor;
+                }
             }
         } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
             e.handled = true;
@@ -1080,11 +1130,11 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 if (!self.touch_editing and dvui.dragging(e.evt.mouse.p) == null) {
                     // click without drag
                     self.click_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+
                     self.click_num += 1;
                     if (self.click_num == 4) {
                         self.click_num = 1;
                     }
-                    //std.debug.print("click_num {d}\n", .{self.click_num});
                 }
 
                 if (e.evt.mouse.button.touch()) {
