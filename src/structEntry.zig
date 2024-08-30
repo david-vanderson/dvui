@@ -20,7 +20,12 @@ fn intFieldWidget(
             var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
             defer box.deinit();
 
-            try dvui.label(src, "{s}", .{name}, .{ .id_extra = id_allocator.next(), .border = border, .background = true, .expand = .horizontal });
+            try dvui.label(src, "{s}", .{name}, .{
+                .id_extra = id_allocator.next(),
+                .border = border,
+                .background = true,
+                .expand = .horizontal,
+            });
             const maybe_num = try dvui.textEntryNumber(src, T, .{}, .{ .id_extra = id_allocator.next() });
             if (maybe_num == .Valid) {
                 result.* = maybe_num.Valid;
@@ -31,7 +36,12 @@ fn intFieldWidget(
             var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
             defer box.deinit();
 
-            try dvui.label(src, "{s}", .{name}, .{ .id_extra = id_allocator.next(), .border = border, .background = true, .expand = .horizontal });
+            try dvui.label(src, "{s}", .{name}, .{
+                .id_extra = id_allocator.next(),
+                .border = border,
+                .background = true,
+                .expand = .horizontal,
+            });
 
             var percent = intToNormalizedPercent(result.*);
             _ = try dvui.slider(
@@ -193,7 +203,7 @@ pub fn unionFieldWidget(
     comptime alloc: bool,
 ) !void {
     _ = options; // autofix
-    var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
 
     const FieldEnum = std.meta.FieldEnum(T);
@@ -201,8 +211,18 @@ pub fn unionFieldWidget(
     const entries = std.meta.fieldNames(T);
     var choice: usize = @intFromEnum(std.meta.activeTag(result.*));
 
-    try dvui.label(src, "{s}", .{name}, .{ .id_extra = id_allocator.next(), .border = border, .background = true });
-    _ = try dvui.dropdown(src, entries, &choice, .{ .id_extra = id_allocator.next() });
+    {
+        var hbox = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+        defer hbox.deinit();
+        if (name.len != 0) {
+            try dvui.label(src, "{s}", .{name}, .{
+                .id_extra = id_allocator.next(),
+                .border = border,
+                .background = true,
+            });
+        }
+        _ = try dvui.dropdown(src, entries, &choice, .{ .id_extra = id_allocator.next() });
+    }
 
     inline for (@typeInfo(T).Union.fields, 0..) |field, i| {
         if (choice == i) {
@@ -210,9 +230,32 @@ pub fn unionFieldWidget(
                 result.* = @unionInit(T, field.name, undefined);
             }
             const field_result: *field.type = &@field(result.*, field.name);
+
+            var hbox = try dvui.box(src, .horizontal, .{
+                .id_extra = id_allocator.next(),
+                //.border = border,
+                .expand = .both,
+                //.background = true,
+            });
+            defer hbox.deinit();
+            var line = try dvui.box(src, .vertical, .{
+                .border = border,
+                .expand = .vertical,
+                .background = true,
+                .margin = .{ .w = 10, .x = 10 },
+            });
+            line.deinit();
+
             //TODO support child opts
-            try fieldWidget(src, field.name, field.type, @ptrCast(field_result), id_allocator, .{}, alloc);
-            //result.* = @unionInit(T, field.name, field_result.*);
+            try fieldWidget(
+                src,
+                field.name,
+                field.type,
+                @ptrCast(field_result),
+                id_allocator,
+                .{},
+                alloc,
+            );
         }
     }
 }
@@ -233,12 +276,18 @@ pub fn optionalFieldWidget(
     comptime options: OptionalFieldOptions(T),
     comptime alloc: bool,
 ) !void {
-    var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
 
     const Child = @typeInfo(T).Optional.child;
 
-    const checkbox_state = dvui.dataGetPtrDefault(dvui.currentWindow(), box.widget().data().id, "checked", bool, false);
+    const checkbox_state = dvui.dataGetPtrDefault(
+        null,
+        box.widget().data().id,
+        "checked",
+        bool,
+        false,
+    );
     {
         var hbox = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
         defer hbox.deinit();
@@ -247,6 +296,20 @@ pub fn optionalFieldWidget(
     }
 
     if (checkbox_state.*) {
+        var hbox = try dvui.box(src, .horizontal, .{
+            .id_extra = id_allocator.next(),
+            //.border = border,
+            .expand = .both,
+            //.background = true,
+        });
+        defer hbox.deinit();
+        var line = try dvui.box(src, .vertical, .{
+            .border = border,
+            .expand = .vertical,
+            .background = true,
+            .margin = .{ .w = 10, .x = 10 },
+        });
+        line.deinit();
         try fieldWidget(src, "", Child, @ptrCast(result), id_allocator, options.child_opts, alloc);
     } else {
         result.* = null;
@@ -433,85 +496,43 @@ fn structFieldWidget(
     var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next(), .expand = .both });
     defer box.deinit();
 
-    //var selected: *?usize = undefined;
-    //{
-    //    var box = try dvui.box(src, .vertical, .{
-    //        .id_extra = id_allocator.next(),
-    //        .border = border,
-    //        .background = true,
-    //        .expand = .both,
-    //    });
-    //    defer box.deinit();
+    inline for (fields, 0..) |field, i| {
+        //if (i == selected.*) {
+        const options = @field(struct_opts, field.name);
+        const result_ptr = &@field(result.*, field.name);
 
-    //    if (name.len != 0) {
-    //        try dvui.label(src, "{s}", .{name}, .{
-    //            .id_extra = id_allocator.next(),
-    //            .border = border,
-    //            .background = true,
-    //            .expand = .horizontal,
-    //            //.color_fill = .{ .name = .fill_hover },
-    //        });
-    //    }
+        //skip widget if set to null
+        if (options != null) {
+            if (@typeInfo(field.type) == .Struct) {
+                if (try dvui.expander(@src(), field.name, .{}, .{ .id_extra = i })) {
+                    var hbox = try dvui.box(src, .horizontal, .{
+                        .id_extra = id_allocator.next(),
+                        //.border = border,
+                        .expand = .both,
+                        //.background = true,
+                    });
+                    defer hbox.deinit();
+                    var line = try dvui.box(src, .vertical, .{
+                        .border = border,
+                        .expand = .vertical,
+                        .background = true,
+                        .margin = .{ .w = 10, .x = 10 },
+                    });
+                    line.deinit();
 
-    //    var scroll = try dvui.scrollArea(src, .{ .expand_to_fit = true }, .{ .id_extra = id_allocator.next() });
-    //    defer scroll.deinit();
-
-    //    selected = dvui.dataGetPtrDefault(dvui.currentWindow(), box.widget().data().id, "selected", ?usize, null);
-    //    inline for (fields, 0..) |field, i| {
-    //        const options: dvui.Options = .{
-    //            .id_extra = id_allocator.next(),
-    //            .background = true,
-    //            .color_fill = .{ .name = if (selected.* == i) .fill_hover else .fill },
-    //        };
-    //        if (try dvui.button(src, field.name, .{}, options)) {
-    //            if (selected.* != i) {
-    //                selected.* = i;
-    //            } else {
-    //                selected.* = null;
-    //            }
-    //        }
-    //    }
-    //}
-
-    {
-        inline for (fields, 0..) |field, i| {
-            //if (i == selected.*) {
-            const options = @field(struct_opts, field.name);
-            const result_ptr = &@field(result.*, field.name);
-
-            //skip widget if set to null
-            if (options != null) {
-                if (@typeInfo(field.type) == .Struct) {
-                    if (try dvui.expander(@src(), field.name, .{}, .{ .id_extra = i })) {
-                        var hbox = try dvui.box(src, .horizontal, .{
+                    {
+                        var vbox = try dvui.box(src, .vertical, .{
                             .id_extra = id_allocator.next(),
-                            //.border = border,
+                            //.border = dvui.Rect.all(1),
                             .expand = .both,
                             //.background = true,
                         });
-                        defer hbox.deinit();
-                        var line = try dvui.box(src, .vertical, .{
-                            .border = border,
-                            .expand = .vertical,
-                            .background = true,
-                            .margin = .{ .w = 10 },
-                        });
-                        line.deinit();
-
-                        {
-                            var vbox = try dvui.box(src, .vertical, .{
-                                .id_extra = id_allocator.next(),
-                                .border = dvui.Rect.all(1),
-                                .expand = .both,
-                                .background = true,
-                            });
-                            defer vbox.deinit();
-                            try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options.?, alloc);
-                        }
+                        defer vbox.deinit();
+                        try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options.?, alloc);
                     }
-                } else {
-                    try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options.?, alloc);
                 }
+            } else {
+                try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options.?, alloc);
             }
             //}
         }
@@ -556,7 +577,7 @@ pub fn fieldWidget(
 }
 
 //==========For Allocating Extra Ids===========
-const IdExtraType = u64;
+const IdExtraType = usize;
 const IdAllocator = struct {
     active_id: *IdExtraType,
 
@@ -579,8 +600,8 @@ fn structEntryInternal(
     var starting_id_extra: IdExtraType = 1;
     const id_allocator = IdAllocator{ .active_id = &starting_id_extra };
 
-    var box = try dvui.boxEqual(src, .vertical, .{ .id_extra = id_allocator.next(), .color_border = .{ .name = .border }, .expand = .both });
-    defer box.deinit();
+    //var box = try dvui.boxEqual(src, .vertical, .{ .id_extra = id_allocator.next(), .color_border = .{ .name = .border }, .expand = .both });
+    //defer box.deinit();
 
     // var pane = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = 10 }, .{ .id_extra = id_allocator.next(), .background = true });
     // defer pane.deinit();
