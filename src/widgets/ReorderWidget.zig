@@ -20,10 +20,7 @@ found_slot: bool = false,
 pub fn init(src: std.builtin.SourceLocation, opts: Options) ReorderWidget {
     var self = ReorderWidget{};
     const defaults = Options{ .name = "Reorder" };
-    // we are always going to be the same size as our parent's content rect,
-    // and not participate in normal widget layout
-    const parentSize = dvui.parentGet().data().contentRect().size();
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = parentSize.rect() }));
+    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
     self.id_reorderable = dvui.dataGet(null, self.wd.id, "_id_reorderable", usize) orelse null;
     self.drag_point = dvui.dataGet(null, self.wd.id, "_drag_point", dvui.Point) orelse null;
     self.reorderable_size = dvui.dataGet(null, self.wd.id, "_reorderable_size", dvui.Size) orelse dvui.Size{};
@@ -32,12 +29,26 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) ReorderWidget {
 
 pub fn install(self: *ReorderWidget) !void {
     try self.wd.register();
+    try self.wd.borderAndBackground(.{});
 
     dvui.parentSet(self.widget());
 }
 
 pub fn needFinalSlot(self: *ReorderWidget) bool {
     return self.drag_point != null and !self.found_slot;
+}
+
+pub fn finalSlot(self: *ReorderWidget) !bool {
+    if (self.needFinalSlot()) {
+        var r = try self.reorderable(@src(), .{ .last_slot = true }, .{});
+        defer r.deinit();
+
+        if (r.insertBefore()) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 pub fn widget(self: *ReorderWidget) Widget {
@@ -49,15 +60,15 @@ pub fn data(self: *ReorderWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *ReorderWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    return self.wd.parent.rectFor(id, min_size, e, g);
+    return dvui.placeIn(self.wd.contentRect().justSize(), dvui.minSize(id, min_size), e, g);
 }
 
 pub fn screenRectScale(self: *ReorderWidget, rect: Rect) RectScale {
-    return self.wd.parent.screenRectScale(rect);
+    return self.wd.contentRectScale().rectToRectScale(rect);
 }
 
 pub fn minSizeForChild(self: *ReorderWidget, s: Size) void {
-    self.wd.parent.minSizeForChild(s);
+    self.wd.minSizeMax(self.wd.padSize(s));
 }
 
 pub fn matchEvent(self: *ReorderWidget, e: *dvui.Event) bool {
@@ -105,10 +116,6 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *ReorderWidget) void {
-    // we aren't participating in normal widget layout, so don't do these
-    //self.wd.minSizeSetAndRefresh();
-    //self.wd.minSizeReportToParent();
-
     if (self.drag_ending) {
         self.id_reorderable = null;
         self.drag_point = null;
@@ -128,6 +135,8 @@ pub fn deinit(self: *ReorderWidget) void {
 
     dvui.dataSet(null, self.wd.id, "_reorderable_size", self.reorderable_size);
 
+    self.wd.minSizeSetAndRefresh();
+    self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);
 }
 
@@ -238,13 +247,13 @@ pub const Reorderable = struct {
     pub fn install(self: *Reorderable) !void {
         self.installed = true;
         if (self.reorder.drag_point) |dp| {
+            const topleft = dp.plus(dvui.dragOffset());
             if (self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.wd.id)) {
                 // we are being dragged - put in floating widget
                 try self.wd.register();
                 dvui.parentSet(self.widget());
 
-                const topleft = dp.plus(dvui.dragOffset()).scale(1 / dvui.windowNaturalScale());
-                self.floating_widget = dvui.FloatingWidget.init(@src(), .{ .rect = Rect.fromPoint(topleft), .min_size_content = self.reorder.reorderable_size });
+                self.floating_widget = dvui.FloatingWidget.init(@src(), .{ .rect = Rect.fromPoint(topleft.scale(1 / dvui.windowNaturalScale())), .min_size_content = self.reorder.reorderable_size });
                 try self.floating_widget.?.install();
             } else {
                 if (self.init_options.last_slot) {
@@ -253,7 +262,9 @@ pub const Reorderable = struct {
                     self.wd = WidgetData.init(self.wd.src, .{}, self.options);
                 }
                 const rs = self.wd.rectScale();
-                if (rs.r.contains(dp)) {
+                const dragRect = Rect.fromPoint(topleft).toSize(self.reorder.reorderable_size.scale(rs.s));
+
+                if (!self.reorder.found_slot and !rs.r.intersect(dragRect).empty()) {
                     // user is dragging a reorderable over this rect
                     self.target_rs = rs;
                     self.reorder.found_slot = true;
@@ -360,3 +371,29 @@ pub const Reorderable = struct {
         dvui.parentReset(self.wd.id, self.wd.parent);
     }
 };
+
+pub fn reorderSlice(comptime T: type, slice: []T, removed_idx: ?usize, insert_before_idx: ?usize) bool {
+    if (removed_idx) |ri| {
+        if (insert_before_idx) |ibi| {
+            // save this index
+            const removed = slice[ri];
+            if (ri < ibi) {
+                // moving down, shift others up
+                for (ri..ibi - 1) |i| {
+                    slice[i] = slice[i + 1];
+                }
+                slice[ibi - 1] = removed;
+            } else {
+                // moving up, shift others down
+                for (ibi..ri, 0..) |_, i| {
+                    slice[ri - i] = slice[ri - i - 1];
+                }
+                slice[ibi] = removed;
+            }
+
+            return true;
+        }
+    }
+
+    return false;
+}

@@ -138,6 +138,12 @@ pub const Alignment = struct {
 
     pub fn deinit(self: *Alignment) void {
         dvui.dataSet(null, self.id, "_max_align", self.next);
+        if (self.max) |m| {
+            if (self.next != m) {
+                // something changed
+                refresh(null, @src(), self.id);
+            }
+        }
     }
 };
 
@@ -5323,10 +5329,10 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         else => unreachable,
     };
 
-    var hbox = try dvui.box(src, .horizontal, .{ .id_extra = 1 });
+    var hbox = try dvui.box(src, .horizontal, .{});
     defer hbox.deinit();
 
-    const buffer = dataGetSliceDefault(currentWindow(), hbox.widget().data().id, "buffer", []u8, &[_]u8{0} ** 32);
+    const buffer = dataGetSliceDefault(null, hbox.widget().data().id, "buffer", []u8, &[_]u8{0} ** 32);
 
     //initialize with input number
     if (init_opts.value) |num| {
@@ -5388,7 +5394,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         } else if (init_opts.max != null) {
             minmax_text = try std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?});
         }
-        try te.textLayout.addText(minmax_text, .{ .id_extra = 2, .color_text = .{ .name = .fill_hover } });
+        try te.textLayout.addText(minmax_text, .{ .color_text = .{ .name = .fill_hover } });
     }
 
     te.deinit();
