@@ -40,7 +40,14 @@ var slider_entry_vector: bool = false;
 var text_entry_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
-var text_entry_multiline_buf = std.mem.zeroes([500]u8);
+var text_entry_multiline_buf = blk: {
+    var temp = std.mem.zeroes([500]u8);
+    const temp2 = "This multiline text\nentry can scroll\nin both directions.";
+    for (temp2, 0..) |c, i| {
+        temp[i] = c;
+    }
+    break :blk temp;
+};
 var dropdown_val: usize = 1;
 var layout_margin: Rect = Rect.all(4);
 var layout_border: Rect = Rect.all(0);
@@ -765,36 +772,52 @@ pub fn textEntryWidgets() !void {
         te.deinit();
     }
 
-    inline for ([_]type{ u8, i16, f32 }, 0..) |T, i| {
-        var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
+    const S = struct {
+        var type_dropdown_val: usize = 0;
+        var min: bool = false;
+        var max: bool = false;
+    };
+    const parse_types = [_]type{ u8, i8, u16, i16, u32, i32, f32, f64 };
+    const parse_typenames: [parse_types.len][]const u8 = blk: {
+        var temp: [parse_types.len][]const u8 = undefined;
+        inline for (parse_types, 0..) |T, i| {
+            temp[i] = @typeName(T);
+        }
+        break :blk temp;
+    };
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        try dvui.label(@src(), "Parse " ++ @typeName(T), .{}, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "Parse", .{}, .{ .gravity_y = 0.5 });
+
+        _ = try dvui.dropdown(@src(), &parse_typenames, &S.type_dropdown_val, .{ .min_size_content = .{ .w = 20 }, .gravity_y = 0.5 });
 
         // align text entry
         var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        const result = try dvui.textEntryNumber(@src(), T, .{}, .{});
-        try displayTextEntryNumberResult(result);
+        inline for (parse_types, 0..) |T, i| {
+            if (i == S.type_dropdown_val) {
+                const result = try dvui.textEntryNumber(@src(), T, .{ .min = if (S.min) 0 else null, .max = if (S.max) 100 else null }, .{});
+                try displayTextEntryNumberResult(result);
+            }
+        }
     }
 
-    try dvui.label(@src(), "Parse f32 with Min and Max", .{}, .{ .gravity_y = 0.5 });
-    const init_options: [3]dvui.TextEntryNumberInitOptions(f32) = .{ .{ .min = 0 }, .{ .max = 1 }, .{ .min = 0, .max = 1 } };
-    inline for (init_options, 0..) |opt, i| {
-        {
-            var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
-            defer hbox.deinit();
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
 
-            // align text entry
-            var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
-            defer hbox_aligned.deinit();
-            left_alignment.record(hbox.data().id, hbox_aligned.data());
+        // align with text entries
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-            const result = try dvui.textEntryNumber(@src(), f32, opt, .{});
-            try displayTextEntryNumberResult(result);
-        }
+        _ = try dvui.checkbox(@src(), &S.min, "Min", .{});
+        _ = try dvui.checkbox(@src(), &S.max, "Max", .{});
     }
 
     try dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});
@@ -1191,48 +1214,29 @@ pub fn reorderListsSimple(dir: dvui.enums.Direction) !void {
     const g = struct {
         var dir_entry: usize = 0;
         var strings = [6][]const u8{ "zero", "one", "two", "three", "four", "five" };
-
-        pub fn reorder(removed_idx: ?usize, insert_before_idx: ?usize) void {
-            if (removed_idx) |ri| {
-                if (insert_before_idx) |ibi| {
-                    // save this index
-                    const removed = strings[ri];
-                    if (ri < ibi) {
-                        // moving down, shift others up
-                        for (ri..ibi - 1) |i| {
-                            strings[i] = strings[i + 1];
-                        }
-                        strings[ibi - 1] = removed;
-                    } else {
-                        // moving up, shift others down
-                        for (ibi..ri, 0..) |_, i| {
-                            strings[ri - i] = strings[ri - i - 1];
-                        }
-                        strings[ibi] = removed;
-                    }
-                }
-            }
-        }
     };
 
     var removed_idx: ?usize = null;
     var insert_before_idx: ?usize = null;
 
-    // container for list, this determines layout of list
-    var vbox = try dvui.box(@src(), dir, .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
-    defer vbox.deinit();
-
-    var reorder = try dvui.reorder(@src(), .{});
+    // reorder widget must wrap entire list
+    var reorder = try dvui.reorder(@src(), .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
     defer reorder.deinit();
 
+    // this box determines layout of list - could be any layout widget
+    var vbox = try dvui.box(@src(), dir, .{ .expand = .both });
+    defer vbox.deinit();
+
     for (g.strings[0..g.strings.len], 0..) |s, i| {
+
+        // make a reorderable for each entry in the list
         var reorderable = try reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
         defer reorderable.deinit();
 
         if (reorderable.removed()) {
-            removed_idx = i;
+            removed_idx = i; // this entry is being dragged
         } else if (reorderable.insertBefore()) {
-            insert_before_idx = i;
+            insert_before_idx = i; // this entry was dropped onto
         }
 
         // actual content of the list entry
@@ -1241,19 +1245,18 @@ pub fn reorderListsSimple(dir: dvui.enums.Direction) !void {
 
         try dvui.label(@src(), "{s}", .{s}, .{});
 
+        // this helper shows the triple-line icon, detects the start of a drag,
+        // and hands off the drag to the ReorderWidget
         _ = try dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 });
     }
 
-    if (reorder.needFinalSlot()) {
-        var reorderable = try reorder.reorderable(@src(), .{ .last_slot = true }, .{});
-        defer reorderable.deinit();
-
-        if (reorderable.insertBefore()) {
-            insert_before_idx = g.strings.len;
-        }
+    // show a final slot that allows dropping an entry at the end of the list
+    if (try reorder.finalSlot()) {
+        insert_before_idx = g.strings.len; // entry was dropped into the final slot
     }
 
-    g.reorder(removed_idx, insert_before_idx);
+    // returns true if the slice was reordered
+    _ = dvui.ReorderWidget.reorderSlice([]const u8, &g.strings, removed_idx, insert_before_idx);
 }
 
 pub fn reorderListsAdvanced() !void {
@@ -1318,12 +1321,13 @@ pub fn reorderListsAdvanced() !void {
     var removed_idx: ?usize = null;
     var insert_before_idx: ?usize = null;
 
-    // container for list, this determines layout of list
-    var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
-    defer vbox.deinit();
-
-    var reorder = try dvui.reorder(@src(), .{});
+    // reorder widget must wrap entire list
+    var reorder = try dvui.reorder(@src(), .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
     defer reorder.deinit();
+
+    // determines layout of list
+    var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both });
+    defer vbox.deinit();
 
     if (added_idx) |ai| {
         reorder.dragStart(ai, added_idx_p.?); // reorder grabs capture
