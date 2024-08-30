@@ -62,6 +62,8 @@ pub const Selection = struct {
             self.start = idx;
             self.end = idx;
         }
+
+        self.order();
     }
 
     pub fn order(self: *Selection) void {
@@ -95,7 +97,8 @@ selection_store: Selection = .{},
 sel_mouse_down_pt: ?Point = null,
 sel_mouse_down_bytes: ?usize = null,
 sel_mouse_drag_pt: ?Point = null,
-sel_left_right: i32 = 0,
+sel_left_right: i8 = 0,
+sel_left_right_buf: [10]u8 = [1]u8{0} ** 10,
 sel_start_r: Rect = .{},
 sel_start_r_new: ?Rect = null,
 sel_end_r: Rect = .{},
@@ -155,10 +158,6 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             self.selection_store = s;
         }
         self.selection = &self.selection_store;
-    }
-
-    if (dvui.dataGet(null, self.wd.id, "_sel_left_right", i32)) |slf| {
-        self.sel_left_right = slf;
     }
 
     if (dvui.captured(self.wd.id)) {
@@ -457,36 +456,6 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             self.selection.end += 1;
         }
 
-        if (self.sel_left_right != 0 and !self.cursor_seen and self.selection.cursor <= self.bytes_seen + end) {
-            while (self.sel_left_right < 0 and self.selection.cursor > self.bytes_seen) {
-                var cur = self.selection.cursor;
-
-                // move cursor one utf8 char left
-                cur -|= 1;
-                while (cur > self.bytes_seen and txt[cur - self.bytes_seen] & 0xc0 == 0x80) {
-                    // in the middle of a multibyte char
-                    cur -|= 1;
-                }
-
-                self.selection.moveCursor(cur, true);
-                self.sel_left_right += 1;
-            }
-
-            if (self.sel_left_right < 0 and self.selection.cursor == 0) {
-                self.sel_left_right = 0;
-            }
-
-            while (self.sel_left_right > 0 and self.selection.cursor < (self.bytes_seen + end)) {
-                var cur = self.selection.cursor;
-
-                // move cursor one utf8 char right
-                cur += std.unicode.utf8ByteSequenceLength(txt[cur - self.bytes_seen]) catch 1;
-
-                self.selection.moveCursor(cur, true);
-                self.sel_left_right -= 1;
-            }
-        }
-
         if (clickable) {
             if (self.cursor_pt) |p| {
                 const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
@@ -574,7 +543,6 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                     // point is before this text
                     self.selection.moveCursor(self.bytes_seen, self.cursor_updown_drag);
                     self.cursor_updown_pt = null;
-                    self.selection.order();
                     self.scroll_to_cursor = true;
                 } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
                     // point is in this text
@@ -583,7 +551,6 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                     _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
                     self.selection.moveCursor(self.bytes_seen + pt_end, self.cursor_updown_drag);
                     self.cursor_updown_pt = null;
-                    self.selection.order();
                     self.scroll_to_cursor = true;
                 } else {
                     if (newline and p.y < (rs.y + rs.h)) {
@@ -594,7 +561,6 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                         // point is after this text, but we might not get anymore
                         self.selection.moveCursor(self.bytes_seen + end, self.cursor_updown_drag);
                     }
-                    self.selection.order();
                     self.scroll_to_cursor = true;
                 }
             }
@@ -698,6 +664,51 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             if (self.selection.start == self.selection.end) {
                 self.cursor_rect = cr;
             }
+        }
+
+        if (self.sel_left_right < 0) {
+            // save a small lookback buffer
+
+            const last_idx = @min(self.selection.cursor, self.bytes_seen + end) -| self.bytes_seen;
+            for (self.sel_left_right_buf, 0..) |_, i| {
+                if (i + last_idx >= self.sel_left_right_buf.len) {
+                    self.sel_left_right_buf[i] = txt[last_idx + i - self.sel_left_right_buf.len];
+                } else {
+                    self.sel_left_right_buf[i] = self.sel_left_right_buf[i + last_idx];
+                }
+            }
+
+            if (self.cursor_seen) {
+                while (self.sel_left_right < 0) {
+                    var cur = self.selection.cursor;
+
+                    // move cursor one utf8 char left
+                    cur -|= 1;
+                    while (cur > self.bytes_seen and self.sel_left_right_buf[self.sel_left_right_buf.len + cur - self.selection.cursor] & 0xc0 == 0x80) {
+                        // in the middle of a multibyte char
+                        cur -|= 1;
+                    }
+
+                    self.selection.moveCursor(cur, true);
+                    self.sel_left_right += 1;
+                }
+
+                self.sel_left_right = 0;
+
+                dvui.refresh(null, @src(), self.wd.id);
+            }
+        }
+
+        while (self.cursor_seen and self.sel_left_right > 0 and self.selection.cursor < (self.bytes_seen + end)) {
+            var cur = self.selection.cursor;
+
+            // move cursor one utf8 char right
+            cur += std.unicode.utf8ByteSequenceLength(txt[cur - self.bytes_seen]) catch 1;
+
+            self.selection.moveCursor(cur, true);
+            self.sel_left_right -= 1;
+
+            dvui.refresh(null, @src(), self.wd.id);
         }
 
         // even if we don't actually render, need to update insert_pt and minSize
@@ -843,12 +854,6 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
     self.selection.start = @min(self.selection.start, self.bytes_seen);
     self.selection.end = @min(self.selection.end, self.bytes_seen);
 
-    if (self.sel_left_right > 0 and self.selection.cursor == self.bytes_seen) {
-        self.sel_left_right = 0;
-    } else if (self.sel_left_right < 0 and self.selection.cursor == 0) {
-        self.sel_left_right = 0;
-    }
-
     if (!self.cursor_seen) {
         self.cursor_seen = true;
         self.selection.cursor = self.bytes_seen;
@@ -867,6 +872,26 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
                 .screen_rect = self.screenRectScale(cr_new).r,
             } } };
             self.processEvent(&scrollto, true);
+        }
+
+        if (self.sel_left_right < 0) {
+            while (self.sel_left_right < 0) {
+                var cur = self.selection.cursor;
+
+                // move cursor one utf8 char left
+                cur -|= 1;
+                while (cur > self.bytes_seen and self.sel_left_right_buf[self.sel_left_right_buf.len + cur - self.selection.cursor] & 0xc0 == 0x80) {
+                    // in the middle of a multibyte char
+                    cur -|= 1;
+                }
+
+                self.selection.moveCursor(cur, true);
+                self.sel_left_right += 1;
+            }
+
+            self.sel_left_right = 0;
+
+            dvui.refresh(null, @src(), self.wd.id);
         }
 
         if (self.scroll_to_cursor) {
@@ -1150,13 +1175,6 @@ pub fn deinit(self: *TextLayoutWidget) void {
     dvui.dataSet(null, self.wd.id, "_sel_end_r", self.sel_end_r);
     dvui.dataSet(null, self.wd.id, "_selection", self.selection.*);
 
-    if (self.sel_left_right != 0) {
-        // user might have pressed left a few times, but we couldn't
-        // process them all this frame because they crossed calls to
-        // addText
-        dvui.dataSet(null, self.wd.id, "_sel_left_right", self.sel_left_right);
-        dvui.refresh(null, @src(), self.wd.id);
-    }
     if (dvui.captured(self.wd.id) and self.sel_mouse_down_bytes != null) {
         // once we figure out where the mousedown was, we need to save it
         // as long as we are dragging
