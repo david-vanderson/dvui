@@ -20,38 +20,46 @@ fn intFieldWidget(
             var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
             defer box.deinit();
 
-            try dvui.label(src, "{s}", .{name}, .{
-                .id_extra = id_allocator.next(),
-                .border = border,
-                .background = true,
-                .expand = .horizontal,
+            try dvui.label(@src(), "{s}", .{name}, .{
+                //.id_extra = id_allocator.next(),
+                //.border = border,
+                //.background = true,
+                //.expand = .horizontal,
             });
             const maybe_num = try dvui.textEntryNumber(src, T, .{}, .{ .id_extra = id_allocator.next() });
             if (maybe_num == .Valid) {
                 result.* = maybe_num.Valid;
             }
-            try dvui.label(src, "{}", .{result.*}, .{ .id_extra = id_allocator.next() });
+            try dvui.label(@src(), "{}", .{result.*}, .{
+                //.id_extra = id_allocator.next(),
+            });
         },
         .slider => {
             var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
             defer box.deinit();
 
-            try dvui.label(src, "{s}", .{name}, .{
-                .id_extra = id_allocator.next(),
-                .border = border,
-                .background = true,
-                .expand = .horizontal,
+            try dvui.label(@src(), "{s}", .{name}, .{
+                //.id_extra = id_allocator.next(),
+                //.border = border,
+                //.background = true,
+                //.expand = .horizontal,
             });
 
             var percent = intToNormalizedPercent(result.*);
             _ = try dvui.slider(
-                src,
+                @src(),
                 .horizontal,
                 &percent,
-                .{ .id_extra = id_allocator.next(), .expand = .horizontal, .min_size_content = .{ .w = 100, .h = 20 } },
+                .{
+                    //.id_extra = id_allocator.next(),
+                    .expand = .horizontal,
+                    .min_size_content = .{ .w = 100, .h = 20 },
+                },
             );
             result.* = normalizedPercentToInt(percent, T);
-            try dvui.label(src, "{}", .{result.*}, .{ .id_extra = id_allocator.next() });
+            try dvui.label(@src(), "{}", .{result.*}, .{
+                //.id_extra = id_allocator.next(),
+            });
         },
     }
 }
@@ -95,13 +103,20 @@ pub fn floatFieldWidget(
 ) !void {
     var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
-    try dvui.label(src, "{s}", .{name}, .{ .id_extra = id_allocator.next(), .border = border, .background = true, .expand = .horizontal });
+    try dvui.label(@src(), "{s}", .{name}, .{
+        //.id_extra = id_allocator.next(),
+        //.border = border,
+        //.background = true,
+        //.expand = .horizontal,
+    });
 
     const maybe_num = try dvui.textEntryNumber(src, T, .{}, .{ .id_extra = id_allocator.next() });
     if (maybe_num == .Valid) {
         result.* = maybe_num.Valid;
     }
-    try dvui.label(src, "{d}", .{result.*}, .{ .id_extra = id_allocator.next() });
+    try dvui.label(@src(), "{d}", .{result.*}, .{
+        //.id_extra = id_allocator.next(),
+    });
 }
 
 pub const EnumFieldOptions = struct {
@@ -119,22 +134,26 @@ fn enumFieldWidget(
     var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
 
-    try dvui.label(src, "{s}", .{name}, .{ .id_extra = id_allocator.next(), .border = border, .background = true, .expand = .horizontal });
+    try dvui.label(@src(), "{s}", .{name}, .{
+        //.id_extra = id_allocator.next(),
+        //.border = border,
+        //.background = true,
+        //.expand = .horizontal,
+    });
     switch (enum_opt.widget_type) {
         .dropdown => {
             const entries = std.meta.fieldNames(T);
             var choice: usize = @intFromEnum(result.*);
-            _ = try dvui.dropdown(src, entries, &choice, .{ .id_extra = id_allocator.next() });
+            _ = try dvui.dropdown(@src(), entries, &choice, .{
+                //.id_extra = id_allocator.next(),
+            });
             result.* = @enumFromInt(choice);
         },
         .radio => {
             inline for (@typeInfo(T).Enum.fields) |field| {
-                if (try dvui.radio(
-                    @src(),
-                    result.* == @as(T, @enumFromInt(field.value)),
-                    field.name,
-                    .{ .id_extra = id_allocator.next() },
-                )) {
+                if (try dvui.radio(@src(), result.* == @as(T, @enumFromInt(field.value)), field.name, .{
+                    //.id_extra = id_allocator.next(),
+                })) {
                     result.* = @enumFromInt(field.value);
                 }
             }
@@ -212,7 +231,7 @@ pub fn unionFieldWidget(
     var choice: usize = @intFromEnum(std.meta.activeTag(result.*));
 
     {
-        var hbox = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+        var hbox = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
         defer hbox.deinit();
         if (name.len != 0) {
             try dvui.label(src, "{s}", .{name}, .{
@@ -221,7 +240,12 @@ pub fn unionFieldWidget(
                 .background = true,
             });
         }
-        _ = try dvui.dropdown(src, entries, &choice, .{ .id_extra = id_allocator.next() });
+        //_ = try dvui.dropdown(src, entries, &choice, .{ .id_extra = id_allocator.next() });
+        inline for (entries, 0..) |field_name, i| {
+            if (try dvui.radio(@src(), choice == i, field_name, .{ .id_extra = i })) {
+                choice = i; //@enumFromInt(field.value);
+            }
+        }
     }
 
     inline for (@typeInfo(T).Union.fields, 0..) |field, i| {
@@ -336,7 +360,12 @@ fn textFieldWidget(
     var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
     defer box.deinit();
 
-    try dvui.label(src, "{s}", .{name}, .{ .id_extra = id_allocator.next(), .border = border, .background = true, .expand = .horizontal });
+    try dvui.label(@src(), "{s}", .{name}, .{
+        //.id_extra = id_allocator.next(),
+        //.border = border,
+        //.background = true,
+        //.expand = .horizontal,
+    });
     const buffer = dvui.dataGetSliceDefault(
         dvui.currentWindow(),
         box.widget().data().id,
@@ -345,7 +374,7 @@ fn textFieldWidget(
         &([_]u8{0} ** text_opt.max_len),
     );
 
-    const text_box = try dvui.textEntry(src, .{ .text = buffer }, .{ .id_extra = id_allocator.next() });
+    const text_box = try dvui.textEntry(@src(), .{ .text = buffer }, .{});
     defer text_box.deinit();
 
     result.* = text_box.getText();
@@ -496,6 +525,9 @@ fn structFieldWidget(
     var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next(), .expand = .both });
     defer box.deinit();
 
+    var left_alignment = dvui.Alignment.init();
+    defer left_alignment.deinit();
+
     inline for (fields, 0..) |field, i| {
         //if (i == selected.*) {
         const options = @field(struct_opts, field.name);
@@ -525,10 +557,13 @@ fn structFieldWidget(
                             .id_extra = id_allocator.next(),
                             //.border = dvui.Rect.all(1),
                             .expand = .both,
-                            //.background = true,
+                            .margin = left_alignment.margin(box.data().id), //.background = true,
+
                         });
                         defer vbox.deinit();
                         try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options.?, alloc);
+
+                        left_alignment.record(hbox.data().id, vbox.data());
                     }
                 }
             } else {
@@ -560,6 +595,7 @@ pub fn fieldWidget(
     comptime T: type,
     result: *T,
     id_allocator: IdAllocator,
+    //left_align: *dvui.Alignment,
     comptime options: FieldOptions(T),
     comptime alloc: bool,
 ) !void {
