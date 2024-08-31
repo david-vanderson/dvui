@@ -60,7 +60,7 @@ pub fn build(b: *std.Build) !void {
     });
     sdl_mod.addImport("dvui", dvui_mod);
 
-    if (b.systemIntegrationOption("sdl2", .{}) or target.result.os.tag == .linux) {
+    if (b.systemIntegrationOption("sdl2", .{})) {
         sdl_mod.linkSystemLibrary("SDL2", .{});
     } else {
         const sdl_dep = b.lazyDependency("sdl", .{
