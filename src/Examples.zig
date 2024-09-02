@@ -378,22 +378,6 @@ pub fn demo() !void {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
 
-        //structUi
-
-        const TestType = struct {
-            a: i8,
-            b: u16,
-            c: f32,
-            g: f64,
-            foo_a: bool,
-            foo_b: bool,
-            foo_c: bool,
-            bar: dvui.Color,
-            fizz: enum { bap, bep, bip, bop, bup },
-            buzz: enum { bap, bep, bip, bop, bup },
-            text: []const u8,
-        };
-        _ = TestType; // autofix
         const Static = struct {
             var result: dvui.Theme = undefined;
         };
@@ -403,16 +387,31 @@ pub fn demo() !void {
             dvui.Theme,
             &Static.result,
             .{
-                //    .a = .{ .widget_type = .slider },
-                //    .foo_a = .{ .widget_type = .toggle },
-                //    .foo_b = .{ .widget_type = .dropdown },
-                //    .foo_c = .{ .widget_type = .checkbox },
-                //    .bar = .{
-                //        .r = .{ .widget_type = .slider },
-                //        .g = .{ .widget_type = .slider },
-                //        .b = .{ .widget_type = .slider },
-                //    },
-                //    .buzz = .{ .widget_type = .radio },
+                //set the field "dark" to use a drop down widget
+                .dark = .{ .widget_type = .dropdown },
+                //set the field "alpha" to use min and max
+                .alpha = .{ .min = 0, .max = 255 },
+                .style_accent = .{
+                    .id_extra = .{
+                        //id_extra is an optional, so we need to use
+                        //child_opts to change the options of its child type
+                        //this controls the "T" in "?T"
+                        .child_opts = .{
+                            .widget_type = .slider,
+                            .min = 0,
+                            .max = 10,
+                        },
+                    },
+                },
+                .style_err = .{
+                    .id_extra = .{
+                        .child_opts = .{
+                            .widget_type = .slider,
+                            .min = 5,
+                            .max = 10,
+                        },
+                    },
+                },
             },
         );
     }
