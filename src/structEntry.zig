@@ -8,42 +8,28 @@ pub const IntFieldOptions = struct {
 };
 
 fn intFieldWidget(
-    comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
-    id_allocator: IdAllocator,
     comptime int_opt: IntFieldOptions,
 ) !void {
     switch (int_opt.widget_type) {
         .number_entry => {
-            var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+            var box = try dvui.box(@src(), .horizontal, .{});
             defer box.deinit();
 
-            try dvui.label(@src(), "{s}", .{name}, .{
-                //.id_extra = id_allocator.next(),
-                //.border = border,
-                //.background = true,
-                //.expand = .horizontal,
-            });
-            const maybe_num = try dvui.textEntryNumber(src, T, .{}, .{ .id_extra = id_allocator.next() });
+            try dvui.label(@src(), "{s}", .{name}, .{});
+            const maybe_num = try dvui.textEntryNumber(@src(), T, .{}, .{});
             if (maybe_num == .Valid) {
                 result.* = maybe_num.Valid;
             }
-            try dvui.label(@src(), "{}", .{result.*}, .{
-                //.id_extra = id_allocator.next(),
-            });
+            try dvui.label(@src(), "{}", .{result.*}, .{});
         },
         .slider => {
-            var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
+            var box = try dvui.box(@src(), .vertical, .{});
             defer box.deinit();
 
-            try dvui.label(@src(), "{s}", .{name}, .{
-                //.id_extra = id_allocator.next(),
-                //.border = border,
-                //.background = true,
-                //.expand = .horizontal,
-            });
+            try dvui.label(@src(), "{s}", .{name}, .{});
 
             var percent = intToNormalizedPercent(result.*);
             _ = try dvui.slider(
@@ -51,15 +37,12 @@ fn intFieldWidget(
                 .horizontal,
                 &percent,
                 .{
-                    //.id_extra = id_allocator.next(),
                     .expand = .horizontal,
                     .min_size_content = .{ .w = 100, .h = 20 },
                 },
             );
             result.* = normalizedPercentToInt(percent, T);
-            try dvui.label(@src(), "{}", .{result.*}, .{
-                //.id_extra = id_allocator.next(),
-            });
+            try dvui.label(@src(), "{}", .{result.*}, .{});
         },
     }
 }
@@ -94,23 +77,16 @@ pub const FloatFieldOptions = struct {
 };
 
 pub fn floatFieldWidget(
-    comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
-    id_allocator: IdAllocator,
     _: FloatFieldOptions,
 ) !void {
-    var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(@src(), .horizontal, .{});
     defer box.deinit();
-    try dvui.label(@src(), "{s}", .{name}, .{
-        //.id_extra = id_allocator.next(),
-        //.border = border,
-        //.background = true,
-        //.expand = .horizontal,
-    });
+    try dvui.label(@src(), "{s}", .{name}, .{});
 
-    const maybe_num = try dvui.textEntryNumber(src, T, .{}, .{ .id_extra = id_allocator.next() });
+    const maybe_num = try dvui.textEntryNumber(@src(), T, .{}, .{});
     if (maybe_num == .Valid) {
         result.* = maybe_num.Valid;
     }
@@ -124,22 +100,15 @@ pub const EnumFieldOptions = struct {
 };
 
 fn enumFieldWidget(
-    comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
-    id_allocator: IdAllocator,
     enum_opt: EnumFieldOptions,
 ) !void {
-    var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(@src(), .horizontal, .{});
     defer box.deinit();
 
-    try dvui.label(@src(), "{s}", .{name}, .{
-        //.id_extra = id_allocator.next(),
-        //.border = border,
-        //.background = true,
-        //.expand = .horizontal,
-    });
+    try dvui.label(@src(), "{s}", .{name}, .{});
     switch (enum_opt.widget_type) {
         .dropdown => {
             const entries = std.meta.fieldNames(T);
@@ -166,36 +135,34 @@ pub const BoolFieldOptions = struct {
 };
 
 fn boolFieldWidget(
-    comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     result: *bool,
-    id_allocator: IdAllocator,
     comptime bool_opt: BoolFieldOptions,
 ) !void {
-    var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(@src(), .horizontal, .{});
     defer box.deinit();
 
     switch (bool_opt.widget_type) {
         .checkbox => {
-            try dvui.label(src, "{s}", .{name}, .{ .id_extra = id_allocator.next(), .border = border, .background = true, .expand = .horizontal });
-            _ = try dvui.checkbox(src, result, "", .{ .id_extra = id_allocator.next() });
+            try dvui.label(@src(), "{s}", .{name}, .{ .border = border, .background = true, .expand = .horizontal });
+            _ = try dvui.checkbox(@src(), result, "", .{});
         },
         .dropdown => {
             const entries = .{ "false", "true" };
             var choice: usize = if (result.* == false) 0 else 1;
-            try dvui.labelNoFmt(src, name, .{ .id_extra = id_allocator.next(), .background = true, .border = border });
-            _ = try dvui.dropdown(src, &entries, &choice, .{ .id_extra = id_allocator.next() });
+            try dvui.labelNoFmt(@src(), name, .{ .background = true, .border = border });
+            _ = try dvui.dropdown(@src(), &entries, &choice, .{});
             result.* = if (choice == 0) false else true;
         },
         .toggle => {
             switch (result.*) {
                 true => {
-                    if (try dvui.button(src, name ++ " enabled", .{}, .{ .id_extra = id_allocator.next(), .border = border, .background = true })) {
+                    if (try dvui.button(@src(), name ++ " enabled", .{}, .{ .border = border, .background = true })) {
                         result.* = !result.*;
                     }
                 },
                 false => {
-                    if (try dvui.button(src, name ++ " disabled", .{}, .{ .id_extra = id_allocator.next(), .border = border, .background = true })) {
+                    if (try dvui.button(@src(), name ++ " disabled", .{}, .{ .border = border, .background = true })) {
                         result.* = !result.*;
                     }
                 },
@@ -213,16 +180,14 @@ pub fn UnionFieldOptions(comptime T: type) type {
 }
 
 pub fn unionFieldWidget(
-    comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
-    id_allocator: IdAllocator,
     comptime options: UnionFieldOptions(T),
     comptime alloc: bool,
 ) !void {
     _ = options; // autofix
-    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(@src(), .vertical, .{});
     defer box.deinit();
 
     const FieldEnum = std.meta.FieldEnum(T);
@@ -231,19 +196,17 @@ pub fn unionFieldWidget(
     var choice: usize = @intFromEnum(std.meta.activeTag(result.*));
 
     {
-        var hbox = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
+        var hbox = try dvui.box(@src(), .vertical, .{});
         defer hbox.deinit();
         if (name.len != 0) {
-            try dvui.label(src, "{s}", .{name}, .{
-                .id_extra = id_allocator.next(),
+            try dvui.label(@src(), "{s}", .{name}, .{
                 .border = border,
                 .background = true,
             });
         }
-        //_ = try dvui.dropdown(src, entries, &choice, .{ .id_extra = id_allocator.next() });
         inline for (entries, 0..) |field_name, i| {
             if (try dvui.radio(@src(), choice == i, field_name, .{ .id_extra = i })) {
-                choice = i; //@enumFromInt(field.value);
+                choice = i;
             }
         }
     }
@@ -255,14 +218,9 @@ pub fn unionFieldWidget(
             }
             const field_result: *field.type = &@field(result.*, field.name);
 
-            var hbox = try dvui.box(src, .horizontal, .{
-                .id_extra = id_allocator.next(),
-                //.border = border,
-                .expand = .both,
-                //.background = true,
-            });
+            var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both });
             defer hbox.deinit();
-            var line = try dvui.box(src, .vertical, .{
+            var line = try dvui.box(@src(), .vertical, .{
                 .border = border,
                 .expand = .vertical,
                 .background = true,
@@ -272,11 +230,10 @@ pub fn unionFieldWidget(
 
             //TODO support child opts
             try fieldWidget(
-                src,
                 field.name,
                 field.type,
                 @ptrCast(field_result),
-                id_allocator,
+
                 .{},
                 alloc,
             );
@@ -292,15 +249,14 @@ pub fn OptionalFieldOptions(comptime T: type) type {
 }
 
 pub fn optionalFieldWidget(
-    comptime src: std.builtin.SourceLocation,
+    //comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
-    id_allocator: IdAllocator,
     comptime options: OptionalFieldOptions(T),
     comptime alloc: bool,
 ) !void {
-    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(@src(), .vertical, .{});
     defer box.deinit();
 
     const Child = @typeInfo(T).Optional.child;
@@ -313,28 +269,23 @@ pub fn optionalFieldWidget(
         false,
     );
     {
-        var hbox = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+        var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
-        try dvui.label(src, "{s}?", .{name}, .{ .id_extra = id_allocator.next() });
-        _ = try dvui.checkbox(src, checkbox_state, null, .{ .id_extra = id_allocator.next() });
+        try dvui.label(@src(), "{s}?", .{name}, .{});
+        _ = try dvui.checkbox(@src(), checkbox_state, null, .{});
     }
 
     if (checkbox_state.*) {
-        var hbox = try dvui.box(src, .horizontal, .{
-            .id_extra = id_allocator.next(),
-            //.border = border,
-            .expand = .both,
-            //.background = true,
-        });
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both });
         defer hbox.deinit();
-        var line = try dvui.box(src, .vertical, .{
+        var line = try dvui.box(@src(), .vertical, .{
             .border = border,
             .expand = .vertical,
             .background = true,
             .margin = .{ .w = 10, .x = 10 },
         });
         line.deinit();
-        try fieldWidget(src, "", Child, @ptrCast(result), id_allocator, options.child_opts, alloc);
+        try fieldWidget("", Child, @ptrCast(result), options.child_opts, alloc);
     } else {
         result.* = null;
     }
@@ -347,25 +298,19 @@ pub const TextFieldOptions = struct {
 };
 
 fn textFieldWidget(
-    comptime src: std.builtin.SourceLocation,
+    //comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     result: *[]const u8,
-    id_allocator: IdAllocator,
     comptime text_opt: TextFieldOptions,
     comptime alloc: bool,
 ) !void {
 
     //TODO respect alloc setting
     _ = alloc; // autofix
-    var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(@src(), .horizontal, .{});
     defer box.deinit();
 
-    try dvui.label(@src(), "{s}", .{name}, .{
-        //.id_extra = id_allocator.next(),
-        //.border = border,
-        //.background = true,
-        //.expand = .horizontal,
-    });
+    try dvui.label(@src(), "{s}", .{name}, .{});
     const buffer = dvui.dataGetSliceDefault(
         dvui.currentWindow(),
         box.widget().data().id,
@@ -395,22 +340,20 @@ pub fn PointerFieldOptions(comptime T: type) type {
 }
 
 pub fn pointerFieldWidget(
-    comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
-    id_allocator: IdAllocator,
     comptime options: PointerFieldOptions(T),
     comptime alloc: bool,
 ) !void {
     const info = @typeInfo(T).Pointer;
 
     if (info.size == .Slice and info.child == u8) {
-        try textFieldWidget(src, name, result, id_allocator, options, alloc);
+        try textFieldWidget(name, result, options, alloc);
     } else if (info.size == .Slice) {
-        try sliceFieldWidget(src, name, T, result, id_allocator, options, alloc);
+        try sliceFieldWidget(name, T, result, options, alloc);
     } else if (info.size == .One) {
-        try singlePointerFieldWidget(src, T, name, result, id_allocator, options, alloc);
+        try singlePointerFieldWidget(T, name, result, options, alloc);
     } else if (info.size == .C or info.size == .Many) {
         @compileError("structEntry does not support *C or Many pointers");
     }
@@ -424,16 +367,15 @@ pub fn SinglePointerFieldOptions(comptime T: type) type {
 }
 
 pub fn singlePointerFieldWidget(
-    comptime src: std.builtin.SourceLocation,
+    //comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
-    id_allocator: IdAllocator,
     options: SinglePointerFieldOptions(T),
     comptime alloc: bool,
     paned: *dvui.PanedWidget,
 ) !void {
-    var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
+    var box = try dvui.box(@src(), .horizontal, .{});
     defer box.deinit();
 
     const Child = @typeInfo(T).Pointer.child;
@@ -444,47 +386,30 @@ pub fn singlePointerFieldWidget(
         result;
     result.* = destination;
 
-    try fieldWidget(src, name, Child, result.*, id_allocator, options.child_opts, alloc, paned);
+    try fieldWidget(@src(), name, Child, result.*, options.child_opts, alloc, paned);
 }
 
 //=======Single Item pointer and options=======
 pub fn SliceFieldOptions(comptime T: type) type {
     return struct {
         child_opts: FieldOptions(@typeInfo(T).Pointer.child) = .{},
-        //capacity: ?usize = null, //if alloc is false the slice assumes max_len space is avaiable
     };
 }
 
 //TODO implement this using reorderable lists and use this as the backend for array and vector widgets
 pub fn sliceFieldWidget(
-    comptime src: std.builtin.SourceLocation,
+    //comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
-    id_allocator: IdAllocator,
     options: SliceFieldOptions(T),
     comptime alloc: bool,
 ) !void {
-    _ = src; // autofix
     _ = name; // autofix
     _ = result; // autofix
-    _ = id_allocator; // autofix
     _ = options; // autofix
     _ = alloc; // autofix
     @compileError("TODO");
-    // var box = try dvui.box(src, .horizontal, .{ .id_extra = id_allocator.next() });
-    // defer box.deinit();
-
-    // const Child = @typeInfo(T).Pointer.child;
-
-    // result.* = if (alloc)
-    //     try dvui.dataGetSliceDefault(dvui.currentWindow(), box.widget().data().id, "slice", []T, [_]T{undefined})
-    // else
-    //     result.*;
-
-    // for (0..result.*.len) |i| {
-    //     try fieldWidget(src, name, Child, &(result.*[i]), id_allocator, options.child_opts, alloc, paned);
-    // }
 }
 
 //==========Struct Field Widget and Options
@@ -495,10 +420,10 @@ pub fn StructFieldOptions(comptime T: type) type {
         const FieldType = FieldOptions(field.type);
         fields[i] = .{
             .alignment = 1,
-            .default_value = @alignCast(@ptrCast(&(@as(?FieldType, FieldType{})))),
+            .default_value = @alignCast(@ptrCast(&(@as(FieldType, FieldType{})))),
             .is_comptime = false,
             .name = field.name,
-            .type = ?FieldType,
+            .type = FieldType,
         };
     }
     return @Type(.{ .Struct = .{
@@ -510,11 +435,10 @@ pub fn StructFieldOptions(comptime T: type) type {
 }
 
 fn structFieldWidget(
-    comptime src: std.builtin.SourceLocation,
+    //comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
-    id_allocator: IdAllocator,
     comptime struct_opts: StructFieldOptions(T),
     comptime alloc: bool,
 ) !void {
@@ -522,54 +446,48 @@ fn structFieldWidget(
     if (@typeInfo(T) != .Struct) @compileError("Input Type Must Be A Struct");
     const fields = @typeInfo(T).Struct.fields;
 
-    var box = try dvui.box(src, .vertical, .{ .id_extra = id_allocator.next(), .expand = .both });
+    var box = try dvui.box(@src(), .vertical, .{ .expand = .both });
     defer box.deinit();
 
     var left_alignment = dvui.Alignment.init();
     defer left_alignment.deinit();
 
     inline for (fields, 0..) |field, i| {
-        //if (i == selected.*) {
         const options = @field(struct_opts, field.name);
         const result_ptr = &@field(result.*, field.name);
 
-        //skip widget if set to null
-        if (options != null) {
-            if (@typeInfo(field.type) == .Struct) {
-                if (try dvui.expander(@src(), field.name, .{}, .{ .id_extra = i })) {
-                    var hbox = try dvui.box(src, .horizontal, .{
-                        .id_extra = id_allocator.next(),
-                        //.border = border,
+        if (@typeInfo(field.type) == .Struct) {
+            if (try dvui.expander(@src(), field.name, .{}, .{ .id_extra = i })) {
+                var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .id_extra = i });
+                defer hbox.deinit();
+                var line = try dvui.box(@src(), .vertical, .{
+                    .id_extra = i,
+                    .border = border,
+                    .expand = .vertical,
+                    .background = true,
+                    .margin = .{ .w = 10, .x = 10 },
+                });
+                line.deinit();
+
+                {
+                    //TODO get left align working
+                    var vbox = try dvui.box(@src(), .vertical, .{
                         .expand = .both,
-                        //.background = true,
+                        .id_extra = i,
+                        //.margin = left_alignment.margin(box.data().id),
                     });
-                    defer hbox.deinit();
-                    var line = try dvui.box(src, .vertical, .{
-                        .border = border,
-                        .expand = .vertical,
-                        .background = true,
-                        .margin = .{ .w = 10, .x = 10 },
-                    });
-                    line.deinit();
-
-                    {
-                        var vbox = try dvui.box(src, .vertical, .{
-                            .id_extra = id_allocator.next(),
-                            //.border = dvui.Rect.all(1),
-                            .expand = .both,
-                            .margin = left_alignment.margin(box.data().id), //.background = true,
-
-                        });
-                        defer vbox.deinit();
-                        try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options.?, alloc);
-
-                        left_alignment.record(hbox.data().id, vbox.data());
-                    }
+                    defer vbox.deinit();
+                    try fieldWidget(field.name, field.type, result_ptr, options, alloc);
+                    //left_alignment.record(hbox.data().id, vbox.data());
                 }
-            } else {
-                try fieldWidget(src, field.name, field.type, result_ptr, id_allocator, options.?, alloc);
             }
-            //}
+        } else {
+            var vbox = try dvui.box(@src(), .vertical, .{
+                .expand = .both,
+                .id_extra = i,
+            });
+            defer vbox.deinit();
+            try fieldWidget(field.name, field.type, result_ptr, options, alloc);
         }
     }
 }
@@ -590,61 +508,23 @@ pub fn FieldOptions(comptime T: type) type {
 }
 
 pub fn fieldWidget(
-    comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
-    id_allocator: IdAllocator,
-    //left_align: *dvui.Alignment,
     comptime options: FieldOptions(T),
     comptime alloc: bool,
 ) !void {
     switch (@typeInfo(T)) {
-        .Int => try intFieldWidget(src, name, T, result, id_allocator, options),
-        .Float => try floatFieldWidget(src, name, T, result, id_allocator, options),
-        .Bool => try boolFieldWidget(src, name, result, id_allocator, options),
-        .Enum => try enumFieldWidget(src, name, T, result, id_allocator, options),
-        .Pointer => try pointerFieldWidget(src, name, T, result, id_allocator, options, alloc),
-        .Optional => try optionalFieldWidget(src, name, T, result, id_allocator, options, alloc),
-        .Union => try unionFieldWidget(src, name, T, result, id_allocator, options, alloc),
-        .Struct => try structFieldWidget(src, name, T, result, id_allocator, options, alloc),
+        .Int => try intFieldWidget(name, T, result, options),
+        .Float => try floatFieldWidget(name, T, result, options),
+        .Bool => try boolFieldWidget(name, result, options),
+        .Enum => try enumFieldWidget(name, T, result, options),
+        .Pointer => try pointerFieldWidget(name, T, result, options, alloc),
+        .Optional => try optionalFieldWidget(name, T, result, options, alloc),
+        .Union => try unionFieldWidget(name, T, result, options, alloc),
+        .Struct => try structFieldWidget(name, T, result, options, alloc),
         else => @compileError("Invalid type: " ++ @typeName(T)),
     }
-}
-
-//==========For Allocating Extra Ids===========
-const IdExtraType = usize;
-const IdAllocator = struct {
-    active_id: *IdExtraType,
-
-    pub fn next(self: @This()) IdExtraType {
-        const result = self.active_id.*;
-        self.active_id.* += 1;
-        return result;
-    }
-};
-
-//========Internal Struct Entry Entrypoint=========
-fn structEntryInternal(
-    comptime src: std.builtin.SourceLocation,
-    comptime T: type,
-    result: *T,
-    comptime field_options: StructFieldOptions(T),
-    comptime alloc: bool,
-    comptime name: []const u8,
-) !void {
-    var starting_id_extra: IdExtraType = 1;
-    const id_allocator = IdAllocator{ .active_id = &starting_id_extra };
-
-    //var box = try dvui.boxEqual(src, .vertical, .{ .id_extra = id_allocator.next(), .color_border = .{ .name = .border }, .expand = .both });
-    //defer box.deinit();
-
-    // var pane = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = 10 }, .{ .id_extra = id_allocator.next(), .background = true });
-    // defer pane.deinit();
-
-    // pane.collapsing = false;
-    // pane.collapsed_state = false;
-    try structFieldWidget(src, name, T, result, id_allocator, field_options, alloc);
 }
 
 //=========PUBLIC API FUNCTIONS===========
@@ -653,7 +533,9 @@ pub fn structEntry(
     comptime T: type,
     result: *T,
 ) !void {
-    try structEntryInternal(src, T, result, .{}, false, "");
+    var box = try dvui.box(src, .vertical, .{ .expand = .both });
+    defer box.deinit();
+    try structFieldWidget("", T, result, .{}, false);
 }
 
 pub fn structEntryEx(
@@ -663,7 +545,9 @@ pub fn structEntryEx(
     result: *T,
     comptime field_options: StructFieldOptions(T),
 ) !void {
-    try structEntryInternal(src, T, result, field_options, false, name);
+    var box = try dvui.box(src, .vertical, .{ .expand = .both });
+    defer box.deinit();
+    try structFieldWidget(name, T, result, field_options, false);
 }
 
 pub fn structEntryAlloc(
@@ -671,7 +555,9 @@ pub fn structEntryAlloc(
     comptime T: type,
     result: *T,
 ) !void {
-    try structEntryInternal(src, T, result, .{}, true, "");
+    var box = try dvui.box(src, .vertical, .{ .expand = .both });
+    defer box.deinit();
+    try structFieldWidget("", T, result, .{}, true);
 }
 
 pub fn structEntryExAlloc(
@@ -681,7 +567,9 @@ pub fn structEntryExAlloc(
     result: *T,
     comptime field_options: StructFieldOptions(T),
 ) !void {
-    try structEntryInternal(src, T, result, field_options, true, name);
+    var box = try dvui.box(src, .vertical, .{ .expand = .both });
+    defer box.deinit();
+    try structFieldWidget(name, T, result, field_options, true);
 }
 
 //============Alloc result type========
