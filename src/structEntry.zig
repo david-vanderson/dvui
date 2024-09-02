@@ -3,15 +3,20 @@ const dvui = @import("dvui.zig");
 
 const border = dvui.Rect{ .h = 1, .w = 1, .x = 1, .y = 1 };
 
-pub const IntFieldOptions = struct {
-    widget_type: enum { number_entry, slider } = .number_entry,
-};
+pub fn IntFieldOptions(comptime T: type) type {
+    return struct {
+        widget_type: enum { number_entry, slider } = .number_entry,
+        min: T = std.math.minInt(T),
+        max: T = std.math.maxInt(T),
+        dvui_opts: dvui.Options = .{},
+    };
+}
 
 fn intFieldWidget(
     comptime name: []const u8,
     comptime T: type,
     result: *T,
-    comptime int_opt: IntFieldOptions,
+    comptime int_opt: IntFieldOptions(T),
 ) !void {
     switch (int_opt.widget_type) {
         .number_entry => {
@@ -19,7 +24,11 @@ fn intFieldWidget(
             defer box.deinit();
 
             try dvui.label(@src(), "{s}", .{name}, .{});
-            const maybe_num = try dvui.textEntryNumber(@src(), T, .{}, .{});
+            const maybe_num = try dvui.textEntryNumber(@src(), T, .{
+                .min = int_opt.min,
+                .max = int_opt.max,
+                .value = result,
+            }, int_opt.dvui_opts);
             if (maybe_num == .Valid) {
                 result.* = maybe_num.Valid;
             }
@@ -31,37 +40,28 @@ fn intFieldWidget(
 
             try dvui.label(@src(), "{s}", .{name}, .{});
 
-            var percent = intToNormalizedPercent(result.*);
-            _ = try dvui.slider(
-                @src(),
-                .horizontal,
-                &percent,
-                .{
-                    .expand = .horizontal,
-                    .min_size_content = .{ .w = 100, .h = 20 },
-                },
-            );
-            result.* = normalizedPercentToInt(percent, T);
+            var percent = intToNormalizedPercent(result.*, int_opt.min, int_opt.max);
+            //TODO implement dvui_opts
+            _ = try dvui.slider(@src(), .horizontal, &percent, .{
+                .expand = .horizontal,
+                .min_size_content = .{ .w = 100, .h = 20 },
+            });
+            result.* = normalizedPercentToInt(percent, T, int_opt.min, int_opt.max);
             try dvui.label(@src(), "{}", .{result.*}, .{});
         },
     }
 }
 
-fn normalizedPercentToInt(normalized_percent: f32, comptime T: type) T {
+fn normalizedPercentToInt(normalized_percent: f32, comptime T: type, min: T, max: T) T {
     if (@typeInfo(T) != .Int) @compileError("T is not an int type");
     std.debug.assert(normalized_percent >= 0);
     std.debug.assert(normalized_percent <= 1);
-
-    const min: f32 = @floatFromInt(std.math.minInt(T));
-    const max: f32 = @floatFromInt(std.math.maxInt(T));
     const range = max + @abs(min);
 
     return @intFromFloat(min + (range * normalized_percent));
 }
 
-fn intToNormalizedPercent(int: anytype) f32 {
-    const min: f32 = @floatFromInt(std.math.minInt(@TypeOf(int)));
-    const max: f32 = @floatFromInt(std.math.maxInt(@TypeOf(int)));
+fn intToNormalizedPercent(int: anytype, min: @TypeOf(int), max: @TypeOf(int)) f32 {
     const range = max + @abs(min);
     const progress: f32 = @as(f32, @floatFromInt(int)) + @abs(min);
     const result = progress / range;
@@ -72,31 +72,34 @@ fn intToNormalizedPercent(int: anytype) f32 {
     return result;
 }
 
-pub const FloatFieldOptions = struct {
-    //TODO implement min and max
-};
+pub fn FloatFieldOptions(comptime T: type) type {
+    return struct {
+        min: ?T = null,
+        max: ?T = null,
+        dvui_opts: dvui.Options = .{},
+    };
+}
 
 pub fn floatFieldWidget(
     comptime name: []const u8,
     comptime T: type,
     result: *T,
-    _: FloatFieldOptions,
+    opt: FloatFieldOptions(T),
 ) !void {
     var box = try dvui.box(@src(), .horizontal, .{});
     defer box.deinit();
     try dvui.label(@src(), "{s}", .{name}, .{});
 
-    const maybe_num = try dvui.textEntryNumber(@src(), T, .{}, .{});
+    const maybe_num = try dvui.textEntryNumber(@src(), T, .{ .min = opt.min, .max = opt.max }, opt.dvui_opts);
     if (maybe_num == .Valid) {
         result.* = maybe_num.Valid;
     }
-    try dvui.label(@src(), "{d}", .{result.*}, .{
-        //.id_extra = id_allocator.next(),
-    });
+    try dvui.label(@src(), "{d}", .{result.*}, .{});
 }
 
 pub const EnumFieldOptions = struct {
     widget_type: enum { radio, dropdown } = .dropdown,
+    dvui_opts: dvui.Options = .{},
 };
 
 fn enumFieldWidget(
@@ -113,16 +116,17 @@ fn enumFieldWidget(
         .dropdown => {
             const entries = std.meta.fieldNames(T);
             var choice: usize = @intFromEnum(result.*);
-            _ = try dvui.dropdown(@src(), entries, &choice, .{
-                //.id_extra = id_allocator.next(),
-            });
+            _ = try dvui.dropdown(@src(), entries, &choice, enum_opt.dvui_opts);
             result.* = @enumFromInt(choice);
         },
         .radio => {
             inline for (@typeInfo(T).Enum.fields) |field| {
-                if (try dvui.radio(@src(), result.* == @as(T, @enumFromInt(field.value)), field.name, .{
-                    //.id_extra = id_allocator.next(),
-                })) {
+                if (try dvui.radio(
+                    @src(),
+                    result.* == @as(T, @enumFromInt(field.value)),
+                    field.name,
+                    enum_opt.dvui_opts,
+                )) {
                     result.* = @enumFromInt(field.value);
                 }
             }
@@ -132,6 +136,7 @@ fn enumFieldWidget(
 
 pub const BoolFieldOptions = struct {
     widget_type: enum { checkbox, dropdown, toggle } = .toggle,
+    dvui_opts: dvui.Options = .{},
 };
 
 fn boolFieldWidget(
@@ -142,10 +147,11 @@ fn boolFieldWidget(
     var box = try dvui.box(@src(), .horizontal, .{});
     defer box.deinit();
 
+    //TODO implement dvui_opts for other types
     switch (bool_opt.widget_type) {
         .checkbox => {
             try dvui.label(@src(), "{s}", .{name}, .{ .border = border, .background = true, .expand = .horizontal });
-            _ = try dvui.checkbox(@src(), result, "", .{});
+            _ = try dvui.checkbox(@src(), result, "", bool_opt.dvui_opts);
         },
         .dropdown => {
             const entries = .{ "false", "true" };
@@ -157,12 +163,22 @@ fn boolFieldWidget(
         .toggle => {
             switch (result.*) {
                 true => {
-                    if (try dvui.button(@src(), name ++ " enabled", .{}, .{ .border = border, .background = true })) {
+                    if (try dvui.button(
+                        @src(),
+                        name ++ " enabled",
+                        .{},
+                        .{ .border = border, .background = true },
+                    )) {
                         result.* = !result.*;
                     }
                 },
                 false => {
-                    if (try dvui.button(@src(), name ++ " disabled", .{}, .{ .border = border, .background = true })) {
+                    if (try dvui.button(
+                        @src(),
+                        name ++ " disabled",
+                        .{},
+                        .{ .border = border, .background = true },
+                    )) {
                         result.* = !result.*;
                     }
                 },
@@ -173,7 +189,8 @@ fn boolFieldWidget(
 
 //=======Optional Field Widget and Options=======
 pub fn UnionFieldOptions(comptime T: type) type {
-    _ = T; // autofix
+    //TODO
+    _ = T; //autofix
     return struct {
         //child_opts: FieldOptions(@typeInfo(T).Optional.child) = .{},
     };
@@ -233,7 +250,6 @@ pub fn unionFieldWidget(
                 field.name,
                 field.type,
                 @ptrCast(field_result),
-
                 .{},
                 alloc,
             );
@@ -295,6 +311,7 @@ pub fn optionalFieldWidget(
 
 pub const TextFieldOptions = struct {
     max_len: u16 = 64,
+    dvui_opts: dvui.Options = .{},
 };
 
 fn textFieldWidget(
@@ -319,7 +336,7 @@ fn textFieldWidget(
         &([_]u8{0} ** text_opt.max_len),
     );
 
-    const text_box = try dvui.textEntry(@src(), .{ .text = buffer }, .{});
+    const text_box = try dvui.textEntry(@src(), .{ .text = buffer }, text_opt.dvui_opts);
     defer text_box.deinit();
 
     result.* = text_box.getText();
@@ -435,7 +452,6 @@ pub fn StructFieldOptions(comptime T: type) type {
 }
 
 fn structFieldWidget(
-    //comptime src: std.builtin.SourceLocation,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
@@ -495,8 +511,8 @@ fn structFieldWidget(
 //=========Generic Field Widget and Options===========
 pub fn FieldOptions(comptime T: type) type {
     return switch (@typeInfo(T)) {
-        .Int => IntFieldOptions,
-        .Float => FloatFieldOptions,
+        .Int => IntFieldOptions(T),
+        .Float => FloatFieldOptions(T),
         .Enum => EnumFieldOptions,
         .Bool => BoolFieldOptions,
         .Struct => StructFieldOptions(T),
