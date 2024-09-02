@@ -4342,7 +4342,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
                 }
             },
             .key => |ke| {
-                if (ke.code == .space and ke.action == .down) {
+                if ((ke.code == .space or ke.code == .enter) and ke.action == .down) {
                     e.handled = true;
                     ret = true;
                     dvui.refresh(null, @src(), lwid);
