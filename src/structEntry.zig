@@ -56,18 +56,18 @@ fn normalizedPercentToInt(normalized_percent: f32, comptime T: type, min: T, max
     if (@typeInfo(T) != .Int) @compileError("T is not an int type");
     std.debug.assert(normalized_percent >= 0);
     std.debug.assert(normalized_percent <= 1);
-    const range = max + @abs(min);
+    const range: f32 = @floatFromInt(max - min);
 
-    return @intFromFloat(min + (range * normalized_percent));
+    const result: T = @intFromFloat(@as(f32, @floatFromInt(min)) + (range * normalized_percent));
+
+    return result;
 }
 
-fn intToNormalizedPercent(int: anytype, min: @TypeOf(int), max: @TypeOf(int)) f32 {
-    const range = max + @abs(min);
-    const progress: f32 = @as(f32, @floatFromInt(int)) + @abs(min);
+fn intToNormalizedPercent(input_int: anytype, min: @TypeOf(input_int), max: @TypeOf(input_int)) f32 {
+    const int = if (input_int < min) min else input_int;
+    const range: f32 = @floatFromInt(max - min);
+    const progress: f32 = (@as(f32, @floatFromInt(int)) - @as(f32, @floatFromInt(min)));
     const result = progress / range;
-
-    std.debug.assert(result >= 0);
-    std.debug.assert(result <= 1);
 
     return result;
 }
@@ -150,13 +150,13 @@ fn boolFieldWidget(
     //TODO implement dvui_opts for other types
     switch (bool_opt.widget_type) {
         .checkbox => {
-            try dvui.label(@src(), "{s}", .{name}, .{ .border = border, .background = true, .expand = .horizontal });
+            try dvui.label(@src(), "{s}", .{name}, .{});
             _ = try dvui.checkbox(@src(), result, "", bool_opt.dvui_opts);
         },
         .dropdown => {
             const entries = .{ "false", "true" };
             var choice: usize = if (result.* == false) 0 else 1;
-            try dvui.labelNoFmt(@src(), name, .{ .background = true, .border = border });
+            try dvui.labelNoFmt(@src(), name, .{});
             _ = try dvui.dropdown(@src(), &entries, &choice, .{});
             result.* = if (choice == 0) false else true;
         },
