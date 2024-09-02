@@ -3,7 +3,11 @@ const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 
 pub fn build(b: *std.Build) !void {
-    const target = b.standardTargetOptions(.{});
+    const uses_dx11 = b.option(bool, "dx11", "Whether to use the DirectX11 Backend") orelse false;
+
+    const target = if (uses_dx11) b.standardTargetOptions(.{}) else b.resolveTargetQuery(.{
+        .os_tag = .windows,
+    });
     const optimize = b.standardOptimizeOption(.{});
 
     const link_backend = b.option(bool, "link_backend", "Should dvui link the chosen backend?") orelse true;
@@ -15,6 +19,34 @@ pub fn build(b: *std.Build) !void {
     addExample(b, target, optimize, "sdl-ontop", dvui_sdl);
     addExample(b, target, optimize, "raylib-standalone", dvui_raylib);
     addExample(b, target, optimize, "raylib-ontop", dvui_raylib);
+
+    // dx11 example
+    const dx11_examples = [_][]const u8{
+        "dx11-ontop",
+    };
+
+    inline for (dx11_examples) |ex| {
+        const windows_target = b.resolveTargetQuery(.{
+            .os_tag = .windows,
+        });
+
+        const exe = b.addExecutable(.{
+            .name = ex,
+            .root_source_file = b.path("examples/" ++ ex ++ ".zig"),
+            .target = windows_target,
+            .optimize = optimize,
+        });
+
+        exe.root_module.addImport("Dx11Backend", createDx11Module(b, target, optimize, true).?);
+        const compile_step = b.step("compile-" ++ ex, "Compile " ++ ex);
+        compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
+
+        const run_cmd = b.addRunArtifact(exe);
+        run_cmd.step.dependOn(compile_step);
+
+        const run_step = b.step(ex, "Run " ++ ex);
+        run_step.dependOn(&run_cmd.step);
+    }
 
     // web test
     {
@@ -266,4 +298,4 @@ fn addExample(
 
 //    const run_step = b.step(name, "Run " ++ name);
 //    run_step.dependOn(run_cmd);
-//}
+// }
