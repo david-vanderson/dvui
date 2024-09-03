@@ -108,3 +108,28 @@ pub fn scrollToFraction(self: *ScrollInfo, dir: enums.Direction, fin: f32) void 
         .horizontal => self.viewport.x = f * self.scroll_max(dir),
     }
 }
+
+/// Scrolls a viewport (screen) amount.
+/// dir: scroll vertically or horizontally
+/// up: true to scroll up or left, false to scroll down or right
+pub fn scrollPage(self: *ScrollInfo, dir: enums.Direction, up: bool) void {
+    var fi = self.fraction_visible(dir);
+    // the last page is scroll fraction 1.0, so there is
+    // one less scroll position between 0 and 1.0
+    fi = 1.0 / ((1.0 / fi) - 1);
+    var f: f32 = undefined;
+    if (up) {
+        f = self.scroll_fraction(dir) - fi;
+    } else {
+        f = self.scroll_fraction(dir) + fi;
+    }
+    self.scrollToFraction(dir, f);
+}
+
+pub fn scrollPageUp(self: *ScrollInfo, dir: enums.Direction) void {
+    self.scrollPage(dir, true);
+}
+
+pub fn scrollPageDown(self: *ScrollInfo, dir: enums.Direction) void {
+    self.scrollPage(dir, false);
+}

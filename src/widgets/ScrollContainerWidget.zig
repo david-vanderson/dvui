@@ -280,6 +280,14 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
                         self.si.viewport.x = dvui.math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
                     }
                     dvui.refresh(null, @src(), self.wd.id);
+                } else if (ke.code == .page_up and (ke.action == .down or ke.action == .repeat)) {
+                    e.handled = true;
+                    self.si.scrollPageUp(.vertical);
+                    dvui.refresh(null, @src(), self.wd.id);
+                } else if (ke.code == .page_down and (ke.action == .down or ke.action == .repeat)) {
+                    e.handled = true;
+                    self.si.scrollPageDown(.vertical);
+                    dvui.refresh(null, @src(), self.wd.id);
                 }
             }
         },
