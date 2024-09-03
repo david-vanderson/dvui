@@ -333,7 +333,7 @@ fn textFieldWidget(
         box.widget().data().id,
         "buffer",
         []u8,
-        &([_]u8{0} ** text_opt.max_len),
+        result.*,
     );
 
     const text_box = try dvui.textEntry(@src(), .{ .text = buffer }, text_opt.dvui_opts);
@@ -476,14 +476,8 @@ fn structFieldWidget(
             if (try dvui.expander(@src(), field.name, .{}, .{ .id_extra = i })) {
                 var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .id_extra = i });
                 defer hbox.deinit();
-                var line = try dvui.box(@src(), .vertical, .{
-                    .id_extra = i,
-                    .border = border,
-                    .expand = .vertical,
-                    .background = true,
-                    .margin = .{ .w = 10, .x = 10 },
-                });
-                line.deinit();
+
+                try dvui.separator(@src(), .{ .expand = .vertical, .min_size_content = .{ .w = 2 }, .margin = dvui.Rect.all(4) });
 
                 {
                     //TODO get left align working
@@ -548,8 +542,9 @@ pub fn structEntry(
     comptime src: std.builtin.SourceLocation,
     comptime T: type,
     result: *T,
+    opts: dvui.Options,
 ) !void {
-    var box = try dvui.box(src, .vertical, .{ .expand = .both });
+    var box = try dvui.box(src, .vertical, opts);
     defer box.deinit();
     try structFieldWidget("", T, result, .{}, false);
 }
