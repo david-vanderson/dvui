@@ -368,52 +368,76 @@ pub fn demo() !void {
         try themeSerialization(float.data().id);
     }
 
+    if (try dvui.expander(@src(), "Struct UI Widget (Experimental)", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+
+        const Top = struct {
+            const TopChild = struct {
+                a_dir: dvui.enums.Direction,
+            };
+
+            a_u8: u8 = 1,
+            a_f32: f32 = 2.0,
+            a_struct: TopChild = .{ .a_dir = .vertical },
+            a_str: []const u8 = &[_]u8{0} ** 20,
+
+            var instance: @This() = .{};
+        };
+
+        try dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
+        {
+            try dvui.structEntry(@src(), Top, &Top.instance, .{ .margin = .{ .x = 10 } });
+        }
+
+        if (try dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
+            var b2 = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+            defer b2.deinit();
+
+            //const Static = struct {
+            //    var result: dvui.Theme = undefined;
+            //};
+            try dvui.structEntryExAlloc(
+                @src(),
+                "dvui.Theme",
+                dvui.Theme,
+                //&Static.result,
+                dvui.themeGet(),
+                .{
+                    //set the field "dark" to use a drop down widget
+                    .dark = .{ .widget_type = .dropdown },
+                    //set the field "alpha" to use min and max
+                    .alpha = .{ .min = 0, .max = 255 },
+                    .style_accent = .{
+                        .id_extra = .{
+                            //id_extra is an optional, so we need to use
+                            //child_opts to change the options of its child type
+                            //this controls the "T" in "?T"
+                            .child_opts = .{
+                                .widget_type = .slider,
+                                .min = 0,
+                                .max = 10,
+                            },
+                        },
+                    },
+                    .style_err = .{
+                        .id_extra = .{
+                            .child_opts = .{
+                                .widget_type = .slider,
+                                .min = 5,
+                                .max = 10,
+                            },
+                        },
+                    },
+                },
+            );
+        }
+    }
+
     if (try dvui.expander(@src(), "Debugging and Errors", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         try debuggingErrors();
-    }
-
-    if (try dvui.expander(@src(), "Struct UI Widget", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-
-        const Static = struct {
-            var result: dvui.Theme = undefined;
-        };
-        try dvui.structEntryExAlloc(
-            @src(),
-            "dvui.Theme",
-            dvui.Theme,
-            &Static.result,
-            .{
-                //set the field "dark" to use a drop down widget
-                .dark = .{ .widget_type = .dropdown },
-                //set the field "alpha" to use min and max
-                .alpha = .{ .min = 0, .max = 255 },
-                .style_accent = .{
-                    .id_extra = .{
-                        //id_extra is an optional, so we need to use
-                        //child_opts to change the options of its child type
-                        //this controls the "T" in "?T"
-                        .child_opts = .{
-                            .widget_type = .slider,
-                            .min = 0,
-                            .max = 10,
-                        },
-                    },
-                },
-                .style_err = .{
-                    .id_extra = .{
-                        .child_opts = .{
-                            .widget_type = .slider,
-                            .min = 5,
-                            .max = 10,
-                        },
-                    },
-                },
-            },
-        );
     }
 
     if (show_dialog) {
