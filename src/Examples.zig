@@ -401,7 +401,7 @@ pub fn demo() !void {
                 .a = .{ .disabled = true },
             } };
 
-            try dvui.structEntryExAlloc(@src(), "dvui.Theme", dvui.Theme, dvui.themeGet(), .{ .fields = .{
+            try dvui.structEntryEx(@src(), "dvui.Theme", dvui.Theme, dvui.themeGet(), .{ .fields = .{
                 .dark = .{ .widget_type = .toggle },
                 .style_err = .{ .disabled = true },
                 .style_accent = .{ .disabled = true },
