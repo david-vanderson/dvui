@@ -104,19 +104,14 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect) void {
                                     .horizontal => dvui.dragPreStart(me.p, .arrow, .{ .x = me.p.x - (grabrs.x + grabrs.w / 2) }),
                                 }
                             } else {
-                                var fi = self.si.fraction_visible(self.dir);
-                                // the last page is scroll fraction 1.0, so there is
-                                // one less scroll position between 0 and 1.0
-                                fi = 1.0 / ((1.0 / fi) - 1);
-                                var f: f32 = undefined;
                                 if (if (self.dir == .vertical) (me.p.y < grabrs.y) else (me.p.x < grabrs.x)) {
                                     // clicked above grab
-                                    f = self.si.scroll_fraction(self.dir) - fi;
+                                    self.si.scrollPageUp(self.dir);
                                 } else {
                                     // clicked below grab
-                                    f = self.si.scroll_fraction(self.dir) + fi;
+                                    self.si.scrollPageDown(self.dir);
                                 }
-                                self.si.scrollToFraction(self.dir, f);
+
                                 dvui.refresh(null, @src(), self.wd.id);
                             }
                         }
