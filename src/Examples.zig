@@ -374,6 +374,48 @@ pub fn demo() !void {
         try debuggingErrors();
     }
 
+    if (try dvui.expander(@src(), "Struct UI Widget", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+
+        const Static = struct {
+            var result: dvui.Theme = undefined;
+        };
+        try dvui.structEntryExAlloc(
+            @src(),
+            "dvui.Theme",
+            dvui.Theme,
+            &Static.result,
+            .{
+                //set the field "dark" to use a drop down widget
+                .dark = .{ .widget_type = .dropdown },
+                //set the field "alpha" to use min and max
+                .alpha = .{ .min = 0, .max = 255 },
+                .style_accent = .{
+                    .id_extra = .{
+                        //id_extra is an optional, so we need to use
+                        //child_opts to change the options of its child type
+                        //this controls the "T" in "?T"
+                        .child_opts = .{
+                            .widget_type = .slider,
+                            .min = 0,
+                            .max = 10,
+                        },
+                    },
+                },
+                .style_err = .{
+                    .id_extra = .{
+                        .child_opts = .{
+                            .widget_type = .slider,
+                            .min = 5,
+                            .max = 10,
+                        },
+                    },
+                },
+            },
+        );
+    }
+
     if (show_dialog) {
         try dialogDirect();
     }

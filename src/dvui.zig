@@ -45,6 +45,12 @@ pub const TextEntryWidget = @import("widgets/TextEntryWidget.zig");
 pub const TextLayoutWidget = @import("widgets/TextLayoutWidget.zig");
 pub const VirtualParentWidget = @import("widgets/VirtualParentWidget.zig");
 
+const se = @import("structEntry.zig");
+pub const structEntry = se.structEntry;
+pub const structEntryEx = se.structEntryEx;
+pub const structEntryAlloc = se.structEntryAlloc;
+pub const structEntryExAlloc = se.structEntryExAlloc;
+
 pub const enums = @import("enums.zig");
 
 pub const useFreeType = (builtin.target.cpu.arch != .wasm32);
@@ -1641,6 +1647,24 @@ pub fn dataGet(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
         return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
     } else {
         return null;
+    }
+}
+
+pub fn dataGetDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: T) T {
+    if (dataGetInternal(win, id, key, T, false)) |bytes| {
+        return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
+    } else {
+        dataSet(win, id, key, default);
+        return default;
+    }
+}
+
+pub fn dataGetPtrDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: T) *T {
+    if (dataGetPtr(win, id, key, T)) |ptr| {
+        return ptr;
+    } else {
+        dataSet(win, id, key, default);
+        return dataGetPtr(win, id, key, T).?;
     }
 }
 
@@ -4501,6 +4525,9 @@ pub var slider_defaults: Options = .{
 
 // returns true if normalized_percent (0-1) was changed
 pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, normalized_percent: *f32, opts: Options) !bool {
+    std.debug.assert(normalized_percent.* >= 0);
+    std.debug.assert(normalized_percent.* <= 1);
+
     const options = slider_defaults.override(opts);
 
     var b = try box(src, dir, options);
