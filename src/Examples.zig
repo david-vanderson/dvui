@@ -40,14 +40,9 @@ var slider_entry_vector: bool = false;
 var text_entry_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
-var text_entry_multiline_buf = blk: {
-    var temp = std.mem.zeroes([500]u8);
-    const temp2 = "This multiline text\nentry can scroll\nin both directions.";
-    for (temp2, 0..) |c, i| {
-        temp[i] = c;
-    }
-    break :blk temp;
-};
+var text_entry_multiline_allocator_buf: [1000]u8 = undefined;
+var text_entry_multiline_fba = std.heap.FixedBufferAllocator.init(&text_entry_multiline_allocator_buf);
+var text_entry_multiline_buf: []u8 = &.{};
 var dropdown_val: usize = 1;
 var layout_margin: Rect = Rect.all(4);
 var layout_border: Rect = Rect.all(0);
@@ -510,7 +505,7 @@ pub fn basicWidgets() !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Text Entry", .{}, .{ .gravity_y = 0.5 });
-        var te = try dvui.textEntry(@src(), .{ .text = &text_entry_buf }, .{});
+        var te = try dvui.textEntry(@src(), .{}, .{});
         te.deinit();
     }
 
@@ -697,6 +692,7 @@ pub fn dropdownAdvanced() !void {
 pub fn textEntryWidgets() !void {
     var left_alignment = dvui.Alignment.init();
     defer left_alignment.deinit();
+
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -708,7 +704,7 @@ pub fn textEntryWidgets() !void {
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = &text_entry_buf }, .{});
+        var te = dvui.TextEntryWidget.init(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{});
 
         const teid = te.data().id;
         try te.install();
@@ -731,7 +727,7 @@ pub fn textEntryWidgets() !void {
         try te.draw();
         te.deinit();
 
-        try dvui.label(@src(), "(press enter)", .{}, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "(limit {d}) press enter", .{text_entry_buf.len}, .{ .gravity_y = 0.5 });
 
         if (enter_pressed) {
             dvui.animation(teid, "enter_pressed", .{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 500_000 });
@@ -757,7 +753,7 @@ pub fn textEntryWidgets() !void {
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
         var te = try dvui.textEntry(@src(), .{
-            .text = &text_entry_password_buf,
+            .text = .{ .buffer = &text_entry_password_buf },
             .password_char = if (text_entry_password_buf_obf_enable) "*" else null,
         }, .{});
 
@@ -772,6 +768,8 @@ pub fn textEntryWidgets() !void {
         )) {
             text_entry_password_buf_obf_enable = !text_entry_password_buf_obf_enable;
         }
+
+        try dvui.label(@src(), "(limit {d})", .{text_entry_password_buf.len}, .{ .gravity_y = 0.5 });
     }
 
     {
@@ -787,12 +785,20 @@ pub fn textEntryWidgets() !void {
 
         var te = try dvui.textEntry(
             @src(),
-            .{ .text = &text_entry_multiline_buf, .multiline = true },
+            .{ .multiline = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf, .allocator = text_entry_multiline_fba.allocator() } } },
             .{
                 .min_size_content = .{ .w = 150, .h = 80 },
             },
         );
+
+        if (dvui.firstFrame(te.data().id)) {
+            te.textTyped("This multiline text\nentry can scroll\nin both directions.");
+        }
+
+        const bytes = te.len;
         te.deinit();
+
+        try dvui.label(@src(), "bytes {d}\nallocated {d}\nlimit {d}", .{ bytes, text_entry_multiline_buf.len, text_entry_multiline_allocator_buf.len }, .{ .gravity_y = 0.5 });
     }
 
     const S = struct {
