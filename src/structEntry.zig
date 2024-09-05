@@ -336,7 +336,7 @@ fn textFieldWidget(
         result.*,
     );
 
-    const text_box = try dvui.textEntry(@src(), .{ .text = buffer }, text_opt.dvui_opts);
+    const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer = buffer } }, text_opt.dvui_opts);
     defer text_box.deinit();
 
     result.* = text_box.getText();
