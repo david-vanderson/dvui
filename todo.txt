@@ -6,6 +6,11 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
+can we do word-drag-select?
+
+textLayout touch when initiating touch_editing should do word select
+
+
 text entry:
 - filterOut and filterIn should return a bool if they changed something
 - add flag that tells the app if the text changed and add to example
