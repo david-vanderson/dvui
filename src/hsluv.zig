@@ -137,6 +137,7 @@ fn from_linear(c: f32) f32 {
     if (c <= 0.0031308) {
         return 12.92 * c;
     } else {
+        @setEvalBranchQuota(2000);
         return 1.055 * std.math.pow(f32, c, 1.0 / 2.4) - 0.055;
     }
 }

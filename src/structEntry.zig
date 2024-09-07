@@ -53,7 +53,7 @@ fn intFieldWidget(
 }
 
 fn normalizedPercentToInt(normalized_percent: f32, comptime T: type, min: T, max: T) T {
-    if (@typeInfo(T) != .Int) @compileError("T is not an int type");
+    if (@typeInfo(T) != .int) @compileError("T is not an int type");
     std.debug.assert(normalized_percent >= 0);
     std.debug.assert(normalized_percent <= 1);
     const range: f32 = @floatFromInt(max - min);
@@ -120,7 +120,7 @@ fn enumFieldWidget(
             result.* = @enumFromInt(choice);
         },
         .radio => {
-            inline for (@typeInfo(T).Enum.fields) |field| {
+            inline for (@typeInfo(T).@"enum".fields) |field| {
                 if (try dvui.radio(
                     @src(),
                     result.* == @as(T, @enumFromInt(field.value)),
@@ -228,7 +228,7 @@ pub fn unionFieldWidget(
         }
     }
 
-    inline for (@typeInfo(T).Union.fields, 0..) |field, i| {
+    inline for (@typeInfo(T).@"union".fields, 0..) |field, i| {
         if (choice == i) {
             if (std.meta.activeTag(result.*) != @as(FieldEnum, @enumFromInt(i))) {
                 result.* = @unionInit(T, field.name, undefined);
@@ -260,7 +260,7 @@ pub fn unionFieldWidget(
 //=======Optional Field Widget and Options=======
 pub fn OptionalFieldOptions(comptime T: type) type {
     return struct {
-        child_opts: FieldOptions(@typeInfo(T).Optional.child) = .{},
+        child_opts: FieldOptions(@typeInfo(T).optional.child) = .{},
     };
 }
 
@@ -275,7 +275,7 @@ pub fn optionalFieldWidget(
     var box = try dvui.box(@src(), .vertical, .{});
     defer box.deinit();
 
-    const Child = @typeInfo(T).Optional.child;
+    const Child = @typeInfo(T).optional.child;
 
     const checkbox_state = dvui.dataGetPtrDefault(
         null,
@@ -343,7 +343,7 @@ fn textFieldWidget(
 }
 
 pub fn PointerFieldOptions(comptime T: type) type {
-    const info = @typeInfo(T).Pointer;
+    const info = @typeInfo(T).pointer;
 
     if (info.size == .Slice and info.child == u8) {
         return TextFieldOptions;
@@ -363,7 +363,7 @@ pub fn pointerFieldWidget(
     comptime options: PointerFieldOptions(T),
     comptime alloc: bool,
 ) !void {
-    const info = @typeInfo(T).Pointer;
+    const info = @typeInfo(T).pointer;
 
     if (info.size == .Slice and info.child == u8) {
         try textFieldWidget(name, result, options, alloc);
@@ -431,9 +431,9 @@ pub fn sliceFieldWidget(
 
 //==========Struct Field Widget and Options
 pub fn StructFieldOptions(comptime T: type) type {
-    var fields: [@typeInfo(T).Struct.fields.len]std.builtin.Type.StructField = undefined;
+    var fields: [@typeInfo(T).@"struct".fields.len]std.builtin.Type.StructField = undefined;
 
-    inline for (@typeInfo(T).Struct.fields, 0..) |field, i| {
+    inline for (@typeInfo(T).@"struct".fields, 0..) |field, i| {
         const FieldType = FieldOptions(field.type);
         fields[i] = .{
             .alignment = 1,
@@ -443,7 +443,7 @@ pub fn StructFieldOptions(comptime T: type) type {
             .type = FieldType,
         };
     }
-    return @Type(.{ .Struct = .{
+    return @Type(.{ .@"struct" = .{
         .decls = &.{},
         .fields = &fields,
         .is_tuple = false,
@@ -459,8 +459,8 @@ fn structFieldWidget(
     comptime alloc: bool,
 ) !void {
     _ = name; // autofix
-    if (@typeInfo(T) != .Struct) @compileError("Input Type Must Be A Struct");
-    const fields = @typeInfo(T).Struct.fields;
+    if (@typeInfo(T) != .@"struct") @compileError("Input Type Must Be A Struct");
+    const fields = @typeInfo(T).@"struct".fields;
 
     var box = try dvui.box(@src(), .vertical, .{ .expand = .both });
     defer box.deinit();
@@ -472,7 +472,7 @@ fn structFieldWidget(
         const options = @field(struct_opts, field.name);
         const result_ptr = &@field(result.*, field.name);
 
-        if (@typeInfo(field.type) == .Struct) {
+        if (@typeInfo(field.type) == .@"struct") {
             if (try dvui.expander(@src(), field.name, .{}, .{ .id_extra = i })) {
                 var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .id_extra = i });
                 defer hbox.deinit();
@@ -505,14 +505,14 @@ fn structFieldWidget(
 //=========Generic Field Widget and Options===========
 pub fn FieldOptions(comptime T: type) type {
     return switch (@typeInfo(T)) {
-        .Int => IntFieldOptions(T),
-        .Float => FloatFieldOptions(T),
-        .Enum => EnumFieldOptions,
-        .Bool => BoolFieldOptions,
-        .Struct => StructFieldOptions(T),
-        .Union => UnionFieldOptions(T),
-        .Optional => OptionalFieldOptions(T),
-        .Pointer => PointerFieldOptions(T),
+        .int => IntFieldOptions(T),
+        .float => FloatFieldOptions(T),
+        .@"enum" => EnumFieldOptions,
+        .bool => BoolFieldOptions,
+        .@"struct" => StructFieldOptions(T),
+        .@"union" => UnionFieldOptions(T),
+        .optional => OptionalFieldOptions(T),
+        .pointer => PointerFieldOptions(T),
         else => @compileError("Invalid Type: " ++ @typeName(T)),
     };
 }
@@ -525,14 +525,14 @@ pub fn fieldWidget(
     comptime alloc: bool,
 ) !void {
     switch (@typeInfo(T)) {
-        .Int => try intFieldWidget(name, T, result, options),
-        .Float => try floatFieldWidget(name, T, result, options),
-        .Bool => try boolFieldWidget(name, result, options),
-        .Enum => try enumFieldWidget(name, T, result, options),
-        .Pointer => try pointerFieldWidget(name, T, result, options, alloc),
-        .Optional => try optionalFieldWidget(name, T, result, options, alloc),
-        .Union => try unionFieldWidget(name, T, result, options, alloc),
-        .Struct => try structFieldWidget(name, T, result, options, alloc),
+        .int => try intFieldWidget(name, T, result, options),
+        .float => try floatFieldWidget(name, T, result, options),
+        .bool => try boolFieldWidget(name, result, options),
+        .@"enum" => try enumFieldWidget(name, T, result, options),
+        .pointer => try pointerFieldWidget(name, T, result, options, alloc),
+        .optional => try optionalFieldWidget(name, T, result, options, alloc),
+        .@"union" => try unionFieldWidget(name, T, result, options, alloc),
+        .@"struct" => try structFieldWidget(name, T, result, options, alloc),
         else => @compileError("Invalid type: " ++ @typeName(T)),
     }
 }
