@@ -31,8 +31,8 @@ pub fn init(
 ) Widget {
     const Ptr = @TypeOf(pointer);
     const ptr_info = @typeInfo(Ptr);
-    std.debug.assert(ptr_info == .Pointer); // Must be a pointer
-    std.debug.assert(ptr_info.Pointer.size == .One); // Must be a single-item pointer
+    std.debug.assert(ptr_info == .pointer); // Must be a pointer
+    std.debug.assert(ptr_info.pointer.size == .One); // Must be a single-item pointer
 
     const gen = struct {
         fn dataImpl(ptr: *anyopaque) *WidgetData {

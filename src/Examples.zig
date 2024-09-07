@@ -774,7 +774,7 @@ pub fn basicWidgets(demo_win_id: u32) !void {
         te.deinit();
     }
 
-    inline for (@typeInfo(RadioChoice).Enum.fields, 0..) |field, i| {
+    inline for (@typeInfo(RadioChoice).@"enum".fields, 0..) |field, i| {
         if (try dvui.radio(@src(), radio_choice == @as(RadioChoice, @enumFromInt(field.value)), "Radio " ++ field.name, .{ .id_extra = i })) {
             radio_choice = @enumFromInt(field.value);
         }
@@ -2933,17 +2933,17 @@ pub fn dialogDirect() !void {
     }
 }
 
-const icon_names: [@typeInfo(entypo).Struct.decls.len][]const u8 = blk: {
-    var blah: [@typeInfo(entypo).Struct.decls.len][]const u8 = undefined;
-    for (@typeInfo(entypo).Struct.decls, 0..) |d, i| {
+const icon_names: [@typeInfo(entypo).@"struct".decls.len][]const u8 = blk: {
+    var blah: [@typeInfo(entypo).@"struct".decls.len][]const u8 = undefined;
+    for (@typeInfo(entypo).@"struct".decls, 0..) |d, i| {
         blah[i] = d.name;
     }
     break :blk blah;
 };
 
-const icon_fields: [@typeInfo(entypo).Struct.decls.len][]const u8 = blk: {
-    var blah: [@typeInfo(entypo).Struct.decls.len][]const u8 = undefined;
-    for (@typeInfo(entypo).Struct.decls, 0..) |d, i| {
+const icon_fields: [@typeInfo(entypo).@"struct".decls.len][]const u8 = blk: {
+    var blah: [@typeInfo(entypo).@"struct".decls.len][]const u8 = undefined;
+    for (@typeInfo(entypo).@"struct".decls, 0..) |d, i| {
         blah[i] = @field(entypo, d.name);
     }
     break :blk blah;
@@ -2954,7 +2954,7 @@ pub fn icon_browser() !void {
     defer fwin.deinit();
     try dvui.windowHeader("Icon Browser", "", &IconBrowser.show);
 
-    const num_icons = @typeInfo(entypo).Struct.decls.len;
+    const num_icons = @typeInfo(entypo).@"struct".decls.len;
     const height = @as(f32, @floatFromInt(num_icons)) * IconBrowser.row_height;
 
     // we won't have the height the first frame, so always set it
