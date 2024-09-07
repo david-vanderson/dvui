@@ -572,7 +572,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                     if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
                         e.handled = true;
                         self.textLayout.cursor_updown += if (code == .down) 1 else -1;
-                        self.textLayout.cursor_updown_drag = false;
+                        self.textLayout.cursor_updown_select = false;
                     }
                 },
                 else => {},

@@ -8,8 +8,6 @@ check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 can we do word-drag-select?
 
-textLayout touch when initiating touch_editing should do word select
-
 
 text entry:
 - filterOut and filterIn should return a bool if they changed something

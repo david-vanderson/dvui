@@ -45,8 +45,8 @@ pub const Selection = struct {
         self.end = std.math.maxInt(usize);
     }
 
-    pub fn moveCursor(self: *Selection, idx: usize, shift: bool) void {
-        if (shift) {
+    pub fn moveCursor(self: *Selection, idx: usize, select: bool) void {
+        if (select) {
             if (self.cursor == self.start) {
                 // move the start
                 self.cursor = idx;
@@ -57,7 +57,7 @@ pub const Selection = struct {
                 self.end = idx;
             }
         } else {
-            // not an expanded selection
+            // removing any selection
             self.cursor = idx;
             self.start = idx;
             self.end = idx;
@@ -110,7 +110,7 @@ sel_word_last_space: usize = 0,
 cursor_seen: bool = false,
 cursor_rect: ?Rect = null,
 cursor_updown: i8 = 0, // positive is down
-cursor_updown_drag: bool = true,
+cursor_updown_select: bool = true,
 cursor_updown_pt: ?Point = null,
 scroll_to_cursor: bool = false,
 
@@ -171,8 +171,9 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
     if (dvui.dataGet(null, self.wd.id, "_cursor_updown_pt", Point)) |p| {
         self.cursor_updown_pt = p;
         dvui.dataRemove(null, self.wd.id, "_cursor_updown_pt");
-        if (dvui.dataGet(null, self.wd.id, "_cursor_updown_drag", bool)) |cud| {
-            self.cursor_updown_drag = cud;
+        if (dvui.dataGet(null, self.wd.id, "_cursor_updown_select", bool)) |cud| {
+            self.cursor_updown_select = cud;
+            dvui.dataRemove(null, self.wd.id, "_cursor_updown_select");
         }
     }
 
@@ -544,7 +545,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
             if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
                 // point is before this text
-                self.selection.moveCursor(self.bytes_seen, self.cursor_updown_drag);
+                self.selection.moveCursor(self.bytes_seen, self.cursor_updown_select);
                 self.cursor_updown_pt = null;
                 self.scroll_to_cursor = true;
             } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
@@ -552,17 +553,17 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                 const how_far = p.x - rs.x;
                 var pt_end: usize = undefined;
                 _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
-                self.selection.moveCursor(self.bytes_seen + pt_end, self.cursor_updown_drag);
+                self.selection.moveCursor(self.bytes_seen + pt_end, self.cursor_updown_select);
                 self.cursor_updown_pt = null;
                 self.scroll_to_cursor = true;
             } else {
                 if (newline and p.y < (rs.y + rs.h)) {
                     // point is after this text on this same horizontal line
-                    self.selection.moveCursor(self.bytes_seen + end - 1, self.cursor_updown_drag);
+                    self.selection.moveCursor(self.bytes_seen + end - 1, self.cursor_updown_select);
                     self.cursor_updown_pt = null;
                 } else {
                     // point is after this text, but we might not get anymore
-                    self.selection.moveCursor(self.bytes_seen + end, self.cursor_updown_drag);
+                    self.selection.moveCursor(self.bytes_seen + end, self.cursor_updown_select);
                 }
                 self.scroll_to_cursor = true;
             }
@@ -637,7 +638,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                 // forward the pixel position we want the cursor to be in to
                 // the next frame
                 dvui.dataSet(null, self.wd.id, "_cursor_updown_pt", updown_pt);
-                dvui.dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
+                dvui.dataSet(null, self.wd.id, "_cursor_updown_select", self.cursor_updown_select);
 
                 // might have already passed, so need to go again next frame
                 dvui.refresh(null, @src(), self.wd.id);
@@ -920,7 +921,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
             // forward the pixel position we want the cursor to be in to
             // the next frame
             dvui.dataSet(null, self.wd.id, "_cursor_updown_pt", updown_pt);
-            dvui.dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
+            dvui.dataSet(null, self.wd.id, "_cursor_updown_select", self.cursor_updown_select);
 
             // might have already passed, so need to go again next frame
             dvui.refresh(null, @src(), self.wd.id);
