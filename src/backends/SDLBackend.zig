@@ -17,8 +17,8 @@ touch_mouse_events: bool = false,
 log_events: bool = false,
 initial_scale: f32 = 1.0,
 cursor_last: dvui.enums.Cursor = .arrow,
-cursor_backing: [@typeInfo(dvui.enums.Cursor).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.enums.Cursor).Enum.fields.len,
-cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(dvui.enums.Cursor).Enum.fields.len,
+cursor_backing: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.enums.Cursor).@"enum".fields.len,
+cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]bool = [_]bool{false} ** @typeInfo(dvui.enums.Cursor).@"enum".fields.len,
 arena: std.mem.Allocator = undefined,
 
 pub const InitOptions = struct {
@@ -129,9 +129,9 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
                 var mdpi: ?f32 = null;
 
                 // for X11, try to grab the output of xrdb -query
-                //*customization:	-color
-                //Xft.dpi:	96
-                //Xft.antialias:	1
+                //*customization:  -color
+                //Xft.dpi: 96
+                //Xft.antialias:   1
                 if (mdpi == null and builtin.os.tag == .linux) {
                     var stdout = std.ArrayList(u8).init(options.allocator);
                     defer stdout.deinit();
