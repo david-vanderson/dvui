@@ -94,9 +94,17 @@ bytes_seen: usize = 0,
 selection_in: ?*Selection = null,
 selection: *Selection = undefined,
 selection_store: Selection = .{},
-sel_mouse_down_pt: ?Point = null,
-sel_mouse_down_bytes: ?usize = null,
-sel_mouse_drag_pt: ?Point = null,
+
+/// For simplicity we only handle a single kind of selection change per frame
+sel_move: union(enum) {
+    none: void,
+    mouse: struct {
+        down_pt: ?Point = null, // point we got the mouse down (frame 1)
+        byte: ?usize = null, // byte index of pt (find on frame 1, keep while captured)
+        drag_pt: ?Point = null, // point of current mouse drag
+    },
+} = .none,
+
 sel_left_right: i8 = 0,
 sel_left_right_buf: [10]u8 = [1]u8{0} ** 10,
 sel_start_r: Rect = .{},
@@ -163,8 +171,8 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
     }
 
     if (dvui.captured(self.wd.id)) {
-        if (dvui.dataGet(null, self.wd.id, "_sel_mouse_down_bytes", usize)) |p| {
-            self.sel_mouse_down_bytes = p;
+        if (dvui.dataGet(null, self.wd.id, "_sel_move_mouse_byte", usize)) |p| {
+            self.sel_move = .{ .mouse = .{ .byte = p } };
         }
     }
 
@@ -347,6 +355,35 @@ pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: Options) !b
     return try self.addTextEx(text, true, opts);
 }
 
+// Helper to addTextEx
+// - returns byte position if p is before or within r
+fn findPoint(p: Point, r: Rect, bytes_seen: usize, txt: []const u8, options: Options) !?usize {
+    if (p.y < r.y or (p.y < (r.y + r.h) and p.x < r.x)) {
+        // found it - p is before this rect
+        return bytes_seen;
+    }
+
+    if (p.y < (r.y + r.h) and p.x < (r.x + r.w)) {
+        // found it - p is in this rect
+        const how_far = p.x - r.x;
+        var pt_end: usize = undefined;
+        _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
+        return bytes_seen + pt_end;
+    }
+
+    var newline = false;
+    if (txt.len > 0 and (txt[txt.len - 1] == '\n')) {
+        newline = true;
+    }
+
+    if (newline and p.y < (r.y + r.h)) {
+        // found it - p is after this rect on same horizontal line
+        return bytes_seen + txt.len - 1;
+    }
+
+    return null;
+}
+
 fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: Options) !bool {
     var clicked = false;
 
@@ -478,67 +515,37 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             }
         }
 
-        if (self.sel_mouse_down_pt) |p| {
-            const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
-            if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
-                // point is before this text
-                self.sel_mouse_down_bytes = self.bytes_seen;
-                self.selection.cursor = self.sel_mouse_down_bytes.?;
-                self.selection.start = self.sel_mouse_down_bytes.?;
-                self.selection.end = self.sel_mouse_down_bytes.?;
-                self.sel_mouse_down_pt = null;
-            } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
-                // point is in this text
-                const how_far = p.x - rs.x;
-                var pt_end: usize = undefined;
-                _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
-                self.sel_mouse_down_bytes = self.bytes_seen + pt_end;
-                self.selection.cursor = self.sel_mouse_down_bytes.?;
-                self.selection.start = self.sel_mouse_down_bytes.?;
-                self.selection.end = self.sel_mouse_down_bytes.?;
-                self.sel_mouse_down_pt = null;
-            } else {
-                if (newline and p.y < (rs.y + rs.h)) {
-                    // point is after this text on this same horizontal line
-                    self.sel_mouse_down_bytes = self.bytes_seen + end - 1;
-                    self.sel_mouse_down_pt = null;
-                } else {
-                    // point is after this text, but we might not get anymore
-                    self.sel_mouse_down_bytes = self.bytes_seen + end;
+        // handle selection movement
+        const text_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
+        const text_line = txt[0..end];
+        switch (self.sel_move) {
+            .none => {},
+            .mouse => |*m| {
+                if (m.down_pt) |p| {
+                    if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |byte| {
+                        m.byte = byte;
+                        self.selection.moveCursor(byte, false);
+                        m.down_pt = null;
+                    } else {
+                        // haven't found it yet, keep cursor at end to not trigger cursor_seen
+                        self.selection.moveCursor(self.bytes_seen + end, false);
+                    }
                 }
-                self.selection.cursor = self.sel_mouse_down_bytes.?;
-                self.selection.start = self.sel_mouse_down_bytes.?;
-                self.selection.end = self.sel_mouse_down_bytes.?;
-            }
-            self.scroll_to_cursor = true;
-        }
 
-        if (self.sel_mouse_drag_pt) |p| {
-            const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
-            if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
-                // point is before this text
-                self.selection.cursor = self.bytes_seen;
-                self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen);
-                self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen);
-                self.sel_mouse_drag_pt = null;
-            } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
-                // point is in this text
-                const how_far = p.x - rs.x;
-                var pt_end: usize = undefined;
-                _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
-                self.selection.cursor = self.bytes_seen + pt_end;
-                self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + pt_end);
-                self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen + pt_end);
-                self.sel_mouse_drag_pt = null;
-            } else {
-                // point is after this text, but we might not get anymore
-                self.selection.cursor = self.bytes_seen + end;
-                self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
-                self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
-            }
-
-            // don't set scroll_to_cursor here because when we are dragging
-            // we are already doing a scroll_drag in processEvent
+                if (m.drag_pt) |p| {
+                    if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |byte| {
+                        self.selection.cursor = byte;
+                        self.selection.start = @min(m.byte.?, byte);
+                        self.selection.end = @max(m.byte.?, byte);
+                        m.drag_pt = null;
+                    } else {
+                        // haven't found it yet, keep cursor at end to not trigger cursor_seen
+                        self.selection.cursor = self.bytes_seen + end;
+                        self.selection.start = @min(m.byte.?, self.selection.cursor);
+                        self.selection.end = @max(m.byte.?, self.selection.cursor);
+                    }
+                }
+            },
         }
 
         if (self.cursor_updown_pt) |p| {
@@ -861,9 +868,23 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
         self.copy_slice = null;
     }
 
-    // if we had mouse/keyboard interaction, need to handle things if addText never gets called
-    if (self.sel_mouse_down_pt) |_| {
-        self.sel_mouse_down_bytes = self.bytes_seen;
+    // handle selection movement
+    switch (self.sel_move) {
+        .none => {},
+        .mouse => |*m| {
+            if (m.down_pt) |_| {
+                m.byte = self.bytes_seen;
+                self.selection.moveCursor(self.bytes_seen, false);
+                m.down_pt = null;
+            }
+
+            if (m.drag_pt) |_| {
+                self.selection.cursor = self.bytes_seen;
+                self.selection.start = @min(m.byte.?, self.bytes_seen);
+                self.selection.end = @max(m.byte.?, self.bytes_seen);
+                m.drag_pt = null;
+            }
+        },
     }
 
     if (self.sel_start_r_new) |start_r| {
@@ -1118,8 +1139,10 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     dvui.refresh(null, @src(), self.wd.id);
                 }
             } else {
-                self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-                self.sel_mouse_drag_pt = null;
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .mouse = .{ .down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p) } };
+                    self.scroll_to_cursor = true;
+                }
 
                 self.sel_word = .none;
                 if (self.click_num == 1) {
@@ -1173,7 +1196,9 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 self.click_num = 0;
                 if (!e.evt.mouse.button.touch()) {
                     e.handled = true;
-                    self.sel_mouse_drag_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                    if (self.sel_move == .mouse) {
+                        self.sel_move.mouse.drag_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                    }
                     var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
                         .mouse_pt = e.evt.mouse.p,
                         .screen_rect = self.wd.rectScale().r,
@@ -1239,10 +1264,10 @@ pub fn deinit(self: *TextLayoutWidget) void {
     dvui.dataSet(null, self.wd.id, "_sel_end_r", self.sel_end_r);
     dvui.dataSet(null, self.wd.id, "_selection", self.selection.*);
 
-    if (dvui.captured(self.wd.id) and self.sel_mouse_down_bytes != null) {
+    if (dvui.captured(self.wd.id) and self.sel_move == .mouse) {
         // once we figure out where the mousedown was, we need to save it
         // as long as we are dragging
-        dvui.dataSet(null, self.wd.id, "_sel_mouse_down_bytes", self.sel_mouse_down_bytes.?);
+        dvui.dataSet(null, self.wd.id, "_sel_move_mouse_byte", self.sel_move.mouse.byte.?);
     }
     if (self.click_num == 0) {
         dvui.dataRemove(null, self.wd.id, "_click_num");
