@@ -98,10 +98,21 @@ selection_store: Selection = .{},
 /// For simplicity we only handle a single kind of selection change per frame
 sel_move: union(enum) {
     none: void,
+    // mouse down to move cursor and dragging to select
     mouse: struct {
         down_pt: ?Point = null, // point we got the mouse down (frame 1)
         byte: ?usize = null, // byte index of pt (find on frame 1, keep while captured)
         drag_pt: ?Point = null, // point of current mouse drag
+    },
+    // second click or touch selects word at the pointer
+    word_pt: struct {
+        p: ?Point,
+        last: usize = 0, // index of last space/newline we've seen
+        where: enum {
+            done,
+            precursor,
+            aftcursor,
+        } = .precursor,
     },
 } = .none,
 
@@ -112,8 +123,6 @@ sel_start_r_new: ?Rect = null,
 sel_end_r: Rect = .{},
 sel_end_r_new: ?Rect = null,
 sel_pts: [2]?Point = [2]?Point{ null, null },
-sel_word: enum { none, precursor, aftcursor } = .none,
-sel_word_last_space: usize = 0,
 
 cursor_seen: bool = false,
 cursor_rect: ?Rect = null,
@@ -546,6 +555,18 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                     }
                 }
             },
+            .word_pt => |*wp| {
+                // note: we do more of this below cursor_seen
+                if (wp.p) |p| {
+                    if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |byte| {
+                        self.selection.moveCursor(byte, false);
+                        wp.p = null;
+                    } else {
+                        // haven't found it yet, keep cursor at end to not trigger cursor_seen
+                        self.selection.moveCursor(self.bytes_seen + end, false);
+                    }
+                }
+            },
         }
 
         if (self.cursor_updown_pt) |p| {
@@ -668,41 +689,49 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             }
         }
 
-        loop: while (self.sel_word != .none) {
-            switch (self.sel_word) {
-                .precursor => {
-                    // maintain index of last space/newline we saw
-                    const sofar = txt[0..@min(self.selection.cursor -| self.bytes_seen, end)];
-                    const space = std.mem.lastIndexOfScalar(u8, sofar, ' ');
-                    const nline = std.mem.lastIndexOfScalar(u8, sofar, '\n');
-                    if (space != null or nline != null) {
-                        const last = @max(space orelse 0, nline orelse 0);
-                        self.sel_word_last_space = last + self.bytes_seen + 1;
-                    }
+        switch (self.sel_move) {
+            .none => {},
+            .mouse => {},
+            .word_pt => |*wp| {
+                loop: while (wp.where != .done) {
+                    switch (wp.where) {
+                        .done => {},
+                        .precursor => {
+                            // maintain index of last space/newline we saw
+                            const sofar = txt[0..@min(self.selection.cursor -| self.bytes_seen, end)];
+                            const space = std.mem.lastIndexOfScalar(u8, sofar, ' ');
+                            const nline = std.mem.lastIndexOfScalar(u8, sofar, '\n');
+                            if (space != null or nline != null) {
+                                const last = @max(space orelse 0, nline orelse 0);
+                                wp.last = last + self.bytes_seen + 1;
+                            }
 
-                    if (self.cursor_seen) {
-                        self.selection.moveCursor(self.sel_word_last_space, true);
-                        self.selection.cursor = self.selection.end; // put cursor at end for the aftcursor logic
-                        self.sel_word = .aftcursor;
-                    } else {
-                        break :loop;
-                    }
-                },
-                .aftcursor => {
-                    // find next space/newline
-                    const space = std.mem.indexOfScalarPos(u8, txt, self.selection.cursor -| self.bytes_seen, ' ');
-                    const nline = std.mem.indexOfScalarPos(u8, txt, self.selection.cursor -| self.bytes_seen, '\n');
-                    if (space != null or nline != null) {
-                        const first = @min(space orelse std.math.maxInt(usize), nline orelse std.math.maxInt(usize));
-                        self.selection.moveCursor(self.bytes_seen + first, true);
-                        self.sel_word = .none;
-                        dvui.refresh(null, @src(), self.wd.id);
-                    }
+                            if (self.cursor_seen) {
+                                self.selection.moveCursor(wp.last, true);
+                                self.selection.cursor = self.selection.end; // put cursor at end for the aftcursor logic
+                                wp.where = .aftcursor;
+                            } else {
+                                break :loop;
+                            }
+                        },
+                        .aftcursor => {
+                            // find next space/newline
+                            const space = std.mem.indexOfScalarPos(u8, txt, self.selection.cursor -| self.bytes_seen, ' ');
+                            const nline = std.mem.indexOfScalarPos(u8, txt, self.selection.cursor -| self.bytes_seen, '\n');
+                            if (space != null or nline != null) {
+                                const first = @min(space orelse std.math.maxInt(usize), nline orelse std.math.maxInt(usize));
+                                self.selection.moveCursor(self.bytes_seen + first, true);
+                                wp.where = .done;
 
-                    break :loop;
-                },
-                .none => {},
-            }
+                                // might have selected a word we already rendered part of
+                                dvui.refresh(null, @src(), self.wd.id);
+                            }
+
+                            break :loop;
+                        },
+                    }
+                }
+            },
         }
 
         if (self.sel_left_right < 0) {
@@ -868,7 +897,12 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
         self.copy_slice = null;
     }
 
+    self.selection.cursor = @min(self.selection.cursor, self.bytes_seen);
+    self.selection.start = @min(self.selection.start, self.bytes_seen);
+    self.selection.end = @min(self.selection.end, self.bytes_seen);
+
     // handle selection movement
+    // - this logic must work even if addText() is never called
     switch (self.sel_move) {
         .none => {},
         .mouse => |*m| {
@@ -883,6 +917,25 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
                 self.selection.start = @min(m.byte.?, self.bytes_seen);
                 self.selection.end = @max(m.byte.?, self.bytes_seen);
                 m.drag_pt = null;
+            }
+        },
+        .word_pt => |*wp| {
+            while (wp.where != .done) {
+                switch (wp.where) {
+                    .done => {},
+                    .precursor => {
+                        self.selection.moveCursor(wp.last, true);
+                        self.selection.cursor = self.selection.end; // put cursor at end for the aftcursor logic
+                        wp.where = .aftcursor;
+                    },
+                    .aftcursor => {
+                        self.selection.moveCursor(self.bytes_seen, true);
+                        wp.where = .done;
+
+                        // might have selected a word we already rendered part of
+                        dvui.refresh(null, @src(), self.wd.id);
+                    },
+                }
             }
         },
     }
@@ -915,16 +968,6 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
         if (self.selection.end > self.bytes_seen) {
             dvui.refresh(null, @src(), self.wd.id);
         }
-    }
-
-    self.selection.cursor = @min(self.selection.cursor, self.bytes_seen);
-    self.selection.start = @min(self.selection.start, self.bytes_seen);
-    self.selection.end = @min(self.selection.end, self.bytes_seen);
-
-    if (self.sel_word == .aftcursor) {
-        self.selection.moveCursor(self.bytes_seen, true);
-        self.sel_word = .none;
-        dvui.refresh(null, @src(), self.wd.id);
     }
 
     if (!self.cursor_seen) {
@@ -1102,19 +1145,6 @@ pub fn processEvents(self: *TextLayoutWidget) void {
 
         self.processEvent(e, false);
     }
-
-    // we could have gotten multiple conflicting keyboard/mouse movements, so
-    // here we decide which to actually do
-    if (self.sel_mouse_down_pt != null or self.sel_mouse_drag_pt != null) {
-        // doing mouse click-drag selection, turn off other stuff
-        self.cursor_updown = 0;
-        self.cursor_updown_pt = null;
-        self.sel_left_right = 0;
-        self.scroll_to_cursor = false;
-    } else if (self.cursor_updown != 0 or self.cursor_updown_pt != null) {
-        // moving cursor vertically
-        self.sel_left_right = 0;
-    }
 }
 
 pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
@@ -1139,14 +1169,14 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     dvui.refresh(null, @src(), self.wd.id);
                 }
             } else {
-                if (self.sel_move == .none) {
-                    self.sel_move = .{ .mouse = .{ .down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p) } };
-                    self.scroll_to_cursor = true;
-                }
+                // a click always sets sel_move - has the highest priority
+                const p = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                self.sel_move = .{ .mouse = .{ .down_pt = p } };
+                self.scroll_to_cursor = true;
 
-                self.sel_word = .none;
                 if (self.click_num == 1) {
-                    self.sel_word = .precursor;
+                    // select word we touched
+                    self.sel_move = .{ .word_pt = .{ .p = p } };
                 }
             }
         } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
@@ -1166,12 +1196,15 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 if (e.evt.mouse.button.touch()) {
                     // this was a touch-release without drag, which transitions
                     // us between touch editing
+                    const p = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
 
                     if (self.te_focus_on_touchdown) {
                         self.touch_editing = !self.touch_editing;
-                        self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                        // move cursor to point
+                        self.sel_move = .{ .mouse = .{ .down_pt = p } };
                         if (self.touch_editing) {
-                            self.sel_word = .precursor; // select the word we touched
+                            // select word we touched
+                            self.sel_move = .{ .word_pt = .{ .p = p } };
                         }
                     } else {
                         if (self.touch_edit_just_focused) {
@@ -1182,8 +1215,9 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                             // touch editing from not having focus, we want to
                             // position the cursor.
                             self.te_first = false;
-                            self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-                            self.sel_word = .precursor; // select the word we touched
+
+                            // select word we touched
+                            self.sel_move = .{ .word_pt = .{ .p = p } };
                         }
                     }
                     dvui.refresh(null, @src(), self.wd.id);
