@@ -389,43 +389,42 @@ pub fn demo() !void {
             var b2 = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
             defer b2.deinit();
 
-            //const Static = struct {
-            //    var result: dvui.Theme = undefined;
-            //};
-            try dvui.structEntryExAlloc(
-                @src(),
-                "dvui.Theme",
-                dvui.Theme,
-                //&Static.result,
-                dvui.themeGet(),
-                .{
-                    //set the field "dark" to use a drop down widget
-                    .dark = .{ .widget_type = .dropdown },
-                    //set the field "alpha" to use min and max
-                    .alpha = .{ .min = 0, .max = 255 },
-                    .style_accent = .{
-                        .id_extra = .{
-                            //id_extra is an optional, so we need to use
-                            //child_opts to change the options of its child type
-                            //this controls the "T" in "?T"
-                            .child_opts = .{
-                                .widget_type = .slider,
-                                .min = 0,
-                                .max = 10,
-                            },
-                        },
-                    },
-                    .style_err = .{
-                        .id_extra = .{
-                            .child_opts = .{
-                                .widget_type = .slider,
-                                .min = 5,
-                                .max = 10,
-                            },
-                        },
-                    },
+            const color_field_options = .{ .fields = .{
+                .r = .{ .min = 0, .max = 255, .widget_type = .slider },
+                .g = .{ .min = 0, .max = 255, .widget_type = .slider },
+                .b = .{ .min = 0, .max = 255, .widget_type = .slider },
+                .a = .{ .disabled = true },
+            } };
+
+            try dvui.structEntryEx(@src(), "dvui.Theme", dvui.Theme, dvui.themeGet(), .{
+                .use_expander = false,
+                .label_override = "",
+                .fields = .{
+                    .name = .{ .disabled = true },
+                    .dark = .{ .widget_type = .toggle },
+                    .style_err = .{ .disabled = true },
+                    .style_accent = .{ .disabled = true },
+                    .font_body = .{ .disabled = true },
+                    .font_heading = .{ .disabled = true },
+                    .font_caption = .{ .disabled = true },
+                    .font_caption_heading = .{ .disabled = true },
+                    .font_title = .{ .disabled = true },
+                    .font_title_1 = .{ .disabled = true },
+                    .font_title_2 = .{ .disabled = true },
+                    .font_title_3 = .{ .disabled = true },
+                    .font_title_4 = .{ .disabled = true },
+                    .color_accent = color_field_options,
+                    .color_err = color_field_options,
+                    .color_text = color_field_options,
+                    .color_text_press = color_field_options,
+                    .color_fill = color_field_options,
+                    .color_fill_window = color_field_options,
+                    .color_fill_control = color_field_options,
+                    .color_fill_hover = color_field_options,
+                    .color_fill_press = color_field_options,
+                    .color_border = color_field_options,
                 },
-            );
+            });
         }
     }
 
