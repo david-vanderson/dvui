@@ -1579,7 +1579,7 @@ const DataOffset = struct {
 ///
 /// If you want to store the contents of a slice, use dataSetSlice().
 pub fn dataSet(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
-    dataSetAdvanced(win, id, key, data, false);
+    dataSetAdvanced(win, id, key, data, false, 1);
 }
 
 /// Set key/value pair for given id, copying the slice contents. Can be passed
@@ -1590,19 +1590,26 @@ pub fn dataSet(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
 /// If called from non-GUI thread or outside window.begin()/end(), you must
 /// pass a pointer to the Window you want to add the data to.
 pub fn dataSetSlice(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
+    dataSetSliceCopies(win, id, key, data, 1);
+}
+
+/// Same as dataSetSlice, but will copy data num_copies times all concatenated
+/// into a single slice.  Useful to get dvui to allocate a specific number of
+/// entries that you want to fill in after.
+pub fn dataSetSliceCopies(win: ?*Window, id: u32, key: []const u8, data: anytype, num_copies: usize) void {
     const dt = @typeInfo(@TypeOf(data));
     if (dt == .Pointer and dt.Pointer.size == .Slice) {
         if (dt.Pointer.sentinel) |s| {
-            dataSetAdvanced(win, id, key, @as([:@as(*const dt.Pointer.child, @alignCast(@ptrCast(s))).*]dt.Pointer.child, @constCast(data)), true);
+            dataSetAdvanced(win, id, key, @as([:@as(*const dt.Pointer.child, @alignCast(@ptrCast(s))).*]dt.Pointer.child, @constCast(data)), true, num_copies);
         } else {
-            dataSetAdvanced(win, id, key, @as([]dt.Pointer.child, @constCast(data)), true);
+            dataSetAdvanced(win, id, key, @as([]dt.Pointer.child, @constCast(data)), true, num_copies);
         }
     } else if (dt == .Pointer and dt.Pointer.size == .One and @typeInfo(dt.Pointer.child) == .Array) {
         const child_type = @typeInfo(dt.Pointer.child);
         if (child_type.Array.sentinel) |s| {
-            dataSetAdvanced(win, id, key, @as([:@as(*const child_type.Array.child, @alignCast(@ptrCast(s))).*]child_type.Array.child, @constCast(data)), true);
+            dataSetAdvanced(win, id, key, @as([:@as(*const child_type.Array.child, @alignCast(@ptrCast(s))).*]child_type.Array.child, @constCast(data)), true, num_copies);
         } else {
-            dataSetAdvanced(win, id, key, @as([]child_type.Array.child, @constCast(data)), true);
+            dataSetAdvanced(win, id, key, @as([]child_type.Array.child, @constCast(data)), true, num_copies);
         }
     } else {
         @compileError("dataSetSlice needs a slice or pointer to array, given " ++ @typeName(@TypeOf(data)));
@@ -1619,13 +1626,13 @@ pub fn dataSetSlice(win: ?*Window, id: u32, key: []const u8, data: anytype) void
 /// If copy_slice is true, data must be a slice or pointer to array, and the
 /// contents are copied into internal storage. If false, only the slice itself
 /// (ptr and len) and stored.
-pub fn dataSetAdvanced(win: ?*Window, id: u32, key: []const u8, data: anytype, comptime copy_slice: bool) void {
+pub fn dataSetAdvanced(win: ?*Window, id: u32, key: []const u8, data: anytype, comptime copy_slice: bool, num_copies: usize) void {
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
-        w.dataSetAdvanced(id, key, data, copy_slice);
+        w.dataSetAdvanced(id, key, data, copy_slice, num_copies);
     } else {
         if (current_window) |cw| {
-            cw.dataSetAdvanced(id, key, data, copy_slice);
+            cw.dataSetAdvanced(id, key, data, copy_slice, num_copies);
         } else {
             @panic("dataSet current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
         }
@@ -3005,7 +3012,7 @@ pub const Window = struct {
     }
 
     // data is copied into internal storage
-    pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, comptime copy_slice: bool) void {
+    pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, comptime copy_slice: bool, num_copies: usize) void {
         const hash = hashIdKey(id, key);
 
         const dt = @typeInfo(@TypeOf(data_in));
@@ -3032,7 +3039,7 @@ pub const Window = struct {
         defer self.data_mutex.unlock();
 
         if (self.datas.getPtr(hash)) |sd| {
-            if (sd.data.len == bytes.len) {
+            if (sd.data.len == (bytes.len * num_copies)) {
                 sd.used = true;
                 if (builtin.mode == .Debug) {
                     sd.type_str = dt_type_str;
@@ -3042,7 +3049,9 @@ pub const Window = struct {
                 // Someone might do dataSetSlice on the slice they got from
                 // dataGetSlice, and @memcpy would complain about aliasing
                 if (sd.data.ptr != bytes.ptr) {
-                    @memcpy(sd.data, bytes);
+                    for (0..num_copies) |i| {
+                        @memcpy(sd.data[i * bytes.len ..][0..bytes.len], bytes);
+                    }
                 }
                 return;
             } else {
@@ -3051,14 +3060,16 @@ pub const Window = struct {
             }
         }
 
-        var sd = SavedData{ .alignment = alignment, .data = self.gpa.allocWithOptions(u8, bytes.len, alignment, null) catch |err| switch (err) {
+        var sd = SavedData{ .alignment = alignment, .data = self.gpa.allocWithOptions(u8, bytes.len * num_copies, alignment, null) catch |err| switch (err) {
             error.OutOfMemory => {
                 log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
                 return;
             },
         } };
 
-        @memcpy(sd.data, bytes);
+        for (0..num_copies) |i| {
+            @memcpy(sd.data[i * bytes.len ..][0..bytes.len], bytes);
+        }
 
         if (builtin.mode == .Debug) {
             sd.type_str = dt_type_str;
@@ -3269,7 +3280,7 @@ pub const Window = struct {
                 _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
             }
             var te = try dvui.textEntry(@src(), .{
-                .text = &buf,
+                .text = .{ .buffer = &buf },
             }, .{});
             te.deinit();
 
@@ -4752,7 +4763,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         };
 
         // pass 0 for tab_index so you can't tab to TextEntry
-        var te = TextEntryWidget.init(@src(), .{ .text = te_buf }, options.strip().override(.{ .min_size_content = .{}, .expand = .both, .tab_index = 0 }));
+        var te = TextEntryWidget.init(@src(), .{ .text = .{ .buffer = te_buf } }, options.strip().override(.{ .min_size_content = .{}, .expand = .both, .tab_index = 0 }));
         try te.install();
 
         if (firstFrame(te.wd.id)) {
@@ -5341,7 +5352,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     const cw = currentWindow();
     var te = try cw.arena.create(TextEntryWidget);
-    te.* = TextEntryWidget.init(src, .{ .text = buffer }, opts);
+    te.* = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer } }, opts);
     try te.install();
     te.processEvents();
 
