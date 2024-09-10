@@ -6,7 +6,19 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
+
 can we do word-drag-select?
+
+textLayout:
+home/end to go to start/end of line (Mac?)
+ctrl-home/end to go to start/end of text (Mac?)
+triple click to select whole line
+
+textEntry:
+ctrl-backspace/delete to delete previous/next word (Mac?)
+ctrl-left/right to move word left/right
+
+test all on single-char at a time stuff
 
 
 text entry:
