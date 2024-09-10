@@ -131,6 +131,17 @@ sel_move: union(enum) {
         pt: ?Point = null, // get this on frame 2
         select: bool = true, // false - move cursor, true - change selection
     },
+
+    // moving left/right by words (only support moving a single word right now)
+    word_left_right: struct {
+        count: i8 = 0,
+        scratch_kind: enum {
+            blank,
+            word,
+        } = .blank,
+        // indexes of the last starts of words (only used when count < 0
+        word_start_idx: [5]usize = .{ 0, 0, 0, 0, 0 },
+    },
 } = .none,
 
 sel_start_r: Rect = .{},
@@ -593,6 +604,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                     }
                 }
             },
+            .word_left_right => {}, // done below cursor_seen
         }
 
         if (self.sel_pts[0] != null or self.sel_pts[1] != null) {
@@ -661,6 +673,11 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                 .mouse => {},
                 .word_pt => {},
                 .char_left_right => {},
+                .word_left_right => |*wlr| {
+                    if (wlr.count > 0) {
+                        wlr.scratch_kind = .blank; // start by skipping over any blanks to our right
+                    }
+                },
                 .cursor_updown => |*cud| {
                     if (cud.count != 0) {
                         // If we had cursor_updown.pt from last frame, we don't get
@@ -708,11 +725,8 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                         .precursor => {
                             // maintain index of last space/newline we saw
                             const sofar = txt[0..@min(self.selection.cursor -| self.bytes_seen, end)];
-                            const space = std.mem.lastIndexOfScalar(u8, sofar, ' ');
-                            const nline = std.mem.lastIndexOfScalar(u8, sofar, '\n');
-                            if (space != null or nline != null) {
-                                const last = @max(space orelse 0, nline orelse 0);
-                                wp.last = last + self.bytes_seen + 1;
+                            if (std.mem.lastIndexOfAny(u8, sofar, " \n")) |space| {
+                                wp.last = self.bytes_seen + space + 1;
                             }
 
                             if (self.cursor_seen) {
@@ -725,11 +739,8 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                         },
                         .aftcursor => {
                             // find next space/newline
-                            const space = std.mem.indexOfScalarPos(u8, txt, self.selection.cursor -| self.bytes_seen, ' ');
-                            const nline = std.mem.indexOfScalarPos(u8, txt, self.selection.cursor -| self.bytes_seen, '\n');
-                            if (space != null or nline != null) {
-                                const first = @min(space orelse std.math.maxInt(usize), nline orelse std.math.maxInt(usize));
-                                self.selection.moveCursor(self.bytes_seen + first, true);
+                            if (std.mem.indexOfAnyPos(u8, txt, self.selection.cursor -| self.bytes_seen, " \n")) |space| {
+                                self.selection.moveCursor(self.bytes_seen + space, true);
                                 wp.where = .done;
 
                                 // might have selected a word we already rendered part of
@@ -788,6 +799,102 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                 }
             },
             .cursor_updown => {},
+            .word_left_right => |*wlr| {
+                if (wlr.count < 0) {
+                    // maintain our list of previous starts of words, looking backwards
+                    const sofar = txt[0..@min(self.selection.cursor -| self.bytes_seen, end)];
+                    var idx = sofar.len -| 1;
+                    var last_kind: enum { blank, word } = undefined;
+                    if (idx > 0) {
+                        if (std.mem.indexOfAnyPos(u8, sofar, idx, " \n") != null) {
+                            last_kind = .blank;
+                        } else {
+                            last_kind = .word;
+                        }
+                    }
+
+                    var word_start_count: usize = 0;
+
+                    while (idx > 0 and word_start_count < wlr.word_start_idx.len) {
+                        switch (last_kind) {
+                            .blank => {
+                                if (std.mem.lastIndexOfNone(u8, sofar[0..idx], " \n")) |word_end| {
+                                    last_kind = .word;
+                                    idx = word_end;
+                                } else {
+                                    // all blank
+                                    idx = 0;
+                                }
+                            },
+                            .word => {
+                                var new_word_start: ?usize = null;
+                                if (std.mem.lastIndexOfAny(u8, sofar[0..idx], " \n")) |blank| {
+                                    last_kind = .blank;
+                                    idx = blank;
+                                    new_word_start = idx + 1;
+                                } else {
+                                    // all word
+                                    idx = 0;
+                                    if (wlr.scratch_kind == .blank) {
+                                        // last char from previous iteration was blank and we started with word
+                                        new_word_start = idx;
+                                    }
+                                }
+
+                                if (new_word_start) |ws| {
+                                    var i = wlr.word_start_idx.len - 1;
+                                    while (i > word_start_count) : (i -= 1) {
+                                        wlr.word_start_idx[i] = wlr.word_start_idx[i - 1];
+                                    }
+                                    wlr.word_start_idx[word_start_count] = self.bytes_seen + ws;
+                                    word_start_count += 1;
+                                }
+                            },
+                        }
+                    }
+
+                    // record last character kind for next iteration
+                    if (std.mem.indexOfAnyPos(u8, text_line, text_line.len - 1, " \n") != null) {
+                        wlr.scratch_kind = .blank;
+                    } else {
+                        wlr.scratch_kind = .word;
+                    }
+
+                    if (self.cursor_seen) {
+                        const idx2 = @min(-wlr.count - 1, wlr.word_start_idx.len - 1);
+                        self.selection.moveCursor(wlr.word_start_idx[@intCast(idx2)], true);
+                        wlr.count = 0;
+                        dvui.refresh(null, @src(), self.wd.id);
+                    }
+                }
+
+                while (self.cursor_seen and wlr.count > 0 and self.selection.cursor < (self.bytes_seen + end)) {
+                    switch (wlr.scratch_kind) {
+                        .blank => {
+                            // skipping over blanks
+                            if (std.mem.indexOfNonePos(u8, text_line, self.selection.cursor -| self.bytes_seen, " \n")) |non_blank| {
+                                self.selection.moveCursor(self.bytes_seen + non_blank, true);
+                                wlr.scratch_kind = .word; // now want to skip over word chars
+                            } else {
+                                // rest was blank
+                                self.selection.moveCursor(self.bytes_seen + end, true);
+                            }
+                        },
+                        .word => {
+                            // skipping over word chars
+                            if (std.mem.indexOfAnyPos(u8, text_line, self.selection.cursor -| self.bytes_seen, " \n")) |blank| {
+                                self.selection.moveCursor(self.bytes_seen + blank, true);
+                                // done with this one
+                                wlr.scratch_kind = .blank; // now want to skip over blanks
+                                wlr.count -= 1;
+                            } else {
+                                // rest was word
+                                self.selection.moveCursor(self.bytes_seen + end, true);
+                            }
+                        },
+                    }
+                }
+            },
         }
 
         const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });
@@ -969,6 +1076,16 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
             }
         },
         .cursor_updown => {}, // done below when cursor_seen
+        .word_left_right => |*wlr| {
+            if (wlr.count < 0) {
+                const idx2 = @min(-wlr.count - 1, wlr.word_start_idx.len - 1);
+                self.selection.moveCursor(wlr.word_start_idx[@intCast(idx2)], true);
+                wlr.count = 0;
+                dvui.refresh(null, @src(), self.wd.id);
+            }
+
+            // wlr.count > 0 doesn't need any processing here
+        },
     }
 
     if (self.sel_start_r_new) |start_r| {
@@ -1012,6 +1129,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
             .mouse => {},
             .word_pt => {},
             .char_left_right => {},
+            .word_left_right => {},
             .cursor_updown => |*cud| {
                 if (cud.count != 0) {
                     // If we had cursor_updown.pt from last frame, we don't get
@@ -1274,11 +1392,20 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
         switch (e.evt.key.code) {
             .left, .right => |code| {
                 e.handled = true;
-                if (self.sel_move == .none) {
-                    self.sel_move = .{ .char_left_right = .{} };
-                }
-                if (self.sel_move == .char_left_right) {
-                    self.sel_move.char_left_right.count += if (code == .right) 1 else -1;
+                if (e.evt.key.mod.controlOrMacOption()) {
+                    if (self.sel_move == .none) {
+                        self.sel_move = .{ .word_left_right = .{} };
+                    }
+                    if (self.sel_move == .word_left_right) {
+                        self.sel_move.word_left_right.count += if (code == .right) 1 else -1;
+                    }
+                } else {
+                    if (self.sel_move == .none) {
+                        self.sel_move = .{ .char_left_right = .{} };
+                    }
+                    if (self.sel_move == .char_left_right) {
+                        self.sel_move.char_left_right.count += if (code == .right) 1 else -1;
+                    }
                 }
                 self.scroll_to_cursor = true;
             },

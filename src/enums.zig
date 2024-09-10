@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 pub const Button = enum {
     // used for mouse motion events
@@ -86,6 +87,14 @@ pub const Mod = enum(u16) {
 
     pub fn controlCommand(self: Mod) bool {
         return self.control() or self.command();
+    }
+
+    pub fn controlOrMacOption(self: Mod) bool {
+        if (builtin.os.tag.isDarwin()) {
+            return self.alt();
+        } else {
+            return self.control();
+        }
     }
 
     ///combine two modifiers
