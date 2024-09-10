@@ -45,8 +45,8 @@ pub const Selection = struct {
         self.end = std.math.maxInt(usize);
     }
 
-    pub fn moveCursor(self: *Selection, idx: usize, shift: bool) void {
-        if (shift) {
+    pub fn moveCursor(self: *Selection, idx: usize, select: bool) void {
+        if (select) {
             if (self.cursor == self.start) {
                 // move the start
                 self.cursor = idx;
@@ -57,7 +57,7 @@ pub const Selection = struct {
                 self.end = idx;
             }
         } else {
-            // not an expanded selection
+            // removing any selection
             self.cursor = idx;
             self.start = idx;
             self.end = idx;
@@ -94,24 +94,64 @@ bytes_seen: usize = 0,
 selection_in: ?*Selection = null,
 selection: *Selection = undefined,
 selection_store: Selection = .{},
-sel_mouse_down_pt: ?Point = null,
-sel_mouse_down_bytes: ?usize = null,
-sel_mouse_drag_pt: ?Point = null,
-sel_left_right: i8 = 0,
-sel_left_right_buf: [10]u8 = [1]u8{0} ** 10,
+
+/// For simplicity we only handle a single kind of selection change per frame
+sel_move: union(enum) {
+    none: void,
+
+    // mouse down to move cursor and dragging to select
+    mouse: struct {
+        down_pt: ?Point = null, // point we got the mouse down (frame 1)
+        byte: ?usize = null, // byte index of pt (find on frame 1, keep while captured)
+        drag_pt: ?Point = null, // point of current mouse drag
+    },
+
+    // second click or touch selects word at the pointer
+    word_pt: struct {
+        p: ?Point,
+        last: usize = 0, // index of last space/newline we've seen
+        where: enum {
+            done,
+            precursor,
+            aftcursor,
+        } = .precursor,
+    },
+
+    // moving left/right by characters
+    char_left_right: struct {
+        count: i8 = 0,
+        buf: [20]u8 = [1]u8{0} ** 20,
+    },
+
+    // moving cursor up/down
+    // - this can be pipelined, so we might get more count on the same frame 2
+    // we are adjusting for the previous count
+    cursor_updown: struct {
+        count: i8 = 0, // positive is down (get this on frame 1, set pt once we see the cursor)
+        pt: ?Point = null, // get this on frame 2
+        select: bool = true, // false - move cursor, true - change selection
+    },
+
+    // moving left/right by words (only support moving a single word right now)
+    word_left_right: struct {
+        count: i8 = 0,
+        scratch_kind: enum {
+            blank,
+            word,
+        } = .blank,
+        // indexes of the last starts of words (only used when count < 0
+        word_start_idx: [5]usize = .{ 0, 0, 0, 0, 0 },
+    },
+} = .none,
+
 sel_start_r: Rect = .{},
 sel_start_r_new: ?Rect = null,
 sel_end_r: Rect = .{},
 sel_end_r_new: ?Rect = null,
 sel_pts: [2]?Point = [2]?Point{ null, null },
-sel_word: enum { none, precursor, aftcursor } = .none,
-sel_word_last_space: usize = 0,
 
 cursor_seen: bool = false,
 cursor_rect: ?Rect = null,
-cursor_updown: i8 = 0, // positive is down
-cursor_updown_drag: bool = true,
-cursor_updown_pt: ?Point = null,
 scroll_to_cursor: bool = false,
 
 add_text_done: bool = false,
@@ -163,16 +203,17 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
     }
 
     if (dvui.captured(self.wd.id)) {
-        if (dvui.dataGet(null, self.wd.id, "_sel_mouse_down_bytes", usize)) |p| {
-            self.sel_mouse_down_bytes = p;
+        if (dvui.dataGet(null, self.wd.id, "_sel_move_mouse_byte", usize)) |p| {
+            self.sel_move = .{ .mouse = .{ .byte = p } };
         }
     }
 
-    if (dvui.dataGet(null, self.wd.id, "_cursor_updown_pt", Point)) |p| {
-        self.cursor_updown_pt = p;
-        dvui.dataRemove(null, self.wd.id, "_cursor_updown_pt");
-        if (dvui.dataGet(null, self.wd.id, "_cursor_updown_drag", bool)) |cud| {
-            self.cursor_updown_drag = cud;
+    if (dvui.dataGet(null, self.wd.id, "_sel_move_cursor_updown_pt", Point)) |p| {
+        self.sel_move = .{ .cursor_updown = .{ .pt = p } };
+        dvui.dataRemove(null, self.wd.id, "_sel_move_cursor_updown_pt");
+        if (dvui.dataGet(null, self.wd.id, "_sel_move_cursor_updown_select", bool)) |cud| {
+            self.sel_move.cursor_updown.select = cud;
+            dvui.dataRemove(null, self.wd.id, "_sel_move_cursor_updown_select");
         }
     }
 
@@ -346,6 +387,35 @@ pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: Options) !b
     return try self.addTextEx(text, true, opts);
 }
 
+// Helper to addTextEx
+// - returns byte position if p is before or within r
+fn findPoint(p: Point, r: Rect, bytes_seen: usize, txt: []const u8, options: Options) !?usize {
+    if (p.y < r.y or (p.y < (r.y + r.h) and p.x < r.x)) {
+        // found it - p is before this rect
+        return bytes_seen;
+    }
+
+    if (p.y < (r.y + r.h) and p.x < (r.x + r.w)) {
+        // found it - p is in this rect
+        const how_far = p.x - r.x;
+        var pt_end: usize = undefined;
+        _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
+        return bytes_seen + pt_end;
+    }
+
+    var newline = false;
+    if (txt.len > 0 and (txt[txt.len - 1] == '\n')) {
+        newline = true;
+    }
+
+    if (newline and p.y < (r.y + r.h)) {
+        // found it - p is after this rect on same horizontal line
+        return bytes_seen + txt.len - 1;
+    }
+
+    return null;
+}
+
 fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: Options) !bool {
     var clicked = false;
 
@@ -477,95 +547,64 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             }
         }
 
-        if (self.sel_mouse_down_pt) |p| {
-            const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
-            if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
-                // point is before this text
-                self.sel_mouse_down_bytes = self.bytes_seen;
-                self.selection.cursor = self.sel_mouse_down_bytes.?;
-                self.selection.start = self.sel_mouse_down_bytes.?;
-                self.selection.end = self.sel_mouse_down_bytes.?;
-                self.sel_mouse_down_pt = null;
-            } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
-                // point is in this text
-                const how_far = p.x - rs.x;
-                var pt_end: usize = undefined;
-                _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
-                self.sel_mouse_down_bytes = self.bytes_seen + pt_end;
-                self.selection.cursor = self.sel_mouse_down_bytes.?;
-                self.selection.start = self.sel_mouse_down_bytes.?;
-                self.selection.end = self.sel_mouse_down_bytes.?;
-                self.sel_mouse_down_pt = null;
-            } else {
-                if (newline and p.y < (rs.y + rs.h)) {
-                    // point is after this text on this same horizontal line
-                    self.sel_mouse_down_bytes = self.bytes_seen + end - 1;
-                    self.sel_mouse_down_pt = null;
-                } else {
-                    // point is after this text, but we might not get anymore
-                    self.sel_mouse_down_bytes = self.bytes_seen + end;
+        // handle selection movement
+        const text_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
+        const text_line = txt[0..end];
+        switch (self.sel_move) {
+            .none => {},
+            .mouse => |*m| {
+                if (m.down_pt) |p| {
+                    if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |byte| {
+                        m.byte = byte;
+                        self.selection.moveCursor(byte, false);
+                        m.down_pt = null;
+                    } else {
+                        // haven't found it yet, keep cursor at end to not trigger cursor_seen
+                        self.selection.moveCursor(self.bytes_seen + end, false);
+                    }
                 }
-                self.selection.cursor = self.sel_mouse_down_bytes.?;
-                self.selection.start = self.sel_mouse_down_bytes.?;
-                self.selection.end = self.sel_mouse_down_bytes.?;
-            }
-            self.scroll_to_cursor = true;
-        }
 
-        if (self.sel_mouse_drag_pt) |p| {
-            const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
-            if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
-                // point is before this text
-                self.selection.cursor = self.bytes_seen;
-                self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen);
-                self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen);
-                self.sel_mouse_drag_pt = null;
-            } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
-                // point is in this text
-                const how_far = p.x - rs.x;
-                var pt_end: usize = undefined;
-                _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
-                self.selection.cursor = self.bytes_seen + pt_end;
-                self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + pt_end);
-                self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen + pt_end);
-                self.sel_mouse_drag_pt = null;
-            } else {
-                // point is after this text, but we might not get anymore
-                self.selection.cursor = self.bytes_seen + end;
-                self.selection.start = @min(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
-                self.selection.end = @max(self.sel_mouse_down_bytes.?, self.bytes_seen + end);
-            }
-
-            // don't set scroll_to_cursor here because when we are dragging
-            // we are already doing a scroll_drag in processEvent
-        }
-
-        if (self.cursor_updown_pt) |p| {
-            const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
-            if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
-                // point is before this text
-                self.selection.moveCursor(self.bytes_seen, self.cursor_updown_drag);
-                self.cursor_updown_pt = null;
-                self.scroll_to_cursor = true;
-            } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
-                // point is in this text
-                const how_far = p.x - rs.x;
-                var pt_end: usize = undefined;
-                _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
-                self.selection.moveCursor(self.bytes_seen + pt_end, self.cursor_updown_drag);
-                self.cursor_updown_pt = null;
-                self.scroll_to_cursor = true;
-            } else {
-                if (newline and p.y < (rs.y + rs.h)) {
-                    // point is after this text on this same horizontal line
-                    self.selection.moveCursor(self.bytes_seen + end - 1, self.cursor_updown_drag);
-                    self.cursor_updown_pt = null;
-                } else {
-                    // point is after this text, but we might not get anymore
-                    self.selection.moveCursor(self.bytes_seen + end, self.cursor_updown_drag);
+                if (m.drag_pt) |p| {
+                    if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |byte| {
+                        self.selection.cursor = byte;
+                        self.selection.start = @min(m.byte.?, byte);
+                        self.selection.end = @max(m.byte.?, byte);
+                        m.drag_pt = null;
+                    } else {
+                        // haven't found it yet, keep cursor at end to not trigger cursor_seen
+                        self.selection.cursor = self.bytes_seen + end;
+                        self.selection.start = @min(m.byte.?, self.selection.cursor);
+                        self.selection.end = @max(m.byte.?, self.selection.cursor);
+                    }
                 }
-                self.scroll_to_cursor = true;
-            }
+            },
+            .word_pt => |*wp| {
+                // note: we do more of this below cursor_seen
+                if (wp.p) |p| {
+                    if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |byte| {
+                        self.selection.moveCursor(byte, false);
+                        wp.p = null;
+                    } else {
+                        // haven't found it yet, keep cursor at end to not trigger cursor_seen
+                        self.selection.moveCursor(self.bytes_seen + end, false);
+                    }
+                }
+            },
+            .char_left_right => {}, // done below cursor_seen
+            .cursor_updown => |*cud| {
+                // note: we do more of this when setting cursor_seen
+                if (cud.pt) |p| {
+                    if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |byte| {
+                        self.selection.moveCursor(byte, cud.select);
+                        cud.pt = null;
+                        self.scroll_to_cursor = true;
+                    } else {
+                        // haven't found it yet, keep cursor at end to not trigger cursor_seen
+                        self.selection.moveCursor(self.bytes_seen + end, cud.select);
+                    }
+                }
+            },
+            .word_left_right => {}, // done below cursor_seen
         }
 
         if (self.sel_pts[0] != null or self.sel_pts[1] != null) {
@@ -629,23 +668,38 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             const size = try options.fontGet().textSize(txt[0 .. self.selection.cursor - self.bytes_seen]);
             const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
 
-            if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
-                const updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
-                self.cursor_updown = 0;
+            switch (self.sel_move) {
+                .none => {},
+                .mouse => {},
+                .word_pt => {},
+                .char_left_right => {},
+                .word_left_right => |*wlr| {
+                    if (wlr.count > 0) {
+                        wlr.scratch_kind = .blank; // start by skipping over any blanks to our right
+                    }
+                },
+                .cursor_updown => |*cud| {
+                    if (cud.count != 0) {
+                        // If we had cursor_updown.pt from last frame, we don't get
+                        // cursor_seen until we've moved the cursor to that point
+                        const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(cud.count)) * try options.fontGet().lineHeight() });
+                        const updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
+                        cud.count = 0;
 
-                // forward the pixel position we want the cursor to be in to
-                // the next frame
-                dvui.dataSet(null, self.wd.id, "_cursor_updown_pt", updown_pt);
-                dvui.dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
+                        // forward the pixel position we want the cursor to be in to
+                        // the next frame
+                        dvui.dataSet(null, self.wd.id, "_sel_move_cursor_updown_pt", updown_pt);
+                        dvui.dataSet(null, self.wd.id, "_sel_move_cursor_updown_select", cud.select);
 
-                // might have already passed, so need to go again next frame
-                dvui.refresh(null, @src(), self.wd.id);
+                        // might have already passed, so need to go again next frame
+                        dvui.refresh(null, @src(), self.wd.id);
 
-                var scrollto = Event{ .evt = .{ .scroll_to = .{
-                    .screen_rect = self.screenRectScale(cr_new).r,
-                } } };
-                self.processEvent(&scrollto, true);
+                        var scrollto = Event{ .evt = .{ .scroll_to = .{
+                            .screen_rect = self.screenRectScale(cr_new).r,
+                        } } };
+                        self.processEvent(&scrollto, true);
+                    }
+                },
             }
 
             if (self.scroll_to_cursor) {
@@ -660,86 +714,187 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             }
         }
 
-        loop: while (self.sel_word != .none) {
-            switch (self.sel_word) {
-                .precursor => {
-                    // maintain index of last space/newline we saw
-                    const sofar = txt[0..@min(self.selection.cursor -| self.bytes_seen, end)];
-                    const space = std.mem.lastIndexOfScalar(u8, sofar, ' ');
-                    const nline = std.mem.lastIndexOfScalar(u8, sofar, '\n');
-                    if (space != null or nline != null) {
-                        const last = @max(space orelse 0, nline orelse 0);
-                        self.sel_word_last_space = last + self.bytes_seen + 1;
+        // handle selection movement possibly after cursor_seen
+        switch (self.sel_move) {
+            .none => {},
+            .mouse => {},
+            .word_pt => |*wp| {
+                loop: while (wp.where != .done) {
+                    switch (wp.where) {
+                        .done => {},
+                        .precursor => {
+                            // maintain index of last space/newline we saw
+                            const sofar = txt[0..@min(self.selection.cursor -| self.bytes_seen, end)];
+                            if (std.mem.lastIndexOfAny(u8, sofar, " \n")) |space| {
+                                wp.last = self.bytes_seen + space + 1;
+                            }
+
+                            if (self.cursor_seen) {
+                                self.selection.moveCursor(wp.last, true);
+                                self.selection.cursor = self.selection.end; // put cursor at end for the aftcursor logic
+                                wp.where = .aftcursor;
+                            } else {
+                                break :loop;
+                            }
+                        },
+                        .aftcursor => {
+                            // find next space/newline
+                            if (std.mem.indexOfAnyPos(u8, txt, self.selection.cursor -| self.bytes_seen, " \n")) |space| {
+                                self.selection.moveCursor(self.bytes_seen + space, true);
+                                wp.where = .done;
+
+                                // might have selected a word we already rendered part of
+                                dvui.refresh(null, @src(), self.wd.id);
+                            }
+
+                            break :loop;
+                        },
+                    }
+                }
+            },
+            .char_left_right => |*clr| {
+                if (clr.count < 0) {
+                    // save a small lookback buffer
+
+                    const last_idx = @min(self.selection.cursor, self.bytes_seen + end) -| self.bytes_seen;
+                    for (clr.buf, 0..) |_, i| {
+                        if (i + last_idx >= clr.buf.len) {
+                            clr.buf[i] = txt[last_idx + i - clr.buf.len];
+                        } else {
+                            clr.buf[i] = clr.buf[i + last_idx];
+                        }
                     }
 
                     if (self.cursor_seen) {
-                        self.selection.moveCursor(self.sel_word_last_space, true);
-                        self.selection.cursor = self.selection.end; // put cursor at end for the aftcursor logic
-                        self.sel_word = .aftcursor;
-                    } else {
-                        break :loop;
-                    }
-                },
-                .aftcursor => {
-                    // find next space/newline
-                    const space = std.mem.indexOfScalarPos(u8, txt, self.selection.cursor -| self.bytes_seen, ' ');
-                    const nline = std.mem.indexOfScalarPos(u8, txt, self.selection.cursor -| self.bytes_seen, '\n');
-                    if (space != null or nline != null) {
-                        const first = @min(space orelse std.math.maxInt(usize), nline orelse std.math.maxInt(usize));
-                        self.selection.moveCursor(self.bytes_seen + first, true);
-                        self.sel_word = .none;
+                        while (clr.count < 0) {
+                            var cur = self.selection.cursor;
+
+                            // move cursor one utf8 char left
+                            cur -|= 1;
+                            while (cur > self.bytes_seen and clr.buf[clr.buf.len + cur - self.selection.cursor] & 0xc0 == 0x80) {
+                                // in the middle of a multibyte char
+                                cur -|= 1;
+                            }
+
+                            self.selection.moveCursor(cur, true);
+                            clr.count += 1;
+                        }
+
+                        clr.count = 0;
+
                         dvui.refresh(null, @src(), self.wd.id);
                     }
-
-                    break :loop;
-                },
-                .none => {},
-            }
-        }
-
-        if (self.sel_left_right < 0) {
-            // save a small lookback buffer
-
-            const last_idx = @min(self.selection.cursor, self.bytes_seen + end) -| self.bytes_seen;
-            for (self.sel_left_right_buf, 0..) |_, i| {
-                if (i + last_idx >= self.sel_left_right_buf.len) {
-                    self.sel_left_right_buf[i] = txt[last_idx + i - self.sel_left_right_buf.len];
-                } else {
-                    self.sel_left_right_buf[i] = self.sel_left_right_buf[i + last_idx];
                 }
-            }
 
-            if (self.cursor_seen) {
-                while (self.sel_left_right < 0) {
+                while (self.cursor_seen and clr.count > 0 and self.selection.cursor < (self.bytes_seen + end)) {
                     var cur = self.selection.cursor;
 
-                    // move cursor one utf8 char left
-                    cur -|= 1;
-                    while (cur > self.bytes_seen and self.sel_left_right_buf[self.sel_left_right_buf.len + cur - self.selection.cursor] & 0xc0 == 0x80) {
-                        // in the middle of a multibyte char
-                        cur -|= 1;
-                    }
+                    // move cursor one utf8 char right
+                    cur += std.unicode.utf8ByteSequenceLength(txt[cur - self.bytes_seen]) catch 1;
 
                     self.selection.moveCursor(cur, true);
-                    self.sel_left_right += 1;
+                    clr.count -= 1;
+
+                    dvui.refresh(null, @src(), self.wd.id);
+                }
+            },
+            .cursor_updown => {},
+            .word_left_right => |*wlr| {
+                if (wlr.count < 0) {
+                    // maintain our list of previous starts of words, looking backwards
+                    const sofar = txt[0..@min(self.selection.cursor -| self.bytes_seen, end)];
+                    var idx = sofar.len -| 1;
+                    var last_kind: enum { blank, word } = undefined;
+                    if (idx > 0) {
+                        if (std.mem.indexOfAnyPos(u8, sofar, idx, " \n") != null) {
+                            last_kind = .blank;
+                        } else {
+                            last_kind = .word;
+                        }
+                    }
+
+                    var word_start_count: usize = 0;
+
+                    while (idx > 0 and word_start_count < wlr.word_start_idx.len) {
+                        switch (last_kind) {
+                            .blank => {
+                                if (std.mem.lastIndexOfNone(u8, sofar[0..idx], " \n")) |word_end| {
+                                    last_kind = .word;
+                                    idx = word_end;
+                                } else {
+                                    // all blank
+                                    idx = 0;
+                                }
+                            },
+                            .word => {
+                                var new_word_start: ?usize = null;
+                                if (std.mem.lastIndexOfAny(u8, sofar[0..idx], " \n")) |blank| {
+                                    last_kind = .blank;
+                                    idx = blank;
+                                    new_word_start = idx + 1;
+                                } else {
+                                    // all word
+                                    idx = 0;
+                                    if (wlr.scratch_kind == .blank) {
+                                        // last char from previous iteration was blank and we started with word
+                                        new_word_start = idx;
+                                    }
+                                }
+
+                                if (new_word_start) |ws| {
+                                    var i = wlr.word_start_idx.len - 1;
+                                    while (i > word_start_count) : (i -= 1) {
+                                        wlr.word_start_idx[i] = wlr.word_start_idx[i - 1];
+                                    }
+                                    wlr.word_start_idx[word_start_count] = self.bytes_seen + ws;
+                                    word_start_count += 1;
+                                }
+                            },
+                        }
+                    }
+
+                    // record last character kind for next iteration
+                    if (std.mem.indexOfAnyPos(u8, text_line, text_line.len - 1, " \n") != null) {
+                        wlr.scratch_kind = .blank;
+                    } else {
+                        wlr.scratch_kind = .word;
+                    }
+
+                    if (self.cursor_seen) {
+                        const idx2 = @min(-wlr.count - 1, wlr.word_start_idx.len - 1);
+                        self.selection.moveCursor(wlr.word_start_idx[@intCast(idx2)], true);
+                        wlr.count = 0;
+                        dvui.refresh(null, @src(), self.wd.id);
+                    }
                 }
 
-                self.sel_left_right = 0;
-
-                dvui.refresh(null, @src(), self.wd.id);
-            }
-        }
-
-        while (self.cursor_seen and self.sel_left_right > 0 and self.selection.cursor < (self.bytes_seen + end)) {
-            var cur = self.selection.cursor;
-
-            // move cursor one utf8 char right
-            cur += std.unicode.utf8ByteSequenceLength(txt[cur - self.bytes_seen]) catch 1;
-
-            self.selection.moveCursor(cur, true);
-            self.sel_left_right -= 1;
-
-            dvui.refresh(null, @src(), self.wd.id);
+                while (self.cursor_seen and wlr.count > 0 and self.selection.cursor < (self.bytes_seen + end)) {
+                    switch (wlr.scratch_kind) {
+                        .blank => {
+                            // skipping over blanks
+                            if (std.mem.indexOfNonePos(u8, text_line, self.selection.cursor -| self.bytes_seen, " \n")) |non_blank| {
+                                self.selection.moveCursor(self.bytes_seen + non_blank, true);
+                                wlr.scratch_kind = .word; // now want to skip over word chars
+                            } else {
+                                // rest was blank
+                                self.selection.moveCursor(self.bytes_seen + end, true);
+                            }
+                        },
+                        .word => {
+                            // skipping over word chars
+                            if (std.mem.indexOfAnyPos(u8, text_line, self.selection.cursor -| self.bytes_seen, " \n")) |blank| {
+                                self.selection.moveCursor(self.bytes_seen + blank, true);
+                                // done with this one
+                                wlr.scratch_kind = .blank; // now want to skip over blanks
+                                wlr.count -= 1;
+                            } else {
+                                // rest was word
+                                self.selection.moveCursor(self.bytes_seen + end, true);
+                            }
+                        },
+                    }
+                }
+            },
         }
 
         const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });
@@ -860,9 +1015,77 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
         self.copy_slice = null;
     }
 
-    // if we had mouse/keyboard interaction, need to handle things if addText never gets called
-    if (self.sel_mouse_down_pt) |_| {
-        self.sel_mouse_down_bytes = self.bytes_seen;
+    self.selection.cursor = @min(self.selection.cursor, self.bytes_seen);
+    self.selection.start = @min(self.selection.start, self.bytes_seen);
+    self.selection.end = @min(self.selection.end, self.bytes_seen);
+
+    // handle selection movement
+    // - this logic must work even if addText() is never called
+    switch (self.sel_move) {
+        .none => {},
+        .mouse => |*m| {
+            if (m.down_pt) |_| {
+                m.byte = self.bytes_seen;
+                self.selection.moveCursor(self.bytes_seen, false);
+                m.down_pt = null;
+            }
+
+            if (m.drag_pt) |_| {
+                self.selection.cursor = self.bytes_seen;
+                self.selection.start = @min(m.byte.?, self.bytes_seen);
+                self.selection.end = @max(m.byte.?, self.bytes_seen);
+                m.drag_pt = null;
+            }
+        },
+        .word_pt => |*wp| {
+            while (wp.where != .done) {
+                switch (wp.where) {
+                    .done => {},
+                    .precursor => {
+                        self.selection.moveCursor(wp.last, true);
+                        self.selection.cursor = self.selection.end; // put cursor at end for the aftcursor logic
+                        wp.where = .aftcursor;
+                    },
+                    .aftcursor => {
+                        self.selection.moveCursor(self.bytes_seen, true);
+                        wp.where = .done;
+
+                        // might have selected a word we already rendered part of
+                        dvui.refresh(null, @src(), self.wd.id);
+                    },
+                }
+            }
+        },
+        .char_left_right => |*clr| {
+            if (clr.count < 0) {
+                while (clr.count < 0) {
+                    var cur = self.selection.cursor;
+
+                    // move cursor one utf8 char left
+                    cur -|= 1;
+                    while (cur > 0 and clr.buf[clr.buf.len + cur - self.selection.cursor] & 0xc0 == 0x80) {
+                        // in the middle of a multibyte char
+                        cur -|= 1;
+                    }
+
+                    self.selection.moveCursor(cur, true);
+                    clr.count += 1;
+                }
+
+                dvui.refresh(null, @src(), self.wd.id);
+            }
+        },
+        .cursor_updown => {}, // done below when cursor_seen
+        .word_left_right => |*wlr| {
+            if (wlr.count < 0) {
+                const idx2 = @min(-wlr.count - 1, wlr.word_start_idx.len - 1);
+                self.selection.moveCursor(wlr.word_start_idx[@intCast(idx2)], true);
+                wlr.count = 0;
+                dvui.refresh(null, @src(), self.wd.id);
+            }
+
+            // wlr.count > 0 doesn't need any processing here
+        },
     }
 
     if (self.sel_start_r_new) |start_r| {
@@ -895,60 +1118,40 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
         }
     }
 
-    self.selection.cursor = @min(self.selection.cursor, self.bytes_seen);
-    self.selection.start = @min(self.selection.start, self.bytes_seen);
-    self.selection.end = @min(self.selection.end, self.bytes_seen);
-
-    if (self.sel_word == .aftcursor) {
-        self.selection.moveCursor(self.bytes_seen, true);
-        self.sel_word = .none;
-        dvui.refresh(null, @src(), self.wd.id);
-    }
-
     if (!self.cursor_seen) {
         self.cursor_seen = true;
-        self.selection.cursor = self.bytes_seen;
 
         const options = self.wd.options.override(opts);
         const cr = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
 
-        if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-            const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
-            const updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
-            self.cursor_updown = 0;
+        switch (self.sel_move) {
+            .none => {},
+            .mouse => {},
+            .word_pt => {},
+            .char_left_right => {},
+            .word_left_right => {},
+            .cursor_updown => |*cud| {
+                if (cud.count != 0) {
+                    // If we had cursor_updown.pt from last frame, we don't get
+                    // cursor_seen until we've moved the cursor to that point
+                    const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(cud.count)) * try options.fontGet().lineHeight() });
+                    const updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
+                    cud.count = 0;
 
-            // forward the pixel position we want the cursor to be in to
-            // the next frame
-            dvui.dataSet(null, self.wd.id, "_cursor_updown_pt", updown_pt);
-            dvui.dataSet(null, self.wd.id, "_cursor_updown_drag", self.cursor_updown_drag);
+                    // forward the pixel position we want the cursor to be in to
+                    // the next frame
+                    dvui.dataSet(null, self.wd.id, "_sel_move_cursor_updown_pt", updown_pt);
+                    dvui.dataSet(null, self.wd.id, "_sel_move_cursor_updown_select", cud.select);
 
-            // might have already passed, so need to go again next frame
-            dvui.refresh(null, @src(), self.wd.id);
+                    // might have already passed, so need to go again next frame
+                    dvui.refresh(null, @src(), self.wd.id);
 
-            var scrollto = Event{ .evt = .{ .scroll_to = .{
-                .screen_rect = self.screenRectScale(cr_new).r,
-            } } };
-            self.processEvent(&scrollto, true);
-        }
-
-        if (self.sel_left_right < 0) {
-            while (self.sel_left_right < 0) {
-                var cur = self.selection.cursor;
-
-                // move cursor one utf8 char left
-                cur -|= 1;
-                while (cur > self.bytes_seen and self.sel_left_right_buf[self.sel_left_right_buf.len + cur - self.selection.cursor] & 0xc0 == 0x80) {
-                    // in the middle of a multibyte char
-                    cur -|= 1;
+                    var scrollto = Event{ .evt = .{ .scroll_to = .{
+                        .screen_rect = self.screenRectScale(cr_new).r,
+                    } } };
+                    self.processEvent(&scrollto, true);
                 }
-
-                self.selection.moveCursor(cur, true);
-                self.sel_left_right += 1;
-            }
-
-            self.sel_left_right = 0;
-
-            dvui.refresh(null, @src(), self.wd.id);
+            },
         }
 
         if (self.scroll_to_cursor) {
@@ -1080,19 +1283,6 @@ pub fn processEvents(self: *TextLayoutWidget) void {
 
         self.processEvent(e, false);
     }
-
-    // we could have gotten multiple conflicting keyboard/mouse movements, so
-    // here we decide which to actually do
-    if (self.sel_mouse_down_pt != null or self.sel_mouse_drag_pt != null) {
-        // doing mouse click-drag selection, turn off other stuff
-        self.cursor_updown = 0;
-        self.cursor_updown_pt = null;
-        self.sel_left_right = 0;
-        self.scroll_to_cursor = false;
-    } else if (self.cursor_updown != 0 or self.cursor_updown_pt != null) {
-        // moving cursor vertically
-        self.sel_left_right = 0;
-    }
 }
 
 pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
@@ -1117,12 +1307,14 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     dvui.refresh(null, @src(), self.wd.id);
                 }
             } else {
-                self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-                self.sel_mouse_drag_pt = null;
+                // a click always sets sel_move - has the highest priority
+                const p = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                self.sel_move = .{ .mouse = .{ .down_pt = p } };
+                self.scroll_to_cursor = true;
 
-                self.sel_word = .none;
                 if (self.click_num == 1) {
-                    self.sel_word = .precursor;
+                    // select word we touched
+                    self.sel_move = .{ .word_pt = .{ .p = p } };
                 }
             }
         } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
@@ -1142,12 +1334,15 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 if (e.evt.mouse.button.touch()) {
                     // this was a touch-release without drag, which transitions
                     // us between touch editing
+                    const p = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
 
                     if (self.te_focus_on_touchdown) {
                         self.touch_editing = !self.touch_editing;
-                        self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                        // move cursor to point
+                        self.sel_move = .{ .mouse = .{ .down_pt = p } };
                         if (self.touch_editing) {
-                            self.sel_word = .precursor; // select the word we touched
+                            // select word we touched
+                            self.sel_move = .{ .word_pt = .{ .p = p } };
                         }
                     } else {
                         if (self.touch_edit_just_focused) {
@@ -1158,8 +1353,9 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                             // touch editing from not having focus, we want to
                             // position the cursor.
                             self.te_first = false;
-                            self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-                            self.sel_word = .precursor; // select the word we touched
+
+                            // select word we touched
+                            self.sel_move = .{ .word_pt = .{ .p = p } };
                         }
                     }
                     dvui.refresh(null, @src(), self.wd.id);
@@ -1172,7 +1368,9 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 self.click_num = 0;
                 if (!e.evt.mouse.button.touch()) {
                     e.handled = true;
-                    self.sel_mouse_drag_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                    if (self.sel_move == .mouse) {
+                        self.sel_move.mouse.drag_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                    }
                     var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
                         .mouse_pt = e.evt.mouse.p,
                         .screen_rect = self.wd.rectScale().r,
@@ -1192,19 +1390,33 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
         }
     } else if (e.evt == .key and (e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.mod.shift()) {
         switch (e.evt.key.code) {
-            .left => {
+            .left, .right => |code| {
                 e.handled = true;
-                self.sel_left_right -= 1;
-                self.scroll_to_cursor = true;
-            },
-            .right => {
-                e.handled = true;
-                self.sel_left_right += 1;
+                if (e.evt.key.mod.controlOrMacOption()) {
+                    if (self.sel_move == .none) {
+                        self.sel_move = .{ .word_left_right = .{} };
+                    }
+                    if (self.sel_move == .word_left_right) {
+                        self.sel_move.word_left_right.count += if (code == .right) 1 else -1;
+                    }
+                } else {
+                    if (self.sel_move == .none) {
+                        self.sel_move = .{ .char_left_right = .{} };
+                    }
+                    if (self.sel_move == .char_left_right) {
+                        self.sel_move.char_left_right.count += if (code == .right) 1 else -1;
+                    }
+                }
                 self.scroll_to_cursor = true;
             },
             .up, .down => |code| {
                 e.handled = true;
-                self.cursor_updown += if (code == .down) 1 else -1;
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .cursor_updown = .{} };
+                }
+                if (self.sel_move == .cursor_updown) {
+                    self.sel_move.cursor_updown.count += if (code == .down) 1 else -1;
+                }
             },
             else => {},
         }
@@ -1238,10 +1450,10 @@ pub fn deinit(self: *TextLayoutWidget) void {
     dvui.dataSet(null, self.wd.id, "_sel_end_r", self.sel_end_r);
     dvui.dataSet(null, self.wd.id, "_selection", self.selection.*);
 
-    if (dvui.captured(self.wd.id) and self.sel_mouse_down_bytes != null) {
+    if (dvui.captured(self.wd.id) and self.sel_move == .mouse) {
         // once we figure out where the mousedown was, we need to save it
         // as long as we are dragging
-        dvui.dataSet(null, self.wd.id, "_sel_mouse_down_bytes", self.sel_mouse_down_bytes.?);
+        dvui.dataSet(null, self.wd.id, "_sel_move_mouse_byte", self.sel_move.mouse.byte.?);
     }
     if (self.click_num == 0) {
         dvui.dataRemove(null, self.wd.id, "_click_num");
