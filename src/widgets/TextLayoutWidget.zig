@@ -1423,6 +1423,9 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
     } else if (e.evt == .key and e.evt.key.mod.controlCommand() and e.evt.key.code == .c and e.evt.key.action == .down) {
         e.handled = true;
         self.copy();
+    } else if (e.evt == .key and e.evt.key.mod.controlCommand() and e.evt.key.code == .a and e.evt.key.action == .down) {
+        e.handled = true;
+        self.selection.selectAll();
     }
 
     if (e.bubbleable()) {
