@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>exportPath</key>
+	<string>/Users/abbie/Documents/github/opendyslexic/otf</string>
+	<key>fontPath</key>
+	<string>opendyslexic.glyphs</string>
+	<key>instances</key>
+	<array>
+		<dict>
+			<key>name</key>
+			<string>Light</string>
+			<key>weightClass</key>
+			<string>Light</string>
+		</dict>
+		<dict>
+			<key>name</key>
+			<string>Regular</string>
+		</dict>
+		<dict>
+			<key>interpolationWeight</key>
+			<real>700</real>
+			<key>isBold</key>
+			<true/>
+			<key>linkStyle</key>
+			<string>Regular</string>
+			<key>name</key>
+			<string>Bold</string>
+			<key>weightClass</key>
+			<string>Bold</string>
+		</dict>
+	</array>
+</dict>
+</plist>

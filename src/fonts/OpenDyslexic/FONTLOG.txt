@@ -1,0 +1,448 @@
+Adding
+Compiled update
+Updated pdf character sheet
+removed duplicate breve-cy
+Corrected greek accents
+Corrected accents, moved characters to components
+italic carons complete.
+Correcting acents & marks
+Working on Italic
+fixed some international symbols
+Adjusting symbols
+corrected accents, updated build & pdf
+compile of latest
+updated pdf for last commit
+Finished regular
+Large number of additions. o_O
+Central European, South Eastern European
+Cryllic, Western European, IPA complete
+And more characters
+more characters
+Including PDF with current character set
+fixes
+Symbols, starting greek
+Updatd; more symbols
+Adding uppercase, adjustments, etc.
+New character sheet
+bold-italic, kerning, adjusting accents
+Adding Italic: readded composite glyphs, adding bold
+Adjusted metrics, more glyph fixes, improving compatibility between bold and regular.
+Added missing features.
+Updated PDF with current character set.
+finished moving colors to styleset, corrected metrics in regular and bold
+recomposing inconsistent glyphs, corrected path direction and made adjustments to any broken bold glyphs.
+Corrected the Lcaron.
+Spacing fixes, Removed extra large space, added a few missing characters. Moving colors to stylesets.
+Updated with the current state of the glyphs.
+Recompositing some glyphs for consistency. Spacing fixes. Moving colors to stylesets.
+Metric fixes, more progress on Bold, a dash of color
+Adding glyphs for BoldItalic
+Adding
+Compiled update
+Updated pdf character sheet
+removed duplicate breve-cy
+Corrected greek accents
+Corrected accents, moved characters to components
+italic carons complete.
+Correcting acents & marks
+Working on Italic
+fixed some international symbols
+Adjusting symbols
+corrected accents, updated build & pdf
+compile of latest
+updated pdf for last commit
+Finished regular
+Large number of additions. o_O
+Central European, South Eastern European
+Cryllic, Western European, IPA complete
+And more characters
+more characters
+Including PDF with current character set
+fixes
+Symbols, starting greek
+Updatd; more symbols
+Adding uppercase, adjustments, etc.
+Updated compiled
+Updated metrics andn character sizes
+More adjustments: letter height, overshot, accents.
+Consistent sizing fixs, removing odd angles
+Making sizes more consistent.
+Updated charcter list
+Updated metrics, corrected accents and path directions.
+adjusted metrics, accents, path directions.
+Removed old italic
+Compiled fonts for next release
+Added ss04
+e.ss04 shows no color fix
+Removed color from main styleset, moved to styleset 3, corrected compound symbols with incorrect positions.
+Accents, updating refining symbols.
+More adjustments to kerning & positions. Alternate stylesets modified for better compatibility.
+New character sheet
+bold-italic, kerning, adjusting accents
+Adding Italic: readded composite glyphs, adding bold
+Adjusted metrics, more glyph fixes, improving compatibility between bold and regular.
+Added missing features.
+Updated PDF with current character set.
+finished moving colors to styleset, corrected metrics in regular and bold
+recomposing inconsistent glyphs, corrected path direction and made adjustments to any broken bold glyphs.
+Corrected the Lcaron.
+Spacing fixes, Removed extra large space, added a few missing characters. Moving colors to stylesets.
+Updated with the current state of the glyphs.
+Recompositing some glyphs for consistency. Spacing fixes. Moving colors to stylesets.
+Metric fixes, more progress on Bold, a dash of color
+Adding glyphs for BoldItalic
+Updated charcter list
+Updated metrics, corrected accents and path directions.
+adjusted metrics, accents, path directions.
+Removed old italic
+Compiled fonts for next release
+Added ss04
+e.ss04 shows no color fix
+Removed color from main styleset, moved to styleset 3, corrected compound symbols with incorrect positions.
+Accents, updating refining symbols.
+More adjustments to kerning & positions. Alternate stylesets modified for better compatibility.
+New character sheet
+bold-italic, kerning, adjusting accents
+Adding Italic: readded composite glyphs, adding bold
+Adjusted metrics, more glyph fixes, improving compatibility between bold and regular.
+Added missing features.
+Updated PDF with current character set.
+finished moving colors to styleset, corrected metrics in regular and bold
+recomposing inconsistent glyphs, corrected path direction and made adjustments to any broken bold glyphs.
+Corrected the Lcaron.
+Spacing fixes, Removed extra large space, added a few missing characters. Moving colors to stylesets.
+Updated with the current state of the glyphs.
+Recompositing some glyphs for consistency. Spacing fixes. Moving colors to stylesets.
+Metric fixes, more progress on Bold, a dash of color
+Adding glyphs for BoldItalic
+Adding
+Compiled update
+Updated pdf character sheet
+removed duplicate breve-cy
+Corrected greek accents
+Corrected accents, moved characters to components
+italic carons complete.
+Correcting acents & marks
+Working on Italic
+fixed some international symbols
+Adjusting symbols
+corrected accents, updated build & pdf
+compile of latest
+updated pdf for last commit
+Finished regular
+Large number of additions. o_O
+Central European, South Eastern European
+Cryllic, Western European, IPA complete
+And more characters
+more characters
+Including PDF with current character set
+fixes
+Symbols, starting greek
+Updatd; more symbols
+Adding uppercase, adjustments, etc.
+Updated compiled
+Updated metrics andn character sizes
+More adjustments: letter height, overshot, accents.
+Consistent sizing fixs, removing odd angles
+Making sizes more consistent.
+Updated charcter list
+Updated metrics, corrected accents and path directions.
+adjusted metrics, accents, path directions.
+Removed old italic
+Compiled fonts for next release
+Added ss04
+e.ss04 shows no color fix
+Removed color from main styleset, moved to styleset 3, corrected compound symbols with incorrect positions.
+Accents, updating refining symbols.
+More adjustments to kerning & positions. Alternate stylesets modified for better compatibility.
+New character sheet
+bold-italic, kerning, adjusting accents
+Adding Italic: readded composite glyphs, adding bold
+Adjusted metrics, more glyph fixes, improving compatibility between bold and regular.
+Added missing features.
+Updated PDF with current character set.
+finished moving colors to styleset, corrected metrics in regular and bold
+recomposing inconsistent glyphs, corrected path direction and made adjustments to any broken bold glyphs.
+Corrected the Lcaron.
+Spacing fixes, Removed extra large space, added a few missing characters. Moving colors to stylesets.
+Updated with the current state of the glyphs.
+Recompositing some glyphs for consistency. Spacing fixes. Moving colors to stylesets.
+Metric fixes, more progress on Bold, a dash of color
+Adding glyphs for BoldItalic
+Updated charcter list
+Updated metrics, corrected accents and path directions.
+adjusted metrics, accents, path directions.
+Removed old italic
+Compiled fonts for next release
+Added ss04
+e.ss04 shows no color fix
+Removed color from main styleset, moved to styleset 3, corrected compound symbols with incorrect positions.
+Accents, updating refining symbols.
+More adjustments to kerning & positions. Alternate stylesets modified for better compatibility.
+New character sheet
+bold-italic, kerning, adjusting accents
+Adding Italic: readded composite glyphs, adding bold
+Adjusted metrics, more glyph fixes, improving compatibility between bold and regular.
+Added missing features.
+Updated PDF with current character set.
+finished moving colors to styleset, corrected metrics in regular and bold
+recomposing inconsistent glyphs, corrected path direction and made adjustments to any broken bold glyphs.
+Corrected the Lcaron.
+Spacing fixes, Removed extra large space, added a few missing characters. Moving colors to stylesets.
+Updated with the current state of the glyphs.
+Recompositing some glyphs for consistency. Spacing fixes. Moving colors to stylesets.
+Metric fixes, more progress on Bold, a dash of color
+Adding glyphs for BoldItalic
+Adding
+Compiled update
+Updated pdf character sheet
+removed duplicate breve-cy
+Corrected greek accents
+Corrected accents, moved characters to components
+italic carons complete.
+Correcting acents & marks
+Working on Italic
+fixed some international symbols
+Adjusting symbols
+corrected accents, updated build & pdf
+compile of latest
+updated pdf for last commit
+Finished regular
+Large number of additions. o_O
+Central European, South Eastern European
+Cryllic, Western European, IPA complete
+And more characters
+more characters
+Including PDF with current character set
+fixes
+Symbols, starting greek
+Updatd; more symbols
+Adding uppercase, adjustments, etc.
+Updated charcter list
+Updated metrics, corrected accents and path directions.
+adjusted metrics, accents, path directions.
+Removed old italic
+Compiled fonts for next release
+Added ss04
+e.ss04 shows no color fix
+Removed color from main styleset, moved to styleset 3, corrected compound symbols with incorrect positions.
+Accents, updating refining symbols.
+More adjustments to kerning & positions. Alternate stylesets modified for better compatibility.
+New character sheet
+bold-italic, kerning, adjusting accents
+Adding Italic: readded composite glyphs, adding bold
+Adjusted metrics, more glyph fixes, improving compatibility between bold and regular.
+Added missing features.
+Updated PDF with current character set.
+finished moving colors to styleset, corrected metrics in regular and bold
+recomposing inconsistent glyphs, corrected path direction and made adjustments to any broken bold glyphs.
+Corrected the Lcaron.
+Spacing fixes, Removed extra large space, added a few missing characters. Moving colors to stylesets.
+Updated with the current state of the glyphs.
+Recompositing some glyphs for consistency. Spacing fixes. Moving colors to stylesets.
+Metric fixes, more progress on Bold, a dash of color
+Adding glyphs for BoldItalic
+Updated charcter list
+Updated metrics, corrected accents and path directions.
+adjusted metrics, accents, path directions.
+Removed old italic
+Compiled fonts for next release
+Added ss04
+e.ss04 shows no color fix
+Removed color from main styleset, moved to styleset 3, corrected compound symbols with incorrect positions.
+Accents, updating refining symbols.
+More adjustments to kerning & positions. Alternate stylesets modified for better compatibility.
+New character sheet
+bold-italic, kerning, adjusting accents
+Adding Italic: readded composite glyphs, adding bold
+Adjusted metrics, more glyph fixes, improving compatibility between bold and regular.
+Added missing features.
+Updated PDF with current character set.
+finished moving colors to styleset, corrected metrics in regular and bold
+recomposing inconsistent glyphs, corrected path direction and made adjustments to any broken bold glyphs.
+Corrected the Lcaron.
+Spacing fixes, Removed extra large space, added a few missing characters. Moving colors to stylesets.
+Updated with the current state of the glyphs.
+Recompositing some glyphs for consistency. Spacing fixes. Moving colors to stylesets.
+Metric fixes, more progress on Bold, a dash of color
+Adding glyphs for BoldItalic
+Adjusting dimensions, correcting oddly shaped characters
+Update opendyslexic-characters.pdf
+Updated compiled
+Updated metrics andn character sizes
+More adjustments: letter height, overshot, accents.
+Consistent sizing fixs, removing odd angles
+Making sizes more consistent.
+Updated charcter list
+Updated metrics, corrected accents and path directions.
+adjusted metrics, accents, path directions.
+Removed old italic
+Compiled fonts for next release
+Added ss04
+e.ss04 shows no color fix
+Removed color from main styleset, moved to styleset 3, corrected compound symbols with incorrect positions.
+Accents, updating refining symbols.
+More adjustments to kerning & positions. Alternate stylesets modified for better compatibility.
+New character sheet
+bold-italic, kerning, adjusting accents
+Adding Italic: readded composite glyphs, adding bold
+Adjusted metrics, more glyph fixes, improving compatibility between bold and regular.
+Added missing features.
+Updated PDF with current character set.
+finished moving colors to styleset, corrected metrics in regular and bold
+recomposing inconsistent glyphs, corrected path direction and made adjustments to any broken bold glyphs.
+Corrected the Lcaron.
+Spacing fixes, Removed extra large space, added a few missing characters. Moving colors to stylesets.
+Updated with the current state of the glyphs.
+Recompositing some glyphs for consistency. Spacing fixes. Moving colors to stylesets.
+Metric fixes, more progress on Bold, a dash of color
+Adding glyphs for BoldItalic
+Minor adjustments where letters were not positioned where they should be
+new build
+Adjusting dimensions, correcting oddly shaped characters
+Update opendyslexic-characters.pdf
+Updated compiled
+Updated metrics andn character sizes
+More adjustments: letter height, overshot, accents.
+Consistent sizing fixs, removing odd angles
+Making sizes more consistent.
+Updated charcter list
+Updated metrics, corrected accents and path directions.
+adjusted metrics, accents, path directions.
+Removed old italic
+Compiled fonts for next release
+Added ss04
+e.ss04 shows no color fix
+Removed color from main styleset, moved to styleset 3, corrected compound symbols with incorrect positions.
+Accents, updating refining symbols.
+More adjustments to kerning & positions. Alternate stylesets modified for better compatibility.
+New character sheet
+bold-italic, kerning, adjusting accents
+Adding Italic: readded composite glyphs, adding bold
+Adjusted metrics, more glyph fixes, improving compatibility between bold and regular.
+Added missing features.
+Updated PDF with current character set.
+finished moving colors to styleset, corrected metrics in regular and bold
+recomposing inconsistent glyphs, corrected path direction and made adjustments to any broken bold glyphs.
+Corrected the Lcaron.
+Spacing fixes, Removed extra large space, added a few missing characters. Moving colors to stylesets.
+Updated with the current state of the glyphs.
+Recompositing some glyphs for consistency. Spacing fixes. Moving colors to stylesets.
+Metric fixes, more progress on Bold, a dash of color
+Adding glyphs for BoldItalic
+All characters in a PDF
+Exporting current state.
+fixed bad character name. Updated meta,
+weight adjustments. moving color to other 3 styles.
+More information in the readme
+kerning adjustments
+glyph complete Italic, bold italic, regular, bold
+spacing, anchor and shape adjustments.
+refining positions & shapes. Correcting off-centered comp. caused by recentering.
+centered glyphs in italic. adjustments to anchors.
+Continuing work on Italic: glyph size, ancho positions
+Minor position changes
+normal italic size increase, accent adjustments
+compiled webfont of updated non-italics
+Update opendyslexic-characters.pdf
+Compiled Bold & regular
+letters larger, adjusted anchors, punctuation is larger/bolder for visibility.
+Increased metricxs; typeface too small next to lower case. Uppercase size increase by 13%, 9% Bold.
+Corrected sizes for ss04 numbers
+Fixed ss04 sizes & compat. Setup with components
+x swapped for y in ss04 corrected
+Minor adjustments where letters were not positioned where they should be
+new build
+Adjusting dimensions, correcting oddly shaped characters
+Update opendyslexic-characters.pdf
+Updated compiled
+Updated metrics andn character sizes
+More adjustments: letter height, overshot, accents.
+Consistent sizing fixs, removing odd angles
+Making sizes more consistent.
+Updated charcter list
+Updated metrics, corrected accents and path directions.
+adjusted metrics, accents, path directions.
+Removed old italic
+Compiled fonts for next release
+Added ss04
+e.ss04 shows no color fix
+Removed color from main styleset, moved to styleset 3, corrected compound symbols with incorrect positions.
+Accents, updating refining symbols.
+More adjustments to kerning & positions. Alternate stylesets modified for better compatibility.
+New character sheet
+bold-italic, kerning, adjusting accents
+Adding Italic: readded composite glyphs, adding bold
+Adjusted metrics, more glyph fixes, improving compatibility between bold and regular.
+Added missing features.
+Updated PDF with current character set.
+finished moving colors to styleset, corrected metrics in regular and bold
+recomposing inconsistent glyphs, corrected path direction and made adjustments to any broken bold glyphs.
+Corrected the Lcaron.
+Spacing fixes, Removed extra large space, added a few missing characters. Moving colors to stylesets.
+Updated with the current state of the glyphs.
+Recompositing some glyphs for consistency. Spacing fixes. Moving colors to stylesets.
+Metric fixes, more progress on Bold, a dash of color
+Adding glyphs for BoldItalic
+Update FONTLOG for rc2
+Added complied woff2,eot formats. Adjusted character spacing and kerning. Removed ss04.
+removed errant color layers in the non-color styleset.
+Compiled otf and webfont
+Current list of glyphs in OpenDyslexic
+Added missing glyphs fb03-6, adjusted more anchors, adjusted tracking & kerning
+Taller line height. Fixes for post-upgrade changes. Using anchors for more accents, & cleaned up some.
+upgraded app version, correcting anchors. Set leading.
+All characters in a PDF
+Exporting current state.
+fixed bad character name. Updated meta,
+weight adjustments. moving color to other 3 styles.
+More information in the readme
+kerning adjustments
+glyph complete Italic, bold italic, regular, bold
+spacing, anchor and shape adjustments.
+refining positions & shapes. Correcting off-centered comp. caused by recentering.
+centered glyphs in italic. adjustments to anchors.
+Continuing work on Italic: glyph size, ancho positions
+Minor position changes
+normal italic size increase, accent adjustments
+compiled webfont of updated non-italics
+Update opendyslexic-characters.pdf
+Compiled Bold & regular
+letters larger, adjusted anchors, punctuation is larger/bolder for visibility.
+Increased metricxs; typeface too small next to lower case. Uppercase size increase by 13%, 9% Bold.
+Corrected sizes for ss04 numbers
+Fixed ss04 sizes & compat. Setup with components
+x swapped for y in ss04 corrected
+Minor adjustments where letters were not positioned where they should be
+new build
+Adjusting dimensions, correcting oddly shaped characters
+Update opendyslexic-characters.pdf
+Updated compiled
+Updated metrics andn character sizes
+More adjustments: letter height, overshot, accents.
+Consistent sizing fixs, removing odd angles
+Making sizes more consistent.
+Updated charcter list
+Updated metrics, corrected accents and path directions.
+adjusted metrics, accents, path directions.
+Removed old italic
+Compiled fonts for next release
+Added ss04
+e.ss04 shows no color fix
+Removed color from main styleset, moved to styleset 3, corrected compound symbols with incorrect positions.
+Accents, updating refining symbols.
+More adjustments to kerning & positions. Alternate stylesets modified for better compatibility.
+New character sheet
+bold-italic, kerning, adjusting accents
+Adding Italic: readded composite glyphs, adding bold
+Adjusted metrics, more glyph fixes, improving compatibility between bold and regular.
+Added missing features.
+Updated PDF with current character set.
+finished moving colors to styleset, corrected metrics in regular and bold
+recomposing inconsistent glyphs, corrected path direction and made adjustments to any broken bold glyphs.
+Corrected the Lcaron.
+Spacing fixes, Removed extra large space, added a few missing characters. Moving colors to stylesets.
+Updated with the current state of the glyphs.
+Recompositing some glyphs for consistency. Spacing fixes. Moving colors to stylesets.
+Metric fixes, more progress on Bold, a dash of color
+Adding glyphs for BoldItalic

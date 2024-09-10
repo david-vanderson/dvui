@@ -106,6 +106,8 @@ pub const TTFBytes = struct {
     pub const HackBd = @embedFile("fonts/hack/Hack-Bold.ttf");
     pub const HackIt = @embedFile("fonts/hack/Hack-Italic.ttf");
     pub const HackBdIt = @embedFile("fonts/hack/Hack-BoldItalic.ttf");
+    pub const OpenDyslexic = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Regular.otf");
+    pub const OpenDyslexicIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Italic.otf");
 };
 
 pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap([]const u8) {
