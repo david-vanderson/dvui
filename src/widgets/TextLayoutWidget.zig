@@ -122,6 +122,15 @@ sel_move: union(enum) {
         count: i8 = 0,
         buf: [20]u8 = [1]u8{0} ** 20,
     },
+
+    // moving cursor up/down
+    // - this can be pipelined, so we might get more count on the same frame 2
+    // we are adjusting for the previous count
+    cursor_updown: struct {
+        count: i8 = 0, // positive is down (get this on frame 1, set pt once we see the cursor)
+        pt: ?Point = null, // get this on frame 2
+        select: bool = true, // false - move cursor, true - change selection
+    },
 } = .none,
 
 sel_start_r: Rect = .{},
@@ -132,9 +141,6 @@ sel_pts: [2]?Point = [2]?Point{ null, null },
 
 cursor_seen: bool = false,
 cursor_rect: ?Rect = null,
-cursor_updown: i8 = 0, // positive is down
-cursor_updown_select: bool = true,
-cursor_updown_pt: ?Point = null,
 scroll_to_cursor: bool = false,
 
 add_text_done: bool = false,
@@ -191,12 +197,12 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
         }
     }
 
-    if (dvui.dataGet(null, self.wd.id, "_cursor_updown_pt", Point)) |p| {
-        self.cursor_updown_pt = p;
-        dvui.dataRemove(null, self.wd.id, "_cursor_updown_pt");
-        if (dvui.dataGet(null, self.wd.id, "_cursor_updown_select", bool)) |cud| {
-            self.cursor_updown_select = cud;
-            dvui.dataRemove(null, self.wd.id, "_cursor_updown_select");
+    if (dvui.dataGet(null, self.wd.id, "_sel_move_cursor_updown_pt", Point)) |p| {
+        self.sel_move = .{ .cursor_updown = .{ .pt = p } };
+        dvui.dataRemove(null, self.wd.id, "_sel_move_cursor_updown_pt");
+        if (dvui.dataGet(null, self.wd.id, "_sel_move_cursor_updown_select", bool)) |cud| {
+            self.sel_move.cursor_updown.select = cud;
+            dvui.dataRemove(null, self.wd.id, "_sel_move_cursor_updown_select");
         }
     }
 
@@ -574,34 +580,19 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                 }
             },
             .char_left_right => {}, // done below cursor_seen
-        }
-
-        if (self.cursor_updown_pt) |p| {
-            const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
-            if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
-                // point is before this text
-                self.selection.moveCursor(self.bytes_seen, self.cursor_updown_select);
-                self.cursor_updown_pt = null;
-                self.scroll_to_cursor = true;
-            } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
-                // point is in this text
-                const how_far = p.x - rs.x;
-                var pt_end: usize = undefined;
-                _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
-                self.selection.moveCursor(self.bytes_seen + pt_end, self.cursor_updown_select);
-                self.cursor_updown_pt = null;
-                self.scroll_to_cursor = true;
-            } else {
-                if (newline and p.y < (rs.y + rs.h)) {
-                    // point is after this text on this same horizontal line
-                    self.selection.moveCursor(self.bytes_seen + end - 1, self.cursor_updown_select);
-                    self.cursor_updown_pt = null;
-                } else {
-                    // point is after this text, but we might not get anymore
-                    self.selection.moveCursor(self.bytes_seen + end, self.cursor_updown_select);
+            .cursor_updown => |*cud| {
+                // note: we do more of this when setting cursor_seen
+                if (cud.pt) |p| {
+                    if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |byte| {
+                        self.selection.moveCursor(byte, cud.select);
+                        cud.pt = null;
+                        self.scroll_to_cursor = true;
+                    } else {
+                        // haven't found it yet, keep cursor at end to not trigger cursor_seen
+                        self.selection.moveCursor(self.bytes_seen + end, cud.select);
+                    }
                 }
-                self.scroll_to_cursor = true;
-            }
+            },
         }
 
         if (self.sel_pts[0] != null or self.sel_pts[1] != null) {
@@ -665,23 +656,33 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             const size = try options.fontGet().textSize(txt[0 .. self.selection.cursor - self.bytes_seen]);
             const cr = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
 
-            if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-                const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
-                const updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
-                self.cursor_updown = 0;
+            switch (self.sel_move) {
+                .none => {},
+                .mouse => {},
+                .word_pt => {},
+                .char_left_right => {},
+                .cursor_updown => |*cud| {
+                    if (cud.count != 0) {
+                        // If we had cursor_updown.pt from last frame, we don't get
+                        // cursor_seen until we've moved the cursor to that point
+                        const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(cud.count)) * try options.fontGet().lineHeight() });
+                        const updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
+                        cud.count = 0;
 
-                // forward the pixel position we want the cursor to be in to
-                // the next frame
-                dvui.dataSet(null, self.wd.id, "_cursor_updown_pt", updown_pt);
-                dvui.dataSet(null, self.wd.id, "_cursor_updown_select", self.cursor_updown_select);
+                        // forward the pixel position we want the cursor to be in to
+                        // the next frame
+                        dvui.dataSet(null, self.wd.id, "_sel_move_cursor_updown_pt", updown_pt);
+                        dvui.dataSet(null, self.wd.id, "_sel_move_cursor_updown_select", cud.select);
 
-                // might have already passed, so need to go again next frame
-                dvui.refresh(null, @src(), self.wd.id);
+                        // might have already passed, so need to go again next frame
+                        dvui.refresh(null, @src(), self.wd.id);
 
-                var scrollto = Event{ .evt = .{ .scroll_to = .{
-                    .screen_rect = self.screenRectScale(cr_new).r,
-                } } };
-                self.processEvent(&scrollto, true);
+                        var scrollto = Event{ .evt = .{ .scroll_to = .{
+                            .screen_rect = self.screenRectScale(cr_new).r,
+                        } } };
+                        self.processEvent(&scrollto, true);
+                    }
+                },
             }
 
             if (self.scroll_to_cursor) {
@@ -696,6 +697,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             }
         }
 
+        // handle selection movement possibly after cursor_seen
         switch (self.sel_move) {
             .none => {},
             .mouse => {},
@@ -785,6 +787,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                     dvui.refresh(null, @src(), self.wd.id);
                 }
             },
+            .cursor_updown => {},
         }
 
         const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });
@@ -965,6 +968,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
                 dvui.refresh(null, @src(), self.wd.id);
             }
         },
+        .cursor_updown => {}, // done below when cursor_seen
     }
 
     if (self.sel_start_r_new) |start_r| {
@@ -1003,23 +1007,33 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
         const options = self.wd.options.override(opts);
         const cr = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
 
-        if (self.cursor_updown != 0 and self.cursor_updown_pt == null) {
-            const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(self.cursor_updown)) * try options.fontGet().lineHeight() });
-            const updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
-            self.cursor_updown = 0;
+        switch (self.sel_move) {
+            .none => {},
+            .mouse => {},
+            .word_pt => {},
+            .char_left_right => {},
+            .cursor_updown => |*cud| {
+                if (cud.count != 0) {
+                    // If we had cursor_updown.pt from last frame, we don't get
+                    // cursor_seen until we've moved the cursor to that point
+                    const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(cud.count)) * try options.fontGet().lineHeight() });
+                    const updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
+                    cud.count = 0;
 
-            // forward the pixel position we want the cursor to be in to
-            // the next frame
-            dvui.dataSet(null, self.wd.id, "_cursor_updown_pt", updown_pt);
-            dvui.dataSet(null, self.wd.id, "_cursor_updown_select", self.cursor_updown_select);
+                    // forward the pixel position we want the cursor to be in to
+                    // the next frame
+                    dvui.dataSet(null, self.wd.id, "_sel_move_cursor_updown_pt", updown_pt);
+                    dvui.dataSet(null, self.wd.id, "_sel_move_cursor_updown_select", cud.select);
 
-            // might have already passed, so need to go again next frame
-            dvui.refresh(null, @src(), self.wd.id);
+                    // might have already passed, so need to go again next frame
+                    dvui.refresh(null, @src(), self.wd.id);
 
-            var scrollto = Event{ .evt = .{ .scroll_to = .{
-                .screen_rect = self.screenRectScale(cr_new).r,
-            } } };
-            self.processEvent(&scrollto, true);
+                    var scrollto = Event{ .evt = .{ .scroll_to = .{
+                        .screen_rect = self.screenRectScale(cr_new).r,
+                    } } };
+                    self.processEvent(&scrollto, true);
+                }
+            },
         }
 
         if (self.scroll_to_cursor) {
@@ -1258,29 +1272,24 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
         }
     } else if (e.evt == .key and (e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.mod.shift()) {
         switch (e.evt.key.code) {
-            .left => {
+            .left, .right => |code| {
                 e.handled = true;
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .char_left_right = .{} };
                 }
                 if (self.sel_move == .char_left_right) {
-                    self.sel_move.char_left_right.count -= 1;
-                }
-                self.scroll_to_cursor = true;
-            },
-            .right => {
-                e.handled = true;
-                if (self.sel_move == .none) {
-                    self.sel_move = .{ .char_left_right = .{} };
-                }
-                if (self.sel_move == .char_left_right) {
-                    self.sel_move.char_left_right.count += 1;
+                    self.sel_move.char_left_right.count += if (code == .right) 1 else -1;
                 }
                 self.scroll_to_cursor = true;
             },
             .up, .down => |code| {
                 e.handled = true;
-                self.cursor_updown += if (code == .down) 1 else -1;
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .cursor_updown = .{} };
+                }
+                if (self.sel_move == .cursor_updown) {
+                    self.sel_move.cursor_updown.count += if (code == .down) 1 else -1;
+                }
             },
             else => {},
         }
