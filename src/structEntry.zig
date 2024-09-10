@@ -85,8 +85,8 @@ fn intToNormalizedPercent(input_int: anytype, min: @TypeOf(input_int), max: @Typ
 
 pub fn FloatFieldOptions(comptime T: type) type {
     return struct {
-        min: ?T = null,
-        max: ?T = null,
+        min: ?T = null, // you could also use floatMin/floatMax here, but that
+        max: ?T = null, // would cause issues rendering min and max numbers
         dvui_opts: dvui.Options = .{},
         disabled: bool = false,
         label_override: ?[]const u8 = null,
