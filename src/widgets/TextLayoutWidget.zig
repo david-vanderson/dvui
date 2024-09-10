@@ -125,7 +125,8 @@ sel_move: union(enum) {
     // moving left/right by characters
     char_left_right: struct {
         count: i8 = 0,
-        buf: [20]u8 = [1]u8{0} ** 20,
+        select: bool = true, // false - move cursor, true - change selection
+        buf: [20]u8 = [1]u8{0} ** 20, // only used when count < 0
     },
 
     // moving cursor up/down
@@ -140,11 +141,12 @@ sel_move: union(enum) {
     // moving left/right by words (only support moving a single word right now)
     word_left_right: struct {
         count: i8 = 0,
+        select: bool = true, // false - move cursor, true - change selection
         scratch_kind: enum {
             blank,
             word,
         } = .blank,
-        // indexes of the last starts of words (only used when count < 0
+        // indexes of the last starts of words (only used when count < 0)
         word_start_idx: [5]usize = .{ 0, 0, 0, 0, 0 },
     },
 } = .none,
@@ -609,7 +611,35 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                     }
                 }
             },
-            .word_left_right => {}, // done below cursor_seen
+            .word_left_right => |*wlr| {
+                // note: more below cursor_seen
+                while (wlr.count > 0 and (self.cursor_seen or self.selection.cursor < (self.bytes_seen + end))) {
+                    switch (wlr.scratch_kind) {
+                        .blank => {
+                            // skipping over blanks
+                            if (std.mem.indexOfNonePos(u8, text_line, self.selection.cursor -| self.bytes_seen, " \n")) |non_blank| {
+                                self.selection.moveCursor(self.bytes_seen + non_blank, wlr.select);
+                                wlr.scratch_kind = .word; // now want to skip over word chars
+                            } else {
+                                // rest was blank
+                                self.selection.moveCursor(self.bytes_seen + end, wlr.select);
+                            }
+                        },
+                        .word => {
+                            // skipping over word chars
+                            if (std.mem.indexOfAnyPos(u8, text_line, self.selection.cursor -| self.bytes_seen, " \n")) |blank| {
+                                self.selection.moveCursor(self.bytes_seen + blank, wlr.select);
+                                // done with this one
+                                wlr.scratch_kind = .blank; // now want to skip over blanks
+                                wlr.count -= 1;
+                            } else {
+                                // rest was word
+                                self.selection.moveCursor(self.bytes_seen + end, wlr.select);
+                            }
+                        },
+                    }
+                }
+            },
         }
 
         if (self.sel_pts[0] != null or self.sel_pts[1] != null) {
@@ -678,11 +708,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                 .mouse => {},
                 .expand_pt => {},
                 .char_left_right => {},
-                .word_left_right => |*wlr| {
-                    if (wlr.count > 0) {
-                        wlr.scratch_kind = .blank; // start by skipping over any blanks to our right
-                    }
-                },
+                .word_left_right => {},
                 .cursor_updown => |*cud| {
                     if (cud.count != 0) {
                         // If we had cursor_updown.pt from last frame, we don't get
@@ -784,7 +810,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                                 cur -|= 1;
                             }
 
-                            self.selection.moveCursor(cur, true);
+                            self.selection.moveCursor(cur, clr.select);
                             clr.count += 1;
                         }
 
@@ -800,7 +826,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                     // move cursor one utf8 char right
                     cur += std.unicode.utf8ByteSequenceLength(txt[cur - self.bytes_seen]) catch 1;
 
-                    self.selection.moveCursor(cur, true);
+                    self.selection.moveCursor(cur, clr.select);
                     clr.count -= 1;
 
                     dvui.refresh(null, @src(), self.wd.id);
@@ -872,36 +898,9 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
 
                     if (self.cursor_seen) {
                         const idx2 = @min(-wlr.count - 1, wlr.word_start_idx.len - 1);
-                        self.selection.moveCursor(wlr.word_start_idx[@intCast(idx2)], true);
+                        self.selection.moveCursor(wlr.word_start_idx[@intCast(idx2)], wlr.select);
                         wlr.count = 0;
                         dvui.refresh(null, @src(), self.wd.id);
-                    }
-                }
-
-                while (self.cursor_seen and wlr.count > 0 and self.selection.cursor < (self.bytes_seen + end)) {
-                    switch (wlr.scratch_kind) {
-                        .blank => {
-                            // skipping over blanks
-                            if (std.mem.indexOfNonePos(u8, text_line, self.selection.cursor -| self.bytes_seen, " \n")) |non_blank| {
-                                self.selection.moveCursor(self.bytes_seen + non_blank, true);
-                                wlr.scratch_kind = .word; // now want to skip over word chars
-                            } else {
-                                // rest was blank
-                                self.selection.moveCursor(self.bytes_seen + end, true);
-                            }
-                        },
-                        .word => {
-                            // skipping over word chars
-                            if (std.mem.indexOfAnyPos(u8, text_line, self.selection.cursor -| self.bytes_seen, " \n")) |blank| {
-                                self.selection.moveCursor(self.bytes_seen + blank, true);
-                                // done with this one
-                                wlr.scratch_kind = .blank; // now want to skip over blanks
-                                wlr.count -= 1;
-                            } else {
-                                // rest was word
-                                self.selection.moveCursor(self.bytes_seen + end, true);
-                            }
-                        },
                     }
                 }
             },
@@ -1078,7 +1077,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
                         cur -|= 1;
                     }
 
-                    self.selection.moveCursor(cur, true);
+                    self.selection.moveCursor(cur, clr.select);
                     clr.count += 1;
                 }
 
@@ -1089,7 +1088,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
         .word_left_right => |*wlr| {
             if (wlr.count < 0) {
                 const idx2 = @min(-wlr.count - 1, wlr.word_start_idx.len - 1);
-                self.selection.moveCursor(wlr.word_start_idx[@intCast(idx2)], true);
+                self.selection.moveCursor(wlr.word_start_idx[@intCast(idx2)], wlr.select);
                 wlr.count = 0;
                 dvui.refresh(null, @src(), self.wd.id);
             }
