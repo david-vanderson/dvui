@@ -18,6 +18,7 @@ pub fn IntFieldOptions(comptime T: type) type {
         max: T = std.math.maxInt(T),
         dvui_opts: dvui.Options = .{},
         disabled: bool = false,
+        label_override: ?[]const u8 = null,
     };
 }
 
@@ -33,7 +34,7 @@ fn intFieldWidget(
             var box = try dvui.box(@src(), .horizontal, .{});
             defer box.deinit();
 
-            try dvui.label(@src(), "{s}", .{name}, .{});
+            try dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
             const maybe_num = try dvui.textEntryNumber(@src(), T, .{
                 .min = opt.min,
                 .max = opt.max,
@@ -88,6 +89,7 @@ pub fn FloatFieldOptions(comptime T: type) type {
         max: ?T = null,
         dvui_opts: dvui.Options = .{},
         disabled: bool = false,
+        label_override: ?[]const u8 = null,
     };
 }
 
@@ -101,7 +103,7 @@ pub fn floatFieldWidget(
 
     var box = try dvui.box(@src(), .horizontal, .{});
     defer box.deinit();
-    try dvui.label(@src(), "{s}", .{name}, .{});
+    try dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
 
     const maybe_num = try dvui.textEntryNumber(@src(), T, .{ .min = opt.min, .max = opt.max }, opt.dvui_opts);
     if (maybe_num == .Valid) {
@@ -114,6 +116,7 @@ pub const EnumFieldOptions = struct {
     widget_type: enum { radio, dropdown } = .dropdown,
     dvui_opts: dvui.Options = .{},
     disabled: bool = false,
+    label_override: ?[]const u8 = null,
 };
 
 fn enumFieldWidget(
@@ -127,7 +130,7 @@ fn enumFieldWidget(
     var box = try dvui.box(@src(), .horizontal, .{});
     defer box.deinit();
 
-    try dvui.label(@src(), "{s}", .{name}, .{});
+    try dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
     switch (opt.widget_type) {
         .dropdown => {
             const entries = std.meta.fieldNames(T);
@@ -154,6 +157,7 @@ pub const BoolFieldOptions = struct {
     widget_type: enum { checkbox, dropdown, toggle } = .toggle,
     dvui_opts: dvui.Options = .{},
     disabled: bool = false,
+    label_override: ?[]const u8 = null,
 };
 
 fn boolFieldWidget(
@@ -168,13 +172,13 @@ fn boolFieldWidget(
     //TODO implement dvui_opts for other types
     switch (opt.widget_type) {
         .checkbox => {
-            try dvui.label(@src(), "{s}", .{name}, .{});
+            try dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
             _ = try dvui.checkbox(@src(), result, "", opt.dvui_opts);
         },
         .dropdown => {
             const entries = .{ "false", "true" };
             var choice: usize = if (result.* == false) 0 else 1;
-            try dvui.labelNoFmt(@src(), name, .{});
+            try dvui.labelNoFmt(@src(), opt.label_override orelse name, .{});
             _ = try dvui.dropdown(@src(), &entries, &choice, .{});
             result.* = if (choice == 0) false else true;
         },
@@ -200,22 +204,23 @@ pub const TextFieldOptions = struct {
     max_len: u16 = 64,
     dvui_opts: dvui.Options = .{},
     disabled: bool = false,
+    label_override: ?[]const u8 = null,
 };
 
 fn textFieldWidget(
     comptime name: []const u8,
     result: *[]const u8,
-    text_opt: TextFieldOptions,
+    opt: TextFieldOptions,
     comptime alloc: bool,
 ) !void {
-    if (text_opt.disabled) return;
+    if (opt.disabled) return;
 
     //TODO respect alloc setting
     _ = alloc; // autofix
     var box = try dvui.box(@src(), .horizontal, .{});
     defer box.deinit();
 
-    try dvui.label(@src(), "{s}", .{name}, .{});
+    try dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
     const buffer = dvui.dataGetSliceDefault(
         dvui.currentWindow(),
         box.widget().data().id,
@@ -224,7 +229,7 @@ fn textFieldWidget(
         result.*,
     );
 
-    const text_box = try dvui.textEntry(@src(), .{ .text = buffer }, text_opt.dvui_opts);
+    const text_box = try dvui.textEntry(@src(), .{ .text = buffer }, opt.dvui_opts);
     defer text_box.deinit();
 
     result.* = text_box.getText();
@@ -243,6 +248,7 @@ pub fn UnionFieldOptions(comptime T: type) type {
     return struct {
         fields: NamespaceFieldOptions(T) = .{},
         disabled: bool = false,
+        label_override: ?[]const u8 = null,
     };
 }
 
@@ -264,8 +270,9 @@ pub fn unionFieldWidget(
     {
         var hbox = try dvui.box(@src(), .vertical, .{});
         defer hbox.deinit();
-        if (name.len != 0) {
-            try dvui.label(@src(), "{s}", .{name}, .{
+        const label = opt.label_override orelse name;
+        if (label.len != 0) {
+            try dvui.label(@src(), "{s}", .{label}, .{
                 .border = border,
                 .background = true,
             });
@@ -310,6 +317,7 @@ pub fn OptionalFieldOptions(comptime T: type) type {
     return struct {
         child: FieldOptions(@typeInfo(T).Optional.child) = .{},
         disabled: bool = false,
+        label_override: ?[]const u8 = null,
     };
 }
 
@@ -330,7 +338,7 @@ pub fn optionalFieldWidget(
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
-        try dvui.label(@src(), "{s}?", .{name}, .{});
+        try dvui.label(@src(), "{s}?", .{opt.label_override orelse name}, .{});
         _ = try dvui.checkbox(@src(), checkbox_state, null, .{});
     }
 
@@ -438,14 +446,15 @@ pub fn sliceFieldWidget(
     @compileError("TODO");
 }
 
+//==========Struct Field Widget and Options
 pub fn StructFieldOptions(comptime T: type) type {
     return struct {
         fields: NamespaceFieldOptions(T) = .{},
         disabled: bool = false,
+        label_override: ?[]const u8 = null,
     };
 }
 
-//==========Struct Field Widget and Options
 fn structFieldWidget(
     comptime name: []const u8,
     comptime T: type,
