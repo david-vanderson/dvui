@@ -235,6 +235,8 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                         self.sel_pts[0] = self.wd.contentRectScale().pointFromScreen(corner);
                         self.sel_pts[1] = self.sel_end_r.topLeft().plus(.{ .y = self.sel_end_r.h / 2 });
 
+                        self.sel_pts[0].?.y = @min(self.sel_pts[0].?.y, self.sel_pts[1].?.y);
+
                         var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
                             .mouse_pt = e.evt.mouse.p,
                             .screen_rect = self.wd.rectScale().r,
@@ -299,10 +301,10 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                         dvui.captureMouse(null);
                     } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
                         const corner = me.p.plus(offset);
+                        self.sel_pts[0] = self.sel_start_r.topLeft().plus(.{ .y = self.sel_start_r.h / 2 });
                         self.sel_pts[1] = self.wd.contentRectScale().pointFromScreen(corner);
-                        if (self.sel_pts[0] == null) {
-                            self.sel_pts[0] = self.sel_start_r.topLeft().plus(.{ .y = self.sel_start_r.h / 2 });
-                        }
+
+                        self.sel_pts[1].?.y = @max(self.sel_pts[0].?.y, self.sel_pts[1].?.y);
 
                         var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
                             .mouse_pt = e.evt.mouse.p,
@@ -1144,6 +1146,9 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     if (self.te_focus_on_touchdown) {
                         self.touch_editing = !self.touch_editing;
                         self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                        if (self.touch_editing) {
+                            self.sel_word = .precursor; // select the word we touched
+                        }
                     } else {
                         if (self.touch_edit_just_focused) {
                             self.touch_editing = true;
@@ -1154,6 +1159,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                             // position the cursor.
                             self.te_first = false;
                             self.sel_mouse_down_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                            self.sel_word = .precursor; // select the word we touched
                         }
                     }
                     dvui.refresh(null, @src(), self.wd.id);

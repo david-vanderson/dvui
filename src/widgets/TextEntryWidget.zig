@@ -24,8 +24,30 @@ pub var defaults: Options = .{
     // min_size_content is calculated in init()
 };
 
+const realloc_bin_size = 100;
+
 pub const InitOptions = struct {
-    text: []u8,
+    pub const TextOption = union(enum) {
+        /// Use this slice of bytes, cannot add more.
+        buffer: []u8,
+
+        /// Use and grow with realloc and shrink with resize as needed.
+        buffer_dynamic: struct {
+            backing: *[]u8,
+            allocator: std.mem.Allocator,
+            limit: usize = 10_000,
+        },
+
+        /// Use internal buffer up to limit.
+        /// - use getText() to get contents.
+        internal: struct {
+            limit: usize = 10_000,
+        },
+    };
+
+    /// If null, same as .internal = .{}
+    text: ?TextOption = null,
+
     break_lines: bool = false,
     scroll_vertical: ?bool = null, // default is value of multiline
     scroll_vertical_bar: ?ScrollInfo.ScrollBarMode = null, // default .auto
@@ -46,12 +68,15 @@ textClip: Rect = undefined,
 padding: Rect = undefined,
 
 init_opts: InitOptions = undefined,
+text_opt: InitOptions.TextOption = undefined,
+text: []u8 = undefined,
 len: usize = undefined,
 scroll_to_cursor: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextEntryWidget {
     var self = TextEntryWidget{};
     self.init_opts = init_opts;
+    self.text_opt = init_opts.text orelse .{ .internal = .{} };
 
     const msize = opts.fontGet().textSize("M") catch unreachable;
     var options = defaults.override(.{ .min_size_content = .{ .w = msize.w * 14, .h = msize.h } }).override(opts);
@@ -66,8 +91,14 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 
     self.wd = WidgetData.init(src, .{}, options);
 
-    self.len = std.mem.indexOfScalar(u8, self.init_opts.text, 0) orelse self.init_opts.text.len;
-    self.len = dvui.findUtf8Start(self.init_opts.text[0..self.len], self.len);
+    switch (self.text_opt) {
+        .buffer => |b| self.text = b,
+        .buffer_dynamic => |b| self.text = b.backing.*,
+        .internal => self.text = dvui.dataGetSliceDefault(null, self.wd.id, "_buffer", []u8, &.{}),
+    }
+
+    self.len = std.mem.indexOfScalar(u8, self.text, 0) orelse self.text.len;
+    self.len = dvui.findUtf8Start(self.text[0..self.len], self.len);
     return self;
 }
 
@@ -134,9 +165,9 @@ pub fn install(self: *TextEntryWidget) !void {
     // changed, we need to update the selection to be valid before we
     // process any events
     var sel = self.textLayout.selection;
-    sel.start = dvui.findUtf8Start(self.init_opts.text[0..self.len], sel.start);
-    sel.cursor = dvui.findUtf8Start(self.init_opts.text[0..self.len], sel.cursor);
-    sel.end = dvui.findUtf8Start(self.init_opts.text[0..self.len], sel.end);
+    sel.start = dvui.findUtf8Start(self.text[0..self.len], sel.start);
+    sel.cursor = dvui.findUtf8Start(self.text[0..self.len], sel.cursor);
+    sel.end = dvui.findUtf8Start(self.text[0..self.len], sel.end);
 
     // textLayout clips to its content, but we need to get events out to our border
     dvui.clipSet(borderClip);
@@ -178,7 +209,7 @@ pub fn draw(self: *TextEntryWidget) !void {
         var sstart: ?usize = null;
         var scursor: ?usize = null;
         var send: ?usize = null;
-        var utf8it = (try std.unicode.Utf8View.init(self.init_opts.text[0..self.len])).iterator();
+        var utf8it = (try std.unicode.Utf8View.init(self.text[0..self.len])).iterator();
         while (utf8it.nextCodepoint()) |codepoint| {
             if (sstart == null and sel.start == bytes) sstart = count * pc.len;
             if (scursor == null and sel.cursor == bytes) scursor = count * pc.len;
@@ -201,7 +232,7 @@ pub fn draw(self: *TextEntryWidget) !void {
         }
         try self.textLayout.addText(password_str, self.wd.options.strip());
     } else {
-        try self.textLayout.addText(self.init_opts.text[0..self.len], self.wd.options.strip());
+        try self.textLayout.addText(self.text[0..self.len], self.wd.options.strip());
     }
 
     try self.textLayout.addTextDone(self.wd.options.strip());
@@ -214,7 +245,7 @@ pub fn draw(self: *TextEntryWidget) !void {
         var sstart: ?usize = null;
         var scursor: ?usize = null;
         var send: ?usize = null;
-        var utf8it = (try std.unicode.Utf8View.init(self.init_opts.text[0..self.len])).iterator();
+        var utf8it = (try std.unicode.Utf8View.init(self.text[0..self.len])).iterator();
         while (utf8it.nextCodepoint()) |codepoint| {
             if (sstart == null and sel.start == count * pc.len) sstart = bytes;
             if (scursor == null and sel.cursor == count * pc.len) scursor = bytes;
@@ -291,13 +322,43 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
     var sel = self.textLayout.selectionGet(self.len);
     if (!sel.empty()) {
         // delete selection
-        std.mem.copyForwards(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+        std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
         self.len -= (sel.end - sel.start);
         sel.end = sel.start;
         sel.cursor = sel.start;
     }
 
-    var new_len = @min(new.len, self.init_opts.text.len - self.len);
+    const space_left = self.text.len - self.len;
+    if (space_left < new.len) {
+        var new_size = realloc_bin_size * (@divTrunc(self.len + new.len, realloc_bin_size) + 1);
+        switch (self.text_opt) {
+            .buffer => {},
+            .buffer_dynamic => |b| {
+                new_size = @min(new_size, b.limit);
+                b.backing.* = b.allocator.realloc(self.text, new_size) catch blk: {
+                    dvui.log.debug("{x} TextEntryWidget.textTyped failed to realloc backing\n", .{self.wd.id});
+                    break :blk b.backing.*;
+                };
+                self.text = b.backing.*;
+            },
+            .internal => |i| {
+                new_size = @min(new_size, i.limit);
+                var oom = false;
+                const copy = dvui.currentWindow().arena.dupe(u8, self.text) catch blk: {
+                    oom = true;
+                    dvui.log.debug("{x} TextEntryWidget.textTyped failed to dupe internal buffer for grow\n", .{self.wd.id});
+                    break :blk &.{};
+                };
+                if (!oom) {
+                    dvui.dataRemove(null, self.wd.id, "_buffer");
+                    dvui.dataSetSliceCopies(null, self.wd.id, "_buffer", &[_]u8{0}, new_size);
+                    self.text = dvui.dataGetSlice(null, self.wd.id, "_buffer", []u8).?;
+                    @memcpy(self.text[0..copy.len], copy);
+                }
+            },
+        }
+    }
+    var new_len = @min(new.len, self.text.len - self.len);
 
     // find start of last utf8 char
     var last: usize = new_len -| 1;
@@ -314,18 +375,18 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
     }
 
     // make room if we can
-    if (sel.cursor + new_len < self.init_opts.text.len) {
-        std.mem.copyBackwards(u8, self.init_opts.text[sel.cursor + new_len ..], self.init_opts.text[sel.cursor..self.len]);
+    if (sel.cursor + new_len < self.text.len) {
+        std.mem.copyBackwards(u8, self.text[sel.cursor + new_len ..], self.text[sel.cursor..self.len]);
     }
 
     // update our len and maintain 0 termination if possible
     self.len += new_len;
-    if (self.len < self.init_opts.text.len) {
-        self.init_opts.text[self.len] = 0;
+    if (self.len < self.text.len) {
+        self.text[self.len] = 0;
     }
 
     // insert
-    std.mem.copyForwards(u8, self.init_opts.text[sel.cursor..], new[0..new_len]);
+    std.mem.copyForwards(u8, self.text[sel.cursor..], new[0..new_len]);
     sel.cursor += new_len;
     sel.end = sel.cursor;
     sel.start = sel.cursor;
@@ -345,7 +406,7 @@ pub fn filterIn(self: *TextEntryWidget, filter_chars: []const u8) void {
     var j: usize = 0;
     const n = self.len;
     while (i < n) {
-        if (std.mem.indexOfScalar(u8, filter_chars, self.init_opts.text[i]) == null) {
+        if (std.mem.indexOfScalar(u8, filter_chars, self.text[i]) == null) {
             self.len -= 1;
             var sel = self.textLayout.selection;
             if (sel.start > i) sel.start -= 1;
@@ -354,14 +415,14 @@ pub fn filterIn(self: *TextEntryWidget, filter_chars: []const u8) void {
 
             i += 1;
         } else {
-            self.init_opts.text[j] = self.init_opts.text[i];
+            self.text[j] = self.text[i];
             i += 1;
             j += 1;
         }
     }
 
-    if (j < self.init_opts.text.len)
-        self.init_opts.text[j] = 0;
+    if (j < self.text.len)
+        self.text[j] = 0;
 }
 
 /// Remove all instances of the string needle.
@@ -375,7 +436,7 @@ pub fn filterOut(self: *TextEntryWidget, needle: []const u8) void {
     var j: usize = 0;
     const n = self.len;
     while (i < n) {
-        if (std.mem.startsWith(u8, self.init_opts.text[i..], needle)) {
+        if (std.mem.startsWith(u8, self.text[i..], needle)) {
             self.len -= needle.len;
             var sel = self.textLayout.selection;
             if (sel.start > i) sel.start -= needle.len;
@@ -384,14 +445,14 @@ pub fn filterOut(self: *TextEntryWidget, needle: []const u8) void {
 
             i += needle.len;
         } else {
-            self.init_opts.text[j] = self.init_opts.text[i];
+            self.text[j] = self.text[i];
             i += 1;
             j += 1;
         }
     }
 
-    if (j < self.init_opts.text.len)
-        self.init_opts.text[j] = 0;
+    if (j < self.text.len)
+        self.text[j] = 0;
 }
 
 pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
@@ -404,9 +465,9 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                         var sel = self.textLayout.selectionGet(self.len);
                         if (!sel.empty()) {
                             // just delete selection
-                            std.mem.copyForwards(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+                            std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
                             self.len -= (sel.end - sel.start);
-                            self.init_opts.text[self.len] = 0;
+                            self.text[self.len] = 0;
                             sel.end = sel.start;
                             sel.cursor = sel.start;
                             self.scroll_to_cursor = true;
@@ -418,10 +479,10 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             // the string backwards. The first byte of a utf8 char
                             // does not have the pattern 10xxxxxx.
                             var i: usize = 1;
-                            while (self.init_opts.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
-                            std.mem.copyForwards(u8, self.init_opts.text[sel.cursor - i ..], self.init_opts.text[sel.cursor..self.len]);
+                            while (self.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
+                            std.mem.copyForwards(u8, self.text[sel.cursor - i ..], self.text[sel.cursor..self.len]);
                             self.len -= i;
-                            self.init_opts.text[self.len] = 0;
+                            self.text[self.len] = 0;
                             sel.cursor -= i;
                             sel.start = sel.cursor;
                             sel.end = sel.cursor;
@@ -435,9 +496,9 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                         var sel = self.textLayout.selectionGet(self.len);
                         if (!sel.empty()) {
                             // just delete selection
-                            std.mem.copyForwards(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+                            std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
                             self.len -= (sel.end - sel.start);
-                            self.init_opts.text[self.len] = 0;
+                            self.text[self.len] = 0;
                             sel.end = sel.start;
                             sel.cursor = sel.start;
                             self.scroll_to_cursor = true;
@@ -445,10 +506,10 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             // delete the character just after the cursor
                             //
                             // A utf8 char might consist of more than one byte.
-                            const i = std.unicode.utf8ByteSequenceLength(self.init_opts.text[sel.cursor]) catch 1;
-                            std.mem.copyForwards(u8, self.init_opts.text[sel.cursor..], self.init_opts.text[sel.cursor + i .. self.len]);
+                            const i = std.unicode.utf8ByteSequenceLength(self.text[sel.cursor]) catch 1;
+                            std.mem.copyForwards(u8, self.text[sel.cursor..], self.text[sel.cursor + i .. self.len]);
                             self.len -= i;
-                            self.init_opts.text[self.len] = 0;
+                            self.text[self.len] = 0;
                         }
                     }
                 },
@@ -490,14 +551,14 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                                 // ... otherwise, "jump over" the utf8 char to the
                                 // left of the cursor.
                                 var i: usize = 1;
-                                while (sel.cursor -| i > 0 and self.init_opts.text[sel.cursor -| i] & 0xc0 == 0x80) : (i += 1) {}
+                                while (sel.cursor -| i > 0 and self.text[sel.cursor -| i] & 0xc0 == 0x80) : (i += 1) {}
                                 sel.cursor -|= i;
                             }
                         } else {
                             if (sel.cursor < self.len) {
                                 // Get the number of bytes of the current code point and
                                 // "jump" to the next code point to the right of the cursor.
-                                sel.cursor += std.unicode.utf8ByteSequenceLength(self.init_opts.text[sel.cursor]) catch 1;
+                                sel.cursor += std.unicode.utf8ByteSequenceLength(self.text[sel.cursor]) catch 1;
                                 sel.cursor = @min(sel.cursor, self.len);
                             }
                         }
@@ -579,14 +640,14 @@ pub fn cut(self: *TextEntryWidget) void {
     var sel = self.textLayout.selectionGet(self.len);
     if (!sel.empty()) {
         // copy selection to clipboard
-        dvui.clipboardTextSet(self.init_opts.text[sel.start..sel.end]) catch |err| {
+        dvui.clipboardTextSet(self.text[sel.start..sel.end]) catch |err| {
             dvui.log.err("clipboardTextSet error {!}\n", .{err});
         };
 
         // delete selection
-        std.mem.copyForwards(u8, self.init_opts.text[sel.start..], self.init_opts.text[sel.end..self.len]);
+        std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
         self.len -= (sel.end - sel.start);
-        self.init_opts.text[self.len] = 0;
+        self.text[self.len] = 0;
         sel.end = sel.start;
         sel.cursor = sel.start;
         self.scroll_to_cursor = true;
@@ -594,10 +655,40 @@ pub fn cut(self: *TextEntryWidget) void {
 }
 
 pub fn getText(self: *const TextEntryWidget) []u8 {
-    return std.mem.sliceTo(self.init_opts.text, 0);
+    return self.text[0..self.len];
 }
 
 pub fn deinit(self: *TextEntryWidget) void {
+    if (self.len == 0 or self.len + realloc_bin_size + @divTrunc(realloc_bin_size, 2) <= self.text.len) {
+        // we want to shrink the allocation
+        const new_len = if (self.len == 0) 0 else realloc_bin_size * (@divTrunc(self.len, realloc_bin_size) + 1);
+        switch (self.text_opt) {
+            .buffer => {},
+            .buffer_dynamic => |b| {
+                if (b.allocator.resize(self.text, new_len)) {
+                    b.backing.*.len = new_len;
+                    self.text.len = new_len;
+                } else {
+                    dvui.log.debug("{x} TextEntryWidget.deinit failed to resize backing\n", .{self.wd.id});
+                }
+            },
+            .internal => {
+                var oom = false;
+                const copy = dvui.currentWindow().arena.dupe(u8, self.text[0..new_len]) catch blk: {
+                    oom = true;
+                    dvui.log.debug("{x} TextEntryWidget.deinit failed to dupe internal buffer for shrink\n", .{self.wd.id});
+                    break :blk &.{};
+                };
+                if (!oom) {
+                    dvui.dataRemove(null, self.wd.id, "_buffer");
+                    dvui.dataSetSliceCopies(null, self.wd.id, "_buffer", &[_]u8{0}, new_len);
+                    self.text = dvui.dataGetSlice(null, self.wd.id, "_buffer", []u8).?;
+                    @memcpy(self.text, copy);
+                }
+            },
+        }
+    }
+
     self.textLayout.deinit();
     self.scroll.deinit();
 
