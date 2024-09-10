@@ -98,12 +98,14 @@ selection_store: Selection = .{},
 /// For simplicity we only handle a single kind of selection change per frame
 sel_move: union(enum) {
     none: void,
+
     // mouse down to move cursor and dragging to select
     mouse: struct {
         down_pt: ?Point = null, // point we got the mouse down (frame 1)
         byte: ?usize = null, // byte index of pt (find on frame 1, keep while captured)
         drag_pt: ?Point = null, // point of current mouse drag
     },
+
     // second click or touch selects word at the pointer
     word_pt: struct {
         p: ?Point,
@@ -114,10 +116,14 @@ sel_move: union(enum) {
             aftcursor,
         } = .precursor,
     },
+
+    // moving left/right by characters
+    char_left_right: struct {
+        count: i8 = 0,
+        buf: [20]u8 = [1]u8{0} ** 20,
+    },
 } = .none,
 
-sel_left_right: i8 = 0,
-sel_left_right_buf: [10]u8 = [1]u8{0} ** 10,
 sel_start_r: Rect = .{},
 sel_start_r_new: ?Rect = null,
 sel_end_r: Rect = .{},
@@ -567,6 +573,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                     }
                 }
             },
+            .char_left_right => {}, // done below cursor_seen
         }
 
         if (self.cursor_updown_pt) |p| {
@@ -732,51 +739,52 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                     }
                 }
             },
-        }
+            .char_left_right => |*clr| {
+                if (clr.count < 0) {
+                    // save a small lookback buffer
 
-        if (self.sel_left_right < 0) {
-            // save a small lookback buffer
-
-            const last_idx = @min(self.selection.cursor, self.bytes_seen + end) -| self.bytes_seen;
-            for (self.sel_left_right_buf, 0..) |_, i| {
-                if (i + last_idx >= self.sel_left_right_buf.len) {
-                    self.sel_left_right_buf[i] = txt[last_idx + i - self.sel_left_right_buf.len];
-                } else {
-                    self.sel_left_right_buf[i] = self.sel_left_right_buf[i + last_idx];
-                }
-            }
-
-            if (self.cursor_seen) {
-                while (self.sel_left_right < 0) {
-                    var cur = self.selection.cursor;
-
-                    // move cursor one utf8 char left
-                    cur -|= 1;
-                    while (cur > self.bytes_seen and self.sel_left_right_buf[self.sel_left_right_buf.len + cur - self.selection.cursor] & 0xc0 == 0x80) {
-                        // in the middle of a multibyte char
-                        cur -|= 1;
+                    const last_idx = @min(self.selection.cursor, self.bytes_seen + end) -| self.bytes_seen;
+                    for (clr.buf, 0..) |_, i| {
+                        if (i + last_idx >= clr.buf.len) {
+                            clr.buf[i] = txt[last_idx + i - clr.buf.len];
+                        } else {
+                            clr.buf[i] = clr.buf[i + last_idx];
+                        }
                     }
 
-                    self.selection.moveCursor(cur, true);
-                    self.sel_left_right += 1;
+                    if (self.cursor_seen) {
+                        while (clr.count < 0) {
+                            var cur = self.selection.cursor;
+
+                            // move cursor one utf8 char left
+                            cur -|= 1;
+                            while (cur > self.bytes_seen and clr.buf[clr.buf.len + cur - self.selection.cursor] & 0xc0 == 0x80) {
+                                // in the middle of a multibyte char
+                                cur -|= 1;
+                            }
+
+                            self.selection.moveCursor(cur, true);
+                            clr.count += 1;
+                        }
+
+                        clr.count = 0;
+
+                        dvui.refresh(null, @src(), self.wd.id);
+                    }
                 }
 
-                self.sel_left_right = 0;
+                while (self.cursor_seen and clr.count > 0 and self.selection.cursor < (self.bytes_seen + end)) {
+                    var cur = self.selection.cursor;
 
-                dvui.refresh(null, @src(), self.wd.id);
-            }
-        }
+                    // move cursor one utf8 char right
+                    cur += std.unicode.utf8ByteSequenceLength(txt[cur - self.bytes_seen]) catch 1;
 
-        while (self.cursor_seen and self.sel_left_right > 0 and self.selection.cursor < (self.bytes_seen + end)) {
-            var cur = self.selection.cursor;
+                    self.selection.moveCursor(cur, true);
+                    clr.count -= 1;
 
-            // move cursor one utf8 char right
-            cur += std.unicode.utf8ByteSequenceLength(txt[cur - self.bytes_seen]) catch 1;
-
-            self.selection.moveCursor(cur, true);
-            self.sel_left_right -= 1;
-
-            dvui.refresh(null, @src(), self.wd.id);
+                    dvui.refresh(null, @src(), self.wd.id);
+                }
+            },
         }
 
         const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });
@@ -938,6 +946,25 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
                 }
             }
         },
+        .char_left_right => |*clr| {
+            if (clr.count < 0) {
+                while (clr.count < 0) {
+                    var cur = self.selection.cursor;
+
+                    // move cursor one utf8 char left
+                    cur -|= 1;
+                    while (cur > 0 and clr.buf[clr.buf.len + cur - self.selection.cursor] & 0xc0 == 0x80) {
+                        // in the middle of a multibyte char
+                        cur -|= 1;
+                    }
+
+                    self.selection.moveCursor(cur, true);
+                    clr.count += 1;
+                }
+
+                dvui.refresh(null, @src(), self.wd.id);
+            }
+        },
     }
 
     if (self.sel_start_r_new) |start_r| {
@@ -972,7 +999,6 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
 
     if (!self.cursor_seen) {
         self.cursor_seen = true;
-        self.selection.cursor = self.bytes_seen;
 
         const options = self.wd.options.override(opts);
         const cr = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = try options.fontGet().lineHeight() };
@@ -994,26 +1020,6 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
                 .screen_rect = self.screenRectScale(cr_new).r,
             } } };
             self.processEvent(&scrollto, true);
-        }
-
-        if (self.sel_left_right < 0) {
-            while (self.sel_left_right < 0) {
-                var cur = self.selection.cursor;
-
-                // move cursor one utf8 char left
-                cur -|= 1;
-                while (cur > self.bytes_seen and self.sel_left_right_buf[self.sel_left_right_buf.len + cur - self.selection.cursor] & 0xc0 == 0x80) {
-                    // in the middle of a multibyte char
-                    cur -|= 1;
-                }
-
-                self.selection.moveCursor(cur, true);
-                self.sel_left_right += 1;
-            }
-
-            self.sel_left_right = 0;
-
-            dvui.refresh(null, @src(), self.wd.id);
         }
 
         if (self.scroll_to_cursor) {
@@ -1254,12 +1260,22 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
         switch (e.evt.key.code) {
             .left => {
                 e.handled = true;
-                self.sel_left_right -= 1;
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .char_left_right = .{} };
+                }
+                if (self.sel_move == .char_left_right) {
+                    self.sel_move.char_left_right.count -= 1;
+                }
                 self.scroll_to_cursor = true;
             },
             .right => {
                 e.handled = true;
-                self.sel_left_right += 1;
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .char_left_right = .{} };
+                }
+                if (self.sel_move == .char_left_right) {
+                    self.sel_move.char_left_right.count += 1;
+                }
                 self.scroll_to_cursor = true;
             },
             .up, .down => |code| {
