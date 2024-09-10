@@ -106,9 +106,14 @@ sel_move: union(enum) {
         drag_pt: ?Point = null, // point of current mouse drag
     },
 
-    // second click or touch selects word at the pointer
-    word_pt: struct {
-        p: ?Point,
+    // second click or touch selects word at pointer
+    // third click selects line at pointer
+    expand_pt: struct {
+        pt: ?Point,
+        which: enum {
+            word,
+            line,
+        },
         last: usize = 0, // index of last space/newline we've seen
         where: enum {
             done,
@@ -578,12 +583,12 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                     }
                 }
             },
-            .word_pt => |*wp| {
+            .expand_pt => |*wp| {
                 // note: we do more of this below cursor_seen
-                if (wp.p) |p| {
+                if (wp.pt) |p| {
                     if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |byte| {
                         self.selection.moveCursor(byte, false);
-                        wp.p = null;
+                        wp.pt = null;
                     } else {
                         // haven't found it yet, keep cursor at end to not trigger cursor_seen
                         self.selection.moveCursor(self.bytes_seen + end, false);
@@ -671,7 +676,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             switch (self.sel_move) {
                 .none => {},
                 .mouse => {},
-                .word_pt => {},
+                .expand_pt => {},
                 .char_left_right => {},
                 .word_left_right => |*wlr| {
                     if (wlr.count > 0) {
@@ -718,14 +723,15 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
         switch (self.sel_move) {
             .none => {},
             .mouse => {},
-            .word_pt => |*wp| {
+            .expand_pt => |*wp| {
                 loop: while (wp.where != .done) {
+                    const search = if (wp.which == .word) " \n" else "\n";
                     switch (wp.where) {
                         .done => {},
                         .precursor => {
                             // maintain index of last space/newline we saw
                             const sofar = txt[0..@min(self.selection.cursor -| self.bytes_seen, end)];
-                            if (std.mem.lastIndexOfAny(u8, sofar, " \n")) |space| {
+                            if (std.mem.lastIndexOfAny(u8, sofar, search)) |space| {
                                 wp.last = self.bytes_seen + space + 1;
                             }
 
@@ -733,18 +739,20 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                                 self.selection.moveCursor(wp.last, true);
                                 self.selection.cursor = self.selection.end; // put cursor at end for the aftcursor logic
                                 wp.where = .aftcursor;
+
+                                // might have selected a word we already rendered part of
+                                dvui.refresh(null, @src(), self.wd.id);
                             } else {
                                 break :loop;
                             }
                         },
                         .aftcursor => {
                             // find next space/newline
-                            if (std.mem.indexOfAnyPos(u8, txt, self.selection.cursor -| self.bytes_seen, " \n")) |space| {
+                            if (std.mem.indexOfAnyPos(u8, txt, self.selection.cursor -| self.bytes_seen, search)) |space| {
                                 self.selection.moveCursor(self.bytes_seen + space, true);
                                 wp.where = .done;
-
-                                // might have selected a word we already rendered part of
-                                dvui.refresh(null, @src(), self.wd.id);
+                            } else {
+                                self.selection.moveCursor(self.bytes_seen + end, true);
                             }
 
                             break :loop;
@@ -1039,7 +1047,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
                 m.drag_pt = null;
             }
         },
-        .word_pt => |*wp| {
+        .expand_pt => |*wp| {
             while (wp.where != .done) {
                 switch (wp.where) {
                     .done => {},
@@ -1129,7 +1137,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
         switch (self.sel_move) {
             .none => {},
             .mouse => {},
-            .word_pt => {},
+            .expand_pt => {},
             .char_left_right => {},
             .word_left_right => {},
             .cursor_updown => |*cud| {
@@ -1316,7 +1324,10 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
 
                 if (self.click_num == 1) {
                     // select word we touched
-                    self.sel_move = .{ .word_pt = .{ .p = p } };
+                    self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
+                } else if (self.click_num == 2) {
+                    // select line we touched
+                    self.sel_move = .{ .expand_pt = .{ .which = .line, .pt = p } };
                 }
             }
         } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
@@ -1344,7 +1355,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                         self.sel_move = .{ .mouse = .{ .down_pt = p } };
                         if (self.touch_editing) {
                             // select word we touched
-                            self.sel_move = .{ .word_pt = .{ .p = p } };
+                            self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
                         }
                     } else {
                         if (self.touch_edit_just_focused) {
@@ -1357,7 +1368,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                             self.te_first = false;
 
                             // select word we touched
-                            self.sel_move = .{ .word_pt = .{ .p = p } };
+                            self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
                         }
                     }
                     dvui.refresh(null, @src(), self.wd.id);
