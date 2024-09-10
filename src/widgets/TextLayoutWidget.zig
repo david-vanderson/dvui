@@ -800,22 +800,20 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             },
             .cursor_updown => {},
             .word_left_right => |*wlr| {
-                if (wlr.count < 0) {
+                if (wlr.count < 0 and self.selection.cursor > self.bytes_seen) {
                     // maintain our list of previous starts of words, looking backwards
                     const sofar = txt[0..@min(self.selection.cursor -| self.bytes_seen, end)];
                     var idx = sofar.len -| 1;
                     var last_kind: enum { blank, word } = undefined;
-                    if (idx > 0) {
-                        if (std.mem.indexOfAnyPos(u8, sofar, idx, " \n") != null) {
-                            last_kind = .blank;
-                        } else {
-                            last_kind = .word;
-                        }
+                    if (std.mem.indexOfAnyPos(u8, sofar, idx, " \n") != null) {
+                        last_kind = .blank;
+                    } else {
+                        last_kind = .word;
                     }
 
                     var word_start_count: usize = 0;
 
-                    while (idx > 0 and word_start_count < wlr.word_start_idx.len) {
+                    loop: while (word_start_count < wlr.word_start_idx.len) {
                         switch (last_kind) {
                             .blank => {
                                 if (std.mem.lastIndexOfNone(u8, sofar[0..idx], " \n")) |word_end| {
@@ -823,7 +821,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                                     idx = word_end;
                                 } else {
                                     // all blank
-                                    idx = 0;
+                                    break :loop;
                                 }
                             },
                             .word => {
@@ -848,6 +846,10 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                                     }
                                     wlr.word_start_idx[word_start_count] = self.bytes_seen + ws;
                                     word_start_count += 1;
+                                }
+
+                                if (idx == 0) {
+                                    break :loop;
                                 }
                             },
                         }
