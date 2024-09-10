@@ -544,28 +544,21 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 .left, .right => |code| {
                     if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
                         e.handled = true;
-                        var sel = self.textLayout.selectionGet(self.len);
-                        if (code == .left) {
-                            // If the cursor is at position 0 do nothing...
-                            if (sel.cursor > 0) {
-                                // ... otherwise, "jump over" the utf8 char to the
-                                // left of the cursor.
-                                var i: usize = 1;
-                                while (sel.cursor -| i > 0 and self.text[sel.cursor -| i] & 0xc0 == 0x80) : (i += 1) {}
-                                sel.cursor -|= i;
+                        if (ke.mod.control()) {
+                            if (self.textLayout.sel_move == .none) {
+                                self.textLayout.sel_move = .{ .word_left_right = .{ .select = false } };
+                            }
+                            if (self.textLayout.sel_move == .word_left_right) {
+                                self.textLayout.sel_move.word_left_right.count += if (code == .right) 1 else -1;
                             }
                         } else {
-                            if (sel.cursor < self.len) {
-                                // Get the number of bytes of the current code point and
-                                // "jump" to the next code point to the right of the cursor.
-                                sel.cursor += std.unicode.utf8ByteSequenceLength(self.text[sel.cursor]) catch 1;
-                                sel.cursor = @min(sel.cursor, self.len);
+                            if (self.textLayout.sel_move == .none) {
+                                self.textLayout.sel_move = .{ .char_left_right = .{ .select = false } };
+                            }
+                            if (self.textLayout.sel_move == .char_left_right) {
+                                self.textLayout.sel_move.char_left_right.count += if (code == .right) 1 else -1;
                             }
                         }
-
-                        sel.start = sel.cursor;
-                        sel.end = sel.cursor;
-                        self.scroll_to_cursor = true;
                     }
                 },
                 .up, .down => |code| {

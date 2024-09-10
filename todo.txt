@@ -12,7 +12,6 @@ can we do word-drag-select?
 textLayout:
 home/end to go to start/end of line (Mac?)
 ctrl-home/end to go to start/end of text (Mac?)
-triple click to select whole line
 
 textEntry:
 ctrl-backspace/delete to delete previous/next word (Mac?)
