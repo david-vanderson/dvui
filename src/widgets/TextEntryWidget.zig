@@ -571,8 +571,12 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 .up, .down => |code| {
                     if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
                         e.handled = true;
-                        self.textLayout.cursor_updown += if (code == .down) 1 else -1;
-                        self.textLayout.cursor_updown_select = false;
+                        if (self.textLayout.sel_move == .none) {
+                            self.textLayout.sel_move = .{ .cursor_updown = .{ .select = false } };
+                        }
+                        if (self.textLayout.sel_move == .cursor_updown) {
+                            self.textLayout.sel_move.cursor_updown.count += if (code == .down) 1 else -1;
+                        }
                     }
                 },
                 else => {},
