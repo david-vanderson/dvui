@@ -452,6 +452,7 @@ pub fn StructFieldOptions(comptime T: type) type {
         fields: NamespaceFieldOptions(T) = .{},
         disabled: bool = false,
         label_override: ?[]const u8 = null,
+        use_expander: bool = true,
     };
 }
 
@@ -459,51 +460,57 @@ fn structFieldWidget(
     comptime name: []const u8,
     comptime T: type,
     result: *T,
-    opts: StructFieldOptions(T),
+    opt: StructFieldOptions(T),
     comptime alloc: bool,
 ) !void {
-    _ = name; // autofix
     if (@typeInfo(T) != .Struct) @compileError("Input Type Must Be A Struct");
-    if (opts.disabled) return;
+    if (opt.disabled) return;
     const fields = @typeInfo(T).Struct.fields;
 
     var box = try dvui.box(@src(), .vertical, .{ .expand = .both });
     defer box.deinit();
 
-    var left_alignment = dvui.Alignment.init();
-    defer left_alignment.deinit();
+    const label = opt.label_override orelse name;
 
-    inline for (fields, 0..) |field, i| {
-        const options = @field(opts.fields, field.name);
-        const result_ptr = &@field(result.*, field.name);
+    var expand = false; //use expander
+    var separate = false; //use separator to inset field
 
-        if (!options.disabled) {
-            if (@typeInfo(field.type) == .Struct) {
-                if (try dvui.expander(@src(), field.name, .{}, .{ .id_extra = i })) {
-                    var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .id_extra = i });
-                    defer hbox.deinit();
+    if (label.len == 0) {
+        expand = true;
+        separate = false;
+    } else if (opt.use_expander) {
+        expand = try dvui.expander(@src(), label, .{}, .{});
+        separate = expand;
+    } else {
+        try dvui.label(@src(), "{s}", .{label}, .{});
+        expand = true;
+        separate = false;
+    }
 
-                    try dvui.separator(
-                        @src(),
-                        .{ .expand = .vertical, .min_size_content = .{ .w = 2 }, .margin = dvui.Rect.all(4) },
-                    );
+    var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both });
+    defer hbox.deinit();
 
-                    //TODO get left align working
-                    var vbox = try dvui.box(@src(), .vertical, .{
-                        .expand = .both,
-                        .id_extra = i,
-                        //.margin = left_alignment.margin(box.data().id),
-                    });
-                    defer vbox.deinit();
-                    try fieldWidget(field.name, field.type, result_ptr, options, alloc);
-                    //left_alignment.record(hbox.data().id, vbox.data());
-                }
-            } else {
-                var vbox = try dvui.box(@src(), .vertical, .{
+    if (separate) {
+        try dvui.separator(@src(), .{
+            .expand = .vertical,
+            .min_size_content = .{ .w = 2 },
+            .margin = dvui.Rect.all(4),
+        });
+    }
+
+    if (expand) {
+        var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both });
+        defer vbox.deinit();
+        inline for (fields, 0..) |field, i| {
+            const options = @field(opt.fields, field.name);
+            if (!options.disabled) {
+                const result_ptr = &@field(result.*, field.name);
+
+                var widgetbox = try dvui.box(@src(), .vertical, .{
                     .expand = .both,
                     .id_extra = i,
                 });
-                defer vbox.deinit();
+                defer widgetbox.deinit();
                 try fieldWidget(field.name, field.type, result_ptr, options, alloc);
             }
         }
