@@ -109,10 +109,12 @@ sel_move: union(enum) {
     // second click or touch selects word at pointer
     // third click selects line at pointer
     expand_pt: struct {
-        pt: ?Point,
+        pt: ?Point = null,
         which: enum {
             word,
             line,
+            home,
+            end,
         },
         last: usize = 0, // index of last space/newline we've seen
         where: enum {
@@ -754,7 +756,12 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                     const search = if (wp.which == .word) " \n" else "\n";
                     switch (wp.where) {
                         .done => {},
-                        .precursor => {
+                        .precursor => blk: {
+                            if (wp.which == .end) {
+                                wp.where = .aftcursor;
+                                break :blk;
+                            }
+
                             // maintain index of last space/newline we saw
                             const sofar = txt[0..@min(self.selection.cursor -| self.bytes_seen, end)];
                             if (std.mem.lastIndexOfAny(u8, sofar, search)) |space| {
@@ -763,8 +770,12 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
 
                             if (self.cursor_seen) {
                                 self.selection.moveCursor(wp.last, true);
-                                self.selection.cursor = self.selection.end; // put cursor at end for the aftcursor logic
-                                wp.where = .aftcursor;
+                                if (wp.which == .home) {
+                                    wp.where = .done;
+                                } else {
+                                    wp.where = .aftcursor;
+                                    self.selection.cursor = self.selection.end; // put cursor at end for the aftcursor logic
+                                }
 
                                 // might have selected a word we already rendered part of
                                 dvui.refresh(null, @src(), self.wd.id);
@@ -1428,6 +1439,12 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 }
                 if (self.sel_move == .cursor_updown) {
                     self.sel_move.cursor_updown.count += if (code == .down) 1 else -1;
+                }
+            },
+            .home, .end => |code| {
+                e.handled = true;
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .expand_pt = .{ .which = if (code == .home) .home else .end } };
                 }
             },
             else => {},
