@@ -8,6 +8,8 @@ const Options = dvui.Options;
 pub const ptrs = [_]*dvui.Theme{
     &AdwaitaLight,
     &AdwaitaDark,
+    &AdwaitaOpenDyslexicLight,
+    &AdwaitaOpenDyslexicDark,
     &Jungle,
     &Dracula,
     &Flow,
@@ -17,6 +19,8 @@ pub const ptrs = [_]*dvui.Theme{
 //builtin themes
 pub var AdwaitaLight = @import("themes/Adwaita.zig").light;
 pub var AdwaitaDark = @import("themes/Adwaita.zig").dark;
+pub var AdwaitaOpenDyslexicLight = @import("themes/AdwaitaOpenDyslexic.zig").light;
+pub var AdwaitaOpenDyslexicDark = @import("themes/AdwaitaOpenDyslexic.zig").dark;
 pub var Jungle = @import("themes/Jungle.zig").jungle;
 pub var Dracula = @import("themes/Dracula.zig").dracula;
 pub var Flow = @import("themes/Flow.zig").flow;
