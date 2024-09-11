@@ -364,7 +364,7 @@ pub fn PointerFieldOptions(comptime T: type) type {
     if (info.size == .Slice and info.child == u8) {
         return TextFieldOptions;
     } else if (info.size == .Slice) {
-        return SliceFieldOptions(T);
+        return SliceFieldOptions(info.child);
     } else if (info.size == .One) {
         return SinglePointerFieldOptions(T);
     } else if (info.size == .C or info.size == .Many) {
@@ -384,7 +384,7 @@ pub fn pointerFieldWidget(
     if (info.size == .Slice and info.child == u8) {
         try textFieldWidget(name, result, opt, alloc);
     } else if (info.size == .Slice) {
-        try sliceFieldWidget(name, T, result, opt, alloc);
+        try sliceFieldWidget(name, info.child, result, opt, alloc);
     } else if (info.size == .One) {
         try singlePointerFieldWidget(T, name, result, opt, alloc);
     } else if (info.size == .C or info.size == .Many) {
@@ -426,24 +426,54 @@ pub fn singlePointerFieldWidget(
 //=======Single Item pointer and options=======
 pub fn SliceFieldOptions(comptime T: type) type {
     return struct {
-        child: FieldOptions(@typeInfo(T).Pointer.child) = .{},
+        child: FieldOptions(T) = .{},
         disabled: bool = false,
     };
 }
 
-//TODO implement this using reorderable lists and use this as the backend for array and vector widgets
 pub fn sliceFieldWidget(
     comptime name: []const u8,
     comptime T: type,
-    result: *T,
+    result: *[]T,
     options: SliceFieldOptions(T),
     comptime alloc: bool,
 ) !void {
     _ = name; // autofix
-    _ = result; // autofix
-    _ = options; // autofix
-    _ = alloc; // autofix
-    @compileError("TODO");
+
+    var removed_idx: ?usize = null;
+    var insert_before_idx: ?usize = null;
+
+    var reorder = try dvui.reorder(@src(), .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
+    defer reorder.deinit();
+
+    var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both });
+    defer vbox.deinit();
+
+    for (result.*, 0..) |_, i| {
+        var reorderable = try reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
+        defer reorderable.deinit();
+
+        if (reorderable.removed()) {
+            removed_idx = i; // this entry is being dragged
+        } else if (reorderable.insertBefore()) {
+            insert_before_idx = i; // this entry was dropped onto
+        }
+
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+        defer hbox.deinit();
+
+        _ = try dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{ .expand = .vertical, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 });
+
+        try fieldWidget("name", T, @ptrCast(&result.*[i]), options.child, alloc);
+    }
+
+    // show a final slot that allows dropping an entry at the end of the list
+    if (try reorder.finalSlot()) {
+        insert_before_idx = result.*.len; // entry was dropped into the final slot
+    }
+
+    // returns true if the slice was reordered
+    _ = dvui.ReorderWidget.reorderSlice(T, result.*, removed_idx, insert_before_idx);
 }
 
 //==========Struct Field Widget and Options

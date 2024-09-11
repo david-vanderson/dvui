@@ -376,8 +376,15 @@ pub fn demo() !void {
             a_f32: f32 = 2.0,
             a_struct: TopChild = .{ .a_dir = .vertical },
             a_str: []const u8 = &[_]u8{0} ** 20,
+            a_slice: []TopChild = undefined,
 
-            var instance: @This() = .{};
+            var slice: [2]TopChild = blk: {
+                var temp: [2]TopChild = undefined;
+                temp[0].a_dir = .vertical;
+                temp[1].a_dir = .horizontal;
+                break :blk temp;
+            };
+            var instance: @This() = .{ .a_slice = &slice };
         };
 
         try dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
