@@ -565,7 +565,7 @@ pub fn basicWidgets() !void {
         _ = try dvui.checkbox(@src(), &slider_entry_vector, "Vector", .{});
     }
 
-    _ = dvui.spacer(@src(), .{ .h = 4 }, .{});
+    _ = try dvui.spacer(@src(), .{ .h = 4 }, .{});
 
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
@@ -1593,7 +1593,7 @@ pub fn animations() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        _ = dvui.spacer(@src(), .{ .w = 20 }, .{});
+        _ = try dvui.spacer(@src(), .{ .w = 20 }, .{});
         var button_wiggle = ButtonWidget.init(@src(), .{}, .{ .tab_index = 10 });
         defer button_wiggle.deinit();
 
@@ -1817,7 +1817,7 @@ pub fn dialogDirect() !void {
     }
 
     {
-        _ = dvui.spacer(@src(), .{}, .{ .expand = .vertical });
+        _ = try dvui.spacer(@src(), .{}, .{ .expand = .vertical });
         var hbox = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0 });
         defer hbox.deinit();
 

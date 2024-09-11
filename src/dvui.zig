@@ -4182,13 +4182,13 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) !void {
     wd.minSizeReportToParent();
 }
 
-pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) WidgetData {
+pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) !WidgetData {
     if (opts.min_size_content != null) {
         log.debug("spacer options had min_size but is being overwritten\n", .{});
     }
     const defaults: Options = .{ .name = "Spacer" };
     var wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .min_size_content = size }));
-    wd.register() catch {};
+    try wd.register();
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
     return wd;
@@ -5142,7 +5142,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     defer b.deinit();
 
     const check_size = try options.fontGet().lineHeight();
-    const s = spacer(@src(), Size.all(check_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+    const s = try spacer(@src(), Size.all(check_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
 
@@ -5151,7 +5151,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     }
 
     if (label_str) |str| {
-        _ = spacer(@src(), .{ .w = checkbox_defaults.paddingGet().w }, .{});
+        _ = try spacer(@src(), .{ .w = checkbox_defaults.paddingGet().w }, .{});
         try labelNoFmt(@src(), str, options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
     }
 
@@ -5228,7 +5228,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     defer b.deinit();
 
     const radio_size = try options.fontGet().lineHeight();
-    const s = spacer(@src(), Size.all(radio_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+    const s = try spacer(@src(), Size.all(radio_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
 
@@ -5237,7 +5237,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     }
 
     if (label_str) |str| {
-        _ = spacer(@src(), .{ .w = radio_defaults.paddingGet().w }, .{});
+        _ = try spacer(@src(), .{ .w = radio_defaults.paddingGet().w }, .{});
         try labelNoFmt(@src(), str, options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
     }
 
