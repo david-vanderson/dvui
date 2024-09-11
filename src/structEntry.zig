@@ -444,10 +444,8 @@ pub fn sliceFieldWidget(
     var insert_before_idx: ?usize = null;
 
     var reorder = try dvui.reorder(@src(), .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
-    defer reorder.deinit();
 
     var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both });
-    defer vbox.deinit();
 
     for (result.*, 0..) |_, i| {
         var reorderable = try reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
@@ -474,6 +472,25 @@ pub fn sliceFieldWidget(
 
     // returns true if the slice was reordered
     _ = dvui.ReorderWidget.reorderSlice(T, result.*, removed_idx, insert_before_idx);
+
+    if (alloc) {
+        const new_item: *T = dvui.dataGetPtrDefault(null, reorder.data().id, "new_item", T, T{});
+
+        _ = try dvui.spacer(@src(), .{ .h = 4 }, .{});
+
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+        defer hbox.deinit();
+
+        if (try dvui.button(@src(), "Add New", .{}, .{})) {
+            // want to add new_item to the end of the slice, but where is the allocator?
+        }
+
+        try fieldWidget(@typeName(T), T, @ptrCast(new_item), options.child, alloc);
+    }
+
+    vbox.deinit();
+
+    reorder.deinit();
 }
 
 //==========Struct Field Widget and Options
@@ -634,8 +651,9 @@ pub fn structEntryAlloc(
     comptime src: std.builtin.SourceLocation,
     comptime T: type,
     result: *T,
+    opts: dvui.Options,
 ) !void {
-    var box = try dvui.box(src, .vertical, .{ .expand = .both });
+    var box = try dvui.box(src, .vertical, opts);
     defer box.deinit();
     try structFieldWidget("", T, result, .{}, true);
 }

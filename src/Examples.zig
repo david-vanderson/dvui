@@ -369,7 +369,7 @@ pub fn demo() !void {
 
         const Top = struct {
             const TopChild = struct {
-                a_dir: dvui.enums.Direction,
+                a_dir: dvui.enums.Direction = undefined,
             };
 
             a_u8: u8 = 1,
@@ -389,7 +389,7 @@ pub fn demo() !void {
 
         try dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
         {
-            try dvui.structEntry(@src(), Top, &Top.instance, .{ .margin = .{ .x = 10 } });
+            try dvui.structEntryAlloc(@src(), Top, &Top.instance, .{ .margin = .{ .x = 10 } });
         }
 
         if (try dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
