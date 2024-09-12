@@ -271,18 +271,12 @@ fn textFieldWidget(
                 std.mem.copyForwards(u8, memory, result.*);
                 dvui.dataSet(null, box.widget().data().id, "memory_handle", memory);
                 memory_handle = memory;
-
-                //WARNING: this could leak memory if result has been dynamically allocated
-                result.* = memory;
             }
 
-            const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer_dynamic = .{
-                .allocator = allocator.?,
-                .backing = &memory_handle.?,
-            } } }, opt.dvui_opts);
-            defer text_box.deinit();
-
+            //WARNING: this could leak memory if result has been dynamically allocated
             result.* = memory_handle.?;
+            const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer = memory_handle.? } }, opt.dvui_opts);
+            text_box.deinit();
         },
     }
 }
