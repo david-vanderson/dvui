@@ -199,9 +199,15 @@ fn boolFieldWidget(
     }
 }
 
+const MemoryStrategy = enum {
+    mutable_in_place_alloc,
+    immutable_alloc,
+    mutable_in_place,
+    immutable,
+};
+
 //==========Text Field Widget and Options============
 pub const TextFieldOptions = struct {
-    max_len: u16 = 64,
     dvui_opts: dvui.Options = .{},
     disabled: bool = false,
     label_override: ?[]const u8 = null,
@@ -209,30 +215,85 @@ pub const TextFieldOptions = struct {
 
 fn textFieldWidget(
     comptime name: []const u8,
-    result: *[]const u8,
+    comptime T: type,
+    result: *T,
     opt: TextFieldOptions,
-    comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     if (opt.disabled) return;
 
     //TODO respect alloc setting
-    _ = alloc; // autofix
     var box = try dvui.box(@src(), .horizontal, .{});
     defer box.deinit();
 
     try dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
-    const buffer = dvui.dataGetSliceDefault(
-        dvui.currentWindow(),
-        box.widget().data().id,
-        "buffer",
-        []u8,
-        result.*,
-    );
 
-    const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer = buffer } }, opt.dvui_opts);
-    defer text_box.deinit();
+    const mutable_in_place = !@typeInfo(T).Pointer.is_const;
+    const alloc = allocator != null;
 
-    result.* = text_box.getText();
+    // zig fmt: off
+    const strategy: MemoryStrategy =
+    if (alloc)
+        if (mutable_in_place)
+            .mutable_in_place_alloc
+        else
+            .immutable_alloc
+    else
+        if (mutable_in_place)
+            .mutable_in_place
+        else
+            .immutable;
+    // zig fmt: on
+
+    switch (strategy) {
+        .mutable_in_place => {
+            const text_box = try dvui.textEntry(
+                @src(),
+                .{ .text = .{ .buffer = result.* } },
+                opt.dvui_opts,
+            );
+            defer text_box.deinit();
+        },
+        .mutable_in_place_alloc => {
+            const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer_dynamic = .{
+                .allocator = allocator.?,
+                .backing = result.*,
+            } } }, opt.dvui_opts);
+            defer text_box.deinit();
+        },
+        .immutable => {
+            try dvui.label(@src(), "{s}", .{result.*}, .{});
+        },
+        .immutable_alloc => {
+            @panic("Todo");
+        },
+    }
+
+    //if (mutable_in_place and !alloc) {
+    //    const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer = result.* } }, opt.dvui_opts);
+    //    defer text_box.deinit();
+    //} else if (mutable_in_place and alloc) {
+    //    const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer_dynamic = .{
+    //        .allocator = allocator.?,
+    //        .backing = result.*,
+    //    } } }, opt.dvui_opts);
+    //    defer text_box.deinit();
+    //} else if (!mutable_in_place and !alloc) {
+    //    try dvui.label(@src(), "{s}", .{result.*}, .{});
+    //} else if (!mutable_in_place and alloc) {}
+
+    //if (allocator) |a| {
+    //    if (@typeInfo(T).Pointer.is_const) {} else {
+    //        const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer_dynamic = .{
+    //            .allocator = a,
+    //            .backing = result.*,
+    //        } } }, opt.dvui_opts);
+    //        defer text_box.deinit();
+    //    }
+    //} else {
+    //    const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer = result.* } }, opt.dvui_opts);
+    //    defer text_box.deinit();
+    //}
 }
 
 //===============================================
@@ -257,7 +318,7 @@ pub fn unionFieldWidget(
     comptime T: type,
     result: *T,
     opt: UnionFieldOptions(T),
-    comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     var box = try dvui.box(@src(), .vertical, .{});
     defer box.deinit();
@@ -306,7 +367,7 @@ pub fn unionFieldWidget(
                 field.type,
                 @ptrCast(field_result),
                 @field(opt.fields, field.name),
-                alloc,
+                allocator,
             );
         }
     }
@@ -326,7 +387,7 @@ pub fn optionalFieldWidget(
     comptime T: type,
     result: *T,
     opt: OptionalFieldOptions(T),
-    comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     if (opt.disabled) return;
     var box = try dvui.box(@src(), .vertical, .{});
@@ -352,7 +413,7 @@ pub fn optionalFieldWidget(
             .margin = .{ .w = 10, .x = 10 },
         });
         line.deinit();
-        try fieldWidget("", Child, @ptrCast(result), opt.child, alloc);
+        try fieldWidget("", Child, @ptrCast(result), opt.child, allocator);
     } else {
         result.* = null;
     }
@@ -377,16 +438,16 @@ pub fn pointerFieldWidget(
     comptime T: type,
     result: *T,
     opt: PointerFieldOptions(T),
-    comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     const info = @typeInfo(T).Pointer;
 
     if (info.size == .Slice and info.child == u8) {
-        try textFieldWidget(name, result, opt, alloc);
+        try textFieldWidget(name, T, result, opt, allocator);
     } else if (info.size == .Slice) {
-        try sliceFieldWidget(name, info.child, result, opt, alloc);
+        try sliceFieldWidget(name, info.child, result, opt, allocator);
     } else if (info.size == .One) {
-        try singlePointerFieldWidget(T, name, result, opt, alloc);
+        try singlePointerFieldWidget(T, name, result, opt, allocator);
     } else if (info.size == .C or info.size == .Many) {
         @compileError("structEntry does not support *C or Many pointers");
     }
@@ -405,8 +466,7 @@ pub fn singlePointerFieldWidget(
     comptime T: type,
     result: *T,
     opt: SinglePointerFieldOptions(T),
-    comptime alloc: bool,
-    paned: *dvui.PanedWidget,
+    allocator: ?std.mem.Allocator,
 ) !void {
     if (opt.disabled) return;
     var box = try dvui.box(@src(), .horizontal, .{});
@@ -414,13 +474,13 @@ pub fn singlePointerFieldWidget(
 
     const Child = @typeInfo(T).Pointer.child;
 
-    const destination = if (alloc)
+    const destination = if (allocator)
         try dvui.dataGetPtrDefault(dvui.currentWindow(), box.widget().data().id, "ptr", T, undefined)
     else
         result;
     result.* = destination;
 
-    try fieldWidget(@src(), name, Child, result.*, opt.child, alloc, paned);
+    try fieldWidget(@src(), name, Child, result.*, opt.child, allocator);
 }
 
 //=======Single Item pointer and options=======
@@ -436,7 +496,7 @@ pub fn sliceFieldWidget(
     comptime T: type,
     result: *[]T,
     options: SliceFieldOptions(T),
-    comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     _ = name; // autofix
 
@@ -457,12 +517,21 @@ pub fn sliceFieldWidget(
             insert_before_idx = i; // this entry was dropped onto
         }
 
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+        var hbox = try dvui.box(@src(), .horizontal, .{
+            .expand = .both,
+            .border = dvui.Rect.all(1),
+            .background = true,
+            .color_fill = .{ .name = .fill_window },
+        });
         defer hbox.deinit();
 
-        _ = try dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{ .expand = .vertical, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 });
+        _ = try dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{
+            .expand = .vertical,
+            .min_size_content = dvui.Size.all(22),
+            .gravity_y = 0.5,
+        });
 
-        try fieldWidget("name", T, @ptrCast(&result.*[i]), options.child, alloc);
+        try fieldWidget("name", T, @ptrCast(&result.*[i]), options.child, allocator);
     }
 
     // show a final slot that allows dropping an entry at the end of the list
@@ -473,19 +542,24 @@ pub fn sliceFieldWidget(
     // returns true if the slice was reordered
     _ = dvui.ReorderWidget.reorderSlice(T, result.*, removed_idx, insert_before_idx);
 
-    if (alloc) {
+    if (allocator) {
         const new_item: *T = dvui.dataGetPtrDefault(null, reorder.data().id, "new_item", T, T{});
 
         _ = try dvui.spacer(@src(), .{ .h = 4 }, .{});
 
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+        var hbox = try dvui.box(@src(), .horizontal, .{
+            .expand = .both,
+            .border = dvui.Rect.all(1),
+            .background = true,
+            .color_fill = .{ .name = .fill_window },
+        });
         defer hbox.deinit();
 
         if (try dvui.button(@src(), "Add New", .{}, .{})) {
             // want to add new_item to the end of the slice, but where is the allocator?
         }
 
-        try fieldWidget(@typeName(T), T, @ptrCast(new_item), options.child, alloc);
+        try fieldWidget(@typeName(T), T, @ptrCast(new_item), options.child, allocator);
     }
 
     vbox.deinit();
@@ -508,7 +582,7 @@ fn structFieldWidget(
     comptime T: type,
     result: *T,
     opt: StructFieldOptions(T),
-    comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     if (@typeInfo(T) != .Struct) @compileError("Input Type Must Be A Struct");
     if (opt.disabled) return;
@@ -558,7 +632,7 @@ fn structFieldWidget(
                     .id_extra = i,
                 });
                 defer widgetbox.deinit();
-                try fieldWidget(field.name, field.type, result_ptr, options, alloc);
+                try fieldWidget(field.name, field.type, result_ptr, options, allocator);
             }
         }
     }
@@ -605,17 +679,17 @@ pub fn fieldWidget(
     comptime T: type,
     result: *T,
     options: FieldOptions(T),
-    comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     switch (@typeInfo(T)) {
         .Int => try intFieldWidget(name, T, result, options),
         .Float => try floatFieldWidget(name, T, result, options),
         .Bool => try boolFieldWidget(name, result, options),
         .Enum => try enumFieldWidget(name, T, result, options),
-        .Pointer => try pointerFieldWidget(name, T, result, options, alloc),
-        .Optional => try optionalFieldWidget(name, T, result, options, alloc),
-        .Union => try unionFieldWidget(name, T, result, options, alloc),
-        .Struct => try structFieldWidget(name, T, result, options, alloc),
+        .Pointer => try pointerFieldWidget(name, T, result, options, allocator),
+        .Optional => try optionalFieldWidget(name, T, result, options, allocator),
+        .Union => try unionFieldWidget(name, T, result, options, allocator),
+        .Struct => try structFieldWidget(name, T, result, options, allocator),
         else => @compileError("Invalid type: " ++ @typeName(T)),
     }
 }
@@ -632,7 +706,7 @@ pub fn structEntry(
 ) !void {
     var box = try dvui.box(src, .vertical, opts);
     defer box.deinit();
-    try structFieldWidget("", T, result, .{}, false);
+    try structFieldWidget("", T, result, .{}, null);
 }
 
 pub fn structEntryEx(
@@ -644,22 +718,24 @@ pub fn structEntryEx(
 ) !void {
     var box = try dvui.box(src, .vertical, .{ .expand = .both });
     defer box.deinit();
-    try structFieldWidget(name, T, result, field_options, false);
+    try structFieldWidget(name, T, result, field_options, null);
 }
 
 pub fn structEntryAlloc(
     comptime src: std.builtin.SourceLocation,
+    allocator: std.mem.Allocator,
     comptime T: type,
     result: *T,
     opts: dvui.Options,
 ) !void {
     var box = try dvui.box(src, .vertical, opts);
     defer box.deinit();
-    try structFieldWidget("", T, result, .{}, true);
+    try structFieldWidget("", T, result, .{}, allocator);
 }
 
 pub fn structEntryExAlloc(
     comptime src: std.builtin.SourceLocation,
+    allocator: std.mem.Allocator,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
@@ -667,7 +743,13 @@ pub fn structEntryExAlloc(
 ) !void {
     var box = try dvui.box(src, .vertical, .{ .expand = .both });
     defer box.deinit();
-    try structFieldWidget(name, T, result, field_options, true);
+    try structFieldWidget(
+        name,
+        T,
+        result,
+        field_options,
+        allocator,
+    );
 }
 
 //===============================================
