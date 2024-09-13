@@ -15,10 +15,6 @@ multiline default text is duplicated every time the expander is expanded
 can we do word-drag-select and line-drag-select?
 
 
-
-
-test line selection when hemmed by corner widgets
-
 test char left when movement is larger than buf
 - also test char left/right with non ascii
 
@@ -31,14 +27,14 @@ test movements with an empty textEntry/textLayout
 
 consolidate touch editing selection
 
+test selection movements on mac
+
 textLayout:
-home/end to go to start/end of visual line (Mac?)
-triple-click selects logical line, but need to select visual line
-ctrl-home/end to go to start/end of text (Mac?)
+ctrl-shift-home/end to go to start/end of text (Mac?)
 
 textEntry:
-home/end without selection
 ctrl-backspace/delete to delete previous/next word (Mac?)
+ctrl-home/end to go to start/end of text (Mac?)
 
 
 text entry:

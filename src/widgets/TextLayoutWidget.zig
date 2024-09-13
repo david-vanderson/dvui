@@ -865,7 +865,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
         self.wd.rect.w = given_width;
     }
 
-    while (txt.len > 0) {
+    text_loop: while (txt.len > 0) {
         var linestart: f32 = 0;
         var linewidth = container_width;
         var width = linewidth - self.insert_pt.x;
@@ -910,32 +910,29 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
 
         //std.debug.print("{d} 1 txt to {d} \"{s}\"\n", .{ container_width, end, txt[0..end] });
 
-        // if we are boxed in too much by corner widgets drop to next line
-        if (self.break_lines and s.w > width and linewidth < container_width) {
-            self.insert_pt.y += self.current_line_height;
-            self.insert_pt.x = 0;
-            self.current_line_height = line_height;
+        if (self.break_lines) blk: {
 
-            self.lineBreak();
+            // try to break on space if:
+            // - slice ended due to width (not newline)
+            // - linewidth is long enough (otherwise too narrow to break on space)
+            if (end < txt.len and !newline and linewidth > (10 * msize.w)) {
+                // now we are under the length limit but might be in the middle of a word
+                // look one char further because we might be right at the end of a word
+                const spaceIdx = std.mem.lastIndexOfLinear(u8, txt[0 .. end + 1], " ");
+                if (spaceIdx) |si| {
+                    end = si + 1;
+                    s = try options.fontGet().textSize(txt[0..end]);
+                    break :blk; // this part will fit
+                }
 
-            self.first_byte_in_line = self.bytes_seen;
+                // couldn't break of space, fall through
+            }
 
-            continue;
-        }
-
-        // try to break on space if:
-        // - slice ended due to width (not newline)
-        // - linewidth is long enough (otherwise too narrow to break on space)
-        if (self.break_lines and end < txt.len and !newline and linewidth > (10 * msize.w)) {
-            // now we are under the length limit but might be in the middle of a word
-            // look one char further because we might be right at the end of a word
-            const spaceIdx = std.mem.lastIndexOfLinear(u8, txt[0 .. end + 1], " ");
-            if (spaceIdx) |si| {
-                end = si + 1;
-                s = try options.fontGet().textSize(txt[0..end]);
-            } else if (self.insert_pt.x > linestart) {
-                // can't fit breaking on space, but we aren't starting at the left edge
-                // so drop to next line
+            // drop to next line without doing anything if:
+            // - we are boxed in too much by corner widgets
+            // - we aren't starting at the left edge
+            // both mean dropping to next line will give us more space
+            if (s.w > width and (linewidth < container_width or self.insert_pt.x > linestart)) {
                 self.insert_pt.y += self.current_line_height;
                 self.insert_pt.x = 0;
                 self.current_line_height = line_height;
@@ -944,7 +941,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
 
                 self.first_byte_in_line = self.bytes_seen;
 
-                continue;
+                continue :text_loop;
             }
         }
 
@@ -1153,7 +1150,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             const nextrs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y });
             if (nextrs.r.y > (dvui.clipGet().y + dvui.clipGet().h)) {
                 //std.debug.print("stopping after: {s}\n", .{rtxt});
-                break;
+                break :text_loop;
             }
         }
     }
