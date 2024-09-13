@@ -274,11 +274,12 @@ pub fn draw(self: *TextEntryWidget) !void {
 }
 
 pub fn drawCursor(self: *TextEntryWidget) !void {
-    if (self.textLayout.cursor_rect) |cr| {
+    var sel = self.textLayout.selectionGet(self.len);
+    if (sel.empty()) {
         // the cursor can be slightly outside the textLayout clip
         dvui.clipSet(self.scrollClip);
 
-        var crect = cr.plus(.{ .x = -1 });
+        var crect = self.textLayout.cursor_rect.plus(.{ .x = -1 });
         crect.w = 2;
         try dvui.pathAddRect(self.textLayout.screenRectScale(crect).r, Rect.all(0));
         try dvui.pathFillConvex(self.wd.options.color(.accent));
@@ -569,6 +570,14 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                         }
                         if (self.textLayout.sel_move == .cursor_updown) {
                             self.textLayout.sel_move.cursor_updown.count += if (code == .down) 1 else -1;
+                        }
+                    }
+                },
+                .home, .end => |code| {
+                    if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
+                        e.handled = true;
+                        if (self.textLayout.sel_move == .none) {
+                            self.textLayout.sel_move = .{ .expand_pt = .{ .select = false, .which = if (code == .home) .home else .end } };
                         }
                     }
                 },
