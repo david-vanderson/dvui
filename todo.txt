@@ -6,8 +6,30 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
+write zig.news article about making global mutable slice variables
+- is there a mechanical way to transfrom from const to var?
 
-can we do word-drag-select?
+
+multiline default text is duplicated every time the expander is expanded
+
+can we do word-drag-select and line-drag-select?
+
+
+
+
+test line selection when hemmed by corner widgets
+
+test char left when movement is larger than buf
+- also test char left/right with non ascii
+
+test movements with an empty textEntry/textLayout
+- mouse select, mouse drag
+- expand word line home end
+- char left/right
+- cursor up/down
+- word left-right
+
+consolidate touch editing selection
 
 textLayout:
 home/end to go to start/end of visual line (Mac?)
@@ -15,6 +37,7 @@ triple-click selects logical line, but need to select visual line
 ctrl-home/end to go to start/end of text (Mac?)
 
 textEntry:
+home/end without selection
 ctrl-backspace/delete to delete previous/next word (Mac?)
 
 
