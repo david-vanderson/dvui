@@ -42,7 +42,7 @@ var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
 var text_entry_multiline_allocator_buf: [1000]u8 = undefined;
 var text_entry_multiline_fba = std.heap.FixedBufferAllocator.init(&text_entry_multiline_allocator_buf);
-var text_entry_multiline_buf: []u8 = &.{};
+var text_entry_multiline_buf: ?[]u8 = null;
 var dropdown_val: usize = 1;
 var layout_margin: Rect = Rect.all(4);
 var layout_border: Rect = Rect.all(0);
@@ -779,6 +779,12 @@ pub fn textEntryWidgets() !void {
     }
 
     {
+        if (text_entry_multiline_buf == null) {
+            const starting_text = "This multiline text\nentry can scroll\nin both directions.";
+            text_entry_multiline_buf = try text_entry_multiline_fba.allocator().alloc(u8, starting_text.len);
+            @memcpy(text_entry_multiline_buf.?, starting_text);
+        }
+
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
@@ -791,20 +797,17 @@ pub fn textEntryWidgets() !void {
 
         var te = try dvui.textEntry(
             @src(),
-            .{ .multiline = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf, .allocator = text_entry_multiline_fba.allocator() } } },
+            .{ .multiline = true, .scroll_horizontal = false, .break_lines = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf.?, .allocator = text_entry_multiline_fba.allocator() } } },
             .{
                 .min_size_content = .{ .w = 150, .h = 80 },
+                .debug = true,
             },
         );
-
-        if (dvui.firstFrame(te.data().id)) {
-            te.textTyped("This multiline text\nentry can scroll\nin both directions.");
-        }
 
         const bytes = te.len;
         te.deinit();
 
-        try dvui.label(@src(), "bytes {d}\nallocated {d}\nlimit {d}", .{ bytes, text_entry_multiline_buf.len, text_entry_multiline_allocator_buf.len }, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "bytes {d}\nallocated {d}\nlimit {d}", .{ bytes, text_entry_multiline_buf.?.len, text_entry_multiline_allocator_buf.len }, .{ .gravity_y = 0.5 });
     }
 
     const S = struct {
