@@ -260,23 +260,25 @@ fn textFieldWidget(
             defer text_box.deinit();
         },
         .display_only => {
-            try dvui.label(@src(), "{s}", .{result.*}, .{});
+            try dvui.label(@src(), " : {s}", .{result.*}, .{});
         },
         .copy_value_and_alloc_new => {
-            var memory_handle = dvui.dataGet(null, box.widget().data().id, "memory_handle", []u8);
-            if (memory_handle == null) {
-                const len = @max(64, result.*.len * 2);
-                const memory = try allocator.?.alloc(u8, len);
-                @memset(memory, 0);
-                std.mem.copyForwards(u8, memory, result.*);
-                dvui.dataSet(null, box.widget().data().id, "memory_handle", memory);
-                memory_handle = memory;
-            }
+            //TODO
+            try dvui.label(@src(), " : TODO {s}", .{result.*}, .{});
+            //var memory_handle = dvui.dataGet(null, box.widget().data().id, "memory_handle", []u8);
+            //if (memory_handle == null) {
+            //    const len = @max(64, result.*.len * 2);
+            //    const memory = try allocator.?.alloc(u8, len);
+            //    @memset(memory, 0);
+            //    std.mem.copyForwards(u8, memory, result.*);
+            //    dvui.dataSet(null, box.widget().data().id, "memory_handle", memory);
+            //    memory_handle = memory;
+            //}
 
-            //WARNING: this could leak memory if result has been dynamically allocated
-            result.* = memory_handle.?;
-            const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer = memory_handle.? } }, opt.dvui_opts);
-            text_box.deinit();
+            ////WARNING: this could leak memory if result has been dynamically allocated
+            //result.* = memory_handle.?;
+            //const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer = memory_handle.? } }, opt.dvui_opts);
+            //text_box.deinit();
         },
     }
 }
@@ -413,7 +415,7 @@ pub fn PointerFieldOptions(comptime T: type) type {
     if (info.size == .Slice and info.child == u8) {
         return TextFieldOptions;
     } else if (info.size == .Slice) {
-        return SliceFieldOptions(info.child);
+        return SliceFieldOptions(T);
     } else if (info.size == .One) {
         return SinglePointerFieldOptions(T);
     } else if (info.size == .C or info.size == .Many) {
@@ -434,7 +436,7 @@ pub fn pointerFieldWidget(
     if (info.size == .Slice and info.child == u8) {
         try textFieldWidget(name, T, result, opt, alloc, allocator);
     } else if (info.size == .Slice) {
-        try sliceFieldWidget(name, info.child, result, opt, alloc, allocator);
+        try sliceFieldWidget(name, T, result, opt, alloc, allocator);
     } else if (info.size == .One) {
         try singlePointerFieldWidget(T, name, result, opt, alloc, allocator);
     } else if (info.size == .C or info.size == .Many) {
@@ -464,11 +466,40 @@ pub fn singlePointerFieldWidget(
 
     const Child = @typeInfo(T).Pointer.child;
 
-    const destination = if (allocator)
-        try dvui.dataGetPtrDefault(dvui.currentWindow(), box.widget().data().id, "ptr", T, undefined)
-    else
-        result;
-    result.* = destination;
+    const ProvidedPointerTreatment = enum {
+        mutate_value_in_place,
+        display_only,
+        copy_value_and_alloc_new,
+    };
+
+    comptime var treatment: ProvidedPointerTreatment = .display_only;
+    comptime if (alloc == false) {
+        if (@typeInfo(T).Pointer.is_const) {
+            treatment = .display_only;
+        } else {
+            treatment = .mutate_value_in_place;
+        }
+    } else if (alloc == true) {
+        if (@typeInfo(T).Pointer.is_const) {
+            treatment = .copy_value_and_alloc_new;
+        } else {
+            treatment = .mutate_value_in_place;
+        }
+    };
+
+    try dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
+    switch (treatment) {
+        .display_only => {
+            try dvui.label(@src(), ": {any}", .{result.*.*}, .{});
+        },
+        .mutate_value_in_place => {
+            try fieldWidget(@src(), name, Child, result.*, opt.child, alloc, allocator);
+        },
+        .copy_value_and_alloc_new => {
+            //TODO
+            try dvui.label(@src(), ": TODO {any}", .{result.*.*}, .{});
+        },
+    }
 
     try fieldWidget(@src(), name, Child, result.*, opt.child, alloc, allocator);
 }
@@ -476,7 +507,8 @@ pub fn singlePointerFieldWidget(
 //=======Single Item pointer and options=======
 pub fn SliceFieldOptions(comptime T: type) type {
     return struct {
-        child: FieldOptions(T) = .{},
+        child: FieldOptions(@typeInfo(T).Pointer.child) = .{},
+        label_override: ?[]const u8 = null,
         disabled: bool = false,
     };
 }
@@ -484,22 +516,60 @@ pub fn SliceFieldOptions(comptime T: type) type {
 pub fn sliceFieldWidget(
     comptime name: []const u8,
     comptime T: type,
-    result: *[]T,
-    options: SliceFieldOptions(T),
+    result: *T,
+    opt: SliceFieldOptions(T),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
 ) !void {
-    _ = name; // autofix
+    if (@typeInfo(T).Pointer.size != .Slice) @compileError("must be called with slice");
+
+    const Child = @typeInfo(T).Pointer.child;
+
+    const ProvidedPointerTreatment = enum {
+        mutate_value_and_realloc,
+        mutate_value_in_place_only,
+        display_only,
+        copy_value_and_alloc_new,
+    };
+
+    comptime var treatment: ProvidedPointerTreatment = .display_only;
+    comptime if (alloc == false) {
+        if (@typeInfo(T).Pointer.is_const) {
+            treatment = .display_only;
+        } else {
+            treatment = .mutate_value_in_place_only;
+        }
+    } else if (alloc == true) {
+        if (@typeInfo(T).Pointer.is_const) {
+            treatment = .copy_value_and_alloc_new;
+        } else {
+            treatment = .mutate_value_and_realloc;
+        }
+    };
+
+    //if (treatment == .display_only) {
+    //    try dvui.label(@src(), ": {any}", .{result.*.*}, .{});
+    //    return;
+    //}
 
     var removed_idx: ?usize = null;
     var insert_before_idx: ?usize = null;
 
-    var reorder = try dvui.reorder(@src(), .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
+    var reorder = try dvui.reorder(@src(), .{
+        .min_size_content = .{ .w = 120 },
+        .background = true,
+        .border = dvui.Rect.all(1),
+        .padding = dvui.Rect.all(4),
+    });
 
     var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both });
+    try dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
 
     for (result.*, 0..) |_, i| {
-        var reorderable = try reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
+        var reorderable = try reorder.reorderable(@src(), .{}, .{
+            .id_extra = i,
+            .expand = .horizontal,
+        });
         defer reorderable.deinit();
 
         if (reorderable.removed()) {
@@ -516,13 +586,23 @@ pub fn sliceFieldWidget(
         });
         defer hbox.deinit();
 
-        _ = try dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{
-            .expand = .vertical,
-            .min_size_content = dvui.Size.all(22),
-            .gravity_y = 0.5,
-        });
+        switch (treatment) {
+            .mutate_value_in_place_only, .mutate_value_and_realloc => {
+                _ = try dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{
+                    .expand = .vertical,
+                    .min_size_content = dvui.Size.all(22),
+                    .gravity_y = 0.5,
+                });
+            },
+            .display_only => {
+                //TODO
+            },
+            .copy_value_and_alloc_new => {
+                //TODO
+            },
+        }
 
-        try fieldWidget("name", T, @ptrCast(&result.*[i]), options.child, alloc, allocator);
+        try fieldWidget("name", Child, @alignCast(@ptrCast(&(result.*[i]))), opt.child, alloc, allocator);
     }
 
     // show a final slot that allows dropping an entry at the end of the list
@@ -531,26 +611,36 @@ pub fn sliceFieldWidget(
     }
 
     // returns true if the slice was reordered
-    _ = dvui.ReorderWidget.reorderSlice(T, result.*, removed_idx, insert_before_idx);
+    _ = dvui.ReorderWidget.reorderSlice(Child, result.*, removed_idx, insert_before_idx);
 
-    if (alloc) {
-        const new_item: *T = dvui.dataGetPtrDefault(null, reorder.data().id, "new_item", T, T{});
+    //if (alloc) {
+    switch (treatment) {
+        .mutate_value_and_realloc => {
+            const new_item: *Child = dvui.dataGetPtrDefault(null, reorder.data().id, "new_item", Child, undefined);
 
-        _ = try dvui.spacer(@src(), .{ .h = 4 }, .{});
+            _ = try dvui.spacer(@src(), .{ .h = 4 }, .{});
 
-        var hbox = try dvui.box(@src(), .horizontal, .{
-            .expand = .both,
-            .border = dvui.Rect.all(1),
-            .background = true,
-            .color_fill = .{ .name = .fill_window },
-        });
-        defer hbox.deinit();
+            var hbox = try dvui.box(@src(), .horizontal, .{
+                .expand = .both,
+                .border = dvui.Rect.all(1),
+                .background = true,
+                .color_fill = .{ .name = .fill_window },
+            });
+            defer hbox.deinit();
 
-        if (try dvui.button(@src(), "Add New", .{}, .{})) {
-            // want to add new_item to the end of the slice, but where is the allocator?
-        }
+            if (try dvui.button(@src(), "Add New", .{}, .{})) {
+                // want to add new_item to the end of the slice, but where is the allocator?
 
-        try fieldWidget(@typeName(T), T, @ptrCast(new_item), options.child, alloc, allocator);
+                //realloc here
+            }
+
+            try fieldWidget(@typeName(T), Child, @ptrCast(new_item), opt.child, alloc, allocator);
+        },
+        .copy_value_and_alloc_new => {
+            //TODO
+        },
+        .display_only => {},
+        .mutate_value_in_place_only => {},
     }
 
     vbox.deinit();
