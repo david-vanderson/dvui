@@ -9,8 +9,7 @@ check zig std lib for bytesAsSlice alignment - should it always aligncast?
 can we do word-drag-select and line-drag-select?
 
 
-test char left when movement is larger than buf
-- also test char left/right with non ascii
+test movements with mutlibyte utf8 chars
 
 test movements with an empty textEntry/textLayout
 - mouse select, mouse drag
