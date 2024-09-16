@@ -472,6 +472,31 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             sel.end = sel.start;
                             sel.cursor = sel.start;
                             self.scroll_to_cursor = true;
+                        } else if (ke.mod.control()) {
+                            // delete word before cursor
+
+                            const oldcur = sel.cursor;
+                            // find end of last word
+                            if (sel.cursor > 0 and std.mem.indexOfAny(u8, self.text[sel.cursor - 1 ..][0..1], " \n") != null) {
+                                sel.cursor = std.mem.lastIndexOfNone(u8, self.text[0..sel.cursor], " \n") orelse 0;
+                            }
+
+                            // find start of word
+                            if (std.mem.lastIndexOfAny(u8, self.text[0..sel.cursor], " \n")) |last_space| {
+                                sel.cursor = last_space + 1;
+                            } else {
+                                sel.cursor = 0;
+                            }
+
+                            // delete from sel.cursor to oldcur
+                            std.mem.copyForwards(u8, self.text[sel.cursor..], self.text[oldcur..self.len]);
+                            self.len -= (oldcur - sel.cursor);
+                            if (self.len > 0) {
+                                self.text[self.len] = 0;
+                            }
+                            sel.end = sel.cursor;
+                            sel.start = sel.cursor;
+                            self.scroll_to_cursor = true;
                         } else if (sel.cursor > 0) {
                             // delete character just before cursor
                             //
@@ -502,6 +527,32 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             self.text[self.len] = 0;
                             sel.end = sel.start;
                             sel.cursor = sel.start;
+                            self.scroll_to_cursor = true;
+                        } else if (ke.mod.control()) {
+                            // delete word after cursor
+
+                            const oldcur = sel.cursor;
+                            // find start of next word
+                            if (sel.cursor < self.len and std.mem.indexOfAny(u8, self.text[sel.cursor..][0..1], " \n") != null) {
+                                sel.cursor = std.mem.indexOfNonePos(u8, self.text, sel.cursor, " \n") orelse self.len;
+                            }
+
+                            // find end of word
+                            if (std.mem.indexOfAny(u8, self.text[sel.cursor..self.len], " \n")) |last_space| {
+                                sel.cursor = sel.cursor + last_space;
+                            } else {
+                                sel.cursor = self.len;
+                            }
+
+                            // delete from oldcur to sel.cursor
+                            std.mem.copyForwards(u8, self.text[oldcur..], self.text[sel.cursor..self.len]);
+                            self.len -= (sel.cursor - oldcur);
+                            if (self.len > 0) {
+                                self.text[self.len] = 0;
+                            }
+                            sel.cursor = oldcur;
+                            sel.end = sel.cursor;
+                            sel.start = sel.cursor;
                             self.scroll_to_cursor = true;
                         } else if (sel.cursor < self.len) {
                             // delete the character just after the cursor
