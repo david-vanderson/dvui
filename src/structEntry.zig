@@ -438,7 +438,7 @@ pub fn pointerFieldWidget(
     } else if (info.size == .Slice) {
         try sliceFieldWidget(name, T, result, opt, alloc, allocator);
     } else if (info.size == .One) {
-        try singlePointerFieldWidget(T, name, result, opt, alloc, allocator);
+        try singlePointerFieldWidget(name, T, result, opt, alloc, allocator);
     } else if (info.size == .C or info.size == .Many) {
         @compileError("structEntry does not support *C or Many pointers");
     }
@@ -449,6 +449,7 @@ pub fn SinglePointerFieldOptions(comptime T: type) type {
     return struct {
         child: FieldOptions(@typeInfo(T).Pointer.child) = .{},
         disabled: bool = false,
+        label_override: ?[]const u8 = null,
     };
 }
 
@@ -493,7 +494,7 @@ pub fn singlePointerFieldWidget(
             try dvui.label(@src(), ": {any}", .{result.*.*}, .{});
         },
         .mutate_value_in_place => {
-            try fieldWidget(@src(), name, Child, result.*, opt.child, alloc, allocator);
+            try fieldWidget(name, Child, result.*, opt.child, alloc, allocator);
         },
         .copy_value_and_alloc_new => {
             //TODO
@@ -501,7 +502,7 @@ pub fn singlePointerFieldWidget(
         },
     }
 
-    try fieldWidget(@src(), name, Child, result.*, opt.child, alloc, allocator);
+    //try fieldWidget(name, Child, result.*, opt.child, alloc, allocator);
 }
 
 //=======Single Item pointer and options=======

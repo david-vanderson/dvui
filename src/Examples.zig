@@ -377,6 +377,7 @@ pub fn demo() !void {
             a_struct: TopChild = .{ .a_dir = .vertical },
             a_str: []const u8 = &[_]u8{0} ** 20,
             a_slice: []TopChild = undefined,
+            a_ptr: *TopChild = undefined,
 
             var slice: [2]TopChild = blk: {
                 var temp: [2]TopChild = undefined;
@@ -384,7 +385,10 @@ pub fn demo() !void {
                 temp[1].a_dir = .horizontal;
                 break :blk temp;
             };
-            var instance: @This() = .{ .a_slice = &slice };
+
+            var ptr: TopChild = TopChild{ .a_dir = .horizontal };
+
+            var instance: @This() = .{ .a_slice = &slice, .a_ptr = &ptr };
         };
 
         try dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
