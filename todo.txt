@@ -6,12 +6,6 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
-write zig.news article about making global mutable slice variables
-- is there a mechanical way to transfrom from const to var?
-
-
-multiline default text is duplicated every time the expander is expanded
-
 can we do word-drag-select and line-drag-select?
 
 
