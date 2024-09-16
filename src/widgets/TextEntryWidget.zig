@@ -576,8 +576,16 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 .home, .end => |code| {
                     if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
                         e.handled = true;
-                        if (self.textLayout.sel_move == .none) {
-                            self.textLayout.sel_move = .{ .expand_pt = .{ .select = false, .which = if (code == .home) .home else .end } };
+                        if (ke.mod.control()) {
+                            if (code == .home) {
+                                self.textLayout.selection.moveCursor(0, false);
+                            } else {
+                                self.textLayout.selection.moveCursor(std.math.maxInt(usize), false);
+                            }
+                        } else {
+                            if (self.textLayout.sel_move == .none) {
+                                self.textLayout.sel_move = .{ .expand_pt = .{ .select = false, .which = if (code == .home) .home else .end } };
+                            }
                         }
                     }
                 },
