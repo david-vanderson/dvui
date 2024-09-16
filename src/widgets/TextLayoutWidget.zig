@@ -1513,8 +1513,16 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             },
             .home, .end => |code| {
                 e.handled = true;
-                if (self.sel_move == .none) {
-                    self.sel_move = .{ .expand_pt = .{ .which = if (code == .home) .home else .end } };
+                if (e.evt.key.mod.control()) {
+                    if (code == .home) {
+                        self.selection.moveCursor(0, true);
+                    } else {
+                        self.selection.moveCursor(std.math.maxInt(usize), true);
+                    }
+                } else {
+                    if (self.sel_move == .none) {
+                        self.sel_move = .{ .expand_pt = .{ .which = if (code == .home) .home else .end } };
+                    }
                 }
             },
             else => {},

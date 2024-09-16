@@ -11,16 +11,15 @@ can we do word-drag-select and line-drag-select?
 
 test movements with mutlibyte utf8 chars
 
-test movements with an empty textEntry/textLayout
-- mouse select, mouse drag
-- expand word line home end
-- char left/right
-- cursor up/down
-- word left-right
-
 consolidate touch editing selection
 
 test selection movements on mac
+- deleting previous/next word
+- back/forward by word (select)
+- beginning/end of line (select)
+- beginning/end of text (select)
+- select all
+
 
 textLayout:
 ctrl-shift-home/end to go to start/end of text (Mac?)
