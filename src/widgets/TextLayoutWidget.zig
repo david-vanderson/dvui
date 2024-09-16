@@ -774,9 +774,9 @@ fn cursorSeen(self: *TextLayoutWidget) void {
             if (clr.count < 0) {
                 const oldcur = self.selection.cursor;
                 var cur = self.selection.cursor;
-                while (clr.count < 0) {
-                    if (cur > 0 and cur == self.first_byte_in_line and self.selection.affinity == .after and !clr.select) {
-                        if (oldcur - cur + 1 <= @min(clr.buf.len, oldcur) and clr.buf[clr.buf.len + cur - oldcur - 1] == '\n') {
+                while (clr.count < 0 and cur > 0 and (oldcur - cur + 1) <= clr.buf.len) {
+                    if (cur == self.first_byte_in_line and self.selection.affinity == .after and !clr.select) {
+                        if (clr.buf[clr.buf.len + cur - oldcur - 1] == '\n') {
                             cur -= 1;
                             self.selection.moveCursor(cur, clr.select);
                         } else {
@@ -785,10 +785,19 @@ fn cursorSeen(self: *TextLayoutWidget) void {
                     } else {
                         // move cursor one utf8 char left
                         cur -|= 1;
-                        while (cur < oldcur and oldcur - cur <= @min(clr.buf.len, oldcur) and clr.buf[clr.buf.len + cur - oldcur] & 0xc0 == 0x80) {
+                        while (cur > 0 and oldcur - cur <= clr.buf.len and clr.buf[clr.buf.len + cur - oldcur] & 0xc0 == 0x80) {
                             // in the middle of a multibyte char
                             cur -|= 1;
                         }
+
+                        var bail = false;
+                        while ((oldcur - cur) > clr.buf.len or (cur <= oldcur and clr.buf[clr.buf.len + cur - oldcur] & 0xc0 == 0x80)) {
+                            // couldn't get to a good place, so reverse
+                            cur += 1;
+                            bail = true;
+                        }
+
+                        if (bail) break;
 
                         self.selection.moveCursor(cur, clr.select);
                     }
