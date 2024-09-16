@@ -21,12 +21,8 @@ test selection movements on mac
 - select all
 
 
-textLayout:
-ctrl-shift-home/end to go to start/end of text (Mac?)
-
 textEntry:
 ctrl-backspace/delete to delete previous/next word (Mac?)
-ctrl-home/end to go to start/end of text (Mac?)
 
 
 text entry:
