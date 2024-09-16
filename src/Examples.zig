@@ -43,6 +43,7 @@ var text_entry_password_buf_obf_enable: bool = true;
 var text_entry_multiline_allocator_buf: [1000]u8 = undefined;
 var text_entry_multiline_fba = std.heap.FixedBufferAllocator.init(&text_entry_multiline_allocator_buf);
 var text_entry_multiline_buf: []u8 = &.{};
+var text_entry_multiline_initialized = false;
 var dropdown_val: usize = 1;
 var layout_margin: Rect = Rect.all(4);
 var layout_border: Rect = Rect.all(0);
@@ -372,6 +373,10 @@ pub fn demo() !void {
                 a_dir: dvui.enums.Direction = undefined,
             };
 
+            const init_data = [_]TopChild{ .{ .a_dir = .vertical }, .{ .a_dir = .horizontal } };
+            var mut_array = init_data;
+            var ptr: TopChild = TopChild{ .a_dir = .horizontal };
+
             a_u8: u8 = 1,
             a_f32: f32 = 2.0,
             a_struct: TopChild = .{ .a_dir = .vertical },
@@ -379,16 +384,7 @@ pub fn demo() !void {
             a_slice: []TopChild = undefined,
             a_ptr: *TopChild = undefined,
 
-            var slice: [2]TopChild = blk: {
-                var temp: [2]TopChild = undefined;
-                temp[0].a_dir = .vertical;
-                temp[1].a_dir = .horizontal;
-                break :blk temp;
-            };
-
-            var ptr: TopChild = TopChild{ .a_dir = .horizontal };
-
-            var instance: @This() = .{ .a_slice = &slice, .a_ptr = &ptr };
+            var instance: @This() = .{ .a_slice = &mut_array, .a_ptr = &ptr };
         };
 
         try dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
@@ -795,13 +791,15 @@ pub fn textEntryWidgets() !void {
 
         var te = try dvui.textEntry(
             @src(),
-            .{ .multiline = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf, .allocator = text_entry_multiline_fba.allocator() } } },
+            .{ .multiline = true, .scroll_horizontal = false, .break_lines = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf, .allocator = text_entry_multiline_fba.allocator() } } },
             .{
                 .min_size_content = .{ .w = 150, .h = 80 },
+                .debug = true,
             },
         );
 
-        if (dvui.firstFrame(te.data().id)) {
+        if (!text_entry_multiline_initialized) {
+            text_entry_multiline_initialized = true;
             te.textTyped("This multiline text\nentry can scroll\nin both directions.");
         }
 

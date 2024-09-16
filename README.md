@@ -162,7 +162,8 @@ If you want to only render frames when needed, add `window.beginWait()` at the s
 - an event comes in
 - an animation is ongoing
 - a timer has expired
-- user code calls `dvui.refresh()` (if your code knows you need a frame after the current one)
+- user code calls `dvui.refresh(null, ...)` (if your code knows you need a frame after the current one)
+- a background thread calls `dvui.refresh(window, ...)` which in turn calls `backend.refresh()`
 
 `window.waitTime()` also accepts a max fps parameter which will ensure the framerate stays below the given value.
 
