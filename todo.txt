@@ -6,16 +6,28 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
+can we do word-drag-select and line-drag-select?
 
-can we do word-drag-select?
+
+test movements with mutlibyte utf8 chars
+
+test movements with an empty textEntry/textLayout
+- mouse select, mouse drag
+- expand word line home end
+- char left/right
+- cursor up/down
+- word left-right
+
+consolidate touch editing selection
+
+test selection movements on mac
 
 textLayout:
-home/end to go to start/end of visual line (Mac?)
-triple-click selects logical line, but need to select visual line
-ctrl-home/end to go to start/end of text (Mac?)
+ctrl-shift-home/end to go to start/end of text (Mac?)
 
 textEntry:
 ctrl-backspace/delete to delete previous/next word (Mac?)
+ctrl-home/end to go to start/end of text (Mac?)
 
 
 text entry:
