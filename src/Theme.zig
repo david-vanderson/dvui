@@ -78,15 +78,15 @@ style_err: Options,
 
 pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     var ret = self.*;
-    ret.font_body.size += delta;
-    ret.font_heading.size += delta;
-    ret.font_caption.size += delta;
-    ret.font_caption_heading.size += delta;
-    ret.font_title.size += delta;
-    ret.font_title_1.size += delta;
-    ret.font_title_2.size += delta;
-    ret.font_title_3.size += delta;
-    ret.font_title_4.size += delta;
+    ret.font_body.getData().base_size += delta;
+    ret.font_heading.getData().base_size += delta;
+    ret.font_caption.getData().base_size += delta;
+    ret.font_caption_heading.getData().base_size += delta;
+    ret.font_title.getData().base_size += delta;
+    ret.font_title_1.getData().base_size += delta;
+    ret.font_title_2.getData().base_size += delta;
+    ret.font_title_3.getData().base_size += delta;
+    ret.font_title_4.getData().base_size += delta;
 
     return ret;
 }

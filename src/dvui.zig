@@ -579,10 +579,10 @@ pub fn fontCacheGet(bytes: []const u8, size: f32) !*FontCacheEntry {
                     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
                     .texture_atlas = cw.backend.textureCreate(
                         pixels.ptr,
-                        @as(u32, @intFromFloat(pixel_size.w)),
-                        @as(u32, @intFromFloat(pixel_size.h)),
+                        @as(u32, @intFromFloat(atlas_size.w)),
+                        @as(u32, @intFromFloat(atlas_size.h)),
                     ),
-                    .texture_atlas_size = size,
+                    .texture_atlas_size = atlas_size,
                     .texture_atlas_regen = true,
                 };
 
@@ -614,7 +614,7 @@ pub fn fontCacheGet(bytes: []const u8, size: f32) !*FontCacheEntry {
                 @as(u32, @intFromFloat(atlas_size.w)),
                 @as(u32, @intFromFloat(atlas_size.h)),
             ),
-            .texture_atlas_size = size,
+            .texture_atlas_size = atlas_size,
             .texture_atlas_regen = true,
         };
     }
@@ -5475,10 +5475,10 @@ pub fn renderText(opts: renderTextOptions) !void {
     }
 
     const target_size = opts.font.getSize() * opts.rs.s;
-    const sized_font = opts.font.resize(target_size);
+    //const sized_font = opts.font.resize(target_size);
 
     // might get a slightly smaller font
-    var fce = try fontCacheGet(sized_font);
+    var fce = try fontCacheGet(opts.font.getBytes(), opts.font.getSize());
 
     // this must be synced with Font.textSizeEx()
     const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.height;

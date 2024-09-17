@@ -296,11 +296,11 @@ pub fn demo() !void {
         defer hbox.deinit();
 
         if (try dvui.button(@src(), "Zoom In", .{}, .{})) {
-            scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
+            scale_val = @round(dvui.themeGet().font_body.getSize() * scale_val + 1.0) / dvui.themeGet().font_body.getSize();
         }
 
         if (try dvui.button(@src(), "Zoom Out", .{}, .{})) {
-            scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
+            scale_val = @round(dvui.themeGet().font_body.getSize() * scale_val - 1.0) / dvui.themeGet().font_body.getSize();
         }
     }
 
