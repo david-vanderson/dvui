@@ -72,6 +72,7 @@ text_opt: InitOptions.TextOption = undefined,
 text: []u8 = undefined,
 len: usize = undefined,
 scroll_to_cursor: bool = false,
+text_changed: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextEntryWidget {
     var self = TextEntryWidget{};
@@ -327,6 +328,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
         self.len -= (sel.end - sel.start);
         sel.end = sel.start;
         sel.cursor = sel.start;
+        self.text_changed = true;
     }
 
     const space_left = self.text.len - self.len;
@@ -380,6 +382,10 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
         std.mem.copyBackwards(u8, self.text[sel.cursor + new_len ..], self.text[sel.cursor..self.len]);
     }
 
+    if (new_len > 0) {
+        self.text_changed = true;
+    }
+
     // update our len and maintain 0 termination if possible
     self.len += new_len;
     if (self.len < self.text.len) {
@@ -413,6 +419,7 @@ pub fn filterIn(self: *TextEntryWidget, filter_chars: []const u8) void {
             if (sel.start > i) sel.start -= 1;
             if (sel.cursor > i) sel.cursor -= 1;
             if (sel.end > i) sel.end -= 1;
+            self.text_changed = true;
 
             i += 1;
         } else {
@@ -443,6 +450,7 @@ pub fn filterOut(self: *TextEntryWidget, needle: []const u8) void {
             if (sel.start > i) sel.start -= needle.len;
             if (sel.cursor > i) sel.cursor -= needle.len;
             if (sel.end > i) sel.end -= needle.len;
+            self.text_changed = true;
 
             i += needle.len;
         } else {
@@ -472,6 +480,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             sel.end = sel.start;
                             sel.cursor = sel.start;
                             self.scroll_to_cursor = true;
+                            self.text_changed = true;
                         } else if (ke.mod.control()) {
                             // delete word before cursor
 
@@ -497,6 +506,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             sel.end = sel.cursor;
                             sel.start = sel.cursor;
                             self.scroll_to_cursor = true;
+                            self.text_changed = (sel.cursor != oldcur);
                         } else if (sel.cursor > 0) {
                             // delete character just before cursor
                             //
@@ -505,7 +515,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             // the string backwards. The first byte of a utf8 char
                             // does not have the pattern 10xxxxxx.
                             var i: usize = 1;
-                            while (self.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
+                            while (sel.cursor - i > 0 and self.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
                             std.mem.copyForwards(u8, self.text[sel.cursor - i ..], self.text[sel.cursor..self.len]);
                             self.len -= i;
                             self.text[self.len] = 0;
@@ -513,6 +523,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             sel.start = sel.cursor;
                             sel.end = sel.cursor;
                             self.scroll_to_cursor = true;
+                            self.text_changed = true;
                         }
                     }
                 },
@@ -528,6 +539,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             sel.end = sel.start;
                             sel.cursor = sel.start;
                             self.scroll_to_cursor = true;
+                            self.text_changed = true;
                         } else if (ke.mod.control()) {
                             // delete word after cursor
 
@@ -554,14 +566,18 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             sel.end = sel.cursor;
                             sel.start = sel.cursor;
                             self.scroll_to_cursor = true;
+                            self.text_changed = (sel.cursor != oldcur);
                         } else if (sel.cursor < self.len) {
                             // delete the character just after the cursor
                             //
                             // A utf8 char might consist of more than one byte.
-                            const i = std.unicode.utf8ByteSequenceLength(self.text[sel.cursor]) catch 1;
+                            const ii = std.unicode.utf8ByteSequenceLength(self.text[sel.cursor]) catch 1;
+                            const i = @min(ii, self.len - sel.cursor);
+
                             std.mem.copyForwards(u8, self.text[sel.cursor..], self.text[sel.cursor + i .. self.len]);
                             self.len -= i;
                             self.text[self.len] = 0;
+                            self.text_changed = true;
                         }
                     }
                 },
@@ -716,6 +732,7 @@ pub fn cut(self: *TextEntryWidget) void {
         sel.end = sel.start;
         sel.cursor = sel.start;
         self.scroll_to_cursor = true;
+        self.text_changed = true;
     }
 }
 
