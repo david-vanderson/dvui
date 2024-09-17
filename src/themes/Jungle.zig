@@ -16,21 +16,19 @@ const fill_hover = Color{ .r = 0x33, .g = 0x4e, .b = 0x57, .a = 0xff }; // defau
 const fill_press = Color{ .r = 0x3b, .g = 0x63, .b = 0x57, .a = 0xff }; // DEFAULT_BASE_COLOR_PRESSED
 const border = Color{ .r = 0x60, .g = 0x82, .b = 0x7d, .a = 0xff }; // default_border_color_normal
 
-const size = 18;
-
 pub const jungle = Theme{
     .name = "Jungle",
     .dark = true,
 
-    .font_body = .{ .size = size, .name = "Pixelify" },
-    .font_heading = .{ .size = size, .name = "Pixelify" },
-    .font_caption = .{ .size = size, .name = "Pixelify" },
-    .font_caption_heading = .{ .size = size, .name = "Pixelify" },
-    .font_title = .{ .size = size * 2, .name = "Pixelify" },
-    .font_title_1 = .{ .size = size * 1.8, .name = "Pixelify" },
-    .font_title_2 = .{ .size = size * 1.6, .name = "Pixelify" },
-    .font_title_3 = .{ .size = size * 1.4, .name = "Pixelify" },
-    .font_title_4 = .{ .size = size * 1.2, .name = "Pixelify" },
+    .font_body = .{ .name = "Pixelify" },
+    .font_heading = .{ .name = "Pixelify" },
+    .font_caption = .{ .name = "Pixelify" },
+    .font_caption_heading = .{ .name = "Pixelify" },
+    .font_title = .{ .name = "Pixelify" },
+    .font_title_1 = .{ .name = "Pixelify" },
+    .font_title_2 = .{ .name = "Pixelify" },
+    .font_title_3 = .{ .name = "Pixelify" },
+    .font_title_4 = .{ .name = "Pixelify" },
 
     .color_accent = accent,
     .color_err = err,

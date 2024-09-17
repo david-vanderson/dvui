@@ -16,21 +16,20 @@ const fill_control = Color{ .r = 0x51, .g = 0x5b, .b = 0x7f, .a = 0xff }; // col
 const fill_hover = Color{ .r = 0x62, .g = 0x72, .b = 0xa4, .a = 0xff }; // colors.bg_border
 const fill_press = accent;
 const border = Color{ .r = 0x9f, .g = 0xa7, .b = 0xc7, .a = 0xff }; // colors.grey[7]
-const size = 15;
 
 pub const flow = Theme{
     .name = "Flow",
     .dark = true,
 
-    .font_body = .{ .size = 13, .name = "Vera" },
-    .font_heading = .{ .size = 13, .name = "VeraBd" },
-    .font_caption = .{ .size = 10, .name = "Vera" },
-    .font_caption_heading = .{ .size = 10, .name = "VeraBd" },
-    .font_title = .{ .size = 28, .name = "Vera" },
-    .font_title_1 = .{ .size = 23, .name = "VeraBd" },
-    .font_title_2 = .{ .size = 20, .name = "VeraBd" },
-    .font_title_3 = .{ .size = 17, .name = "VeraBd" },
-    .font_title_4 = .{ .size = 15, .name = "VeraBd" },
+    .font_body = .{ .name = "Vera" },
+    .font_heading = .{ .name = "VeraBd" },
+    .font_caption = .{ .name = "Vera" },
+    .font_caption_heading = .{ .name = "VeraBd" },
+    .font_title = .{ .name = "Vera" },
+    .font_title_1 = .{ .name = "VeraBd" },
+    .font_title_2 = .{ .name = "VeraBd" },
+    .font_title_3 = .{ .name = "VeraBd" },
+    .font_title_4 = .{ .name = "VeraBd" },
 
     .color_accent = accent,
     .color_err = err,

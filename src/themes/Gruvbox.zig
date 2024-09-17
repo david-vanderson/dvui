@@ -15,21 +15,20 @@ const fill_control = Color{ .r = 0x7c, .g = 0x6f, .b = 0x64, .a = 0xff }; // s:g
 const fill_hover = border;
 const fill_press = accent;
 const border = Color{ .r = 0x83, .g = 0xa5, .b = 0x98, .a = 0xff }; // s:gb.bright_blue
-const size = 16;
 
 pub const gruvbox = Theme{
     .name = "Gruvbox",
     .dark = true,
 
-    .font_body = .{ .size = size, .name = "Aleo" },
-    .font_heading = .{ .size = size, .name = "AleoBd" },
-    .font_caption = .{ .size = size * 0.8, .name = "Aleo" },
-    .font_caption_heading = .{ .size = size * 0.8, .name = "AleoBd" },
-    .font_title = .{ .size = size * 2, .name = "Aleo" },
-    .font_title_1 = .{ .size = size * 1.8, .name = "AleoBd" },
-    .font_title_2 = .{ .size = size * 1.6, .name = "AleoBd" },
-    .font_title_3 = .{ .size = size * 1.4, .name = "AleoBd" },
-    .font_title_4 = .{ .size = size * 1.2, .name = "AleoBd" },
+    .font_body = .{ .name = "Aleo" },
+    .font_heading = .{ .name = "AleoBd" },
+    .font_caption = .{ .name = "Aleo" },
+    .font_caption_heading = .{ .name = "AleoBd" },
+    .font_title = .{ .name = "Aleo" },
+    .font_title_1 = .{ .name = "AleoBd" },
+    .font_title_2 = .{ .name = "AleoBd" },
+    .font_title_3 = .{ .name = "AleoBd" },
+    .font_title_4 = .{ .name = "AleoBd" },
 
     .color_accent = accent,
     .color_err = err,

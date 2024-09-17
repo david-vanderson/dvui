@@ -352,16 +352,22 @@ const FontCacheEntry = struct {
         };
     }
 
-    pub fn hash(font: Font) u32 {
+    pub fn hash(bytes: []const u8, size: f32) u32 {
         var h = fnv.init();
-        var bytes: []const u8 = undefined;
-        if (currentWindow().ttf_bytes_database.get(font.name)) |ttf_bytes| {
-            bytes = ttf_bytes;
-        } else {
-            bytes = Font.default_ttf_bytes;
-        }
+        //var bytes: []const u8 = undefined;
+        //var size: usize = 0;
+
+        //if (currentWindow().font_database.get(font.name)) |font_data| {
+        //    bytes = font_data.bytes;
+        //    size = font_data.size;
+        //} else {
+        //    bytes = Font.default_font.bytes;
+        //    size = Font.default_font.getSize();
+        //}
+        //const data = font.getData();
+
         h.update(std.mem.asBytes(&bytes.ptr));
-        h.update(std.mem.asBytes(&font.size));
+        h.update(std.mem.asBytes(&size));
         return h.final();
     }
 
@@ -496,31 +502,39 @@ const FontCacheEntry = struct {
     }
 };
 
-// Will get a font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
-pub fn fontCacheGet(font: Font) !*FontCacheEntry {
+// Will get a font at an integer size <= font.getSize() (guaranteed to have a minimum pixel size of 1)
+pub fn fontCacheGet(bytes: []const u8, size: f32) !*FontCacheEntry {
     var cw = currentWindow();
-    const fontHash = FontCacheEntry.hash(font);
+    const fontHash = FontCacheEntry.hash(bytes, size);
     if (cw.font_cache.getPtr(fontHash)) |fce| {
         fce.used = true;
         return fce;
     }
 
     //ttf bytes
-    const bytes = blk: {
-        if (currentWindow().ttf_bytes_database.get(font.name)) |ttf_bytes| {
-            break :blk ttf_bytes;
-        } else {
-            log.warn("Font \"{s}\" not in dvui database, using default", .{font.name});
-            break :blk Font.default_ttf_bytes;
-        }
-    };
-    log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
+    //const bytes = blk: {
+    //    if (currentWindow().font_database.get(font.name)) |ttf_bytes| {
+    //        break :blk ttf_bytes;
+    //    } else {
+    //        log.warn("Font \"{s}\" not in dvui database, using default", .{font.name});
+    //        break :blk Font.default_ttf_bytes;
+    //    }
+    //};
+    log.debug("FontCacheGet creating font hash {x} ptr {*} size {d}", .{
+        fontHash,
+        bytes.ptr,
+        size,
+        //font.name,
+    });
 
     var entry: FontCacheEntry = undefined;
 
     // make debug texture atlas so we can see if something later goes wrong
-    const size = .{ .w = 10, .h = 10 };
-    const pixels = try cw.arena.alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
+    const atlas_size = .{ .w = 10, .h = 10 };
+    const pixels = try cw.arena.alloc(
+        u8,
+        @as(usize, @intFromFloat(atlas_size.w * atlas_size.h)) * 4,
+    );
     @memset(pixels, 255);
 
     const min_pixel_size = 1;
@@ -532,17 +546,20 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         args.memory_base = bytes.ptr;
         args.memory_size = @as(u31, @intCast(bytes.len));
         FontCacheEntry.intToError(c.FT_Open_Face(ft2lib, &args, 0, &face)) catch |err| {
-            log.warn("fontCacheGet freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, font.name });
+            log.warn("fontCacheGet freetype error {!} trying to FT_Open_Face font \n", .{
+                err,
+                //font.name,
+            });
             return error.freetypeError;
         };
 
         // "pixel size" for freetype doesn't actually mean you'll get that height, it's more like using pts
-        // so we search for a font that has a height <= font.size
-        var pixel_size = @as(u32, @intFromFloat(@max(min_pixel_size, @floor(font.size))));
+        // so we search for a font that has a height <= font.getSize()
+        var pixel_size = @as(u32, @intFromFloat(@max(min_pixel_size, @floor(size))));
 
         while (true) : (pixel_size -= 1) {
             FontCacheEntry.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
-                log.warn("fontCacheGet freetype error {!} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, font.name });
+                log.warn("fontCacheGet freetype error {!} trying to FT_Set_Pixel_Sizes font\n", .{err});
                 return error.freetypeError;
             };
 
@@ -553,14 +570,18 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
 
             //std.debug.print("height {d} -> pixel_size {d}\n", .{ height, pixel_size });
 
-            if (height <= font.size or pixel_size == min_pixel_size) {
+            if (height <= size or pixel_size == min_pixel_size) {
                 entry = FontCacheEntry{
                     .face = face,
                     .scaleFactor = 1.0, // not used with freetype
                     .height = @ceil(height),
                     .ascent = @floor(ascent),
                     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-                    .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h))),
+                    .texture_atlas = cw.backend.textureCreate(
+                        pixels.ptr,
+                        @as(u32, @intFromFloat(pixel_size.w)),
+                        @as(u32, @intFromFloat(pixel_size.h)),
+                    ),
                     .texture_atlas_size = size,
                     .texture_atlas_regen = true,
                 };
@@ -571,7 +592,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     } else {
         var face: c.stbtt_fontinfo = undefined;
         _ = c.stbtt_InitFont(&face, bytes.ptr, c.stbtt_GetFontOffsetForIndex(bytes.ptr, 0));
-        const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, @max(min_pixel_size, @floor(font.size)));
+        const SF: f32 = c.stbtt_ScaleForPixelHeight(&face, @max(min_pixel_size, @floor(size)));
 
         var face2_ascent: c_int = undefined;
         var face2_descent: c_int = undefined;
@@ -588,13 +609,17 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
             .height = height,
             .ascent = ascent,
             .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-            .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h))),
+            .texture_atlas = cw.backend.textureCreate(
+                pixels.ptr,
+                @as(u32, @intFromFloat(atlas_size.w)),
+                @as(u32, @intFromFloat(atlas_size.h)),
+            ),
             .texture_atlas_size = size,
             .texture_atlas_regen = true,
         };
     }
 
-    log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
+    log.debug("- size {d} ascent {d} height {d}", .{ size, entry.ascent, entry.height });
 
     try cw.font_cache.put(fontHash, entry);
 
@@ -2171,7 +2196,7 @@ pub const Window = struct {
     tab_index_prev: std.ArrayList(TabIndex),
     tab_index: std.ArrayList(TabIndex),
     font_cache: std.AutoHashMap(u32, FontCacheEntry),
-    ttf_bytes_database: std.StringHashMap([]const u8),
+    font_database: std.StringHashMap(Font.Data),
     texture_cache: std.AutoHashMap(u32, TextureCacheEntry),
     dialog_mutex: std.Thread.Mutex,
     dialogs: std.ArrayList(Dialog),
@@ -2243,7 +2268,7 @@ pub const Window = struct {
             .debug_refresh_mutex = std.Thread.Mutex{},
             .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
             .backend = backend,
-            .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
+            .font_database = try Font.initTTFBytesDatabase(gpa),
             .theme = init_opts.theme orelse &Theme.AdwaitaLight,
         };
 
@@ -2310,7 +2335,7 @@ pub const Window = struct {
         self.dialogs.deinit();
         self.toasts.deinit();
         self._arena.deinit();
-        self.ttf_bytes_database.deinit();
+        self.font_database.deinit();
     }
 
     // called from any thread
@@ -5449,7 +5474,7 @@ pub fn renderText(opts: renderTextOptions) !void {
         return;
     }
 
-    const target_size = opts.font.size * opts.rs.s;
+    const target_size = opts.font.getSize() * opts.rs.s;
     const sized_font = opts.font.resize(target_size);
 
     // might get a slightly smaller font
@@ -5510,7 +5535,7 @@ pub fn renderText(opts: renderTextOptions) !void {
         }
 
         //const num_glyphs = fce.glyph_info.count();
-        //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{ sized_font.size, num_glyphs, size });
+        //std.debug.print("font.getSize() {d} regen glyph atlas num {d} max size {}\n", .{ sized_font.getSize(), num_glyphs, size });
 
         {
             var x: i32 = pad;

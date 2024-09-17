@@ -6,19 +6,41 @@ const Size = dvui.Size;
 
 const Font = @This();
 
-size: f32,
+//size: f32,
 line_height_factor: f32 = 1.0,
 name: []const u8,
+scale: f32 = 1.0,
 
-pub fn resize(self: *const Font, s: f32) Font {
-    return Font{ .size = s, .line_height_factor = self.line_height_factor, .name = self.name };
+//pub fn resize(self: *const Font, s: f32) Font {
+//return Font{ .size = s, .line_height_factor = self.line_height_factor, .name = self.name };
+//}
+
+//pub fn lineHeightFactor(self: *const Font, factor: f32) Font {
+//return Font{ .size = self.size, .line_height_factor = factor, .name = self.name };
+//}
+
+pub const Data = struct {
+    bytes: []const u8,
+    base_size: f32 = 12,
+};
+
+// default bytes if font id is not found in database
+pub const default_font_data: Data = .{ .bytes = TTFBytes.Vera };
+
+/// Gets font ttf bytes and default size for font
+pub fn getData(self: Font) Font.Data {
+    if (dvui.currentWindow().font_database.get(self.name)) |font_data| {
+        return font_data;
+    } else {
+        return default_font_data;
+    }
 }
 
-pub fn lineHeightFactor(self: *const Font, factor: f32) Font {
-    return Font{ .size = self.size, .line_height_factor = factor, .name = self.name };
+pub fn getSize(self: Font) f32 {
+    return self.getData().base_size * self.scale;
 }
 
-// handles multiple lines
+//handles multiple lines
 pub fn textSize(self: *const Font, text: []const u8) !Size {
     if (text.len == 0) {
         // just want the line height
@@ -46,19 +68,29 @@ pub const EndMetric = enum {
 };
 
 /// textSizeEx always stops at a newline, use textSize to get multiline sizes
-pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: EndMetric) !Size {
+pub fn textSizeEx(
+    self: *const Font,
+    text: []const u8,
+    max_width: ?f32,
+    end_idx: ?*usize,
+    end_metric: EndMetric,
+) !Size {
     // ask for a font that matches the natural display pixels so we get a more
     // accurate size
+    const font_data = self.getData();
 
-    const ss = dvui.parentGet().screenRectScale(Rect{}).s;
-    const ask_size = self.size * ss;
-    const sized_font = self.resize(ask_size);
+    const screen_scale = dvui.parentGet().screenRectScale(Rect{}).s;
+    const ask_size = self.getSize() * screen_scale;
+    //const sized_font = self.resize(ask_size);
 
     // might give us a slightly smaller font
-    const fce = try dvui.fontCacheGet(sized_font);
+    const fce = try dvui.fontCacheGet(font_data.bytes, ask_size);
 
     // this must be synced with dvui.renderText()
-    const target_fraction = if (dvui.currentWindow().snap_to_pixels) 1.0 / ss else self.size / fce.height;
+    const target_fraction = if (dvui.currentWindow().snap_to_pixels)
+        1.0 / screen_scale
+    else
+        self.size / fce.height;
 
     var max_width_sized: ?f32 = null;
     if (max_width) |mwidth| {
@@ -75,14 +107,11 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
     // convert size back from font units
     return s.scale(target_fraction);
 }
-
+//
 pub fn lineHeight(self: *const Font) !f32 {
     const s = try self.textSizeEx(" ", null, null, .before);
     return s.h;
 }
-
-// default bytes if font id is not found in database
-pub const default_ttf_bytes = TTFBytes.Vera;
 
 // functionality for accessing builtin fonts
 pub const TTFBytes = struct {
@@ -112,10 +141,12 @@ pub const TTFBytes = struct {
     pub const OpenDyslexicBdIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold-Italic.otf");
 };
 
-pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap([]const u8) {
-    var result = std.StringHashMap([]const u8).init(allocator);
+pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap(Data) {
+    var result = std.StringHashMap(Data).init(allocator);
     inline for (@typeInfo(TTFBytes).Struct.decls) |decl| {
-        try result.put(decl.name, @field(TTFBytes, decl.name));
+        try result.put(decl.name, .{
+            .bytes = @field(TTFBytes, decl.name),
+        });
     }
     return result;
 }

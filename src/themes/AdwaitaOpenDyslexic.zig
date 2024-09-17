@@ -25,21 +25,19 @@ const light_err_fill = err_hsl.color();
 const light_err_fill_hover = err_hsl.lighten(-10).color();
 const light_err_border = err_hsl.lighten(-20).color();
 
-const font_size = 20;
-
 pub const light = Theme{
     .name = "Adwaita OpenDyslexic",
     .dark = false,
 
-    .font_body = .{ .size = font_size, .name = font },
-    .font_heading = .{ .size = font_size, .name = font_bold },
-    .font_caption = .{ .size = font_size, .name = font },
-    .font_caption_heading = .{ .size = font_size, .name = font_bold },
-    .font_title = .{ .size = font_size * 2, .name = font },
-    .font_title_1 = .{ .size = font_size * 1.8, .name = font_bold },
-    .font_title_2 = .{ .size = font_size * 1.6, .name = font_bold },
-    .font_title_3 = .{ .size = font_size * 1.4, .name = font_bold },
-    .font_title_4 = .{ .size = font_size * 1.2, .name = font_bold },
+    .font_body = .{ .name = font },
+    .font_heading = .{ .name = font_bold },
+    .font_caption = .{ .name = font },
+    .font_caption_heading = .{ .name = font_bold },
+    .font_title = .{ .name = font },
+    .font_title_1 = .{ .name = font_bold },
+    .font_title_2 = .{ .name = font_bold },
+    .font_title_3 = .{ .name = font_bold },
+    .font_title_4 = .{ .name = font_bold },
 
     .color_accent = accent_hsl.color(),
     .color_err = err_hsl.color(),
@@ -91,15 +89,15 @@ pub const dark = Theme{
     .name = "Adwaita OpenDyslexic Dark",
     .dark = true,
 
-    .font_body = .{ .size = font_size, .name = font },
-    .font_heading = .{ .size = font_size, .name = font_bold },
-    .font_caption = .{ .size = font_size, .name = font },
-    .font_caption_heading = .{ .size = font_size, .name = font_bold },
-    .font_title = .{ .size = font_size * 2, .name = font },
-    .font_title_1 = .{ .size = font_size * 1.8, .name = font_bold },
-    .font_title_2 = .{ .size = font_size * 1.6, .name = font_bold },
-    .font_title_3 = .{ .size = font_size * 1.4, .name = font_bold },
-    .font_title_4 = .{ .size = font_size * 1.2, .name = font_bold },
+    .font_body = .{ .name = font },
+    .font_heading = .{ .name = font_bold },
+    .font_caption = .{ .name = font },
+    .font_caption_heading = .{ .name = font_bold },
+    .font_title = .{ .name = font },
+    .font_title_1 = .{ .name = font_bold },
+    .font_title_2 = .{ .name = font_bold },
+    .font_title_3 = .{ .name = font_bold },
+    .font_title_4 = .{ .name = font_bold },
 
     .color_accent = accent_hsl.color(),
     .color_err = dark_err,

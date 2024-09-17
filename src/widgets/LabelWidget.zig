@@ -27,6 +27,8 @@ pub fn initNoFmt(src: std.builtin.SourceLocation, label_str: []const u8, opts: O
     const options = defaults.override(opts);
     self.label_str = label_str;
 
+    //var font = options.fontGet();
+    //var text_size = f
     var size = try options.fontGet().textSize(self.label_str);
     size = Size.max(size, options.min_size_contentGet());
 
