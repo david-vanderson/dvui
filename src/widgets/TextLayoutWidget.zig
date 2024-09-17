@@ -123,7 +123,10 @@ sel_move: union(enum) {
     // third click selects line at pointer
     expand_pt: struct {
         pt: ?Point = null,
+        bytes: [2]usize = .{ 0, 0 }, // start and end of original selection while dragging
         select: bool = true, // false - move cursor, true - change selection
+        dragging: bool = false,
+        done: bool = false, // finished our work this frame?
         which: enum {
             word,
             line,
@@ -223,6 +226,12 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
     if (dvui.captured(self.wd.id)) {
         if (dvui.dataGet(null, self.wd.id, "_sel_move_mouse_byte", usize)) |p| {
             self.sel_move = .{ .mouse = .{ .byte = p } };
+        }
+
+        if (dvui.dataGet(null, self.wd.id, "_sel_move_expand_pt_which", @TypeOf(self.sel_move.expand_pt.which))) |w| {
+            if (dvui.dataGet(null, self.wd.id, "_sel_move_expand_pt_bytes", [2]usize)) |bytes| {
+                self.sel_move = .{ .expand_pt = .{ .which = w, .bytes = bytes, .done = true } };
+            }
         }
     }
 
@@ -481,6 +490,11 @@ fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: R
                     // haven't found it yet, keep cursor at end to not trigger cursor_seen
                     self.selection.moveCursor(self.bytes_seen + end, false);
                 }
+
+                if (ep.dragging) {
+                    self.selection.start = @min(self.selection.start, ep.bytes[0]);
+                    self.selection.end = @max(self.selection.end, ep.bytes[1]);
+                }
             }
         },
         .char_left_right => {},
@@ -550,14 +564,18 @@ fn lineBreak(self: *TextLayoutWidget) void {
                 }
             }
 
-            if (self.cursor_seen) {
+            if (!ep.done and self.cursor_seen) {
                 if (!ep.select) {
                     self.selection.moveCursor(self.selection.cursor, false);
                 }
 
                 self.selection.affinity = .before;
 
-                self.sel_move = .none;
+                if (!ep.dragging) {
+                    ep.bytes[1] = self.selection.end;
+                }
+
+                ep.done = true;
             }
         },
         .cursor_updown => |*cud| {
@@ -588,24 +606,35 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
         .none => {},
         .mouse => {},
         .expand_pt => |*ep| {
-            const search = if (ep.which == .word) " \n" else "\n";
-            if (!self.cursor_seen) {
-                // maintain index of last space/newline we saw
-                if (std.mem.lastIndexOfAny(u8, txt, search)) |space| {
-                    ep.last[1] = ep.last[0];
-                    ep.last[0] = start_idx + space + 1;
-                    if (std.mem.lastIndexOfAny(u8, txt[0..space], search)) |space2| {
-                        ep.last[1] = start_idx + space2 + 1;
+            if (!ep.done) {
+                const search = if (ep.which == .word) " \n" else "\n";
+                if (!self.cursor_seen) {
+                    // maintain index of last space/newline we saw
+                    if (std.mem.lastIndexOfAny(u8, txt, search)) |space| {
+                        ep.last[1] = ep.last[0];
+                        ep.last[0] = start_idx + space + 1;
+                        if (std.mem.lastIndexOfAny(u8, txt[0..space], search)) |space2| {
+                            ep.last[1] = start_idx + space2 + 1;
+                        }
                     }
-                }
-            } else {
-                // searching for next space/newline
-                if (std.mem.indexOfAny(u8, txt, search)) |space| {
-                    // found within our current text
-                    self.selection.moveCursor(start_idx + space, ep.select);
-                    self.sel_move = .none;
                 } else {
-                    self.selection.moveCursor(start_idx + txt.len, ep.select);
+                    // searching for next space/newline
+                    if (std.mem.indexOfAny(u8, txt, search)) |space| {
+                        // found within our current text
+                        self.selection.moveCursor(start_idx + space, ep.select);
+                        ep.done = true;
+                    } else {
+                        self.selection.moveCursor(start_idx + txt.len, ep.select);
+                    }
+
+                    if (!ep.dragging) {
+                        ep.bytes[1] = self.selection.end;
+                    }
+
+                    if (ep.dragging) {
+                        self.selection.start = @min(self.selection.start, ep.bytes[0]);
+                        self.selection.end = @max(self.selection.end, ep.bytes[1]);
+                    }
                 }
             }
         },
@@ -753,23 +782,35 @@ fn cursorSeen(self: *TextLayoutWidget) void {
         .none => {},
         .mouse => {},
         .expand_pt => |*ep| {
-            switch (ep.which) {
-                .word => {
-                    self.selection.moveCursor(@max(ep.last[0], self.first_byte_in_line), true);
-                    self.selection.cursor = self.selection.end; // put cursor at end so later expansion works
-                },
-                .line => {
-                    self.selection.moveCursor(self.first_byte_in_line, true);
-                    self.selection.cursor = self.selection.end; // put cursor at end so later expansion works
-                },
-                .home => {
-                    self.selection.moveCursor(self.first_byte_in_line, ep.select);
-                    self.sel_move = .none;
-                },
-                .end => {},
-            }
+            if (!ep.done) {
+                switch (ep.which) {
+                    .word => {
+                        self.selection.start = @max(ep.last[0], self.first_byte_in_line);
+                        self.selection.cursor = self.selection.end; // put cursor at end so later expansion works
+                    },
+                    .line => {
+                        self.selection.start = self.first_byte_in_line;
+                        self.selection.cursor = self.selection.end; // put cursor at end so later expansion works
+                    },
+                    .home => {
+                        self.selection.moveCursor(self.first_byte_in_line, ep.select);
+                        ep.done = true;
+                    },
+                    .end => {},
+                }
 
-            dvui.refresh(null, @src(), self.wd.id);
+                if (!ep.dragging) {
+                    ep.bytes[0] = self.selection.start;
+                    ep.bytes[1] = self.selection.end;
+                }
+
+                if (ep.dragging) {
+                    self.selection.start = @min(self.selection.start, ep.bytes[0]);
+                    self.selection.end = @max(self.selection.end, ep.bytes[1]);
+                }
+
+                dvui.refresh(null, @src(), self.wd.id);
+            }
         },
         .char_left_right => |*clr| {
             if (clr.count < 0) {
@@ -1464,6 +1505,10 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     e.handled = true;
                     if (self.sel_move == .mouse) {
                         self.sel_move.mouse.drag_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                    } else if (self.sel_move == .expand_pt) {
+                        self.sel_move.expand_pt.pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                        self.sel_move.expand_pt.done = false;
+                        self.sel_move.expand_pt.dragging = true;
                     }
                     var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
                         .mouse_pt = e.evt.mouse.p,
@@ -1573,10 +1618,15 @@ pub fn deinit(self: *TextLayoutWidget) void {
     dvui.dataSet(null, self.wd.id, "_sel_end_r", self.sel_end_r);
     dvui.dataSet(null, self.wd.id, "_selection", self.selection.*);
 
-    if (dvui.captured(self.wd.id) and self.sel_move == .mouse) {
-        // once we figure out where the mousedown was, we need to save it
-        // as long as we are dragging
-        dvui.dataSet(null, self.wd.id, "_sel_move_mouse_byte", self.sel_move.mouse.byte.?);
+    if (dvui.captured(self.wd.id)) {
+        if (self.sel_move == .mouse) {
+            // once we figure out where the mousedown was, we need to save it
+            // as long as we are dragging
+            dvui.dataSet(null, self.wd.id, "_sel_move_mouse_byte", self.sel_move.mouse.byte.?);
+        } else if (self.sel_move == .expand_pt and (self.sel_move.expand_pt.which == .word or self.sel_move.expand_pt.which == .line)) {
+            dvui.dataSet(null, self.wd.id, "_sel_move_expand_pt_which", self.sel_move.expand_pt.which);
+            dvui.dataSet(null, self.wd.id, "_sel_move_expand_pt_bytes", self.sel_move.expand_pt.bytes);
+        }
     }
     if (self.click_num == 0) {
         dvui.dataRemove(null, self.wd.id, "_click_num");
