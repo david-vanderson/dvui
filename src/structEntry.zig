@@ -201,7 +201,6 @@ fn boolFieldWidget(
 
 //==========Text Field Widget and Options============
 pub const TextFieldOptions = struct {
-    max_len: u16 = 64,
     dvui_opts: dvui.Options = .{},
     disabled: bool = false,
     label_override: ?[]const u8 = null,
@@ -209,30 +208,76 @@ pub const TextFieldOptions = struct {
 
 fn textFieldWidget(
     comptime name: []const u8,
-    result: *[]const u8,
+    comptime T: type,
+    result: *T,
     opt: TextFieldOptions,
     comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     if (opt.disabled) return;
 
     //TODO respect alloc setting
-    _ = alloc; // autofix
     var box = try dvui.box(@src(), .horizontal, .{});
     defer box.deinit();
 
     try dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
-    const buffer = dvui.dataGetSliceDefault(
-        dvui.currentWindow(),
-        box.widget().data().id,
-        "buffer",
-        []u8,
-        result.*,
-    );
 
-    const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer = buffer } }, opt.dvui_opts);
-    defer text_box.deinit();
+    const ProvidedPointerTreatment = enum {
+        mutate_value_and_realloc,
+        mutate_value_in_place_only,
+        display_only,
+        copy_value_and_alloc_new,
+    };
 
-    result.* = text_box.getText();
+    comptime var treatment: ProvidedPointerTreatment = .display_only;
+    comptime if (!alloc) {
+        if (@typeInfo(T).Pointer.is_const) {
+            treatment = .display_only;
+        } else {
+            treatment = .mutate_value_in_place_only;
+        }
+    } else {
+        if (@typeInfo(T).Pointer.is_const) {
+            treatment = .copy_value_and_alloc_new;
+        } else {
+            treatment = .mutate_value_and_realloc;
+        }
+    };
+
+    switch (treatment) {
+        .mutate_value_in_place_only => {
+            const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer = result.* } }, opt.dvui_opts);
+            defer text_box.deinit();
+        },
+        .mutate_value_and_realloc => {
+            const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer_dynamic = .{
+                .allocator = allocator.?,
+                .backing = result.*,
+            } } }, opt.dvui_opts);
+            defer text_box.deinit();
+        },
+        .display_only => {
+            try dvui.label(@src(), " : {s}", .{result.*}, .{});
+        },
+        .copy_value_and_alloc_new => {
+            //TODO
+            try dvui.label(@src(), " : TODO {s}", .{result.*}, .{});
+            //var memory_handle = dvui.dataGet(null, box.widget().data().id, "memory_handle", []u8);
+            //if (memory_handle == null) {
+            //    const len = @max(64, result.*.len * 2);
+            //    const memory = try allocator.?.alloc(u8, len);
+            //    @memset(memory, 0);
+            //    std.mem.copyForwards(u8, memory, result.*);
+            //    dvui.dataSet(null, box.widget().data().id, "memory_handle", memory);
+            //    memory_handle = memory;
+            //}
+
+            ////WARNING: this could leak memory if result has been dynamically allocated
+            //result.* = memory_handle.?;
+            //const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer = memory_handle.? } }, opt.dvui_opts);
+            //text_box.deinit();
+        },
+    }
 }
 
 //===============================================
@@ -258,6 +303,7 @@ pub fn unionFieldWidget(
     result: *T,
     opt: UnionFieldOptions(T),
     comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     var box = try dvui.box(@src(), .vertical, .{});
     defer box.deinit();
@@ -307,6 +353,7 @@ pub fn unionFieldWidget(
                 @ptrCast(field_result),
                 @field(opt.fields, field.name),
                 alloc,
+                allocator,
             );
         }
     }
@@ -327,6 +374,7 @@ pub fn optionalFieldWidget(
     result: *T,
     opt: OptionalFieldOptions(T),
     comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     if (opt.disabled) return;
     var box = try dvui.box(@src(), .vertical, .{});
@@ -352,7 +400,7 @@ pub fn optionalFieldWidget(
             .margin = .{ .w = 10, .x = 10 },
         });
         line.deinit();
-        try fieldWidget("", Child, @ptrCast(result), opt.child, alloc);
+        try fieldWidget("", Child, @ptrCast(result), opt.child, alloc, allocator);
     } else {
         result.* = null;
     }
@@ -364,7 +412,7 @@ pub fn PointerFieldOptions(comptime T: type) type {
     if (info.size == .Slice and info.child == u8) {
         return TextFieldOptions;
     } else if (info.size == .Slice) {
-        return SliceFieldOptions(info.child);
+        return SliceFieldOptions(T);
     } else if (info.size == .One) {
         return SinglePointerFieldOptions(T);
     } else if (info.size == .C or info.size == .Many) {
@@ -378,15 +426,16 @@ pub fn pointerFieldWidget(
     result: *T,
     opt: PointerFieldOptions(T),
     comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     const info = @typeInfo(T).Pointer;
 
     if (info.size == .Slice and info.child == u8) {
-        try textFieldWidget(name, result, opt, alloc);
+        try textFieldWidget(name, T, result, opt, alloc, allocator);
     } else if (info.size == .Slice) {
-        try sliceFieldWidget(name, info.child, result, opt, alloc);
+        try sliceFieldWidget(name, T, result, opt, alloc, allocator);
     } else if (info.size == .One) {
-        try singlePointerFieldWidget(T, name, result, opt, alloc);
+        try singlePointerFieldWidget(name, T, result, opt, alloc, allocator);
     } else if (info.size == .C or info.size == .Many) {
         @compileError("structEntry does not support *C or Many pointers");
     }
@@ -397,6 +446,7 @@ pub fn SinglePointerFieldOptions(comptime T: type) type {
     return struct {
         child: FieldOptions(@typeInfo(T).Pointer.child) = .{},
         disabled: bool = false,
+        //label_override: ?[]const u8 = null,
     };
 }
 
@@ -406,7 +456,7 @@ pub fn singlePointerFieldWidget(
     result: *T,
     opt: SinglePointerFieldOptions(T),
     comptime alloc: bool,
-    paned: *dvui.PanedWidget,
+    allocator: ?std.mem.Allocator,
 ) !void {
     if (opt.disabled) return;
     var box = try dvui.box(@src(), .horizontal, .{});
@@ -414,19 +464,47 @@ pub fn singlePointerFieldWidget(
 
     const Child = @typeInfo(T).Pointer.child;
 
-    const destination = if (alloc)
-        try dvui.dataGetPtrDefault(dvui.currentWindow(), box.widget().data().id, "ptr", T, undefined)
-    else
-        result;
-    result.* = destination;
+    const ProvidedPointerTreatment = enum {
+        mutate_value_in_place,
+        display_only,
+        copy_value_and_alloc_new,
+    };
 
-    try fieldWidget(@src(), name, Child, result.*, opt.child, alloc, paned);
+    comptime var treatment: ProvidedPointerTreatment = .display_only;
+    comptime if (alloc == false) {
+        if (@typeInfo(T).Pointer.is_const) {
+            treatment = .display_only;
+        } else {
+            treatment = .mutate_value_in_place;
+        }
+    } else if (alloc == true) {
+        if (@typeInfo(T).Pointer.is_const) {
+            treatment = .copy_value_and_alloc_new;
+        } else {
+            treatment = .mutate_value_in_place;
+        }
+    };
+
+    //try dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
+    switch (treatment) {
+        .display_only => {
+            try dvui.label(@src(), ": {any}", .{result.*.*}, .{});
+        },
+        .mutate_value_in_place => {
+            try fieldWidget(name, Child, result.*, opt.child, alloc, allocator);
+        },
+        .copy_value_and_alloc_new => {
+            //TODO
+            try dvui.label(@src(), ": TODO {any}", .{result.*.*}, .{});
+        },
+    }
 }
 
 //=======Single Item pointer and options=======
 pub fn SliceFieldOptions(comptime T: type) type {
     return struct {
-        child: FieldOptions(T) = .{},
+        child: FieldOptions(@typeInfo(T).Pointer.child) = .{},
+        label_override: ?[]const u8 = null,
         disabled: bool = false,
     };
 }
@@ -434,21 +512,55 @@ pub fn SliceFieldOptions(comptime T: type) type {
 pub fn sliceFieldWidget(
     comptime name: []const u8,
     comptime T: type,
-    result: *[]T,
-    options: SliceFieldOptions(T),
+    result: *T,
+    opt: SliceFieldOptions(T),
     comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
-    _ = name; // autofix
+    if (@typeInfo(T).Pointer.size != .Slice) @compileError("must be called with slice");
+
+    const Child = @typeInfo(T).Pointer.child;
+
+    const ProvidedPointerTreatment = enum {
+        mutate_value_and_realloc,
+        mutate_value_in_place_only,
+        display_only,
+        copy_value_and_alloc_new,
+    };
+
+    comptime var treatment: ProvidedPointerTreatment = .display_only;
+    comptime if (alloc == false) {
+        if (@typeInfo(T).Pointer.is_const) {
+            treatment = .display_only;
+        } else {
+            treatment = .mutate_value_in_place_only;
+        }
+    } else if (alloc == true) {
+        if (@typeInfo(T).Pointer.is_const) {
+            treatment = .copy_value_and_alloc_new;
+        } else {
+            treatment = .mutate_value_and_realloc;
+        }
+    };
 
     var removed_idx: ?usize = null;
     var insert_before_idx: ?usize = null;
 
-    var reorder = try dvui.reorder(@src(), .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
+    var reorder = try dvui.reorder(@src(), .{
+        .min_size_content = .{ .w = 120 },
+        .background = true,
+        .border = dvui.Rect.all(1),
+        .padding = dvui.Rect.all(4),
+    });
 
     var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both });
+    try dvui.label(@src(), "{s}", .{opt.label_override orelse name}, .{});
 
     for (result.*, 0..) |_, i| {
-        var reorderable = try reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
+        var reorderable = try reorder.reorderable(@src(), .{}, .{
+            .id_extra = i,
+            .expand = .horizontal,
+        });
         defer reorderable.deinit();
 
         if (reorderable.removed()) {
@@ -457,12 +569,31 @@ pub fn sliceFieldWidget(
             insert_before_idx = i; // this entry was dropped onto
         }
 
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+        var hbox = try dvui.box(@src(), .horizontal, .{
+            .expand = .both,
+            .border = dvui.Rect.all(1),
+            .background = true,
+            .color_fill = .{ .name = .fill_window },
+        });
         defer hbox.deinit();
 
-        _ = try dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{ .expand = .vertical, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 });
+        switch (treatment) {
+            .mutate_value_in_place_only, .mutate_value_and_realloc => {
+                _ = try dvui.ReorderWidget.draggable(@src(), .{ .reorderable = reorderable }, .{
+                    .expand = .vertical,
+                    .min_size_content = dvui.Size.all(22),
+                    .gravity_y = 0.5,
+                });
+            },
+            .display_only => {
+                //TODO
+            },
+            .copy_value_and_alloc_new => {
+                //TODO
+            },
+        }
 
-        try fieldWidget("name", T, @ptrCast(&result.*[i]), options.child, alloc);
+        try fieldWidget("name", Child, @alignCast(@ptrCast(&(result.*[i]))), opt.child, alloc, allocator);
     }
 
     // show a final slot that allows dropping an entry at the end of the list
@@ -471,21 +602,38 @@ pub fn sliceFieldWidget(
     }
 
     // returns true if the slice was reordered
-    _ = dvui.ReorderWidget.reorderSlice(T, result.*, removed_idx, insert_before_idx);
+    _ = dvui.ReorderWidget.reorderSlice(Child, result.*, removed_idx, insert_before_idx);
 
-    if (alloc) {
-        const new_item: *T = dvui.dataGetPtrDefault(null, reorder.data().id, "new_item", T, T{});
+    //if (alloc) {
+    switch (treatment) {
+        .mutate_value_and_realloc => {
+            const new_item: *Child = dvui.dataGetPtrDefault(null, reorder.data().id, "new_item", Child, undefined);
 
-        _ = try dvui.spacer(@src(), .{ .h = 4 }, .{});
+            _ = try dvui.spacer(@src(), .{ .h = 4 }, .{});
 
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
-        defer hbox.deinit();
+            var hbox = try dvui.box(@src(), .horizontal, .{
+                .expand = .both,
+                .border = dvui.Rect.all(1),
+                .background = true,
+                .color_fill = .{ .name = .fill_window },
+            });
+            defer hbox.deinit();
 
-        if (try dvui.button(@src(), "Add New", .{}, .{})) {
-            // want to add new_item to the end of the slice, but where is the allocator?
-        }
+            if (try dvui.button(@src(), "Add New", .{}, .{})) {
+                //TODO realloc here with allocator parameter
+            }
 
-        try fieldWidget(@typeName(T), T, @ptrCast(new_item), options.child, alloc);
+            try fieldWidget(@typeName(T), Child, @ptrCast(new_item), opt.child, alloc, allocator);
+        },
+        .copy_value_and_alloc_new => {
+            //TODO
+        },
+        .display_only => {
+            //TODO
+        },
+        .mutate_value_in_place_only => {
+            //TODO
+        },
     }
 
     vbox.deinit();
@@ -509,6 +657,7 @@ fn structFieldWidget(
     result: *T,
     opt: StructFieldOptions(T),
     comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     if (@typeInfo(T) != .Struct) @compileError("Input Type Must Be A Struct");
     if (opt.disabled) return;
@@ -558,7 +707,7 @@ fn structFieldWidget(
                     .id_extra = i,
                 });
                 defer widgetbox.deinit();
-                try fieldWidget(field.name, field.type, result_ptr, options, alloc);
+                try fieldWidget(field.name, field.type, result_ptr, options, alloc, allocator);
             }
         }
     }
@@ -606,16 +755,17 @@ pub fn fieldWidget(
     result: *T,
     options: FieldOptions(T),
     comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
 ) !void {
     switch (@typeInfo(T)) {
         .Int => try intFieldWidget(name, T, result, options),
         .Float => try floatFieldWidget(name, T, result, options),
         .Bool => try boolFieldWidget(name, result, options),
         .Enum => try enumFieldWidget(name, T, result, options),
-        .Pointer => try pointerFieldWidget(name, T, result, options, alloc),
-        .Optional => try optionalFieldWidget(name, T, result, options, alloc),
-        .Union => try unionFieldWidget(name, T, result, options, alloc),
-        .Struct => try structFieldWidget(name, T, result, options, alloc),
+        .Pointer => try pointerFieldWidget(name, T, result, options, alloc, allocator),
+        .Optional => try optionalFieldWidget(name, T, result, options, alloc, allocator),
+        .Union => try unionFieldWidget(name, T, result, options, alloc, allocator),
+        .Struct => try structFieldWidget(name, T, result, options, alloc, allocator),
         else => @compileError("Invalid type: " ++ @typeName(T)),
     }
 }
@@ -632,7 +782,7 @@ pub fn structEntry(
 ) !void {
     var box = try dvui.box(src, .vertical, opts);
     defer box.deinit();
-    try structFieldWidget("", T, result, .{}, false);
+    try structFieldWidget("", T, result, .{}, false, null);
 }
 
 pub fn structEntryEx(
@@ -644,22 +794,24 @@ pub fn structEntryEx(
 ) !void {
     var box = try dvui.box(src, .vertical, .{ .expand = .both });
     defer box.deinit();
-    try structFieldWidget(name, T, result, field_options, false);
+    try structFieldWidget(name, T, result, field_options, false, null);
 }
 
 pub fn structEntryAlloc(
     comptime src: std.builtin.SourceLocation,
+    allocator: std.mem.Allocator,
     comptime T: type,
     result: *T,
     opts: dvui.Options,
 ) !void {
     var box = try dvui.box(src, .vertical, opts);
     defer box.deinit();
-    try structFieldWidget("", T, result, .{}, true);
+    try structFieldWidget("", T, result, .{}, true, allocator);
 }
 
 pub fn structEntryExAlloc(
     comptime src: std.builtin.SourceLocation,
+    allocator: std.mem.Allocator,
     comptime name: []const u8,
     comptime T: type,
     result: *T,
@@ -667,7 +819,7 @@ pub fn structEntryExAlloc(
 ) !void {
     var box = try dvui.box(src, .vertical, .{ .expand = .both });
     defer box.deinit();
-    try structFieldWidget(name, T, result, field_options, true);
+    try structFieldWidget(name, T, result, field_options, true, allocator);
 }
 
 //===============================================
@@ -678,64 +830,65 @@ pub fn structEntryExAlloc(
 // Currently untested
 
 //============Alloc result type========
-pub fn getOwnedCopy(a: std.mem.Allocator, value: anytype) !Parsed(@TypeOf(value)) {
-    var arena = std.heap.ArenaAllocator.init(a);
-
-    //perform deep copy
-    const copied = try deepCopyStruct(arena.allocator(), value);
-
-    return .{ .value = copied, .arena = arena };
-}
-
-pub fn getOwnedCopyLeaky(a: std.mem.Allocator, value: anytype) !@TypeOf(value) {
-
-    //perform deep copy
-    return try deepCopyStruct(a, value);
-}
-
-//==========Deep Copy Function==========
-pub fn Parsed(comptime T: type) type {
-    return struct {
-        arena: std.heap.ArenaAllocator,
-        value: T,
-
-        pub fn deinit(self: @This()) void {
-            self.arena.deinit();
-        }
-    };
-}
-
-pub fn deepCopyStruct(allocator: std.mem.Allocator, value: anytype) !@TypeOf(value) {
-    const T = @TypeOf(value);
-    var result: T = undefined;
-
-    inline for (@typeInfo(T).Struct.fields) |field| {
-        const info = @typeInfo(field.type);
-        if (info == .Pointer) {
-            switch (info.size) {
-                .Slice => {
-                    @field(result, field.name) = try allocator.dupe(info.child, @field(value, field.name));
-                    if (@typeInfo(info.child) == .Struct) {
-                        for (@field(result, field.name), 0..) |*val, i| {
-                            val.* = try deepCopyStruct(allocator, @field(value, field.name)[i]);
-                        }
-                    }
-                },
-                .One => {
-                    @field(result, field.name) = try allocator.create(info.child);
-                    if (@typeInfo(info.child) == .Struct) {
-                        @field(result, field.name).* = try deepCopyStruct(allocator, @field(value, field.name));
-                    } else {
-                        @field(result, field.name).* = @field(value, field.name);
-                    }
-                },
-                else => @compileError("Cannot copy *C and Many pointers"),
-            }
-        } else if (info == .Struct) {
-            @field(result, field.name) = try deepCopyStruct(allocator, @field(value, field.name));
-        } else {
-            @field(result, field.name) = @field(value, field.name);
-        }
-    }
-    return result;
-}
+//pub fn getOwnedCopy(a: std.mem.Allocator, value: anytype) !Parsed(@TypeOf(value)) {
+//    var arena = std.heap.ArenaAllocator.init(a);
+//
+//    //perform deep copy
+//    const copied = try deepCopyStruct(arena.allocator(), value);
+//
+//    return .{ .value = copied, .arena = arena };
+//}
+//
+//pub fn getOwnedCopyLeaky(a: std.mem.Allocator, value: anytype) !@TypeOf(value) {
+//
+//    //perform deep copy
+//    return try deepCopyStruct(a, value);
+//}
+//
+////==========Deep Copy Function==========
+//pub fn Parsed(comptime T: type) type {
+//    return struct {
+//        arena: std.heap.ArenaAllocator,
+//        value: T,
+//
+//        pub fn deinit(self: @This()) void {
+//            self.arena.deinit();
+//        }
+//    };
+//}
+//
+//pub fn deepCopyStruct(allocator: std.mem.Allocator, value: anytype) !@TypeOf(value) {
+//    const T = @TypeOf(value);
+//    var result: T = undefined;
+//
+//    inline for (@typeInfo(T).Struct.fields) |field| {
+//        const info = @typeInfo(field.type);
+//        if (info == .Pointer) {
+//            switch (info.size) {
+//                .Slice => {
+//                    @field(result, field.name) = try allocator.dupe(info.child, @field(value, field.name));
+//                    if (@typeInfo(info.child) == .Struct) {
+//                        for (@field(result, field.name), 0..) |*val, i| {
+//                            val.* = try deepCopyStruct(allocator, @field(value, field.name)[i]);
+//                        }
+//                    }
+//                },
+//                .One => {
+//                    @field(result, field.name) = try allocator.create(info.child);
+//                    if (@typeInfo(info.child) == .Struct) {
+//                        @field(result, field.name).* = try deepCopyStruct(allocator, @field(value, field.name));
+//                    } else {
+//                        @field(result, field.name).* = @field(value, field.name);
+//                    }
+//                },
+//                else => @compileError("Cannot copy *C and Many pointers"),
+//            }
+//        } else if (info == .Struct) {
+//            @field(result, field.name) = try deepCopyStruct(allocator, @field(value, field.name));
+//        } else {
+//            @field(result, field.name) = @field(value, field.name);
+//        }
+//    }
+//    return result;
+//}
+//
