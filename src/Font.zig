@@ -41,7 +41,7 @@ pub fn getBytes(self: Font) []const u8 {
 }
 
 pub fn getSize(self: Font) f32 {
-    return @floor(self.getData().base_size * self.scale);
+    return @ceil(self.getData().base_size * self.scale);
 }
 
 //handles multiple lines
@@ -129,91 +129,91 @@ pub const TTFBytes = struct {
     };
     pub const Vera = Data{
         .bytes = @embedFile("fonts/bitstream-vera/Vera.ttf"),
-        .base_size = 16,
+        .base_size = 13,
     };
     pub const VeraBI = Data{
         .bytes = @embedFile("fonts/bitstream-vera/VeraBI.ttf"),
-        .base_size = 16,
+        .base_size = 13,
     };
     pub const VeraBd = Data{
         .bytes = @embedFile("fonts/bitstream-vera/VeraBd.ttf"),
-        .base_size = 16,
+        .base_size = 13,
     };
     pub const VeraIt = Data{
         .bytes = @embedFile("fonts/bitstream-vera/VeraIt.ttf"),
-        .base_size = 16,
+        .base_size = 13,
     };
     pub const VeraMoBI = Data{
         .bytes = @embedFile("fonts/bitstream-vera/VeraMoBI.ttf"),
-        .base_size = 16,
+        .base_size = 13,
     };
     pub const VeraMoBd = Data{
         .bytes = @embedFile("fonts/bitstream-vera/VeraMoBd.ttf"),
-        .base_size = 16,
+        .base_size = 13,
     };
     pub const VeraMoIt = Data{
         .bytes = @embedFile("fonts/bitstream-vera/VeraMoIt.ttf"),
-        .base_size = 16,
+        .base_size = 13,
     };
     pub const VeraMono = Data{
         .bytes = @embedFile("fonts/bitstream-vera/VeraMono.ttf"),
-        .base_size = 16,
+        .base_size = 13,
     };
     pub const VeraSe = Data{
         .bytes = @embedFile("fonts/bitstream-vera/VeraSe.ttf"),
-        .base_size = 16,
+        .base_size = 13,
     };
     pub const VeraSeBd = Data{
         .bytes = @embedFile("fonts/bitstream-vera/VeraSeBd.ttf"),
-        .base_size = 16,
+        .base_size = 13,
     };
     pub const Pixelify = Data{
         .bytes = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Regular.ttf"),
-        .base_size = 16,
+        .base_size = 18,
     };
     pub const PixelifyBd = Data{
         .bytes = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Bold.ttf"),
-        .base_size = 16,
+        .base_size = 18,
     };
     pub const PixelifyMe = Data{
         .bytes = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-Medium.ttf"),
-        .base_size = 16,
+        .base_size = 18,
     };
     pub const PixelifySeBd = Data{
         .bytes = @embedFile("fonts/Pixelify_Sans/static/PixelifySans-SemiBold.ttf"),
-        .base_size = 16,
+        .base_size = 18,
     };
     pub const Hack = Data{
         .bytes = @embedFile("fonts/hack/Hack-Regular.ttf"),
-        .base_size = 16,
+        .base_size = 18,
     };
     pub const HackBd = Data{
         .bytes = @embedFile("fonts/hack/Hack-Bold.ttf"),
-        .base_size = 16,
+        .base_size = 18,
     };
     pub const HackIt = Data{
         .bytes = @embedFile("fonts/hack/Hack-Italic.ttf"),
-        .base_size = 16,
+        .base_size = 18,
     };
     pub const HackBdIt = Data{
         .bytes = @embedFile("fonts/hack/Hack-BoldItalic.ttf"),
-        .base_size = 16,
+        .base_size = 18,
     };
     pub const OpenDyslexic = Data{
         .bytes = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Regular.otf"),
-        .base_size = 16,
+        .base_size = 18,
     };
     pub const OpenDyslexicBd = Data{
         .bytes = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold.otf"),
-        .base_size = 16,
+        .base_size = 18,
     };
     pub const OpenDyslexicIt = Data{
         .bytes = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Italic.otf"),
-        .base_size = 16,
+        .base_size = 18,
     };
     pub const OpenDyslexicBdIt = Data{
         .bytes = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold-Italic.otf"),
-        .base_size = 16,
+        .base_size = 18,
     };
 };
 
