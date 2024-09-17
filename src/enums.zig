@@ -85,8 +85,12 @@ pub const Mod = enum(u16) {
         return self.is(.lcommand) or self.is(.rcommand);
     }
 
-    pub fn controlCommand(self: Mod) bool {
-        return self.control() or self.command();
+    pub fn controlOrMacCommand(self: Mod) bool {
+        if (builtin.os.tag.isDarwin()) {
+            return self.command();
+        } else {
+            return self.control();
+        }
     }
 
     pub fn controlOrMacOption(self: Mod) bool {

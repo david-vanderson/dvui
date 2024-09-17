@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
@@ -1485,7 +1486,11 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
         switch (e.evt.key.code) {
             .left, .right => |code| {
                 e.handled = true;
-                if (e.evt.key.mod.controlOrMacOption()) {
+                if (builtin.os.tag.isDarwin() and e.evt.key.mod.command()) {
+                    if (self.sel_move == .none) {
+                        self.sel_move = .{ .expand_pt = .{ .which = if (code == .left) .home else .end } };
+                    }
+                } else if (e.evt.key.mod.controlOrMacOption()) {
                     if (self.sel_move == .none) {
                         self.sel_move = .{ .word_left_right = .{} };
                     }
@@ -1504,11 +1509,19 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             },
             .up, .down => |code| {
                 e.handled = true;
-                if (self.sel_move == .none) {
-                    self.sel_move = .{ .cursor_updown = .{} };
-                }
-                if (self.sel_move == .cursor_updown) {
-                    self.sel_move.cursor_updown.count += if (code == .down) 1 else -1;
+                if (builtin.os.tag.isDarwin() and e.evt.key.mod.command()) {
+                    if (code == .up) {
+                        self.selection.moveCursor(0, true);
+                    } else {
+                        self.selection.moveCursor(std.math.maxInt(usize), true);
+                    }
+                } else {
+                    if (self.sel_move == .none) {
+                        self.sel_move = .{ .cursor_updown = .{} };
+                    }
+                    if (self.sel_move == .cursor_updown) {
+                        self.sel_move.cursor_updown.count += if (code == .down) 1 else -1;
+                    }
                 }
             },
             .home, .end => |code| {
@@ -1527,10 +1540,10 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             },
             else => {},
         }
-    } else if (e.evt == .key and e.evt.key.mod.controlCommand() and e.evt.key.code == .c and e.evt.key.action == .down) {
+    } else if (e.evt == .key and e.evt.key.mod.controlOrMacCommand() and e.evt.key.code == .c and e.evt.key.action == .down) {
         e.handled = true;
         self.copy();
-    } else if (e.evt == .key and e.evt.key.mod.controlCommand() and e.evt.key.code == .a and e.evt.key.action == .down) {
+    } else if (e.evt == .key and e.evt.key.mod.controlOrMacCommand() and e.evt.key.code == .a and e.evt.key.action == .down) {
         e.handled = true;
         self.selection.selectAll();
     }

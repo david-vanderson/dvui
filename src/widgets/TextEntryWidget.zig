@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
@@ -481,7 +482,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             sel.cursor = sel.start;
                             self.scroll_to_cursor = true;
                             self.text_changed = true;
-                        } else if (ke.mod.control()) {
+                        } else if (ke.mod.controlOrMacOption()) {
                             // delete word before cursor
 
                             const oldcur = sel.cursor;
@@ -540,7 +541,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             sel.cursor = sel.start;
                             self.scroll_to_cursor = true;
                             self.text_changed = true;
-                        } else if (ke.mod.control()) {
+                        } else if (ke.mod.controlOrMacOption()) {
                             // delete word after cursor
 
                             const oldcur = sel.cursor;
@@ -598,13 +599,13 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                     }
                 },
                 .v => {
-                    if (ke.action == .down and ke.mod.controlCommand()) {
+                    if (ke.action == .down and ke.mod.controlOrMacCommand()) {
                         e.handled = true;
                         self.paste();
                     }
                 },
                 .x => {
-                    if (ke.action == .down and ke.mod.controlCommand()) {
+                    if (ke.action == .down and ke.mod.controlOrMacCommand()) {
                         e.handled = true;
                         self.cut();
                     }
@@ -612,7 +613,11 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 .left, .right => |code| {
                     if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
                         e.handled = true;
-                        if (ke.mod.control()) {
+                        if (builtin.os.tag.isDarwin() and ke.mod.command()) {
+                            if (self.textLayout.sel_move == .none) {
+                                self.textLayout.sel_move = .{ .expand_pt = .{ .select = false, .which = if (code == .left) .home else .end } };
+                            }
+                        } else if (ke.mod.controlOrMacOption()) {
                             if (self.textLayout.sel_move == .none) {
                                 self.textLayout.sel_move = .{ .word_left_right = .{ .select = false } };
                             }
@@ -632,11 +637,19 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 .up, .down => |code| {
                     if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
                         e.handled = true;
-                        if (self.textLayout.sel_move == .none) {
-                            self.textLayout.sel_move = .{ .cursor_updown = .{ .select = false } };
-                        }
-                        if (self.textLayout.sel_move == .cursor_updown) {
-                            self.textLayout.sel_move.cursor_updown.count += if (code == .down) 1 else -1;
+                        if (builtin.os.tag.isDarwin() and e.evt.key.mod.command()) {
+                            if (code == .up) {
+                                self.textLayout.selection.moveCursor(0, false);
+                            } else {
+                                self.textLayout.selection.moveCursor(std.math.maxInt(usize), false);
+                            }
+                        } else {
+                            if (self.textLayout.sel_move == .none) {
+                                self.textLayout.sel_move = .{ .cursor_updown = .{ .select = false } };
+                            }
+                            if (self.textLayout.sel_move == .cursor_updown) {
+                                self.textLayout.sel_move.cursor_updown.count += if (code == .down) 1 else -1;
+                            }
                         }
                     }
                 },

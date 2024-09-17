@@ -4778,7 +4778,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         const evts = events();
         for (evts) |*e| {
             if (e.evt == .key) {
-                ctrl_down = e.evt.key.mod.controlCommand();
+                ctrl_down = e.evt.key.mod.controlOrMacCommand();
             }
 
             if (!text_mode) {
@@ -4847,7 +4847,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         const evts = events();
         for (evts) |*e| {
             if (e.evt == .key) {
-                ctrl_down = e.evt.key.mod.controlCommand();
+                ctrl_down = e.evt.key.mod.controlOrMacCommand();
             }
 
             if (!eventMatch(e, .{ .id = b.data().id, .r = rs.r }))
