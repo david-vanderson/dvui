@@ -375,19 +375,21 @@ pub fn demo() !void {
 
             const init_data = [_]TopChild{ .{ .a_dir = .vertical }, .{ .a_dir = .horizontal } };
             var mut_array = init_data;
+            var ptr: TopChild = TopChild{ .a_dir = .horizontal };
 
             a_u8: u8 = 1,
             a_f32: f32 = 2.0,
+            a_ptr: *TopChild = undefined,
             a_struct: TopChild = .{ .a_dir = .vertical },
             a_str: []const u8 = &[_]u8{0} ** 20,
             a_slice: []TopChild = undefined,
 
-            var instance: @This() = .{ .a_slice = &mut_array };
+            var instance: @This() = .{ .a_slice = &mut_array, .a_ptr = &ptr };
         };
 
         try dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
         {
-            try dvui.structEntryAlloc(@src(), Top, &Top.instance, .{ .margin = .{ .x = 10 } });
+            try dvui.structEntryAlloc(@src(), std.heap.c_allocator, Top, &Top.instance, .{ .margin = .{ .x = 10 } });
         }
 
         if (try dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
