@@ -389,7 +389,7 @@ pub fn demo() !void {
 
         try dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
         {
-            try dvui.structEntryAlloc(@src(), std.heap.c_allocator, Top, &Top.instance, .{ .margin = .{ .x = 10 } });
+            try dvui.structEntryAlloc(@src(), dvui.currentWindow().gpa, Top, &Top.instance, .{ .margin = .{ .x = 10 } });
         }
 
         if (try dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
