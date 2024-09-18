@@ -36,6 +36,15 @@ pub const Button = enum {
     }
 };
 
+pub const Keybind = struct {
+    shift: ?bool = null,
+    control: ?bool = null,
+    alt: ?bool = null,
+    command: ?bool = null,
+    key: ?Key = null,
+    also: ?[]const u8 = null,
+};
+
 pub const Mod = enum(u16) {
     none = 0,
 
@@ -54,7 +63,7 @@ pub const Mod = enum(u16) {
     // make non-exhaustive so that we can take combinations of the values
     _,
 
-    pub fn is(self: Mod, other: Mod) bool {
+    pub fn has(self: Mod, other: Mod) bool {
         const s: u16 = @intFromEnum(self);
         const t: u16 = @intFromEnum(other);
         return (s & t) != 0;
@@ -70,35 +79,19 @@ pub const Mod = enum(u16) {
     }
 
     pub fn shift(self: Mod) bool {
-        return self.is(.lshift) or self.is(.rshift);
+        return self.has(.lshift) or self.has(.rshift);
     }
 
     pub fn control(self: Mod) bool {
-        return self.is(.lcontrol) or self.is(.rcontrol);
+        return self.has(.lcontrol) or self.has(.rcontrol);
     }
 
     pub fn alt(self: Mod) bool {
-        return self.is(.lalt) or self.is(.ralt);
+        return self.has(.lalt) or self.has(.ralt);
     }
 
     pub fn command(self: Mod) bool {
-        return self.is(.lcommand) or self.is(.rcommand);
-    }
-
-    pub fn controlOrMacCommand(self: Mod) bool {
-        if (builtin.os.tag.isDarwin()) {
-            return self.command();
-        } else {
-            return self.control();
-        }
-    }
-
-    pub fn controlOrMacOption(self: Mod) bool {
-        if (builtin.os.tag.isDarwin()) {
-            return self.alt();
-        } else {
-            return self.control();
-        }
+        return self.has(.lcommand) or self.has(.rcommand);
     }
 
     ///combine two modifiers
@@ -122,7 +115,7 @@ pub const Mod = enum(u16) {
         var found_set = false;
 
         inline for (@typeInfo(Mod).Enum.fields[0..9]) |field| {
-            if (self.is(@field(Mod, field.name))) {
+            if (self.has(@field(Mod, field.name))) {
                 std.debug.print(".{s}, ", .{field.name});
                 found_set = true;
             }

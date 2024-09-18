@@ -2176,6 +2176,7 @@ pub const Window = struct {
     dialog_mutex: std.Thread.Mutex,
     dialogs: std.ArrayList(Dialog),
     toasts: std.ArrayList(Toast),
+    keybinds: std.StringHashMap(enums.Keybind),
 
     cursor_requested: enums.Cursor = .arrow,
     cursor_dragging: ?enums.Cursor = null,
@@ -2214,6 +2215,11 @@ pub const Window = struct {
         id_extra: usize = 0,
         arena: ?std.heap.ArenaAllocator = null,
         theme: ?*Theme = null,
+        keybinds: ?enum {
+            none,
+            windows,
+            mac,
+        } = null,
     };
 
     pub fn init(
@@ -2240,12 +2246,110 @@ pub const Window = struct {
             .dialog_mutex = std.Thread.Mutex{},
             .dialogs = std.ArrayList(Dialog).init(gpa),
             .toasts = std.ArrayList(Toast).init(gpa),
+            .keybinds = std.StringHashMap(enums.Keybind).init(gpa),
             .debug_refresh_mutex = std.Thread.Mutex{},
             .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
             .backend = backend,
             .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
             .theme = init_opts.theme orelse &Theme.AdwaitaLight,
         };
+
+        const kb = init_opts.keybinds orelse blk: {
+            if (builtin.os.tag.isDarwin()) {
+                break :blk .mac;
+            } else {
+                break :blk .windows;
+            }
+        };
+
+        if (kb == .windows or kb == .mac) {
+            try self.keybinds.put("activate", .{ .key = .enter, .also = "activate_1" });
+            try self.keybinds.put("activate_1", .{ .key = .space });
+            try self.keybinds.put("next_widget", .{ .key = .tab, .shift = false });
+            try self.keybinds.put("prev_widget", .{ .key = .tab, .shift = true });
+        }
+
+        switch (kb) {
+            .none => {},
+            .windows => {
+                // zig fmt: off
+                try self.keybinds.put("cut",        .{ .key = .x, .control = true });
+                try self.keybinds.put("copy",       .{ .key = .c, .control = true });
+                try self.keybinds.put("paste",      .{ .key = .v, .control = true });
+                try self.keybinds.put("select_all", .{ .key = .a, .control = true });
+
+                try self.keybinds.put("ctrlOrMacCmd",   .{ .key = .left_control, .also = "ctrlOrMacCmd_1" });
+                try self.keybinds.put("ctrlOrMacCmd_1", .{ .key = .right_control });
+
+                try self.keybinds.put("text_start",        .{ .key = .home, .shift = false, .control = true });
+                try self.keybinds.put("text_end",          .{ .key = .end,  .shift = false, .control = true });
+                try self.keybinds.put("text_start_select", .{ .key = .home, .shift = true,  .control = true });
+                try self.keybinds.put("text_end_select",   .{ .key = .end,  .shift = true,  .control = true });
+
+                try self.keybinds.put("line_start",        .{ .key = .home, .shift = false, .control = false });
+                try self.keybinds.put("line_end",          .{ .key = .end,  .shift = false, .control = false });
+                try self.keybinds.put("line_start_select", .{ .key = .home, .shift = true,  .control = false });
+                try self.keybinds.put("line_end_select",   .{ .key = .end,  .shift = true,  .control = false });
+
+                try self.keybinds.put("word_left",         .{ .key = .left,  .shift = false, .control = true });
+                try self.keybinds.put("word_right",        .{ .key = .right, .shift = false, .control = true });
+                try self.keybinds.put("word_left_select",  .{ .key = .left,  .shift = true,  .control = true });
+                try self.keybinds.put("word_right_select", .{ .key = .right, .shift = true,  .control = true });
+
+                try self.keybinds.put("char_left",         .{ .key = .left,  .shift = false, .control = false });
+                try self.keybinds.put("char_right",        .{ .key = .right, .shift = false, .control = false });
+                try self.keybinds.put("char_left_select",  .{ .key = .left,  .shift = true,  .control = false });
+                try self.keybinds.put("char_right_select", .{ .key = .right, .shift = true,  .control = false });
+
+                try self.keybinds.put("char_up",          .{ .key = .up,   .shift = false });
+                try self.keybinds.put("char_down",        .{ .key = .down, .shift = false });
+                try self.keybinds.put("char_up_select",   .{ .key = .up,   .shift = true });
+                try self.keybinds.put("char_down_select", .{ .key = .down, .shift = true });
+
+                try self.keybinds.put("delete_prev_word", .{ .key = .backspace, .control = true });
+                try self.keybinds.put("delete_next_word", .{ .key = .delete,    .control = true });
+                // zig fmt: on
+            },
+            .mac => {
+                // zig fmt: off
+                try self.keybinds.put("cut",        .{ .key = .x, .command = true });
+                try self.keybinds.put("copy",       .{ .key = .c, .command = true });
+                try self.keybinds.put("paste",      .{ .key = .v, .command = true });
+                try self.keybinds.put("select_all", .{ .key = .a, .command = true });
+
+                try self.keybinds.put("ctrlOrMacCmd",   .{ .key = .left_command, .also = "ctrlOrMacCmd_1" });
+                try self.keybinds.put("ctrlOrMacCmd_1", .{ .key = .right_command });
+
+                try self.keybinds.put("text_start",        .{ .key = .up,   .shift = false, .command = true });
+                try self.keybinds.put("text_end",          .{ .key = .down, .shift = false, .command = true });
+                try self.keybinds.put("text_start_select", .{ .key = .up,   .shift = true,  .command = true });
+                try self.keybinds.put("text_end_select",   .{ .key = .down, .shift = true,  .command = true });
+
+                try self.keybinds.put("line_start",        .{ .key = .left,  .shift = false, .command = true });
+                try self.keybinds.put("line_end",          .{ .key = .right, .shift = false, .command = true });
+                try self.keybinds.put("line_start_select", .{ .key = .left,  .shift = true,  .command = true });
+                try self.keybinds.put("line_end_select",   .{ .key = .right, .shift = true,  .command = true });
+
+                try self.keybinds.put("word_left",         .{ .key = .left,  .shift = false, .alt = true });
+                try self.keybinds.put("word_right",        .{ .key = .right, .shift = false, .alt = true });
+                try self.keybinds.put("word_left_select",  .{ .key = .left,  .shift = true,  .alt = true });
+                try self.keybinds.put("word_right_select", .{ .key = .right, .shift = true,  .alt = true });
+
+                try self.keybinds.put("char_left",         .{ .key = .left,  .shift = false, .alt = false });
+                try self.keybinds.put("char_right",        .{ .key = .right, .shift = false, .alt = false });
+                try self.keybinds.put("char_left_select",  .{ .key = .left,  .shift = true,  .alt = false });
+                try self.keybinds.put("char_right_select", .{ .key = .right, .shift = true,  .alt = false });
+
+                try self.keybinds.put("char_up",          .{ .key = .up,   .shift = false, .command = false });
+                try self.keybinds.put("char_down",        .{ .key = .down, .shift = false, .command = false });
+                try self.keybinds.put("char_up_select",   .{ .key = .up,   .shift = true,  .command = false });
+                try self.keybinds.put("char_down_select", .{ .key = .down, .shift = true,  .command = false });
+
+                try self.keybinds.put("delete_prev_word", .{ .key = .backspace, .alt = true });
+                try self.keybinds.put("delete_next_word", .{ .key = .delete,    .alt = true });
+                // zig fmt: on
+            },
+        }
 
         const winSize = self.backend.windowSize();
         const pxSize = self.backend.pixelSize();
@@ -2309,6 +2413,7 @@ pub const Window = struct {
 
         self.dialogs.deinit();
         self.toasts.deinit();
+        self.keybinds.deinit();
         self._arena.deinit();
         self.ttf_bytes_database.deinit();
     }
@@ -3362,20 +3467,20 @@ pub const Window = struct {
             if (!eventMatch(e, .{ .id = self.wd.id, .r = self.rect_pixels, .cleanup = true }))
                 continue;
 
-            // doesn't matter if we mark events has handled or not because this is
-            // the end of the line for all events
             if (e.evt == .mouse) {
                 if (e.evt.mouse.action == .focus) {
                     // unhandled click, clear focus
                     focusWidget(null, null, null);
                 }
             } else if (e.evt == .key) {
-                if (e.evt.key.code == .tab and e.evt.key.action == .down) {
-                    if (e.evt.key.mod.shift()) {
-                        tabIndexPrev(e.num);
-                    } else {
-                        tabIndexNext(e.num);
-                    }
+                if (e.evt.key.action == .down and e.evt.key.matchBind("next_widget")) {
+                    e.handled = true;
+                    tabIndexNext(e.num);
+                }
+
+                if (e.evt.key.action == .down and e.evt.key.matchBind("prev_widget")) {
+                    e.handled = true;
+                    tabIndexPrev(e.num);
                 }
             }
         }
@@ -4377,7 +4482,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
                 }
             },
             .key => |ke| {
-                if ((ke.code == .space or ke.code == .enter) and ke.action == .down) {
+                if (ke.action == .down and ke.matchBind("activate")) {
                     e.handled = true;
                     ret = true;
                     dvui.refresh(null, @src(), lwid);
@@ -4777,8 +4882,8 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
         const evts = events();
         for (evts) |*e| {
-            if (e.evt == .key) {
-                ctrl_down = e.evt.key.mod.controlOrMacCommand();
+            if (e.evt == .key and e.evt.key.matchBind("ctrlOrMacCmd")) {
+                ctrl_down = (e.evt.key.action == .down);
             }
 
             if (!text_mode) {
@@ -4846,8 +4951,8 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
         const evts = events();
         for (evts) |*e| {
-            if (e.evt == .key) {
-                ctrl_down = e.evt.key.mod.controlOrMacCommand();
+            if (e.evt == .key and e.evt.key.matchBind("ctrlOrMacCmd")) {
+                ctrl_down = (e.evt.key.action == .down);
             }
 
             if (!eventMatch(e, .{ .id = b.data().id, .r = rs.r }))

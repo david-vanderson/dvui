@@ -152,7 +152,7 @@ pub fn processEvent(self: *ButtonWidget, e: *Event, bubbling: bool) void {
             }
         },
         .key => |ke| {
-            if ((ke.code == .space or ke.code == .enter) and ke.action == .down) {
+            if (ke.action == .down and ke.matchBind("activate")) {
                 e.handled = true;
                 self.click = true;
                 dvui.refresh(null, @src(), self.wd.id);
