@@ -47,12 +47,7 @@ pub const Key = struct {
         var name = keybind_name;
         while (true) {
             if (cw.keybinds.get(name)) |kb| {
-                if ((kb.shift == null or kb.shift.? == self.mod.shift()) and
-                    (kb.control == null or kb.control.? == self.mod.control()) and
-                    (kb.alt == null or kb.alt.? == self.mod.alt()) and
-                    (kb.command == null or kb.command.? == self.mod.command()) and
-                    (kb.key == null or kb.key.? == self.code))
-                {
+                if (self.matchKeyBind(kb)) {
                     return true;
                 } else if (kb.also) |also_name| {
                     name = also_name;
@@ -64,6 +59,14 @@ pub const Key = struct {
                 return false;
             }
         }
+    }
+
+    pub fn matchKeyBind(self: Key, kb: enums.Keybind) bool {
+        return ((kb.shift == null or kb.shift.? == self.mod.shift()) and
+            (kb.control == null or kb.control.? == self.mod.control()) and
+            (kb.alt == null or kb.alt.? == self.mod.alt()) and
+            (kb.command == null or kb.command.? == self.mod.command()) and
+            (kb.key == null or kb.key.? == self.code));
     }
 };
 
