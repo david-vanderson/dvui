@@ -4640,10 +4640,10 @@ pub var slider_defaults: Options = .{
     .color_fill = .{ .name = .fill_control },
 };
 
-// returns true if normalized_percent (0-1) was changed
-pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, normalized_percent: *f32, opts: Options) !bool {
-    std.debug.assert(normalized_percent.* >= 0);
-    std.debug.assert(normalized_percent.* <= 1);
+// returns true if fraction (0-1) was changed
+pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *f32, opts: Options) !bool {
+    std.debug.assert(fraction.* >= 0);
+    std.debug.assert(fraction.* <= 1);
 
     const options = slider_defaults.override(opts);
 
@@ -4712,8 +4712,8 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, normalized_
 
                     if (max > min) {
                         const v = if (dir == .horizontal) pp.x else (trackrs.r.y + trackrs.r.h - pp.y);
-                        normalized_percent.* = (v - min) / (max - min);
-                        normalized_percent.* = @max(0, @min(1, normalized_percent.*));
+                        fraction.* = (v - min) / (max - min);
+                        fraction.* = @max(0, @min(1, fraction.*));
                         ret = true;
                     }
                 }
@@ -4723,12 +4723,12 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, normalized_
                     switch (ke.code) {
                         .left, .down => {
                             e.handled = true;
-                            normalized_percent.* = @max(0, @min(1, normalized_percent.* - 0.05));
+                            fraction.* = @max(0, @min(1, fraction.* - 0.05));
                             ret = true;
                         },
                         .right, .up => {
                             e.handled = true;
-                            normalized_percent.* = @max(0, @min(1, normalized_percent.* + 0.05));
+                            fraction.* = @max(0, @min(1, fraction.* + 0.05));
                             ret = true;
                         },
                         else => {},
@@ -4739,7 +4739,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, normalized_
         }
     }
 
-    const perc = @max(0, @min(1, normalized_percent.*));
+    const perc = @max(0, @min(1, fraction.*));
 
     var part = trackrs.r;
     switch (dir) {
