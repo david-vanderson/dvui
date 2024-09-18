@@ -99,6 +99,15 @@ export fn dvui_c_ldexp(x: f64, n: c_int) f64 {
     return x * @exp2(@as(f64, @floatFromInt(n)));
 }
 
+export fn gpa_u8(len: usize) [*c]u8 {
+    const buf = gpa.alloc(u8, len) catch return @ptrFromInt(0);
+    return buf.ptr;
+}
+
+export fn gpa_free(ptr: [*c]u8, len: usize) void {
+    gpa.free(ptr[0..len]);
+}
+
 export fn arena_u8(len: usize) [*c]u8 {
     const buf = arena.alloc(u8, len) catch return @ptrFromInt(0);
     return buf.ptr;

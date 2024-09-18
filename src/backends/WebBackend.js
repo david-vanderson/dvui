@@ -453,7 +453,16 @@ function dvui(canvasId, wasmFile) {
 
             if (!app_initialized) {
                 app_initialized = true;
-                wasmResult.instance.exports.app_init();
+	        let str = utf8encoder.encode(navigator.platform);
+                if (str.length > 0) {
+                    const ptr = wasmResult.instance.exports.gpa_u8(str.length);
+                    var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
+                    dest.set(str);
+                    wasmResult.instance.exports.app_init(ptr, str.length);
+		    wasmResult.instance.exports.gpa_free(ptr, str.length);
+		} else {
+                    wasmResult.instance.exports.app_init(0, 0);
+		}
             }
 
             let millis_to_wait = wasmResult.instance.exports.app_update();
