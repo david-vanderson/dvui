@@ -2263,90 +2263,91 @@ pub const Window = struct {
         };
 
         if (kb == .windows or kb == .mac) {
-            try self.keybinds.put("activate", .{ .key = .enter, .also = "activate_1" });
-            try self.keybinds.put("activate_1", .{ .key = .space });
-            try self.keybinds.put("next_widget", .{ .key = .tab, .shift = false });
-            try self.keybinds.put("prev_widget", .{ .key = .tab, .shift = true });
+            try self.keybinds.putNoClobber("activate", .{ .key = .enter, .also = "activate_1" });
+            try self.keybinds.putNoClobber("activate_1", .{ .key = .space });
+
+            try self.keybinds.putNoClobber("next_widget", .{ .key = .tab, .shift = false });
+            try self.keybinds.putNoClobber("prev_widget", .{ .key = .tab, .shift = true });
         }
 
         switch (kb) {
             .none => {},
             .windows => {
                 // zig fmt: off
-                try self.keybinds.put("cut",        .{ .key = .x, .control = true });
-                try self.keybinds.put("copy",       .{ .key = .c, .control = true });
-                try self.keybinds.put("paste",      .{ .key = .v, .control = true });
-                try self.keybinds.put("select_all", .{ .key = .a, .control = true });
+                try self.keybinds.putNoClobber("cut",        .{ .key = .x, .control = true });
+                try self.keybinds.putNoClobber("copy",       .{ .key = .c, .control = true });
+                try self.keybinds.putNoClobber("paste",      .{ .key = .v, .control = true });
+                try self.keybinds.putNoClobber("select_all", .{ .key = .a, .control = true });
 
-                try self.keybinds.put("ctrlOrMacCmd",   .{ .key = .left_control, .also = "ctrlOrMacCmd_1" });
-                try self.keybinds.put("ctrlOrMacCmd_1", .{ .key = .right_control });
+                try self.keybinds.putNoClobber("ctrlOrMacCmd",   .{ .key = .left_control, .also = "ctrlOrMacCmd_1" });
+                try self.keybinds.putNoClobber("ctrlOrMacCmd_1", .{ .key = .right_control });
 
-                try self.keybinds.put("text_start",        .{ .key = .home, .shift = false, .control = true });
-                try self.keybinds.put("text_end",          .{ .key = .end,  .shift = false, .control = true });
-                try self.keybinds.put("text_start_select", .{ .key = .home, .shift = true,  .control = true });
-                try self.keybinds.put("text_end_select",   .{ .key = .end,  .shift = true,  .control = true });
+                try self.keybinds.putNoClobber("text_start",        .{ .key = .home, .shift = false, .control = true });
+                try self.keybinds.putNoClobber("text_end",          .{ .key = .end,  .shift = false, .control = true });
+                try self.keybinds.putNoClobber("text_start_select", .{ .key = .home, .shift = true,  .control = true });
+                try self.keybinds.putNoClobber("text_end_select",   .{ .key = .end,  .shift = true,  .control = true });
 
-                try self.keybinds.put("line_start",        .{ .key = .home, .shift = false, .control = false });
-                try self.keybinds.put("line_end",          .{ .key = .end,  .shift = false, .control = false });
-                try self.keybinds.put("line_start_select", .{ .key = .home, .shift = true,  .control = false });
-                try self.keybinds.put("line_end_select",   .{ .key = .end,  .shift = true,  .control = false });
+                try self.keybinds.putNoClobber("line_start",        .{ .key = .home, .shift = false, .control = false });
+                try self.keybinds.putNoClobber("line_end",          .{ .key = .end,  .shift = false, .control = false });
+                try self.keybinds.putNoClobber("line_start_select", .{ .key = .home, .shift = true,  .control = false });
+                try self.keybinds.putNoClobber("line_end_select",   .{ .key = .end,  .shift = true,  .control = false });
 
-                try self.keybinds.put("word_left",         .{ .key = .left,  .shift = false, .control = true });
-                try self.keybinds.put("word_right",        .{ .key = .right, .shift = false, .control = true });
-                try self.keybinds.put("word_left_select",  .{ .key = .left,  .shift = true,  .control = true });
-                try self.keybinds.put("word_right_select", .{ .key = .right, .shift = true,  .control = true });
+                try self.keybinds.putNoClobber("word_left",         .{ .key = .left,  .shift = false, .control = true });
+                try self.keybinds.putNoClobber("word_right",        .{ .key = .right, .shift = false, .control = true });
+                try self.keybinds.putNoClobber("word_left_select",  .{ .key = .left,  .shift = true,  .control = true });
+                try self.keybinds.putNoClobber("word_right_select", .{ .key = .right, .shift = true,  .control = true });
 
-                try self.keybinds.put("char_left",         .{ .key = .left,  .shift = false, .control = false });
-                try self.keybinds.put("char_right",        .{ .key = .right, .shift = false, .control = false });
-                try self.keybinds.put("char_left_select",  .{ .key = .left,  .shift = true,  .control = false });
-                try self.keybinds.put("char_right_select", .{ .key = .right, .shift = true,  .control = false });
+                try self.keybinds.putNoClobber("char_left",         .{ .key = .left,  .shift = false, .control = false });
+                try self.keybinds.putNoClobber("char_right",        .{ .key = .right, .shift = false, .control = false });
+                try self.keybinds.putNoClobber("char_left_select",  .{ .key = .left,  .shift = true,  .control = false });
+                try self.keybinds.putNoClobber("char_right_select", .{ .key = .right, .shift = true,  .control = false });
 
-                try self.keybinds.put("char_up",          .{ .key = .up,   .shift = false });
-                try self.keybinds.put("char_down",        .{ .key = .down, .shift = false });
-                try self.keybinds.put("char_up_select",   .{ .key = .up,   .shift = true });
-                try self.keybinds.put("char_down_select", .{ .key = .down, .shift = true });
+                try self.keybinds.putNoClobber("char_up",          .{ .key = .up,   .shift = false });
+                try self.keybinds.putNoClobber("char_down",        .{ .key = .down, .shift = false });
+                try self.keybinds.putNoClobber("char_up_select",   .{ .key = .up,   .shift = true });
+                try self.keybinds.putNoClobber("char_down_select", .{ .key = .down, .shift = true });
 
-                try self.keybinds.put("delete_prev_word", .{ .key = .backspace, .control = true });
-                try self.keybinds.put("delete_next_word", .{ .key = .delete,    .control = true });
+                try self.keybinds.putNoClobber("delete_prev_word", .{ .key = .backspace, .control = true });
+                try self.keybinds.putNoClobber("delete_next_word", .{ .key = .delete,    .control = true });
                 // zig fmt: on
             },
             .mac => {
                 // zig fmt: off
-                try self.keybinds.put("cut",        .{ .key = .x, .command = true });
-                try self.keybinds.put("copy",       .{ .key = .c, .command = true });
-                try self.keybinds.put("paste",      .{ .key = .v, .command = true });
-                try self.keybinds.put("select_all", .{ .key = .a, .command = true });
+                try self.keybinds.putNoClobber("cut",        .{ .key = .x, .command = true });
+                try self.keybinds.putNoClobber("copy",       .{ .key = .c, .command = true });
+                try self.keybinds.putNoClobber("paste",      .{ .key = .v, .command = true });
+                try self.keybinds.putNoClobber("select_all", .{ .key = .a, .command = true });
 
-                try self.keybinds.put("ctrlOrMacCmd",   .{ .key = .left_command, .also = "ctrlOrMacCmd_1" });
-                try self.keybinds.put("ctrlOrMacCmd_1", .{ .key = .right_command });
+                try self.keybinds.putNoClobber("ctrlOrMacCmd",   .{ .key = .left_command, .also = "ctrlOrMacCmd_1" });
+                try self.keybinds.putNoClobber("ctrlOrMacCmd_1", .{ .key = .right_command });
 
-                try self.keybinds.put("text_start",        .{ .key = .up,   .shift = false, .command = true });
-                try self.keybinds.put("text_end",          .{ .key = .down, .shift = false, .command = true });
-                try self.keybinds.put("text_start_select", .{ .key = .up,   .shift = true,  .command = true });
-                try self.keybinds.put("text_end_select",   .{ .key = .down, .shift = true,  .command = true });
+                try self.keybinds.putNoClobber("text_start",        .{ .key = .up,   .shift = false, .command = true });
+                try self.keybinds.putNoClobber("text_end",          .{ .key = .down, .shift = false, .command = true });
+                try self.keybinds.putNoClobber("text_start_select", .{ .key = .up,   .shift = true,  .command = true });
+                try self.keybinds.putNoClobber("text_end_select",   .{ .key = .down, .shift = true,  .command = true });
 
-                try self.keybinds.put("line_start",        .{ .key = .left,  .shift = false, .command = true });
-                try self.keybinds.put("line_end",          .{ .key = .right, .shift = false, .command = true });
-                try self.keybinds.put("line_start_select", .{ .key = .left,  .shift = true,  .command = true });
-                try self.keybinds.put("line_end_select",   .{ .key = .right, .shift = true,  .command = true });
+                try self.keybinds.putNoClobber("line_start",        .{ .key = .left,  .shift = false, .command = true });
+                try self.keybinds.putNoClobber("line_end",          .{ .key = .right, .shift = false, .command = true });
+                try self.keybinds.putNoClobber("line_start_select", .{ .key = .left,  .shift = true,  .command = true });
+                try self.keybinds.putNoClobber("line_end_select",   .{ .key = .right, .shift = true,  .command = true });
 
-                try self.keybinds.put("word_left",         .{ .key = .left,  .shift = false, .alt = true });
-                try self.keybinds.put("word_right",        .{ .key = .right, .shift = false, .alt = true });
-                try self.keybinds.put("word_left_select",  .{ .key = .left,  .shift = true,  .alt = true });
-                try self.keybinds.put("word_right_select", .{ .key = .right, .shift = true,  .alt = true });
+                try self.keybinds.putNoClobber("word_left",         .{ .key = .left,  .shift = false, .alt = true });
+                try self.keybinds.putNoClobber("word_right",        .{ .key = .right, .shift = false, .alt = true });
+                try self.keybinds.putNoClobber("word_left_select",  .{ .key = .left,  .shift = true,  .alt = true });
+                try self.keybinds.putNoClobber("word_right_select", .{ .key = .right, .shift = true,  .alt = true });
 
-                try self.keybinds.put("char_left",         .{ .key = .left,  .shift = false, .alt = false });
-                try self.keybinds.put("char_right",        .{ .key = .right, .shift = false, .alt = false });
-                try self.keybinds.put("char_left_select",  .{ .key = .left,  .shift = true,  .alt = false });
-                try self.keybinds.put("char_right_select", .{ .key = .right, .shift = true,  .alt = false });
+                try self.keybinds.putNoClobber("char_left",         .{ .key = .left,  .shift = false, .alt = false });
+                try self.keybinds.putNoClobber("char_right",        .{ .key = .right, .shift = false, .alt = false });
+                try self.keybinds.putNoClobber("char_left_select",  .{ .key = .left,  .shift = true,  .alt = false });
+                try self.keybinds.putNoClobber("char_right_select", .{ .key = .right, .shift = true,  .alt = false });
 
-                try self.keybinds.put("char_up",          .{ .key = .up,   .shift = false, .command = false });
-                try self.keybinds.put("char_down",        .{ .key = .down, .shift = false, .command = false });
-                try self.keybinds.put("char_up_select",   .{ .key = .up,   .shift = true,  .command = false });
-                try self.keybinds.put("char_down_select", .{ .key = .down, .shift = true,  .command = false });
+                try self.keybinds.putNoClobber("char_up",          .{ .key = .up,   .shift = false, .command = false });
+                try self.keybinds.putNoClobber("char_down",        .{ .key = .down, .shift = false, .command = false });
+                try self.keybinds.putNoClobber("char_up_select",   .{ .key = .up,   .shift = true,  .command = false });
+                try self.keybinds.putNoClobber("char_down_select", .{ .key = .down, .shift = true,  .command = false });
 
-                try self.keybinds.put("delete_prev_word", .{ .key = .backspace, .alt = true });
-                try self.keybinds.put("delete_next_word", .{ .key = .delete,    .alt = true });
+                try self.keybinds.putNoClobber("delete_prev_word", .{ .key = .backspace, .alt = true });
+                try self.keybinds.putNoClobber("delete_next_word", .{ .key = .delete,    .alt = true });
                 // zig fmt: on
             },
         }

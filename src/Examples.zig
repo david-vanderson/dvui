@@ -1785,6 +1785,64 @@ pub fn debuggingErrors() !void {
         }
     }
 
+    if (try dvui.expander(@src(), "Debug key bindings", .{}, .{ .expand = .horizontal })) {
+        const g = struct {
+            const empty = [1]u8{0} ** 100;
+            var latest_buf = empty;
+            var latest_slice: []u8 = &.{};
+        };
+
+        const evts = dvui.events();
+        for (evts) |e| {
+            switch (e.evt) {
+                .key => |ke| {
+                    var it = dvui.currentWindow().keybinds.iterator();
+                    while (it.next()) |kv| {
+                        if (ke.matchKeyBind(kv.value_ptr.*)) {
+                            g.latest_slice = try std.fmt.bufPrintZ(&g.latest_buf, "{s}", .{kv.key_ptr.*});
+                        }
+                    }
+                },
+                else => {},
+            }
+        }
+
+        var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+
+        try tl.format("Latest matched keybinding: {s}\n\n", .{g.latest_slice}, .{});
+
+        var any_overlaps = false;
+        var outer = dvui.currentWindow().keybinds.iterator();
+        while (outer.next()) |okv| {
+            var inner = dvui.currentWindow().keybinds.iterator();
+            var found = false;
+            while (inner.next()) |ikv| {
+                if (!found) {
+                    if (okv.key_ptr == ikv.key_ptr) {
+                        found = true;
+                    }
+                } else {
+                    const okb = okv.value_ptr.*;
+                    const ikb = ikv.value_ptr.*;
+                    if ((okb.shift == ikb.shift or okb.shift == null or ikb.shift == null) and
+                        (okb.control == ikb.control or okb.control == null or ikb.control == null) and
+                        (okb.alt == ikb.alt or okb.alt == null or ikb.alt == null) and
+                        (okb.command == ikb.command or okb.command == null or ikb.command == null) and
+                        (okb.key == ikb.key or okb.key == null or ikb.key == null))
+                    {
+                        try tl.format("keybind \"{s}\" overlaps \"{s}\"\n", .{ okv.key_ptr.*, ikv.key_ptr.* }, .{});
+                        any_overlaps = true;
+                    }
+                }
+            }
+        }
+
+        if (!any_overlaps) {
+            try tl.addText("No keybind overlaps found.\n", .{});
+        }
+        tl.deinit();
+    }
+
     if (try dvui.expander(@src(), "Show Font Atlases", .{}, .{ .expand = .horizontal })) {
         try dvui.debugFontAtlases(@src(), .{});
     }
