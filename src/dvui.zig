@@ -2279,8 +2279,8 @@ pub const Window = struct {
                 try self.keybinds.putNoClobber("paste",      .{ .key = .v, .control = true });
                 try self.keybinds.putNoClobber("select_all", .{ .key = .a, .control = true });
 
-                try self.keybinds.putNoClobber("ctrlOrMacCmd",   .{ .key = .left_control, .also = "ctrlOrMacCmd_1" });
-                try self.keybinds.putNoClobber("ctrlOrMacCmd_1", .{ .key = .right_control });
+                try self.keybinds.putNoClobber("ctrl/cmd",   .{ .key = .left_control, .also = "ctrl/cmd_1" });
+                try self.keybinds.putNoClobber("ctrl/cmd_1", .{ .key = .right_control });
 
                 try self.keybinds.putNoClobber("text_start",        .{ .key = .home, .shift = false, .control = true });
                 try self.keybinds.putNoClobber("text_end",          .{ .key = .end,  .shift = false, .control = true });
@@ -2318,8 +2318,8 @@ pub const Window = struct {
                 try self.keybinds.putNoClobber("paste",      .{ .key = .v, .command = true });
                 try self.keybinds.putNoClobber("select_all", .{ .key = .a, .command = true });
 
-                try self.keybinds.putNoClobber("ctrlOrMacCmd",   .{ .key = .left_command, .also = "ctrlOrMacCmd_1" });
-                try self.keybinds.putNoClobber("ctrlOrMacCmd_1", .{ .key = .right_command });
+                try self.keybinds.putNoClobber("ctrl/cmd",   .{ .key = .left_command, .also = "ctrl/cmd_1" });
+                try self.keybinds.putNoClobber("ctrl/cmd_1", .{ .key = .right_command });
 
                 try self.keybinds.putNoClobber("text_start",        .{ .key = .up,   .shift = false, .command = true });
                 try self.keybinds.putNoClobber("text_end",          .{ .key = .down, .shift = false, .command = true });
@@ -4883,7 +4883,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
         const evts = events();
         for (evts) |*e| {
-            if (e.evt == .key and e.evt.key.matchBind("ctrlOrMacCmd")) {
+            if (e.evt == .key and e.evt.key.matchBind("ctrl/cmd")) {
                 ctrl_down = (e.evt.key.action == .down);
             }
 
@@ -4952,7 +4952,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
         const evts = events();
         for (evts) |*e| {
-            if (e.evt == .key and e.evt.key.matchBind("ctrlOrMacCmd")) {
+            if (e.evt == .key and e.evt.key.matchBind("ctrl/cmd")) {
                 ctrl_down = (e.evt.key.action == .down);
             }
 
