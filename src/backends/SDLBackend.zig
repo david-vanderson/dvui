@@ -473,33 +473,38 @@ pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
     switch (event.type) {
         if (sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
+            const code = SDL_keysym_to_dvui(event.key.keysym.sym);
+            const mod = SDL_keymod_to_dvui(event.key.keysym.mod);
             if (self.log_events) {
-                std.debug.print("sdl event KEYDOWN {d}\n", .{event.key.keysym.sym});
+                std.debug.print("sdl event KEYDOWN {d} {s} {b}\n", .{event.key.keysym.sym, @tagName(code), mod});
             }
 
             return try win.addEventKey(.{
-                .code = SDL_keysym_to_dvui(event.key.keysym.sym),
+                .code = code,
                 .action = if (event.key.repeat > 0) .repeat else .down,
-                .mod = SDL_keymod_to_dvui(event.key.keysym.mod),
+                .mod = mod,
             });
         },
         if (sdl3) c.SDL_EVENT_KEY_UP else c.SDL_KEYUP => {
+            const code = SDL_keysym_to_dvui(event.key.keysym.sym);
+            const mod = SDL_keymod_to_dvui(event.key.keysym.mod);
             if (self.log_events) {
-                std.debug.print("sdl event KEYUP {d}\n", .{event.key.keysym.sym});
+                std.debug.print("sdl event KEYUP {d} {s} {b}\n", .{event.key.keysym.sym, @tagName(code), mod});
             }
 
             return try win.addEventKey(.{
-                .code = SDL_keysym_to_dvui(event.key.keysym.sym),
+                .code = code,
                 .action = .up,
-                .mod = SDL_keymod_to_dvui(event.key.keysym.mod),
+                .mod = mod,
             });
         },
         if (sdl3) c.SDL_EVENT_TEXT_INPUT else c.SDL_TEXTINPUT => {
+            const txt = std.mem.sliceTo(&event.text.text, 0);
             if (self.log_events) {
-                std.debug.print("sdl event TEXTINPUT {s}\n", .{event.text.text});
+                std.debug.print("sdl event TEXTINPUT {s}\n", .{txt});
             }
 
-            return try win.addEventText(std.mem.sliceTo(&event.text.text, 0));
+            return try win.addEventText(txt);
         },
         if (sdl3) c.SDL_EVENT_MOUSE_MOTION else c.SDL_MOUSEMOTION => {
             const touch = event.motion.which == c.SDL_TOUCH_MOUSEID;
