@@ -45,14 +45,18 @@ var orig_content_scale: f32 = 1.0;
 
 const zig_favicon = @embedFile("src/zig-favicon.png");
 
-export fn app_init() i32 {
+export fn app_init(platform_ptr: [*]const u8, platform_len: usize) i32 {
+    const platform = platform_ptr[0..platform_len];
+    dvui.log.debug("platform: {s}", .{platform});
+    const mac = if (std.mem.indexOf(u8, platform, "Mac") != null) true else false;
+
     dvui.Theme.AdwaitaLight = dvui.Theme.AdwaitaLight.fontSizeAdd(2);
     dvui.Theme.AdwaitaDark = dvui.Theme.AdwaitaDark.fontSizeAdd(2);
 
     backend = WebBackend.init() catch {
         return 1;
     };
-    win = dvui.Window.init(@src(), gpa, backend.backend(), .{}) catch {
+    win = dvui.Window.init(@src(), gpa, backend.backend(), .{ .keybinds = if (mac) .mac else .windows }) catch {
         return 2;
     };
 

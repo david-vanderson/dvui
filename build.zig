@@ -201,6 +201,8 @@ pub fn build(b: *std.Build) !void {
             "app_update",
             "add_event",
             "arena_u8",
+            "gpa_u8",
+            "gpa_free",
         };
 
         wasm.root_module.addImport("WebBackend", web_mod);
