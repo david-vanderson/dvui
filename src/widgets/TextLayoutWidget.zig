@@ -1419,178 +1419,234 @@ pub fn processEvents(self: *TextLayoutWidget) void {
 
 pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
     _ = bubbling;
-    if (e.evt == .mouse) {
-        if (e.evt.mouse.action == .focus) {
-            e.handled = true;
-            // focus so that we can receive keyboard input
-            dvui.focusWidget(self.wd.id, null, e.num);
-        } else if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
-            e.handled = true;
-            // capture and start drag
-            dvui.captureMouse(self.wd.id);
-            dvui.dragPreStart(e.evt.mouse.p, .ibeam, Point{});
+    switch (e.evt) {
+        .mouse => |me| {
+            if (me.action == .focus) {
+                e.handled = true;
+                // focus so that we can receive keyboard input
+                dvui.focusWidget(self.wd.id, null, e.num);
+            } else if (me.action == .press and me.button.pointer()) {
+                e.handled = true;
+                // capture and start drag
+                dvui.captureMouse(self.wd.id);
+                dvui.dragPreStart(me.p, .ibeam, Point{});
 
-            if (e.evt.mouse.button.touch()) {
-                self.te_focus_on_touchdown = self.focus_at_start;
-                if (self.touch_editing) {
-                    self.te_show_context_menu = false;
+                if (me.button.touch()) {
+                    self.te_focus_on_touchdown = self.focus_at_start;
+                    if (self.touch_editing) {
+                        self.te_show_context_menu = false;
 
-                    // need to refresh draggables
-                    dvui.refresh(null, @src(), self.wd.id);
-                }
-            } else {
-                // a click always sets sel_move - has the highest priority
-                const p = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-                self.sel_move = .{ .mouse = .{ .down_pt = p } };
-                self.scroll_to_cursor = true;
+                        // need to refresh draggables
+                        dvui.refresh(null, @src(), self.wd.id);
+                    }
+                } else {
+                    // a click always sets sel_move - has the highest priority
+                    const p = self.wd.contentRectScale().pointFromScreen(me.p);
+                    self.sel_move = .{ .mouse = .{ .down_pt = p } };
+                    self.scroll_to_cursor = true;
 
-                if (self.click_num == 1) {
-                    // select word we touched
-                    self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
-                } else if (self.click_num == 2) {
-                    // select line we touched
-                    self.sel_move = .{ .expand_pt = .{ .which = .line, .pt = p } };
-                }
-            }
-        } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
-            e.handled = true;
-
-            if (dvui.captured(self.wd.id)) {
-                if (!self.touch_editing and dvui.dragging(e.evt.mouse.p) == null) {
-                    // click without drag
-                    self.click_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-
-                    self.click_num += 1;
-                    if (self.click_num == 4) {
-                        self.click_num = 1;
+                    if (self.click_num == 1) {
+                        // select word we touched
+                        self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
+                    } else if (self.click_num == 2) {
+                        // select line we touched
+                        self.sel_move = .{ .expand_pt = .{ .which = .line, .pt = p } };
                     }
                 }
+            } else if (me.action == .release and me.button.pointer()) {
+                e.handled = true;
 
-                if (e.evt.mouse.button.touch()) {
-                    // this was a touch-release without drag, which transitions
-                    // us between touch editing
-                    const p = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
+                if (dvui.captured(self.wd.id)) {
+                    if (!self.touch_editing and dvui.dragging(me.p) == null) {
+                        // click without drag
+                        self.click_pt = self.wd.contentRectScale().pointFromScreen(me.p);
 
-                    if (self.te_focus_on_touchdown) {
-                        self.touch_editing = !self.touch_editing;
-                        // move cursor to point
-                        self.sel_move = .{ .mouse = .{ .down_pt = p } };
-                        if (self.touch_editing) {
-                            // select word we touched
-                            self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
+                        self.click_num += 1;
+                        if (self.click_num == 4) {
+                            self.click_num = 1;
                         }
+                    }
+
+                    if (me.button.touch()) {
+                        // this was a touch-release without drag, which transitions
+                        // us between touch editing
+                        const p = self.wd.contentRectScale().pointFromScreen(me.p);
+
+                        if (self.te_focus_on_touchdown) {
+                            self.touch_editing = !self.touch_editing;
+                            // move cursor to point
+                            self.sel_move = .{ .mouse = .{ .down_pt = p } };
+                            if (self.touch_editing) {
+                                // select word we touched
+                                self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
+                            }
+                        } else {
+                            if (self.touch_edit_just_focused) {
+                                self.touch_editing = true;
+                            }
+                            if (self.te_first) {
+                                // This is the very first time we are entering
+                                // touch editing from not having focus, we want to
+                                // position the cursor.
+                                self.te_first = false;
+
+                                // select word we touched
+                                self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
+                            }
+                        }
+                        dvui.refresh(null, @src(), self.wd.id);
+                    }
+
+                    dvui.captureMouse(null);
+                }
+            } else if (me.action == .motion and dvui.captured(self.wd.id)) {
+                if (dvui.dragging(me.p)) |_| {
+                    self.click_num = 0;
+                    if (!me.button.touch()) {
+                        e.handled = true;
+                        if (self.sel_move == .mouse) {
+                            self.sel_move.mouse.drag_pt = self.wd.contentRectScale().pointFromScreen(me.p);
+                        } else if (self.sel_move == .expand_pt) {
+                            self.sel_move.expand_pt.pt = self.wd.contentRectScale().pointFromScreen(me.p);
+                            self.sel_move.expand_pt.done = false;
+                            self.sel_move.expand_pt.dragging = true;
+                        }
+                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
+                            .mouse_pt = me.p,
+                            .screen_rect = self.wd.rectScale().r,
+                            .capture_id = self.wd.id,
+                        } } };
+                        self.processEvent(&scrolldrag, true);
                     } else {
-                        if (self.touch_edit_just_focused) {
-                            self.touch_editing = true;
-                        }
-                        if (self.te_first) {
-                            // This is the very first time we are entering
-                            // touch editing from not having focus, we want to
-                            // position the cursor.
-                            self.te_first = false;
-
-                            // select word we touched
-                            self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
-                        }
+                        // user intended to scroll with a finger swipe
+                        dvui.captureMouse(null); // stop possible drag and capture
                     }
-                    dvui.refresh(null, @src(), self.wd.id);
                 }
-
-                dvui.captureMouse(null);
-            }
-        } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
-            if (dvui.dragging(e.evt.mouse.p)) |_| {
+            } else if (me.action == .motion) {
                 self.click_num = 0;
-                if (!e.evt.mouse.button.touch()) {
-                    e.handled = true;
-                    if (self.sel_move == .mouse) {
-                        self.sel_move.mouse.drag_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-                    } else if (self.sel_move == .expand_pt) {
-                        self.sel_move.expand_pt.pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-                        self.sel_move.expand_pt.done = false;
-                        self.sel_move.expand_pt.dragging = true;
-                    }
-                    var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
-                        .mouse_pt = e.evt.mouse.p,
-                        .screen_rect = self.wd.rectScale().r,
-                        .capture_id = self.wd.id,
-                    } } };
-                    self.processEvent(&scrolldrag, true);
-                } else {
-                    // user intended to scroll with a finger swipe
-                    dvui.captureMouse(null); // stop possible drag and capture
-                }
+            } else if (me.action == .position) {
+                e.handled = true;
+                self.cursor_pt = self.wd.contentRectScale().pointFromScreen(me.p);
             }
-        } else if (e.evt.mouse.action == .motion) {
-            self.click_num = 0;
-        } else if (e.evt.mouse.action == .position) {
-            e.handled = true;
-            self.cursor_pt = self.wd.contentRectScale().pointFromScreen(e.evt.mouse.p);
-        }
-    } else if (e.evt == .key and (e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.mod.shift()) {
-        switch (e.evt.key.code) {
-            .left, .right => |code| {
+        },
+        .key => |ke| blk: {
+            if (ke.action == .down and ke.matchBind("text_start_select")) {
                 e.handled = true;
-                if (builtin.os.tag.isDarwin() and e.evt.key.mod.command()) {
-                    if (self.sel_move == .none) {
-                        self.sel_move = .{ .expand_pt = .{ .which = if (code == .left) .home else .end } };
-                    }
-                } else if (e.evt.key.mod.controlOrMacOption()) {
-                    if (self.sel_move == .none) {
-                        self.sel_move = .{ .word_left_right = .{} };
-                    }
-                    if (self.sel_move == .word_left_right) {
-                        self.sel_move.word_left_right.count += if (code == .right) 1 else -1;
-                    }
-                } else {
-                    if (self.sel_move == .none) {
-                        self.sel_move = .{ .char_left_right = .{} };
-                    }
-                    if (self.sel_move == .char_left_right) {
-                        self.sel_move.char_left_right.count += if (code == .right) 1 else -1;
-                    }
-                }
+                self.selection.moveCursor(0, true);
                 self.scroll_to_cursor = true;
-            },
-            .up, .down => |code| {
+                break :blk;
+            }
+
+            if (ke.action == .down and ke.matchBind("text_end_select")) {
                 e.handled = true;
-                if (builtin.os.tag.isDarwin() and e.evt.key.mod.command()) {
-                    if (code == .up) {
-                        self.selection.moveCursor(0, true);
-                    } else {
-                        self.selection.moveCursor(std.math.maxInt(usize), true);
-                    }
-                } else {
-                    if (self.sel_move == .none) {
-                        self.sel_move = .{ .cursor_updown = .{} };
-                    }
-                    if (self.sel_move == .cursor_updown) {
-                        self.sel_move.cursor_updown.count += if (code == .down) 1 else -1;
-                    }
-                }
-            },
-            .home, .end => |code| {
+                self.selection.moveCursor(std.math.maxInt(usize), true);
+                self.scroll_to_cursor = true;
+                break :blk;
+            }
+
+            if (ke.action == .down and ke.matchBind("line_start_select")) {
                 e.handled = true;
-                if (e.evt.key.mod.control()) {
-                    if (code == .home) {
-                        self.selection.moveCursor(0, true);
-                    } else {
-                        self.selection.moveCursor(std.math.maxInt(usize), true);
-                    }
-                } else {
-                    if (self.sel_move == .none) {
-                        self.sel_move = .{ .expand_pt = .{ .which = if (code == .home) .home else .end } };
-                    }
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .expand_pt = .{ .which = .home } };
+                    self.scroll_to_cursor = true;
                 }
-            },
-            else => {},
-        }
-    } else if (e.evt == .key and e.evt.key.mod.controlOrMacCommand() and e.evt.key.code == .c and e.evt.key.action == .down) {
-        e.handled = true;
-        self.copy();
-    } else if (e.evt == .key and e.evt.key.mod.controlOrMacCommand() and e.evt.key.code == .a and e.evt.key.action == .down) {
-        e.handled = true;
-        self.selection.selectAll();
+                break :blk;
+            }
+
+            if (ke.action == .down and ke.matchBind("line_end_select")) {
+                e.handled = true;
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .expand_pt = .{ .which = .end } };
+                    self.scroll_to_cursor = true;
+                }
+                break :blk;
+            }
+
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("word_left_select")) {
+                e.handled = true;
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .word_left_right = .{} };
+                    self.scroll_to_cursor = true;
+                }
+                if (self.sel_move == .word_left_right) {
+                    self.sel_move.word_left_right.count -= 1;
+                }
+                break :blk;
+            }
+
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("word_right_select")) {
+                e.handled = true;
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .word_left_right = .{} };
+                    self.scroll_to_cursor = true;
+                }
+                if (self.sel_move == .word_left_right) {
+                    self.sel_move.word_left_right.count += 1;
+                }
+                break :blk;
+            }
+
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_left_select")) {
+                e.handled = true;
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .char_left_right = .{} };
+                    self.scroll_to_cursor = true;
+                }
+                if (self.sel_move == .char_left_right) {
+                    self.sel_move.char_left_right.count -= 1;
+                }
+                break :blk;
+            }
+
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_right_select")) {
+                e.handled = true;
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .char_left_right = .{} };
+                    self.scroll_to_cursor = true;
+                }
+                if (self.sel_move == .char_left_right) {
+                    self.sel_move.char_left_right.count += 1;
+                }
+                break :blk;
+            }
+
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_up_select")) {
+                e.handled = true;
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .cursor_updown = .{} };
+                    self.scroll_to_cursor = true;
+                }
+                if (self.sel_move == .cursor_updown) {
+                    self.sel_move.cursor_updown.count -= 1;
+                }
+                break :blk;
+            }
+
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_down_select")) {
+                e.handled = true;
+                if (self.sel_move == .none) {
+                    self.sel_move = .{ .cursor_updown = .{} };
+                    self.scroll_to_cursor = true;
+                }
+                if (self.sel_move == .cursor_updown) {
+                    self.sel_move.cursor_updown.count += 1;
+                }
+                break :blk;
+            }
+
+            if (ke.action == .down and ke.matchBind("copy")) {
+                e.handled = true;
+                self.copy();
+                break :blk;
+            }
+
+            if (ke.action == .down and ke.matchBind("select_all")) {
+                e.handled = true;
+                self.selection.selectAll();
+                break :blk;
+            }
+        },
+        else => {},
     }
 
     if (e.bubbleable()) {

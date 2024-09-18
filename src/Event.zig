@@ -40,6 +40,31 @@ pub const Key = struct {
         up,
     },
     mod: enums.Mod,
+
+    pub fn matchBind(self: Key, keybind_name: []const u8) bool {
+        const cw = dvui.currentWindow();
+
+        var name = keybind_name;
+        while (true) {
+            if (cw.keybinds.get(name)) |kb| {
+                if ((kb.shift == null or kb.shift.? == self.mod.shift()) and
+                    (kb.control == null or kb.control.? == self.mod.control()) and
+                    (kb.alt == null or kb.alt.? == self.mod.alt()) and
+                    (kb.command == null or kb.command.? == self.mod.command()) and
+                    (kb.key == null or kb.key.? == self.code))
+                {
+                    return true;
+                } else if (kb.also) |also_name| {
+                    name = also_name;
+                    continue;
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+    }
 };
 
 pub const Mouse = struct {

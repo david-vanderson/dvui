@@ -191,13 +191,14 @@ pub fn deinit(self: *FloatingMenuWidget) void {
             }
         } else if (e.evt == .key) {
             // catch any tabs that weren't handled by widgets
-            if (e.evt.key.code == .tab and e.evt.key.action == .down) {
+            if (e.evt.key.action == .down and e.evt.key.matchBind("next_widget")) {
                 e.handled = true;
-                if (e.evt.key.mod.shift()) {
-                    dvui.tabIndexPrev(e.num);
-                } else {
-                    dvui.tabIndexNext(e.num);
-                }
+                dvui.tabIndexNext(e.num);
+            }
+
+            if (e.evt.key.action == .down and e.evt.key.matchBind("prev_widget")) {
+                e.handled = true;
+                dvui.tabIndexPrev(e.num);
             }
         }
     }

@@ -194,7 +194,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
             }
         },
         .key => |ke| {
-            if ((ke.code == .space or ke.code == .enter) and ke.action == .down) {
+            if (ke.action == .down and ke.matchBind("activate")) {
                 e.handled = true;
                 if (self.init_opts.submenu) {
                     dvui.menuGet().?.submenus_activated = true;

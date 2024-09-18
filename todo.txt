@@ -7,6 +7,20 @@ check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
 
+runtime keyboard shortcuts
+- hashmap in Window that maps a string to a struct:
+  - "ctrl-right" -> struct { .shift = false, .control = true, .alt = false, .command = false, .key = null }
+
+remove Mod.controlOrMac stuff
+
+write debugging function to test that all keybinds are unique
+
+figure out what we get when pressing fn-up/down on mac
+- do we just get page_up/page_down?
+
+textEntry doesn't need its own scroll_to_cursor
+
+
 textEntryNumber example - show how to initialize with number and write back if the number validates?
 
 

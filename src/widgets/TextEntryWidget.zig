@@ -467,7 +467,135 @@ pub fn filterOut(self: *TextEntryWidget, needle: []const u8) void {
 
 pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
     switch (e.evt) {
-        .key => |ke| {
+        .key => |ke| blk: {
+            if (ke.action == .down and ke.matchBind("next_widget")) {
+                e.handled = true;
+                dvui.tabIndexNext(e.num);
+                break :blk;
+            }
+
+            if (ke.action == .down and ke.matchBind("prev_widget")) {
+                e.handled = true;
+                dvui.tabIndexPrev(e.num);
+                break :blk;
+            }
+
+            if (ke.action == .down and ke.matchBind("paste")) {
+                e.handled = true;
+                self.paste();
+                break :blk;
+            }
+
+            if (ke.action == .down and ke.matchBind("cut")) {
+                e.handled = true;
+                self.cut();
+                break :blk;
+            }
+
+            if (ke.action == .down and ke.matchBind("text_start")) {
+                e.handled = true;
+                self.textLayout.selection.moveCursor(0, false);
+                self.scroll_to_cursor = true;
+                break :blk;
+            }
+
+            if (ke.action == .down and ke.matchBind("text_end")) {
+                e.handled = true;
+                self.textLayout.selection.moveCursor(std.math.maxInt(usize), false);
+                self.scroll_to_cursor = true;
+                break :blk;
+            }
+
+            if (ke.action == .down and ke.matchBind("line_start")) {
+                e.handled = true;
+                if (self.textLayout.sel_move == .none) {
+                    self.textLayout.sel_move = .{ .expand_pt = .{ .select = false, .which = .home } };
+                    self.scroll_to_cursor = true;
+                }
+                break :blk;
+            }
+
+            if (ke.action == .down and ke.matchBind("line_end")) {
+                e.handled = true;
+                if (self.textLayout.sel_move == .none) {
+                    self.textLayout.sel_move = .{ .expand_pt = .{ .select = false, .which = .end } };
+                    self.scroll_to_cursor = true;
+                }
+                break :blk;
+            }
+
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("word_left")) {
+                e.handled = true;
+                if (self.textLayout.sel_move == .none) {
+                    self.textLayout.sel_move = .{ .word_left_right = .{ .select = false } };
+                    self.scroll_to_cursor = true;
+                }
+                if (self.textLayout.sel_move == .word_left_right) {
+                    self.textLayout.sel_move.word_left_right.count -= 1;
+                }
+                break :blk;
+            }
+
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("word_right")) {
+                e.handled = true;
+                if (self.textLayout.sel_move == .none) {
+                    self.textLayout.sel_move = .{ .word_left_right = .{ .select = false } };
+                    self.scroll_to_cursor = true;
+                }
+                if (self.textLayout.sel_move == .word_left_right) {
+                    self.textLayout.sel_move.word_left_right.count += 1;
+                }
+                break :blk;
+            }
+
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_left")) {
+                e.handled = true;
+                if (self.textLayout.sel_move == .none) {
+                    self.textLayout.sel_move = .{ .char_left_right = .{ .select = false } };
+                    self.scroll_to_cursor = true;
+                }
+                if (self.textLayout.sel_move == .char_left_right) {
+                    self.textLayout.sel_move.char_left_right.count -= 1;
+                }
+                break :blk;
+            }
+
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_right")) {
+                e.handled = true;
+                if (self.textLayout.sel_move == .none) {
+                    self.textLayout.sel_move = .{ .char_left_right = .{ .select = false } };
+                    self.scroll_to_cursor = true;
+                }
+                if (self.textLayout.sel_move == .char_left_right) {
+                    self.textLayout.sel_move.char_left_right.count += 1;
+                }
+                break :blk;
+            }
+
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_up")) {
+                e.handled = true;
+                if (self.textLayout.sel_move == .none) {
+                    self.textLayout.sel_move = .{ .cursor_updown = .{ .select = false } };
+                    self.scroll_to_cursor = true;
+                }
+                if (self.textLayout.sel_move == .cursor_updown) {
+                    self.textLayout.sel_move.cursor_updown.count -= 1;
+                }
+                break :blk;
+            }
+
+            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_down")) {
+                e.handled = true;
+                if (self.textLayout.sel_move == .none) {
+                    self.textLayout.sel_move = .{ .cursor_updown = .{ .select = false } };
+                    self.scroll_to_cursor = true;
+                }
+                if (self.textLayout.sel_move == .cursor_updown) {
+                    self.textLayout.sel_move.cursor_updown.count += 1;
+                }
+                break :blk;
+            }
+
             switch (ke.code) {
                 .backspace => {
                     if (ke.action == .down or ke.action == .repeat) {
@@ -482,7 +610,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             sel.cursor = sel.start;
                             self.scroll_to_cursor = true;
                             self.text_changed = true;
-                        } else if (ke.mod.controlOrMacOption()) {
+                        } else if (ke.matchBind("delete_prev_word")) {
                             // delete word before cursor
 
                             const oldcur = sel.cursor;
@@ -541,7 +669,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             sel.cursor = sel.start;
                             self.scroll_to_cursor = true;
                             self.text_changed = true;
-                        } else if (ke.mod.controlOrMacOption()) {
+                        } else if (ke.matchBind("delete_next_word")) {
                             // delete word after cursor
 
                             const oldcur = sel.cursor;
@@ -586,87 +714,6 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                     if (self.init_opts.multiline and (ke.action == .down or ke.action == .repeat)) {
                         e.handled = true;
                         self.textTyped("\n");
-                    }
-                },
-                .tab => {
-                    if (ke.action == .down) {
-                        e.handled = true;
-                        if (ke.mod.shift()) {
-                            dvui.tabIndexPrev(e.num);
-                        } else {
-                            dvui.tabIndexNext(e.num);
-                        }
-                    }
-                },
-                .v => {
-                    if (ke.action == .down and ke.mod.controlOrMacCommand()) {
-                        e.handled = true;
-                        self.paste();
-                    }
-                },
-                .x => {
-                    if (ke.action == .down and ke.mod.controlOrMacCommand()) {
-                        e.handled = true;
-                        self.cut();
-                    }
-                },
-                .left, .right => |code| {
-                    if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
-                        e.handled = true;
-                        if (builtin.os.tag.isDarwin() and ke.mod.command()) {
-                            if (self.textLayout.sel_move == .none) {
-                                self.textLayout.sel_move = .{ .expand_pt = .{ .select = false, .which = if (code == .left) .home else .end } };
-                            }
-                        } else if (ke.mod.controlOrMacOption()) {
-                            if (self.textLayout.sel_move == .none) {
-                                self.textLayout.sel_move = .{ .word_left_right = .{ .select = false } };
-                            }
-                            if (self.textLayout.sel_move == .word_left_right) {
-                                self.textLayout.sel_move.word_left_right.count += if (code == .right) 1 else -1;
-                            }
-                        } else {
-                            if (self.textLayout.sel_move == .none) {
-                                self.textLayout.sel_move = .{ .char_left_right = .{ .select = false } };
-                            }
-                            if (self.textLayout.sel_move == .char_left_right) {
-                                self.textLayout.sel_move.char_left_right.count += if (code == .right) 1 else -1;
-                            }
-                        }
-                    }
-                },
-                .up, .down => |code| {
-                    if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
-                        e.handled = true;
-                        if (builtin.os.tag.isDarwin() and e.evt.key.mod.command()) {
-                            if (code == .up) {
-                                self.textLayout.selection.moveCursor(0, false);
-                            } else {
-                                self.textLayout.selection.moveCursor(std.math.maxInt(usize), false);
-                            }
-                        } else {
-                            if (self.textLayout.sel_move == .none) {
-                                self.textLayout.sel_move = .{ .cursor_updown = .{ .select = false } };
-                            }
-                            if (self.textLayout.sel_move == .cursor_updown) {
-                                self.textLayout.sel_move.cursor_updown.count += if (code == .down) 1 else -1;
-                            }
-                        }
-                    }
-                },
-                .home, .end => |code| {
-                    if ((ke.action == .down or ke.action == .repeat) and !ke.mod.shift()) {
-                        e.handled = true;
-                        if (ke.mod.control()) {
-                            if (code == .home) {
-                                self.textLayout.selection.moveCursor(0, false);
-                            } else {
-                                self.textLayout.selection.moveCursor(std.math.maxInt(usize), false);
-                            }
-                        } else {
-                            if (self.textLayout.sel_move == .none) {
-                                self.textLayout.sel_move = .{ .expand_pt = .{ .select = false, .which = if (code == .home) .home else .end } };
-                            }
-                        }
                     }
                 },
                 else => {},

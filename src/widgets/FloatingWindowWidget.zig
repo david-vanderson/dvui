@@ -345,13 +345,14 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
             },
             .key => |ke| {
                 // catch any tabs that weren't handled by widgets
-                if (ke.code == .tab and ke.action == .down) {
+                if (ke.action == .down and ke.matchBind("next_widget")) {
                     e.handled = true;
-                    if (ke.mod.shift()) {
-                        dvui.tabIndexPrev(e.num);
-                    } else {
-                        dvui.tabIndexNext(e.num);
-                    }
+                    dvui.tabIndexNext(e.num);
+                }
+
+                if (ke.action == .down and ke.matchBind("prev_widget")) {
+                    e.handled = true;
+                    dvui.tabIndexPrev(e.num);
                 }
             },
             else => {},
