@@ -4,11 +4,10 @@ const dvui = @import("dvui");
 
 const win = @import("zigwin32");
 const graphics = win.graphics;
-const dxgi = graphics.dxgi;
 
-const graphics = win.graphics;
-const dxgi = graphics.dxgi;
 const dxgic = dxgi.common;
+
+const dxgi = graphics.dxgi;
 const dx = graphics.direct3d11;
 const d3d = graphics.direct3d;
 
@@ -43,6 +42,8 @@ const DirectxOptions = struct {
     vertex_layout: ?*dx.ID3D11InputLayout = null,
     vertex_buffer: ?*dx.ID3D11Buffer = null,
     index_buffer: ?*dx.ID3D11Buffer = null,
+    texture_view: ?*dx.ID3D11ShaderResourceView = null,
+    sampler: ?*dx.ID3D11SamplerState = null,
 };
 
 pub const InitOptions = struct {
@@ -213,7 +214,78 @@ fn createInputLayout(self: *Dx11Backend) !void {
     self.device_context.vtable.IASetInputLayout(self.device_context, self.dx_options.vertex_layout);
 }
 
-pub fn drawClippedTriangles(self: *Dx11Backend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr: dvui.Rect) void {
+pub fn textureCreate(self: *Dx11Backend, pixels: []const u8, width: u32, height: u32) !*anyopaque {
+    var texture: ?*dx.ID3D11Texture2D = null;
+    var tex_desc = dx.D3D11_TEXTURE2D_DESC{
+        .Width = width,
+        .Height = height,
+        .MipLevels = 1,
+        .ArraySize = 1,
+        .Format = dxgic.DXGI_FORMAT.R8G8B8A8_UNORM,
+        .SampleDesc = .{
+            .Count = 1,
+            .Quality = 0,
+        },
+        .Usage = dx.D3D11_USAGE_DEFAULT,
+        .BindFlags = dx.D3D11_BIND_SHADER_RESOURCE,
+        .CPUAccessFlags = .{},
+        .MiscFlags = .{},
+    };
+
+    var resource_data: dx.D3D11_SUBRESOURCE_DATA = std.mem.zeroes(dx.D3D11_SUBRESOURCE_DATA);
+    resource_data.pSysMem = pixels.ptr;
+    resource_data.SysMemPitch = pixels.len;
+
+    const tex_creation = self.device.vtable.CreateTexture2D(
+        self.device,
+        &tex_desc,
+        &resource_data,
+        &texture,
+    );
+
+    if (!isOk(tex_creation)) {
+        std.debug.print("Texture creation failed.\n", .{});
+        return error.TextureCreationFailed;
+    }
+
+    var rvd: dx.D3D11_SHADER_RESOURCE_VIEW_DESC = std.mem.zeroes(dx.D3D11_SHADER_RESOURCE_VIEW_DESC);
+    rvd = .{
+        .Format = dxgic.DXGI_FORMAT.R8G8B8A8_UNORM,
+        .ViewDimension = @enumFromInt(4), // DIMENSION_TEXTURE2D
+        .Anonymous = .{ .Texture2D = .{
+            .MostDetailedMip = 0,
+            .MipLevels = 1,
+        } },
+    };
+
+    const rv_result = self.device.vtable.CreateShaderResourceView(
+        self.device,
+        &self.dx_options.texture.ID3D11Resource,
+        &rvd,
+        &self.dx_options.texture_view,
+    );
+
+    if (!isOk(rv_result)) {
+        std.debug.print("Texture View creation failed\n", .{});
+        return error.TextureViewCreationFailed;
+    }
+
+    return texture.?;
+}
+
+pub fn textureDestroy(self: *Dx11Backend, texture: *anyopaque) void {
+    _ = self;
+    const tex: *dx.ID3D11Texture2D = @ptrCast(texture);
+    tex.vtable.base.base.base.Release(tex);
+}
+
+pub fn drawClippedTriangles(
+    self: *Dx11Backend,
+    texture: ?*anyopaque,
+    vtx: []const dvui.Vertex,
+    idx: []const u16,
+    clipr: dvui.Rect,
+) void {
     _ = texture; // autofix
     _ = vtx; // autofix
     _ = idx; // autofix
@@ -238,4 +310,21 @@ pub fn drawClippedTriangles(self: *Dx11Backend, texture: ?*anyopaque, vtx: []con
             return;
         };
     }
+
+    if (self.dx_options.sampler == null) {
+        self.createSampler() catch |err| {
+            std.debug.print("sampler could not be initialized: {any}\n", .{err});
+            return;
+        };
+    }
+
+    var clear_color = [_]f32{ 0.0, 0.0, 0.0, 0.0 };
+    self.device_context.vtable.OMSetRenderTargets(self.device_context, 1, @ptrCast(self.render_target), null);
+    self.device_context.vtable.ClearRenderTargetView(self.device_context, self.render_target, @ptrCast((&clear_color).ptr));
+    self.device_context.vtable.VSSetShader(self.device_context, self.dx_options.vertex_shader, null, 0);
+    self.device_context.vtable.PSSetShader(self.device_context, self.dx_options.pixel_shader, null, 0);
+    self.device_context.vtable.PSSetShaderResources(self.device_context, 0, 1, @ptrCast(self.dx_options.sampler));
+    self.device_context.vtable.DrawIndexed(self.device_context, idx.len, 0, 0);
+
+    self.swap_chain.vtable.Present(self.swap_chain, 0, 0);
 }
