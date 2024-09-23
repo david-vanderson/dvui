@@ -90,7 +90,7 @@ pub fn main() !void {
 }
 
 fn colorPicker(result: *dvui.Color) !void {
-    _ = dvui.spacer(@src(), .{ .w = 10, .h = 10 }, .{});
+    _ = try dvui.spacer(@src(), .{ .w = 10, .h = 10 }, .{});
     {
         var overlay = try dvui.overlay(@src(), .{ .min_size_content = .{ .w = 100, .h = 100 } });
         defer overlay.deinit();
