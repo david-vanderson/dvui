@@ -358,7 +358,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         const code = raylibKeyToDvui(event);
 
         //text input
-        if ((self.pressed_modifier.shiftOnly() or self.pressed_modifier.is(.none)) and event < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(event))) {
+        if ((self.pressed_modifier.shiftOnly() or self.pressed_modifier.has(.none)) and event < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(event))) {
             const char: u8 = @intCast(event);
 
             const lowercase_alpha = std.ascii.toLower(char);
@@ -391,7 +391,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     iter = self.pressed_keys.iterator(.{});
     while (iter.next()) |keycode| {
         if (c.IsKeyPressedRepeat(@intCast(keycode)) and
-            (self.pressed_modifier.shiftOnly() or self.pressed_modifier.is(.none)) and
+            (self.pressed_modifier.shiftOnly() or self.pressed_modifier.has(.none)) and
             keycode < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(keycode)))
         {
             const char: u8 = @intCast(keycode);
