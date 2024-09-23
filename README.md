@@ -16,6 +16,8 @@ How to run the built-in examples:
 
 This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify widgets.
 
+Online discussion happens in #gui-dev on the zig discord server: https://discord.gg/Cz3z5mzA
+
 Below is a screenshot of the demo window, whose source code can be found at `src/Examples.zig`.
 
 ![Screenshot of DVUI Standalone Example (Application Window)](/screenshot_demo.png?raw=true)
