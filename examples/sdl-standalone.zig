@@ -1,6 +1,7 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const Backend = @import("SDLBackend");
+comptime { std.debug.assert(dvui.backend_kind == .sdl); }
+const Backend = dvui.backend;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
