@@ -1738,6 +1738,41 @@ pub fn animations() !void {
             try dvui.timer(mslabel.wd.id, wait);
         }
     }
+
+    if (try dvui.expander(@src(), "Texture Frames", .{}, .{ .expand = .horizontal })) {
+        var box = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
+        defer box.deinit();
+
+        const pixel_data = [_]u8{ 0xff, 0xff, 0x00, 0xff, 0x00, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0xff, 0xff, 0x00, 0xff, 0xff };
+        var pixels = pixel_data;
+
+        // example of how to run frames at a certain fps
+        const millis_per_frame = 500;
+        if (dvui.timerDone(box.data().id) or !dvui.timerExists(box.data().id)) {
+            const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);
+            const left = @as(i32, @intCast(@rem(millis, millis_per_frame)));
+            const wait = 1000 * (millis_per_frame - left);
+            try dvui.timer(box.data().id, wait);
+        }
+
+        const num_frames = 4;
+        const frame: i32 = blk: {
+            const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);
+            const left = @as(i32, @intCast(@rem(millis, num_frames * millis_per_frame)));
+            break :blk @divTrunc(left, millis_per_frame);
+        };
+
+        try dvui.label(@src(), "frame: {d}", .{frame}, .{});
+
+        std.mem.rotate(u8, &pixels, @intCast(frame * 4));
+
+        const tex = dvui.textureCreate((&pixels).ptr, 2, 2);
+        dvui.textureDestroyLater(tex);
+
+        var frame_box = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 50, .h = 50 } });
+        try dvui.renderTexture(tex, frame_box.data().contentRectScale(), 0, .{});
+        frame_box.deinit();
+    }
 }
 
 fn makeLabels(src: std.builtin.SourceLocation, count: usize) !void {
