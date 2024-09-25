@@ -666,16 +666,8 @@ pub const RenderCmd = struct {
             rs: RectScale,
             color: Color,
         },
-        icon: struct {
-            name: []const u8,
-            tvg_bytes: []const u8,
-            rs: RectScale,
-            rotation: f32,
-            colormod: Color,
-        },
-        image: struct {
-            name: []const u8,
-            image_bytes: []const u8,
+        texture: struct {
+            tex: *anyopaque,
             rs: RectScale,
             rotation: f32,
             colormod: Color,
@@ -2193,6 +2185,7 @@ pub const Window = struct {
     gpa: std.mem.Allocator,
     _arena: std.heap.ArenaAllocator,
     arena: std.mem.Allocator = undefined,
+    texture_trash: std.ArrayList(*anyopaque) = undefined,
     path: std.ArrayList(Point) = undefined,
     rendering: bool = true,
 
@@ -2819,6 +2812,7 @@ pub const Window = struct {
         const arena = self._arena.allocator();
         self.arena = arena;
 
+        self.texture_trash = std.ArrayList(*anyopaque).init(arena);
         self.path = std.ArrayList(Point).init(arena);
 
         {
@@ -3095,11 +3089,8 @@ pub const Window = struct {
                 .debug_font_atlases => |t| {
                     try debugRenderFontAtlases(t.rs, t.color);
                 },
-                .icon => |i| {
-                    try renderIcon(i.name, i.tvg_bytes, i.rs, i.rotation, i.colormod);
-                },
-                .image => |i| {
-                    try renderImage(i.name, i.image_bytes, i.rs, i.rotation, i.colormod);
+                .texture => |t| {
+                    try renderTexture(t.tex, t.rs, t.rotation, t.colormod);
                 },
                 .pathFillConvex => |pf| {
                     try self.path.appendSlice(pf.path.items);
@@ -3460,6 +3451,10 @@ pub const Window = struct {
         }
         clipSet(oldclip);
         self.snap_to_pixels = oldsnap;
+
+        for (self.texture_trash.items) |tex| {
+            self.backend.textureDestroy(tex);
+        }
 
         // events may have been tagged with a focus widget that never showed up, so
         // we wouldn't even get them bubbled
@@ -5883,11 +5878,38 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
     }
 }
 
+/// Create a texture that can be rendered with renderTexture().
+///
+/// Remember to destroy the texture at some point, see textureDestroyLater().
+pub fn textureCreate(pixels: [*]u8, width: u32, height: u32) *anyopaque {
+    return currentWindow().backend.textureCreate(pixels, width, height);
+}
+
+/// Destroy a texture created with textureCreate() and the end of the frame.
+///
+/// While backend.textureDestroy() immediately destroys the texture, this
+/// function deferres the destruction until the end of the frame, so it is safe
+/// to use even in a subwindow where rendering is deferred.
+pub fn textureDestroyLater(texture: *anyopaque) void {
+    currentWindow().texture_trash.append(texture) catch |err| {
+        dvui.log.err("textureDestroyLater got {!}\n", .{err});
+    };
+}
+
 pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Color) !void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
     var cw = currentWindow();
+
+    if (!cw.rendering) {
+        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .rotation = rotation, .colormod = colormod } } };
+
+        var sw = cw.subwindowCurrent();
+        try sw.render_cmds.append(cmd);
+
+        return;
+    }
 
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, 4);
     defer vtx.deinit();
@@ -5954,20 +5976,6 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotati
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
-    //if (true) return;
-
-    var cw = currentWindow();
-
-    if (!cw.rendering) {
-        const name_copy = try cw.arena.dupe(u8, name);
-        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .icon = .{ .name = name_copy, .tvg_bytes = tvg_bytes, .rs = rs, .rotation = rotation, .colormod = colormod } } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
-
-        return;
-    }
-
     // Ask for an integer size icon, then render it to fit rs
     const target_size = rs.r.h;
     const ask_height = @ceil(target_size);
@@ -6023,20 +6031,6 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
 pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, rotation: f32, colormod: Color) !void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
-
-    //if (true) return;
-
-    var cw = currentWindow();
-
-    if (!cw.rendering) {
-        const name_copy = try cw.arena.dupe(u8, name);
-        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .image = .{ .name = name_copy, .image_bytes = image_bytes, .rs = rs, .rotation = rotation, .colormod = colormod } } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
-
-        return;
-    }
 
     const tce = imageTexture(name, image_bytes) catch return;
     try renderTexture(tce.texture, rs, rotation, colormod);
