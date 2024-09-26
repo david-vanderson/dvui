@@ -459,15 +459,21 @@ function dvui(canvasId, wasmFile) {
 
             if (!app_initialized) {
                 app_initialized = true;
+	        let app_init_return = 0;
 	        let str = utf8encoder.encode(navigator.platform);
                 if (str.length > 0) {
                     const ptr = wasmResult.instance.exports.gpa_u8(str.length);
                     var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
                     dest.set(str);
-                    wasmResult.instance.exports.app_init(ptr, str.length);
+                    app_init_return = wasmResult.instance.exports.app_init(ptr, str.length);
 		    wasmResult.instance.exports.gpa_free(ptr, str.length);
 		} else {
-                    wasmResult.instance.exports.app_init(0, 0);
+                    app_init_return = wasmResult.instance.exports.app_init(0, 0);
+		}
+
+		if (app_init_return != 0) {
+		    console.log("ERROR: app_init returned " + app_init_return);
+		    return;
 		}
             }
 
