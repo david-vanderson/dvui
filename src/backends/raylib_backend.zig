@@ -10,6 +10,7 @@ pub const c = @cImport({
 });
 
 const RaylibBackend = @This();
+pub const Context = *RaylibBackend;
 
 we_own_window: bool = false,
 shader: c.Shader = undefined,
