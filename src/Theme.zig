@@ -96,7 +96,7 @@ pub const QuickTheme = struct {
     name: []const u8 = "Default",
 
     // fonts
-    font_size: usize = 14,
+    font_size: f32 = 14,
     font_name_body: []const u8 = "Vera",
     font_name_heading: []const u8 = "Vera",
     font_name_caption: []const u8 = "Vera",
@@ -112,7 +112,7 @@ pub const QuickTheme = struct {
     color_text_press: []const u8 = "#112233",
 
     // background color for displaying lots of text
-    color_fill_text: []const u8 = "#ggggfg",
+    color_fill_text: []const u8 = "#ddedde",
 
     // background color for containers that have other widgets inside
     color_fill_container: []const u8 = "#dddddd",
@@ -123,7 +123,7 @@ pub const QuickTheme = struct {
     color_fill_hover: []const u8 = "#ddeede",
     color_fill_press: []const u8 = "#223344",
 
-    color_border: []const u8 = "#000010",
+    color_border: []const u8 = "#220110",
 
     pub fn fromString(
         allocator: std.mem.Allocator,
@@ -139,7 +139,7 @@ pub const QuickTheme = struct {
 
     pub fn toTheme(self: @This(), allocator: std.mem.Allocator) !Theme {
         return Theme{
-            .name = allocator.dupeZ(u8, self.name),
+            .name = try allocator.dupeZ(u8, self.name),
             .dark = true,
             .alpha = 1.0,
             .color_accent = try Color.fromHex(self.color_focus),
@@ -264,11 +264,11 @@ const basic_theme =
     \\  "color_focus": "#aa2244",
     \\  "color_text": "#111111",
     \\  "color_text_press": "#112233",
-    \\  "color_fill_text": "#ggggfg",
+    \\  "color_fill_text": "#ddeddd",
     \\  "color_fill_container": "#dddddd",
     \\  "color_fill_control": "#ddeede",
     \\  "color_fill_hover": "#ddeede",
     \\  "color_fill_press": "#223344",
-    \\  "color_border": "#000010"
+    \\  "color_border": "#223310"
     \\}
 ;

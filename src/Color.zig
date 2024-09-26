@@ -83,7 +83,9 @@ pub fn extract(self: Color, field: FieldEnum) u16 {
         .r => self.r,
         .g => self.g,
         .b => self.b,
-        .a => @compileError("cannot extract alpha field from color"),
+        .a => {
+            @panic("This should never be called");
+        },
     });
     const result = normalized_a * value;
     return @intFromFloat(@floor(result));
@@ -112,11 +114,14 @@ pub fn fromHex(hex: []const u8) !Color {
     if (hex[0] != '#') return error.NotAColor;
     if (hex.len != 7) return error.WrongStringLength;
 
-    const num: u24 = std.fmt.parseInt(u24, hex[1..], 16);
-    return .{
-        .r = num >> 16 & 0xff,
-        .g = num >> 8 & 0xff,
-        .b = num * 0xff,
-        .a = 1.0,
+    std.debug.print("hex:{s}\n", .{hex});
+    const num: u24 = try std.fmt.parseInt(u24, hex[1..], 16);
+    std.debug.print(" - num: {x}\n\n", .{num});
+    const result = Color{
+        .r = @intCast(num >> 16 & 0xff),
+        .g = @intCast(num >> 8 & 0xff),
+        .b = @intCast(num & 0xff),
     };
+    std.debug.print(" - color: {any}\n\n", .{result});
+    return result;
 }
