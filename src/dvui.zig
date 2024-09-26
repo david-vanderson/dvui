@@ -695,32 +695,11 @@ pub fn focusedSubwindowId() u32 {
 }
 
 pub fn focusSubwindow(subwindow_id: ?u32, event_num: ?u16) void {
-    const cw = currentWindow();
-    const winId = subwindow_id orelse cw.subwindow_currentId;
-    if (cw.focused_subwindowId != winId) {
-        cw.focused_subwindowId = winId;
-        refresh(null, @src(), null);
-        if (event_num) |en| {
-            for (cw.subwindows.items) |*sw| {
-                if (cw.focused_subwindowId == sw.id) {
-                    focusRemainingEvents(en, sw.id, sw.focused_widgetId);
-                    break;
-                }
-            }
-        }
-    }
+    currentWindow().focusSubwindowInternal(subwindow_id, event_num);
 }
 
 pub fn focusRemainingEvents(event_num: u16, focusWindowId: u32, focusWidgetId: ?u32) void {
-    var evts = events();
-    var k: usize = 0;
-    while (k < evts.len) : (k += 1) {
-        var e: *Event = &evts[k];
-        if (e.num > event_num and e.focus_windowId != null) {
-            e.focus_windowId = focusWindowId;
-            e.focus_widgetId = focusWidgetId;
-        }
-    }
+    currentWindow().focusRemainingEventsInternal(event_num, focusWindowId, focusWidgetId);
 }
 
 pub fn raiseSubwindow(subwindow_id: u32) void {
@@ -2106,8 +2085,6 @@ pub const Window = struct {
         }
     };
 
-    const EVENT_NUM_UNINITIALIZED = 9999;
-
     backend: Backend,
     previous_window: ?*Window = null,
 
@@ -2127,8 +2104,8 @@ pub const Window = struct {
     snap_to_pixels: bool = true,
     alpha: f32 = 1.0,
 
-    events: std.ArrayList(Event) = undefined,
-    event_num: u16 = EVENT_NUM_UNINITIALIZED,
+    events: std.ArrayListUnmanaged(Event) = .{},
+    event_num: u16 = 0,
     // mouse_pt tracks the last position we got a mouse event for
     // 1) used to add position info to mouse wheel events
     // 2) used to highlight the widget under the mouse (Event.Mouse.Action.position event)
@@ -2249,6 +2226,8 @@ pub const Window = struct {
             .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
             .theme = init_opts.theme orelse &Theme.AdwaitaLight,
         };
+
+        try self.initEvents();
 
         const kb = init_opts.keybinds orelse blk: {
             if (builtin.os.tag.isDarwin()) {
@@ -2448,9 +2427,35 @@ pub const Window = struct {
         self.backend.refresh();
     }
 
-    pub fn addEventKey(self: *Self, event: Event.Key) !bool {
-        try self.initEventsIfNeeded();
+    pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?u32, event_num: ?u16) void {
+        const winId = subwindow_id orelse self.subwindow_currentId;
+        if (self.focused_subwindowId != winId) {
+            self.focused_subwindowId = winId;
+            self.refreshWindow(@src(), null);
+            if (event_num) |en| {
+                for (self.subwindows.items) |*sw| {
+                    if (self.focused_subwindowId == sw.id) {
+                        self.focusRemainingEventsInternal(en, sw.id, sw.focused_widgetId);
+                        break;
+                    }
+                }
+            }
+        }
+    }
 
+    pub fn focusRemainingEventsInternal(self: *Self, event_num: u16, focusWindowId: u32, focusWidgetId: ?u32) void {
+        var evts = self.events.items;
+        var k: usize = 0;
+        while (k < evts.len) : (k += 1) {
+            var e: *Event = &evts[k];
+            if (e.num > event_num and e.focus_windowId != null) {
+                e.focus_windowId = focusWindowId;
+                e.focus_widgetId = focusWidgetId;
+            }
+        }
+    }
+
+    pub fn addEventKey(self: *Self, event: Event.Key) !bool {
         if (self.debug_under_mouse and self.debug_under_mouse_esc_needed and event.action == .down and event.code == .escape) {
             // a left click will stop the debug stuff from following the mouse,
             // but need to stop it at the end of the frame when we've gotten
@@ -2462,7 +2467,7 @@ pub const Window = struct {
         self.positionMouseEventRemove();
 
         self.event_num += 1;
-        try self.events.append(Event{
+        try self.events.append(self.arena(), Event{
             .num = self.event_num,
             .evt = .{ .key = event },
             .focus_windowId = self.focused_subwindowId,
@@ -2475,12 +2480,10 @@ pub const Window = struct {
     }
 
     pub fn addEventText(self: *Self, text: []const u8) !bool {
-        try self.initEventsIfNeeded();
-
         self.positionMouseEventRemove();
 
         self.event_num += 1;
-        try self.events.append(Event{
+        try self.events.append(self.arena(), Event{
             .num = self.event_num,
             .evt = .{ .text = try self._arena.allocator().dupe(u8, text) },
             .focus_windowId = self.focused_subwindowId,
@@ -2494,8 +2497,6 @@ pub const Window = struct {
 
     // this is only for mouse - for touch use addEventTouchMotion
     pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) !bool {
-        try self.initEventsIfNeeded();
-
         self.positionMouseEventRemove();
 
         const newpt = (Point{ .x = x, .y = y }).scale(self.natural_scale / self.content_scale);
@@ -2509,7 +2510,7 @@ pub const Window = struct {
         // - how to make it optional?
 
         self.event_num += 1;
-        try self.events.append(Event{ .num = self.event_num, .evt = .{
+        try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
             .mouse = .{
                 .action = .motion,
                 .button = if (self.debug_touch_simulate_events and self.debug_touch_simulate_down) .touch0 else .none,
@@ -2529,8 +2530,6 @@ pub const Window = struct {
     }
 
     pub fn addEventPointer(self: *Self, b: enums.Button, action: Event.Mouse.Action, xynorm: ?Point) !bool {
-        try self.initEventsIfNeeded();
-
         if (self.debug_under_mouse and !self.debug_under_mouse_esc_needed and action == .press and b.pointer()) {
             // a left click or touch will stop the debug stuff from following
             // the mouse, but need to stop it at the end of the frame when
@@ -2565,12 +2564,12 @@ pub const Window = struct {
             if (winId == self.wd.id) {
                 // focus the window here so any more key events get routed
                 // properly
-                focusSubwindow(self.wd.id, null);
+                self.focusSubwindowInternal(self.wd.id, null);
             }
 
             // add focus event
             self.event_num += 1;
-            try self.events.append(Event{ .num = self.event_num, .evt = .{
+            try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
                 .mouse = .{
                     .action = .focus,
                     .button = bb,
@@ -2581,7 +2580,7 @@ pub const Window = struct {
         }
 
         self.event_num += 1;
-        try self.events.append(Event{ .num = self.event_num, .evt = .{
+        try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
             .mouse = .{
                 .action = action,
                 .button = bb,
@@ -2596,8 +2595,6 @@ pub const Window = struct {
     }
 
     pub fn addEventMouseWheel(self: *Self, ticks: f32) !bool {
-        try self.initEventsIfNeeded();
-
         self.positionMouseEventRemove();
 
         const winId = self.windowFor(self.mouse_pt);
@@ -2605,7 +2602,7 @@ pub const Window = struct {
         //std.debug.print("mouse wheel {d}\n", .{ticks_adj});
 
         self.event_num += 1;
-        try self.events.append(Event{ .num = self.event_num, .evt = .{
+        try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
             .mouse = .{
                 .action = .wheel_y,
                 .button = .none,
@@ -2621,8 +2618,6 @@ pub const Window = struct {
     }
 
     pub fn addEventTouchMotion(self: *Self, finger: enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) !bool {
-        try self.initEventsIfNeeded();
-
         self.positionMouseEventRemove();
 
         const newpt = (Point{ .x = xnorm * self.wd.rect.w, .y = ynorm * self.wd.rect.h }).scale(self.natural_scale);
@@ -2634,7 +2629,7 @@ pub const Window = struct {
         const winId = self.windowFor(self.mouse_pt);
 
         self.event_num += 1;
-        try self.events.append(Event{ .num = self.event_num, .evt = .{
+        try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
             .mouse = .{
                 .action = .motion,
                 .button = finger,
@@ -2992,13 +2987,11 @@ pub const Window = struct {
 
         self.next_widget_ypos = self.wd.rect.y;
 
-        try self.initEventsIfNeeded();
-
         self.backend.begin(larena);
     }
 
     fn positionMouseEventAdd(self: *Self) !void {
-        try self.events.append(.{ .evt = .{ .mouse = .{
+        try self.events.append(self.arena(), .{ .evt = .{ .mouse = .{
             .action = .position,
             .button = .none,
             .p = self.mouse_pt,
@@ -3545,8 +3538,8 @@ pub const Window = struct {
     }
 
     fn initEvents(self: *Self) !void {
+        self.events = .{};
         self.event_num = 0;
-        self.events = std.ArrayList(Event).init(self.arena());
 
         // We want a position mouse event to do mouse cursors.  It needs to be
         // final so if there was a drag end the cursor will still be set
@@ -3554,12 +3547,6 @@ pub const Window = struct {
         // so make our position event now, and addEvent* functions will remove
         // and re-add to keep it as the final event.
         try self.positionMouseEventAdd();
-    }
-
-    fn initEventsIfNeeded(self: *Self) !void {
-        if (self.event_num == Window.EVENT_NUM_UNINITIALIZED) {
-            try self.initEvents();
-        }
     }
 
     pub fn widget(self: *Self) Widget {
