@@ -562,7 +562,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
                     .height = @ceil(height),
                     .ascent = @floor(ascent),
                     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-                    .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h))),
+                    .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
                     .texture_atlas_size = size,
                     .texture_atlas_regen = true,
                 };
@@ -590,7 +590,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
             .height = height,
             .ascent = ascent,
             .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-            .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h))),
+            .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
             .texture_atlas_size = size,
             .texture_atlas_regen = true,
         };
@@ -649,7 +649,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
     };
     defer render.deinit(cw.arena);
 
-    const texture = cw.backend.textureCreate(@as([*]u8, @ptrCast(render.pixels.ptr)), render.width, render.height);
+    const texture = cw.backend.textureCreate(@as([*]u8, @ptrCast(render.pixels.ptr)), render.width, render.height, .linear);
 
     //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, render.width, render.height });
 
@@ -5696,7 +5696,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             }
         }
 
-        fce.texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)));
+        fce.texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
         fce.texture_atlas_size = size;
     }
 
@@ -5883,8 +5883,8 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 /// Create a texture that can be rendered with renderTexture().
 ///
 /// Remember to destroy the texture at some point, see textureDestroyLater().
-pub fn textureCreate(pixels: [*]u8, width: u32, height: u32) *anyopaque {
-    return currentWindow().backend.textureCreate(pixels, width, height);
+pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enums.TextureInterpolation) *anyopaque {
+    return currentWindow().backend.textureCreate(pixels, width, height, interpolation);
 }
 
 /// Destroy a texture created with textureCreate() and the end of the frame.
@@ -6007,7 +6007,7 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
 
     defer c.stbi_image_free(data);
 
-    const texture = cw.backend.textureCreate(data, @intCast(w), @intCast(h));
+    const texture = cw.backend.textureCreate(data, @intCast(w), @intCast(h), .linear);
 
     //std.debug.print("created image texture \"{s}\" size {d}x{d}\n", .{ name, w, h });
     //const usizeh: usize = @intCast(h);

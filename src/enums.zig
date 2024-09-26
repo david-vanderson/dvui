@@ -1,5 +1,11 @@
 const builtin = @import("builtin");
 const std = @import("std");
+
+pub const TextureInterpolation = enum {
+    nearest,
+    linear,
+};
+
 pub const Button = enum {
     // used for mouse motion events
     none,

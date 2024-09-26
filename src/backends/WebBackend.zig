@@ -37,7 +37,7 @@ pub const wasm = struct {
     pub extern fn wasm_canvas_width() f32;
     pub extern fn wasm_canvas_height() f32;
 
-    pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32) u32;
+    pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32, interp: u8) u32;
     pub extern fn wasm_textureDestroy(u32) void;
     pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, x: u32, y: u32, w: u32, h: u32) void;
 
@@ -415,7 +415,7 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?*anyopaque, vtx: []const d
     );
 }
 
-pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
+pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {
     _ = self;
 
     // convert to premultiplied alpha
@@ -429,7 +429,12 @@ pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32) 
         }
     }
 
-    const id = wasm.wasm_textureCreate(pixels, width, height);
+    const wasm_interp: u8 = switch (interpolation) {
+        .nearest => 0,
+        .linear => 1,
+    };
+
+    const id = wasm.wasm_textureCreate(pixels, width, height, wasm_interp);
     return @ptrFromInt(id);
 }
 
