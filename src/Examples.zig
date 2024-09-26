@@ -1766,7 +1766,7 @@ pub fn animations() !void {
 
         std.mem.rotate(u8, &pixels, @intCast(frame * 4));
 
-        const tex = dvui.textureCreate((&pixels).ptr, 2, 2);
+        const tex = dvui.textureCreate((&pixels).ptr, 2, 2, .nearest);
         dvui.textureDestroyLater(tex);
 
         var frame_box = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 50, .h = 50 } });

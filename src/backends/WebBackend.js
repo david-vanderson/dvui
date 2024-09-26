@@ -164,7 +164,7 @@ function dvui(canvasId, wasmFile) {
         wasm_canvas_height() {
             return gl.canvas.clientHeight;
         },
-        wasm_textureCreate(pixels, width, height) {
+        wasm_textureCreate(pixels, width, height, interp) {
             const pixelData = new Uint8Array(wasmResult.instance.exports.memory.buffer, pixels, width * height * 4);
 
             const texture = gl.createTexture();
@@ -191,7 +191,13 @@ function dvui(canvasId, wasmFile) {
                 gl.generateMipmap(gl.TEXTURE_2D);
 	    }
 
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+	    if (interp == 0) {
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+	    } else {
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+	    }
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 

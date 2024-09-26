@@ -49,7 +49,7 @@ pub fn VTableTypes(comptime Context: type) type {
 
         /// Create a texture from the given pixels in RGBA.  The returned
         /// pointer is what will later be passed to drawClippedTriangles.
-        pub const textureCreate = *const fn (ctx: Context, pixels: [*]u8, width: u32, height: u32) *anyopaque;
+        pub const textureCreate = *const fn (ctx: Context, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque;
 
         /// Destroy texture that was previously made with textureCreate.  After
         /// this call, this texture pointer will not be used by dvui.
@@ -150,8 +150,8 @@ pub fn contentScale(self: *Backend) f32 {
 pub fn drawClippedTriangles(self: *Backend, texture: ?*anyopaque, vtx: []const Vertex, idx: []const u16, clipr: dvui.Rect) void {
     return self.vtable.drawClippedTriangles(self.ptr, texture, vtx, idx, clipr);
 }
-pub fn textureCreate(self: *Backend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
-    return self.vtable.textureCreate(self.ptr, pixels, width, height);
+pub fn textureCreate(self: *Backend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {
+    return self.vtable.textureCreate(self.ptr, pixels, width, height, interpolation);
 }
 pub fn textureDestroy(self: *Backend, texture: *anyopaque) void {
     return self.vtable.textureDestroy(self.ptr, texture);
