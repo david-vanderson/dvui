@@ -462,9 +462,7 @@ fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: R
                     // haven't found it yet, keep cursor at end to not trigger cursor_seen
                     self.selection.moveCursor(self.bytes_seen + end, false);
                 }
-            }
-
-            if (m.drag_pt) |p| {
+            } else if (m.drag_pt) |p| {
                 if (try findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
                     self.selection.cursor = ba.byte;
                     self.selection.start = @min(m.byte.?, ba.byte);
@@ -530,9 +528,7 @@ fn lineBreak(self: *TextLayoutWidget) void {
 
                     self.cursorSeen();
                 }
-            }
-
-            if (m.drag_pt) |p| {
+            } else if (m.drag_pt) |p| {
                 if (p.y < self.insert_pt.y) {
                     // point was right of previous line, no newline
                     self.selection.cursor = self.bytes_seen;
