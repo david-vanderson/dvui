@@ -1,5 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
+pub const backend_kind = @import("build_options").backend;
+pub const backend = @import("backend");
 const tvg = @import("tinyvg/tinyvg.zig");
 
 pub const math = std.math;
@@ -808,14 +810,14 @@ pub fn cursorSet(cursor: enums.Cursor) void {
     cw.cursor_requested = cursor;
 }
 
-fn drawClippedTriangles_helper(backend: *Backend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16) void {
+fn drawClippedTriangles_helper(backend_ctx: *Backend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16) void {
     const clipr = dvui.windowRectPixels().intersect(dvui.clipGet());
     // optimize: invert this logic outside this function. vtx and idx do not need to be built at all when this is true
     // then, inline clipr and remove this function
     if (clipr.empty()) {
         return;
     }
-    return backend.drawClippedTriangles(texture, vtx, idx, clipr);
+    return backend_ctx.drawClippedTriangles(texture, vtx, idx, clipr);
 }
 
 pub fn pathAddPoint(p: Point) !void {
@@ -2218,7 +2220,7 @@ pub const Window = struct {
     pub fn init(
         src: std.builtin.SourceLocation,
         gpa: std.mem.Allocator,
-        backend: Backend,
+        backend_ctx: Backend,
         init_opts: InitOptions,
     ) !Self {
         const hashval = hashSrc(src, init_opts.id_extra);
@@ -2242,7 +2244,7 @@ pub const Window = struct {
             .keybinds = std.StringHashMap(enums.Keybind).init(gpa),
             .debug_refresh_mutex = std.Thread.Mutex{},
             .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
-            .backend = backend,
+            .backend = backend_ctx,
             .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
             .theme = init_opts.theme orelse &Theme.AdwaitaLight,
         };
