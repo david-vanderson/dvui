@@ -113,7 +113,7 @@ fn addDvuiModule(
     dvui_mod.addOptions("build_options", options);
 
     const backend_mod = b.addModule("backend_" ++ @tagName(backend), .{
-        .root_source_file = b.path("src/backends/" ++ @tagName(backend) ++ "backend.zig"),
+        .root_source_file = b.path("src/backends/" ++ @tagName(backend) ++ "_backend.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = switch (backend) {
