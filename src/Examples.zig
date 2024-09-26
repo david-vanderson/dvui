@@ -459,16 +459,19 @@ pub fn themeSerialization(demo_win_id: u32) !void {
         const Static = struct {
             var bytes: [4096]u8 = undefined;
             var buffer = std.io.fixedBufferStream(&bytes);
+            var theme: dvui.Theme = undefined;
         };
 
         if (try dvui.button(@src(), "Serialize Active Theme", .{}, .{})) {
             Static.buffer.reset();
-            _ = try std.json.stringify(
-                dvui.Theme.QuickTheme{},
-                .{ .whitespace = .indent_2 },
-                Static.buffer.writer(),
-            );
-            std.debug.print("\n{s}\n\n", .{Static.buffer.getWritten()});
+            Static.theme = try (dvui.Theme.QuickTheme{}).toTheme(std.heap.c_allocator);
+            dvui.themeSet(&Static.theme);
+            // _ = try std.json.stringify(
+            //     (try (dvui.Theme.QuickTheme{}).toTheme(dvui.currentWindow().arena)),
+            //     .{ .whitespace = .indent_2 },
+            //     Static.buffer.writer(),
+            // );
+            // std.debug.print("\n{s}\n\n", .{Static.buffer.getWritten()});
         }
 
         if (try dvui.expander(@src(), "Serialized Theme", .{}, .{ .expand = .horizontal })) {
