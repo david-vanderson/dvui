@@ -403,7 +403,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
 
 pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, opts: Options) !void {
     const cw = dvui.currentWindow();
-    const l = try std.fmt.allocPrint(cw.arena, fmt, args);
+    const l = try std.fmt.allocPrint(cw.arena(), fmt, args);
     try self.addText(l, opts);
 }
 
@@ -1137,10 +1137,10 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                 // initialize or realloc
                 if (self.copy_slice) |slice| {
                     const old_len = slice.len;
-                    self.copy_slice = try dvui.currentWindow().arena.realloc(slice, slice.len + (cend - cstart));
+                    self.copy_slice = try dvui.currentWindow().arena().realloc(slice, slice.len + (cend - cstart));
                     @memcpy(self.copy_slice.?[old_len..], txt[cstart..cend]);
                 } else {
-                    self.copy_slice = try dvui.currentWindow().arena.dupe(u8, txt[cstart..cend]);
+                    self.copy_slice = try dvui.currentWindow().arena().dupe(u8, txt[cstart..cend]);
                 }
 
                 // push to clipboard if done
@@ -1148,7 +1148,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                     try dvui.clipboardTextSet(self.copy_slice.?);
 
                     self.copy_sel = null;
-                    dvui.currentWindow().arena.free(self.copy_slice.?);
+                    dvui.currentWindow().arena().free(self.copy_slice.?);
                     self.copy_slice = null;
                 }
             }
@@ -1234,7 +1234,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
 
         self.copy_sel = null;
         if (self.copy_slice) |cs| {
-            dvui.currentWindow().arena.free(cs);
+            dvui.currentWindow().arena().free(cs);
         }
         self.copy_slice = null;
     }
