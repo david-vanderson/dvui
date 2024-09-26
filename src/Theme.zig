@@ -149,6 +149,11 @@ pub const QuickTheme = struct {
         const color_fill_press = try Color.fromHex(self.color_fill_press);
         const color_border = try Color.fromHex(self.color_border);
 
+        const font_name_body = try allocator.dupeZ(u8, self.font_name_body);
+        const font_name_heading = try allocator.dupeZ(u8, self.font_name_heading);
+        const font_name_caption = try allocator.dupeZ(u8, self.font_name_caption);
+        const font_name_title = try allocator.dupeZ(u8, self.font_name_title);
+
         return Theme{
             .name = try allocator.dupeZ(u8, self.name),
             .dark = true,
@@ -163,15 +168,15 @@ pub const QuickTheme = struct {
             .color_fill_hover = color_fill_hover,
             .color_fill_press = color_fill_press,
             .color_border = color_border,
-            .font_body = .{ .size = self.font_size, .name = self.font_name_body },
-            .font_heading = .{ .size = self.font_size, .name = self.font_name_heading },
-            .font_caption = .{ .size = self.font_size * 0.7, .name = self.font_name_caption },
-            .font_caption_heading = .{ .size = self.font_size * 0.7, .name = self.font_name_caption },
-            .font_title = .{ .size = self.font_size * 2, .name = self.font_name_title },
-            .font_title_1 = .{ .size = self.font_size * 1.8, .name = self.font_name_title },
-            .font_title_2 = .{ .size = self.font_size * 1.6, .name = self.font_name_title },
-            .font_title_3 = .{ .size = self.font_size * 1.4, .name = self.font_name_title },
-            .font_title_4 = .{ .size = self.font_size * 1.2, .name = self.font_name_title },
+            .font_body = .{ .size = self.font_size, .name = font_name_body },
+            .font_heading = .{ .size = self.font_size, .name = font_name_heading },
+            .font_caption = .{ .size = self.font_size * 0.7, .name = font_name_caption },
+            .font_caption_heading = .{ .size = self.font_size * 0.7, .name = font_name_caption },
+            .font_title = .{ .size = self.font_size * 2, .name = font_name_title },
+            .font_title_1 = .{ .size = self.font_size * 1.8, .name = font_name_title },
+            .font_title_2 = .{ .size = self.font_size * 1.6, .name = font_name_title },
+            .font_title_3 = .{ .size = self.font_size * 1.4, .name = font_name_title },
+            .font_title_4 = .{ .size = self.font_size * 1.2, .name = font_name_title },
             .style_accent = .{
                 .color_accent = .{ .color = Color.alphaAdd(color_accent, color_accent) },
                 .color_text = .{ .color = Color.alphaAdd(color_accent, color_text) },
