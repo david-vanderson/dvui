@@ -96,12 +96,52 @@ const Backend = enum {
     sdl,
 };
 
+pub fn backendSystemPkg(backend: Backend) ?[]const u8 {
+    return switch (backend) {
+        .raylib => null,
+        .sdl => "sdl2",
+    };
+}
+
+const LazyDeps = struct {
+    enabled: bool,
+    need_was_disabled: bool = false,
+    pub fn need(self: *LazyDeps, b: *std.Build, name: []const u8, args: anytype) ?*std.Build.Dependency {
+        if (!self.enabled) {
+            self.need_was_disabled = true;
+            return null;
+        }
+        return b.lazyDependency(name, args);
+    }
+};
+
+const DvuiModule = struct {
+    backend: Backend,
+    mod: union(enum) {
+        disabled: void,
+        enabled: *std.Build.Module,
+    },
+};
+
 fn addDvuiModule(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     comptime backend: Backend,
-) *std.Build.Module {
+) DvuiModule {
+    var deps: LazyDeps = .{
+        .enabled = b.option(bool, @tagName(backend), b.fmt(
+            "Fetches lazy dependencies for the {s} backend",
+            .{ @tagName(backend) },
+        )) orelse false,
+    };
+
+    const system_integration: bool = blk: {
+        if (backendSystemPkg(backend)) |name|
+            break :blk b.systemIntegrationOption(name, .{});
+        break :blk false;
+    };
+
     const dvui_mod = b.addModule("dvui_" ++ @tagName(backend), .{
         .root_source_file = b.path("src/dvui.zig"),
         .target = target,
@@ -134,7 +174,7 @@ fn addDvuiModule(
                 error.EnvironmentVariableNotFound => raylib_linux_display = "X11",
                 else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
             };
-            const maybe_ray = b.lazyDependency("raylib", .{ .target = target, .optimize = optimize, .linux_display_backend = raylib_linux_display });
+            const maybe_ray = deps.need(b, "raylib", .{ .target = target, .optimize = optimize, .linux_display_backend = raylib_linux_display });
             if (maybe_ray) |ray| {
                 backend_mod.linkLibrary(ray.artifact("raylib"));
                 // This seems wonky to me, but is copied from raylib's src/build.zig
@@ -149,10 +189,10 @@ fn addDvuiModule(
             dvui_mod.addCSourceFiles(.{ .files = &.{
                 "src/stb/stb_image_impl.c",
             }});
-            if (b.systemIntegrationOption("sdl2", .{})) {
+            if (system_integration) {
                 backend_mod.linkSystemLibrary("SDL2", .{});
             } else {
-                const sdl_dep = b.lazyDependency("sdl", .{
+                const sdl_dep = deps.need(b, "sdl", .{
                     .target = target,
                     .optimize = optimize,
                 });
@@ -167,7 +207,7 @@ fn addDvuiModule(
     if (b.systemIntegrationOption("freetype", .{})) {
         dvui_mod.linkSystemLibrary("freetype", .{});
     } else {
-        const freetype_dep = b.lazyDependency("freetype", .{
+        const freetype_dep = deps.need(b, "freetype", .{
             .target = target,
             .optimize = optimize,
         });
@@ -175,7 +215,11 @@ fn addDvuiModule(
             dvui_mod.linkLibrary(fd.artifact("freetype"));
         }
     }
-    return dvui_mod;
+
+    if (deps.need_was_disabled)
+        return .{ .backend = backend, .mod = .disabled };
+
+    return .{ .backend = backend, .mod = .{ .enabled = dvui_mod } };
 }
 
 fn addExample(
@@ -183,26 +227,81 @@ fn addExample(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     comptime name: []const u8,
-    dvui_mod: *std.Build.Module,
+    dvui: DvuiModule,
 ) void {
-    const exe = b.addExecutable(.{
-        .name = name,
-        .root_source_file = b.path("examples/" ++ name ++ ".zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.root_module.addImport("dvui", dvui_mod);
+    const exe: struct {
+        install: *std.Build.Step,
+        run: *std.Build.Step,
+    } = blk: {
+        switch (dvui.mod) {
+            .disabled => {
+                const disabled = BackendDisabledStep.create(b, dvui.backend);
+                break :blk .{
+                    .install = &disabled.step,
+                    .run = &disabled.step,
+                };
+            },
+            .enabled => |mod| {
+                const exe = b.addExecutable(.{
+                    .name = name,
+                    .root_source_file = b.path("examples/" ++ name ++ ".zig"),
+                    .target = target,
+                    .optimize = optimize,
+                });
+                exe.root_module.addImport("dvui", mod);
+                const install = b.addInstallArtifact(exe, .{});
+                const run = b.addRunArtifact(exe);
+                run.step.dependOn(&install.step);
+                break :blk .{
+                    .install = &install.step,
+                    .run = &run.step,
+                };
+            },
+        }
+    };
 
-    const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
-    compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
+    const requires = if (backendSystemPkg(dvui.backend)) |system_pkg|
+        b.fmt(" (requires -D{s} or --system {s})", .{@tagName(dvui.backend), system_pkg})
+    else
+        b.fmt(" (requires -D{s})", .{@tagName(dvui.backend)});
+
+    const compile_step = b.step("compile-" ++ name, b.fmt("Compile {s}{s}", .{name, requires}));
+    compile_step.dependOn(exe.install);
     b.getInstallStep().dependOn(compile_step);
 
-    const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(compile_step);
-
-    const run_step = b.step(name, "Run " ++ name);
-    run_step.dependOn(&run_cmd.step);
+    const run_step = b.step(name, b.fmt("Run {s}{s}", .{name, requires}));
+    run_step.dependOn(exe.run);
 }
+
+const BackendDisabledStep = struct {
+    step: std.Build.Step,
+    backend: Backend,
+    pub fn create(owner: *std.Build, backend: Backend) *BackendDisabledStep {
+        const disabled = owner.allocator.create(BackendDisabledStep) catch @panic("OOM");
+        disabled.* = .{
+            .step = std.Build.Step.init(.{
+                .id = .custom,
+                .name = owner.fmt("Assert {s} backend is disabled", .{@tagName(backend)}),
+                .owner = owner,
+                .makeFn = make,
+            }),
+            .backend = backend,
+        };
+        return disabled;
+    }
+    fn make(step: *std.Build.Step, prog_node: std.Progress.Node) !void {
+        _ = prog_node;
+        const disabled: *BackendDisabledStep = @fieldParentPtr("step", step);
+        if (backendSystemPkg(disabled.backend)) |system_pkg| return step.fail(
+            "the {s} backend requires either -D{0s} to fetch/build its lazy dependencies or --system {s} to use the system package",
+            .{@tagName(disabled.backend), system_pkg},
+        );
+        return step.fail(
+            "the {s} backend requires -D{0s} to fetch its lazy dependencies",
+            .{@tagName(disabled.backend)},
+        );
+    }
+};
 
 // mach example build code
 // note: Disabled currently until mach backend is updated
