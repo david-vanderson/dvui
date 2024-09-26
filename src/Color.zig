@@ -99,8 +99,24 @@ pub fn alphaAdd(self: Color, other: Color) Color {
     };
 }
 
-pub fn toHexString(self: Color) ![7]u8 {
+pub const HexString = [7]u8;
+
+pub fn toHexString(self: Color) !HexString {
     var result: [7]u8 = .{0} ** 7;
     _ = try std.fmt.bufPrint(&result, "#{x:0>2}{x:0>2}{x:0>2}", .{ self.r, self.g, self.b });
     return result;
+}
+
+/// Converts slice of HexString to Color
+pub fn fromHex(hex: []const u8) !Color {
+    if (hex[0] != '#') return error.NotAColor;
+    if (hex.len != 7) return error.WrongStringLength;
+
+    const num: u24 = std.fmt.parseInt(u24, hex[1..], 16);
+    return .{
+        .r = num >> 16 & 0xff,
+        .g = num >> 8 & 0xff,
+        .b = num * 0xff,
+        .a = 1.0,
+    };
 }
