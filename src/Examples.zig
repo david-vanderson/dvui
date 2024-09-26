@@ -463,7 +463,12 @@ pub fn themeSerialization(demo_win_id: u32) !void {
 
         if (try dvui.button(@src(), "Serialize Active Theme", .{}, .{})) {
             Static.buffer.reset();
-            _ = try std.json.stringify(dvui.themeGet(), .{}, Static.buffer.writer());
+            _ = try std.json.stringify(
+                dvui.Theme.QuickTheme{},
+                .{ .whitespace = .indent_2 },
+                Static.buffer.writer(),
+            );
+            std.debug.print("\n{s}\n\n", .{Static.buffer.getWritten()});
         }
 
         if (try dvui.expander(@src(), "Serialized Theme", .{}, .{ .expand = .horizontal })) {

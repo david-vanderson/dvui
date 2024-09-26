@@ -1,4 +1,5 @@
 const dvui = @import("dvui.zig");
+const std = @import("std");
 
 const Color = dvui.Color;
 const Font = dvui.Font;
@@ -90,3 +91,184 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
 
     return ret;
 }
+
+pub const QuickTheme = struct {
+    name: []const u8 = "Default",
+
+    // fonts
+    font_size: usize = 14,
+    font_name_body: []const u8 = "Vera",
+    font_name_heading: []const u8 = "Vera",
+    font_name_caption: []const u8 = "Vera",
+    font_name_title: []const u8 = "VeraBd",
+
+    // used for focus
+    color_focus: []const u8 = "#aa2244",
+
+    // text/foreground color
+    color_text: []const u8 = "#111111",
+
+    // text/foreground color when widget is pressed
+    color_text_press: []const u8 = "#112233",
+
+    // background color for displaying lots of text
+    color_fill_text: []const u8 = "#ggggfg",
+
+    // background color for containers that have other widgets inside
+    color_fill_container: []const u8 = "#dddddd",
+
+    // background color for controls like buttons
+    color_fill_control: []const u8 = "#ddeede",
+
+    color_fill_hover: []const u8 = "#ddeede",
+    color_fill_press: []const u8 = "#223344",
+
+    color_border: []const u8 = "#000010",
+
+    pub fn fromString(
+        allocator: std.mem.Allocator,
+        string: []const u8,
+    ) !std.json.Parsed(QuickTheme) {
+        return try std.json.parseFromSlice(
+            QuickTheme,
+            allocator,
+            string,
+            .{ .allocate = .alloc_always },
+        );
+    }
+
+    pub fn toTheme(self: @This(), allocator: std.mem.Allocator) !Theme {
+        return Theme{
+            .name = allocator.dupeZ(u8, self.name),
+            .dark = true,
+            .alpha = 1.0,
+            .color_accent = try Color.fromHex(self.color_focus),
+            .color_err = try Color.fromHex("#ffaaaa"),
+            .color_text = try Color.fromHex(self.color_text),
+            .color_text_press = try Color.fromHex(self.color_text_press),
+            .color_fill = try Color.fromHex(self.color_fill_text),
+            .color_fill_window = try Color.fromHex(self.color_fill_container),
+            .color_fill_control = try Color.fromHex(self.color_fill_control),
+            .color_fill_hover = try Color.fromHex(self.color_fill_hover),
+            .color_fill_press = try Color.fromHex(self.color_fill_press),
+            .color_border = try Color.fromHex(self.color_border),
+            .font_body = .{ .size = self.font_size, .name = self.font_name_body },
+            .font_heading = .{ .size = self.font_size, .name = self.font_name_heading },
+            .font_caption = .{ .size = self.font_size * 0.7, .name = self.font_name_caption },
+            .font_caption_heading = .{ .size = self.font_size * 0.7, .name = self.font_name_caption },
+            .font_title = .{ .size = self.font_size * 2, .name = self.font_name_title },
+            .font_title_1 = .{ .size = self.font_size * 1.8, .name = self.font_name_title },
+            .font_title_2 = .{ .size = self.font_size * 1.6, .name = self.font_name_title },
+            .font_title_3 = .{ .size = self.font_size * 1.4, .name = self.font_name_title },
+            .font_title_4 = .{ .size = self.font_size * 1.2, .name = self.font_name_title },
+            .style_accent = .{
+                .color_accent = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex(self.color_focus),
+                        try Color.fromHex(self.color_focus),
+                    ),
+                },
+                .color_text = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex(self.color_focus),
+                        try Color.fromHex(self.color_text),
+                    ),
+                },
+                .color_text_press = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex(self.color_focus),
+                        try Color.fromHex(self.color_text_press),
+                    ),
+                },
+                .color_fill = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex(self.color_focus),
+                        try Color.fromHex(self.color_fill_text),
+                    ),
+                },
+                .color_fill_hover = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex(self.color_focus),
+                        try Color.fromHex(self.color_fill_hover),
+                    ),
+                },
+                .color_fill_press = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex(self.color_focus),
+                        try Color.fromHex(self.color_text_press),
+                    ),
+                },
+                .color_border = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex(self.color_focus),
+                        try Color.fromHex(self.color_border),
+                    ),
+                },
+            },
+            .style_err = .{
+                .color_accent = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex("#ffaaaa"),
+                        try Color.fromHex("#ffaaaa"),
+                    ),
+                },
+                .color_text = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex("#ffaaaa"),
+                        try Color.fromHex(self.color_text),
+                    ),
+                },
+                .color_text_press = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex("#ffaaaa"),
+                        try Color.fromHex(self.color_text_press),
+                    ),
+                },
+                .color_fill = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex("#ffaaaa"),
+                        try Color.fromHex(self.color_fill_text),
+                    ),
+                },
+                .color_fill_hover = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex("#ffaaaa"),
+                        try Color.fromHex(self.color_fill_hover),
+                    ),
+                },
+                .color_fill_press = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex("#ffaaaa"),
+                        try Color.fromHex(self.color_text_press),
+                    ),
+                },
+                .color_border = .{
+                    .color = Color.alphaAdd(
+                        try Color.fromHex("#ffaaaa"),
+                        try Color.fromHex(self.color_border),
+                    ),
+                },
+            },
+        };
+    }
+};
+
+const basic_theme =
+    \\ {
+    \\  "name": "Default",
+    \\  "font_size": 14,
+    \\  "font_name_body": "Vera",
+    \\  "font_name_heading": "Vera",
+    \\  "font_name_caption": "Vera",
+    \\  "font_name_title": "VeraBd",
+    \\  "color_focus": "#aa2244",
+    \\  "color_text": "#111111",
+    \\  "color_text_press": "#112233",
+    \\  "color_fill_text": "#ggggfg",
+    \\  "color_fill_container": "#dddddd",
+    \\  "color_fill_control": "#ddeede",
+    \\  "color_fill_hover": "#ddeede",
+    \\  "color_fill_press": "#223344",
+    \\  "color_border": "#000010"
+    \\}
+;
