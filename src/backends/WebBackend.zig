@@ -12,6 +12,7 @@ pub var win: *dvui.Window = undefined;
 var arena: std.mem.Allocator = undefined;
 var last_touch_enum: dvui.enums.Button = .none;
 var touchPoints: [10]?dvui.Point = [_]?dvui.Point{null} ** 10;
+var have_event = false;
 
 cursor_last: dvui.enums.Cursor = .wait,
 
@@ -123,6 +124,7 @@ export fn add_event(kind: u8, int1: u32, int2: u32, float1: f32, float2: f32) vo
 }
 
 fn add_event_raw(kind: u8, int1: u32, int2: u32, float1: f32, float2: f32) !void {
+    have_event = true;
     //event_temps.append(.{
     //    .kind = kind,
     //    .int1 = int1,
@@ -186,8 +188,11 @@ fn add_event_raw(kind: u8, int1: u32, int2: u32, float1: f32, float2: f32) !void
     }
 }
 
+// returns whether an event has come in since last frame (otherwise we are
+// doing a frame based on an animation or timer)
 pub fn hasEvent(_: *WebBackend) bool {
-    return event_temps.items.len > 0;
+    //return event_temps.items.len > 0;
+    return have_event;
 }
 
 fn buttonFromJS(jsButton: u32) dvui.enums.Button {
@@ -429,7 +434,9 @@ pub fn begin(self: *WebBackend, arena_in: std.mem.Allocator) void {
     arena = arena_in;
 }
 
-pub fn end(_: *WebBackend) void {}
+pub fn end(_: *WebBackend) void {
+    have_event = false;
+}
 
 pub fn pixelSize(_: *WebBackend) dvui.Size {
     return dvui.Size{ .w = wasm.wasm_pixel_width(), .h = wasm.wasm_pixel_height() };

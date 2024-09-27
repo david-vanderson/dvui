@@ -2709,27 +2709,32 @@ pub const Window = struct {
             // compensate if we didn't hit our target
             if (new_time > target) {
                 // woke up later than expected
-                self.loop_target_slop_frames = @max(1, self.loop_target_slop_frames * 2);
+                self.loop_target_slop_frames = math.clamp(self.loop_target_slop_frames * 2, 1, 1000);
                 self.loop_target_slop += self.loop_target_slop_frames;
             } else if (new_time < target) {
                 // woke up sooner than expected
-                self.loop_target_slop_frames = @min(-1, self.loop_target_slop_frames * 2);
+                self.loop_target_slop_frames = math.clamp(self.loop_target_slop_frames * 2, -1000, -1);
                 self.loop_target_slop += self.loop_target_slop_frames;
 
-                // since we are early, spin a bit to guarantee that we never run before
-                // the target
-                //var i: usize = 0;
-                //var first_time = new_time;
-                while (new_time < target) {
-                    //i += 1;
-                    self.backend.sleep(0);
-                    new_time = @max(self.frame_time_ns, self.backend.nanoTime());
-                }
+                const max_behind = std.time.ns_per_ms;
+                if (new_time > target - max_behind) {
+                    // we are early (but not too early), so spin a bit to try and hit target
+                    //var i: usize = 0;
+                    //var first_time = new_time;
+                    while (new_time < target) {
+                        //i += 1;
+                        self.backend.sleep(0);
+                        new_time = @max(self.frame_time_ns, self.backend.nanoTime());
+                    }
 
-                //if (i > 0) {
-                //  std.debug.print("    begin {d} spun {d} {d}us\n", .{self.loop_target_slop, i, @divFloor(new_time - first_time, 1000)});
-                //}
+                    //if (i > 0) {
+                    //  std.debug.print("    begin {d} spun {d} {d}us\n", .{self.loop_target_slop, i, @divFloor(new_time - first_time, 1000)});
+                    //}
+                }
             }
+
+            // make sure this never gets too crazy -1ms to 100ms
+            self.loop_target_slop = math.clamp(self.loop_target_slop, -1_000, 100_000);
         }
 
         //std.debug.print("beginWait {d:6} {d}\n", .{ self.loop_target_slop, self.loop_target_slop_frames });
