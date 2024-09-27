@@ -198,3 +198,56 @@ pub const QuickTheme = struct {
         };
     }
 };
+
+pub const Database = struct {
+    themes: std.StringHashMap(Theme),
+    arena: std.heap.ArenaAllocator,
+    names: ?std.ArrayList([]const u8) = null,
+
+    pub const builtin = struct {
+        pub const jungle = @embedFile("themes/jungle.json");
+    };
+
+    pub fn get(self: *const @This(), name: []const u8) *Theme {
+        return self.themes.getPtr(name) orelse @panic("Requested theme does not exist");
+    }
+
+    pub fn themeNames(self: *const @This()) []const []const u8 {
+        if (self.names) |names| {
+            if (names.len == self.themes.count()) {
+                return self.names.items;
+            } else {
+                names.clearRetainingCapacity();
+                var iter = self.themes.keyIterator();
+                while (iter.next()) |key| {
+                    names.append(key);
+                }
+                return themeNames(self);
+            }
+        } else {
+            self.names = std.ArrayList([]const u8).init(self.arena);
+            return themeNames(self);
+        }
+    }
+
+    pub fn init(base_allocator: std.mem.Allocator) !@This() {
+        var self: @This() = .{
+            .arena = std.heap.ArenaAllocator.init(base_allocator),
+            .themes = undefined,
+        };
+        const alloc = self.arena.allocator();
+        self.themes = std.StringHashMap(Theme).init(alloc);
+        inline for (@typeInfo(builtin).Struct.decls) |decl| {
+            const quick_theme = QuickTheme.fromString(alloc, @field(builtin, decl.name)) catch {
+                @panic("Failure loading builtin theme. This is a problem with DVUI.");
+            };
+            defer quick_theme.deinit();
+            try self.themes.putNoClobber(decl.name, try quick_theme.value.toTheme(alloc));
+        }
+        return self;
+    }
+
+    pub fn deinit(self: *@This()) void {
+        self.arena.deinit();
+    }
+};
