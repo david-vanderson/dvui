@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const dvui = @import("dvui");
 
 const WebBackend = @This();
+pub const Context = *WebBackend;
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();

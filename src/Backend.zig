@@ -149,7 +149,7 @@ pub fn drawClippedTriangles(self: *Backend, texture: ?*anyopaque, vtx: []const V
     return self.vtable.drawClippedTriangles(self.ctx, texture, vtx, idx, clipr);
 }
 pub fn textureCreate(self: *Backend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {
-    return self.vtable.textureCreate(self.ptr, pixels, width, height, interpolation);
+    return self.vtable.textureCreate(self.ctx, pixels, width, height, interpolation);
 }
 pub fn textureDestroy(self: *Backend, texture: *anyopaque) void {
     return self.vtable.textureDestroy(self.ctx, texture);

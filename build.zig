@@ -66,6 +66,7 @@ pub fn build(b: *std.Build) !void {
 
         wasm.root_module.addImport("WebBackend", web_mod);
         web_mod.addImport("dvui", dvui_mod_web);
+        dvui_mod_web.addImport("backend", web_mod);
 
         const install_wasm = b.addInstallArtifact(wasm, .{
             .dest_dir = .{ .override = .{ .custom = "bin" } },
