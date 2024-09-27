@@ -2455,6 +2455,11 @@ pub const Window = struct {
         }
     }
 
+    /// Add a keyboard event (key up/down/repeat) to the dvui event list.
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventKey(self: *Self, event: Event.Key) !bool {
         if (self.debug_under_mouse and self.debug_under_mouse_esc_needed and event.action == .down and event.code == .escape) {
             // a left click will stop the debug stuff from following the mouse,
@@ -2479,6 +2484,13 @@ pub const Window = struct {
         return ret;
     }
 
+    /// Add an event that represents text being typed.  This is distinct from
+    /// key up/down because the text could come from an IME (Input Method
+    /// Editor).
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventText(self: *Self, text: []const u8) !bool {
         self.positionMouseEventRemove();
 
@@ -2495,7 +2507,12 @@ pub const Window = struct {
         return ret;
     }
 
-    // this is only for mouse - for touch use addEventTouchMotion
+    /// Add a mouse motion event.  This is only for a mouse - for touch motion
+    /// use addEventTouchMotion().
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) !bool {
         self.positionMouseEventRemove();
 
@@ -2525,10 +2542,21 @@ pub const Window = struct {
         return ret;
     }
 
+    /// Add a mouse button event (like left button down/up).
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventMouseButton(self: *Self, b: enums.Button, action: Event.Mouse.Action) !bool {
         return addEventPointer(self, b, action, null);
     }
 
+    /// Add a touch up/down event.  This is similar to addEventMouseButton but
+    /// also includes a normalized (0-1) touch point.
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventPointer(self: *Self, b: enums.Button, action: Event.Mouse.Action, xynorm: ?Point) !bool {
         if (self.debug_under_mouse and !self.debug_under_mouse_esc_needed and action == .press and b.pointer()) {
             // a left click or touch will stop the debug stuff from following
@@ -2594,12 +2622,17 @@ pub const Window = struct {
         return ret;
     }
 
+    /// Add a mouse wheel event.  Positive ticks means scrolling up.
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventMouseWheel(self: *Self, ticks: f32) !bool {
         self.positionMouseEventRemove();
 
         const winId = self.windowFor(self.mouse_pt);
 
-        //std.debug.print("mouse wheel {d}\n", .{ticks_adj});
+        //std.debug.print("mouse wheel {d}\n", .{ticks});
 
         self.event_num += 1;
         try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
@@ -2617,6 +2650,11 @@ pub const Window = struct {
         return ret;
     }
 
+    /// Add an event that represents a finger moving while touching the screen.
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventTouchMotion(self: *Self, finger: enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) !bool {
         self.positionMouseEventRemove();
 
