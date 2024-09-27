@@ -9,6 +9,7 @@ pub const c = @cImport({
 });
 
 const SDLBackend = @This();
+pub const Context = *SDLBackend;
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
