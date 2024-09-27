@@ -2171,6 +2171,7 @@ pub const Window = struct {
     dialogs: std.ArrayList(Dialog),
     toasts: std.ArrayList(Toast),
     keybinds: std.StringHashMap(enums.Keybind),
+    themes: Theme.Database,
 
     cursor_requested: enums.Cursor = .arrow,
     cursor_dragging: ?enums.Cursor = null,
@@ -2247,6 +2248,7 @@ pub const Window = struct {
             .backend = backend_ctx,
             .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
             .theme = init_opts.theme orelse &Theme.AdwaitaLight,
+            .themes = try Theme.Database.init(gpa),
         };
 
         const kb = init_opts.keybinds orelse blk: {
@@ -2412,6 +2414,7 @@ pub const Window = struct {
         self.keybinds.deinit();
         self._arena.deinit();
         self.ttf_bytes_database.deinit();
+        self.themes.deinit();
     }
 
     // called from any thread

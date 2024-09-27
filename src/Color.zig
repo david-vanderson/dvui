@@ -114,14 +114,11 @@ pub fn fromHex(hex: []const u8) !Color {
     if (hex[0] != '#') return error.NotAColor;
     if (hex.len != 7) return error.WrongStringLength;
 
-    std.debug.print("hex:{s}\n", .{hex});
     const num: u24 = try std.fmt.parseInt(u24, hex[1..], 16);
-    std.debug.print(" - num: {x}\n\n", .{num});
     const result = Color{
         .r = @intCast(num >> 16 & 0xff),
         .g = @intCast(num >> 8 & 0xff),
         .b = @intCast(num & 0xff),
     };
-    std.debug.print(" - color: {any}\n\n", .{result});
     return result;
 }
