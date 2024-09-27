@@ -1,0 +1,17 @@
+{
+  "name": "Dracula",
+  "font_size": 14,
+  "font_name_body": "Vera",
+  "font_name_heading": "Vera",
+  "font_name_caption": "Vera",
+  "font_name_title": "VeraBd",
+  "color_focus": "#50fa7b",  
+  "color_text": "#f8f8f2",   
+  "color_text_press": "#ff79c6", 
+  "color_fill_text": "#6272a4", 
+  "color_fill_container": "#282a36", 
+  "color_fill_control": "#44475a", 
+  "color_fill_hover": "#8be9fd", 
+  "color_fill_press": "#ffb86c", 
+  "color_border": "#bd93f9" 
+}
