@@ -164,7 +164,7 @@ function dvui(canvasId, wasmFile) {
         wasm_canvas_height() {
             return gl.canvas.clientHeight;
         },
-        wasm_textureCreate(pixels, width, height) {
+        wasm_textureCreate(pixels, width, height, interp) {
             const pixelData = new Uint8Array(wasmResult.instance.exports.memory.buffer, pixels, width * height * 4);
 
             const texture = gl.createTexture();
@@ -191,7 +191,13 @@ function dvui(canvasId, wasmFile) {
                 gl.generateMipmap(gl.TEXTURE_2D);
 	    }
 
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+	    if (interp == 0) {
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+	    } else {
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+	    }
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
@@ -453,15 +459,21 @@ function dvui(canvasId, wasmFile) {
 
             if (!app_initialized) {
                 app_initialized = true;
+	        let app_init_return = 0;
 	        let str = utf8encoder.encode(navigator.platform);
                 if (str.length > 0) {
                     const ptr = wasmResult.instance.exports.gpa_u8(str.length);
                     var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, str.length);
                     dest.set(str);
-                    wasmResult.instance.exports.app_init(ptr, str.length);
+                    app_init_return = wasmResult.instance.exports.app_init(ptr, str.length);
 		    wasmResult.instance.exports.gpa_free(ptr, str.length);
 		} else {
-                    wasmResult.instance.exports.app_init(0, 0);
+                    app_init_return = wasmResult.instance.exports.app_init(0, 0);
+		}
+
+		if (app_init_return != 0) {
+		    console.log("ERROR: app_init returned " + app_init_return);
+		    return;
 		}
             }
 

@@ -18,7 +18,7 @@ wd: WidgetData = undefined,
 label_str: []const u8 = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) !LabelWidget {
-    const l = try std.fmt.allocPrint(dvui.currentWindow().arena, fmt, args);
+    const l = try std.fmt.allocPrint(dvui.currentWindow().arena(), fmt, args);
     return try LabelWidget.initNoFmt(src, l, opts);
 }
 

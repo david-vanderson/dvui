@@ -10,6 +10,7 @@ pub const c = @cImport({
 });
 
 const RaylibBackend = @This();
+pub const Context = *RaylibBackend;
 
 we_own_window: bool = false,
 shader: c.Shader = undefined,
@@ -254,7 +255,7 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     c.EndScissorMode();
 }
 
-pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
+pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {
     // convert to premultiplied alpha
     for (0..height) |h| {
         for (0..width) |w| {
@@ -266,10 +267,21 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32) 
         }
     }
     const texid = c.rlLoadTexture(pixels, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
-    c.rlTextureParameters(texid, c.RL_TEXTURE_MIN_FILTER, c.RL_TEXTURE_FILTER_LINEAR);
-    c.rlTextureParameters(texid, c.RL_TEXTURE_MAG_FILTER, c.RL_TEXTURE_FILTER_LINEAR);
+
+    switch (interpolation) {
+        .nearest => {
+            c.rlTextureParameters(texid, c.RL_TEXTURE_MIN_FILTER, c.RL_TEXTURE_FILTER_NEAREST);
+            c.rlTextureParameters(texid, c.RL_TEXTURE_MAG_FILTER, c.RL_TEXTURE_FILTER_NEAREST);
+        },
+        .linear => {
+            c.rlTextureParameters(texid, c.RL_TEXTURE_MIN_FILTER, c.RL_TEXTURE_FILTER_LINEAR);
+            c.rlTextureParameters(texid, c.RL_TEXTURE_MAG_FILTER, c.RL_TEXTURE_FILTER_LINEAR);
+        },
+    }
+
     c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_S, c.RL_TEXTURE_WRAP_CLAMP);
     c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_T, c.RL_TEXTURE_WRAP_CLAMP);
+
     return @ptrFromInt(texid);
 }
 
