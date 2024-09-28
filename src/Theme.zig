@@ -207,6 +207,8 @@ pub const Database = struct {
     pub const builtin = struct {
         pub const jungle = @embedFile("themes/jungle.json");
         pub const dracula = @embedFile("themes/dracula.json");
+        pub const gruvbox = @embedFile("themes/gruvbox.json");
+        pub const papercolor_dark = @embedFile("themes/papercolor-dark.json");
     };
 
     pub fn get(self: *const @This(), name: []const u8) *Theme {
