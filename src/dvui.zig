@@ -87,20 +87,33 @@ const dvui = @This();
 
 var current_window: ?*Window = null;
 
+/// Get the current dvui.Window which corresponds to the OS window we are
+/// currently adding widgets to.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn currentWindow() *Window {
     return current_window orelse unreachable;
 }
 
+/// Get the active theme.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn themeGet() *Theme {
     return currentWindow().theme;
 }
 
+/// Set the active theme.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn themeSet(theme: *Theme) void {
     if (currentWindow().theme != theme) {
         currentWindow().theme = theme;
     }
 }
 
+/// Toggle showing the debug window (run during Window.end()).
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn toggleDebugWindow() void {
     var cw = currentWindow();
     cw.debug_window_show = !cw.debug_window_show;
@@ -149,6 +162,12 @@ pub const Alignment = struct {
     }
 };
 
+/// Adjust start rect based on screen and spawner (like a context menu).
+///
+/// When adding a floating widget or window, often we want to guarantee that it
+/// is visible.  Additionally, if start is logically connected to a spawning
+/// rect (like a context menu spawning a submenu), then jump to the opposite
+/// side if needed.
 pub fn placeOnScreen(screen: Rect, spawner: Rect, start: Rect) Rect {
     var r = start;
     if ((r.x + r.w) > (screen.x + screen.w)) {
@@ -192,6 +211,11 @@ pub fn placeOnScreen(screen: Rect, spawner: Rect, start: Rect) Rect {
     return r;
 }
 
+/// Nanosecond timestamp for this frame.
+///
+/// Updated during Window.begin().  Will not go backwards.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn frameTimeNS() i128 {
     return currentWindow().frame_time_ns;
 }
@@ -498,7 +522,7 @@ const FontCacheEntry = struct {
     }
 };
 
-// Will get a font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
+// Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
 pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     var cw = currentWindow();
     const fontHash = FontCacheEntry.hash(font);
@@ -616,6 +640,9 @@ const TextureCacheEntry = struct {
     }
 };
 
+/// Get the width of an icon at a specified height.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
     if (height == 0) return 0.0;
     var stream = std.io.fixedBufferStream(tvg_bytes);
@@ -688,12 +715,22 @@ pub const RenderCmd = struct {
     },
 };
 
+/// Id of the currently focused subwindow.  Used by FloatingMenuWidget to
+/// detect when to stop showing.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn focusedSubwindowId() u32 {
     const cw = currentWindow();
     const sw = cw.subwindowFocused();
     return sw.id;
 }
 
+/// Focus a subwindow.
+///
+/// If you are doing this in response to an event, you can pass that event's
+/// "num" to change the focus of any further events in the list.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn focusSubwindow(subwindow_id: ?u32, event_num: ?u16) void {
     currentWindow().focusSubwindowInternal(subwindow_id, event_num);
 }
@@ -702,6 +739,11 @@ pub fn focusRemainingEvents(event_num: u16, focusWindowId: u32, focusWidgetId: ?
     currentWindow().focusRemainingEventsInternal(event_num, focusWindowId, focusWidgetId);
 }
 
+/// Raise a subwindow to the top of the stack.
+///
+/// Any subwindows directly above it with "stay_above_parent_window" set will also be moved to stay above it.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn raiseSubwindow(subwindow_id: u32) void {
     const cw = currentWindow();
     // don't check against subwindows[0] - that's that main window
@@ -739,9 +781,12 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
     return;
 }
 
-// Focus a widget in the given subwindow (if null, the current subwindow).  If
-// you are focusing in the context of processing events, you can pass the
-// event_num so that remaining events get the new focus.
+/// Focus a widget in the given subwindow (if null, the current subwindow).
+///
+/// If you are doing this in response to an event, you can pass that event's
+/// "num" to change the focus of any further events in the list.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn focusWidget(id: ?u32, subwindow_id: ?u32, event_num: ?u16) void {
     const cw = currentWindow();
     const swid = subwindow_id orelse subwindowCurrentId();
@@ -759,7 +804,9 @@ pub fn focusWidget(id: ?u32, subwindow_id: ?u32, event_num: ?u16) void {
     }
 }
 
-// Return the id of the focused widget (if any) in the focused subwindow.
+/// Id of the focused widget (if any) in the focused subwindow.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn focusedWidgetId() ?u32 {
     const cw = currentWindow();
     for (cw.subwindows.items) |*sw| {
@@ -771,8 +818,9 @@ pub fn focusedWidgetId() ?u32 {
     return null;
 }
 
-// Return the id of the focused widget (if any) in the current subwindow (the
-// one that widgets are being added to).
+/// Id of the focused widget (if any) in the current subwindow.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn focusedWidgetIdInCurrentSubwindow() ?u32 {
     const cw = currentWindow();
     const sw = cw.subwindowCurrent();
@@ -784,6 +832,9 @@ pub fn cursorGetDragging() ?enums.Cursor {
     return cw.cursor_dragging;
 }
 
+/// Set cursor the app should use.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn cursorSet(cursor: enums.Cursor) void {
     const cw = currentWindow();
     cw.cursor_requested = cursor;
@@ -799,11 +850,23 @@ fn drawClippedTriangles_helper(backend_ctx: *Backend, texture: ?*anyopaque, vtx:
     return backend_ctx.drawClippedTriangles(texture, vtx, idx, clipr);
 }
 
+/// Add point to the current path.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn pathAddPoint(p: Point) !void {
     const cw = currentWindow();
     try cw.path.append(p);
 }
 
+/// Add rounded rect to current path.
+///
+/// radius values:
+/// - x is top-left corner
+/// - y is top-right corner
+/// - w is bottom-right corner
+/// - h is bottom-left corner
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn pathAddRect(r: Rect, radius: Rect) !void {
     var rad = radius;
     const maxrad = @min(r.w, r.h) / 2;
@@ -821,8 +884,16 @@ pub fn pathAddRect(r: Rect, radius: Rect) !void {
     try pathAddArc(tr, rad.y, math.pi * 2.0, math.pi * 1.5, @abs(tr.x - tl.x) < 0.5);
 }
 
-pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool) !void {
-    if (rad == 0) {
+/// Add line segments creating an arc to the current path.
+///
+/// start >= end, both are radians that go clockwise from the positive x axis.
+///
+/// If skip_end, the final point will not be added.  Useful if the next
+/// addition to the path would duplicate the end of the arc.
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn pathAddArc(center: Point, radius: f32, start: f32, end: f32, skip_end: bool) !void {
+    if (radius == 0) {
         try pathAddPoint(center);
         return;
     }
@@ -831,7 +902,7 @@ pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool)
     const err = 0.1;
 
     // angle that has err error between circle and segments
-    const theta = math.acos(rad / (rad + err));
+    const theta = math.acos(radius / (radius + err));
 
     // make sure we never have less than 4 segments
     // so a full circle can't be less than a diamond
@@ -843,16 +914,19 @@ pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool)
     var a: f32 = start;
     var i: u32 = 0;
     while (i < num) : (i += 1) {
-        try pathAddPoint(Point{ .x = center.x + rad * @cos(a), .y = center.y + rad * @sin(a) });
+        try pathAddPoint(Point{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
         a -= step;
     }
 
     if (!skip_end) {
         a = end;
-        try pathAddPoint(Point{ .x = center.x + rad * @cos(a), .y = center.y + rad * @sin(a) });
+        try pathAddPoint(Point{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
     }
 }
 
+/// Fill the current path (must be convex) with col and free the path.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn pathFillConvex(col: Color) !void {
     const cw = currentWindow();
 
@@ -941,10 +1015,22 @@ pub const EndCapStyle = enum {
     square,
 };
 
+/// Stroke the current path and free the path.
+///
+/// * if closed_in, stroke includes from path end to path start.
+///
+/// Only valid between dvui.Window.begin() and end().
+///
+/// If you want to stroke a path on top of normal drawing, see pathStrokeAfter().
 pub fn pathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) !void {
     try pathStrokeAfter(false, closed_in, thickness, endcap_style, col);
 }
 
+/// Stroke the current path and free the path, but render it after normal
+/// drawing on that subwindow (when after is true).  This is useful for
+/// debugging or cross-gui drawing (like an arrow pointing to a widget).
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) !void {
     const cw = currentWindow();
 
