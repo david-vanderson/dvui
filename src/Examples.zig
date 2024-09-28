@@ -260,6 +260,7 @@ pub fn demo() !void {
     var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
     defer vbox.deinit();
 
+    //TODO make this use new theme database
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -465,7 +466,7 @@ pub fn themeSerialization(demo_win_id: u32) !void {
         if (try dvui.button(@src(), "Serialize Active Theme", .{}, .{})) {
             Static.buffer.reset();
             //Static.theme = try (dvui.Theme.QuickTheme{}).toTheme(std.heap.c_allocator);
-            dvui.themeSet(dvui.currentWindow().themes.get("dracula"));
+            dvui.themeSet(dvui.currentWindow().themes.get("papercolor_dark"));
             // _ = try std.json.stringify(
             //     (try (dvui.Theme.QuickTheme{}).toTheme(dvui.currentWindow().arena)),
             //     .{ .whitespace = .indent_2 },
