@@ -1,11 +1,14 @@
 const std = @import("std");
 const dvui = @import("dvui");
-comptime { std.debug.assert(dvui.backend_kind == .raylib); }
+comptime {
+    std.debug.assert(dvui.backend_kind == .raylib);
+}
 const RaylibBackend = dvui.backend;
 const ray = RaylibBackend.c;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
+const alloc = std.heap.c_allocator;
 //TODO:
 //Figure out the best way to integrate raylib and dvui Event Handling
 
@@ -32,7 +35,9 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{ .theme = &dvui.Theme.Jungle });
     defer win.deinit();
 
-    var selected_color: dvui.Color = dvui.Color.white;
+    //var selected_color: dvui.Color = dvui.Color.white;
+
+    var quick_theme = try dvui.Theme.QuickTheme.initDefault(std.heap.c_allocator);
 
     while (!ray.WindowShouldClose()) {
         ray.BeginDrawing();
@@ -65,13 +70,14 @@ pub fn main() !void {
             }
 
             if (try dvui.expander(@src(), "Pick Color Using Raygui", .{}, .{})) {
-                try colorPicker(&selected_color);
+                //try colorPicker(&selected_color);
+                try quickTheme(&quick_theme);
             }
         }
 
-        ray.DrawText("Congrats! You Combined Raylib, Raygui and DVUI!", 20, 400, 20, ray.RAYWHITE);
-
-        try dvuiStuff();
+        //        ray.DrawText("Congrats! You Combined Raylib, Raygui and DVUI!", 20, 400, 20, ray.RAYWHITE);
+        //
+        //        try dvuiStuff();
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before EndDrawing()
@@ -90,36 +96,87 @@ pub fn main() !void {
     }
 }
 
-fn colorPicker(result: *dvui.Color) !void {
+fn quickTheme(result: *dvui.Theme.QuickTheme) !void {
+    var overall_box = try dvui.box(@src(), .horizontal, .{});
+    defer overall_box.deinit();
+
+    try dvui.structEntryExAlloc(@src(), std.heap.c_allocator, "", dvui.Theme.QuickTheme, result, .{
+        .fields = .{
+            .color_focus = .{ .disabled = true },
+            .color_text = .{ .disabled = true },
+            .color_text_press = .{ .disabled = true },
+            .color_fill_text = .{ .disabled = true },
+            .color_fill_container = .{ .disabled = true },
+            .color_fill_control = .{ .disabled = true },
+            .color_fill_hover = .{ .disabled = true },
+            .color_fill_press = .{ .disabled = true },
+            .color_border = .{ .disabled = true },
+        },
+    });
+
+    _ = try dvui.spacer(@src(), .{ .w = 10, .h = 10 }, .{});
+
+    {
+        var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .h = 500 } });
+        defer vbox.deinit();
+
+        var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .vertical });
+        defer scroll.deinit();
+
+        inline for (dvui.Theme.QuickTheme.colorFieldNames, 0..) |name, i| {
+            var box = try dvui.box(@src(), .vertical, .{ .id_extra = i });
+            defer box.deinit();
+            var color: ray.Color = RaylibBackend.dvuiColorToRaylib(try dvui.Color.fromHex(@field(result, name)));
+
+            _ = try dvui.spacer(@src(), .{ .w = 10, .h = 10 }, .{});
+
+            {
+                var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
+                defer hbox.deinit();
+                try dvui.labelNoFmt(@src(), name, .{});
+                try dvui.label(@src(), ": {s}", .{@field(result, name)}, .{});
+            }
+
+            try colorPicker(&color);
+
+            std.mem.copyForwards(u8, @field(result, name), &try RaylibBackend.raylibColorToDvui(color).toHexString());
+
+            _ = try dvui.spacer(@src(), .{ .w = 10, .h = 10 }, .{});
+        }
+    }
+}
+
+fn colorPicker(result: *ray.Color) !void {
+    var hbox = try dvui.box(@src(), .vertical, .{});
+    defer hbox.deinit();
     _ = try dvui.spacer(@src(), .{ .w = 10, .h = 10 }, .{});
     {
         var overlay = try dvui.overlay(@src(), .{ .min_size_content = .{ .w = 100, .h = 100 } });
         defer overlay.deinit();
 
         const bounds = RaylibBackend.dvuiRectToRaylib(overlay.data().contentRectScale().r);
-        var c_color: ray.Color = RaylibBackend.dvuiColorToRaylib(result.*);
-        _ = ray.GuiColorPicker(bounds, "Pick Color", &c_color);
-        result.* = RaylibBackend.raylibColorToDvui(c_color);
+        _ = ray.GuiColorPicker(bounds, "Pick Color", result);
+        //result.* = RaylibBackend.raylibColorToDvui(c_color);
     }
 
-    const color_hex = try result.toHexString();
+    //const color_hex = try result.toHexString();
 
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
+    //{
+    //    var hbox = try dvui.box(@src(), .horizontal, .{});
+    //    defer hbox.deinit();
 
-        try dvui.labelNoFmt(@src(), &color_hex, .{
-            .color_text = .{ .color = result.* },
-            .gravity_y = 0.5,
-        });
+    //    try dvui.labelNoFmt(@src(), &color_hex, .{
+    //        .color_text = .{ .color = result.* },
+    //        .gravity_y = 0.5,
+    //    });
 
-        const copy = try dvui.button(@src(), "Copy", .{}, .{});
+    //    const copy = try dvui.button(@src(), "Copy", .{}, .{});
 
-        if (copy) {
-            try dvui.clipboardTextSet(&color_hex);
-            try dvui.toast(@src(), .{ .message = "Copied!" });
-        }
-    }
+    //    if (copy) {
+    //        try dvui.clipboardTextSet(&color_hex);
+    //        try dvui.toast(@src(), .{ .message = "Copied!" });
+    //    }
+    //}
 }
 
 fn dvuiStuff() !void {

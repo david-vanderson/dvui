@@ -252,7 +252,7 @@ fn textFieldWidget(
         .mutate_value_and_realloc => {
             const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer_dynamic = .{
                 .allocator = allocator.?,
-                .backing = result.*,
+                .backing = result,
             } } }, opt.dvui_opts);
             defer text_box.deinit();
         },

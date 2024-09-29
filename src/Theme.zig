@@ -93,37 +93,69 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
 }
 
 pub const QuickTheme = struct {
-    name: []const u8 = "Default",
+    name: []u8,
 
     // fonts
     font_size: f32 = 14,
-    font_name_body: []const u8 = "Vera",
-    font_name_heading: []const u8 = "Vera",
-    font_name_caption: []const u8 = "Vera",
-    font_name_title: []const u8 = "VeraBd",
+    font_name_body: []u8,
+    font_name_heading: []u8,
+    font_name_caption: []u8,
+    font_name_title: []u8,
 
     // used for focus
-    color_focus: []const u8 = "#aa2244",
+    color_focus: []u8,
 
     // text/foreground color
-    color_text: []const u8 = "#111111",
+    color_text: []u8,
 
     // text/foreground color when widget is pressed
-    color_text_press: []const u8 = "#112233",
+    color_text_press: []u8,
 
     // background color for displaying lots of text
-    color_fill_text: []const u8 = "#ddedde",
+    color_fill_text: []u8,
 
     // background color for containers that have other widgets inside
-    color_fill_container: []const u8 = "#dddddd",
+    color_fill_container: []u8,
 
     // background color for controls like buttons
-    color_fill_control: []const u8 = "#ddeede",
+    color_fill_control: []u8,
 
-    color_fill_hover: []const u8 = "#ddeede",
-    color_fill_press: []const u8 = "#223344",
+    color_fill_hover: []u8,
+    color_fill_press: []u8,
 
-    color_border: []const u8 = "#220110",
+    color_border: []u8,
+
+    pub const colorFieldNames = &.{
+        "color_focus",
+        "color_text",
+        "color_text_press",
+        "color_fill_text",
+        "color_fill_container",
+        "color_fill_control",
+        "color_fill_hover",
+        "color_fill_press",
+        "color_border",
+    };
+
+    pub fn initDefault(alloc: std.mem.Allocator) !@This() {
+        const padding = 32;
+        return .{
+            .name = try alloc.dupeZ(u8, "Default" ++ [_]u8{0} ** padding),
+            .font_name_body = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
+            .font_name_heading = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
+            .font_name_caption = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
+            .font_name_title = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
+            .color_focus = try alloc.dupe(u8, "#ffffff"),
+            .color_text = try alloc.dupe(u8, "#ffffff"),
+            .color_text_press = try alloc.dupe(u8, "#ffffff"),
+            .color_fill_text = try alloc.dupe(u8, "#000000"),
+            .color_fill_container = try alloc.dupe(u8, "#ffffff"),
+            .color_fill_control = try alloc.dupe(u8, "#ffffff"),
+            .color_fill_hover = try alloc.dupe(u8, "#ffffff"),
+            .color_fill_press = try alloc.dupe(u8, "#ffffff"),
+            .color_border = try alloc.dupe(u8, "#000000"),
+        };
+    }
 
     pub fn fromString(
         allocator: std.mem.Allocator,
