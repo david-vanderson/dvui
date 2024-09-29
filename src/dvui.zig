@@ -858,7 +858,8 @@ pub fn pathAddPoint(p: Point) !void {
     try cw.path.append(p);
 }
 
-/// Add rounded rect to current path.
+/// Add rounded rect to current path.  Starts from top left, and ends at top
+/// right unclosed.
 ///
 /// radius values:
 /// - x is top-left corner
