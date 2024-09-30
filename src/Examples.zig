@@ -260,7 +260,6 @@ pub fn demo() !void {
     var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
     defer vbox.deinit();
 
-    //TODO make this use new theme database
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -269,28 +268,6 @@ pub fn demo() !void {
         }
 
         try dvui.currentWindow().themes.picker(@src());
-        //const theme_choice: usize = blk: {
-        //    for (dvui.Theme.ptrs, 0..) |tptr, i| {
-        //        if (dvui.themeGet() == tptr) {
-        //            break :blk i;
-        //        }
-        //    }
-        //    break :blk 0;
-        //};
-
-        //var dd = dvui.DropdownWidget.init(@src(), .{ .selected_index = theme_choice, .label = dvui.themeGet().name }, .{ .min_size_content = .{ .w = 120 } });
-        //try dd.install();
-
-        //if (try dd.dropped()) {
-        //    for (dvui.Theme.ptrs) |tptr| {
-        //        if (try dd.addChoiceLabel(tptr.name)) {
-        //            dvui.themeSet(tptr);
-        //            break;
-        //        }
-        //    }
-        //}
-
-        //dd.deinit();
     }
 
     {
