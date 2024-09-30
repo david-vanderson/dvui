@@ -1335,6 +1335,23 @@ pub fn subwindowCurrentId() u32 {
     return cw.subwindow_currentId;
 }
 
+/// Prepare for a possible mouse drag.  This will detect a drag, and also a
+/// normal click (mouse down and up without a drag).
+///
+/// * dragging() will return a Point once mouse motion has moved at least 3
+/// natural pixels away from p.
+///
+/// * if cursor is non-null and a drag starts, use that cursor while dragging
+///
+/// * offset given here can be retrieved later with dragOffset() - example is
+/// dragging bottom right corner of floating window.  The drag can start
+/// anywhere in the hit area (passing the offset to the true corner), then
+/// during the drag, the dragOffset() is added to the current mouse location to
+/// recover where to move the true corner.
+///
+/// See dragStart() to immediately start a drag.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn dragPreStart(p: Point, cursor: ?enums.Cursor, offset: Point) void {
     const cw = currentWindow();
     cw.drag_state = .prestart;
@@ -1343,6 +1360,18 @@ pub fn dragPreStart(p: Point, cursor: ?enums.Cursor, offset: Point) void {
     cw.cursor_dragging = cursor;
 }
 
+/// Start a mouse drag from p.  Use when only dragging is possible (normal
+/// click would do nothing), otherwise use dragPreStart().
+///
+/// * if cursor is non-null, use that cursor while dragging
+///
+/// * offset given here can be retrieved later with dragOffset() - example is
+/// dragging bottom right corner of floating window.  The drag can start
+/// anywhere in the hit area (passing the offset to the true corner), then
+/// during the drag, the dragOffset() is added to the current mouse location to
+/// recover where to move the true corner.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn dragStart(p: Point, cursor: ?enums.Cursor, offset: Point) void {
     const cw = currentWindow();
     cw.drag_state = .dragging;
@@ -1351,11 +1380,19 @@ pub fn dragStart(p: Point, cursor: ?enums.Cursor, offset: Point) void {
     cw.cursor_dragging = cursor;
 }
 
+/// Get offset previously given to dragPreStart() or dragStart().  See those.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn dragOffset() Point {
     const cw = currentWindow();
     return cw.drag_offset;
 }
 
+/// If a mouse drag is happening, return the pixel difference between the drag
+/// starting location (from dragPreStart() or dragStart()) and p.  Otherwise
+/// return null, meaning a drag hasn't started yet.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn dragging(p: Point) ?Point {
     const cw = currentWindow();
     switch (cw.drag_state) {
@@ -1379,6 +1416,10 @@ pub fn dragging(p: Point) ?Point {
     }
 }
 
+/// Stop any mouse drag.  This is called for you in captureMouse(null) because
+/// most drags end at the same time as mouse capture.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn dragEnd() void {
     const cw = currentWindow();
     cw.drag_state = .none;

@@ -2230,7 +2230,6 @@ pub const StrokeTest = struct {
                         if (me.button == .left) {
                             e.handled = true;
                             _ = dvui.captureMouse(null);
-                            dvui.dragEnd();
                         }
                     },
                     .motion => {
