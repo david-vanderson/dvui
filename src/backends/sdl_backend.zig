@@ -9,6 +9,7 @@ pub const c = @cImport({
 });
 
 const SDLBackend = @This();
+pub const Context = *SDLBackend;
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
@@ -446,8 +447,14 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?*anyopaque, vtx: []cons
     }
 }
 
-pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
+pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {
     // TODO: is SDL converting to premultiplied alpha internally?
+
+    switch (interpolation) {
+        .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
+        .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
+    }
+
     var surface: *c.SDL_Surface = undefined;
     if (sdl3) {
         surface = c.SDL_CreateSurfaceFrom(pixels, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), @as(c_int, @intCast(4 * width)), c.SDL_PIXELFORMAT_ABGR8888);
@@ -476,7 +483,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             const code = SDL_keysym_to_dvui(event.key.keysym.sym);
             const mod = SDL_keymod_to_dvui(event.key.keysym.mod);
             if (self.log_events) {
-                std.debug.print("sdl event KEYDOWN {d} {s} {b}\n", .{event.key.keysym.sym, @tagName(code), mod});
+                std.debug.print("sdl event KEYDOWN {d} {s} {b}\n", .{ event.key.keysym.sym, @tagName(code), mod });
             }
 
             return try win.addEventKey(.{
@@ -489,7 +496,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             const code = SDL_keysym_to_dvui(event.key.keysym.sym);
             const mod = SDL_keymod_to_dvui(event.key.keysym.mod);
             if (self.log_events) {
-                std.debug.print("sdl event KEYUP {d} {s} {b}\n", .{event.key.keysym.sym, @tagName(code), mod});
+                std.debug.print("sdl event KEYUP {d} {s} {b}\n", .{ event.key.keysym.sym, @tagName(code), mod });
             }
 
             return try win.addEventKey(.{

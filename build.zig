@@ -66,6 +66,7 @@ pub fn build(b: *std.Build) !void {
 
         wasm.root_module.addImport("WebBackend", web_mod);
         web_mod.addImport("dvui", dvui_mod_web);
+        dvui_mod_web.addImport("backend", web_mod);
 
         const install_wasm = b.addInstallArtifact(wasm, .{
             .dest_dir = .{ .override = .{ .custom = "bin" } },
@@ -126,7 +127,7 @@ fn addDvuiModule(
 
     dvui_mod.addCSourceFiles(.{ .files = &.{
         "src/stb/stb_truetype_impl.c",
-    }});
+    } });
     switch (backend) {
         .raylib => {
             var raylib_linux_display: []const u8 = "Both";
@@ -148,7 +149,7 @@ fn addDvuiModule(
         .sdl => {
             dvui_mod.addCSourceFiles(.{ .files = &.{
                 "src/stb/stb_image_impl.c",
-            }});
+            } });
             if (b.systemIntegrationOption("sdl2", .{})) {
                 backend_mod.linkSystemLibrary("SDL2", .{});
             } else {

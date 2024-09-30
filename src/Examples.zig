@@ -239,7 +239,7 @@ pub fn demo() !void {
         defer toast_win.deinit();
 
         toast_win.data().rect = dvui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-        toast_win.autoSize();
+        toast_win.autoSize(.{});
         try toast_win.install();
         try toast_win.drawBackground();
 
@@ -323,6 +323,12 @@ pub fn demo() !void {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         try menus();
+    }
+
+    if (try dvui.expander(@src(), "Focus", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        try focus();
     }
 
     if (try dvui.expander(@src(), "Dialogs and Toasts", .{}, .{ .expand = .horizontal })) {
@@ -653,6 +659,7 @@ pub fn textEntryWidgets() !void {
     var left_alignment = dvui.Alignment.init();
     defer left_alignment.deinit();
 
+    var enter_pressed = false;
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -666,19 +673,24 @@ pub fn textEntryWidgets() !void {
 
         var te = dvui.TextEntryWidget.init(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{});
 
-        const teid = te.data().id;
         try te.install();
 
-        var enter_pressed = false;
+        // Here we are doing the event loop for TextEntryWidget instead of what
+        // you get from dvui.textEntry() - TextEntryWidget.processEvents()
         for (dvui.events()) |*e| {
+
+            // Check that e matches (keyboard focus, mouse rectangle, etc.)
+            // Also checks that e.handled is false
             if (!te.matchEvent(e))
                 continue;
 
+            // Now we know e matches, and hasn't been handled yet
             if (e.evt == .key and e.evt.key.code == .enter and e.evt.key.action == .down) {
                 e.handled = true;
                 enter_pressed = true;
             }
 
+            // If we haven't handled it, forward it to TextEntryWidget for normal processing
             if (!e.handled) {
                 te.processEvent(e, false);
             }
@@ -687,13 +699,25 @@ pub fn textEntryWidgets() !void {
         try te.draw();
         te.deinit();
 
-        try dvui.label(@src(), "(limit {d}) press enter", .{text_entry_buf.len}, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "(limit {d})", .{text_entry_buf.len}, .{ .gravity_y = 0.5 });
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        // align to text entries
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
+
+        try dvui.label(@src(), "press enter", .{}, .{ .gravity_y = 0.5 });
 
         if (enter_pressed) {
-            dvui.animation(teid, "enter_pressed", .{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 500_000 });
+            dvui.animation(hbox.data().id, "enter_pressed", .{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 500_000 });
         }
 
-        if (dvui.animationGet(teid, "enter_pressed")) |a| {
+        if (dvui.animationGet(hbox.data().id, "enter_pressed")) |a| {
             const prev_alpha = dvui.themeGet().alpha;
             dvui.themeGet().alpha *= a.lerp();
             try dvui.label(@src(), "Enter!", .{}, .{ .gravity_y = 0.5 });
@@ -745,10 +769,9 @@ pub fn textEntryWidgets() !void {
 
         var te = try dvui.textEntry(
             @src(),
-            .{ .multiline = true, .scroll_horizontal = false, .break_lines = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf, .allocator = text_entry_multiline_fba.allocator() } } },
+            .{ .multiline = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf, .allocator = text_entry_multiline_fba.allocator() } } },
             .{
                 .min_size_content = .{ .w = 150, .h = 80 },
-                .debug = true,
             },
         );
 
@@ -1462,6 +1485,47 @@ pub fn submenus() !void {
     }
 }
 
+pub fn focus() !void {
+    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .color_fill = .{ .name = .fill_window } });
+    try tl.addText("Each time this section is expanded, this text entry will be focused", .{});
+    tl.deinit();
+
+    var te = try dvui.textEntry(@src(), .{}, .{});
+
+    // firstFrame must be called before te.deinit()
+    if (dvui.firstFrame(te.data().id)) {
+        dvui.focusWidget(te.data().id, null, null);
+    }
+
+    te.deinit();
+
+    // Get a unique Id without making a widget
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        if (try dvui.button(@src(), "Focus Next textEntry", .{}, .{})) {
+            // grab id from previous frame
+            if (dvui.dataGet(null, uniqueId, "next_text_entry_id", u32)) |id| {
+                dvui.focusWidget(id, null, null);
+            }
+        }
+
+        if (try dvui.button(@src(), "Focus Prev textEntry", .{}, .{})) {
+            dvui.focusWidget(te.data().id, null, null);
+        }
+    }
+
+    var te2 = try dvui.textEntry(@src(), .{}, .{});
+
+    // save id for next frame
+    dvui.dataSet(null, uniqueId, "next_text_entry_id", te2.data().id);
+
+    te2.deinit();
+}
+
 pub fn dialogs(demo_win_id: u32) !void {
     if (try dvui.button(@src(), "Direct Dialog", .{}, .{})) {
         show_dialog = true;
@@ -1720,7 +1784,7 @@ pub fn animations() !void {
 
         std.mem.rotate(u8, &pixels, @intCast(frame * 4));
 
-        const tex = dvui.textureCreate((&pixels).ptr, 2, 2);
+        const tex = dvui.textureCreate((&pixels).ptr, 2, 2, .nearest);
         dvui.textureDestroyLater(tex);
 
         var frame_box = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 50, .h = 50 } });
@@ -1877,11 +1941,15 @@ pub fn dialogDirect() !void {
 
     if (try dvui.button(@src(), "Toggle extra stuff and fit window", .{}, .{})) {
         data.extra_stuff = !data.extra_stuff;
-        dialog_win.autoSize();
+        dialog_win.autoSize(.{ .w = 500 });
     }
 
     if (data.extra_stuff) {
-        try dvui.label(@src(), "This is some extra stuff\nwith a multi-line label\nthat has 3 lines", .{}, .{ .background = true });
+        try dvui.label(@src(), "This is some extra stuff\nwith a multi-line label\nthat has 3 lines", .{}, .{ .margin = .{ .x = 4 } });
+
+        var tl = try dvui.textLayout(@src(), .{}, .{});
+        try tl.addText("Here is a textLayout with a bunch of text in it that would overflow the right edge but we are calling autoSize() with a max width", .{});
+        tl.deinit();
     }
 
     {
@@ -2119,7 +2187,6 @@ pub const StrokeTest = struct {
                         if (me.button == .left) {
                             e.handled = true;
                             _ = dvui.captureMouse(null);
-                            dvui.dragEnd();
                         }
                     },
                     .motion => {

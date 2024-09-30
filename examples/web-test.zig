@@ -59,6 +59,7 @@ export fn app_init(platform_ptr: [*]const u8, platform_len: usize) i32 {
     win = dvui.Window.init(@src(), gpa, backend.backend(), .{ .keybinds = if (mac) .mac else .windows }) catch {
         return 2;
     };
+    WebBackend.win = &win;
 
     orig_content_scale = win.content_scale;
 
@@ -86,7 +87,9 @@ fn update() !i32 {
 
     try win.begin(nstime);
 
-    try backend.addAllEvents(&win);
+    // Instead of the backend saving the events and then calling this, the web
+    // backend is directly sending the events to dvui
+    //try backend.addAllEvents(&win);
 
     try dvui_frame();
     //try dvui.label(@src(), "test", .{}, .{ .color_text = .{ .color = dvui.Color.white } });
