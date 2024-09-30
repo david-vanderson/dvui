@@ -379,7 +379,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                 }
             }
 
-            if (me.action == .release and me.button.pointer()) {
+            if (me.action == .release and me.button.pointer() and dvui.captured(self.wd.id)) {
                 dvui.captureMouse(null); // stop drag and capture
                 e.handled = true;
                 continue;
@@ -437,7 +437,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                         }
                     },
                     .release => {
-                        if (me.button.pointer()) {
+                        if (me.button.pointer() and dvui.captured(self.wd.id)) {
                             e.handled = true;
                             dvui.captureMouse(null); // stop drag and capture
                         }
