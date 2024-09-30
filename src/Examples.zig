@@ -239,7 +239,7 @@ pub fn demo() !void {
         defer toast_win.deinit();
 
         toast_win.data().rect = dvui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-        toast_win.autoSize();
+        toast_win.autoSize(.{});
         try toast_win.install();
         try toast_win.drawBackground();
 
@@ -1987,11 +1987,15 @@ pub fn dialogDirect() !void {
 
     if (try dvui.button(@src(), "Toggle extra stuff and fit window", .{}, .{})) {
         data.extra_stuff = !data.extra_stuff;
-        dialog_win.autoSize();
+        dialog_win.autoSize(.{ .w = 500 });
     }
 
     if (data.extra_stuff) {
-        try dvui.label(@src(), "This is some extra stuff\nwith a multi-line label\nthat has 3 lines", .{}, .{ .background = true });
+        try dvui.label(@src(), "This is some extra stuff\nwith a multi-line label\nthat has 3 lines", .{}, .{ .margin = .{ .x = 4 } });
+
+        var tl = try dvui.textLayout(@src(), .{}, .{});
+        try tl.addText("Here is a textLayout with a bunch of text in it that would overflow the right edge but we are calling autoSize() with a max width", .{});
+        tl.deinit();
     }
 
     {

@@ -3497,7 +3497,7 @@ pub const Window = struct {
             defer toast_win.deinit();
 
             toast_win.data().rect = dvui.placeIn(self.wd.rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-            toast_win.autoSize();
+            toast_win.autoSize(.{});
             try toast_win.install();
             try toast_win.drawBackground();
 
