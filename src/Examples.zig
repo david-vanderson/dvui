@@ -346,6 +346,12 @@ pub fn demo() !void {
         try menus();
     }
 
+    if (try dvui.expander(@src(), "Focus", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        try focus();
+    }
+
     if (try dvui.expander(@src(), "Dialogs and Toasts", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
@@ -1524,6 +1530,47 @@ pub fn submenus() !void {
             show_dialog = true;
         }
     }
+}
+
+pub fn focus() !void {
+    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .color_fill = .{ .name = .fill_window } });
+    try tl.addText("Each time this section is expanded, this text entry will be focused", .{});
+    tl.deinit();
+
+    var te = try dvui.textEntry(@src(), .{}, .{});
+
+    // firstFrame must be called before te.deinit()
+    if (dvui.firstFrame(te.data().id)) {
+        dvui.focusWidget(te.data().id, null, null);
+    }
+
+    te.deinit();
+
+    // Get a unique Id without making a widget
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        if (try dvui.button(@src(), "Focus Next textEntry", .{}, .{})) {
+            // grab id from previous frame
+            if (dvui.dataGet(null, uniqueId, "next_text_entry_id", u32)) |id| {
+                dvui.focusWidget(id, null, null);
+            }
+        }
+
+        if (try dvui.button(@src(), "Focus Prev textEntry", .{}, .{})) {
+            dvui.focusWidget(te.data().id, null, null);
+        }
+    }
+
+    var te2 = try dvui.textEntry(@src(), .{}, .{});
+
+    // save id for next frame
+    dvui.dataSet(null, uniqueId, "next_text_entry_id", te2.data().id);
+
+    te2.deinit();
 }
 
 pub fn dialogs(demo_win_id: u32) !void {
