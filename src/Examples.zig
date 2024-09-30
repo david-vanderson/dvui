@@ -699,6 +699,7 @@ pub fn textEntryWidgets() !void {
     var left_alignment = dvui.Alignment.init();
     defer left_alignment.deinit();
 
+    var enter_pressed = false;
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -712,19 +713,24 @@ pub fn textEntryWidgets() !void {
 
         var te = dvui.TextEntryWidget.init(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{});
 
-        const teid = te.data().id;
         try te.install();
 
-        var enter_pressed = false;
+        // Here we are doing the event loop for TextEntryWidget instead of what
+        // you get from dvui.textEntry() - TextEntryWidget.processEvents()
         for (dvui.events()) |*e| {
+
+            // Check that e matches (keyboard focus, mouse rectangle, etc.)
+            // Also checks that e.handled is false
             if (!te.matchEvent(e))
                 continue;
 
+            // Now we know e matches, and hasn't been handled yet
             if (e.evt == .key and e.evt.key.code == .enter and e.evt.key.action == .down) {
                 e.handled = true;
                 enter_pressed = true;
             }
 
+            // If we haven't handled it, forward it to TextEntryWidget for normal processing
             if (!e.handled) {
                 te.processEvent(e, false);
             }
@@ -733,13 +739,25 @@ pub fn textEntryWidgets() !void {
         try te.draw();
         te.deinit();
 
-        try dvui.label(@src(), "(limit {d}) press enter", .{text_entry_buf.len}, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "(limit {d})", .{text_entry_buf.len}, .{ .gravity_y = 0.5 });
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        // align to text entries
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
+
+        try dvui.label(@src(), "press enter", .{}, .{ .gravity_y = 0.5 });
 
         if (enter_pressed) {
-            dvui.animation(teid, "enter_pressed", .{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 500_000 });
+            dvui.animation(hbox.data().id, "enter_pressed", .{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 500_000 });
         }
 
-        if (dvui.animationGet(teid, "enter_pressed")) |a| {
+        if (dvui.animationGet(hbox.data().id, "enter_pressed")) |a| {
             const prev_alpha = dvui.themeGet().alpha;
             dvui.themeGet().alpha *= a.lerp();
             try dvui.label(@src(), "Enter!", .{}, .{ .gravity_y = 0.5 });
