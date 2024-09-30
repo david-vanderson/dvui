@@ -14,12 +14,19 @@ const FloatingWidget = dvui.FloatingWidget;
 
 const TextLayoutWidget = @This();
 
+/// When break_lines is true, you can't get both a min width and min height,
+/// since the width will affect the height.  In this case, min width will be as
+/// if break_lines was false, and min_height will be the height needed at the
+/// current width.
+///
+/// In many cases on our first frame we have a width of zero, which would make
+/// min height very large, so instead we assume we will get our min width (or
+/// 500 if our min width is zero).
 pub var defaults: Options = .{
     .name = "TextLayout",
     .margin = Rect.all(4),
     .padding = Rect.all(4),
     .background = true,
-    .min_size_content = .{ .w = 250 },
 };
 
 pub const InitOptions = struct {
@@ -96,6 +103,7 @@ insert_pt: Point = Point{},
 current_line_height: f32 = 0.0,
 prevClip: Rect = Rect{},
 break_lines: bool = undefined,
+current_line_width: f32 = 0.0, // width of lines if break_lines was false
 touch_edit_just_focused: bool = undefined,
 
 cursor_pt: ?Point = null,
@@ -904,10 +912,15 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
         // frame for us and we should calculate our min height assuming we
         // get at least our min width
 
+        var assumed_min_width = self.wd.options.min_size_contentGet().w;
+        if (assumed_min_width == 0) {
+            assumed_min_width = 500;
+        }
+
         // do this dance so we aren't repeating the contentRect
         // calculations here
         const given_width = self.wd.rect.w;
-        self.wd.rect.w = @max(given_width, self.wd.min_size.w);
+        self.wd.rect.w = @max(given_width, assumed_min_width);
         container_width = self.wd.contentRect().w;
         self.wd.rect.w = given_width;
     }
@@ -1117,10 +1130,9 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
         // need to update insert_pt and minSize like we did because our parent
         // might size based on that (might be in a scroll area)
         self.insert_pt.x += s.w;
-        const size = self.wd.padSize(.{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h });
-        if (!self.break_lines) {
-            self.wd.min_size.w = @max(self.wd.min_size.w, size.w + width_after);
-        }
+        self.current_line_width += s.w;
+        const size = self.wd.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
+        self.wd.min_size.w = @max(self.wd.min_size.w, size.w + width_after);
         self.wd.min_size.h = @max(self.wd.min_size.h, size.h);
 
         if (self.copy_sel) |sel| {
@@ -1161,24 +1173,19 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
         }
 
         // move insert_pt to next line if we have more text
-        if (txt.len > 0 or newline) {
+        if (newline or txt.len > 0) {
             self.insert_pt.y += self.current_line_height;
             self.insert_pt.x = 0;
-            if (txt.len > 0) {
-                self.lineBreak();
-                self.current_line_height = line_height;
-            } else if (newline) {
-                self.current_line_height = 0;
-            }
-
             self.first_byte_in_line = self.bytes_seen;
+            self.current_line_height = line_height;
 
             if (newline) {
-                const newline_size = self.wd.padSize(.{ .w = self.insert_pt.x, .h = self.insert_pt.y + s.h });
-                if (!self.break_lines) {
-                    self.wd.min_size.w = @max(self.wd.min_size.w, newline_size.w);
-                }
+                const newline_size = self.wd.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
+                self.wd.min_size.w = @max(self.wd.min_size.w, newline_size.w);
                 self.wd.min_size.h = @max(self.wd.min_size.h, newline_size.h);
+                self.current_line_width = 0.0;
+            } else if (txt.len > 0) {
+                self.lineBreak();
             }
         }
 

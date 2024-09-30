@@ -818,7 +818,6 @@ pub fn textEntryWidgets() !void {
             .{ .multiline = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf, .allocator = text_entry_multiline_fba.allocator() } } },
             .{
                 .min_size_content = .{ .w = 150, .h = 80 },
-                .debug = true,
             },
         );
 

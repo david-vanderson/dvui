@@ -4374,10 +4374,6 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
     return ret;
 }
 
-// TextLayout doesn't have a natural width.  If it's min_size.w was 0, then it
-// would calculate a huge min_size.h assuming only 1 character per line can
-// fit.  To prevent starting in weird situations, TextLayout defaults to having
-// a min_size.w so at least you can see what is going on.
 pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.InitOptions, opts: Options) !*TextLayoutWidget {
     const cw = currentWindow();
     var ret = try cw.arena().create(TextLayoutWidget);
