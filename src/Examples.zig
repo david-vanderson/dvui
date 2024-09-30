@@ -815,7 +815,7 @@ pub fn textEntryWidgets() !void {
 
         var te = try dvui.textEntry(
             @src(),
-            .{ .multiline = true, .scroll_horizontal = false, .break_lines = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf, .allocator = text_entry_multiline_fba.allocator() } } },
+            .{ .multiline = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf, .allocator = text_entry_multiline_fba.allocator() } } },
             .{
                 .min_size_content = .{ .w = 150, .h = 80 },
                 .debug = true,
