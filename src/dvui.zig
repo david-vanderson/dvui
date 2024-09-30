@@ -2156,7 +2156,7 @@ pub const Window = struct {
 
     menu_current: ?*MenuWidget = null,
     popup_current: ?*FloatingMenuWidget = null,
-    theme: *Theme = &Theme.AdwaitaLight,
+    theme: *Theme = undefined,
 
     min_sizes: std.AutoHashMap(u32, SavedSize),
     data_mutex: std.Thread.Mutex,
@@ -2247,9 +2247,10 @@ pub const Window = struct {
             .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
             .backend = backend_ctx,
             .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
-            .theme = init_opts.theme orelse &Theme.AdwaitaLight,
             .themes = try Theme.Database.init(gpa),
         };
+
+        self.theme = init_opts.theme orelse self.themes.get("Adwaita Light");
 
         const kb = init_opts.keybinds orelse blk: {
             if (builtin.os.tag.isDarwin()) {
