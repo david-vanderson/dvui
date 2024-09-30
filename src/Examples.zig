@@ -337,10 +337,10 @@ pub fn demo() !void {
         try animations();
     }
 
-    if (try dvui.expander(@src(), "Theme Serialization and Parsing", .{}, .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Theme Parsing", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
-        try themeSerialization(float.data().id);
+        try themeSerialization();
     }
 
     if (try dvui.expander(@src(), "Struct UI Widget (Experimental)", .{}, .{ .expand = .horizontal })) {
@@ -429,44 +429,11 @@ pub fn demo() !void {
     }
 }
 
-pub fn themeSerialization(demo_win_id: u32) !void {
-    {
-        var serialize_box = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer serialize_box.deinit();
+pub fn themeSerialization() !void {
+    var serialize_box = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    defer serialize_box.deinit();
 
-        // Demonstrate serializing a theme
-        const Static = struct {
-            var bytes: [4096]u8 = undefined;
-            var buffer = std.io.fixedBufferStream(&bytes);
-            var theme: dvui.Theme = undefined;
-        };
-
-        if (try dvui.button(@src(), "Serialize Active Theme", .{}, .{})) {
-            Static.buffer.reset();
-            //Static.theme = try (dvui.Theme.QuickTheme{}).toTheme(std.heap.c_allocator);
-            dvui.themeSet(dvui.currentWindow().themes.get("opendyslexic"));
-            // _ = try std.json.stringify(
-            //     (try (dvui.Theme.QuickTheme{}).toTheme(dvui.currentWindow().arena)),
-            //     .{ .whitespace = .indent_2 },
-            //     Static.buffer.writer(),
-            // );
-            // std.debug.print("\n{s}\n\n", .{Static.buffer.getWritten()});
-        }
-
-        if (try dvui.expander(@src(), "Serialized Theme", .{}, .{ .expand = .horizontal })) {
-            var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-            defer b.deinit();
-
-            if (try dvui.button(@src(), "Copy To Clipboard", .{}, .{})) {
-                try dvui.clipboardTextSet(Static.buffer.getWritten());
-                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Copied!" });
-            }
-
-            var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
-            try tl.addText(Static.buffer.getWritten(), .{});
-            tl.deinit();
-        }
-    }
+    try dvui.labelNoFmt(@src(), "TODO: demonstrate loading a quicktheme here", .{});
 }
 
 pub fn basicWidgets() !void {
