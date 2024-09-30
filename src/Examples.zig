@@ -466,7 +466,7 @@ pub fn themeSerialization(demo_win_id: u32) !void {
         if (try dvui.button(@src(), "Serialize Active Theme", .{}, .{})) {
             Static.buffer.reset();
             //Static.theme = try (dvui.Theme.QuickTheme{}).toTheme(std.heap.c_allocator);
-            dvui.themeSet(dvui.currentWindow().themes.get("papercolor_dark"));
+            dvui.themeSet(dvui.currentWindow().themes.get("opendyslexic"));
             // _ = try std.json.stringify(
             //     (try (dvui.Theme.QuickTheme{}).toTheme(dvui.currentWindow().arena)),
             //     .{ .whitespace = .indent_2 },
