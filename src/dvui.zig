@@ -827,11 +827,6 @@ pub fn focusedWidgetIdInCurrentSubwindow() ?u32 {
     return sw.focused_widgetId;
 }
 
-pub fn cursorGetDragging() ?enums.Cursor {
-    const cw = currentWindow();
-    return cw.cursor_dragging;
-}
-
 /// Set cursor the app should use.
 ///
 /// Only valid between dvui.Window.begin() and end().
