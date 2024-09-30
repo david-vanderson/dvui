@@ -58,7 +58,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
 
     var cw = dvui.currentWindow();
     if (self.id == cw.debug_widget_id) {
-        cw.debug_info_src_id_extra = std.fmt.allocPrint(cw.arena, "{s}:{d}\nid_extra {d}", .{ src.file, src.line, self.options.idExtra() }) catch "ERROR allocPrint";
+        cw.debug_info_src_id_extra = std.fmt.allocPrint(cw.arena(), "{s}:{d}\nid_extra {d}", .{ src.file, src.line, self.options.idExtra() }) catch "ERROR allocPrint";
     }
 
     return self;
@@ -91,7 +91,7 @@ pub fn register(self: *const WidgetData) !void {
             if (dvui.minSizeGet(self.id)) |ms| {
                 min_size = ms;
             }
-            cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena, "{x} {s}\n\n{}\nmin {}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{ self.id, name, rs.r, min_size, self.options.expandGet(), rs.s, self.options.paddingGet().scale(rs.s), self.options.borderGet().scale(rs.s), self.options.marginGet().scale(rs.s) });
+            cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena(), "{x} {s}\n\n{}\nmin {}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{ self.id, name, rs.r, min_size, self.options.expandGet(), rs.s, self.options.paddingGet().scale(rs.s), self.options.borderGet().scale(rs.s), self.options.marginGet().scale(rs.s) });
             const clipr = dvui.clipGet();
             // clip to whole window so we always see the outline
             dvui.clipSet(dvui.windowRectPixels());

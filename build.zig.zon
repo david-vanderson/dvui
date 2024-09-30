@@ -4,8 +4,8 @@
     .paths = .{""},
     .dependencies = .{
         .sdl = .{
-            .url = "https://github.com/allyourcodebase/SDL/archive/0f23d064e1dd11947236d9cccb79039c617865da.tar.gz",
-            .hash = "1220bdd8cfd7740aa9f8cce7679824a17b364ff5a34698aa2c1c75ea77e0df15a3b1",
+            .url = "https://github.com/allyourcodebase/SDL/archive/f9637dbccad95197ec4094d696f2dedac1356ea9.tar.gz",
+            .hash = "12202607781309738d498f29a481642f0b166d94d83e4c30256b2d59fdebbdf6f099",
             .lazy = true,
         },
         .freetype = .{

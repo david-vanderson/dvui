@@ -87,20 +87,33 @@ const dvui = @This();
 
 var current_window: ?*Window = null;
 
+/// Get the current dvui.Window which corresponds to the OS window we are
+/// currently adding widgets to.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn currentWindow() *Window {
     return current_window orelse unreachable;
 }
 
+/// Get the active theme.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn themeGet() *Theme {
     return currentWindow().theme;
 }
 
+/// Set the active theme.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn themeSet(theme: *Theme) void {
     if (currentWindow().theme != theme) {
         currentWindow().theme = theme;
     }
 }
 
+/// Toggle showing the debug window (run during Window.end()).
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn toggleDebugWindow() void {
     var cw = currentWindow();
     cw.debug_window_show = !cw.debug_window_show;
@@ -149,6 +162,12 @@ pub const Alignment = struct {
     }
 };
 
+/// Adjust start rect based on screen and spawner (like a context menu).
+///
+/// When adding a floating widget or window, often we want to guarantee that it
+/// is visible.  Additionally, if start is logically connected to a spawning
+/// rect (like a context menu spawning a submenu), then jump to the opposite
+/// side if needed.
 pub fn placeOnScreen(screen: Rect, spawner: Rect, start: Rect) Rect {
     var r = start;
     if ((r.x + r.w) > (screen.x + screen.w)) {
@@ -192,6 +211,11 @@ pub fn placeOnScreen(screen: Rect, spawner: Rect, start: Rect) Rect {
     return r;
 }
 
+/// Nanosecond timestamp for this frame.
+///
+/// Updated during Window.begin().  Will not go backwards.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn frameTimeNS() i128 {
     return currentWindow().frame_time_ns;
 }
@@ -498,7 +522,7 @@ const FontCacheEntry = struct {
     }
 };
 
-// Will get a font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
+// Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
 pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     var cw = currentWindow();
     const fontHash = FontCacheEntry.hash(font);
@@ -522,7 +546,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
 
     // make debug texture atlas so we can see if something later goes wrong
     const size = .{ .w = 10, .h = 10 };
-    const pixels = try cw.arena.alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
+    const pixels = try cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
     @memset(pixels, 255);
 
     const min_pixel_size = 1;
@@ -562,7 +586,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
                     .height = @ceil(height),
                     .ascent = @floor(ascent),
                     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-                    .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h))),
+                    .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
                     .texture_atlas_size = size,
                     .texture_atlas_regen = true,
                 };
@@ -590,7 +614,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
             .height = height,
             .ascent = ascent,
             .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-            .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h))),
+            .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
             .texture_atlas_size = size,
             .texture_atlas_regen = true,
         };
@@ -616,10 +640,13 @@ const TextureCacheEntry = struct {
     }
 };
 
+/// Get the width of an icon at a specified height.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
     if (height == 0) return 0.0;
     var stream = std.io.fixedBufferStream(tvg_bytes);
-    var parser = tvg.parse(currentWindow().arena, stream.reader()) catch |err| {
+    var parser = tvg.parse(currentWindow().arena(), stream.reader()) catch |err| {
         log.warn("iconWidth Tinyvg error {!} parsing icon {s}\n", .{ err, name });
         return error.tvgError;
     };
@@ -638,8 +665,8 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
     }
 
     var render = tvg.rendering.renderBuffer(
-        cw.arena,
-        cw.arena,
+        cw.arena(),
+        cw.arena(),
         tvg.rendering.SizeHint{ .height = height },
         @as(tvg.rendering.AntiAliasing, @enumFromInt(2)),
         tvg_bytes,
@@ -647,9 +674,9 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
         log.warn("iconTexture Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
         return error.tvgError;
     };
-    defer render.deinit(cw.arena);
+    defer render.deinit(cw.arena());
 
-    const texture = cw.backend.textureCreate(@as([*]u8, @ptrCast(render.pixels.ptr)), render.width, render.height);
+    const texture = cw.backend.textureCreate(@as([*]u8, @ptrCast(render.pixels.ptr)), render.width, render.height, .linear);
 
     //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, render.width, render.height });
 
@@ -688,41 +715,35 @@ pub const RenderCmd = struct {
     },
 };
 
+/// Id of the currently focused subwindow.  Used by FloatingMenuWidget to
+/// detect when to stop showing.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn focusedSubwindowId() u32 {
     const cw = currentWindow();
     const sw = cw.subwindowFocused();
     return sw.id;
 }
 
+/// Focus a subwindow.
+///
+/// If you are doing this in response to an event, you can pass that event's
+/// "num" to change the focus of any further events in the list.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn focusSubwindow(subwindow_id: ?u32, event_num: ?u16) void {
-    const cw = currentWindow();
-    const winId = subwindow_id orelse cw.subwindow_currentId;
-    if (cw.focused_subwindowId != winId) {
-        cw.focused_subwindowId = winId;
-        refresh(null, @src(), null);
-        if (event_num) |en| {
-            for (cw.subwindows.items) |*sw| {
-                if (cw.focused_subwindowId == sw.id) {
-                    focusRemainingEvents(en, sw.id, sw.focused_widgetId);
-                    break;
-                }
-            }
-        }
-    }
+    currentWindow().focusSubwindowInternal(subwindow_id, event_num);
 }
 
 pub fn focusRemainingEvents(event_num: u16, focusWindowId: u32, focusWidgetId: ?u32) void {
-    var evts = events();
-    var k: usize = 0;
-    while (k < evts.len) : (k += 1) {
-        var e: *Event = &evts[k];
-        if (e.num > event_num and e.focus_windowId != null) {
-            e.focus_windowId = focusWindowId;
-            e.focus_widgetId = focusWidgetId;
-        }
-    }
+    currentWindow().focusRemainingEventsInternal(event_num, focusWindowId, focusWidgetId);
 }
 
+/// Raise a subwindow to the top of the stack.
+///
+/// Any subwindows directly above it with "stay_above_parent_window" set will also be moved to stay above it.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn raiseSubwindow(subwindow_id: u32) void {
     const cw = currentWindow();
     // don't check against subwindows[0] - that's that main window
@@ -760,9 +781,12 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
     return;
 }
 
-// Focus a widget in the given subwindow (if null, the current subwindow).  If
-// you are focusing in the context of processing events, you can pass the
-// event_num so that remaining events get the new focus.
+/// Focus a widget in the given subwindow (if null, the current subwindow).
+///
+/// If you are doing this in response to an event, you can pass that event's
+/// "num" to change the focus of any further events in the list.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn focusWidget(id: ?u32, subwindow_id: ?u32, event_num: ?u16) void {
     const cw = currentWindow();
     const swid = subwindow_id orelse subwindowCurrentId();
@@ -780,7 +804,9 @@ pub fn focusWidget(id: ?u32, subwindow_id: ?u32, event_num: ?u16) void {
     }
 }
 
-// Return the id of the focused widget (if any) in the focused subwindow.
+/// Id of the focused widget (if any) in the focused subwindow.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn focusedWidgetId() ?u32 {
     const cw = currentWindow();
     for (cw.subwindows.items) |*sw| {
@@ -792,19 +818,18 @@ pub fn focusedWidgetId() ?u32 {
     return null;
 }
 
-// Return the id of the focused widget (if any) in the current subwindow (the
-// one that widgets are being added to).
+/// Id of the focused widget (if any) in the current subwindow.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn focusedWidgetIdInCurrentSubwindow() ?u32 {
     const cw = currentWindow();
     const sw = cw.subwindowCurrent();
     return sw.focused_widgetId;
 }
 
-pub fn cursorGetDragging() ?enums.Cursor {
-    const cw = currentWindow();
-    return cw.cursor_dragging;
-}
-
+/// Set cursor the app should use.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn cursorSet(cursor: enums.Cursor) void {
     const cw = currentWindow();
     cw.cursor_requested = cursor;
@@ -820,11 +845,24 @@ fn drawClippedTriangles_helper(backend_ctx: *Backend, texture: ?*anyopaque, vtx:
     return backend_ctx.drawClippedTriangles(texture, vtx, idx, clipr);
 }
 
+/// Add point to the current path.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn pathAddPoint(p: Point) !void {
     const cw = currentWindow();
     try cw.path.append(p);
 }
 
+/// Add rounded rect to current path.  Starts from top left, and ends at top
+/// right unclosed.
+///
+/// radius values:
+/// - x is top-left corner
+/// - y is top-right corner
+/// - w is bottom-right corner
+/// - h is bottom-left corner
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn pathAddRect(r: Rect, radius: Rect) !void {
     var rad = radius;
     const maxrad = @min(r.w, r.h) / 2;
@@ -842,8 +880,16 @@ pub fn pathAddRect(r: Rect, radius: Rect) !void {
     try pathAddArc(tr, rad.y, math.pi * 2.0, math.pi * 1.5, @abs(tr.x - tl.x) < 0.5);
 }
 
-pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool) !void {
-    if (rad == 0) {
+/// Add line segments creating an arc to the current path.
+///
+/// start >= end, both are radians that go clockwise from the positive x axis.
+///
+/// If skip_end, the final point will not be added.  Useful if the next
+/// addition to the path would duplicate the end of the arc.
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn pathAddArc(center: Point, radius: f32, start: f32, end: f32, skip_end: bool) !void {
+    if (radius == 0) {
         try pathAddPoint(center);
         return;
     }
@@ -852,7 +898,7 @@ pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool)
     const err = 0.1;
 
     // angle that has err error between circle and segments
-    const theta = math.acos(rad / (rad + err));
+    const theta = math.acos(radius / (radius + err));
 
     // make sure we never have less than 4 segments
     // so a full circle can't be less than a diamond
@@ -864,16 +910,19 @@ pub fn pathAddArc(center: Point, rad: f32, start: f32, end: f32, skip_end: bool)
     var a: f32 = start;
     var i: u32 = 0;
     while (i < num) : (i += 1) {
-        try pathAddPoint(Point{ .x = center.x + rad * @cos(a), .y = center.y + rad * @sin(a) });
+        try pathAddPoint(Point{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
         a -= step;
     }
 
     if (!skip_end) {
         a = end;
-        try pathAddPoint(Point{ .x = center.x + rad * @cos(a), .y = center.y + rad * @sin(a) });
+        try pathAddPoint(Point{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
     }
 }
 
+/// Fill the current path (must be convex) with col and free the path.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn pathFillConvex(col: Color) !void {
     const cw = currentWindow();
 
@@ -888,7 +937,7 @@ pub fn pathFillConvex(col: Color) !void {
     }
 
     if (!cw.rendering) {
-        var path_copy = std.ArrayList(Point).init(cw.arena);
+        var path_copy = std.ArrayList(Point).init(cw.arena());
         try path_copy.appendSlice(cw.path.items);
         const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
 
@@ -899,10 +948,10 @@ pub fn pathFillConvex(col: Color) !void {
         return;
     }
 
-    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, cw.path.items.len * 2);
+    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), cw.path.items.len * 2);
     defer vtx.deinit();
     const idx_count = (cw.path.items.len - 2) * 3 + cw.path.items.len * 6;
-    var idx = try std.ArrayList(u16).initCapacity(cw.arena, idx_count);
+    var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
     defer idx.deinit();
     var col_trans = col;
     col_trans.a = 0;
@@ -962,10 +1011,22 @@ pub const EndCapStyle = enum {
     square,
 };
 
+/// Stroke the current path and free the path.
+///
+/// * if closed_in, stroke includes from path end to path start.
+///
+/// Only valid between dvui.Window.begin() and end().
+///
+/// If you want to stroke a path on top of normal drawing, see pathStrokeAfter().
 pub fn pathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) !void {
     try pathStrokeAfter(false, closed_in, thickness, endcap_style, col);
 }
 
+/// Stroke the current path and free the path, but render it after normal
+/// drawing on that subwindow (when after is true).  This is useful for
+/// debugging or cross-gui drawing (like an arrow pointing to a widget).
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) !void {
     const cw = currentWindow();
 
@@ -974,7 +1035,7 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
     }
 
     if (after or !cw.rendering) {
-        var path_copy = std.ArrayList(Point).init(cw.arena);
+        var path_copy = std.ArrayList(Point).init(cw.arena());
         try path_copy.appendSlice(cw.path.items);
         const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
 
@@ -1022,7 +1083,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     if (!closed) {
         vtx_count += 4;
     }
-    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, vtx_count);
+    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), vtx_count);
     defer vtx.deinit();
     var idx_count = (cw.path.items.len - 1) * 18;
     if (closed) {
@@ -1030,7 +1091,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     } else {
         idx_count += 8 * 3;
     }
-    var idx = try std.ArrayList(u16).initCapacity(cw.arena, idx_count);
+    var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
     defer idx.deinit();
     var col_trans = col;
     col_trans.a = 0;
@@ -1215,6 +1276,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
 
 pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_above_parent_window: ?u32) !void {
     const cw = currentWindow();
+    const arena = cw.arena();
 
     for (cw.subwindows.items) |*sw| {
         if (id == sw.id) {
@@ -1229,14 +1291,14 @@ pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_ab
                 log.warn("subwindowAdd {x} is clearing some drawing commands (did you try to draw between subwindowCurrentSet and subwindowAdd?)\n", .{id});
             }
 
-            sw.render_cmds = std.ArrayList(RenderCmd).init(cw.arena);
-            sw.render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena);
+            sw.render_cmds = std.ArrayList(RenderCmd).init(arena);
+            sw.render_cmds_after = std.ArrayList(RenderCmd).init(arena);
             return;
         }
     }
 
     // haven't seen this window before
-    const sw = Window.Subwindow{ .id = id, .rect = rect, .rect_pixels = rect_pixels, .modal = modal, .stay_above_parent_window = stay_above_parent_window, .render_cmds = std.ArrayList(RenderCmd).init(cw.arena), .render_cmds_after = std.ArrayList(RenderCmd).init(cw.arena) };
+    const sw = Window.Subwindow{ .id = id, .rect = rect, .rect_pixels = rect_pixels, .modal = modal, .stay_above_parent_window = stay_above_parent_window, .render_cmds = std.ArrayList(RenderCmd).init(arena), .render_cmds_after = std.ArrayList(RenderCmd).init(arena) };
     if (stay_above_parent_window) |subwin_id| {
         // it wants to be above subwin_id
         var i: usize = 0;
@@ -1273,6 +1335,23 @@ pub fn subwindowCurrentId() u32 {
     return cw.subwindow_currentId;
 }
 
+/// Prepare for a possible mouse drag.  This will detect a drag, and also a
+/// normal click (mouse down and up without a drag).
+///
+/// * dragging() will return a Point once mouse motion has moved at least 3
+/// natural pixels away from p.
+///
+/// * if cursor is non-null and a drag starts, use that cursor while dragging
+///
+/// * offset given here can be retrieved later with dragOffset() - example is
+/// dragging bottom right corner of floating window.  The drag can start
+/// anywhere in the hit area (passing the offset to the true corner), then
+/// during the drag, the dragOffset() is added to the current mouse location to
+/// recover where to move the true corner.
+///
+/// See dragStart() to immediately start a drag.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn dragPreStart(p: Point, cursor: ?enums.Cursor, offset: Point) void {
     const cw = currentWindow();
     cw.drag_state = .prestart;
@@ -1281,6 +1360,18 @@ pub fn dragPreStart(p: Point, cursor: ?enums.Cursor, offset: Point) void {
     cw.cursor_dragging = cursor;
 }
 
+/// Start a mouse drag from p.  Use when only dragging is possible (normal
+/// click would do nothing), otherwise use dragPreStart().
+///
+/// * if cursor is non-null, use that cursor while dragging
+///
+/// * offset given here can be retrieved later with dragOffset() - example is
+/// dragging bottom right corner of floating window.  The drag can start
+/// anywhere in the hit area (passing the offset to the true corner), then
+/// during the drag, the dragOffset() is added to the current mouse location to
+/// recover where to move the true corner.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn dragStart(p: Point, cursor: ?enums.Cursor, offset: Point) void {
     const cw = currentWindow();
     cw.drag_state = .dragging;
@@ -1289,11 +1380,19 @@ pub fn dragStart(p: Point, cursor: ?enums.Cursor, offset: Point) void {
     cw.cursor_dragging = cursor;
 }
 
+/// Get offset previously given to dragPreStart() or dragStart().  See those.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn dragOffset() Point {
     const cw = currentWindow();
     return cw.drag_offset;
 }
 
+/// If a mouse drag is happening, return the pixel difference between the drag
+/// starting location (from dragPreStart() or dragStart()) and p.  Otherwise
+/// return null, meaning a drag hasn't started yet.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn dragging(p: Point) ?Point {
     const cw = currentWindow();
     switch (cw.drag_state) {
@@ -1317,6 +1416,10 @@ pub fn dragging(p: Point) ?Point {
     }
 }
 
+/// Stop any mouse drag.  This is called for you in captureMouse(null) because
+/// most drags end at the same time as mouse capture.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn dragEnd() void {
     const cw = currentWindow();
     cw.drag_state = .none;
@@ -2124,7 +2227,7 @@ pub const Window = struct {
     snap_to_pixels: bool = true,
     alpha: f32 = 1.0,
 
-    events: std.ArrayList(Event) = undefined,
+    events: std.ArrayListUnmanaged(Event) = .{},
     event_num: u16 = 0,
     // mouse_pt tracks the last position we got a mouse event for
     // 1) used to add position info to mouse wheel events
@@ -2187,7 +2290,6 @@ pub const Window = struct {
 
     gpa: std.mem.Allocator,
     _arena: std.heap.ArenaAllocator,
-    arena: std.mem.Allocator = undefined,
     texture_trash: std.ArrayList(*anyopaque) = undefined,
     path: std.ArrayList(Point) = undefined,
     rendering: bool = true,
@@ -2225,11 +2327,10 @@ pub const Window = struct {
         init_opts: InitOptions,
     ) !Self {
         const hashval = hashSrc(src, init_opts.id_extra);
-        const arena = init_opts.arena orelse std.heap.ArenaAllocator.init(gpa);
 
         var self = Self{
             .gpa = gpa,
-            ._arena = arena,
+            ._arena = init_opts.arena orelse std.heap.ArenaAllocator.init(gpa),
             .subwindows = std.ArrayList(Subwindow).init(gpa),
             .min_sizes = std.AutoHashMap(u32, SavedSize).init(gpa),
             .data_mutex = std.Thread.Mutex{},
@@ -2250,7 +2351,11 @@ pub const Window = struct {
             .themes = try Theme.Database.init(gpa),
         };
 
+
         self.theme = init_opts.theme orelse self.themes.get("Adwaita Light");
+
+        try self.initEvents();
+
 
         const kb = init_opts.keybinds orelse blk: {
             if (builtin.os.tag.isDarwin()) {
@@ -2418,6 +2523,10 @@ pub const Window = struct {
         self.themes.deinit();
     }
 
+    pub fn arena(self: *Self) std.mem.Allocator {
+        return self._arena.allocator();
+    }
+
     // called from any thread
     pub fn debugRefresh(self: *Self, val: ?bool) bool {
         self.debug_refresh_mutex.lock();
@@ -2447,6 +2556,39 @@ pub const Window = struct {
         self.backend.refresh();
     }
 
+    pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?u32, event_num: ?u16) void {
+        const winId = subwindow_id orelse self.subwindow_currentId;
+        if (self.focused_subwindowId != winId) {
+            self.focused_subwindowId = winId;
+            self.refreshWindow(@src(), null);
+            if (event_num) |en| {
+                for (self.subwindows.items) |*sw| {
+                    if (self.focused_subwindowId == sw.id) {
+                        self.focusRemainingEventsInternal(en, sw.id, sw.focused_widgetId);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn focusRemainingEventsInternal(self: *Self, event_num: u16, focusWindowId: u32, focusWidgetId: ?u32) void {
+        var evts = self.events.items;
+        var k: usize = 0;
+        while (k < evts.len) : (k += 1) {
+            var e: *Event = &evts[k];
+            if (e.num > event_num and e.focus_windowId != null) {
+                e.focus_windowId = focusWindowId;
+                e.focus_widgetId = focusWidgetId;
+            }
+        }
+    }
+
+    /// Add a keyboard event (key up/down/repeat) to the dvui event list.
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventKey(self: *Self, event: Event.Key) !bool {
         if (self.debug_under_mouse and self.debug_under_mouse_esc_needed and event.action == .down and event.code == .escape) {
             // a left click will stop the debug stuff from following the mouse,
@@ -2459,7 +2601,7 @@ pub const Window = struct {
         self.positionMouseEventRemove();
 
         self.event_num += 1;
-        try self.events.append(Event{
+        try self.events.append(self.arena(), Event{
             .num = self.event_num,
             .evt = .{ .key = event },
             .focus_windowId = self.focused_subwindowId,
@@ -2471,13 +2613,20 @@ pub const Window = struct {
         return ret;
     }
 
+    /// Add an event that represents text being typed.  This is distinct from
+    /// key up/down because the text could come from an IME (Input Method
+    /// Editor).
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventText(self: *Self, text: []const u8) !bool {
         self.positionMouseEventRemove();
 
         self.event_num += 1;
-        try self.events.append(Event{
+        try self.events.append(self.arena(), Event{
             .num = self.event_num,
-            .evt = .{ .text = try self.arena.dupe(u8, text) },
+            .evt = .{ .text = try self._arena.allocator().dupe(u8, text) },
             .focus_windowId = self.focused_subwindowId,
             .focus_widgetId = self.subwindowFocused().focused_widgetId,
         });
@@ -2487,7 +2636,12 @@ pub const Window = struct {
         return ret;
     }
 
-    // this is only for mouse - for touch use addEventTouchMotion
+    /// Add a mouse motion event.  This is only for a mouse - for touch motion
+    /// use addEventTouchMotion().
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) !bool {
         self.positionMouseEventRemove();
 
@@ -2502,7 +2656,7 @@ pub const Window = struct {
         // - how to make it optional?
 
         self.event_num += 1;
-        try self.events.append(Event{ .num = self.event_num, .evt = .{
+        try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
             .mouse = .{
                 .action = .motion,
                 .button = if (self.debug_touch_simulate_events and self.debug_touch_simulate_down) .touch0 else .none,
@@ -2517,10 +2671,21 @@ pub const Window = struct {
         return ret;
     }
 
+    /// Add a mouse button event (like left button down/up).
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventMouseButton(self: *Self, b: enums.Button, action: Event.Mouse.Action) !bool {
         return addEventPointer(self, b, action, null);
     }
 
+    /// Add a touch up/down event.  This is similar to addEventMouseButton but
+    /// also includes a normalized (0-1) touch point.
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventPointer(self: *Self, b: enums.Button, action: Event.Mouse.Action, xynorm: ?Point) !bool {
         if (self.debug_under_mouse and !self.debug_under_mouse_esc_needed and action == .press and b.pointer()) {
             // a left click or touch will stop the debug stuff from following
@@ -2556,12 +2721,12 @@ pub const Window = struct {
             if (winId == self.wd.id) {
                 // focus the window here so any more key events get routed
                 // properly
-                focusSubwindow(self.wd.id, null);
+                self.focusSubwindowInternal(self.wd.id, null);
             }
 
             // add focus event
             self.event_num += 1;
-            try self.events.append(Event{ .num = self.event_num, .evt = .{
+            try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
                 .mouse = .{
                     .action = .focus,
                     .button = bb,
@@ -2572,7 +2737,7 @@ pub const Window = struct {
         }
 
         self.event_num += 1;
-        try self.events.append(Event{ .num = self.event_num, .evt = .{
+        try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
             .mouse = .{
                 .action = action,
                 .button = bb,
@@ -2586,15 +2751,20 @@ pub const Window = struct {
         return ret;
     }
 
+    /// Add a mouse wheel event.  Positive ticks means scrolling up.
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventMouseWheel(self: *Self, ticks: f32) !bool {
         self.positionMouseEventRemove();
 
         const winId = self.windowFor(self.mouse_pt);
 
-        //std.debug.print("mouse wheel {d}\n", .{ticks_adj});
+        //std.debug.print("mouse wheel {d}\n", .{ticks});
 
         self.event_num += 1;
-        try self.events.append(Event{ .num = self.event_num, .evt = .{
+        try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
             .mouse = .{
                 .action = .wheel_y,
                 .button = .none,
@@ -2609,6 +2779,11 @@ pub const Window = struct {
         return ret;
     }
 
+    /// Add an event that represents a finger moving while touching the screen.
+    ///
+    /// This can be called outside begin/end.  You should add all the events
+    /// for a frame either before begin() or just after begin() and before
+    /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventTouchMotion(self: *Self, finger: enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) !bool {
         self.positionMouseEventRemove();
 
@@ -2621,7 +2796,7 @@ pub const Window = struct {
         const winId = self.windowFor(self.mouse_pt);
 
         self.event_num += 1;
-        try self.events.append(Event{ .num = self.event_num, .evt = .{
+        try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
             .mouse = .{
                 .action = .motion,
                 .button = finger,
@@ -2663,27 +2838,32 @@ pub const Window = struct {
             // compensate if we didn't hit our target
             if (new_time > target) {
                 // woke up later than expected
-                self.loop_target_slop_frames = @max(1, self.loop_target_slop_frames * 2);
+                self.loop_target_slop_frames = math.clamp(self.loop_target_slop_frames * 2, 1, 1000);
                 self.loop_target_slop += self.loop_target_slop_frames;
             } else if (new_time < target) {
                 // woke up sooner than expected
-                self.loop_target_slop_frames = @min(-1, self.loop_target_slop_frames * 2);
+                self.loop_target_slop_frames = math.clamp(self.loop_target_slop_frames * 2, -1000, -1);
                 self.loop_target_slop += self.loop_target_slop_frames;
 
-                // since we are early, spin a bit to guarantee that we never run before
-                // the target
-                //var i: usize = 0;
-                //var first_time = new_time;
-                while (new_time < target) {
-                    //i += 1;
-                    self.backend.sleep(0);
-                    new_time = @max(self.frame_time_ns, self.backend.nanoTime());
-                }
+                const max_behind = std.time.ns_per_ms;
+                if (new_time > target - max_behind) {
+                    // we are early (but not too early), so spin a bit to try and hit target
+                    //var i: usize = 0;
+                    //var first_time = new_time;
+                    while (new_time < target) {
+                        //i += 1;
+                        self.backend.sleep(0);
+                        new_time = @max(self.frame_time_ns, self.backend.nanoTime());
+                    }
 
-                //if (i > 0) {
-                //  std.debug.print("    begin {d} spun {d} {d}us\n", .{self.loop_target_slop, i, @divFloor(new_time - first_time, 1000)});
-                //}
+                    //if (i > 0) {
+                    //  std.debug.print("    begin {d} spun {d} {d}us\n", .{self.loop_target_slop, i, @divFloor(new_time - first_time, 1000)});
+                    //}
+                }
             }
+
+            // make sure this never gets too crazy -1ms to 100ms
+            self.loop_target_slop = math.clamp(self.loop_target_slop, -1_000, 100_000);
         }
 
         //std.debug.print("beginWait {d:6} {d}\n", .{ self.loop_target_slop, self.loop_target_slop_frames });
@@ -2783,6 +2963,8 @@ pub const Window = struct {
         self: *Self,
         time_ns: i128,
     ) !void {
+        const larena = self._arena.allocator();
+
         var micros_since_last: u32 = 1;
         if (time_ns > self.frame_time_ns) {
             // enforce monotinicity
@@ -2814,12 +2996,8 @@ pub const Window = struct {
             self.debug_under_mouse_info = "";
         }
 
-        _ = self._arena.reset(.retain_capacity);
-        const arena = self._arena.allocator();
-        self.arena = arena;
-
-        self.texture_trash = std.ArrayList(*anyopaque).init(arena);
-        self.path = std.ArrayList(Point).init(arena);
+        self.texture_trash = std.ArrayList(*anyopaque).init(larena);
+        self.path = std.ArrayList(Point).init(larena);
 
         {
             var i: usize = 0;
@@ -2834,9 +3012,6 @@ pub const Window = struct {
             }
         }
 
-        self.event_num = 0;
-        self.events = std.ArrayList(Event).init(arena);
-
         for (self.frame_times, 0..) |_, i| {
             if (i == (self.frame_times.len - 1)) {
                 self.frame_times[i] = 0;
@@ -2846,7 +3021,7 @@ pub const Window = struct {
         }
 
         {
-            var deadSizes = std.ArrayList(u32).init(arena);
+            var deadSizes = std.ArrayList(u32).init(larena);
             defer deadSizes.deinit();
             var it = self.min_sizes.iterator();
             while (it.next()) |kv| {
@@ -2868,7 +3043,7 @@ pub const Window = struct {
             self.data_mutex.lock();
             defer self.data_mutex.unlock();
 
-            var deadDatas = std.ArrayList(u32).init(arena);
+            var deadDatas = std.ArrayList(u32).init(larena);
             defer deadDatas.deinit();
             var it = self.datas.iterator();
             while (it.next()) |kv| {
@@ -2908,7 +3083,7 @@ pub const Window = struct {
 
         {
             const micros: i32 = if (micros_since_last > math.maxInt(i32)) math.maxInt(i32) else @as(i32, @intCast(micros_since_last));
-            var deadAnimations = std.ArrayList(u32).init(arena);
+            var deadAnimations = std.ArrayList(u32).init(larena);
             defer deadAnimations.deinit();
             var it = self.animations.iterator();
             while (it.next()) |kv| {
@@ -2930,7 +3105,7 @@ pub const Window = struct {
         }
 
         {
-            var deadFonts = std.ArrayList(u32).init(arena);
+            var deadFonts = std.ArrayList(u32).init(larena);
             defer deadFonts.deinit();
             var it = self.font_cache.iterator();
             while (it.next()) |kv| {
@@ -2951,7 +3126,7 @@ pub const Window = struct {
         }
 
         {
-            var deadIcons = std.ArrayList(u32).init(arena);
+            var deadIcons = std.ArrayList(u32).init(larena);
             defer deadIcons.deinit();
             var it = self.texture_cache.iterator();
             while (it.next()) |kv| {
@@ -2984,24 +3159,11 @@ pub const Window = struct {
 
         self.next_widget_ypos = self.wd.rect.y;
 
-        // We want a position mouse event to do mouse cursors.  It needs to be
-        // final so if there was a drag end the cursor will still be set
-        // correctly.  We don't know when the client gives us the last event,
-        // so make our position event now, and addEvent* functions will remove
-        // and re-add to keep it as the final event.
-        try self.positionMouseEventAdd();
-
-        if (self.inject_motion_event) {
-            self.inject_motion_event = false;
-            const pt = self.mouse_pt.scale(self.content_scale / self.natural_scale);
-            _ = try self.addEventMouseMotion(pt.x, pt.y);
-        }
-
-        self.backend.begin(arena);
+        self.backend.begin(larena);
     }
 
     fn positionMouseEventAdd(self: *Self) !void {
-        try self.events.append(.{ .evt = .{ .mouse = .{
+        try self.events.append(self.arena(), .{ .evt = .{ .mouse = .{
             .action = .position,
             .button = .none,
             .p = self.mouse_pt,
@@ -3341,7 +3503,7 @@ pub const Window = struct {
             defer toast_win.deinit();
 
             toast_win.data().rect = dvui.placeIn(self.wd.rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-            toast_win.autoSize();
+            toast_win.autoSize(.{});
             try toast_win.install();
             try toast_win.drawBackground();
 
@@ -3504,11 +3666,6 @@ pub const Window = struct {
             refresh(null, @src(), null);
         }
 
-        // Check that the final event was our synthetic mouse position event.
-        // If one of the addEvent* functions forgot to add the synthetic mouse
-        // event to the end this will print a debug message.
-        self.positionMouseEventRemove();
-
         self.backend.end();
 
         defer current_window = self.previous_window;
@@ -3534,7 +3691,34 @@ pub const Window = struct {
             }
         }
 
+        // Check that the final event was our synthetic mouse position event.
+        // If one of the addEvent* functions forgot to add the synthetic mouse
+        // event to the end this will print a debug message.
+        self.positionMouseEventRemove();
+
+        _ = self._arena.reset(.retain_capacity);
+
+        try self.initEvents();
+
+        if (self.inject_motion_event) {
+            self.inject_motion_event = false;
+            const pt = self.mouse_pt.scale(self.content_scale / self.natural_scale);
+            _ = try self.addEventMouseMotion(pt.x, pt.y);
+        }
+
         return ret;
+    }
+
+    fn initEvents(self: *Self) !void {
+        self.events = .{};
+        self.event_num = 0;
+
+        // We want a position mouse event to do mouse cursors.  It needs to be
+        // final so if there was a drag end the cursor will still be set
+        // correctly.  We don't know when the client gives us the last event,
+        // so make our position event now, and addEvent* functions will remove
+        // and re-add to keep it as the final event.
+        try self.positionMouseEventAdd();
     }
 
     pub fn widget(self: *Self) Widget {
@@ -3588,14 +3772,14 @@ pub const Window = struct {
 pub const popup = @compileError("popup renamed to floatingMenu");
 
 pub fn floatingMenu(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) !*FloatingMenuWidget {
-    var ret = try currentWindow().arena.create(FloatingMenuWidget);
+    var ret = try currentWindow().arena().create(FloatingMenuWidget);
     ret.* = FloatingMenuWidget.init(src, initialRect, opts);
     try ret.install();
     return ret;
 }
 
 pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) !*FloatingWindowWidget {
-    var ret = try currentWindow().arena.create(FloatingWindowWidget);
+    var ret = try currentWindow().arena().create(FloatingWindowWidget);
     ret.* = FloatingWindowWidget.init(src, floating_opts, opts);
     try ret.install();
     ret.processEventsBefore();
@@ -3924,7 +4108,7 @@ pub fn toastDisplay(id: u32) !void {
 }
 
 pub fn animate(src: std.builtin.SourceLocation, kind: AnimateWidget.Kind, duration_micros: i32, opts: Options) !*AnimateWidget {
-    var ret = try currentWindow().arena.create(AnimateWidget);
+    var ret = try currentWindow().arena().create(AnimateWidget);
     ret.* = AnimateWidget.init(src, kind, duration_micros, opts);
     try ret.install();
     return ret;
@@ -4188,7 +4372,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
 }
 
 pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) !*PanedWidget {
-    var ret = try currentWindow().arena.create(PanedWidget);
+    var ret = try currentWindow().arena().create(PanedWidget);
     ret.* = PanedWidget.init(src, init_opts, opts);
     try ret.install();
     ret.processEvents();
@@ -4196,13 +4380,9 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
     return ret;
 }
 
-// TextLayout doesn't have a natural width.  If it's min_size.w was 0, then it
-// would calculate a huge min_size.h assuming only 1 character per line can
-// fit.  To prevent starting in weird situations, TextLayout defaults to having
-// a min_size.w so at least you can see what is going on.
 pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.InitOptions, opts: Options) !*TextLayoutWidget {
     const cw = currentWindow();
-    var ret = try cw.arena.create(TextLayoutWidget);
+    var ret = try cw.arena().create(TextLayoutWidget);
     ret.* = TextLayoutWidget.init(src, init_opts, opts);
     try ret.install(.{});
 
@@ -4223,28 +4403,28 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
 }
 
 pub fn context(src: std.builtin.SourceLocation, opts: Options) !*ContextWidget {
-    var ret = try currentWindow().arena.create(ContextWidget);
+    var ret = try currentWindow().arena().create(ContextWidget);
     ret.* = ContextWidget.init(src, opts);
     try ret.install();
     return ret;
 }
 
 pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) !*VirtualParentWidget {
-    var ret = try currentWindow().arena.create(VirtualParentWidget);
+    var ret = try currentWindow().arena().create(VirtualParentWidget);
     ret.* = VirtualParentWidget.init(src, opts);
     try ret.install();
     return ret;
 }
 
 pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
-    var ret = try currentWindow().arena.create(OverlayWidget);
+    var ret = try currentWindow().arena().create(OverlayWidget);
     ret.* = OverlayWidget.init(src, opts);
     try ret.install();
     return ret;
 }
 
 pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
-    var ret = try currentWindow().arena.create(BoxWidget);
+    var ret = try currentWindow().arena().create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, false, opts);
     try ret.install();
     try ret.drawBackground();
@@ -4252,7 +4432,7 @@ pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options)
 }
 
 pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
-    var ret = try currentWindow().arena.create(BoxWidget);
+    var ret = try currentWindow().arena().create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, true, opts);
     try ret.install();
     try ret.drawBackground();
@@ -4260,7 +4440,7 @@ pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Opt
 }
 
 pub fn reorder(src: std.builtin.SourceLocation, opts: Options) !*ReorderWidget {
-    var ret = try currentWindow().arena.create(ReorderWidget);
+    var ret = try currentWindow().arena().create(ReorderWidget);
     ret.* = ReorderWidget.init(src, opts);
     try ret.install();
     ret.processEvents();
@@ -4268,7 +4448,7 @@ pub fn reorder(src: std.builtin.SourceLocation, opts: Options) !*ReorderWidget {
 }
 
 pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) !*ScrollAreaWidget {
-    var ret = try currentWindow().arena.create(ScrollAreaWidget);
+    var ret = try currentWindow().arena().create(ScrollAreaWidget);
     ret.* = ScrollAreaWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
@@ -4343,14 +4523,14 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
 }
 
 pub fn scale(src: std.builtin.SourceLocation, scale_in: f32, opts: Options) !*ScaleWidget {
-    var ret = try currentWindow().arena.create(ScaleWidget);
+    var ret = try currentWindow().arena().create(ScaleWidget);
     ret.* = ScaleWidget.init(src, scale_in, opts);
     try ret.install();
     return ret;
 }
 
 pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*MenuWidget {
-    var ret = try currentWindow().arena.create(MenuWidget);
+    var ret = try currentWindow().arena().create(MenuWidget);
     ret.* = MenuWidget.init(src, .{ .dir = dir }, opts);
     try ret.install();
     return ret;
@@ -4401,7 +4581,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
 }
 
 pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: Options) !*MenuItemWidget {
-    var ret = try currentWindow().arena.create(MenuItemWidget);
+    var ret = try currentWindow().arena().create(MenuItemWidget);
     ret.* = MenuItemWidget.init(src, init_opts, opts);
     try ret.install();
     ret.processEvents();
@@ -5408,7 +5588,7 @@ pub fn findUtf8Start(text: []const u8, pos: usize) usize {
 
 pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) !*TextEntryWidget {
     const cw = currentWindow();
-    var ret = try cw.arena.create(TextEntryWidget);
+    var ret = try cw.arena().create(TextEntryWidget);
     ret.* = TextEntryWidget.init(src, init_opts, opts);
     try ret.install();
     // can install corner widgets here
@@ -5458,7 +5638,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     }
 
     const cw = currentWindow();
-    var te = try cw.arena.create(TextEntryWidget);
+    var te = try cw.arena().create(TextEntryWidget);
     te.* = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer } }, opts);
     try te.install();
     te.processEvents();
@@ -5547,7 +5727,7 @@ pub fn renderText(opts: renderTextOptions) !void {
 
     if (!cw.rendering) {
         var opts_copy = opts;
-        opts_copy.text = try cw.arena.dupe(u8, opts.text);
+        opts_copy.text = try cw.arena().dupe(u8, opts.text);
         const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
 
         var sw = cw.subwindowCurrent();
@@ -5606,7 +5786,7 @@ pub fn renderText(opts: renderTextOptions) !void {
         size.w += 2 * pad;
         size.h += 2 * pad;
 
-        var pixels = try cw.arena.alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
+        var pixels = try cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
         // set all pixels as white but with zero alpha
         for (pixels, 0..) |*p, i| {
             if (i % 4 == 3) {
@@ -5665,7 +5845,7 @@ pub fn renderText(opts: renderTextOptions) !void {
                     const out_h: u32 = @intFromFloat(gi.h);
 
                     // single channel
-                    const bitmap = try cw.arena.alloc(u8, @as(usize, out_w * out_h));
+                    const bitmap = try cw.arena().alloc(u8, @as(usize, out_w * out_h));
 
                     //log.debug("makecodepointBitmap size x {d} y {d} w {d} h {d} out w {d} h {d}", .{ x, y, size.w, size.h, out_w, out_h });
 
@@ -5700,13 +5880,13 @@ pub fn renderText(opts: renderTextOptions) !void {
             }
         }
 
-        fce.texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)));
+        fce.texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
         fce.texture_atlas_size = size;
     }
 
-    var vtx = std.ArrayList(Vertex).init(cw.arena);
+    var vtx = std.ArrayList(Vertex).init(cw.arena());
     defer vtx.deinit();
-    var idx = std.ArrayList(u16).init(cw.arena);
+    var idx = std.ArrayList(u16).init(cw.arena());
     defer idx.deinit();
 
     var x: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
@@ -5845,9 +6025,9 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
     var offset: f32 = 0;
     var it = cw.font_cache.iterator();
     while (it.next()) |kv| {
-        var vtx = std.ArrayList(Vertex).init(cw.arena);
+        var vtx = std.ArrayList(Vertex).init(cw.arena());
         defer vtx.deinit();
-        var idx = std.ArrayList(u16).init(cw.arena);
+        var idx = std.ArrayList(u16).init(cw.arena());
         defer idx.deinit();
 
         const len = @as(u32, @intCast(vtx.items.len));
@@ -5887,8 +6067,8 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 /// Create a texture that can be rendered with renderTexture().
 ///
 /// Remember to destroy the texture at some point, see textureDestroyLater().
-pub fn textureCreate(pixels: [*]u8, width: u32, height: u32) *anyopaque {
-    return currentWindow().backend.textureCreate(pixels, width, height);
+pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enums.TextureInterpolation) *anyopaque {
+    return currentWindow().backend.textureCreate(pixels, width, height, interpolation);
 }
 
 /// Destroy a texture created with textureCreate() and the end of the frame.
@@ -5917,9 +6097,9 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Co
         return;
     }
 
-    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena, 4);
+    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), 4);
     defer vtx.deinit();
-    var idx = try std.ArrayList(u16).initCapacity(cw.arena, 6);
+    var idx = try std.ArrayList(u16).initCapacity(cw.arena(), 6);
     defer idx.deinit();
 
     const x: f32 = if (cw.snap_to_pixels) @round(rs.r.x) else rs.r.x;
@@ -6011,7 +6191,7 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
 
     defer c.stbi_image_free(data);
 
-    const texture = cw.backend.textureCreate(data, @intCast(w), @intCast(h));
+    const texture = cw.backend.textureCreate(data, @intCast(w), @intCast(h), .linear);
 
     //std.debug.print("created image texture \"{s}\" size {d}x{d}\n", .{ name, w, h });
     //const usizeh: usize = @intCast(h);

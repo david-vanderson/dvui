@@ -3,14 +3,18 @@ const builtin = @import("builtin");
 const dvui = @import("dvui");
 
 const WebBackend = @This();
+pub const Context = *WebBackend;
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
+pub var win: *dvui.Window = undefined;
 var arena: std.mem.Allocator = undefined;
+var last_touch_enum: dvui.enums.Button = .none;
+var touchPoints: [10]?dvui.Point = [_]?dvui.Point{null} ** 10;
+var have_event = false;
+
 cursor_last: dvui.enums.Cursor = .wait,
-touchPoints: [10]?dvui.Point = [_]?dvui.Point{null} ** 10,
-last_touch_enum: dvui.enums.Button = .none,
 
 const EventTemp = struct {
     kind: u8,
@@ -37,7 +41,7 @@ pub const wasm = struct {
     pub extern fn wasm_canvas_width() f32;
     pub extern fn wasm_canvas_height() f32;
 
-    pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32) u32;
+    pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32, interp: u8) u32;
     pub extern fn wasm_textureDestroy(u32) void;
     pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, x: u32, y: u32, w: u32, h: u32) void;
 
@@ -114,20 +118,81 @@ export fn arena_u8(len: usize) [*c]u8 {
 }
 
 export fn add_event(kind: u8, int1: u32, int2: u32, float1: f32, float2: f32) void {
-    event_temps.append(.{
-        .kind = kind,
-        .int1 = int1,
-        .int2 = int2,
-        .float1 = float1,
-        .float2 = float2,
-    }) catch |err| {
-        const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
-        wasm.wasm_panic(msg.ptr, msg.len);
+    add_event_raw(kind, int1, int2, float1, float2) catch |err| {
+        dvui.log.err("add_event_raw returned {!}", .{err});
     };
 }
 
+fn add_event_raw(kind: u8, int1: u32, int2: u32, float1: f32, float2: f32) !void {
+    have_event = true;
+    //event_temps.append(.{
+    //    .kind = kind,
+    //    .int1 = int1,
+    //    .int2 = int2,
+    //    .float1 = float1,
+    //    .float2 = float2,
+    //}) catch |err| {
+    //    const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
+    //    wasm.wasm_panic(msg.ptr, msg.len);
+    //};
+    switch (kind) {
+        1 => _ = try win.addEventMouseMotion(float1, float2),
+        2 => _ = try win.addEventMouseButton(buttonFromJS(int1), .press),
+        3 => _ = try win.addEventMouseButton(buttonFromJS(int1), .release),
+        4 => _ = try win.addEventMouseWheel(if (float1 > 0) -20 else 20),
+        5 => {
+            const str = @as([*]u8, @ptrFromInt(int1))[0..int2];
+            _ = try win.addEventKey(.{
+                .action = if (float1 > 0) .repeat else .down,
+                .code = web_key_code_to_dvui(str),
+                .mod = web_mod_code_to_dvui(@intFromFloat(float2)),
+            });
+        },
+        6 => {
+            const str = @as([*]u8, @ptrFromInt(int1))[0..int2];
+            _ = try win.addEventKey(.{
+                .action = .up,
+                .code = web_key_code_to_dvui(str),
+                .mod = web_mod_code_to_dvui(@intFromFloat(float2)),
+            });
+        },
+        7 => {
+            const str = @as([*]u8, @ptrFromInt(int1))[0..int2];
+            _ = try win.addEventText(str);
+        },
+        8 => {
+            const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
+            last_touch_enum = touch;
+            _ = try win.addEventPointer(touch, .press, .{ .x = float1, .y = float2 });
+            touchPoints[int1] = .{ .x = float1, .y = float2 };
+        },
+        9 => {
+            const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
+            last_touch_enum = touch;
+            _ = try win.addEventPointer(touch, .release, .{ .x = float1, .y = float2 });
+            touchPoints[int1] = null;
+        },
+        10 => {
+            const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
+            last_touch_enum = touch;
+            var dx: f32 = 0;
+            var dy: f32 = 0;
+            if (touchPoints[int1]) |p| {
+                dx = float1 - p.x;
+                dy = float2 - p.y;
+            }
+            _ = try win.addEventTouchMotion(touch, float1, float2, dx, dy);
+            touchPoints[int1] = .{ .x = float1, .y = float2 };
+        },
+        else => dvui.log.debug("addAllEvents unknown event kind {d}", .{kind}),
+    }
+}
+
+// returns whether an event has come in since last frame (otherwise we are
+// doing a frame based on an animation or timer)
 pub fn hasEvent(_: *WebBackend) bool {
-    return event_temps.items.len > 0;
+    //return event_temps.items.len > 0;
+    return have_event;
 }
 
 fn buttonFromJS(jsButton: u32) dvui.enums.Button {
@@ -275,63 +340,63 @@ fn web_mod_code_to_dvui(wmod: u8) dvui.enums.Mod {
     return @as(dvui.enums.Mod, @enumFromInt(m));
 }
 
-pub fn addAllEvents(self: *WebBackend, win: *dvui.Window) !void {
-    for (event_temps.items) |e| {
-        switch (e.kind) {
-            1 => _ = try win.addEventMouseMotion(e.float1, e.float2),
-            2 => _ = try win.addEventMouseButton(buttonFromJS(e.int1), .press),
-            3 => _ = try win.addEventMouseButton(buttonFromJS(e.int1), .release),
-            4 => _ = try win.addEventMouseWheel(if (e.float1 > 0) -20 else 20),
-            5 => {
-                const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
-                _ = try win.addEventKey(.{
-                    .action = if (e.float1 > 0) .repeat else .down,
-                    .code = web_key_code_to_dvui(str),
-                    .mod = web_mod_code_to_dvui(@intFromFloat(e.float2)),
-                });
-            },
-            6 => {
-                const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
-                _ = try win.addEventKey(.{
-                    .action = .up,
-                    .code = web_key_code_to_dvui(str),
-                    .mod = web_mod_code_to_dvui(@intFromFloat(e.float2)),
-                });
-            },
-            7 => {
-                const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
-                _ = try win.addEventText(str);
-            },
-            8 => {
-                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
-                self.last_touch_enum = touch;
-                _ = try win.addEventPointer(touch, .press, .{ .x = e.float1, .y = e.float2 });
-                self.touchPoints[e.int1] = .{ .x = e.float1, .y = e.float2 };
-            },
-            9 => {
-                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
-                self.last_touch_enum = touch;
-                _ = try win.addEventPointer(touch, .release, .{ .x = e.float1, .y = e.float2 });
-                self.touchPoints[e.int1] = null;
-            },
-            10 => {
-                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
-                self.last_touch_enum = touch;
-                var dx: f32 = 0;
-                var dy: f32 = 0;
-                if (self.touchPoints[e.int1]) |p| {
-                    dx = e.float1 - p.x;
-                    dy = e.float2 - p.y;
-                }
-                _ = try win.addEventTouchMotion(touch, e.float1, e.float2, dx, dy);
-                self.touchPoints[e.int1] = .{ .x = e.float1, .y = e.float2 };
-            },
-            else => dvui.log.debug("addAllEvents unknown event kind {d}", .{e.kind}),
-        }
-    }
-
-    event_temps.clearRetainingCapacity();
-}
+//pub fn addAllEvents(self: *WebBackend, win: *dvui.Window) !void {
+//    for (event_temps.items) |e| {
+//        switch (e.kind) {
+//            1 => _ = try win.addEventMouseMotion(e.float1, e.float2),
+//            2 => _ = try win.addEventMouseButton(buttonFromJS(e.int1), .press),
+//            3 => _ = try win.addEventMouseButton(buttonFromJS(e.int1), .release),
+//            4 => _ = try win.addEventMouseWheel(if (e.float1 > 0) -20 else 20),
+//            5 => {
+//                const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
+//                _ = try win.addEventKey(.{
+//                    .action = if (e.float1 > 0) .repeat else .down,
+//                    .code = web_key_code_to_dvui(str),
+//                    .mod = web_mod_code_to_dvui(@intFromFloat(e.float2)),
+//                });
+//            },
+//            6 => {
+//                const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
+//                _ = try win.addEventKey(.{
+//                    .action = .up,
+//                    .code = web_key_code_to_dvui(str),
+//                    .mod = web_mod_code_to_dvui(@intFromFloat(e.float2)),
+//                });
+//            },
+//            7 => {
+//                const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
+//                _ = try win.addEventText(str);
+//            },
+//            8 => {
+//                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
+//                self.last_touch_enum = touch;
+//                _ = try win.addEventPointer(touch, .press, .{ .x = e.float1, .y = e.float2 });
+//                self.touchPoints[e.int1] = .{ .x = e.float1, .y = e.float2 };
+//            },
+//            9 => {
+//                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
+//                self.last_touch_enum = touch;
+//                _ = try win.addEventPointer(touch, .release, .{ .x = e.float1, .y = e.float2 });
+//                self.touchPoints[e.int1] = null;
+//            },
+//            10 => {
+//                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
+//                self.last_touch_enum = touch;
+//                var dx: f32 = 0;
+//                var dy: f32 = 0;
+//                if (self.touchPoints[e.int1]) |p| {
+//                    dx = e.float1 - p.x;
+//                    dy = e.float2 - p.y;
+//                }
+//                _ = try win.addEventTouchMotion(touch, e.float1, e.float2, dx, dy);
+//                self.touchPoints[e.int1] = .{ .x = e.float1, .y = e.float2 };
+//            },
+//            else => dvui.log.debug("addAllEvents unknown event kind {d}", .{e.kind}),
+//        }
+//    }
+//
+//    event_temps.clearRetainingCapacity();
+//}
 
 pub fn init() !WebBackend {
     const back: WebBackend = .{};
@@ -369,7 +434,9 @@ pub fn begin(self: *WebBackend, arena_in: std.mem.Allocator) void {
     arena = arena_in;
 }
 
-pub fn end(_: *WebBackend) void {}
+pub fn end(_: *WebBackend) void {
+    have_event = false;
+}
 
 pub fn pixelSize(_: *WebBackend) dvui.Size {
     return dvui.Size{ .w = wasm.wasm_pixel_width(), .h = wasm.wasm_pixel_height() };
@@ -415,7 +482,7 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?*anyopaque, vtx: []const d
     );
 }
 
-pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32) *anyopaque {
+pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {
     _ = self;
 
     // convert to premultiplied alpha
@@ -429,7 +496,12 @@ pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32) 
         }
     }
 
-    const id = wasm.wasm_textureCreate(pixels, width, height);
+    const wasm_interp: u8 = switch (interpolation) {
+        .nearest => 0,
+        .linear => 1,
+    };
+
+    const id = wasm.wasm_textureCreate(pixels, width, height, wasm_interp);
     return @ptrFromInt(id);
 }
 

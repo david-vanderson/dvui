@@ -191,7 +191,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
 }
 
 pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: Options) !*Reorderable {
-    const ret = try dvui.currentWindow().arena.create(Reorderable);
+    const ret = try dvui.currentWindow().arena().create(Reorderable);
     ret.* = Reorderable.init(src, self, init_opts, opts);
     try ret.install();
     return ret;

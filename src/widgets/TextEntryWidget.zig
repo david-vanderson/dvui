@@ -226,7 +226,7 @@ pub fn draw(self: *TextEntryWidget) !void {
         sel.start = sstart.?;
         sel.cursor = scursor.?;
         sel.end = send.?;
-        var password_str: []u8 = try dvui.currentWindow().arena.alloc(u8, count * pc.len);
+        var password_str: []u8 = try dvui.currentWindow().arena().alloc(u8, count * pc.len);
         for (0..count) |i| {
             for (0..pc.len) |pci| {
                 password_str[i * pc.len + pci] = pc[pci];
@@ -348,7 +348,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
             .internal => |i| {
                 new_size = @min(new_size, i.limit);
                 var oom = false;
-                const copy = dvui.currentWindow().arena.dupe(u8, self.text) catch blk: {
+                const copy = dvui.currentWindow().arena().dupe(u8, self.text) catch blk: {
                     oom = true;
                     dvui.log.debug("{x} TextEntryWidget.textTyped failed to dupe internal buffer for grow\n", .{self.wd.id});
                     break :blk &.{};
@@ -825,7 +825,7 @@ pub fn deinit(self: *TextEntryWidget) void {
             },
             .internal => {
                 var oom = false;
-                const copy = dvui.currentWindow().arena.dupe(u8, self.text[0..new_len]) catch blk: {
+                const copy = dvui.currentWindow().arena().dupe(u8, self.text[0..new_len]) catch blk: {
                     oom = true;
                     dvui.log.debug("{x} TextEntryWidget.deinit failed to dupe internal buffer for shrink\n", .{self.wd.id});
                     break :blk &.{};
