@@ -8,6 +8,15 @@ g: u8 = 0xff,
 b: u8 = 0xff,
 a: u8 = 0xff,
 
+/// Returns brightness of the color as a value between 0 and 1
+pub fn brightness(self: @This()) f32 {
+    const red: f32 = @as(f32, @floatFromInt(self.r)) / 255.0;
+    const green: f32 = @as(f32, @floatFromInt(self.g)) / 255.0;
+    const blue: f32 = @as(f32, @floatFromInt(self.b)) / 255.0;
+
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
 pub const HSLuv = struct {
     h: f32 = 0.0,
     s: f32 = 100.0,
@@ -110,9 +119,9 @@ pub fn toHexString(self: Color) !HexString {
 }
 
 /// Converts slice of HexString to Color
-pub fn fromHex(hex: []const u8) !Color {
-    if (hex[0] != '#') return error.NotAColor;
-    if (hex.len != 7) return error.WrongStringLength;
+pub fn fromHex(hex: HexString) !Color {
+    //if (hex[0] != '#') return error.NotAColor;
+    //if (hex.len != 7) return error.WrongStringLength;
 
     const num: u24 = try std.fmt.parseInt(u24, hex[1..], 16);
     const result = Color{

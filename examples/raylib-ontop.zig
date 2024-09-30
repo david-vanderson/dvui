@@ -139,7 +139,7 @@ fn quickTheme(result: *dvui.Theme.QuickTheme) !void {
 
             try colorPicker(&color);
 
-            std.mem.copyForwards(u8, @field(result, name), &try RaylibBackend.raylibColorToDvui(color).toHexString());
+            std.mem.copyForwards(u8, &@field(result, name), &try RaylibBackend.raylibColorToDvui(color).toHexString());
 
             _ = try dvui.spacer(@src(), .{ .w = 10, .h = 10 }, .{});
         }
