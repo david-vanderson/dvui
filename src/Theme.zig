@@ -5,28 +5,6 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Options = dvui.Options;
 
-/// List of theme pointers
-pub const ptrs = [_]*dvui.Theme{
-    &AdwaitaLight,
-    &AdwaitaDark,
-    &AdwaitaOpenDyslexicLight,
-    &AdwaitaOpenDyslexicDark,
-    &Jungle,
-    &Dracula,
-    &Flow,
-    &Gruvbox,
-};
-
-//builtin themes
-pub var AdwaitaLight = @import("themes/Adwaita.zig").light;
-pub var AdwaitaDark = @import("themes/Adwaita.zig").dark;
-pub var AdwaitaOpenDyslexicLight = @import("themes/AdwaitaOpenDyslexic.zig").light;
-pub var AdwaitaOpenDyslexicDark = @import("themes/AdwaitaOpenDyslexic.zig").dark;
-pub var Jungle = @import("themes/Jungle.zig").jungle;
-pub var Dracula = @import("themes/Dracula.zig").dracula;
-pub var Flow = @import("themes/Flow.zig").flow;
-pub var Gruvbox = @import("themes/Gruvbox.zig").gruvbox;
-
 const Theme = @This();
 
 name: []const u8,
@@ -92,16 +70,6 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     return ret;
 }
 
-//  "color_focus": "#638465",
-//  "color_text": "#82a29f",
-//  "color_text_press": "#97af81",
-//  "color_fill_text": "#2c3332",
-//  "color_fill_container": "#2b3a3a",
-//  "color_fill_control": "#2c3334",
-//  "color_fill_hover": "#334e57",
-//  "color_fill_press": "#3b6357",
-//  "color_border": "#60827d"
-
 pub const QuickTheme = struct {
     name: []u8,
 
@@ -155,15 +123,6 @@ pub const QuickTheme = struct {
             .font_name_heading = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
             .font_name_caption = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
             .font_name_title = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
-            //.color_focus = try alloc.dupe(u8, "#ffffff"),
-            //.color_text = try alloc.dupe(u8, "#ffffff"),
-            //.color_text_press = try alloc.dupe(u8, "#ffffff"),
-            //.color_fill_text = try alloc.dupe(u8, "#000000"),
-            //.color_fill_container = try alloc.dupe(u8, "#ffffff"),
-            //.color_fill_control = try alloc.dupe(u8, "#ffffff"),
-            //.color_fill_hover = try alloc.dupe(u8, "#ffffff"),
-            //.color_fill_press = try alloc.dupe(u8, "#ffffff"),
-            //.color_border = try alloc.dupe(u8, "#000000"),
         };
     }
 
@@ -220,31 +179,34 @@ pub const QuickTheme = struct {
             .font_title_3 = .{ .size = self.font_size * 1.4, .name = font_name_title },
             .font_title_4 = .{ .size = self.font_size * 1.2, .name = font_name_title },
             .style_accent = .{
-                .color_accent = .{ .color = Color.alphaAdd(color_accent, color_accent) },
-                .color_text = .{ .color = Color.alphaAdd(color_accent, color_text) },
-                .color_text_press = .{ .color = Color.alphaAdd(color_accent, color_text_press) },
-                .color_fill = .{ .color = Color.alphaAdd(color_accent, color_fill) },
-                .color_fill_hover = .{ .color = Color.alphaAdd(color_accent, color_fill_hover) },
-                .color_fill_press = .{ .color = Color.alphaAdd(color_accent, color_fill_press) },
-                .color_border = .{ .color = Color.alphaAdd(color_accent, color_border) },
+                .color_accent = .{ .color = Color.alphaAverage(color_accent, color_accent) },
+                .color_text = .{ .color = Color.alphaAverage(color_accent, color_text) },
+                .color_text_press = .{ .color = Color.alphaAverage(color_accent, color_text_press) },
+                .color_fill = .{ .color = Color.alphaAverage(color_accent, color_fill) },
+                .color_fill_hover = .{ .color = Color.alphaAverage(color_accent, color_fill_hover) },
+                .color_fill_press = .{ .color = Color.alphaAverage(color_accent, color_fill_press) },
+                .color_border = .{ .color = Color.alphaAverage(color_accent, color_border) },
             },
             .style_err = .{
-                .color_accent = .{ .color = Color.alphaAdd(color_accent, color_accent) },
-                .color_text = .{ .color = Color.alphaAdd(color_err, color_text) },
-                .color_text_press = .{ .color = Color.alphaAdd(color_err, color_text_press) },
-                .color_fill = .{ .color = Color.alphaAdd(color_err, color_fill) },
-                .color_fill_hover = .{ .color = Color.alphaAdd(color_err, color_fill_hover) },
-                .color_fill_press = .{ .color = Color.alphaAdd(color_err, color_fill_press) },
-                .color_border = .{ .color = Color.alphaAdd(color_err, color_border) },
+                .color_accent = .{ .color = Color.alphaAverage(color_accent, color_accent) },
+                .color_text = .{ .color = Color.alphaAverage(color_err, color_text) },
+                .color_text_press = .{ .color = Color.alphaAverage(color_err, color_text_press) },
+                .color_fill = .{ .color = Color.alphaAverage(color_err, color_fill) },
+                .color_fill_hover = .{ .color = Color.alphaAverage(color_err, color_fill_hover) },
+                .color_fill_press = .{ .color = Color.alphaAverage(color_err, color_fill_press) },
+                .color_border = .{ .color = Color.alphaAverage(color_err, color_border) },
             },
         };
     }
 };
 
 pub const Database = struct {
+    const CacheEntry = std.StringHashMap(Theme).Entry;
+    const Cache = std.ArrayList(CacheEntry);
+
     themes: std.StringHashMap(Theme),
     arena: std.heap.ArenaAllocator,
-    names: ?std.ArrayList([]const u8) = null,
+    theme_cache: ?Cache = null,
 
     pub const builtin = struct {
         pub const jungle = @embedFile("themes/jungle.json");
@@ -259,22 +221,61 @@ pub const Database = struct {
         return self.themes.getPtr(name) orelse @panic("Requested theme does not exist");
     }
 
-    pub fn themeNames(self: *const @This()) []const []const u8 {
-        if (self.names) |names| {
-            if (names.len == self.themes.count()) {
-                return self.names.items;
+    pub fn getList(self: *@This()) ![]const CacheEntry {
+        if (self.theme_cache) |cached| {
+            if (cached.items.len == self.themes.count()) {
+                return cached.items;
             } else {
-                names.clearRetainingCapacity();
-                var iter = self.themes.keyIterator();
-                while (iter.next()) |key| {
-                    names.append(key);
+                self.theme_cache.?.clearRetainingCapacity();
+                var iter = self.themes.iterator();
+                while (iter.next()) |val| {
+                    try self.theme_cache.?.append(val);
                 }
-                return themeNames(self);
+
+                std.sort.heap(CacheEntry, self.theme_cache.?.items, {}, (struct {
+                    pub fn sort(_: void, lhs: CacheEntry, rhs: CacheEntry) bool {
+                        return std.ascii.orderIgnoreCase(lhs.value_ptr.name, rhs.value_ptr.name) == .lt;
+                    }
+                }).sort);
+
+                return try getList(self);
             }
         } else {
-            self.names = std.ArrayList([]const u8).init(self.arena);
-            return themeNames(self);
+            self.theme_cache = Cache.init(self.arena.allocator());
+            return try getList(self);
         }
+    }
+
+    pub fn picker(self: *@This(), src: std.builtin.SourceLocation) !void {
+        var hbox = try dvui.box(src, .horizontal, .{});
+        defer hbox.deinit();
+
+        const theme_choice: usize = blk: {
+            for (try self.getList(), 0..) |val, i| {
+                if (dvui.themeGet() == val.value_ptr) {
+                    break :blk i;
+                }
+            }
+            break :blk 0;
+        };
+
+        var dd = dvui.DropdownWidget.init(
+            @src(),
+            .{ .selected_index = theme_choice, .label = dvui.themeGet().name },
+            .{ .min_size_content = .{ .w = 120 } },
+        );
+        try dd.install();
+
+        if (try dd.dropped()) {
+            for (try self.getList()) |val| {
+                if (try dd.addChoiceLabel(val.value_ptr.name)) {
+                    dvui.themeSet(self.get(val.value_ptr.name));
+                    break;
+                }
+            }
+        }
+
+        dd.deinit();
     }
 
     pub fn init(base_allocator: std.mem.Allocator) !@This() {
@@ -289,7 +290,7 @@ pub const Database = struct {
                 @panic("Failure loading builtin theme. This is a problem with DVUI.");
             };
             defer quick_theme.deinit();
-            try self.themes.putNoClobber(decl.name, try quick_theme.value.toTheme(alloc));
+            try self.themes.putNoClobber(quick_theme.value.name, try quick_theme.value.toTheme(alloc));
         }
         return self;
     }

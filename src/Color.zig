@@ -110,6 +110,16 @@ pub fn alphaAdd(self: Color, other: Color) Color {
     };
 }
 
+/// Adds two colors rgb component-wise premultiplied by alpha
+pub fn alphaAverage(self: Color, other: Color) Color {
+    return Color{
+        .r = @intCast((self.extract(.r) + other.extract(.r)) / (255 * 2)),
+        .g = @intCast((self.extract(.g) + other.extract(.g)) / (255 * 2)),
+        .b = @intCast((self.extract(.b) + other.extract(.b)) / (255 * 2)),
+        .a = 255,
+    };
+}
+
 pub const HexString = [7]u8;
 
 pub fn toHexString(self: Color) !HexString {
