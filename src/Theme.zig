@@ -92,6 +92,16 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     return ret;
 }
 
+//  "color_focus": "#638465",
+//  "color_text": "#82a29f",
+//  "color_text_press": "#97af81",
+//  "color_fill_text": "#2c3332",
+//  "color_fill_container": "#2b3a3a",
+//  "color_fill_control": "#2c3334",
+//  "color_fill_hover": "#334e57",
+//  "color_fill_press": "#3b6357",
+//  "color_border": "#60827d"
+
 pub const QuickTheme = struct {
     name: []u8,
 
@@ -103,27 +113,27 @@ pub const QuickTheme = struct {
     font_name_title: []u8,
 
     // used for focus
-    color_focus: []u8,
+    color_focus: [7]u8 = "#638465".*,
 
     // text/foreground color
-    color_text: []u8,
+    color_text: [7]u8 = "$82a29f".*,
 
     // text/foreground color when widget is pressed
-    color_text_press: []u8,
+    color_text_press: [7]u8 = "#971f81".*,
 
     // background color for displaying lots of text
-    color_fill_text: []u8,
+    color_fill_text: [7]u8 = "#2c3332".*,
 
     // background color for containers that have other widgets inside
-    color_fill_container: []u8,
+    color_fill_container: [7]u8 = "#2b3a3a".*,
 
     // background color for controls like buttons
-    color_fill_control: []u8,
+    color_fill_control: [7]u8 = "#2c3334".*,
 
-    color_fill_hover: []u8,
-    color_fill_press: []u8,
+    color_fill_hover: [7]u8 = "#333e57".*,
+    color_fill_press: [7]u8 = "#3b6357".*,
 
-    color_border: []u8,
+    color_border: [7]u8 = "#60827d".*,
 
     pub const colorFieldNames = &.{
         "color_focus",
@@ -145,15 +155,15 @@ pub const QuickTheme = struct {
             .font_name_heading = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
             .font_name_caption = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
             .font_name_title = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
-            .color_focus = try alloc.dupe(u8, "#ffffff"),
-            .color_text = try alloc.dupe(u8, "#ffffff"),
-            .color_text_press = try alloc.dupe(u8, "#ffffff"),
-            .color_fill_text = try alloc.dupe(u8, "#000000"),
-            .color_fill_container = try alloc.dupe(u8, "#ffffff"),
-            .color_fill_control = try alloc.dupe(u8, "#ffffff"),
-            .color_fill_hover = try alloc.dupe(u8, "#ffffff"),
-            .color_fill_press = try alloc.dupe(u8, "#ffffff"),
-            .color_border = try alloc.dupe(u8, "#000000"),
+            //.color_focus = try alloc.dupe(u8, "#ffffff"),
+            //.color_text = try alloc.dupe(u8, "#ffffff"),
+            //.color_text_press = try alloc.dupe(u8, "#ffffff"),
+            //.color_fill_text = try alloc.dupe(u8, "#000000"),
+            //.color_fill_container = try alloc.dupe(u8, "#ffffff"),
+            //.color_fill_control = try alloc.dupe(u8, "#ffffff"),
+            //.color_fill_hover = try alloc.dupe(u8, "#ffffff"),
+            //.color_fill_press = try alloc.dupe(u8, "#ffffff"),
+            //.color_border = try alloc.dupe(u8, "#000000"),
         };
     }
 
@@ -171,7 +181,7 @@ pub const QuickTheme = struct {
 
     pub fn toTheme(self: @This(), allocator: std.mem.Allocator) !Theme {
         const color_accent = try Color.fromHex(self.color_focus);
-        const color_err = try Color.fromHex("#ffaaaa");
+        const color_err = try Color.fromHex("#ffaaaa".*);
         const color_text = try Color.fromHex(self.color_text);
         const color_text_press = try Color.fromHex(self.color_text_press);
         const color_fill = try Color.fromHex(self.color_fill_text);
@@ -188,7 +198,7 @@ pub const QuickTheme = struct {
 
         return Theme{
             .name = try allocator.dupeZ(u8, self.name),
-            .dark = true,
+            .dark = color_text.brightness() > color_fill.brightness(),
             .alpha = 1.0,
             .color_accent = color_accent,
             .color_err = color_err,
