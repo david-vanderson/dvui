@@ -250,7 +250,9 @@ pub const Database = struct {
         pub const jungle = @embedFile("themes/jungle.json");
         pub const dracula = @embedFile("themes/dracula.json");
         pub const gruvbox = @embedFile("themes/gruvbox.json");
-        pub const papercolor_dark = @embedFile("themes/papercolor-dark.json");
+        pub const adwaita_light = @embedFile("themes/adwaita_light.json");
+        pub const adwaita_dark = @embedFile("themes/adwaita_dark.json");
+        pub const opendyslexic = @embedFile("themes/opendyslexic.json");
     };
 
     pub fn get(self: *const @This(), name: []const u8) *Theme {
