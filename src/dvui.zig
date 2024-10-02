@@ -5631,12 +5631,15 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
 }
 
 pub fn TextEntryNumberResult(comptime T: type) type {
-    return union(enum) {
-        Valid: T,
-        Invalid: void,
-        TooBig: void,
-        TooSmall: void,
-        Empty: void,
+    return struct {
+        value: union(enum) {
+            Valid: T,
+            Invalid: void,
+            TooBig: void,
+            TooSmall: void,
+            Empty: void,
+        } = .Invalid,
+        enter_pressed: bool = false,
     };
 }
 
@@ -5651,10 +5654,9 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         else => unreachable,
     };
 
-    var hbox = try dvui.box(src, .horizontal, .{});
-    defer hbox.deinit();
+    const id = dvui.parentGet().extendId(src, 0);
 
-    const buffer = dataGetSliceDefault(null, hbox.widget().data().id, "buffer", []u8, &[_]u8{0} ** 32);
+    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 32);
 
     //initialize with input number
     if (init_opts.value) |num| {
@@ -5667,10 +5669,10 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     try te.install();
     te.processEvents();
 
+    var result: TextEntryNumberResult(T) = .{ .enter_pressed = te.enter_pressed };
+
     // filter before drawing
     te.filterIn(filter);
-
-    var result: TextEntryNumberResult(T) = .Invalid;
 
     // validation
     const text = te.getText();
@@ -5682,15 +5684,15 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     //determine error if any
     if (text.len == 0 and num == null) {
-        result = .Empty;
+        result.value = .Empty;
     } else if (num == null) {
-        result = .Invalid;
+        result.value = .Invalid;
     } else if (num != null and init_opts.min != null and num.? < init_opts.min.?) {
-        result = .TooSmall;
+        result.value = .TooSmall;
     } else if (num != null and init_opts.max != null and num.? > init_opts.max.?) {
-        result = .TooBig;
+        result.value = .TooBig;
     } else {
-        result = .{ .Valid = num.? };
+        result.value = .{ .Valid = num.? };
         if (init_opts.value) |value_ptr| {
             value_ptr.* = num.?;
         }
@@ -5698,7 +5700,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     try te.draw();
 
-    if (result != .Empty and result != .Valid) {
+    if (result.value != .Empty and result.value != .Valid) {
         const rs = te.data().borderRectScale();
         try dvui.pathAddRect(rs.r.outsetAll(1), te.data().options.corner_radiusGet());
         const color = dvui.themeGet().color_err;

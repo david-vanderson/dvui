@@ -46,8 +46,8 @@ fn intFieldWidget(
                 .max = opt.max,
                 .value = result,
             }, opt.dvui_opts);
-            if (maybe_num == .Valid) {
-                result.* = maybe_num.Valid;
+            if (maybe_num.value == .Valid) {
+                result.* = maybe_num.value.Valid;
             }
             try dvui.label(@src(), "{}", .{result.*}, .{});
         },
@@ -117,8 +117,8 @@ pub fn floatFieldWidget(
     alignment.record(box.data().id, hbox_aligned.data());
 
     const maybe_num = try dvui.textEntryNumber(@src(), T, .{ .min = opt.min, .max = opt.max }, opt.dvui_opts);
-    if (maybe_num == .Valid) {
-        result.* = maybe_num.Valid;
+    if (maybe_num.value == .Valid) {
+        result.* = maybe_num.value.Valid;
     }
     try dvui.label(@src(), "{d}", .{result.*}, .{});
 }
