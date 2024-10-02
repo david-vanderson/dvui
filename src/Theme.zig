@@ -5,8 +5,6 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Options = dvui.Options;
 
-pub const FallBack = @import("themes/Adwaita.zig").light;
-
 const Theme = @This();
 
 name: []const u8,
@@ -57,6 +55,24 @@ style_accent: Options,
 // used for a button to perform dangerous actions
 style_err: Options,
 
+// if true, need to free the strings in deinit()
+allocated_strings: bool = false,
+
+pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
+    if (self.allocated_strings) {
+        gpa.free(self.name);
+        gpa.free(self.font_body.name);
+        gpa.free(self.font_heading.name);
+        gpa.free(self.font_caption.name);
+        gpa.free(self.font_caption_heading.name);
+        gpa.free(self.font_title.name);
+        gpa.free(self.font_title_1.name);
+        gpa.free(self.font_title_2.name);
+        gpa.free(self.font_title_3.name);
+        gpa.free(self.font_title_4.name);
+    }
+}
+
 pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     var ret = self.*;
     ret.font_body.size += delta;
@@ -72,7 +88,51 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     return ret;
 }
 
+pub fn picker(src: std.builtin.SourceLocation, opts: Options) !void {
+    const defaults: Options = .{
+        .name = "Theme Picker",
+        .min_size_content = .{ .w = 120 },
+    };
+
+    const options = defaults.override(opts);
+    const cw = dvui.currentWindow();
+
+    const theme_choice: usize = blk: {
+        for (cw.themes.values(), 0..) |val, i| {
+            if (std.mem.eql(u8, dvui.themeGet().name, val.name)) {
+                break :blk i;
+            }
+        }
+        break :blk 0;
+    };
+
+    var dd = dvui.DropdownWidget.init(
+        src,
+        .{ .selected_index = theme_choice, .label = dvui.themeGet().name },
+        options,
+    );
+    try dd.install();
+
+    if (try dd.dropped()) {
+        for (cw.themes.values()) |*theme| {
+            if (try dd.addChoiceLabel(theme.name)) {
+                dvui.themeSet(theme);
+                break;
+            }
+        }
+    }
+
+    dd.deinit();
+}
+
 pub const QuickTheme = struct {
+    pub const builtin = struct {
+        pub const jungle = @embedFile("themes/jungle.json");
+        pub const dracula = @embedFile("themes/dracula.json");
+        pub const gruvbox = @embedFile("themes/gruvbox.json");
+        pub const opendyslexic = @embedFile("themes/opendyslexic.json");
+    };
+
     name: []u8,
 
     // fonts
@@ -117,30 +177,19 @@ pub const QuickTheme = struct {
         "color_border",
     };
 
-    pub fn initDefault(alloc: std.mem.Allocator) !@This() {
-        const padding = 32;
-        return .{
-            .name = try alloc.dupeZ(u8, "Default" ++ [_]u8{0} ** padding),
-            .font_name_body = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
-            .font_name_heading = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
-            .font_name_caption = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
-            .font_name_title = try alloc.dupeZ(u8, "Vera" ++ [_]u8{0} ** padding),
-        };
-    }
-
     pub fn fromString(
-        allocator: std.mem.Allocator,
+        arena: std.mem.Allocator,
         string: []const u8,
     ) !std.json.Parsed(QuickTheme) {
         return try std.json.parseFromSlice(
             QuickTheme,
-            allocator,
+            arena,
             string,
             .{ .allocate = .alloc_always },
         );
     }
 
-    pub fn toTheme(self: @This(), allocator: std.mem.Allocator) !Theme {
+    pub fn toTheme(self: @This(), gpa: std.mem.Allocator) !Theme {
         const color_accent = try Color.fromHex(self.color_focus);
         const color_err = try Color.fromHex("#ffaaaa".*);
         const color_text = try Color.fromHex(self.color_text);
@@ -152,13 +201,8 @@ pub const QuickTheme = struct {
         const color_fill_press = try Color.fromHex(self.color_fill_press);
         const color_border = try Color.fromHex(self.color_border);
 
-        const font_name_body = try allocator.dupeZ(u8, self.font_name_body);
-        const font_name_heading = try allocator.dupeZ(u8, self.font_name_heading);
-        const font_name_caption = try allocator.dupeZ(u8, self.font_name_caption);
-        const font_name_title = try allocator.dupeZ(u8, self.font_name_title);
-
         return Theme{
-            .name = try allocator.dupeZ(u8, self.name),
+            .name = try gpa.dupe(u8, self.name),
             .dark = color_text.brightness() > color_fill.brightness(),
             .alpha = 1.0,
             .color_accent = color_accent,
@@ -171,15 +215,15 @@ pub const QuickTheme = struct {
             .color_fill_hover = color_fill_hover,
             .color_fill_press = color_fill_press,
             .color_border = color_border,
-            .font_body = .{ .size = @round(self.font_size), .name = font_name_body },
-            .font_heading = .{ .size = @round(self.font_size), .name = font_name_heading },
-            .font_caption = .{ .size = @round(self.font_size * 0.77), .name = font_name_caption },
-            .font_caption_heading = .{ .size = @round(self.font_size * 0.77), .name = font_name_caption },
-            .font_title = .{ .size = @round(self.font_size * 2.15), .name = font_name_title },
-            .font_title_1 = .{ .size = @round(self.font_size * 1.77), .name = font_name_title },
-            .font_title_2 = .{ .size = @round(self.font_size * 1.54), .name = font_name_title },
-            .font_title_3 = .{ .size = @round(self.font_size * 1.3), .name = font_name_title },
-            .font_title_4 = .{ .size = @round(self.font_size * 1.15), .name = font_name_title },
+            .font_body = .{ .size = @round(self.font_size), .name = try gpa.dupe(u8, self.font_name_body) },
+            .font_heading = .{ .size = @round(self.font_size), .name = try gpa.dupe(u8, self.font_name_heading) },
+            .font_caption = .{ .size = @round(self.font_size * 0.77), .name = try gpa.dupe(u8, self.font_name_caption) },
+            .font_caption_heading = .{ .size = @round(self.font_size * 0.77), .name = try gpa.dupe(u8, self.font_name_caption) },
+            .font_title = .{ .size = @round(self.font_size * 2.15), .name = try gpa.dupe(u8, self.font_name_title) },
+            .font_title_1 = .{ .size = @round(self.font_size * 1.77), .name = try gpa.dupe(u8, self.font_name_title) },
+            .font_title_2 = .{ .size = @round(self.font_size * 1.54), .name = try gpa.dupe(u8, self.font_name_title) },
+            .font_title_3 = .{ .size = @round(self.font_size * 1.3), .name = try gpa.dupe(u8, self.font_name_title) },
+            .font_title_4 = .{ .size = @round(self.font_size * 1.15), .name = try gpa.dupe(u8, self.font_name_title) },
             .style_accent = .{
                 .color_accent = .{ .color = Color.alphaAverage(color_accent, color_accent) },
                 .color_text = .{ .color = Color.alphaAverage(color_accent, color_text) },
@@ -198,100 +242,7 @@ pub const QuickTheme = struct {
                 .color_fill_press = .{ .color = Color.alphaAverage(color_err, color_fill_press) },
                 .color_border = .{ .color = Color.alphaAverage(color_err, color_border) },
             },
+            .allocated_strings = true,
         };
-    }
-};
-
-pub const Database = struct {
-    //const CacheEntry = std.StringHashMap(Theme).Entry;
-    //const Cache = std.ArrayList(CacheEntry);
-
-    const HashMap = std.StringArrayHashMap(Theme);
-
-    themes: HashMap,
-    arena: *std.heap.ArenaAllocator,
-    sorted: bool = false,
-
-    pub const builtin = struct {
-        pub const jungle = @embedFile("themes/jungle.json");
-        pub const dracula = @embedFile("themes/dracula.json");
-        pub const gruvbox = @embedFile("themes/gruvbox.json");
-        pub const adwaita_light = @embedFile("themes/adwaita_light.json");
-        pub const adwaita_dark = @embedFile("themes/adwaita_dark.json");
-        pub const opendyslexic = @embedFile("themes/opendyslexic.json");
-    };
-
-    pub fn get(self: *const @This(), name: []const u8) *Theme {
-        return self.themes.getPtr(name) orelse @panic("Requested theme does not exist");
-    }
-
-    pub fn sort(self: *@This()) void {
-        const Context = struct {
-            hashmap: *HashMap,
-            pub fn lessThan(ctx: @This(), lhs: usize, rhs: usize) bool {
-                return std.ascii.orderIgnoreCase(ctx.hashmap.values()[lhs].name, ctx.hashmap.values()[rhs].name) == .lt;
-            }
-        };
-        self.themes.sort(Context{ .hashmap = &self.themes });
-    }
-
-    pub fn getThemes(self: *@This()) []Theme {
-        return self.themes.values();
-    }
-
-    pub fn picker(self: *@This(), src: std.builtin.SourceLocation) !void {
-        var hbox = try dvui.box(src, .horizontal, .{});
-        defer hbox.deinit();
-
-        const theme_choice: usize = blk: {
-            for (self.getThemes(), 0..) |val, i| {
-                if (std.mem.eql(u8, dvui.themeGet().name, val.name)) {
-                    break :blk i;
-                }
-            }
-            break :blk 0;
-        };
-
-        var dd = dvui.DropdownWidget.init(
-            @src(),
-            .{ .selected_index = theme_choice, .label = dvui.themeGet().name },
-            .{ .min_size_content = .{ .w = 120 } },
-        );
-        try dd.install();
-
-        if (try dd.dropped()) {
-            for (self.getThemes()) |theme| {
-                if (try dd.addChoiceLabel(theme.name)) {
-                    dvui.themeSet(self.get(theme.name));
-                    break;
-                }
-            }
-        }
-
-        dd.deinit();
-    }
-
-    pub fn init(base_allocator: std.mem.Allocator) !@This() {
-        var self: @This() = .{
-            .arena = try base_allocator.create(std.heap.ArenaAllocator),
-            .themes = undefined,
-        };
-        self.arena.* = std.heap.ArenaAllocator.init(base_allocator);
-        const alloc = self.arena.allocator();
-
-        self.themes = HashMap.init(alloc);
-        inline for (@typeInfo(builtin).Struct.decls) |decl| {
-            const quick_theme = QuickTheme.fromString(alloc, @field(builtin, decl.name)) catch {
-                @panic("Failure loading builtin theme. This is a problem with DVUI.");
-            };
-            defer quick_theme.deinit();
-            try self.themes.putNoClobber(quick_theme.value.name, try quick_theme.value.toTheme(alloc));
-        }
-        return self;
-    }
-
-    pub fn deinit(self: *@This(), base_allocator: std.mem.Allocator) void {
-        self.arena.deinit();
-        base_allocator.destroy(self.arena);
     }
 };

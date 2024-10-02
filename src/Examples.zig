@@ -267,7 +267,7 @@ pub fn demo() !void {
             dvui.toggleDebugWindow();
         }
 
-        try dvui.currentWindow().themes.picker(@src());
+        try dvui.Theme.picker(@src(), .{});
     }
 
     {
