@@ -58,14 +58,14 @@ pub fn install(self: *ScrollBarWidget) !void {
     self.grabRect = self.wd.contentRect();
     switch (self.dir) {
         .vertical => {
-            self.grabRect.h = @min(self.grabRect.h, @max(20.0, self.grabRect.h * self.si.fraction_visible(self.dir)));
+            self.grabRect.h = @min(self.grabRect.h, @max(20.0, self.grabRect.h * self.si.visibleFraction(self.dir)));
             const insideH = self.wd.contentRect().h - self.grabRect.h;
-            self.grabRect.y += insideH * self.si.scroll_fraction(self.dir);
+            self.grabRect.y += insideH * self.si.offsetFraction(self.dir);
         },
         .horizontal => {
-            self.grabRect.w = @min(self.grabRect.w, @max(20.0, self.grabRect.w * self.si.fraction_visible(self.dir)));
+            self.grabRect.w = @min(self.grabRect.w, @max(20.0, self.grabRect.w * self.si.visibleFraction(self.dir)));
             const insideH = self.wd.contentRect().w - self.grabRect.w;
-            self.grabRect.x += insideH * self.si.scroll_fraction(self.dir);
+            self.grabRect.x += insideH * self.si.offsetFraction(self.dir);
         },
     }
 
@@ -156,16 +156,7 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect) void {
                     },
                     .wheel_y => {
                         e.handled = true;
-                        switch (self.dir) {
-                            .vertical => {
-                                self.si.viewport.y -= me.data.wheel_y;
-                                self.si.viewport.y = dvui.math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
-                            },
-                            .horizontal => {
-                                self.si.viewport.x -= me.data.wheel_y;
-                                self.si.viewport.x = dvui.math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
-                            },
-                        }
+                        self.si.scrollByOffset(self.dir, -me.data.wheel_y);
                         dvui.refresh(null, @src(), self.wd.id);
                     },
                 }
