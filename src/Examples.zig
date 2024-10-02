@@ -674,32 +674,8 @@ pub fn textEntryWidgets() !void {
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        var te = dvui.TextEntryWidget.init(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{});
-
-        try te.install();
-
-        // Here we are doing the event loop for TextEntryWidget instead of what
-        // you get from dvui.textEntry() - TextEntryWidget.processEvents()
-        for (dvui.events()) |*e| {
-
-            // Check that e matches (keyboard focus, mouse rectangle, etc.)
-            // Also checks that e.handled is false
-            if (!te.matchEvent(e))
-                continue;
-
-            // Now we know e matches, and hasn't been handled yet
-            if (e.evt == .key and e.evt.key.code == .enter and e.evt.key.action == .down) {
-                e.handled = true;
-                enter_pressed = true;
-            }
-
-            // If we haven't handled it, forward it to TextEntryWidget for normal processing
-            if (!e.handled) {
-                te.processEvent(e, false);
-            }
-        }
-
-        try te.draw();
+        var te = try dvui.textEntry(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{});
+        enter_pressed = te.enter_pressed;
         te.deinit();
 
         try dvui.label(@src(), "(limit {d})", .{text_entry_buf.len}, .{ .gravity_y = 0.5 });
@@ -841,7 +817,7 @@ pub fn textEntryWidgets() !void {
 }
 
 pub fn displayTextEntryNumberResult(result: anytype) !void {
-    switch (result) {
+    switch (result.value) {
         .TooBig => {
             try dvui.label(@src(), "Too Big", .{}, .{ .gravity_y = 0.5 });
         },

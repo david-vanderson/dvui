@@ -74,6 +74,7 @@ text: []u8 = undefined,
 len: usize = undefined,
 scroll_to_cursor: bool = false,
 text_changed: bool = false,
+enter_pressed: bool = false, // not valid if multiline
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TextEntryWidget {
     var self = TextEntryWidget{};
@@ -720,9 +721,14 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                     }
                 },
                 .enter => {
-                    if (self.init_opts.multiline and (ke.action == .down or ke.action == .repeat)) {
+                    if (ke.action == .down or ke.action == .repeat) {
                         e.handled = true;
-                        self.textTyped("\n");
+                        if (self.init_opts.multiline) {
+                            self.textTyped("\n");
+                        } else {
+                            self.enter_pressed = true;
+                            dvui.refresh(null, @src(), self.wd.id);
+                        }
                     }
                 },
                 else => {},
