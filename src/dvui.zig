@@ -2357,7 +2357,8 @@ pub const Window = struct {
                 @panic("Failure loading builtin theme. This is a problem with DVUI.");
             };
             defer quick_theme.deinit();
-            try self.themes.putNoClobber(quick_theme.value.name, try quick_theme.value.toTheme(self.gpa));
+            const theme = try quick_theme.value.toTheme(self.gpa);
+            try self.themes.putNoClobber(theme.name, theme);
         }
 
         // Sort themes alphabetically
