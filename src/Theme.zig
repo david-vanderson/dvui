@@ -5,6 +5,8 @@ const Color = dvui.Color;
 const Font = dvui.Font;
 const Options = dvui.Options;
 
+pub const FallBack = @import("themes/Adwaita.zig").light;
+
 const Theme = @This();
 
 name: []const u8,
@@ -169,15 +171,15 @@ pub const QuickTheme = struct {
             .color_fill_hover = color_fill_hover,
             .color_fill_press = color_fill_press,
             .color_border = color_border,
-            .font_body = .{ .size = self.font_size, .name = font_name_body },
-            .font_heading = .{ .size = self.font_size, .name = font_name_heading },
-            .font_caption = .{ .size = self.font_size * 0.7, .name = font_name_caption },
-            .font_caption_heading = .{ .size = self.font_size * 0.7, .name = font_name_caption },
-            .font_title = .{ .size = self.font_size * 2, .name = font_name_title },
-            .font_title_1 = .{ .size = self.font_size * 1.8, .name = font_name_title },
-            .font_title_2 = .{ .size = self.font_size * 1.6, .name = font_name_title },
-            .font_title_3 = .{ .size = self.font_size * 1.4, .name = font_name_title },
-            .font_title_4 = .{ .size = self.font_size * 1.2, .name = font_name_title },
+            .font_body = .{ .size = @round(self.font_size), .name = font_name_body },
+            .font_heading = .{ .size = @round(self.font_size), .name = font_name_heading },
+            .font_caption = .{ .size = @round(self.font_size * 0.77), .name = font_name_caption },
+            .font_caption_heading = .{ .size = @round(self.font_size * 0.77), .name = font_name_caption },
+            .font_title = .{ .size = @round(self.font_size * 2.15), .name = font_name_title },
+            .font_title_1 = .{ .size = @round(self.font_size * 1.77), .name = font_name_title },
+            .font_title_2 = .{ .size = @round(self.font_size * 1.54), .name = font_name_title },
+            .font_title_3 = .{ .size = @round(self.font_size * 1.3), .name = font_name_title },
+            .font_title_4 = .{ .size = @round(self.font_size * 1.15), .name = font_name_title },
             .style_accent = .{
                 .color_accent = .{ .color = Color.alphaAverage(color_accent, color_accent) },
                 .color_text = .{ .color = Color.alphaAverage(color_accent, color_text) },
@@ -201,12 +203,14 @@ pub const QuickTheme = struct {
 };
 
 pub const Database = struct {
-    const CacheEntry = std.StringHashMap(Theme).Entry;
-    const Cache = std.ArrayList(CacheEntry);
+    //const CacheEntry = std.StringHashMap(Theme).Entry;
+    //const Cache = std.ArrayList(CacheEntry);
 
-    themes: std.StringHashMap(Theme),
-    arena: std.heap.ArenaAllocator,
-    theme_cache: ?Cache = null,
+    const HashMap = std.StringArrayHashMap(Theme);
+
+    themes: HashMap,
+    arena: *std.heap.ArenaAllocator,
+    sorted: bool = false,
 
     pub const builtin = struct {
         pub const jungle = @embedFile("themes/jungle.json");
@@ -221,29 +225,18 @@ pub const Database = struct {
         return self.themes.getPtr(name) orelse @panic("Requested theme does not exist");
     }
 
-    pub fn getList(self: *@This()) ![]const CacheEntry {
-        if (self.theme_cache) |cached| {
-            if (cached.items.len == self.themes.count()) {
-                return cached.items;
-            } else {
-                self.theme_cache.?.clearRetainingCapacity();
-                var iter = self.themes.iterator();
-                while (iter.next()) |val| {
-                    try self.theme_cache.?.append(val);
-                }
-
-                std.sort.heap(CacheEntry, self.theme_cache.?.items, {}, (struct {
-                    pub fn sort(_: void, lhs: CacheEntry, rhs: CacheEntry) bool {
-                        return std.ascii.orderIgnoreCase(lhs.value_ptr.name, rhs.value_ptr.name) == .lt;
-                    }
-                }).sort);
-
-                return try getList(self);
+    pub fn sort(self: *@This()) void {
+        const Context = struct {
+            hashmap: *HashMap,
+            pub fn lessThan(ctx: @This(), lhs: usize, rhs: usize) bool {
+                return std.ascii.orderIgnoreCase(ctx.hashmap.values()[lhs].name, ctx.hashmap.values()[rhs].name) == .lt;
             }
-        } else {
-            self.theme_cache = Cache.init(self.arena.allocator());
-            return try getList(self);
-        }
+        };
+        self.themes.sort(Context{ .hashmap = &self.themes });
+    }
+
+    pub fn getThemes(self: *@This()) []Theme {
+        return self.themes.values();
     }
 
     pub fn picker(self: *@This(), src: std.builtin.SourceLocation) !void {
@@ -251,8 +244,8 @@ pub const Database = struct {
         defer hbox.deinit();
 
         const theme_choice: usize = blk: {
-            for (try self.getList(), 0..) |val, i| {
-                if (dvui.themeGet() == val.value_ptr) {
+            for (self.getThemes(), 0..) |val, i| {
+                if (std.mem.eql(u8, dvui.themeGet().name, val.name)) {
                     break :blk i;
                 }
             }
@@ -267,9 +260,9 @@ pub const Database = struct {
         try dd.install();
 
         if (try dd.dropped()) {
-            for (try self.getList()) |val| {
-                if (try dd.addChoiceLabel(val.value_ptr.name)) {
-                    dvui.themeSet(self.get(val.value_ptr.name));
+            for (self.getThemes()) |theme| {
+                if (try dd.addChoiceLabel(theme.name)) {
+                    dvui.themeSet(self.get(theme.name));
                     break;
                 }
             }
@@ -280,11 +273,13 @@ pub const Database = struct {
 
     pub fn init(base_allocator: std.mem.Allocator) !@This() {
         var self: @This() = .{
-            .arena = std.heap.ArenaAllocator.init(base_allocator),
+            .arena = try base_allocator.create(std.heap.ArenaAllocator),
             .themes = undefined,
         };
+        self.arena.* = std.heap.ArenaAllocator.init(base_allocator);
         const alloc = self.arena.allocator();
-        self.themes = std.StringHashMap(Theme).init(alloc);
+
+        self.themes = HashMap.init(alloc);
         inline for (@typeInfo(builtin).Struct.decls) |decl| {
             const quick_theme = QuickTheme.fromString(alloc, @field(builtin, decl.name)) catch {
                 @panic("Failure loading builtin theme. This is a problem with DVUI.");
@@ -295,7 +290,8 @@ pub const Database = struct {
         return self;
     }
 
-    pub fn deinit(self: *@This()) void {
+    pub fn deinit(self: *@This(), base_allocator: std.mem.Allocator) void {
         self.arena.deinit();
+        base_allocator.destroy(self.arena);
     }
 };

@@ -2351,11 +2351,10 @@ pub const Window = struct {
             .themes = try Theme.Database.init(gpa),
         };
 
-
+        self.themes.sort(); //makes sure that themes are sorted
         self.theme = init_opts.theme orelse self.themes.get("Adwaita Light");
 
         try self.initEvents();
-
 
         const kb = init_opts.keybinds orelse blk: {
             if (builtin.os.tag.isDarwin()) {
@@ -2520,7 +2519,7 @@ pub const Window = struct {
         self.keybinds.deinit();
         self._arena.deinit();
         self.ttf_bytes_database.deinit();
-        self.themes.deinit();
+        self.themes.deinit(self.gpa);
     }
 
     pub fn arena(self: *Self) std.mem.Allocator {
