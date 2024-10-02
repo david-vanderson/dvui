@@ -3665,6 +3665,21 @@ pub const Window = struct {
             refresh(null, @src(), null);
         }
 
+        // Check that the final event was our synthetic mouse position event.
+        // If one of the addEvent* functions forgot to add the synthetic mouse
+        // event to the end this will print a debug message.
+        self.positionMouseEventRemove();
+
+        _ = self._arena.reset(.retain_capacity);
+
+        try self.initEvents();
+
+        if (self.inject_motion_event) {
+            self.inject_motion_event = false;
+            const pt = self.mouse_pt.scale(self.content_scale / self.natural_scale);
+            _ = try self.addEventMouseMotion(pt.x, pt.y);
+        }
+
         self.backend.end();
 
         defer current_window = self.previous_window;
@@ -3688,21 +3703,6 @@ pub const Window = struct {
                     break;
                 }
             }
-        }
-
-        // Check that the final event was our synthetic mouse position event.
-        // If one of the addEvent* functions forgot to add the synthetic mouse
-        // event to the end this will print a debug message.
-        self.positionMouseEventRemove();
-
-        _ = self._arena.reset(.retain_capacity);
-
-        try self.initEvents();
-
-        if (self.inject_motion_event) {
-            self.inject_motion_event = false;
-            const pt = self.mouse_pt.scale(self.content_scale / self.natural_scale);
-            _ = try self.addEventMouseMotion(pt.x, pt.y);
         }
 
         return ret;
