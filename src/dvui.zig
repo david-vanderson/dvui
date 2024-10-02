@@ -2259,7 +2259,7 @@ pub const Window = struct {
 
     menu_current: ?*MenuWidget = null,
     popup_current: ?*FloatingMenuWidget = null,
-    theme: *Theme = &Theme.AdwaitaLight,
+    theme: *Theme = undefined,
 
     min_sizes: std.AutoHashMap(u32, SavedSize),
     data_mutex: std.Thread.Mutex,
@@ -2274,6 +2274,7 @@ pub const Window = struct {
     dialogs: std.ArrayList(Dialog),
     toasts: std.ArrayList(Toast),
     keybinds: std.StringHashMap(enums.Keybind),
+    themes: Theme.Database,
 
     cursor_requested: enums.Cursor = .arrow,
     cursor_dragging: ?enums.Cursor = null,
@@ -2347,8 +2348,11 @@ pub const Window = struct {
             .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
             .backend = backend_ctx,
             .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
-            .theme = init_opts.theme orelse &Theme.AdwaitaLight,
+            .themes = try Theme.Database.init(gpa),
         };
+
+        self.themes.sort(); //makes sure that themes are sorted
+        self.theme = init_opts.theme orelse self.themes.get("Adwaita Light");
 
         try self.initEvents();
 
@@ -2515,6 +2519,7 @@ pub const Window = struct {
         self.keybinds.deinit();
         self._arena.deinit();
         self.ttf_bytes_database.deinit();
+        self.themes.deinit(self.gpa);
     }
 
     pub fn arena(self: *Self) std.mem.Allocator {
