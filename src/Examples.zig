@@ -364,6 +364,9 @@ pub fn demo() !void {
 
             a_u8: u8 = 1,
             a_f32: f32 = 2.0,
+            a_i8: i8 = 1,
+            a_f64: f64 = 2.0,
+            a_bool: bool = false,
             a_ptr: *TopChild = undefined,
             a_struct: TopChild = .{ .a_dir = .vertical },
             a_str: []const u8 = &[_]u8{0} ** 20,
