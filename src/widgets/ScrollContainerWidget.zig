@@ -141,7 +141,7 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
     // exponential decay: v *= damping^secs_since
     // tweak the damping so we brake harder as the velocity slows down
     {
-        const max_scroll = self.si.scroll_max(.horizontal);
+        const max_scroll = self.si.scrollMax(.horizontal);
         if (self.si.viewport.x < 0) {
             self.si.velocity.x = 0;
             self.si.viewport.x = @min(0, @max(-20, self.si.viewport.x + 250 * dvui.secondsSinceLastFrame()));
@@ -158,7 +158,7 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
     }
 
     {
-        const max_scroll = self.si.scroll_max(.vertical);
+        const max_scroll = self.si.scrollMax(.vertical);
 
         if (self.si.viewport.y < 0) {
             self.si.velocity.y = 0;
@@ -255,29 +255,25 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
                 if (ke.code == .up and (ke.action == .down or ke.action == .repeat)) {
                     e.handled = true;
                     if (self.si.vertical != .none) {
-                        self.si.viewport.y -= 10;
-                        self.si.viewport.y = dvui.math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
+                        self.si.scrollByOffset(.vertical, -10);
                     }
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
                     e.handled = true;
                     if (self.si.vertical != .none) {
-                        self.si.viewport.y += 10;
-                        self.si.viewport.y = dvui.math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
+                        self.si.scrollByOffset(.vertical, 10);
                     }
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (ke.code == .left and (ke.action == .down or ke.action == .repeat)) {
                     e.handled = true;
                     if (self.si.horizontal != .none) {
-                        self.si.viewport.x -= 10;
-                        self.si.viewport.x = dvui.math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
+                        self.si.scrollByOffset(.horizontal, -10);
                     }
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (ke.code == .right and (ke.action == .down or ke.action == .repeat)) {
                     e.handled = true;
                     if (self.si.horizontal != .none) {
-                        self.si.viewport.x += 10;
-                        self.si.viewport.x = dvui.math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
+                        self.si.scrollByOffset(.horizontal, 10);
                     }
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (ke.code == .page_up and (ke.action == .down or ke.action == .repeat)) {
@@ -304,7 +300,7 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
 
             if (sd.mouse_pt.y >= (rs.r.y + rs.r.h) and
                 (sd.screen_rect.y + sd.screen_rect.h) > (rs.r.y + rs.r.h) and
-                self.si.viewport.y < self.si.scroll_max(.vertical))
+                self.si.viewport.y < self.si.scrollMax(.vertical))
             {
                 scrolly = if (!self.seen_scroll_drag) 200 * dvui.secondsSinceLastFrame() else 5;
             }
@@ -319,17 +315,17 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
 
             if (sd.mouse_pt.x >= (rs.r.x + rs.r.w) and
                 (sd.screen_rect.x + sd.screen_rect.w) > (rs.r.x + rs.r.w) and
-                self.si.viewport.x < self.si.scroll_max(.horizontal))
+                self.si.viewport.x < self.si.scrollMax(.horizontal))
             {
                 scrollx = if (!self.seen_scroll_drag) 200 * dvui.secondsSinceLastFrame() else 5;
             }
 
             if (scrolly != 0 or scrollx != 0) {
                 if (scrolly != 0) {
-                    self.si.viewport.y = @max(0.0, @min(self.si.scroll_max(.vertical), self.si.viewport.y + scrolly));
+                    self.si.scrollByOffset(.vertical, scrolly);
                 }
                 if (scrollx != 0) {
-                    self.si.viewport.x = @max(0.0, @min(self.si.scroll_max(.horizontal), self.si.viewport.x + scrollx));
+                    self.si.scrollByOffset(.horizontal, scrollx);
                 }
 
                 dvui.refresh(null, @src(), self.wd.id);
@@ -349,7 +345,7 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
             if (ypx > 0) {
                 self.si.viewport.y = self.si.viewport.y - (ypx / rs.s);
                 if (!st.over_scroll) {
-                    self.si.viewport.y = @max(0.0, @min(self.si.scroll_max(.vertical), self.si.viewport.y));
+                    self.si.scrollToOffset(.vertical, self.si.viewport.y);
                 }
                 dvui.refresh(null, @src(), self.wd.id);
             }
@@ -358,7 +354,7 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
             if (ypx2 > 0) {
                 self.si.viewport.y = self.si.viewport.y + (ypx2 / rs.s);
                 if (!st.over_scroll) {
-                    self.si.viewport.y = @max(0.0, @min(self.si.scroll_max(.vertical), self.si.viewport.y));
+                    self.si.scrollToOffset(.vertical, self.si.viewport.y);
                 }
                 dvui.refresh(null, @src(), self.wd.id);
             }
@@ -367,7 +363,7 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
             if (xpx > 0) {
                 self.si.viewport.x = self.si.viewport.x - (xpx / rs.s);
                 if (!st.over_scroll) {
-                    self.si.viewport.x = @max(0.0, @min(self.si.scroll_max(.horizontal), self.si.viewport.x));
+                    self.si.scrollToOffset(.horizontal, self.si.viewport.x);
                 }
                 dvui.refresh(null, @src(), self.wd.id);
             }
@@ -376,7 +372,7 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
             if (xpx2 > 0) {
                 self.si.viewport.x = self.si.viewport.x + (xpx2 / rs.s);
                 if (!st.over_scroll) {
-                    self.si.viewport.x = @max(0.0, @min(self.si.scroll_max(.horizontal), self.si.viewport.x));
+                    self.si.scrollToOffset(.horizontal, self.si.viewport.x);
                 }
                 dvui.refresh(null, @src(), self.wd.id);
             }
@@ -411,7 +407,7 @@ pub fn processMotionScrollEvent(self: *ScrollContainerWidget, e: *dvui.Event, mo
         self.si.viewport.y -= motion.y / rs.s;
         self.si.velocity.y = -motion.y / rs.s;
         dvui.refresh(null, @src(), self.wd.id);
-        if (@abs(motion.y) > @abs(motion.x) and self.si.viewport.y >= 0 and self.si.viewport.y <= self.si.scroll_max(.vertical)) {
+        if (@abs(motion.y) > @abs(motion.x) and self.si.viewport.y >= 0 and self.si.viewport.y <= self.si.scrollMax(.vertical)) {
             propogate = false;
         }
     }
@@ -419,7 +415,7 @@ pub fn processMotionScrollEvent(self: *ScrollContainerWidget, e: *dvui.Event, mo
         self.si.viewport.x -= motion.x / rs.s;
         self.si.velocity.x = -motion.x / rs.s;
         dvui.refresh(null, @src(), self.wd.id);
-        if (@abs(motion.x) > @abs(motion.y) and self.si.viewport.x >= 0 and self.si.viewport.x <= self.si.scroll_max(.horizontal)) {
+        if (@abs(motion.x) > @abs(motion.y) and self.si.viewport.x >= 0 and self.si.viewport.x <= self.si.scrollMax(.horizontal)) {
             propogate = false;
         }
     }
@@ -446,21 +442,19 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                 } else if (me.action == .wheel_y) {
                     // scroll vertically if we can, otherwise try horizontal
                     if (self.si.vertical != .none) {
-                        if ((me.data.wheel_y > 0 and self.si.viewport.y <= 0) or (me.data.wheel_y < 0 and self.si.viewport.y >= self.si.scroll_max(.vertical))) {
+                        if ((me.data.wheel_y > 0 and self.si.viewport.y <= 0) or (me.data.wheel_y < 0 and self.si.viewport.y >= self.si.scrollMax(.vertical))) {
                             // propogate the scroll event because we are already maxxed out
                         } else {
                             e.handled = true;
-                            self.si.viewport.y -= me.data.wheel_y;
-                            self.si.viewport.y = dvui.math.clamp(self.si.viewport.y, 0, self.si.scroll_max(.vertical));
+                            self.si.scrollByOffset(.vertical, -me.data.wheel_y);
                             dvui.refresh(null, @src(), self.wd.id);
                         }
                     } else if (self.si.horizontal != .none) {
-                        if ((me.data.wheel_y > 0 and self.si.viewport.x <= 0) or (me.data.wheel_y < 0 and self.si.viewport.x >= self.si.scroll_max(.horizontal))) {
+                        if ((me.data.wheel_y > 0 and self.si.viewport.x <= 0) or (me.data.wheel_y < 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
                             // propogate the scroll event because we are already maxxed out
                         } else {
                             e.handled = true;
-                            self.si.viewport.x -= me.data.wheel_y;
-                            self.si.viewport.x = dvui.math.clamp(self.si.viewport.x, 0, self.si.scroll_max(.horizontal));
+                            self.si.scrollByOffset(.horizontal, -me.data.wheel_y);
                             dvui.refresh(null, @src(), self.wd.id);
                         }
                     }

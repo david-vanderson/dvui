@@ -331,6 +331,12 @@ pub fn demo() !void {
         try focus();
     }
 
+    if (try dvui.expander(@src(), "Scrolling", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        try scrolling();
+    }
+
     if (try dvui.expander(@src(), "Dialogs and Toasts", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
@@ -1503,6 +1509,66 @@ pub fn focus() !void {
     dvui.dataSet(null, uniqueId, "next_text_entry_id", te2.data().id);
 
     te2.deinit();
+}
+
+pub fn scrolling() !void {
+    const Data = struct {
+        var msg_start: usize = 10_000;
+        var msg_end: usize = 10_100;
+        var scroll_info: ScrollInfo = .{};
+    };
+
+    var scroll_to_msg: ?usize = null;
+
+    var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+    defer hbox.deinit();
+    {
+        var vbox = try dvui.box(@src(), .vertical, .{});
+        defer vbox.deinit();
+
+        if (try dvui.button(@src(), "Scroll to Top", .{}, .{})) {
+            Data.scroll_info.scrollToOffset(.vertical, 0);
+        }
+
+        if (try dvui.button(@src(), "Scroll to msg:", .{}, .{})) {
+            scroll_to_msg = 0;
+        }
+        const result = try dvui.textEntryNumber(@src(), usize, .{ .min = Data.msg_start, .max = Data.msg_end }, .{});
+        if (result.value != .Valid) {
+            try displayTextEntryNumberResult(result);
+        } else if (scroll_to_msg != null or result.enter_pressed) {
+            scroll_to_msg = result.value.Valid;
+        }
+    }
+    {
+        var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
+        defer vbox.deinit();
+
+        try dvui.label(@src(), "{d:0>4.2}% visible, offset {d} frac {d:0>4.2}", .{ Data.scroll_info.visibleFraction(.vertical) * 100.0, Data.scroll_info.viewport.y, Data.scroll_info.offsetFraction(.vertical) }, .{});
+
+        var scroll = try dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info }, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 } });
+        defer scroll.deinit();
+
+        for (Data.msg_start..Data.msg_end) |i| {
+            var tl = try dvui.textLayout(@src(), .{}, .{ .id_extra = i, .color_fill = .{ .name = .fill_window } });
+            try tl.format("Message {d}", .{i}, .{});
+
+            if (scroll_to_msg != null and scroll_to_msg.? == i) {
+                Data.scroll_info.scrollToOffset(.vertical, tl.data().rect.y);
+            }
+
+            tl.deinit();
+
+            var tl2 = try dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .color_fill = .{ .name = .fill_window }, .min_size_content = .{} });
+            try tl2.format("Reply {d}", .{i}, .{});
+            tl2.deinit();
+        }
+
+        //const visibleRect = scroll.si.viewport;
+    }
+
+    // todo: add button to show icon browser with note about how that works
+
 }
 
 pub fn dialogs(demo_win_id: u32) !void {

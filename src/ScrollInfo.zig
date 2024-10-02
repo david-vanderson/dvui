@@ -1,3 +1,4 @@
+const std = @import("std");
 const dvui = @import("dvui.zig");
 
 const Point = dvui.Point;
@@ -35,14 +36,14 @@ virtual_size: Size = Size{},
 viewport: Rect = Rect{},
 velocity: Point = Point{},
 
-pub fn scroll_max(self: ScrollInfo, dir: enums.Direction) f32 {
+pub fn scrollMax(self: ScrollInfo, dir: enums.Direction) f32 {
     switch (dir) {
         .vertical => return @max(0.0, self.virtual_size.h - self.viewport.h),
         .horizontal => return @max(0.0, self.virtual_size.w - self.viewport.w),
     }
 }
 
-pub fn fraction_visible(self: ScrollInfo, dir: enums.Direction) f32 {
+pub fn visibleFraction(self: ScrollInfo, dir: enums.Direction) f32 {
     const viewport_start = switch (dir) {
         .vertical => self.viewport.y,
         .horizontal => self.viewport.x,
@@ -58,7 +59,7 @@ pub fn fraction_visible(self: ScrollInfo, dir: enums.Direction) f32 {
 
     if (viewport_size == 0) return 1.0;
 
-    const max_hard_scroll = self.scroll_max(dir);
+    const max_hard_scroll = self.scrollMax(dir);
     var length = @max(viewport_size, virtual_size);
     if (viewport_start < 0) {
         // temporarily adding the dead space we are showing
@@ -70,7 +71,14 @@ pub fn fraction_visible(self: ScrollInfo, dir: enums.Direction) f32 {
     return viewport_size / length; // <= 1
 }
 
-pub fn scroll_fraction(self: ScrollInfo, dir: enums.Direction) f32 {
+pub fn offset(self: ScrollInfo, dir: enums.Direction) f32 {
+    return switch (dir) {
+        .vertical => self.viewport.y,
+        .horizontal => self.viewport.x,
+    };
+}
+
+pub fn offsetFraction(self: ScrollInfo, dir: enums.Direction) f32 {
     const viewport_start = switch (dir) {
         .vertical => self.viewport.y,
         .horizontal => self.viewport.x,
@@ -86,7 +94,7 @@ pub fn scroll_fraction(self: ScrollInfo, dir: enums.Direction) f32 {
 
     if (viewport_size == 0) return 0;
 
-    const max_hard_scroll = self.scroll_max(dir);
+    const max_hard_scroll = self.scrollMax(dir);
     var length = @max(viewport_size, virtual_size);
     if (viewport_start < 0) {
         // temporarily adding the dead space we are showing
@@ -101,11 +109,22 @@ pub fn scroll_fraction(self: ScrollInfo, dir: enums.Direction) f32 {
     return @max(0, @min(1.0, viewport_start / max_scroll));
 }
 
+pub fn scrollByOffset(self: *ScrollInfo, dir: enums.Direction, off: f32) void {
+    self.scrollToOffset(dir, self.offset(dir) + off);
+}
+
+pub fn scrollToOffset(self: *ScrollInfo, dir: enums.Direction, off: f32) void {
+    switch (dir) {
+        .vertical => self.viewport.y = std.math.clamp(off, 0, self.scrollMax(dir)),
+        .horizontal => self.viewport.x = std.math.clamp(off, 0, self.scrollMax(dir)),
+    }
+}
+
 pub fn scrollToFraction(self: *ScrollInfo, dir: enums.Direction, fin: f32) void {
     const f = @max(0, @min(1, fin));
     switch (dir) {
-        .vertical => self.viewport.y = f * self.scroll_max(dir),
-        .horizontal => self.viewport.x = f * self.scroll_max(dir),
+        .vertical => self.viewport.y = f * self.scrollMax(dir),
+        .horizontal => self.viewport.x = f * self.scrollMax(dir),
     }
 }
 
@@ -113,15 +132,15 @@ pub fn scrollToFraction(self: *ScrollInfo, dir: enums.Direction, fin: f32) void 
 /// dir: scroll vertically or horizontally
 /// up: true to scroll up or left, false to scroll down or right
 pub fn scrollPage(self: *ScrollInfo, dir: enums.Direction, up: bool) void {
-    var fi = self.fraction_visible(dir);
-    // the last page is scroll fraction 1.0, so there is
+    var fi = self.visibleFraction(dir);
+    // the last page is offset fraction 1.0, so there is
     // one less scroll position between 0 and 1.0
     fi = 1.0 / ((1.0 / fi) - 1);
     var f: f32 = undefined;
     if (up) {
-        f = self.scroll_fraction(dir) - fi;
+        f = self.offsetFraction(dir) - fi;
     } else {
-        f = self.scroll_fraction(dir) + fi;
+        f = self.offsetFraction(dir) + fi;
     }
     self.scrollToFraction(dir, f);
 }
