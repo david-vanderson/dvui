@@ -1,6 +1,8 @@
 const std = @import("std");
 const dvui = @import("dvui");
-comptime { std.debug.assert(dvui.backend_kind == .raylib); }
+comptime {
+    std.debug.assert(dvui.backend_kind == .raylib);
+}
 const RaylibBackend = dvui.backend;
 const ray = RaylibBackend.c;
 
@@ -29,7 +31,7 @@ pub fn main() !void {
 
     // init dvui Window (maps onto a single OS window)
     // OS window is managed by raylib, not dvui
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{ .theme = &dvui.Theme.Jungle });
+    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
     defer win.deinit();
 
     var selected_color: dvui.Color = dvui.Color.white;

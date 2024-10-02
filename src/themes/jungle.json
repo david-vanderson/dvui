@@ -1,0 +1,17 @@
+{
+  "name": "Jungle",
+  "font_size": 18,
+  "font_name_body": "Pixelify",
+  "font_name_heading": "Pixelify",
+  "font_name_caption": "Pixelify",
+  "font_name_title": "Pixelify",
+  "color_focus": "#638465",
+  "color_text": "#82a29f",
+  "color_text_press": "#97af81",
+  "color_fill_text": "#2c3332", 
+  "color_fill_container": "#2b3a3a",
+  "color_fill_control": "#2c3334",
+  "color_fill_hover": "#334e57",
+  "color_fill_press": "#3b6357",
+  "color_border": "#60827d"
+}

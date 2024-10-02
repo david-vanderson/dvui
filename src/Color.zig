@@ -8,6 +8,15 @@ g: u8 = 0xff,
 b: u8 = 0xff,
 a: u8 = 0xff,
 
+/// Returns brightness of the color as a value between 0 and 1
+pub fn brightness(self: @This()) f32 {
+    const red: f32 = @as(f32, @floatFromInt(self.r)) / 255.0;
+    const green: f32 = @as(f32, @floatFromInt(self.g)) / 255.0;
+    const blue: f32 = @as(f32, @floatFromInt(self.b)) / 255.0;
+
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
 pub const HSLuv = struct {
     h: f32 = 0.0,
     s: f32 = 100.0,
@@ -83,7 +92,9 @@ pub fn extract(self: Color, field: FieldEnum) u16 {
         .r => self.r,
         .g => self.g,
         .b => self.b,
-        .a => @compileError("cannot extract alpha field from color"),
+        .a => {
+            @panic("This should never be called");
+        },
     });
     const result = normalized_a * value;
     return @intFromFloat(@floor(result));
@@ -99,8 +110,34 @@ pub fn alphaAdd(self: Color, other: Color) Color {
     };
 }
 
-pub fn toHexString(self: Color) ![7]u8 {
+/// Adds two colors rgb component-wise premultiplied by alpha
+pub fn alphaAverage(self: Color, other: Color) Color {
+    return Color{
+        .r = @intCast((self.extract(.r) + other.extract(.r)) / (255 * 2)),
+        .g = @intCast((self.extract(.g) + other.extract(.g)) / (255 * 2)),
+        .b = @intCast((self.extract(.b) + other.extract(.b)) / (255 * 2)),
+        .a = 255,
+    };
+}
+
+pub const HexString = [7]u8;
+
+pub fn toHexString(self: Color) !HexString {
     var result: [7]u8 = .{0} ** 7;
     _ = try std.fmt.bufPrint(&result, "#{x:0>2}{x:0>2}{x:0>2}", .{ self.r, self.g, self.b });
+    return result;
+}
+
+/// Converts slice of HexString to Color
+pub fn fromHex(hex: HexString) !Color {
+    //if (hex[0] != '#') return error.NotAColor;
+    //if (hex.len != 7) return error.WrongStringLength;
+
+    const num: u24 = try std.fmt.parseInt(u24, hex[1..], 16);
+    const result = Color{
+        .r = @intCast(num >> 16 & 0xff),
+        .g = @intCast(num >> 8 & 0xff),
+        .b = @intCast(num & 0xff),
+    };
     return result;
 }

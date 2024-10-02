@@ -283,7 +283,7 @@ fn textFieldWidget(
 
             const text_box = try dvui.textEntry(@src(), .{ .text = .{ .buffer_dynamic = .{
                 .allocator = allocator.?,
-                .backing = result.*,
+                .backing = result,
             } } }, opt.dvui_opts);
             defer text_box.deinit();
         },
@@ -528,6 +528,34 @@ pub fn singlePointerFieldWidget(
     }
 }
 
+//=========Array Field Widget and Options==========
+
+pub fn ArrayFieldOptions(comptime T: type) type {
+    return struct {
+        child: FieldOptions(@typeInfo(T).Array.child) = .{},
+        label_override: ?[]const u8 = null,
+        disabled: bool = false,
+    };
+}
+
+pub fn arrayFieldWidget(
+    comptime name: []const u8,
+    comptime T: type,
+    result: *T,
+    opt: ArrayFieldOptions(T),
+    comptime alloc: bool,
+    allocator: ?std.mem.Allocator,
+) !void {
+    const SliceType = []@typeInfo(T).Array.child;
+    var slice_result: SliceType = &(result.*);
+    const slice_opts = SliceFieldOptions(SliceType){
+        .child = opt.child,
+        .label_override = opt.label_override,
+        .disabled = opt.disabled,
+    };
+    try sliceFieldWidget(name, SliceType, &slice_result, slice_opts, alloc, allocator);
+}
+
 //=======Single Item pointer and options=======
 pub fn SliceFieldOptions(comptime T: type) type {
     return struct {
@@ -764,6 +792,7 @@ pub fn FieldOptions(comptime T: type) type {
         .Union => UnionFieldOptions(T),
         .Optional => OptionalFieldOptions(T),
         .Pointer => PointerFieldOptions(T),
+        .Array => ArrayFieldOptions(T),
         else => @compileError("Invalid Type: " ++ @typeName(T)),
     };
 }
@@ -807,6 +836,7 @@ pub fn fieldWidget(
         .Optional => try optionalFieldWidget(name, T, result, options, alloc, allocator, alignment),
         .Union => try unionFieldWidget(name, T, result, options, alloc, allocator, alignment),
         .Struct => try structFieldWidget(name, T, result, options, alloc, allocator),
+        .Array => try arrayFieldWidget(name, T, result, options, alloc, allocator),
         else => @compileError("Invalid type: " ++ @typeName(T)),
     }
 }
