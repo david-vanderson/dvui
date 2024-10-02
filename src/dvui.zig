@@ -95,20 +95,18 @@ pub fn currentWindow() *Window {
     return current_window orelse unreachable;
 }
 
-/// Get the active theme.
+/// Get a pointer to the active theme.
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn themeGet() *Theme {
-    return currentWindow().theme;
+    return &currentWindow().theme;
 }
 
-/// Set the active theme.
+/// Set the active theme (copies into internal storage).
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn themeSet(theme: *Theme) void {
-    if (currentWindow().theme != theme) {
-        currentWindow().theme = theme;
-    }
+pub fn themeSet(theme: *const Theme) void {
+    currentWindow().theme = theme.*;
 }
 
 /// Toggle showing the debug window (run during Window.end()).
@@ -2259,7 +2257,7 @@ pub const Window = struct {
 
     menu_current: ?*MenuWidget = null,
     popup_current: ?*FloatingMenuWidget = null,
-    theme: *Theme = undefined,
+    theme: Theme = undefined,
 
     min_sizes: std.AutoHashMap(u32, SavedSize),
     data_mutex: std.Thread.Mutex,
@@ -2274,7 +2272,7 @@ pub const Window = struct {
     dialogs: std.ArrayList(Dialog),
     toasts: std.ArrayList(Toast),
     keybinds: std.StringHashMap(enums.Keybind),
-    themes: Theme.Database,
+    themes: std.StringArrayHashMap(Theme),
 
     cursor_requested: enums.Cursor = .arrow,
     cursor_dragging: ?enums.Cursor = null,
@@ -2348,11 +2346,33 @@ pub const Window = struct {
             .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
             .backend = backend_ctx,
             .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
-            .themes = try Theme.Database.init(gpa),
+            .themes = std.StringArrayHashMap(Theme).init(gpa),
         };
 
-        self.themes.sort(); //makes sure that themes are sorted
-        self.theme = init_opts.theme orelse self.themes.get("Adwaita Light");
+        try self.themes.putNoClobber("Adwaita Light", @import("themes/Adwaita.zig").light);
+        try self.themes.putNoClobber("Adwaita Dark", @import("themes/Adwaita.zig").dark);
+
+        inline for (@typeInfo(Theme.QuickTheme.builtin).Struct.decls) |decl| {
+            const quick_theme = Theme.QuickTheme.fromString(self.arena(), @field(Theme.QuickTheme.builtin, decl.name)) catch {
+                @panic("Failure loading builtin theme. This is a problem with DVUI.");
+            };
+            defer quick_theme.deinit();
+            try self.themes.putNoClobber(quick_theme.value.name, try quick_theme.value.toTheme(self.gpa));
+        }
+
+        // Sort themes alphabetically
+        const Context = struct {
+            hashmap: *std.StringArrayHashMap(Theme),
+            pub fn lessThan(ctx: @This(), lhs: usize, rhs: usize) bool {
+                return std.ascii.orderIgnoreCase(ctx.hashmap.values()[lhs].name, ctx.hashmap.values()[rhs].name) == .lt;
+            }
+        };
+        self.themes.sort(Context{ .hashmap = &self.themes });
+        if (init_opts.theme) |t| {
+            self.theme = t.*;
+        } else {
+            self.theme = self.themes.get("Adwaita Light").?;
+        }
 
         try self.initEvents();
 
@@ -2519,7 +2539,12 @@ pub const Window = struct {
         self.keybinds.deinit();
         self._arena.deinit();
         self.ttf_bytes_database.deinit();
-        self.themes.deinit(self.gpa);
+        {
+            for (self.themes.values()) |*theme| {
+                theme.deinit(self.gpa);
+            }
+        }
+        self.themes.deinit();
     }
 
     pub fn arena(self: *Self) std.mem.Allocator {

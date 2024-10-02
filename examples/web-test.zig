@@ -50,15 +50,20 @@ export fn app_init(platform_ptr: [*]const u8, platform_len: usize) i32 {
     dvui.log.debug("platform: {s}", .{platform});
     const mac = if (std.mem.indexOf(u8, platform, "Mac") != null) true else false;
 
-    dvui.Theme.AdwaitaLight = dvui.Theme.AdwaitaLight.fontSizeAdd(2);
-    dvui.Theme.AdwaitaDark = dvui.Theme.AdwaitaDark.fontSizeAdd(2);
-
     backend = WebBackend.init() catch {
         return 1;
     };
     win = dvui.Window.init(@src(), gpa, backend.backend(), .{ .keybinds = if (mac) .mac else .windows }) catch {
         return 2;
     };
+
+    // small fonts look bad on the web, so bump the default theme up
+    var theme = win.themes.get("Adwaita Light").?;
+    win.themes.put("Adwaita Light", theme.fontSizeAdd(2)) catch {};
+    theme = win.themes.get("Adwaita Dark").?;
+    win.themes.put("Adwaita Dark", theme.fontSizeAdd(2)) catch {};
+    win.theme = win.themes.get("Adwaita Light").?;
+
     WebBackend.win = &win;
 
     orig_content_scale = win.content_scale;
