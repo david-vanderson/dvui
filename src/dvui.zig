@@ -1423,11 +1423,22 @@ pub fn dragEnd() void {
     cw.drag_state = .none;
 }
 
+/// The difference between the final mouse position this frame and last frame.
+/// Use mouseTotalMotion().nonZero() to detect if any mouse motion has occured.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn mouseTotalMotion() Point {
     const cw = currentWindow();
     return Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
 }
 
+/// Pass a widget ID for that widget to receive all mouse events (wheel events
+/// still filtered normally).
+///
+/// To keep mouse capture, must call captureMouseMaintain() each frame, and can
+/// call it every frame regardless of capture.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn captureMouse(id: ?u32) void {
     const cw = currentWindow();
     cw.captureID = id;
@@ -1438,6 +1449,12 @@ pub fn captureMouse(id: ?u32) void {
     }
 }
 
+/// If the widget ID passed has mouse capture, this maintains that capture for
+/// the next frame.
+///
+/// This can be called every frame regardless of capture.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn captureMouseMaintain(id: u32) void {
     const cw = currentWindow();
     if (cw.captureID == id) {
@@ -1463,18 +1480,33 @@ pub fn captureMouseMaintain(id: u32) void {
     }
 }
 
+/// Test if the passed widget ID currently has mouse capture.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn captured(id: u32) bool {
     return id == captureMouseId();
 }
 
+/// Get the widget ID that currently has mouse capture or null if none.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn captureMouseId() ?u32 {
     return currentWindow().captureID;
 }
 
+/// Get current screen rectangle in pixels that drawing is being clipped to.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn clipGet() Rect {
     return currentWindow().clipRect;
 }
 
+/// Intersect the given rect (in pixels) with the current clipping rect and set
+/// as the new clipping rect.
+///
+/// Returns the previous clipping rect.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn clip(new: Rect) Rect {
     const cw = currentWindow();
     const ret = cw.clipRect;
@@ -1482,10 +1514,20 @@ pub fn clip(new: Rect) Rect {
     return ret;
 }
 
+/// Set the current clipping rect to the given rect (in pixels).
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn clipSet(r: Rect) void {
     currentWindow().clipRect = r;
 }
 
+/// Set snap_to_pixels setting.  If true:
+/// * fonts are rendered at @floor(font.size)
+/// * drawing is generally rounded to the nearest pixel
+///
+/// Returns the previous setting.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn snapToPixelsSet(snap: bool) bool {
     const cw = currentWindow();
     const old = cw.snap_to_pixels;
@@ -1493,6 +1535,9 @@ pub fn snapToPixelsSet(snap: bool) bool {
     return old;
 }
 
+/// Get current snap_to_pixels setting.  See snapToPixelsSet().
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn snapToPixels() bool {
     const cw = currentWindow();
     return cw.snap_to_pixels;
@@ -1526,25 +1571,41 @@ pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?u32) void {
     }
 }
 
+/// Get the textual content of the system clipboard.  Caller must copy.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn clipboardText() error{OutOfMemory}![]const u8 {
     const cw = currentWindow();
     return cw.backend.clipboardText();
 }
 
+/// Set the textual content of the system clipboard.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn clipboardTextSet(text: []const u8) error{OutOfMemory}!void {
     const cw = currentWindow();
     try cw.backend.clipboardTextSet(text);
 }
 
+/// Ask the system to open the given url.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn openURL(url: []const u8) !void {
     const cw = currentWindow();
     try cw.backend.openURL(url);
 }
 
+/// Seconds elapsed between last frame and current.  This value can be quite
+/// high after a period with no user interaction.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn secondsSinceLastFrame() f32 {
     return currentWindow().secs_since_last_frame;
 }
 
+/// Average frames per second over the past 30 frames.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn FPS() f32 {
     return currentWindow().FPS();
 }
