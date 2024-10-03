@@ -5036,11 +5036,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     const exp_stretch = 0.02;
     const key_percentage = 0.05;
 
-    var options = slider_entry_defaults.override(opts);
-    if (options.min_size_content == null) {
-        const msize = options.fontGet().textSize("M") catch unreachable;
-        options.min_size_content = .{ .w = msize.w * 10, .h = msize.h };
-    }
+    var options = slider_entry_defaults.addSizeM(10, 1).override(opts);
 
     var ret = false;
     var hover = false;

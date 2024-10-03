@@ -81,8 +81,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     self.init_opts = init_opts;
     self.text_opt = init_opts.text orelse .{ .internal = .{} };
 
-    const msize = opts.fontGet().textSize("M") catch unreachable;
-    var options = defaults.override(.{ .min_size_content = .{ .w = msize.w * 14, .h = msize.h } }).override(opts);
+    var options = defaults.addSizeM(14, 1).override(opts);
 
     // padding is interpreted as the padding for the TextLayoutWidget, but
     // we also need to add it to content size because TextLayoutWidget is
