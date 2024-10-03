@@ -1513,31 +1513,83 @@ pub fn focus() !void {
 
 pub fn scrolling() !void {
     const Data = struct {
-        var msg_start: usize = 10_000;
-        var msg_end: usize = 10_100;
+        var msg_start: usize = 1_000;
+        var msg_end: usize = 1_100;
         var scroll_info: ScrollInfo = .{};
     };
 
     var scroll_to_msg: ?usize = null;
+    var scroll_to_bottom_after = false;
+    var scroll_lock_visible = false;
 
     var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
     defer hbox.deinit();
     {
-        var vbox = try dvui.box(@src(), .vertical, .{});
+        var vbox = try dvui.box(@src(), .vertical, .{ .expand = .vertical });
         defer vbox.deinit();
 
         if (try dvui.button(@src(), "Scroll to Top", .{}, .{})) {
             Data.scroll_info.scrollToOffset(.vertical, 0);
         }
 
-        if (try dvui.button(@src(), "Scroll to msg:", .{}, .{})) {
-            scroll_to_msg = 0;
+        {
+            var h2 = try dvui.box(@src(), .horizontal, .{});
+            defer h2.deinit();
+            if (try dvui.button(@src(), "Add Above", .{}, .{})) {
+                Data.msg_start -|= 10;
+            }
+
+            if (try dvui.button(@src(), "Del Above", .{}, .{})) {
+                Data.msg_start = @min(Data.msg_end, Data.msg_start + 10);
+            }
         }
-        const result = try dvui.textEntryNumber(@src(), usize, .{ .min = Data.msg_start, .max = Data.msg_end }, .{});
-        if (result.value != .Valid) {
-            try displayTextEntryNumberResult(result);
-        } else if (scroll_to_msg != null or result.enter_pressed) {
+
+        if (try dvui.button(@src(), "Add Above No Scroll", .{}, .{})) {
+            Data.msg_start -|= 10;
+            scroll_lock_visible = true;
+        }
+
+        if (try dvui.button(@src(), "Del Above No Scroll", .{}, .{})) {
+            Data.msg_start = @min(Data.msg_end, Data.msg_start + 10);
+            scroll_lock_visible = true;
+        }
+
+        _ = try dvui.spacer(@src(), .{}, .{ .expand = .vertical });
+
+        try dvui.label(@src(), "Scroll to msg:", .{}, .{});
+        const result = try dvui.textEntryNumber(@src(), usize, .{ .min = Data.msg_start, .max = Data.msg_end }, dvui.Options.sizeM(8, 1));
+        const label = switch (result.value) {
+            .TooBig => "Too Big",
+            .TooSmall => "Too Small",
+            .Invalid => "Invalid",
+            .Valid, .Empty => " ",
+        };
+        try dvui.labelNoFmt(@src(), label, .{});
+        if (result.value == .Valid and result.enter_pressed) {
             scroll_to_msg = result.value.Valid;
+        }
+
+        _ = try dvui.spacer(@src(), .{}, .{ .expand = .vertical });
+
+        {
+            var h2 = try dvui.box(@src(), .horizontal, .{});
+            defer h2.deinit();
+            if (try dvui.button(@src(), "Add Below", .{}, .{})) {
+                Data.msg_end += 10;
+            }
+
+            if (try dvui.button(@src(), "Del Below", .{}, .{})) {
+                Data.msg_end = @max(Data.msg_start, Data.msg_end - 10);
+            }
+        }
+
+        if (try dvui.button(@src(), "Add Below + Scroll", .{}, .{})) {
+            Data.msg_end += 10;
+            scroll_to_bottom_after = true;
+        }
+
+        if (try dvui.button(@src(), "Scroll to Bottom", .{}, .{})) {
+            Data.scroll_info.scrollToOffset(.vertical, std.math.maxInt(usize));
         }
     }
     {
@@ -1546,10 +1598,10 @@ pub fn scrolling() !void {
 
         try dvui.label(@src(), "{d:0>4.2}% visible, offset {d} frac {d:0>4.2}", .{ Data.scroll_info.visibleFraction(.vertical) * 100.0, Data.scroll_info.viewport.y, Data.scroll_info.offsetFraction(.vertical) }, .{});
 
-        var scroll = try dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info }, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 } });
+        var scroll = try dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info, .lock_visible = scroll_lock_visible }, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 } });
         defer scroll.deinit();
 
-        for (Data.msg_start..Data.msg_end) |i| {
+        for (Data.msg_start..Data.msg_end + 1) |i| {
             var tl = try dvui.textLayout(@src(), .{}, .{ .id_extra = i, .color_fill = .{ .name = .fill_window } });
             try tl.format("Message {d}", .{i}, .{});
 
@@ -1565,6 +1617,11 @@ pub fn scrolling() !void {
         }
 
         //const visibleRect = scroll.si.viewport;
+    }
+
+    if (scroll_to_bottom_after) {
+        // do this after scrollArea has given scroll_info the new size
+        Data.scroll_info.scrollToOffset(.vertical, std.math.maxInt(usize));
     }
 
     // todo: add button to show icon browser with note about how that works

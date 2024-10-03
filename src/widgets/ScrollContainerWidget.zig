@@ -36,6 +36,10 @@ nextVirtualSize: Size = Size{},
 expand_to_fit: bool = false,
 next_widget_ypos: f32 = 0, // goes from 0 to viritualSize.h
 
+lock_visible: bool = false,
+first_visible_id: u32 = 0,
+first_visible_offset: Point = Point{}, // offset of top left of first visible widget from viewport
+
 inject_capture_id: ?u32 = null,
 seen_scroll_drag: bool = false,
 
@@ -82,6 +86,12 @@ pub fn install(self: *ScrollContainerWidget) !void {
     self.prevClip = dvui.clip(self.wd.contentRectScale().r);
 
     self.frame_viewport = self.si.viewport.topLeft();
+    if (self.lock_visible) {
+        // we don't want to see anything until we find first_visible_id
+        self.first_visible_id = dvui.dataGet(null, self.wd.id, "_fv_id", u32) orelse 0;
+        self.first_visible_offset = dvui.dataGet(null, self.wd.id, "_fv_offset", Point) orelse .{};
+        self.frame_viewport = .{ .x = -10000, .y = -10000 };
+    }
 
     dvui.parentSet(self.widget());
 }
@@ -108,6 +118,9 @@ pub fn processEvents(self: *ScrollContainerWidget) void {
 
     // might have changed from events
     self.frame_viewport = self.si.viewport.topLeft();
+    if (self.lock_visible) {
+        self.frame_viewport = .{ .x = -10000, .y = -10000 };
+    }
 }
 
 pub fn processVelocity(self: *ScrollContainerWidget) void {
@@ -177,6 +190,9 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
 
     // might have changed from events
     self.frame_viewport = self.si.viewport.topLeft();
+    if (self.lock_visible) {
+        self.frame_viewport = .{ .x = -10000, .y = -10000 };
+    }
 }
 
 pub fn widget(self: *ScrollContainerWidget) Widget {
@@ -190,15 +206,37 @@ pub fn data(self: *ScrollContainerWidget) *WidgetData {
 pub fn rectFor(self: *ScrollContainerWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     const y = self.next_widget_ypos;
 
-    // Our virtual size might be smaller than our viewport, and the child could
-    // be expanded, so we want them to take all available space.
-    const maxh = @max(self.si.virtual_size.h, self.si.viewport.h);
+    const ms = dvui.minSize(id, min_size);
+    const h = switch (self.si.vertical) {
+        // no scrolling, you only get the visible space
+        .none => self.si.viewport.h - y,
+
+        // you get the space you need or more if there is extra visible space
+        // and you are expanded
+        .auto => @max(self.si.viewport.h - y, ms.h),
+
+        // you get the given space
+        .given => self.si.virtual_size.h - y,
+    };
+
+    // todo: do horizontal properly
     const maxw = @max(self.si.virtual_size.w, self.si.viewport.w);
 
-    const h = maxh - y;
     const rect = Rect{ .x = 0, .y = y, .w = maxw, .h = h };
-    const ret = dvui.placeIn(rect, dvui.minSize(id, min_size), e, g);
-    self.next_widget_ypos = (ret.y + ret.h);
+    const ret = dvui.placeIn(rect, ms, e, g);
+
+    if (self.lock_visible and self.first_visible_id == id) {
+        self.frame_viewport.x = 0; // todo
+        self.frame_viewport.y = y + self.first_visible_offset.y;
+        self.si.viewport.x = self.frame_viewport.x;
+        self.si.viewport.y = self.frame_viewport.y;
+    }
+
+    if (ret.y <= self.frame_viewport.y and self.frame_viewport.y < (ret.y + ret.h)) {
+        self.first_visible_id = id;
+        self.first_visible_offset = Point.diff(self.frame_viewport, ret.topLeft());
+    }
+
     return ret;
 }
 
@@ -211,6 +249,7 @@ pub fn screenRectScale(self: *ScrollContainerWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *ScrollContainerWidget, s: Size) void {
+    self.next_widget_ypos += s.h;
     self.nextVirtualSize.h += s.h;
     self.nextVirtualSize.w = @max(self.nextVirtualSize.w, s.w);
     const padded = self.wd.padSize(self.nextVirtualSize);
@@ -487,6 +526,8 @@ pub fn deinit(self: *ScrollContainerWidget) void {
         self.processEventsAfter();
     }
 
+    dvui.dataSet(null, self.wd.id, "_fv_id", self.first_visible_id);
+    dvui.dataSet(null, self.wd.id, "_fv_offset", self.first_visible_offset);
     dvui.dataSet(null, self.wd.id, "_finger_down", self.finger_down);
 
     if (self.inject_capture_id) |ci| {
