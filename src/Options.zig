@@ -318,6 +318,14 @@ pub fn override(self: *const Options, over: Options) Options {
     return ret;
 }
 
+pub fn addSizeM(self: *const Options, wide: f32, tall: f32) Options {
+    return self.override(.{ .min_size_content = self.fontGet().sizeM(wide, tall) });
+}
+
+pub fn sizeM(wide: f32, tall: f32) Options {
+    return (Options{}).addSizeM(wide, tall);
+}
+
 //pub fn format(self: *const Options, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
 //    try std.fmt.format(writer, "Options{{ .background = {?}, .color_style = {?} }}", .{ self.background, self.color_style });
 //}

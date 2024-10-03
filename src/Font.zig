@@ -18,6 +18,15 @@ pub fn lineHeightFactor(self: *const Font, factor: f32) Font {
     return Font{ .size = self.size, .line_height_factor = factor, .name = self.name };
 }
 
+pub fn sizeM(self: *const Font, wide: f32, tall: f32) Size {
+    const msize: Size = self.textSize("M") catch |err| blk: {
+        dvui.log.err("font \"{s}\" sizeM() got {!}", .{ self.name, err });
+        break :blk .{ .w = 10, .h = 10 };
+    };
+
+    return .{ .w = msize.w * wide, .h = msize.h * tall };
+}
+
 // handles multiple lines
 pub fn textSize(self: *const Font, text: []const u8) !Size {
     if (text.len == 0) {
