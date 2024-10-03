@@ -5628,6 +5628,7 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
         min: ?T = null,
         max: ?T = null,
         value: ?*T = null,
+        show_min_max: bool = false,
     };
 }
 
@@ -5709,7 +5710,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     }
 
     // display min/max
-    if (te.getText().len == 0) {
+    if (te.getText().len == 0 and init_opts.show_min_max) {
         var minmax_buffer: [64]u8 = undefined;
         var minmax_text: []const u8 = "";
         if (init_opts.min != null and init_opts.max != null) {

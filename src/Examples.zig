@@ -800,7 +800,7 @@ pub fn textEntryWidgets() !void {
 
         inline for (parse_types, 0..) |T, i| {
             if (i == S.type_dropdown_val) {
-                const result = try dvui.textEntryNumber(@src(), T, .{ .min = if (S.min) 0 else null, .max = if (S.max) 100 else null }, .{});
+                const result = try dvui.textEntryNumber(@src(), T, .{ .min = if (S.min) 0 else null, .max = if (S.max) 100 else null, .show_min_max = true }, .{});
                 try displayTextEntryNumberResult(result);
             }
         }
