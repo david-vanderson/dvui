@@ -106,9 +106,9 @@ const shader =
     \\
     \\float4 PSMain(PSInput input) : SV_TARGET
     \\{
-    \\    //float4 sampled = myTexture.Sample(samplerState, input.texcoord);
-    \\    //return sampled;
-    \\    return input.color;
+    \\    float4 sampled = myTexture.Sample(samplerState, input.texcoord);
+    \\    return sampled * input.color;
+    \\    
     \\}
 ;
 
@@ -139,14 +139,21 @@ fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex, zero_uvs: bool)
 }
 
 pub fn setViewport(self: *Dx11Backend) void {
-    var vp: dx.D3D11_VIEWPORT = undefined;
-    vp.Width = self.width;
-    vp.Height = self.height;
-    vp.MinDepth = 0.0;
-    vp.MaxDepth = 1.0;
-    vp.TopLeftX = 0;
-    vp.TopLeftY = 0;
+    var vp = dx.D3D11_VIEWPORT{
+        .TopLeftX = 0.0,
+        .TopLeftY = 0.0,
+        .Width = self.width,
+        .Height = self.height,
+        .MinDepth = 0.0,
+        .MaxDepth = 1.0,
+    };
+
     self.device_context.RSSetViewports(1, @ptrCast(&vp));
+}
+
+pub fn setDimensions(self: *Dx11Backend, rect: RECT) void {
+    self.width = @floatFromInt(rect.right - rect.left);
+    self.height = @floatFromInt(rect.bottom - rect.top);
 }
 
 pub fn init(options: InitOptions, dx_options: Directx11Options) !Dx11Backend {
@@ -459,6 +466,7 @@ pub fn drawClippedTriangles(
     idx: []const u16,
     clipr: dvui.Rect,
 ) void {
+    self.setViewport();
     if (self.render_target == null) {
         self.createRenderTarget() catch |err| {
             std.debug.print("render target could not be initialized: {any}\n", .{err});
@@ -493,7 +501,7 @@ pub fn drawClippedTriangles(
 
     var stride: usize = @sizeOf(SimpleVertex);
     var offset: usize = 0;
-    const converted_vtx = self.convertVertices(vtx, true) catch @panic("OOM");
+    const converted_vtx = self.convertVertices(vtx, false) catch @panic("OOM");
     defer self.arena.free(converted_vtx);
 
     self.dx_options.vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {

@@ -75,6 +75,10 @@ pub export fn main(
         _ = ShowWindow(wnd, cmd_show);
         _ = UpdateWindow(wnd);
 
+        var rect = std.mem.zeroes(zwin.foundation.RECT);
+        _ = ui.GetWindowRect(wnd, &rect);
+
+        backend.setDimensions(rect);
         backend.setViewport(); // for now: fixed values :)
 
         var win = dvui.Window.init(@src(), gpa, backend.backend(), .{}) catch return 1;
@@ -98,6 +102,11 @@ pub export fn main(
                     continue;
                 };
             }
+
+            rect = std.mem.zeroes(zwin.foundation.RECT);
+            _ = ui.GetWindowRect(wnd, &rect);
+
+            backend.setDimensions(rect);
 
             win.begin(std.time.nanoTimestamp()) catch {
                 log.err("win.begin() failed.", .{});
