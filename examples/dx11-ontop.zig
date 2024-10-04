@@ -106,9 +106,31 @@ pub export fn main(
 
             log.info("post begin", .{});
 
-            dvui_floating_stuff() catch {
-                log.err("Oh no something went horribly wrong!", .{});
+             //dvui_floating_stuff() catch {
+                 //log.err("Oh no something went horribly wrong!", .{});
+             //};
+
+            _ = dvui.button(@src(), "button", .{}, .{}) catch {};
+
+             {
+            const vtx = [_]dvui.Vertex{
+                .{ .pos = .{ .x = 100, .y = 100 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+                .{ .pos = .{ .x = 200, .y = 100 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+                .{ .pos = .{ .x = 200, .y = 200 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
             };
+            const idx = [_]u16{ 0, 2, 1 };
+            backend.drawClippedTriangles(null, &vtx, &idx, .{ .x = 0, .y = 0, .w = 400, .h = 400 });
+             }
+
+             {
+            const vtx = [_]dvui.Vertex{
+                .{ .pos = .{ .x = 300, .y = 300 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+                .{ .pos = .{ .x = 400, .y = 300 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+                .{ .pos = .{ .x = 400, .y = 400 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+            };
+            const idx = [_]u16{ 0, 1, 2 };
+            backend.drawClippedTriangles(null, &vtx, &idx, .{ .x = 0, .y = 0, .w = 400, .h = 400 });
+             }
 
             log.info("post dvui_floating_stuff", .{});
 
