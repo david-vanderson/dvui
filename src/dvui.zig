@@ -1611,11 +1611,18 @@ pub fn FPS() f32 {
     return currentWindow().FPS();
 }
 
+/// Get the Widget that would be the parent of a new widget.
+///
+/// dvui.parentGet().extendId(@src, id_extra) is how new widgets get their id.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn parentGet() Widget {
     return currentWindow().wd.parent;
 }
 
-/// Make a new widget the current parent.
+/// Make w the new parent widget.  See parentGet().
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn parentSet(w: Widget) void {
     const cw = currentWindow();
     cw.wd.parent = w;
@@ -1658,22 +1665,50 @@ pub fn renderingSet(r: bool) bool {
     return ret;
 }
 
+/// Get the OS window size in natural pixels.  Physical pixels might be more on
+/// a hidpi screen or if the user has content scaling.  See windowRectPixels().
+///
+/// Natural pixels is the unit for subwindow sizing and placement.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn windowRect() Rect {
     return currentWindow().wd.rect;
 }
 
+/// Get the OS window size in pixels.  See windowRect().
+///
+/// Pixels is the unit for rendering and user input.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn windowRectPixels() Rect {
     return currentWindow().rect_pixels;
 }
 
+/// Get the Rect and scale factor for the OS window.  The Rect is in pixels,
+/// and the scale factor is how many pixels per natural pixel.  See
+/// windowRect().
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn windowRectScale() RectScale {
     return .{ .r = currentWindow().rect_pixels, .s = currentWindow().natural_scale };
 }
 
+/// The natural scale is how many pixels per natural pixel.  Useful for
+/// converting between user input and subwindow size/position.  See
+/// windowRect().
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn windowNaturalScale() f32 {
     return currentWindow().natural_scale;
 }
 
+/// True if this is the first frame we've seen this widget id, meaning we don't
+/// know its min size yet.  The widget will record its min size in deinit().
+///
+/// If a widget is not seen for a frame, its min size will be forgotten and
+/// firstFrame will return true the next frame we see it.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn firstFrame(id: u32) bool {
     return minSizeGet(id) == null;
 }
