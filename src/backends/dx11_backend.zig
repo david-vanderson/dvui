@@ -241,7 +241,7 @@ fn initShader(self: *Dx11Backend) !void {
     }
 }
 
-fn createRenderTarget(self: *Dx11Backend) !void {
+pub fn createRenderTarget(self: *Dx11Backend) !void {
     var back_buffer: ?*dx.ID3D11Texture2D = null;
 
     _ = self.swap_chain.GetBuffer(0, dx.IID_ID3D11Texture2D, @ptrCast(&back_buffer));
@@ -252,6 +252,21 @@ fn createRenderTarget(self: *Dx11Backend) !void {
         null,
         &self.render_target,
     );
+}
+
+pub fn cleanupRenderTarget(self: *Dx11Backend) void {
+    if (self.render_target) |mrtv| {
+        _ = mrtv.IUnknown.Release();
+        self.render_target = null;
+    }
+}
+
+pub fn handleSwapChainResizing(self: *Dx11Backend, width: *c_uint, height: *c_uint) !void {
+    self.cleanupRenderTarget();
+    _ = self.swap_chain.vtable.ResizeBuffers(self.swap_chain, 0, width.*, height.*, dxgic.DXGI_FORMAT_UNKNOWN, 0);
+    width.* = 0;
+    height.* = 0;
+    try self.createRenderTarget();
 }
 
 fn createInputLayout(self: *Dx11Backend) !void {
@@ -416,40 +431,35 @@ pub fn drawClippedTriangles(
         };
     }
 
-    _ = idx;
-    _ = vtx;
+    var stride: usize = @sizeOf(dvui.Vertex);
+    var offset: usize = 0;
+    const converted_vtx = self.convertVertices(vtx) catch @panic("OOM");
+    var vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {
+        std.debug.print("no vertex buffer created\n", .{});
+        return;
+    };
+    const index_buffer = self.createBuffer(dx.D3D11_BIND_INDEX_BUFFER, u16, idx) catch {
+        std.debug.print("no index buffer created\n", .{});
+        return;
+    };
+    self.device_context.IASetVertexBuffers(0, 1, @ptrCast(&vertex_buffer), @ptrCast(&stride), @ptrCast(&offset));
+    self.device_context.IASetIndexBuffer(index_buffer, dxgic.DXGI_FORMAT.R16_UINT, 0);
+    self.device_context.IASetPrimitiveTopology(d3d.D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    //var clear_color = [_]f32{ 0.10, 0.10, 0.10, 0.0 };
-
-    //var stride: usize = @sizeOf(dvui.Vertex);
-    //var offset: usize = 0;
-    //const converted_vtx = self.convertVertices(vtx) catch @panic("OOM");
-    //const vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {
-    //    std.debug.print("no vertex buffer created\n", .{});
-    //    return;
-    //};
-    //const index_buffer = self.createBuffer(dx.D3D11_BIND_INDEX_BUFFER, u16, idx) catch {
-    //    std.debug.print("no index buffer created\n", .{});
-    //    return;
-    //};
-    //self.device_context.IASetVertexBuffers(0, 1, @ptrCast(vertex_buffer), @ptrCast(&stride), @ptrCast(&offset));
-    //self.device_context.IASetIndexBuffer(index_buffer, dxgic.DXGI_FORMAT.R16_UINT, 0);
-    //self.device_context.IASetPrimitiveTopology(d3d.D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    //self.device_context.vtable.OMSetRenderTargets(self.device_context, 1, @ptrCast(self.render_target), null);
-    //self.device_context.vtable.ClearRenderTargetView(self.device_context, self.render_target, @ptrCast((&clear_color).ptr));
-    //self.device_context.vtable.VSSetShader(self.device_context, self.dx_options.vertex_shader, null, 0);
-    //self.device_context.vtable.PSSetShader(self.device_context, self.dx_options.pixel_shader, null, 0);
-    //self.device_context.vtable.PSSetShaderResources(self.device_context, 0, 1, @ptrCast(self.dx_options.sampler));
-    //self.device_context.PSSetSamplers(0, 1, @ptrCast(&self.dx_options.sampler));
-    //self.device_context.DrawIndexed(@intCast(idx.len), 0, 0);
-
-    //_ = self.swap_chain.Present(0, 0);
+    self.device_context.OMSetRenderTargets(1, @ptrCast(&self.render_target), null);
+    var clear_color = [_]f32{ 0.10, 0.10, 0.10, 0.0 };
+    self.device_context.ClearRenderTargetView(self.render_target, @ptrCast((&clear_color).ptr));
+    self.device_context.VSSetShader(self.dx_options.vertex_shader, null, 0);
+    self.device_context.PSSetShader(self.dx_options.pixel_shader, null, 0);
+    self.device_context.PSSetShaderResources(0, 1, @ptrCast(&self.dx_options.texture_view));
+    self.device_context.PSSetSamplers(0, 1, @ptrCast(&self.dx_options.sampler));
+    self.device_context.DrawIndexed(@intCast(idx.len), 0, 0);
 }
 
 pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
-    _ = self;
     _ = arena;
+
+    _ = self.swap_chain.Present(0, 0);
 }
 
 pub fn end(_: *Dx11Backend) void {}
