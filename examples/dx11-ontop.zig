@@ -89,6 +89,13 @@ pub export fn main(
                 }
             }
 
+            if (resize_width != 0 and resize_height != 0) {
+                backend.handleSwapChainResizing(&resize_width, &resize_height) catch {
+                    log.err("Failed to handle swap chain resizing...", .{});
+                    continue;
+                };
+            }
+
             win.begin(std.time.nanoTimestamp()) catch {
                 log.err("win.begin() failed.", .{});
                 return 1;
@@ -97,16 +104,16 @@ pub export fn main(
             log.info("post begin", .{});
 
             //dvui_floating_stuff() catch {
-                //log.err("Oh no something went horribly wrong!", .{});
+            //log.err("Oh no something went horribly wrong!", .{});
             //};
 
             const vtx = [_]dvui.Vertex{
-                .{.pos = .{ .x = 100, .y = 100}, .col = dvui.Color.black, .uv = .{0, 0}},
-                .{.pos = .{ .x = 200, .y = 100}, .col = dvui.Color.black, .uv = .{0, 0}},
-                .{.pos = .{ .x = 200, .y = 200}, .col = dvui.Color.black, .uv = .{0, 0}},
+                .{ .pos = .{ .x = 100, .y = 100 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+                .{ .pos = .{ .x = 200, .y = 100 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+                .{ .pos = .{ .x = 200, .y = 200 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
             };
-            const idx = [_]u16{0, 1, 2};
-            backend.drawClippedTriangles(null, &vtx, &idx, .{.x = 0, .y = 0, .w = 400, .h = 400});
+            const idx = [_]u16{ 0, 1, 2 };
+            backend.drawClippedTriangles(null, &vtx, &idx, .{ .x = 0, .y = 0, .w = 400, .h = 400 });
 
             log.info("post dvui_floating_stuff", .{});
 
