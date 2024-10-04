@@ -13,6 +13,16 @@ const ScrollAreaWidget = dvui.ScrollAreaWidget;
 
 const FloatingMenuWidget = @This();
 
+// this lets us maintain a chain of all the nested FloatingMenuWidgets without
+// forcing the user to manually do it
+var popup_current: ?*FloatingMenuWidget = null;
+
+fn popupSet(p: ?*FloatingMenuWidget) ?*FloatingMenuWidget {
+    const ret = popup_current;
+    popup_current = p;
+    return ret;
+}
+
 pub var defaults: Options = .{
     .name = "FloatingMenu",
     .corner_radius = Rect.all(5),
@@ -61,7 +71,7 @@ pub fn install(self: *FloatingMenuWidget) !void {
     dvui.parentSet(self.widget());
 
     self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id);
-    self.parent_popup = dvui.popupSet(self);
+    self.parent_popup = popupSet(self);
 
     if (dvui.minSizeGet(self.wd.id)) |_| {
         self.wd.rect = Rect.fromPoint(self.initialRect.topLeft());
@@ -225,7 +235,7 @@ pub fn deinit(self: *FloatingMenuWidget) void {
 
     // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();
 
-    _ = dvui.popupSet(self.parent_popup);
+    _ = popupSet(self.parent_popup);
     dvui.parentReset(self.wd.id, self.wd.parent);
     _ = dvui.subwindowCurrentSet(self.prev_windowId);
     dvui.clipSet(self.prevClip);

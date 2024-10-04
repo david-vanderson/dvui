@@ -1657,13 +1657,6 @@ pub fn renderingSet(r: bool) bool {
     return ret;
 }
 
-pub fn popupSet(p: ?*FloatingMenuWidget) ?*FloatingMenuWidget {
-    const cw = currentWindow();
-    const ret = cw.popup_current;
-    cw.popup_current = p;
-    return ret;
-}
-
 pub fn menuGet() ?*MenuWidget {
     return currentWindow().menu_current;
 }
@@ -2317,7 +2310,6 @@ pub const Window = struct {
     clipRect: Rect = Rect{},
 
     menu_current: ?*MenuWidget = null,
-    popup_current: ?*FloatingMenuWidget = null,
     theme: Theme = undefined,
 
     min_sizes: std.AutoHashMap(u32, SavedSize),
