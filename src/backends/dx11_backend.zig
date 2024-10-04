@@ -30,6 +30,9 @@ touch_mouse_events: bool = false,
 log_events: bool = false,
 initial_scale: f32 = 1.0,
 
+width: f32 = 1280.0,
+height: f32 = 760.0,
+
 // TODO: Figure out cursor situation
 // cursor_last: dvui.enums.Cursor = .arrow,
 // something dx cursor
@@ -106,6 +109,14 @@ const shader =
     \\}
 ;
 
+fn convertSpaceToNDC(self: *Dx11Backend, x: f32, y: f32) XMFLOAT3 {
+    return XMFLOAT3{
+        .x = (2.0 * x / self.width) - 1.0,
+        .y = 1.0 - (2.0 * y / self.height),
+        .z = 0.0,
+    };
+}
+
 fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex) ![]SimpleVertex {
     const simple_vertex = try self.arena.alloc(SimpleVertex, vtx.len);
     for (vtx, simple_vertex) |v, *s| {
@@ -114,13 +125,24 @@ fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex) ![]SimpleVertex
         const b: f32 = @floatFromInt(v.col.b);
         const a: f32 = @floatFromInt(v.col.a);
         s.* = .{
-            .position = .{ .x = v.pos.x, .y = v.pos.y, .z = 0.0 },
+            .position = self.convertSpaceToNDC(v.pos.x, v.pos.y),
             .color = .{ .r = r / 255.0, .g = g / 255.0, .b = b / 255.0, .a = a / 255.0 },
             .texcoord = .{ .x = v.uv[0], .y = v.uv[1] },
         };
     }
 
     return simple_vertex;
+}
+
+pub fn setViewport(self: *Dx11Backend) void {
+    var vp: dx.D3D11_VIEWPORT = undefined;
+    vp.Width = self.width;
+    vp.Height = self.height;
+    vp.MinDepth = 0.0;
+    vp.MaxDepth = 1.0;
+    vp.TopLeftX = 0;
+    vp.TopLeftY = 0;
+    self.device_context.RSSetViewports(1, @ptrCast(&vp));
 }
 
 pub fn init(options: InitOptions, dx_options: Directx11Options) !Dx11Backend {
@@ -228,10 +250,9 @@ fn initShader(self: *Dx11Backend) !void {
     }
 
     self.dx_options.pixel_bytes = ps_blob.?;
-    const create_ps = self.device.vtable.CreatePixelShader(
-        self.device,
-        @ptrCast(ps_blob.?.vtable.GetBufferPointer(ps_blob.?)),
-        ps_blob.?.vtable.GetBufferSize(ps_blob.?),
+    const create_ps = self.device.CreatePixelShader(
+        @ptrCast(ps_blob.?.GetBufferPointer()),
+        ps_blob.?.GetBufferSize(),
         null,
         &self.dx_options.pixel_shader,
     );
@@ -281,7 +302,7 @@ fn createInputLayout(self: *Dx11Backend) !void {
     const res = self.device.CreateInputLayout(
         input_layout_desc,
         num_elements,
-        @ptrCast(self.dx_options.vertex_bytes.?.GetBufferPointer().?),
+        @ptrCast(self.dx_options.vertex_bytes.?.GetBufferPointer()),
         self.dx_options.vertex_bytes.?.GetBufferSize(),
         &self.dx_options.vertex_layout,
     );
@@ -290,7 +311,7 @@ fn createInputLayout(self: *Dx11Backend) !void {
         return error.VertexLayoutCreationFailed;
     }
 
-    self.device_context.vtable.IASetInputLayout(self.device_context, self.dx_options.vertex_layout);
+    self.device_context.IASetInputLayout(self.dx_options.vertex_layout);
 }
 
 pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32, ti: dvui.enums.TextureInterpolation) *anyopaque {
@@ -332,10 +353,12 @@ pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32,
     rvd = .{
         .Format = dxgic.DXGI_FORMAT.R8G8B8A8_UNORM,
         .ViewDimension = @enumFromInt(4), // DIMENSION_TEXTURE2D
-        .Anonymous = .{ .Texture2D = .{
-            .MostDetailedMip = 0,
-            .MipLevels = 1,
-        } },
+        .Anonymous = .{
+            .Texture2D = .{
+                .MostDetailedMip = 0,
+                .MipLevels = 1,
+            },
+        },
     };
 
     const rv_result = self.device.vtable.CreateShaderResourceView(
@@ -403,6 +426,13 @@ pub fn drawClippedTriangles(
 ) void {
     _ = texture; // autofix
     _ = clipr; // autofix
+    if (self.render_target == null) {
+        self.createRenderTarget() catch |err| {
+            std.debug.print("render target could not be initialized: {any}\n", .{err});
+            return;
+        };
+    }
+
     if (self.dx_options.vertex_shader == null or self.dx_options.pixel_shader == null) {
         self.initShader() catch |err| {
             std.debug.print("shaders could not be initialized: {any}\n", .{err});
@@ -417,13 +447,6 @@ pub fn drawClippedTriangles(
         };
     }
 
-    if (self.render_target == null) {
-        self.createRenderTarget() catch |err| {
-            std.debug.print("render target could not be initialized: {any}\n", .{err});
-            return;
-        };
-    }
-
     if (self.dx_options.sampler == null) {
         self.createSampler() catch |err| {
             std.debug.print("sampler could not be initialized: {any}\n", .{err});
@@ -431,7 +454,7 @@ pub fn drawClippedTriangles(
         };
     }
 
-    var stride: usize = @sizeOf(dvui.Vertex);
+    var stride: usize = @sizeOf(SimpleVertex);
     var offset: usize = 0;
     const converted_vtx = self.convertVertices(vtx) catch @panic("OOM");
     var vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {

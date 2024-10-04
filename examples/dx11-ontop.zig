@@ -51,6 +51,7 @@ pub export fn main(
     _: ?LPWSTR,
     cmd_show: INT,
 ) callconv(WINAPI) INT {
+    defer _ = gpa_instance.deinit();
     createWindow(instance);
     defer _ = ReleaseDC(wnd, wnd_dc);
     defer _ = UnregisterClassW(wnd_title, instance);
@@ -70,6 +71,8 @@ pub export fn main(
         var backend = Dx11Backend.init(init_options, options) catch return 1;
         defer backend.deinit();
         log.info("Dx11 backend also init.", .{});
+
+        backend.setViewport(); // for now: fixed values :)
 
         var win = dvui.Window.init(@src(), gpa, backend.backend(), .{}) catch return 1;
         log.info("dvui window also init.", .{});
@@ -103,9 +106,9 @@ pub export fn main(
 
             log.info("post begin", .{});
 
-            //dvui_floating_stuff() catch {
-            //log.err("Oh no something went horribly wrong!", .{});
-            //};
+            // dvui_floating_stuff() catch {
+            //     log.err("Oh no something went horribly wrong!", .{});
+            // };
 
             const vtx = [_]dvui.Vertex{
                 .{ .pos = .{ .x = 100, .y = 100 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
