@@ -6,8 +6,10 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const dvui_sdl = addDvuiModule(b, target, optimize, .sdl);
-    const dvui_raylib = addDvuiModule(b, target, optimize, .raylib);
+    const link_backend = b.option(bool, "link_backend", "Should dvui link the chosen backend?") orelse true;
+
+    const dvui_sdl = addDvuiModule(b, target, optimize, link_backend, .sdl);
+    const dvui_raylib = addDvuiModule(b, target, optimize, link_backend, .raylib);
 
     addExample(b, target, optimize, "sdl-standalone", dvui_sdl);
     addExample(b, target, optimize, "sdl-ontop", dvui_sdl);
@@ -101,6 +103,7 @@ fn addDvuiModule(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    link_backend: bool,
     comptime backend: Backend,
 ) *std.Build.Module {
     const dvui_mod = b.addModule("dvui_" ++ @tagName(backend), .{
@@ -128,40 +131,50 @@ fn addDvuiModule(
     dvui_mod.addCSourceFiles(.{ .files = &.{
         "src/stb/stb_truetype_impl.c",
     } });
-    switch (backend) {
-        .raylib => {
-            var raylib_linux_display: []const u8 = "Both";
-            _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
-                error.EnvironmentVariableNotFound => raylib_linux_display = "X11",
-                else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
-            };
-            const maybe_ray = b.lazyDependency("raylib", .{ .target = target, .optimize = optimize, .linux_display_backend = raylib_linux_display });
-            if (maybe_ray) |ray| {
-                backend_mod.linkLibrary(ray.artifact("raylib"));
-                // This seems wonky to me, but is copied from raylib's src/build.zig
-                if (b.lazyDependency("raygui", .{})) |raygui_dep| {
-                    if (b.lazyImport(@This(), "raylib")) |raylib_build| {
-                        raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
+
+    if (link_backend) {
+        switch (backend) {
+            .raylib => {
+                var raylib_linux_display: []const u8 = "Both";
+                _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
+                    error.EnvironmentVariableNotFound => raylib_linux_display = "X11",
+                    else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
+                };
+                const maybe_ray = b.lazyDependency(
+                    "raylib",
+                    .{
+                        .target = target,
+                        .optimize = optimize,
+                        .linux_display_backend = raylib_linux_display,
+                    },
+                );
+                if (maybe_ray) |ray| {
+                    backend_mod.linkLibrary(ray.artifact("raylib"));
+                    // This seems wonky to me, but is copied from raylib's src/build.zig
+                    if (b.lazyDependency("raygui", .{})) |raygui_dep| {
+                        if (b.lazyImport(@This(), "raylib")) |raylib_build| {
+                            raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
+                        }
                     }
                 }
-            }
-        },
-        .sdl => {
-            dvui_mod.addCSourceFiles(.{ .files = &.{
-                "src/stb/stb_image_impl.c",
-            } });
-            if (b.systemIntegrationOption("sdl2", .{})) {
-                backend_mod.linkSystemLibrary("SDL2", .{});
-            } else {
-                const sdl_dep = b.lazyDependency("sdl", .{
-                    .target = target,
-                    .optimize = optimize,
-                });
-                if (sdl_dep) |sd| {
-                    backend_mod.linkLibrary(sd.artifact("SDL2"));
+            },
+            .sdl => {
+                dvui_mod.addCSourceFiles(.{ .files = &.{
+                    "src/stb/stb_image_impl.c",
+                } });
+                if (b.systemIntegrationOption("sdl2", .{})) {
+                    backend_mod.linkSystemLibrary("SDL2", .{});
+                } else {
+                    const sdl_dep = b.lazyDependency("sdl", .{
+                        .target = target,
+                        .optimize = optimize,
+                    });
+                    if (sdl_dep) |sd| {
+                        backend_mod.linkLibrary(sd.artifact("SDL2"));
+                    }
                 }
-            }
-        },
+            },
+        }
     }
     dvui_mod.addIncludePath(b.path("src/stb"));
 
