@@ -275,7 +275,7 @@ fn dvui_floating_stuff() !void {
     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
     defer scroll.deinit();
 
-    const tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
     const lorem = "This example shows how to use dvui for floating windows on top of an existing application.";
     try tl.addText(lorem, .{});
     tl.deinit();
