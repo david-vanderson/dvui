@@ -87,7 +87,7 @@ fn gui_frame(backend: Backend) !void {
             defer fw.deinit();
 
             if (try dvui.menuItemLabel(@src(), "Close Menu", .{}, .{}) != null) {
-                dvui.menuGet().?.close();
+                m.close();
             }
         }
 

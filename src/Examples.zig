@@ -633,7 +633,7 @@ pub fn dropdownAdvanced() !void {
             try dvui.labelNoFmt(@src(), "icon with text", opts);
 
             if (mi.activeRect()) |_| {
-                dvui.menuGet().?.close();
+                dd.close();
                 g.choice = 0;
             }
         }
@@ -655,7 +655,7 @@ pub fn dropdownAdvanced() !void {
             try dvui.labelNoFmt(@src(), "image above text", opts.override(.{ .gravity_x = 0.5 }));
 
             if (mi.activeRect()) |_| {
-                dvui.menuGet().?.close();
+                dd.close();
                 g.choice = 2;
             }
         }
@@ -1409,7 +1409,7 @@ pub fn menus() !void {
         _ = try dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
         _ = try dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
         if ((try dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal })) != null) {
-            dvui.menuGet().?.close();
+            fw2.close();
         }
     }
 
@@ -1429,12 +1429,12 @@ pub fn menus() !void {
             _ = try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
             if (try dvui.menuItemLabel(@src(), "Dialog", .{}, .{ .expand = .horizontal }) != null) {
-                dvui.menuGet().?.close();
+                fw.close();
                 show_dialog = true;
             }
 
             if (try dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
-                dvui.menuGet().?.close();
+                fw.close();
             }
         }
 
@@ -1460,11 +1460,11 @@ pub fn submenus() !void {
         try submenus();
 
         if (try dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal }) != null) {
-            dvui.menuGet().?.close();
+            fw2.close();
         }
 
         if (try dvui.menuItemLabel(@src(), "Dialog", .{}, .{ .expand = .horizontal }) != null) {
-            dvui.menuGet().?.close();
+            fw2.close();
             show_dialog = true;
         }
     }

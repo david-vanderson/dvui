@@ -1546,8 +1546,9 @@ pub fn snapToPixels() bool {
 /// Requests another frame to be shown.
 ///
 /// This only matters if you are using dvui to manage the framerate (by calling
-/// Window.waitTime() and using the return value in for example
-/// SDLBackend.waitEventTimeout at the end of each frame).
+/// Window.waitTime() and using the return value to wait with event
+/// interruption - for example sdl_backend.waitEventTimeout at the end of each
+/// frame).
 ///
 /// src and id are for debugging, which is enabled by calling
 /// Window.debugRefresh(true).  The debug window has a toggle button for this.
@@ -1654,17 +1655,6 @@ pub fn renderingSet(r: bool) bool {
     const cw = currentWindow();
     const ret = cw.rendering;
     cw.rendering = r;
-    return ret;
-}
-
-pub fn menuGet() ?*MenuWidget {
-    return currentWindow().menu_current;
-}
-
-pub fn menuSet(m: ?*MenuWidget) ?*MenuWidget {
-    var cw = currentWindow();
-    const ret = cw.menu_current;
-    cw.menu_current = m;
     return ret;
 }
 
@@ -2309,7 +2299,6 @@ pub const Window = struct {
     extra_frames_needed: u8 = 0,
     clipRect: Rect = Rect{},
 
-    menu_current: ?*MenuWidget = null,
     theme: Theme = undefined,
 
     min_sizes: std.AutoHashMap(u32, SavedSize),
@@ -3233,7 +3222,6 @@ pub const Window = struct {
 
         self.wd.parent = self.widget();
         try self.wd.register();
-        self.menu_current = null;
 
         self.next_widget_ypos = self.wd.rect.y;
 
@@ -4248,6 +4236,10 @@ pub const DropdownWidget = struct {
         }
     }
 
+    pub fn close(self: *DropdownWidget) void {
+        self.menu.close();
+    }
+
     pub fn dropped(self: *DropdownWidget) !bool {
         if (self.drop != null) {
             // protect against calling this multiple times
@@ -4343,7 +4335,7 @@ pub const DropdownWidget = struct {
         try labelNoFmt(@src(), label_text, opts);
 
         if (mi.activeRect()) |_| {
-            dvui.menuGet().?.close();
+            self.close();
             return true;
         }
 

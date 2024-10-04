@@ -58,14 +58,14 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
         focused = true;
     }
 
-    if (focused and dvui.menuGet().?.mouse_over and !self.mouse_over) {
+    if (focused and dvui.MenuWidget.current().?.mouse_over and !self.mouse_over) {
         // our menu got a mouse over but we didn't even though we were focused
         focused = false;
         dvui.focusWidget(null, null, null);
     }
 
     if (focused or ((self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {
-        if (!self.init_opts.submenu or !dvui.menuGet().?.submenus_activated) {
+        if (!self.init_opts.submenu or !dvui.MenuWidget.current().?.submenus_activated) {
             self.show_active = true;
 
             if (!self.focused_last_frame) {
@@ -116,7 +116,7 @@ pub fn processEvents(self: *MenuItemWidget) void {
 pub fn activeRect(self: *const MenuItemWidget) ?Rect {
     var act = false;
     if (self.init_opts.submenu) {
-        if (dvui.menuGet().?.submenus_activated and (self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow())) {
+        if (dvui.MenuWidget.current().?.submenus_activated and (self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow())) {
             act = true;
         }
     } else if (self.activated) {
@@ -162,8 +162,8 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                 // this is how dropdowns are triggered
                 e.handled = true;
                 if (self.init_opts.submenu) {
-                    dvui.menuGet().?.submenus_activated = true;
-                    dvui.menuGet().?.submenus_in_child = true;
+                    dvui.MenuWidget.current().?.submenus_activated = true;
+                    dvui.MenuWidget.current().?.submenus_in_child = true;
                 }
             } else if (me.action == .release) {
                 e.handled = true;
@@ -180,14 +180,14 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                 // moving then it breaks keyboard navigation.
                 if (dvui.mouseTotalMotion().nonZero()) {
                     self.mouse_over = true;
-                    if (dvui.menuGet().?.submenus_activated) {
+                    if (dvui.MenuWidget.current().?.submenus_activated) {
                         // we shouldn't have gotten this event if the motion
                         // was towards a submenu (caught in MenuWidget)
                         dvui.focusSubwindow(null, null); // focuses the window we are in
                         dvui.focusWidget(self.wd.id, null, null);
 
                         if (self.init_opts.submenu) {
-                            dvui.menuGet().?.submenus_in_child = true;
+                            dvui.MenuWidget.current().?.submenus_in_child = true;
                         }
                     }
                 }
@@ -197,20 +197,20 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
             if (ke.action == .down and ke.matchBind("activate")) {
                 e.handled = true;
                 if (self.init_opts.submenu) {
-                    dvui.menuGet().?.submenus_activated = true;
+                    dvui.MenuWidget.current().?.submenus_activated = true;
                 } else {
                     self.activated = true;
                     dvui.refresh(null, @src(), self.wd.id);
                 }
             } else if (ke.code == .right and ke.action == .down) {
-                if (self.init_opts.submenu and dvui.menuGet().?.init_opts.dir == .vertical) {
+                if (self.init_opts.submenu and dvui.MenuWidget.current().?.init_opts.dir == .vertical) {
                     e.handled = true;
-                    dvui.menuGet().?.submenus_activated = true;
+                    dvui.MenuWidget.current().?.submenus_activated = true;
                 }
             } else if (ke.code == .down and ke.action == .down) {
-                if (self.init_opts.submenu and dvui.menuGet().?.init_opts.dir == .horizontal) {
+                if (self.init_opts.submenu and dvui.MenuWidget.current().?.init_opts.dir == .horizontal) {
                     e.handled = true;
-                    dvui.menuGet().?.submenus_activated = true;
+                    dvui.MenuWidget.current().?.submenus_activated = true;
                 }
             }
         },
