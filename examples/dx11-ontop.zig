@@ -106,17 +106,9 @@ pub export fn main(
 
             log.info("post begin", .{});
 
-            // dvui_floating_stuff() catch {
-            //     log.err("Oh no something went horribly wrong!", .{});
-            // };
-
-            const vtx = [_]dvui.Vertex{
-                .{ .pos = .{ .x = 100, .y = 100 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
-                .{ .pos = .{ .x = 200, .y = 100 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
-                .{ .pos = .{ .x = 200, .y = 200 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+            dvui_floating_stuff() catch {
+                log.err("Oh no something went horribly wrong!", .{});
             };
-            const idx = [_]u16{ 0, 1, 2 };
-            backend.drawClippedTriangles(null, &vtx, &idx, .{ .x = 0, .y = 0, .w = 400, .h = 400 });
 
             log.info("post dvui_floating_stuff", .{});
 
@@ -283,7 +275,7 @@ fn dvui_floating_stuff() !void {
     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
     defer scroll.deinit();
 
-    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    const tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
     const lorem = "This example shows how to use dvui for floating windows on top of an existing application.";
     try tl.addText(lorem, .{});
     tl.deinit();

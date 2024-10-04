@@ -127,7 +127,7 @@ fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex) ![]SimpleVertex
         s.* = .{
             .position = self.convertSpaceToNDC(v.pos.x, v.pos.y),
             .color = .{ .r = r / 255.0, .g = g / 255.0, .b = b / 255.0, .a = a / 255.0 },
-            .texcoord = .{ .x = v.uv[0], .y = v.uv[1] },
+            .texcoord = .{ .x = 0.0, .y = 0.0 },
         };
     }
 
@@ -266,7 +266,7 @@ pub fn createRenderTarget(self: *Dx11Backend) !void {
     var back_buffer: ?*dx.ID3D11Texture2D = null;
 
     _ = self.swap_chain.GetBuffer(0, dx.IID_ID3D11Texture2D, @ptrCast(&back_buffer));
-    defer _ = back_buffer.?.IUnknown.Release();
+    // defer _ = back_buffer.?.IUnknown.Release();
 
     _ = self.device.CreateRenderTargetView(
         @ptrCast(back_buffer),
@@ -335,10 +335,9 @@ pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32,
 
     var resource_data: dx.D3D11_SUBRESOURCE_DATA = std.mem.zeroes(dx.D3D11_SUBRESOURCE_DATA);
     resource_data.pSysMem = pixels;
-    resource_data.SysMemPitch = width * height;
+    resource_data.SysMemPitch = width;
 
-    const tex_creation = self.device.vtable.CreateTexture2D(
-        self.device,
+    const tex_creation = self.device.CreateTexture2D(
         &tex_desc,
         &resource_data,
         &texture,
@@ -425,7 +424,6 @@ pub fn drawClippedTriangles(
     clipr: dvui.Rect,
 ) void {
     _ = texture; // autofix
-    _ = clipr; // autofix
     if (self.render_target == null) {
         self.createRenderTarget() catch |err| {
             std.debug.print("render target could not be initialized: {any}\n", .{err});
@@ -465,6 +463,11 @@ pub fn drawClippedTriangles(
         std.debug.print("no index buffer created\n", .{});
         return;
     };
+
+    self.width = clipr.w;
+    self.height = clipr.h;
+    self.setViewport();
+
     self.device_context.IASetVertexBuffers(0, 1, @ptrCast(&vertex_buffer), @ptrCast(&stride), @ptrCast(&offset));
     self.device_context.IASetIndexBuffer(index_buffer, dxgic.DXGI_FORMAT.R16_UINT, 0);
     self.device_context.IASetPrimitiveTopology(d3d.D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
