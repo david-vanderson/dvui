@@ -146,11 +146,11 @@ pub fn setViewport(self: *Dx11Backend) void {
 }
 
 pub fn init(options: InitOptions, dx_options: Directx11Options) !Dx11Backend {
+    _ = options;
     return Dx11Backend{
         .device = dx_options.device,
         .swap_chain = dx_options.swap_chain,
         .device_context = dx_options.device_context,
-        .arena = options.allocator,
     };
 }
 
@@ -480,7 +480,7 @@ pub fn drawClippedTriangles(
 }
 
 pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
-    _ = arena;
+    self.arena = arena;
 
     _ = self.swap_chain.Present(0, 0);
 }
