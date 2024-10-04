@@ -15,6 +15,18 @@ const enums = dvui.enums;
 
 const MenuWidget = @This();
 
+var menu_current: ?*MenuWidget = null;
+
+pub fn current() ?*MenuWidget {
+    return menu_current;
+}
+
+fn menuSet(m: ?*MenuWidget) ?*MenuWidget {
+    const ret = menu_current;
+    menu_current = m;
+    return ret;
+}
+
 pub var defaults: Options = .{
     .name = "Menu",
     .color_fill = .{ .name = .fill_window },
@@ -53,7 +65,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     self.winId = dvui.subwindowCurrentId();
     if (dvui.dataGet(null, self.wd.id, "_sub_act", bool)) |a| {
         self.submenus_activated = a;
-    } else if (dvui.menuGet()) |pm| {
+    } else if (current()) |pm| {
         self.submenus_activated = pm.submenus_in_child;
     } else {
         self.submenus_activated = init_opts.submenus_activated_by_default;
@@ -64,7 +76,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 
 pub fn install(self: *MenuWidget) !void {
     dvui.parentSet(self.widget());
-    self.parentMenu = dvui.menuSet(self);
+    self.parentMenu = menuSet(self);
     try self.wd.register();
     try self.wd.borderAndBackground(.{});
 
@@ -209,6 +221,6 @@ pub fn deinit(self: *MenuWidget) void {
     }
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
-    _ = dvui.menuSet(self.parentMenu);
+    _ = menuSet(self.parentMenu);
     dvui.parentReset(self.wd.id, self.wd.parent);
 }

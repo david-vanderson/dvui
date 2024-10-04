@@ -90,7 +90,7 @@ pub fn install(self: *FloatingMenuWidget) !void {
 
     const rs = self.wd.rectScale();
 
-    try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, null);
+    try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, self.prev_windowId);
     dvui.captureMouseMaintain(self.wd.id);
     try self.wd.register();
 
@@ -106,7 +106,7 @@ pub fn install(self: *FloatingMenuWidget) !void {
     self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none, .expand_to_fit = true }, self.options.override(.{ .margin = .{}, .expand = .both, .min_size_content = .{} }));
     try self.scroll.install();
 
-    if (dvui.menuGet()) |pm| {
+    if (dvui.MenuWidget.current()) |pm| {
         pm.child_popup_rect = rs.r;
     }
 
@@ -118,6 +118,10 @@ pub fn install(self: *FloatingMenuWidget) !void {
     if (dvui.focusedWidgetIdInCurrentSubwindow() == null) {
         dvui.focusWidget(self.menu.wd.id, null, null);
     }
+}
+
+pub fn close(self: *FloatingMenuWidget) void {
+    self.menu.close();
 }
 
 pub fn widget(self: *FloatingMenuWidget) Widget {
