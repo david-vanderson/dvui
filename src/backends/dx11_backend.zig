@@ -492,6 +492,8 @@ pub fn drawClippedTriangles(
     //self.height = clipr.h;
     self.setViewport();
 
+    //TODO: call RSGetScissorRects to save the current scissor rects, then RSSetScissorRects using clipr
+
     self.device_context.IASetVertexBuffers(0, 1, @ptrCast(&vertex_buffer), @ptrCast(&stride), @ptrCast(&offset));
     self.device_context.IASetIndexBuffer(index_buffer, dxgic.DXGI_FORMAT.R16_UINT, 0);
     self.device_context.IASetPrimitiveTopology(d3d.D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -502,6 +504,8 @@ pub fn drawClippedTriangles(
     self.device_context.PSSetShaderResources(0, 1, @ptrCast(&self.dx_options.texture_view));
     self.device_context.PSSetSamplers(0, 1, @ptrCast(&self.dx_options.sampler));
     self.device_context.DrawIndexed(@intCast(idx.len), 0, 0);
+
+    //TODO: call RSSetScissorRects to set them back to what we saved
 }
 
 pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
