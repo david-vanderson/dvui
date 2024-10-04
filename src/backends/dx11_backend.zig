@@ -487,8 +487,9 @@ pub fn drawClippedTriangles(
         return;
     };
 
-    self.width = clipr.w;
-    self.height = clipr.h;
+    _ = clipr;
+    //self.width = clipr.w;
+    //self.height = clipr.h;
     self.setViewport();
 
     self.device_context.IASetVertexBuffers(0, 1, @ptrCast(&vertex_buffer), @ptrCast(&stride), @ptrCast(&offset));
@@ -506,8 +507,8 @@ pub fn drawClippedTriangles(
 pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
     self.arena = arena;
 
-    //var clear_color = [_]f32{ 0.10, 0.10, 0.10, 0.0 };
-    //self.device_context.ClearRenderTargetView(self.render_target, @ptrCast((&clear_color).ptr));
+    var clear_color = [_]f32{ 0.10, 0.10, 0.10, 0.0 };
+    self.device_context.ClearRenderTargetView(self.render_target, @ptrCast((&clear_color).ptr));
 }
 
 pub fn end(self: *Dx11Backend) void {
