@@ -301,18 +301,12 @@ fn hiword(l: w.LONG_PTR) UINT {
 }
 
 // externs
-
-pub extern "user32" fn BeginPaint(
-    hWnd: ?HWND,
-    lpPaint: ?*zwin.graphics.gdi.PAINTSTRUCT,
-) callconv(WINAPI) ?HDC;
+pub extern "user32" fn BeginPaint(hWnd: ?HWND, lpPaint: ?*zwin.graphics.gdi.PAINTSTRUCT) callconv(WINAPI) ?HDC;
 pub extern "user32" fn FillRect(hDC: ?HDC, lprc: ?*const RECT, hbr: ?zwin.graphics.gdi.HBRUSH) callconv(WINAPI) INT;
 pub extern "user32" fn EndPaint(hWnd: HWND, lpPaint: *const zwin.graphics.gdi.PAINTSTRUCT) callconv(WINAPI) BOOL;
 pub extern "user32" fn GetDC(hWnd: ?HWND) callconv(WINAPI) ?w.HDC;
 pub extern "user32" fn GetAsyncKeyState(nKey: c_int) callconv(WINAPI) w.INT;
-pub extern "user32" fn GetDpiForWindow(
-    hWnd: HWND,
-) callconv(WINAPI) w.UINT;
+pub extern "user32" fn GetDpiForWindow(hWnd: HWND) callconv(WINAPI) w.UINT;
 pub extern "user32" fn GetSystemMetricsForDpi(nIndex: w.INT, dpi: w.UINT) callconv(WINAPI) w.INT;
 pub extern "user32" fn DestroyWindow(hWnd: HWND) callconv(WINAPI) BOOL;
 pub extern "user32" fn UnregisterClassW(lpClassName: [*:0]const u16, hInstance: w.HINSTANCE) callconv(WINAPI) BOOL;
@@ -322,5 +316,4 @@ pub extern "user32" fn PeekMessageA(lpMsg: *ui.MSG, hWnd: ?HWND, wMsgFilterMin: 
 pub extern "user32" fn TranslateMessage(lpMsg: *const ui.MSG) callconv(WINAPI) BOOL;
 pub extern "user32" fn DispatchMessageW(lpMsg: *const ui.MSG) callconv(WINAPI) w.LRESULT;
 pub extern "user32" fn ShowWindow(hWnd: HWND, nCmdShow: i32) callconv(WINAPI) BOOL;
-
 pub extern "user32" fn UpdateWindow(hWnd: HWND) callconv(WINAPI) BOOL;
