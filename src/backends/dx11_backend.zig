@@ -105,8 +105,8 @@ const shader =
     \\
     \\float4 PSMain(PSInput input) : SV_TARGET
     \\{
-    \\    return myTexture.Sample(samplerState, input.texcoord);
-    \\    // return texColor * input.color;
+    \\    //return myTexture.Sample(samplerState, input.texcoord);
+    \\    return input.color;
     \\}
 ;
 
@@ -118,7 +118,7 @@ fn convertSpaceToNDC(self: *Dx11Backend, x: f32, y: f32) XMFLOAT3 {
     };
 }
 
-fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex) ![]SimpleVertex {
+fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex, zero_uvs: bool) ![]SimpleVertex {
     const simple_vertex = try self.arena.alloc(SimpleVertex, vtx.len);
     for (vtx, simple_vertex) |v, *s| {
         const r: f32 = @floatFromInt(v.col.r);
@@ -128,8 +128,8 @@ fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex) ![]SimpleVertex
         s.* = .{
             .position = self.convertSpaceToNDC(v.pos.x, v.pos.y),
             .color = .{ .r = r / 255.0, .g = g / 255.0, .b = b / 255.0, .a = a / 255.0 },
-            .texcoord = .{ .x = 0.0, .y = 0.0 },
-        };
+            .texcoord = if (zero_uvs) .{ .x = 0, .y = 0} else .{ .x = v.uv[0], .y = v.uv[1] },
+};
     }
 
     return simple_vertex;
@@ -328,6 +328,8 @@ fn createInputLayout(self: *Dx11Backend) !void {
 }
 
 pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32, ti: dvui.enums.TextureInterpolation) *anyopaque {
+    if (true) return @ptrFromInt(1);
+
     _ = ti;
     var texture: ?*dx.ID3D11Texture2D = null;
     var tex_desc = dx.D3D11_TEXTURE2D_DESC{
@@ -389,6 +391,7 @@ pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32,
 }
 
 pub fn textureDestroy(self: *Dx11Backend, texture: *anyopaque) void {
+    if (true) return;
     _ = self;
     const tex: *dx.ID3D11Texture2D = @ptrCast(@alignCast(texture));
     _ = tex.IUnknown.Release();
@@ -471,7 +474,10 @@ pub fn drawClippedTriangles(
 
     var stride: usize = @sizeOf(SimpleVertex);
     var offset: usize = 0;
-    const converted_vtx = self.convertVertices(vtx) catch @panic("OOM");
+    const converted_vtx = self.convertVertices(vtx, true) catch @panic("OOM");
+    //for (converted_vtx, 0..) |cv, i| {
+        //std.debug.print("cv {d} {}\n", .{i, cv});
+    //}
     var vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {
         std.debug.print("no vertex buffer created\n", .{});
         return;
@@ -490,8 +496,6 @@ pub fn drawClippedTriangles(
     self.device_context.IASetPrimitiveTopology(d3d.D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     self.device_context.OMSetRenderTargets(1, @ptrCast(&self.render_target), null);
-    var clear_color = [_]f32{ 0.10, 0.10, 0.10, 0.0 };
-    self.device_context.ClearRenderTargetView(self.render_target, @ptrCast((&clear_color).ptr));
     self.device_context.VSSetShader(self.dx_options.vertex_shader, null, 0);
     self.device_context.PSSetShader(self.dx_options.pixel_shader, null, 0);
     self.device_context.PSSetShaderResources(0, 1, @ptrCast(&self.dx_options.texture_view));
@@ -502,10 +506,13 @@ pub fn drawClippedTriangles(
 pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
     self.arena = arena;
 
-    _ = self.swap_chain.Present(0, 0);
+    //var clear_color = [_]f32{ 0.10, 0.10, 0.10, 0.0 };
+    //self.device_context.ClearRenderTargetView(self.render_target, @ptrCast((&clear_color).ptr));
 }
 
-pub fn end(_: *Dx11Backend) void {}
+pub fn end(self: *Dx11Backend) void {
+    _ = self.swap_chain.Present(0, 0);
+}
 
 pub fn pixelSize(self: *Dx11Backend) dvui.Size {
     _ = self;
