@@ -49,6 +49,7 @@ const DirectxOptions = struct {
     index_buffer: ?*dx.ID3D11Buffer = null,
     texture_view: ?*dx.ID3D11ShaderResourceView = null,
     sampler: ?*dx.ID3D11SamplerState = null,
+    rasterizer: ?*dx.ID3D11RasterizerState = null,
 };
 
 pub const InitOptions = struct {
@@ -262,6 +263,18 @@ fn initShader(self: *Dx11Backend) !void {
     }
 }
 
+fn createRasterizerState(self: *Dx11Backend) void {
+    var raster_desc = std.mem.zeroes(dx.D3D11_RASTERIZER_DESC);
+    raster_desc.FillMode = dx.D3D11_FILL_SOLID;
+    raster_desc.CullMode = dx.D3D11_CULL_BACK;
+    raster_desc.FrontCounterClockwise = 1;
+    raster_desc.DepthClipEnable = 1;
+
+    // TODO: Create better error handling
+    _ = self.device.CreateRasterizerState(&raster_desc, &self.dx_options.rasterizer);
+    _ = self.device_context.RSSetState(self.dx_options.rasterizer);
+}
+
 pub fn createRenderTarget(self: *Dx11Backend) !void {
     var back_buffer: ?*dx.ID3D11Texture2D = null;
 
@@ -450,6 +463,10 @@ pub fn drawClippedTriangles(
             std.debug.print("sampler could not be initialized: {any}\n", .{err});
             return;
         };
+    }
+
+    if (self.dx_options.rasterizer == null) {
+        self.createRasterizerState();
     }
 
     var stride: usize = @sizeOf(SimpleVertex);
