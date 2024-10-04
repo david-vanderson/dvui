@@ -3,50 +3,25 @@ const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 
 pub fn build(b: *std.Build) !void {
-    const uses_dx11 = b.option(bool, "dx11", "Whether to use the DirectX11 Backend") orelse false;
+    const use_dx = b.option(bool, "use_dx", "Whether or not to use DirectX backend(s)") orelse true;
 
-    const target = if (uses_dx11) b.standardTargetOptions(.{}) else b.resolveTargetQuery(.{
+    const target = if (use_dx) b.resolveTargetQuery(.{
         .os_tag = .windows,
-    });
+    }) else b.standardTargetOptions(.{});
+
     const optimize = b.standardOptimizeOption(.{});
 
     const link_backend = b.option(bool, "link_backend", "Should dvui link the chosen backend?") orelse true;
 
     const dvui_sdl = addDvuiModule(b, target, optimize, link_backend, .sdl);
     const dvui_raylib = addDvuiModule(b, target, optimize, link_backend, .raylib);
+    const dvui_dx11 = addDvuiModule(b, target, optimize, link_backend, .dx11);
 
     addExample(b, target, optimize, "sdl-standalone", dvui_sdl);
     addExample(b, target, optimize, "sdl-ontop", dvui_sdl);
     addExample(b, target, optimize, "raylib-standalone", dvui_raylib);
     addExample(b, target, optimize, "raylib-ontop", dvui_raylib);
-
-    // dx11 example
-    const dx11_examples = [_][]const u8{
-        "dx11-ontop",
-    };
-
-    inline for (dx11_examples) |ex| {
-        const windows_target = b.resolveTargetQuery(.{
-            .os_tag = .windows,
-        });
-
-        const exe = b.addExecutable(.{
-            .name = ex,
-            .root_source_file = b.path("examples/" ++ ex ++ ".zig"),
-            .target = windows_target,
-            .optimize = optimize,
-        });
-
-        exe.root_module.addImport("Dx11Backend", createDx11Module(b, target, optimize, true).?);
-        const compile_step = b.step("compile-" ++ ex, "Compile " ++ ex);
-        compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
-
-        const run_cmd = b.addRunArtifact(exe);
-        run_cmd.step.dependOn(compile_step);
-
-        const run_step = b.step(ex, "Run " ++ ex);
-        run_step.dependOn(&run_cmd.step);
-    }
+    addExample(b, target, optimize, "dx11-ontop", dvui_dx11);
 
     // web test
     {
@@ -148,6 +123,7 @@ pub fn build(b: *std.Build) !void {
 const Backend = enum {
     raylib,
     sdl,
+    dx11,
 };
 
 fn addDvuiModule(
@@ -174,13 +150,18 @@ fn addDvuiModule(
         .link_libc = switch (backend) {
             .raylib => true,
             .sdl => true,
+            .dx11 => true,
         },
     });
+
+    std.debug.print("Using backend: {s}\n", .{backend_mod.root_source_file.?.getDisplayName()});
+
     backend_mod.addImport("dvui", dvui_mod);
     dvui_mod.addImport("backend", backend_mod);
 
     dvui_mod.addCSourceFiles(.{ .files = &.{
         "src/stb/stb_truetype_impl.c",
+        "src/stb/stb_image_impl.c",
     } });
 
     if (link_backend) {
@@ -225,6 +206,17 @@ fn addDvuiModule(
                     }
                 }
             },
+            .dx11 => {
+                const zigwin32 = b.dependency("zigwin32", .{});
+
+                // If dx11 is used, we have to force windows.
+                backend_mod.resolved_target = b.resolveTargetQuery(.{
+                    .os_tag = .windows,
+                });
+
+                // dvui_mod.addImport("zigwin32", zigwin32.module("zigwin32"));
+                backend_mod.addImport("zigwin32", zigwin32.module("zigwin32"));
+            },
         }
     }
     dvui_mod.addIncludePath(b.path("src/stb"));
@@ -258,6 +250,9 @@ fn addExample(
         .win32_manifest = b.path("./src/main.manifest"),
     });
     exe.root_module.addImport("dvui", dvui_mod);
+
+    // TODO: This may just be only used for directx
+    exe.root_module.addImport("zigwin32", b.dependency("zigwin32", .{}).module("zigwin32"));
 
     const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
     compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
