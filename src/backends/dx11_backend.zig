@@ -416,32 +416,35 @@ pub fn drawClippedTriangles(
         };
     }
 
-    var clear_color = [_]f32{ 0.10, 0.10, 0.10, 0.0 };
+    _ = idx;
+    _ = vtx;
 
-    var stride: usize = @sizeOf(dvui.Vertex);
-    var offset: usize = 0;
-    const converted_vtx = self.convertVertices(vtx) catch @panic("OOM");
-    const vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {
-        std.debug.print("no vertex buffer created\n", .{});
-        return;
-    };
-    const index_buffer = self.createBuffer(dx.D3D11_BIND_INDEX_BUFFER, u16, idx) catch {
-        std.debug.print("no index buffer created\n", .{});
-        return;
-    };
-    self.device_context.IASetVertexBuffers(0, 1, @ptrCast(vertex_buffer), @ptrCast(&stride), @ptrCast(&offset));
-    self.device_context.IASetIndexBuffer(index_buffer, dxgic.DXGI_FORMAT.R16_UINT, 0);
-    self.device_context.IASetPrimitiveTopology(d3d.D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    //var clear_color = [_]f32{ 0.10, 0.10, 0.10, 0.0 };
 
-    self.device_context.vtable.OMSetRenderTargets(self.device_context, 1, @ptrCast(self.render_target), null);
-    self.device_context.vtable.ClearRenderTargetView(self.device_context, self.render_target, @ptrCast((&clear_color).ptr));
-    self.device_context.vtable.VSSetShader(self.device_context, self.dx_options.vertex_shader, null, 0);
-    self.device_context.vtable.PSSetShader(self.device_context, self.dx_options.pixel_shader, null, 0);
-    self.device_context.vtable.PSSetShaderResources(self.device_context, 0, 1, @ptrCast(self.dx_options.sampler));
-    self.device_context.PSSetSamplers(0, 1, @ptrCast(&self.dx_options.sampler));
-    self.device_context.DrawIndexed(@intCast(idx.len), 0, 0);
+    //var stride: usize = @sizeOf(dvui.Vertex);
+    //var offset: usize = 0;
+    //const converted_vtx = self.convertVertices(vtx) catch @panic("OOM");
+    //const vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {
+    //    std.debug.print("no vertex buffer created\n", .{});
+    //    return;
+    //};
+    //const index_buffer = self.createBuffer(dx.D3D11_BIND_INDEX_BUFFER, u16, idx) catch {
+    //    std.debug.print("no index buffer created\n", .{});
+    //    return;
+    //};
+    //self.device_context.IASetVertexBuffers(0, 1, @ptrCast(vertex_buffer), @ptrCast(&stride), @ptrCast(&offset));
+    //self.device_context.IASetIndexBuffer(index_buffer, dxgic.DXGI_FORMAT.R16_UINT, 0);
+    //self.device_context.IASetPrimitiveTopology(d3d.D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    _ = self.swap_chain.Present(0, 0);
+    //self.device_context.vtable.OMSetRenderTargets(self.device_context, 1, @ptrCast(self.render_target), null);
+    //self.device_context.vtable.ClearRenderTargetView(self.device_context, self.render_target, @ptrCast((&clear_color).ptr));
+    //self.device_context.vtable.VSSetShader(self.device_context, self.dx_options.vertex_shader, null, 0);
+    //self.device_context.vtable.PSSetShader(self.device_context, self.dx_options.pixel_shader, null, 0);
+    //self.device_context.vtable.PSSetShaderResources(self.device_context, 0, 1, @ptrCast(self.dx_options.sampler));
+    //self.device_context.PSSetSamplers(0, 1, @ptrCast(&self.dx_options.sampler));
+    //self.device_context.DrawIndexed(@intCast(idx.len), 0, 0);
+
+    //_ = self.swap_chain.Present(0, 0);
 }
 
 pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
