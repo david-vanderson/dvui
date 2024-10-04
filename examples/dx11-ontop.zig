@@ -72,14 +72,14 @@ pub export fn main(
         defer backend.deinit();
         log.info("Dx11 backend also init.", .{});
 
+        _ = ShowWindow(wnd, cmd_show);
+        _ = UpdateWindow(wnd);
+
         backend.setViewport(); // for now: fixed values :)
 
         var win = dvui.Window.init(@src(), gpa, backend.backend(), .{}) catch return 1;
         log.info("dvui window also init.", .{});
         defer win.deinit();
-
-        _ = ShowWindow(wnd, cmd_show);
-        _ = UpdateWindow(wnd);
 
         var msg: ui.MSG = std.mem.zeroes(ui.MSG);
         const PM_REMOVE = 0x0001;
@@ -104,35 +104,35 @@ pub export fn main(
                 return 1;
             };
 
-            log.info("post begin", .{});
+            // log.info("post begin", .{});
 
-             //dvui_floating_stuff() catch {
-                 //log.err("Oh no something went horribly wrong!", .{});
-             //};
-
-            _ = dvui.button(@src(), "button", .{}, .{}) catch {};
-
-             {
-            const vtx = [_]dvui.Vertex{
-                .{ .pos = .{ .x = 100, .y = 100 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
-                .{ .pos = .{ .x = 200, .y = 100 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
-                .{ .pos = .{ .x = 200, .y = 200 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+            dvui_floating_stuff() catch {
+                log.err("Oh no something went horribly wrong!", .{});
             };
-            const idx = [_]u16{ 0, 2, 1 };
-            backend.drawClippedTriangles(null, &vtx, &idx, .{ .x = 0, .y = 0, .w = 400, .h = 400 });
-             }
 
-             {
-            const vtx = [_]dvui.Vertex{
-                .{ .pos = .{ .x = 300, .y = 300 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
-                .{ .pos = .{ .x = 400, .y = 300 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
-                .{ .pos = .{ .x = 400, .y = 400 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
-            };
-            const idx = [_]u16{ 0, 1, 2 };
-            backend.drawClippedTriangles(null, &vtx, &idx, .{ .x = 0, .y = 0, .w = 400, .h = 400 });
-             }
+            // _ = dvui.button(@src(), "button", .{}, .{}) catch {};
 
-            log.info("post dvui_floating_stuff", .{});
+            //  {
+            // const vtx = [_]dvui.Vertex{
+            //     .{ .pos = .{ .x = 100, .y = 100 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+            //     .{ .pos = .{ .x = 200, .y = 100 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+            //     .{ .pos = .{ .x = 200, .y = 200 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+            // };
+            // const idx = [_]u16{ 0, 2, 1 };
+            // backend.drawClippedTriangles(null, &vtx, &idx, .{ .x = 0, .y = 0, .w = 400, .h = 400 });
+            //  }
+
+            //  {
+            // const vtx = [_]dvui.Vertex{
+            //     .{ .pos = .{ .x = 300, .y = 300 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+            //     .{ .pos = .{ .x = 400, .y = 300 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+            //     .{ .pos = .{ .x = 400, .y = 400 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
+            // };
+            // const idx = [_]u16{ 0, 1, 2 };
+            // backend.drawClippedTriangles(null, &vtx, &idx, .{ .x = 0, .y = 0, .w = 400, .h = 400 });
+            //  }
+
+            // log.info("post dvui_floating_stuff", .{});
 
             _ = win.end(.{}) catch {
                 log.err("win.end() failed.", .{});

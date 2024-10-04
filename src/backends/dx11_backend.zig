@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const dvui = @import("dvui");
 
 const win = @import("zigwin32");
+const RECT = win.foundation.RECT;
 const graphics = win.graphics;
 
 const dxgic = dxgi.common;
@@ -76,10 +77,10 @@ pub const Directx11Options = struct {
     swap_chain: *dxgi.IDXGISwapChain,
 };
 
-const XMFLOAT2 = struct { x: f32, y: f32 };
-const XMFLOAT3 = struct { x: f32, y: f32, z: f32 };
-const XMFLOAT4 = struct { r: f32, g: f32, b: f32, a: f32 };
-const SimpleVertex = struct { position: XMFLOAT3, color: XMFLOAT4, texcoord: XMFLOAT2 };
+const XMFLOAT2 = extern struct { x: f32, y: f32 };
+const XMFLOAT3 = extern struct { x: f32, y: f32, z: f32 };
+const XMFLOAT4 = extern struct { r: f32, g: f32, b: f32, a: f32 };
+const SimpleVertex = extern struct { position: XMFLOAT3, color: XMFLOAT4, texcoord: XMFLOAT2 };
 
 const shader =
     \\struct PSInput
@@ -105,7 +106,8 @@ const shader =
     \\
     \\float4 PSMain(PSInput input) : SV_TARGET
     \\{
-    \\    //return myTexture.Sample(samplerState, input.texcoord);
+    \\    //float4 sampled = myTexture.Sample(samplerState, input.texcoord);
+    \\    //return sampled;
     \\    return input.color;
     \\}
 ;
@@ -125,11 +127,12 @@ fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex, zero_uvs: bool)
         const g: f32 = @floatFromInt(v.col.g);
         const b: f32 = @floatFromInt(v.col.b);
         const a: f32 = @floatFromInt(v.col.a);
+
         s.* = .{
             .position = self.convertSpaceToNDC(v.pos.x, v.pos.y),
             .color = .{ .r = r / 255.0, .g = g / 255.0, .b = b / 255.0, .a = a / 255.0 },
-            .texcoord = if (zero_uvs) .{ .x = 0, .y = 0} else .{ .x = v.uv[0], .y = v.uv[1] },
-};
+            .texcoord = if (zero_uvs) .{ .x = 0, .y = 0 } else .{ .x = v.uv[0], .y = v.uv[1] },
+        };
     }
 
     return simple_vertex;
@@ -252,8 +255,8 @@ fn initShader(self: *Dx11Backend) !void {
 
     self.dx_options.pixel_bytes = ps_blob.?;
     const create_ps = self.device.CreatePixelShader(
-        @ptrCast(ps_blob.?.GetBufferPointer()),
-        ps_blob.?.GetBufferSize(),
+        @ptrCast(self.dx_options.pixel_bytes.?.GetBufferPointer()),
+        self.dx_options.pixel_bytes.?.GetBufferSize(),
         null,
         &self.dx_options.pixel_shader,
     );
@@ -265,7 +268,7 @@ fn initShader(self: *Dx11Backend) !void {
 
 fn createRasterizerState(self: *Dx11Backend) void {
     var raster_desc = std.mem.zeroes(dx.D3D11_RASTERIZER_DESC);
-    raster_desc.FillMode = dx.D3D11_FILL_SOLID;
+    raster_desc.FillMode = dx.D3D11_FILL_MODE.SOLID;
     raster_desc.CullMode = dx.D3D11_CULL_BACK;
     raster_desc.FrontCounterClockwise = 1;
     raster_desc.DepthClipEnable = 1;
@@ -307,7 +310,7 @@ fn createInputLayout(self: *Dx11Backend) !void {
     const input_layout_desc = &[_]dx.D3D11_INPUT_ELEMENT_DESC{
         .{ .SemanticName = "POSITION", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32B32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 0, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
         .{ .SemanticName = "COLOR", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32B32A32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 12, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
-        .{ .SemanticName = "TEXCOORD", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 28, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
+        .{ .SemanticName = "TEXCOORD", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 24, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
     };
 
     const num_elements = input_layout_desc.len;
@@ -328,9 +331,16 @@ fn createInputLayout(self: *Dx11Backend) !void {
 }
 
 pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32, ti: dvui.enums.TextureInterpolation) *anyopaque {
-    if (true) return @ptrFromInt(1);
+    _ = ti; // autofix
 
-    _ = ti;
+    var i: usize = 0;
+    const half_center = (width / 2) * (height / 2);
+    var window_iter = std.mem.window(u8, pixels[half_center .. half_center + 100], 4, 4);
+    while (window_iter.next()) |x| : (i += 1) {
+        pixels[i + half_center] = 100;
+        std.debug.print("Pixel[{d}] = ({x}, {x}, {x}, {x})\n", .{ i, x[0], x[1], x[2], x[3] });
+    }
+
     var texture: ?*dx.ID3D11Texture2D = null;
     var tex_desc = dx.D3D11_TEXTURE2D_DESC{
         .Width = width,
@@ -350,7 +360,7 @@ pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32,
 
     var resource_data: dx.D3D11_SUBRESOURCE_DATA = std.mem.zeroes(dx.D3D11_SUBRESOURCE_DATA);
     resource_data.pSysMem = pixels;
-    resource_data.SysMemPitch = width;
+    resource_data.SysMemPitch = width * 4; // 4 byte per pixel (RGBA)
 
     const tex_creation = self.device.CreateTexture2D(
         &tex_desc,
@@ -363,10 +373,22 @@ pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32,
         @panic("couldn't create texture");
     }
 
-    var rvd: dx.D3D11_SHADER_RESOURCE_VIEW_DESC = std.mem.zeroes(dx.D3D11_SHADER_RESOURCE_VIEW_DESC);
-    rvd = .{
+    return texture.?;
+}
+
+pub fn textureDestroy(self: *Dx11Backend, texture: *anyopaque) void {
+    // if (true) return;
+    _ = self;
+    const tex: *dx.ID3D11Texture2D = @ptrCast(@alignCast(texture));
+    _ = tex.IUnknown.Release();
+}
+
+fn recreateShaderView(self: *Dx11Backend, texture: *anyopaque) void {
+    const tex: *dx.ID3D11Texture2D = @ptrCast(@alignCast(texture));
+
+    const rvd = dx.D3D11_SHADER_RESOURCE_VIEW_DESC{
         .Format = dxgic.DXGI_FORMAT.R8G8B8A8_UNORM,
-        .ViewDimension = @enumFromInt(4), // DIMENSION_TEXTURE2D
+        .ViewDimension = d3d.D3D_SRV_DIMENSION_TEXTURE2D,
         .Anonymous = .{
             .Texture2D = .{
                 .MostDetailedMip = 0,
@@ -375,9 +397,8 @@ pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32,
         },
     };
 
-    const rv_result = self.device.vtable.CreateShaderResourceView(
-        self.device,
-        &texture.?.ID3D11Resource,
+    const rv_result = self.device.CreateShaderResourceView(
+        &tex.ID3D11Resource,
         &rvd,
         &self.dx_options.texture_view,
     );
@@ -386,26 +407,25 @@ pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32,
         std.debug.print("Texture View creation failed\n", .{});
         @panic("couldn't create texture view");
     }
-
-    return texture.?;
-}
-
-pub fn textureDestroy(self: *Dx11Backend, texture: *anyopaque) void {
-    if (true) return;
-    _ = self;
-    const tex: *dx.ID3D11Texture2D = @ptrCast(@alignCast(texture));
-    _ = tex.IUnknown.Release();
 }
 
 fn createSampler(self: *Dx11Backend) !void {
-    var samp_desc: dx.D3D11_SAMPLER_DESC = std.mem.zeroes(dx.D3D11_SAMPLER_DESC);
-    samp_desc.Filter = dx.D3D11_FILTER.MIN_MAG_POINT_MIP_LINEAR;
-    samp_desc.AddressU = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
-    samp_desc.AddressV = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
-    samp_desc.AddressW = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
+    const samp_desc = dx.D3D11_SAMPLER_DESC{
+        .Filter = dx.D3D11_FILTER.MIN_MAG_POINT_MIP_LINEAR,
+        .AddressU = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP,
+        .AddressV = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP,
+        .AddressW = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP,
+        .MipLODBias = 0.0,
+        .MaxAnisotropy = 1,
+        .ComparisonFunc = dx.D3D11_COMPARISON_ALWAYS,
+        .BorderColor = .{ 0.0, 0.0, 0.0, 0.0 },
+        .MinLOD = 0.0,
+        .MaxLOD = dx.D3D11_FLOAT32_MAX,
+    };
 
     const sampler = self.device.CreateSamplerState(&samp_desc, &self.dx_options.sampler);
-    if (sampler != win.foundation.S_OK) {
+
+    if (!isOk(sampler)) {
         std.debug.print("sampler state could not be iniitialized\n", .{});
         return error.SamplerStateUninitialized;
     }
@@ -439,7 +459,6 @@ pub fn drawClippedTriangles(
     idx: []const u16,
     clipr: dvui.Rect,
 ) void {
-    _ = texture; // autofix
     if (self.render_target == null) {
         self.createRenderTarget() catch |err| {
             std.debug.print("render target could not be initialized: {any}\n", .{err});
@@ -475,37 +494,47 @@ pub fn drawClippedTriangles(
     var stride: usize = @sizeOf(SimpleVertex);
     var offset: usize = 0;
     const converted_vtx = self.convertVertices(vtx, true) catch @panic("OOM");
-    //for (converted_vtx, 0..) |cv, i| {
-        //std.debug.print("cv {d} {}\n", .{i, cv});
-    //}
-    var vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {
+    defer self.arena.free(converted_vtx);
+
+    self.dx_options.vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {
         std.debug.print("no vertex buffer created\n", .{});
         return;
     };
-    const index_buffer = self.createBuffer(dx.D3D11_BIND_INDEX_BUFFER, u16, idx) catch {
+    self.dx_options.index_buffer = self.createBuffer(dx.D3D11_BIND_INDEX_BUFFER, u16, idx) catch {
         std.debug.print("no index buffer created\n", .{});
         return;
     };
 
-    _ = clipr;
     //self.width = clipr.w;
     //self.height = clipr.h;
     self.setViewport();
 
-    //TODO: call RSGetScissorRects to save the current scissor rects, then RSSetScissorRects using clipr
+    if (texture) |tex| self.recreateShaderView(tex);
 
-    self.device_context.IASetVertexBuffers(0, 1, @ptrCast(&vertex_buffer), @ptrCast(&stride), @ptrCast(&offset));
-    self.device_context.IASetIndexBuffer(index_buffer, dxgic.DXGI_FORMAT.R16_UINT, 0);
+    var scissor_rect = std.mem.zeroes(RECT);
+    var nums: u32 = 1;
+    self.device_context.RSGetScissorRects(&nums, @ptrCast(&scissor_rect));
+
+    const new_clip: RECT = .{
+        .left = @intFromFloat(@round(clipr.x)),
+        .top = @intFromFloat(@round(clipr.y)),
+        .right = @intFromFloat(@round(clipr.w)),
+        .bottom = @intFromFloat(@round(clipr.h)),
+    };
+    self.device_context.RSSetScissorRects(nums, @ptrCast(&new_clip));
+
+    self.device_context.IASetVertexBuffers(0, 1, @ptrCast(&self.dx_options.vertex_buffer), @ptrCast(&stride), @ptrCast(&offset));
+    self.device_context.IASetIndexBuffer(self.dx_options.index_buffer, dxgic.DXGI_FORMAT.R16_UINT, 0);
     self.device_context.IASetPrimitiveTopology(d3d.D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     self.device_context.OMSetRenderTargets(1, @ptrCast(&self.render_target), null);
     self.device_context.VSSetShader(self.dx_options.vertex_shader, null, 0);
     self.device_context.PSSetShader(self.dx_options.pixel_shader, null, 0);
+
     self.device_context.PSSetShaderResources(0, 1, @ptrCast(&self.dx_options.texture_view));
     self.device_context.PSSetSamplers(0, 1, @ptrCast(&self.dx_options.sampler));
     self.device_context.DrawIndexed(@intCast(idx.len), 0, 0);
-
-    //TODO: call RSSetScissorRects to set them back to what we saved
+    self.device_context.RSSetScissorRects(nums, @ptrCast(&scissor_rect));
 }
 
 pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
@@ -517,16 +546,26 @@ pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
 
 pub fn end(self: *Dx11Backend) void {
     _ = self.swap_chain.Present(0, 0);
+
+    if (self.dx_options.vertex_buffer) |vb| {
+        _ = vb.IUnknown.Release();
+    }
+    self.dx_options.vertex_buffer = null;
+
+    if (self.dx_options.index_buffer) |ib| {
+        _ = ib.IUnknown.Release();
+    }
+    self.dx_options.index_buffer = null;
 }
 
 pub fn pixelSize(self: *Dx11Backend) dvui.Size {
     _ = self;
-    return dvui.Size{ .w = @as(f32, @floatFromInt(1280)), .h = @as(f32, @floatFromInt(720)) };
+    return dvui.Size{ .w = 1280.0, .h = 720.0 };
 }
 
 pub fn windowSize(self: *Dx11Backend) dvui.Size {
     _ = self;
-    return dvui.Size{ .w = @as(f32, @floatFromInt(1280)), .h = @as(f32, @floatFromInt(720)) };
+    return dvui.Size{ .w = 1280.0, .h = 720.0 };
 }
 
 pub fn contentScale(self: *Dx11Backend) f32 {
