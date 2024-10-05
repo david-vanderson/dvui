@@ -252,25 +252,6 @@ pub fn minSizeForChild(self: *ScrollContainerWidget, s: Size) void {
     self.next_widget_ypos += s.h;
     self.nextVirtualSize.h += s.h;
     self.nextVirtualSize.w = @max(self.nextVirtualSize.w, s.w);
-    const padded = self.wd.padSize(self.nextVirtualSize);
-    switch (self.si.vertical) {
-        .none => self.wd.min_size.h = padded.h,
-        .auto => {
-            if (self.expand_to_fit) {
-                self.wd.min_size.h = padded.h;
-            }
-        },
-        .given => {},
-    }
-    switch (self.si.horizontal) {
-        .none => self.wd.min_size.w = padded.w,
-        .auto => {
-            if (self.expand_to_fit) {
-                self.wd.min_size.w = padded.w;
-            }
-        },
-        .given => {},
-    }
 }
 
 pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) void {
@@ -543,9 +524,13 @@ pub fn deinit(self: *ScrollContainerWidget) void {
 
     dvui.clipSet(self.prevClip);
 
+    const padded = self.wd.padSize(self.nextVirtualSize);
     switch (self.si.horizontal) {
-        .none => {},
+        .none => self.wd.min_size.w = padded.w,
         .auto => {
+            if (self.expand_to_fit) {
+                self.wd.min_size.w = padded.w;
+            }
             if (self.nextVirtualSize.w != self.si.virtual_size.w) {
                 self.si.virtual_size.w = self.nextVirtualSize.w;
                 dvui.refresh(null, @src(), self.wd.id);
@@ -555,8 +540,11 @@ pub fn deinit(self: *ScrollContainerWidget) void {
     }
 
     switch (self.si.vertical) {
-        .none => {},
+        .none => self.wd.min_size.h = padded.h,
         .auto => {
+            if (self.expand_to_fit) {
+                self.wd.min_size.h = padded.h;
+            }
             if (self.nextVirtualSize.h != self.si.virtual_size.h) {
                 self.si.virtual_size.h = self.nextVirtualSize.h;
                 dvui.refresh(null, @src(), self.wd.id);

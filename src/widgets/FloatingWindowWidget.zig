@@ -25,6 +25,7 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     modal: bool = false,
     rect: ?*Rect = null,
+    initial_max_size: ?Size = null,
     open_flag: ?*bool = null,
     process_events_in_deinit: bool = true,
     stay_above_parent_window: bool = false,
@@ -115,7 +116,9 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             self.auto_size = as;
             self.auto_size_max = dvui.dataGet(null, self.wd.id, "_auto_size_max", Size);
         } else {
-            self.auto_size = if (self.wd.rect.w == 0 and self.wd.rect.h == 0) 2 else 0;
+            if (self.wd.rect.w == 0 and self.wd.rect.h == 0) {
+                self.autoSize(init_opts.initial_max_size orelse .{});
+            }
         }
 
         if (dvui.dataGet(null, self.wd.id, "_auto_pos", @TypeOf(self.auto_pos))) |ap| {
