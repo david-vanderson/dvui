@@ -317,7 +317,7 @@ fn createInputLayout(self: *Dx11Backend) !void {
     const input_layout_desc = &[_]dx.D3D11_INPUT_ELEMENT_DESC{
         .{ .SemanticName = "POSITION", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32B32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 0, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
         .{ .SemanticName = "COLOR", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32B32A32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 12, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
-        .{ .SemanticName = "TEXCOORD", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 24, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
+        .{ .SemanticName = "TEXCOORD", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 28, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
     };
 
     const num_elements = input_layout_desc.len;
@@ -340,14 +340,6 @@ fn createInputLayout(self: *Dx11Backend) !void {
 pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32, ti: dvui.enums.TextureInterpolation) *anyopaque {
     _ = ti; // autofix
 
-    var i: usize = 0;
-    const half_center = (width / 2) * (height / 2);
-    var window_iter = std.mem.window(u8, pixels[half_center .. half_center + 100], 4, 4);
-    while (window_iter.next()) |x| : (i += 1) {
-        pixels[i + half_center] = 100;
-        std.debug.print("Pixel[{d}] = ({x}, {x}, {x}, {x})\n", .{ i, x[0], x[1], x[2], x[3] });
-    }
-
     var texture: ?*dx.ID3D11Texture2D = null;
     var tex_desc = dx.D3D11_TEXTURE2D_DESC{
         .Width = width,
@@ -365,7 +357,7 @@ pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32,
         .MiscFlags = .{},
     };
 
-    var resource_data: dx.D3D11_SUBRESOURCE_DATA = std.mem.zeroes(dx.D3D11_SUBRESOURCE_DATA);
+    var resource_data = std.mem.zeroes(dx.D3D11_SUBRESOURCE_DATA);
     resource_data.pSysMem = pixels;
     resource_data.SysMemPitch = width * 4; // 4 byte per pixel (RGBA)
 
@@ -417,18 +409,12 @@ fn recreateShaderView(self: *Dx11Backend, texture: *anyopaque) void {
 }
 
 fn createSampler(self: *Dx11Backend) !void {
-    const samp_desc = dx.D3D11_SAMPLER_DESC{
-        .Filter = dx.D3D11_FILTER.MIN_MAG_POINT_MIP_LINEAR,
-        .AddressU = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP,
-        .AddressV = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP,
-        .AddressW = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP,
-        .MipLODBias = 0.0,
-        .MaxAnisotropy = 1,
-        .ComparisonFunc = dx.D3D11_COMPARISON_ALWAYS,
-        .BorderColor = .{ 0.0, 0.0, 0.0, 0.0 },
-        .MinLOD = 0.0,
-        .MaxLOD = dx.D3D11_FLOAT32_MAX,
-    };
+    var samp_desc = std.mem.zeroes(dx.D3D11_SAMPLER_DESC);
+
+    samp_desc.Filter = dx.D3D11_FILTER.MIN_MAG_POINT_MIP_LINEAR;
+    samp_desc.AddressU = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
+    samp_desc.AddressV = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
+    samp_desc.AddressW = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
 
     const sampler = self.device.CreateSamplerState(&samp_desc, &self.dx_options.sampler);
 
