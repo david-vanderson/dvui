@@ -1629,29 +1629,37 @@ pub fn scrolling() !void {
 }
 
 pub fn dialogs(demo_win_id: u32) !void {
-    if (try dvui.button(@src(), "Direct Dialog", .{}, .{})) {
-        show_dialog = true;
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+        if (try dvui.button(@src(), "Direct Dialog", .{}, .{})) {
+            show_dialog = true;
+        }
+
+        if (try dvui.button(@src(), "Giant", .{}, .{})) {
+            try dvui.dialog(@src(), .{ .modal = false, .title = "So Much Text", .ok_label = "Too Much", .max_size = .{.w = 300, .h = 300}, .message = "This is a non modal dialog with no callafter which happens to have just way too much text in it.\n\nLuckily there is a max_size on here and if the text is too big it will be scrolled.\n\nI mean come on there is just way too much text here.\n\nCan you imagine this much text being created for a dialog?\n\nMaybe like a giant error message with a stack trace or dumping the contents of a large struct?\n\nOr a dialog asking way too many questions, or dumping a whole log into the dialog, or just a very long rant." });
+        }
     }
 
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        if (try dvui.button(@src(), "Ok Dialog", .{}, .{})) {
-            try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "This is a non modal dialog with no callafter" });
+        if (try dvui.button(@src(), "Non modal", .{}, .{})) {
+            try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .ok_label = "Done", .message = "This is a non modal dialog with no callafter" });
         }
 
         const dialogsFollowup = struct {
             fn callafter(id: u32, response: enums.DialogResponse) Error!void {
                 _ = id;
                 var buf: [100]u8 = undefined;
-                const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\"", .{@tagName(response)}) catch unreachable;
+                const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\" in the previous dialog", .{@tagName(response)}) catch unreachable;
                 try dvui.dialog(@src(), .{ .title = "Ok Followup Response", .message = text });
             }
         };
 
-        if (try dvui.button(@src(), "Followup", .{}, .{})) {
-            try dvui.dialog(@src(), .{ .title = "Followup", .message = "This is a modal dialog with modal followup", .callafterFn = dialogsFollowup.callafter, .ok_label = "Do it", .cancel_label = "Cancel" });
+        if (try dvui.button(@src(), "Modal with followup", .{}, .{})) {
+            try dvui.dialog(@src(), .{ .title = "Followup", .message = "This is a modal dialog with modal followup", .callafterFn = dialogsFollowup.callafter, .cancel_label = "Cancel" });
         }
     }
 
@@ -2034,7 +2042,7 @@ pub fn dialogDirect() !void {
     const data = struct {
         var extra_stuff: bool = false;
     };
-    var dialog_win = try dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog }, .{});
+    var dialog_win = try dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog, .initial_max_size = .{.w = 500} }, .{});
     defer dialog_win.deinit();
 
     try dvui.windowHeader("Dialog", "", &show_dialog);
