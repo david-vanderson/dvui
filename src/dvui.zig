@@ -3979,6 +3979,7 @@ pub const DialogOptions = struct {
     message: []const u8,
     ok_label: []const u8 = "Ok",
     cancel_label: ?[]const u8 = null,
+    max_size: ?Size = null,
     displayFn: DialogDisplayFn = dialogDisplay,
     callafterFn: ?DialogCallAfterFn = null,
 };
@@ -3996,6 +3997,9 @@ pub fn dialog(src: std.builtin.SourceLocation, opts: DialogOptions) !void {
     dataSetSlice(opts.window, id, "_ok_label", opts.ok_label);
     if (opts.cancel_label) |cl| {
         dataSetSlice(opts.window, id, "_cancel_label", cl);
+    }
+    if (opts.max_size) |ms| {
+        dataSet(opts.window, id, "_max_size", ms);
     }
     if (opts.callafterFn) |ca| {
         dataSet(opts.window, id, "_callafter", ca);
@@ -4032,7 +4036,9 @@ pub fn dialogDisplay(id: u32) !void {
 
     const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
-    var win = try floatingWindow(@src(), .{ .modal = modal }, .{ .id_extra = id });
+    const maxSize = dvui.dataGet(null, id, "_max_size", Size);
+
+    var win = try floatingWindow(@src(), .{ .modal = modal, .initial_max_size = maxSize }, .{ .id_extra = id });
     defer win.deinit();
 
     var header_openflag = true;
@@ -4045,30 +4051,36 @@ pub fn dialogDisplay(id: u32) !void {
         return;
     }
 
-    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
-    try tl.addText(message, .{});
-    tl.deinit();
+    {
+        // Add the buttons at the bottom first, so that they are guaranteed to be shown
+        var hbox = try dvui.box(@src(), .horizontal, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
+        defer hbox.deinit();
 
-    var hbox = try dvui.box(@src(), .horizontal, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
-    defer hbox.deinit();
+        if (cancel_label) |cl| {
+            if (try dvui.button(@src(), cl, .{}, .{ .tab_index = 2 })) {
+                dvui.dialogRemove(id);
+                if (callafter) |ca| {
+                    try ca(id, .cancel);
+                }
+                return;
+            }
+        }
 
-    if (cancel_label) |cl| {
-        if (try dvui.button(@src(), cl, .{}, .{ .tab_index = 2 })) {
+        if (try dvui.button(@src(), ok_label, .{}, .{ .tab_index = 1 })) {
             dvui.dialogRemove(id);
             if (callafter) |ca| {
-                try ca(id, .cancel);
+                try ca(id, .ok);
             }
             return;
         }
     }
 
-    if (try dvui.button(@src(), ok_label, .{}, .{ .tab_index = 1 })) {
-        dvui.dialogRemove(id);
-        if (callafter) |ca| {
-            try ca(id, .ok);
-        }
-        return;
-    }
+    // Now add the scroll area which will get the remaining space
+    var scroll = try dvui.scrollArea(@src(), .{.expand_to_fit = true}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
+    var tl = try dvui.textLayout(@src(), .{}, .{ .background = false, .gravity_x = 0.5 });
+    try tl.addText(message, .{});
+    tl.deinit();
+    scroll.deinit();
 }
 
 pub const Toast = struct {
