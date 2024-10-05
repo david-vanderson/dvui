@@ -107,6 +107,7 @@ const shader =
     \\
     \\float4 PSMain(PSInput input) : SV_TARGET
     \\{
+    \\    if(input.texcoord.x < 0 || input.texcoord.x > 1 || input.texcoord.y < 0 || input.texcoord.y > 1) return input.color;
     \\    float4 sampled = myTexture.Sample(samplerState, input.texcoord);
     \\    return sampled * input.color;
     \\}
@@ -120,7 +121,7 @@ fn convertSpaceToNDC(self: *Dx11Backend, x: f32, y: f32) XMFLOAT3 {
     };
 }
 
-fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex, zero_uvs: bool) ![]SimpleVertex {
+fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex, signal_invalid_uv: bool) ![]SimpleVertex {
     const simple_vertex = try self.arena.alloc(SimpleVertex, vtx.len);
     for (vtx, simple_vertex) |v, *s| {
         const r: f32 = @floatFromInt(v.col.r);
@@ -131,7 +132,7 @@ fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex, zero_uvs: bool)
         s.* = .{
             .position = self.convertSpaceToNDC(v.pos.x, v.pos.y),
             .color = .{ .r = r / 255.0, .g = g / 255.0, .b = b / 255.0, .a = a / 255.0 },
-            .texcoord = if (zero_uvs) .{ .x = 0, .y = 0 } else .{ .x = v.uv[0], .y = v.uv[1] },
+            .texcoord = if (signal_invalid_uv) .{ .x = -1.0, .y = -1.0 } else .{ .x = v.uv[0], .y = v.uv[1] },
         };
     }
 
@@ -499,7 +500,7 @@ pub fn drawClippedTriangles(
 
     var stride: usize = @sizeOf(SimpleVertex);
     var offset: usize = 0;
-    const converted_vtx = self.convertVertices(vtx, false) catch @panic("OOM");
+    const converted_vtx = self.convertVertices(vtx, texture == null) catch @panic("OOM");
     defer self.arena.free(converted_vtx);
 
     self.dx_options.vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {
