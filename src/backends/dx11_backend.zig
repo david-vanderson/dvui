@@ -51,6 +51,7 @@ const DirectxOptions = struct {
     texture_view: ?*dx.ID3D11ShaderResourceView = null,
     sampler: ?*dx.ID3D11SamplerState = null,
     rasterizer: ?*dx.ID3D11RasterizerState = null,
+    blend_state: ?*dx.ID3D11BlendState = null,
 };
 
 pub const InitOptions = struct {
@@ -108,7 +109,6 @@ const shader =
     \\{
     \\    float4 sampled = myTexture.Sample(samplerState, input.texcoord);
     \\    return sampled * input.color;
-    \\    
     \\}
 ;
 
@@ -410,11 +410,23 @@ fn recreateShaderView(self: *Dx11Backend, texture: *anyopaque) void {
 
 fn createSampler(self: *Dx11Backend) !void {
     var samp_desc = std.mem.zeroes(dx.D3D11_SAMPLER_DESC);
-
     samp_desc.Filter = dx.D3D11_FILTER.MIN_MAG_POINT_MIP_LINEAR;
     samp_desc.AddressU = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
     samp_desc.AddressV = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
     samp_desc.AddressW = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
+
+    var blend_desc = std.mem.zeroes(dx.D3D11_BLEND_DESC);
+    blend_desc.RenderTarget[0].BlendEnable = 1;
+    blend_desc.RenderTarget[0].SrcBlend = dx.D3D11_BLEND_SRC_ALPHA;
+    blend_desc.RenderTarget[0].DestBlend = dx.D3D11_BLEND_INV_SRC_ALPHA;
+    blend_desc.RenderTarget[0].BlendOp = dx.D3D11_BLEND_OP_ADD;
+    blend_desc.RenderTarget[0].SrcBlendAlpha = dx.D3D11_BLEND_ONE;
+    blend_desc.RenderTarget[0].DestBlendAlpha = dx.D3D11_BLEND_ZERO;
+    blend_desc.RenderTarget[0].BlendOpAlpha = dx.D3D11_BLEND_OP_ADD;
+    blend_desc.RenderTarget[0].RenderTargetWriteMask = @intFromEnum(dx.D3D11_COLOR_WRITE_ENABLE_ALL);
+
+    _ = self.device.CreateBlendState(&blend_desc, &self.dx_options.blend_state);
+    _ = self.device_context.OMSetBlendState(self.dx_options.blend_state, null, 0xffffffff);
 
     const sampler = self.device.CreateSamplerState(&samp_desc, &self.dx_options.sampler);
 
@@ -534,7 +546,7 @@ pub fn drawClippedTriangles(
 pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
     self.arena = arena;
 
-    var clear_color = [_]f32{ 0.10, 0.10, 0.10, 0.0 };
+    var clear_color = [_]f32{ 1.0, 1.0, 1.0, 0.0 };
     self.device_context.ClearRenderTargetView(self.render_target, @ptrCast((&clear_color).ptr));
 }
 

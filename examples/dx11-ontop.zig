@@ -115,18 +115,18 @@ pub export fn main(
 
             // log.info("post begin", .{});
 
-            // dvui_floating_stuff() catch {
-            //     log.err("Oh no something went horribly wrong!", .{});
-            // };
-            var pixel_data = [_]u8{ 0xff, 0xff, 0x00, 0xff, 0x00, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0xff, 0xff, 0x00, 0xff, 0xff };
-            const tex = dvui.textureCreate((&pixel_data).ptr, 2, 2, .nearest);
-            dvui.textureDestroyLater(tex);
-
-            var frame_box = dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 50, .h = 50 } }) catch continue;
-            dvui.renderTexture(tex, frame_box.data().contentRectScale(), 0, .{}) catch {
-                continue;
+            dvui_floating_stuff() catch {
+                log.err("Oh no something went horribly wrong!", .{});
             };
-            frame_box.deinit();
+            // var pixel_data = [_]u8{ 0xff, 0xff, 0x00, 0xff, 0x00, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0xff, 0xff, 0x00, 0xff, 0xff };
+            // const tex = dvui.textureCreate((&pixel_data).ptr, 2, 2, .nearest);
+            // dvui.textureDestroyLater(tex);
+
+            // var frame_box = dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 100, .h = 100 } }) catch continue;
+            // dvui.renderTexture(tex, frame_box.data().contentRectScale(), 0, .{}) catch {
+            //     continue;
+            // };
+            // frame_box.deinit();
 
             // _ = dvui.button(@src(), "button", .{}, .{}) catch {};
 
