@@ -224,7 +224,7 @@ pub fn demo() !void {
         return;
     }
 
-    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = @min(440, dvui.windowRect().w), .h = @min(400, dvui.windowRect().h) } });
+    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 440, .h = 400 } });
     defer float.deinit();
 
     // pad the fps label so that it doesn't trigger refresh when the number
