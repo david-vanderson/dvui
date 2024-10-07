@@ -16,6 +16,23 @@ pub fn build(b: *std.Build) !void {
     addExample(b, target, optimize, "raylib-standalone", dvui_raylib);
     addExample(b, target, optimize, "raylib-ontop", dvui_raylib);
 
+    const download_accesskit = b.addSystemCommand(&.{"./download-accesskit.sh"});
+
+    const exe = b.addExecutable(.{
+        .name = "sdl-accesskit-hello",
+        .root_source_file = null,
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.addCSourceFile(.{ .file = b.path("examples/sdl_accesskit_hello.c") });
+    exe.linkLibC();
+    exe.linkSystemLibrary("SDL2");
+    exe.linkSystemLibrary("unwind");
+    exe.step.dependOn(&download_accesskit.step);
+    exe.addIncludePath(b.path("accesskit-c-0.13.0/include"));
+    exe.addObjectFile(b.path("accesskit-c-0.13.0/lib/linux/x86_64/static/libaccesskit.a"));
+    addRunStep(b, "sdl-accesskit-hello", exe);
+
     // web test
     {
         const webtarget = std.Target.Query{
@@ -207,6 +224,10 @@ fn addExample(
     });
     exe.root_module.addImport("dvui", dvui_mod);
 
+    addRunStep(b, name, exe);
+}
+
+fn addRunStep(b: *std.Build, comptime name: []const u8, exe: *std.Build.Step.Compile) void {
     const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
     compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
     b.getInstallStep().dependOn(compile_step);
