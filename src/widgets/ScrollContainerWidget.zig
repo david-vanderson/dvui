@@ -34,7 +34,7 @@ prevClip: Rect = Rect{},
 
 nextVirtualSize: Size = Size{},
 expand_to_fit: bool = false,
-next_widget_ypos: f32 = 0, // goes from 0 to viritualSize.h
+seen_expanded_child: bool = false,
 
 lock_visible: bool = false,
 first_visible_id: u32 = 0,
@@ -58,7 +58,6 @@ pub fn init(src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, opts: 
     self.si.viewport.w = crect.w;
     self.si.viewport.h = crect.h;
 
-    self.next_widget_ypos = 0;
     return self;
 }
 
@@ -204,7 +203,28 @@ pub fn data(self: *ScrollContainerWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *ScrollContainerWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    const y = self.next_widget_ypos;
+    // todo: do horizontal properly
+    if (self.seen_expanded_child) {
+        // Having one expanded child makes sense - could be taking the rest of
+        // the given space or filling the visible space (if bigger than the min
+        // virtual size).  But that should be the last (usually only) child
+        // that asks for space.
+        //
+        // We saw an expanded child and gave it the rest of the space, and now
+        // another child has asked for space, which shouldn't happen.  Visually
+        // the new child might not appear at all or appear on top of the
+        // expanded child.
+        //
+        // If you are reading this, make sure that children of scrollArea() are
+        // not expanded in the scrollArea's layout direction, or that only the
+        // last child is.
+        dvui.currentWindow().debug_widget_id = id;
+        dvui.log.debug("{s}:{d} ScrollContainerWidget.rectFor() got child {x} after expanded child", .{ @src().file, @src().line, id });
+    } else if (e.isVertical()) {
+        self.seen_expanded_child = true;
+    }
+
+    const y = self.nextVirtualSize.h;
 
     const h = switch (self.si.vertical) {
         // no scrolling, you only get the visible space
@@ -248,7 +268,6 @@ pub fn screenRectScale(self: *ScrollContainerWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *ScrollContainerWidget, s: Size) void {
-    self.next_widget_ypos += s.h;
     self.nextVirtualSize.h += s.h;
     self.nextVirtualSize.w = @max(self.nextVirtualSize.w, s.w);
 }
