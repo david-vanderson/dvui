@@ -1948,6 +1948,14 @@ pub fn debuggingErrors() !void {
         }
     }
 
+    if (try dvui.expander(@src(), "Scroll child after expanded child (will log error)", .{}, .{ .expand = .horizontal })) {
+        var scroll = try dvui.scrollArea(@src(), .{}, .{ .min_size_content = .{ .w = 200, .h = 80 } });
+        defer scroll.deinit();
+
+        _ = try dvui.button(@src(), "Expanded\nChild\n", .{}, .{ .expand = .both });
+        _ = try dvui.button(@src(), "Second Child", .{}, .{});
+    }
+
     if (try dvui.expander(@src(), "Debug key bindings", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
