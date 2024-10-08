@@ -1861,7 +1861,7 @@ pub fn animations() !void {
 
         try dvui.label(@src(), "Estimate of frame overhead {d:6} us", .{dvui.currentWindow().loop_target_slop}, .{});
 
-        if (dvui.timerDone(mslabel.wd.id) or !dvui.timerExists(mslabel.wd.id)) {
+        if (dvui.timerDoneOrNone(mslabel.wd.id)) {
             const wait = 1000 * (1000 - left);
             try dvui.timer(mslabel.wd.id, wait);
         }
@@ -1876,7 +1876,7 @@ pub fn animations() !void {
 
         // example of how to run frames at a certain fps
         const millis_per_frame = 500;
-        if (dvui.timerDone(box.data().id) or !dvui.timerExists(box.data().id)) {
+        if (dvui.timerDoneOrNone(box.data().id)) {
             const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);
             const left = @as(i32, @intCast(@rem(millis, millis_per_frame)));
             const wait = 1000 * (millis_per_frame - left);
