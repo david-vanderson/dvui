@@ -78,6 +78,7 @@ pub fn data(self: *BoxWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *BoxWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    _ = id;
     var current_weight: f32 = 0.0;
     if (self.equal_space or (self.dir == .horizontal and e.isHorizontal()) or (self.dir == .vertical and e.isVertical())) {
         current_weight = 1.0;
@@ -91,11 +92,9 @@ pub fn rectFor(self: *BoxWidget, id: u32, min_size: Size, e: Options.Expand, g: 
         }
     }
 
-    const child_size = dvui.minSize(id, min_size);
-
     var rect = self.childRect;
-    rect.w = @min(rect.w, child_size.w);
-    rect.h = @min(rect.h, child_size.h);
+    rect.w = @min(rect.w, min_size.w);
+    rect.h = @min(rect.h, min_size.h);
 
     if (self.dir == .horizontal) {
         rect.h = self.childRect.h;
@@ -129,7 +128,7 @@ pub fn rectFor(self: *BoxWidget, id: u32, min_size: Size, e: Options.Expand, g: 
         }
     }
 
-    return dvui.placeIn(rect, child_size, e, g);
+    return dvui.placeIn(rect, min_size, e, g);
 }
 
 pub fn screenRectScale(self: *BoxWidget, rect: Rect) RectScale {

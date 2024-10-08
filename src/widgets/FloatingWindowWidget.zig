@@ -523,7 +523,8 @@ pub fn data(self: *FloatingWindowWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *FloatingWindowWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    return dvui.placeIn(self.wd.contentRect().justSize(), dvui.minSize(id, min_size), e, g);
+    _ = id;
+    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *FloatingWindowWidget, rect: Rect) RectScale {

@@ -2249,7 +2249,8 @@ pub const StrokeTest = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
-        return dvui.placeIn(self.wd.contentRect().justSize(), dvui.minSize(id, min_size), e, g);
+        _ = id;
+        return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
     }
 
     pub fn screenRectScale(self: *Self, r: dvui.Rect) dvui.RectScale {

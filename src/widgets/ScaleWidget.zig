@@ -51,7 +51,8 @@ pub fn rectFor(self: *ScaleWidget, id: u32, min_size: Size, e: Options.Expand, g
         s = 1_000_000.0;
     }
 
-    return dvui.placeIn(self.wd.contentRect().justSize().scale(s), dvui.minSize(id, min_size), e, g);
+    _ = id;
+    return dvui.placeIn(self.wd.contentRect().justSize().scale(s), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *ScaleWidget, rect: Rect) RectScale {

@@ -38,22 +38,23 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     }
 
     self.min_size = self.options.min_sizeGet();
+    const ms = dvui.minSize(self.id, self.min_size);
 
     if (self.options.rect) |r| {
         self.rect = r;
         if (self.options.expandGet().isHorizontal()) {
             self.rect.w = self.parent.data().contentRect().w;
         } else if (self.rect.w == 0) {
-            self.rect.w = dvui.minSize(self.id, self.min_size).w;
+            self.rect.w = ms.w;
         }
 
         if (self.options.expandGet().isVertical()) {
             self.rect.h = self.parent.data().contentRect().h;
         } else if (self.rect.h == 0) {
-            self.rect.h = dvui.minSize(self.id, self.min_size).h;
+            self.rect.h = ms.h;
         }
     } else {
-        self.rect = self.parent.rectFor(self.id, self.min_size, self.options.expandGet(), self.options.gravityGet());
+        self.rect = self.parent.rectFor(self.id, ms, self.options.expandGet(), self.options.gravityGet());
     }
 
     var cw = dvui.currentWindow();
