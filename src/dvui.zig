@@ -1613,7 +1613,8 @@ pub fn FPS() f32 {
 
 /// Get the Widget that would be the parent of a new widget.
 ///
-/// dvui.parentGet().extendId(@src, id_extra) is how new widgets get their id.
+/// dvui.parentGet().extendId(@src(), id_extra) is how new widgets get their
+/// id, and can be used to make a unique id without making a widget.
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn parentGet() Widget {
@@ -1713,6 +1714,13 @@ pub fn firstFrame(id: u32) bool {
     return minSizeGet(id) == null;
 }
 
+/// Get the min size recorded for id from last frame or null if id was not seen
+/// last frame.
+///
+/// Usually you want minSize() to combine min size from last frame with a min
+/// size provided by the user code.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn minSizeGet(id: u32) ?Size {
     var cw = currentWindow();
     const saved_size = cw.min_sizes.getPtr(id);
@@ -1723,6 +1731,32 @@ pub fn minSizeGet(id: u32) ?Size {
     }
 }
 
+/// Return the maximum of min_size and the min size for id from last frame.
+///
+/// See minSizeGet() to get only the min size from last frame.
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn minSize(id: u32, min_size: Size) Size {
+    var size = min_size;
+
+    // Need to take the max of both given and previous.  ScrollArea could be
+    // passed a min size Size{.w = 0, .h = 200} meaning to get the width from the
+    // previous min size.
+    if (minSizeGet(id)) |ms| {
+        size = Size.max(size, ms);
+    }
+
+    return size;
+}
+
+/// Make a unique id from src and id_extra, without a parent widget.  This is
+/// how the initial parent widget id is created, and also toasts and dialogs
+/// from other threads.
+///
+/// See Widget.extendId() which does similar but on top of a parent id.
+///
+/// dvui.parentGet().extendId(@src(), id_extra) is how new widgets get their
+/// id, and can be used to make a unique id without making a widget.
 pub fn hashSrc(src: std.builtin.SourceLocation, id_extra: usize) u32 {
     var hash = fnv.init();
     hash.update(src.file);
@@ -1732,17 +1766,14 @@ pub fn hashSrc(src: std.builtin.SourceLocation, id_extra: usize) u32 {
     return hash.final();
 }
 
+/// Make a new id by combining id with the contents of key.  This is how dvui
+/// tracks things in dataGet/Set, animation, and timer.
 pub fn hashIdKey(id: u32, key: []const u8) u32 {
     var h = fnv.init();
     h.value = id;
     h.update(key);
     return h.final();
 }
-
-const DataOffset = struct {
-    begin: u32,
-    end: u32,
-};
 
 /// Set key/value pair for given id.
 ///
@@ -1831,6 +1862,16 @@ pub fn dataGet(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
     }
 }
 
+/// Retrieve the value for given key associated with id.  If no value was stored, store default and then return it.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside window.begin()/end(), you must
+/// pass a pointer to the Window you want to add the data to.
+///
+/// If you want a pointer to the stored data, use dataGetPtrDefault().
+///
+/// If you want to get the contents of a stored slice, use dataGetSlice().
 pub fn dataGetDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: T) T {
     if (dataGetInternal(win, id, key, T, false)) |bytes| {
         return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
@@ -1840,6 +1881,20 @@ pub fn dataGetDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type,
     }
 }
 
+/// Retrieve a pointer to the value for given key associated with id.  If no
+/// value was stored, store default and then return a pointer to the stored
+/// value.
+///
+/// Can be called from any thread.
+///
+/// If called from non-GUI thread or outside window.begin()/end(), you must
+/// pass a pointer to the Window you want to add the data to.
+///
+/// Returns a pointer to internal storage, which will be freed after a frame
+/// where there is no call to any dataGet/dataSet functions for that id/key
+/// combination.
+///
+/// If you want to get the contents of a stored slice, use dataGetSlice().
 pub fn dataGetPtrDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: T) *T {
     if (dataGetPtr(win, id, key, T)) |ptr| {
         return ptr;
@@ -1952,19 +2007,8 @@ pub fn dataRemove(win: ?*Window, id: u32, key: []const u8) void {
     }
 }
 
-pub fn minSize(id: u32, min_size: Size) Size {
-    var size = min_size;
-
-    // Need to take the max of both given and previous.  ScrollArea could be
-    // passed a min size Size{.w = 0, .h = 200} meaning to get the width from the
-    // previous min size.
-    if (minSizeGet(id)) |ms| {
-        size = Size.max(size, ms);
-    }
-
-    return size;
-}
-
+/// Make the Rect a widget will get given the available space, the min size
+/// wanted, expand, and gravity.
 pub fn placeIn(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     var size = min_size;
 
@@ -1987,6 +2031,9 @@ pub fn placeIn(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravit
     return r;
 }
 
+/// Get the slice of Events for this frame.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn events() []Event {
     return currentWindow().events.items;
 }
@@ -1997,8 +2044,17 @@ pub const EventMatchOptions = struct {
     cleanup: bool = false,
 };
 
-// returns true if the given event should normally be processed according to
-// the options given
+/// Should e be processed by a widget with the given id and screen rect?
+///
+/// This is the core event matching logic and includes keyboard focus and mouse
+/// capture.  Call this on each event in events() to know whether to process.
+///
+/// If asking whether an existing widget would process an event (if you are
+/// wrapping a widget), that widget should have a matchEvent() which calls this
+/// internally but might extend the logic, or use that function to track state
+/// (like whether a modifier key is being pressed).
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     if (e.handled) return false;
 
@@ -2059,14 +2115,14 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     return true;
 }
 
-// Animations
-// start_time and end_time are relative to the current frame time.  At the
-// start of each frame both are reduced by the micros since the last frame.
-//
-// An animation will be active thru a frame where its end_time is <= 0, and be
-// deleted at the beginning of the next frame.  See Spinner for an example of
-// how to have a seemless continuous animation.
-
+/// Animation state - see animation() and animationGet().
+///
+/// start_time and end_time are relative to the current frame time.  At the
+/// start of each frame both are reduced by the micros since the last frame.
+///
+/// An animation will be active thru a frame where its end_time is <= 0, and be
+/// deleted at the beginning of the next frame.  See Spinner for an example of
+/// how to have a seemless continuous animation.
 pub const Animation = struct {
     used: bool = true,
     start_val: f32 = 0,
@@ -2090,6 +2146,9 @@ pub const Animation = struct {
     }
 };
 
+/// Add animation a to key associated with id.  See Animation.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn animation(id: u32, key: []const u8, a: Animation) void {
     var cw = currentWindow();
     const h = hashIdKey(id, key);
@@ -2100,6 +2159,9 @@ pub fn animation(id: u32, key: []const u8, a: Animation) void {
     };
 }
 
+/// Retrieve an animation previously added with animation().  See Animation.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn animationGet(id: u32, key: []const u8) ?Animation {
     var cw = currentWindow();
     const h = hashIdKey(id, key);
@@ -2112,10 +2174,19 @@ pub fn animationGet(id: u32, key: []const u8) ?Animation {
     return null;
 }
 
+/// Add a timer for id that will be timerDone() on the first frame after micros
+/// has passed.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn timer(id: u32, micros: i32) !void {
     try currentWindow().timer(id, micros);
 }
 
+/// Return the number of micros left on the timer for id if there is one.  If
+/// timerDone(), this value will be <= 0 and represents how many micros this
+/// frame is past the timer expiration.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn timerGet(id: u32) ?i32 {
     if (animationGet(id, "_timer")) |a| {
         return a.end_time;
@@ -2124,11 +2195,9 @@ pub fn timerGet(id: u32) ?i32 {
     }
 }
 
-pub fn timerExists(id: u32) bool {
-    return timerGet(id) != null;
-}
-
-// returns true only on the frame where the timer expired
+/// Return true on the first frame after a timer has expired.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn timerDone(id: u32) bool {
     if (timerGet(id)) |end_time| {
         if (end_time <= 0) {
@@ -2137,6 +2206,14 @@ pub fn timerDone(id: u32) bool {
     }
 
     return false;
+}
+
+/// Return true if timerDone() or if there is no timer.  Useful for periodic
+/// events (see Clock example).
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn timerDoneOrNone(id: u32) bool {
+    return timerDone(id) or (timerGet(id) == null);
 }
 
 const TabIndex = struct {
@@ -4076,7 +4153,7 @@ pub fn dialogDisplay(id: u32) !void {
     }
 
     // Now add the scroll area which will get the remaining space
-    var scroll = try dvui.scrollArea(@src(), .{.expand_to_fit = true}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
+    var scroll = try dvui.scrollArea(@src(), .{ .expand_to_fit = true }, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
     var tl = try dvui.textLayout(@src(), .{}, .{ .background = false, .gravity_x = 0.5 });
     try tl.addText(message, .{});
     tl.deinit();
