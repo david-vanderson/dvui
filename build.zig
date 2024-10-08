@@ -22,6 +22,7 @@ pub fn build(b: *std.Build) !void {
     addExample(b, target, optimize, "raylib-standalone", dvui_raylib);
     addExample(b, target, optimize, "raylib-ontop", dvui_raylib);
     addExample(b, target, optimize, "dx11-ontop", dvui_dx11);
+    addExample(b, target, optimize, "dx11-standalone", dvui_dx11);
 
     // web test
     {

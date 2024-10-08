@@ -1,20 +1,34 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
-
 const win = @import("zigwin32");
-const RECT = win.foundation.RECT;
+
+const w = std.os.windows;
+const UINT = w.UINT;
+const INT = w.INT;
+
 const graphics = win.graphics;
+const ui = win.ui.windows_and_messaging;
+const key = win.ui.input.keyboard_and_mouse;
+const hi_dpi = win.ui.hi_dpi;
+
+const RECT = win.foundation.RECT;
+const HINSTANCE = win.foundation.HINSTANCE;
+const HWND = win.foundation.HWND;
+const BOOL = win.foundation.BOOL;
+
+const WNDCLASSEX = ui.WNDCLASSEXW;
 
 const dxgic = dxgi.common;
 
 const dxgi = graphics.dxgi;
 const dx = graphics.direct3d11;
 const d3d = graphics.direct3d;
+const gdi = graphics.gdi;
+
+const HDC = gdi.HDC;
 
 const L = win.zig.L;
-
-const ui = win.ui.windows_and_messaging;
 
 const Dx11Backend = @This();
 pub const Context = *Dx11Backend;
@@ -23,22 +37,37 @@ device: *dx.ID3D11Device,
 device_context: *dx.ID3D11DeviceContext,
 swap_chain: *dxgi.IDXGISwapChain,
 
-hwnd: ?win.foundation.HWND = null,
+window: ?WindowOptions = null,
 render_target: ?*dx.ID3D11RenderTargetView = null,
 dx_options: DirectxOptions = .{},
-we_own_window: bool = false,
 touch_mouse_events: bool = false,
 log_events: bool = false,
 initial_scale: f32 = 1.0,
 
-width: f32 = 1280.0,
-height: f32 = 760.0,
+options: InitOptions,
 
 // TODO: Figure out cursor situation
 // cursor_last: dvui.enums.Cursor = .arrow,
 // something dx cursor
 
 arena: std.mem.Allocator = undefined,
+
+const WindowOptions = struct {
+    alloc: std.mem.Allocator,
+    instance: HINSTANCE,
+    hwnd: win.foundation.HWND,
+    hwnd_dc: gdi.HDC,
+
+    // Thanks windows!
+    utf16_wnd_title: [:0]u16,
+
+    pub fn deinit(self: WindowOptions) void {
+        _ = gdi.ReleaseDC(self.hwnd, self.hwnd_dc);
+        _ = ui.UnregisterClassW(self.utf16_wnd_title, self.instance);
+        _ = ui.DestroyWindow(self.hwnd);
+        self.alloc.free(self.utf16_wnd_title);
+    }
+};
 
 const DirectxOptions = struct {
     vertex_shader: ?*dx.ID3D11VertexShader = null,
@@ -52,6 +81,42 @@ const DirectxOptions = struct {
     sampler: ?*dx.ID3D11SamplerState = null,
     rasterizer: ?*dx.ID3D11RasterizerState = null,
     blend_state: ?*dx.ID3D11BlendState = null,
+
+    pub fn deinit(self: DirectxOptions) void {
+        if (self.vertex_shader) |vs| {
+            _ = vs.IUnknown.Release();
+        }
+        if (self.vertex_bytes) |vb| {
+            _ = vb.IUnknown.Release();
+        }
+        if (self.pixel_shader) |ps| {
+            _ = ps.IUnknown.Release();
+        }
+        if (self.pixel_bytes) |pb| {
+            _ = pb.IUnknown.Release();
+        }
+        if (self.vertex_layout) |vl| {
+            _ = vl.IUnknown.Release();
+        }
+        if (self.vertex_buffer) |vb| {
+            _ = vb.IUnknown.Release();
+        }
+        if (self.index_buffer) |ib| {
+            _ = ib.IUnknown.Release();
+        }
+        if (self.texture_view) |tv| {
+            _ = tv.IUnknown.Release();
+        }
+        if (self.sampler) |s| {
+            _ = s.IUnknown.Release();
+        }
+        if (self.rasterizer) |r| {
+            _ = r.IUnknown.Release();
+        }
+        if (self.blend_state) |bs| {
+            _ = bs.IUnknown.Release();
+        }
+    }
 };
 
 pub const InitOptions = struct {
@@ -74,7 +139,9 @@ pub const InitOptions = struct {
 pub const Directx11Options = struct {
     /// The device
     device: *dx.ID3D11Device,
+    /// The Context
     device_context: *dx.ID3D11DeviceContext,
+    /// The Swap chain
     swap_chain: *dxgi.IDXGISwapChain,
 };
 
@@ -115,8 +182,8 @@ const shader =
 
 fn convertSpaceToNDC(self: *Dx11Backend, x: f32, y: f32) XMFLOAT3 {
     return XMFLOAT3{
-        .x = (2.0 * x / self.width) - 1.0,
-        .y = 1.0 - (2.0 * y / self.height),
+        .x = (2.0 * x / self.options.size.w) - 1.0,
+        .y = 1.0 - (2.0 * y / self.options.size.h),
         .z = 0.0,
     };
 }
@@ -139,12 +206,197 @@ fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex, signal_invalid_
     return simple_vertex;
 }
 
+fn createWindow(instance: HINSTANCE, options: InitOptions) !WindowOptions {
+    const wnd_title = try std.unicode.utf8ToUtf16LeAllocZ(options.allocator, options.title);
+    const wnd_class: WNDCLASSEX = .{
+        .cbSize = @sizeOf(WNDCLASSEX),
+        .style = .{ .DBLCLKS = 1, .OWNDC = 1 },
+        .lpfnWndProc = windowProc,
+        .cbClsExtra = 0,
+        .cbWndExtra = 0,
+        .hInstance = instance,
+        .hIcon = null,
+        .hCursor = ui.LoadCursorW(null, ui.IDC_ARROW),
+        .hbrBackground = null,
+        .lpszMenuName = null,
+        .lpszClassName = @ptrCast(wnd_title.ptr),
+        .hIconSm = null,
+    };
+    var wnd_size: RECT = .{
+        .left = 0,
+        .top = 0,
+        .right = @intFromFloat(options.size.w),
+        .bottom = @intFromFloat(options.size.h),
+    };
+
+    _ = ui.RegisterClassExW(&wnd_class);
+    var overlap = ui.WS_OVERLAPPEDWINDOW;
+    _ = ui.AdjustWindowRectEx(
+        @ptrCast(&wnd_size),
+        overlap,
+        w.FALSE,
+        .{ .APPWINDOW = 1, .WINDOWEDGE = 1 },
+    );
+
+    overlap.VISIBLE = 1;
+    const wnd = ui.CreateWindowExW(
+        .{ .APPWINDOW = 1, .WINDOWEDGE = 1 },
+        wnd_title,
+        wnd_title,
+        overlap,
+        ui.CW_USEDEFAULT,
+        ui.CW_USEDEFAULT,
+        0,
+        0,
+        null,
+        null,
+        instance,
+        null,
+    ) orelse {
+        std.debug.print("This didn't do anything\n", .{});
+        std.process.exit(1);
+    };
+
+    const wnd_dc = gdi.GetDC(wnd).?;
+    const dpi = hi_dpi.GetDpiForWindow(wnd);
+    const xcenter = @divFloor(hi_dpi.GetSystemMetricsForDpi(@intFromEnum(ui.SM_CXSCREEN), dpi), 2);
+    const ycenter = @divFloor(hi_dpi.GetSystemMetricsForDpi(@intFromEnum(ui.SM_CYSCREEN), dpi), 2);
+
+    const width_floor: i32 = @intFromFloat(@divFloor(options.size.w, 2));
+    const height_floor: i32 = @intFromFloat(@divFloor(options.size.h, 2));
+
+    wnd_size.left = xcenter - width_floor;
+    wnd_size.top = ycenter - height_floor;
+    wnd_size.right = wnd_size.left + width_floor;
+    wnd_size.bottom = wnd_size.top + height_floor;
+
+    _ = ui.SetWindowPos(wnd, null, wnd_size.left, wnd_size.top, wnd_size.right, wnd_size.bottom, ui.SWP_NOCOPYBITS);
+
+    return WindowOptions{
+        .alloc = options.allocator,
+        .instance = instance,
+        .hwnd = wnd,
+        .hwnd_dc = wnd_dc,
+        .utf16_wnd_title = wnd_title,
+    };
+}
+
+fn createDeviceD3D(hwnd: HWND, opt: InitOptions) ?Dx11Backend.Directx11Options {
+    var rc: RECT = undefined;
+    _ = ui.GetClientRect(hwnd, &rc);
+
+    var sd = std.mem.zeroes(dxgi.DXGI_SWAP_CHAIN_DESC);
+    sd.BufferCount = 6;
+    sd.BufferDesc.Width = @intFromFloat(opt.size.w);
+    sd.BufferDesc.Height = @intFromFloat(opt.size.h);
+    sd.BufferDesc.Format = dxgic.DXGI_FORMAT_R8G8B8A8_UNORM;
+    sd.BufferDesc.RefreshRate.Numerator = 60;
+    sd.BufferDesc.RefreshRate.Denominator = 1;
+    sd.Flags = @intFromEnum(dxgi.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
+    sd.BufferUsage = dxgi.DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    @setRuntimeSafety(false);
+    sd.OutputWindow = hwnd;
+    @setRuntimeSafety(true);
+    sd.SampleDesc.Count = 1;
+    sd.SampleDesc.Quality = 0;
+    sd.Windowed = w.TRUE;
+    sd.SwapEffect = dxgi.DXGI_SWAP_EFFECT_DISCARD;
+
+    const createDeviceFlags: dx.D3D11_CREATE_DEVICE_FLAG = .{
+        .DEBUG = 1,
+    };
+    //createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    var featureLevel: d3d.D3D_FEATURE_LEVEL = undefined;
+    const featureLevelArray = &[_]d3d.D3D_FEATURE_LEVEL{ d3d.D3D_FEATURE_LEVEL_11_0, d3d.D3D_FEATURE_LEVEL_10_0 };
+
+    var device: ?*dx.ID3D11Device = null;
+    var device_context: ?*dx.ID3D11DeviceContext = null;
+    var swap_chain: ?*dxgi.IDXGISwapChain = null;
+
+    var res: win.foundation.HRESULT = dx.D3D11CreateDeviceAndSwapChain(
+        null,
+        d3d.D3D_DRIVER_TYPE_HARDWARE,
+        null,
+        createDeviceFlags,
+        featureLevelArray,
+        2,
+        dx.D3D11_SDK_VERSION,
+        &sd,
+        &swap_chain,
+        &device,
+        &featureLevel,
+        &device_context,
+    );
+
+    if (res == dxgi.DXGI_ERROR_UNSUPPORTED) {
+        res = dx.D3D11CreateDeviceAndSwapChain(
+            null,
+            d3d.D3D_DRIVER_TYPE_WARP,
+            null,
+            createDeviceFlags,
+            featureLevelArray,
+            2,
+            dx.D3D11_SDK_VERSION,
+            &sd,
+            &swap_chain,
+            &device,
+            &featureLevel,
+            &device_context,
+        );
+    }
+    if (!isOk(res))
+        return null;
+
+    return Dx11Backend.Directx11Options{
+        .device = device.?,
+        .device_context = device_context.?,
+        .swap_chain = swap_chain.?,
+    };
+}
+
+fn windowProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(w.WINAPI) w.LRESULT {
+    switch (umsg) {
+        ui.WM_DESTROY => {
+            ui.PostQuitMessage(0);
+            return 0;
+        },
+        ui.WM_PAINT => {
+            var ps: win.graphics.gdi.PAINTSTRUCT = undefined;
+            const hdc: HDC = gdi.BeginPaint(hwnd, &ps) orelse undefined;
+            _ = gdi.FillRect(hdc, @ptrCast(&ps.rcPaint), @ptrFromInt(@intFromEnum(ui.COLOR_WINDOW) + 1));
+            _ = gdi.EndPaint(hwnd, &ps);
+        },
+        ui.WM_SIZE => {
+            // // TODO: make those 2 values actually mean something in this scope
+            // const resize_width: u32 = @truncate(lparam);
+            // _ = resize_width; // autofix
+            // const resize_height: u32 = @intCast(lparam >> 16);
+            // _ = resize_height; // autofix
+        },
+        ui.WM_KEYDOWN, ui.WM_SYSKEYDOWN => {
+            const as_vkey: key.VIRTUAL_KEY = @enumFromInt(wparam);
+            switch (as_vkey) {
+                key.VK_ESCAPE => {
+                    if (key.GetAsyncKeyState(@intFromEnum(key.VK_LSHIFT)) & 0x01 == 1) { //SHIFT+ESC = EXIT
+                        ui.PostQuitMessage(0);
+                        return 0;
+                    }
+                },
+                else => {},
+            }
+        },
+        else => _ = .{},
+    }
+
+    return ui.DefWindowProcW(hwnd, umsg, wparam, lparam);
+}
+
 pub fn setViewport(self: *Dx11Backend) void {
     var vp = dx.D3D11_VIEWPORT{
         .TopLeftX = 0.0,
         .TopLeftY = 0.0,
-        .Width = self.width,
-        .Height = self.height,
+        .Width = self.options.size.w,
+        .Height = self.options.size.h,
         .MinDepth = 0.0,
         .MaxDepth = 1.0,
     };
@@ -153,21 +405,38 @@ pub fn setViewport(self: *Dx11Backend) void {
 }
 
 pub fn setDimensions(self: *Dx11Backend, rect: RECT) void {
-    self.width = @floatFromInt(rect.right - rect.left);
-    self.height = @floatFromInt(rect.bottom - rect.top);
+    self.options.size.w = @floatFromInt(rect.right - rect.left);
+    self.options.size.h = @floatFromInt(rect.bottom - rect.top);
 }
 
 pub fn init(options: InitOptions, dx_options: Directx11Options) !Dx11Backend {
-    _ = options;
     return Dx11Backend{
         .device = dx_options.device,
         .swap_chain = dx_options.swap_chain,
         .device_context = dx_options.device_context,
+        .options = options,
+    };
+}
+
+pub fn initWindow(instance: HINSTANCE, cmd_show: INT, options: InitOptions) !Dx11Backend {
+    const window_options = try createWindow(instance, options);
+    const dx_options = createDeviceD3D(window_options.hwnd, options) orelse return error.D3dDeviceInitFailed;
+
+    _ = ui.ShowWindow(window_options.hwnd, @bitCast(cmd_show));
+    _ = gdi.UpdateWindow(window_options.hwnd);
+
+    return Dx11Backend{
+        .device = dx_options.device,
+        .device_context = dx_options.device_context,
+        .swap_chain = dx_options.swap_chain,
+        .window = window_options,
+        .options = options,
     };
 }
 
 pub fn deinit(self: Dx11Backend) void {
-    if (self.we_own_window) {
+    if (self.window) |instance| {
+        instance.deinit();
         _ = self.device.IUnknown.Release();
         _ = self.device_context.IUnknown.Release();
         _ = self.swap_chain.IUnknown.Release();
@@ -177,17 +446,7 @@ pub fn deinit(self: Dx11Backend) void {
         _ = rt.IUnknown.Release();
     }
 
-    if (self.dx_options.vertex_shader) |vs| {
-        _ = vs.IUnknown.Release();
-    }
-
-    if (self.dx_options.pixel_shader) |ps| {
-        _ = ps.IUnknown.Release();
-    }
-
-    if (self.dx_options.vertex_layout) |vl| {
-        _ = vl.IUnknown.Release();
-    }
+    self.dx_options.deinit();
 }
 
 fn isOk(res: win.foundation.HRESULT) bool {
@@ -290,7 +549,7 @@ pub fn createRenderTarget(self: *Dx11Backend) !void {
     var back_buffer: ?*dx.ID3D11Texture2D = null;
 
     _ = self.swap_chain.GetBuffer(0, dx.IID_ID3D11Texture2D, @ptrCast(&back_buffer));
-    // defer _ = back_buffer.?.IUnknown.Release();
+    defer _ = back_buffer.?.IUnknown.Release();
 
     _ = self.device.CreateRenderTargetView(
         @ptrCast(back_buffer),
@@ -308,7 +567,7 @@ pub fn cleanupRenderTarget(self: *Dx11Backend) void {
 
 pub fn handleSwapChainResizing(self: *Dx11Backend, width: *c_uint, height: *c_uint) !void {
     self.cleanupRenderTarget();
-    _ = self.swap_chain.vtable.ResizeBuffers(self.swap_chain, 0, width.*, height.*, dxgic.DXGI_FORMAT_UNKNOWN, 0);
+    _ = self.swap_chain.ResizeBuffers(0, width.*, height.*, dxgic.DXGI_FORMAT_UNKNOWN, 0);
     width.* = 0;
     height.* = 0;
     try self.createRenderTarget();
@@ -512,8 +771,6 @@ pub fn drawClippedTriangles(
         return;
     };
 
-    //self.width = clipr.w;
-    //self.height = clipr.h;
     self.setViewport();
 
     if (texture) |tex| self.recreateShaderView(tex);
@@ -544,15 +801,29 @@ pub fn drawClippedTriangles(
     self.device_context.RSSetScissorRects(nums, @ptrCast(&scissor_rect));
 }
 
+pub fn isExitRequested() bool {
+    var msg: ui.MSG = std.mem.zeroes(ui.MSG);
+
+    while (ui.PeekMessageA(&msg, null, 0, 0, ui.PM_REMOVE) != 0) {
+        _ = ui.TranslateMessage(&msg);
+        _ = ui.DispatchMessageW(&msg);
+        if (msg.message == ui.WM_QUIT) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
     self.arena = arena;
 
     var clear_color = [_]f32{ 1.0, 1.0, 1.0, 0.0 };
-    self.device_context.ClearRenderTargetView(self.render_target, @ptrCast((&clear_color).ptr));
+    self.device_context.ClearRenderTargetView(self.render_target orelse return, @ptrCast((&clear_color).ptr));
 }
 
 pub fn end(self: *Dx11Backend) void {
-    _ = self.swap_chain.Present(0, 0);
+    _ = self.swap_chain.Present(if (self.options.vsync) 1 else 0, 0);
 
     if (self.dx_options.vertex_buffer) |vb| {
         _ = vb.IUnknown.Release();
@@ -577,6 +848,10 @@ pub fn windowSize(self: *Dx11Backend) dvui.Size {
 
 pub fn contentScale(self: *Dx11Backend) f32 {
     return self.initial_scale;
+}
+
+pub fn hasEvent(_: *Dx11Backend) bool {
+    return false;
 }
 
 pub fn backend(self: *Dx11Backend) dvui.Backend {
@@ -610,4 +885,28 @@ pub fn openURL(self: *Dx11Backend, url: []const u8) !void {
 
 pub fn refresh(self: *Dx11Backend) void {
     _ = self;
+}
+
+pub fn addAllEvents(self: *Dx11Backend, window: *dvui.Window) !bool {
+    _ = self;
+    _ = window;
+    return false;
+}
+
+pub fn setCursor(self: *Dx11Backend, new_cursor: dvui.enums.Cursor) void {
+    _ = self; // autofix
+    const converted_cursor = switch (new_cursor) {
+        .arrow => {},
+        .ibeam => {},
+        .wait, .wait_arrow => {},
+        .crosshair => {},
+        .arrow_nw_se => {},
+        .arrow_ne_sw => {},
+        .arrow_w_e => {},
+        .arrow_n_s => {},
+        .arrow_all => {},
+        .bad => {},
+        .hand => {},
+    };
+    _ = converted_cursor; // autofix
 }
