@@ -3908,10 +3908,11 @@ pub const Window = struct {
     }
 
     pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+        _ = id;
         var r = self.wd.rect;
         r.y = self.next_widget_ypos;
         r.h -= r.y;
-        const ret = placeIn(r, minSize(id, min_size), e, g);
+        const ret = placeIn(r, min_size, e, g);
         self.next_widget_ypos += ret.h;
         return ret;
     }

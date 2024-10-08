@@ -60,7 +60,8 @@ pub fn data(self: *ReorderWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *ReorderWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    return dvui.placeIn(self.wd.contentRect().justSize(), dvui.minSize(id, min_size), e, g);
+    _ = id;
+    return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *ReorderWidget, rect: Rect) RectScale {
@@ -340,7 +341,8 @@ pub const Reorderable = struct {
     }
 
     pub fn rectFor(self: *Reorderable, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        return dvui.placeIn(self.wd.contentRect().justSize(), dvui.minSize(id, min_size), e, g);
+        _ = id;
+        return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
     }
 
     pub fn screenRectScale(self: *Reorderable, rect: Rect) RectScale {

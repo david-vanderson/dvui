@@ -206,14 +206,13 @@ pub fn data(self: *ScrollContainerWidget) *WidgetData {
 pub fn rectFor(self: *ScrollContainerWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     const y = self.next_widget_ypos;
 
-    const ms = dvui.minSize(id, min_size);
     const h = switch (self.si.vertical) {
         // no scrolling, you only get the visible space
         .none => self.si.viewport.h - y,
 
         // you get the space you need or more if there is extra visible space
         // and you are expanded
-        .auto => @max(self.si.viewport.h - y, ms.h),
+        .auto => @max(self.si.viewport.h - y, min_size.h),
 
         // you get the given space
         .given => self.si.virtual_size.h - y,
@@ -223,7 +222,7 @@ pub fn rectFor(self: *ScrollContainerWidget, id: u32, min_size: Size, e: Options
     const maxw = @max(self.si.virtual_size.w, self.si.viewport.w);
 
     const rect = Rect{ .x = 0, .y = y, .w = maxw, .h = h };
-    const ret = dvui.placeIn(rect, ms, e, g);
+    const ret = dvui.placeIn(rect, min_size, e, g);
 
     if (self.lock_visible and self.first_visible_id == id) {
         self.frame_viewport.x = 0; // todo

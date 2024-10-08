@@ -27,10 +27,10 @@ split_ratio: f32 = undefined,
 dir: enums.Direction = undefined,
 collapsed_size: f32 = 0,
 hovered: bool = false,
-first_side_id: ?u32 = null,
 prevClip: Rect = Rect{},
 collapsed_state: bool = false,
 collapsing: bool = false,
+first_side: bool = true,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) PanedWidget {
     var self = PanedWidget{};
@@ -162,9 +162,10 @@ pub fn data(self: *PanedWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *PanedWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) dvui.Rect {
+    _ = id;
     var r = self.wd.contentRect().justSize();
-    if (self.first_side_id == null or self.first_side_id.? == id) {
-        self.first_side_id = id;
+    if (self.first_side) {
+        self.first_side = false;
         if (self.collapsed()) {
             if (self.split_ratio == 0.0) {
                 r.w = 0;
@@ -181,7 +182,7 @@ pub fn rectFor(self: *PanedWidget, id: u32, min_size: Size, e: Options.Expand, g
                 .vertical => r.h = r.h * self.split_ratio - handle_size / 2,
             }
         }
-        return dvui.placeIn(r, dvui.minSize(id, min_size), e, g);
+        return dvui.placeIn(r, min_size, e, g);
     } else {
         if (self.collapsed()) {
             if (self.split_ratio == 1.0) {
@@ -211,7 +212,7 @@ pub fn rectFor(self: *PanedWidget, id: u32, min_size: Size, e: Options.Expand, g
                 },
             }
         }
-        return dvui.placeIn(r, dvui.minSize(id, min_size), e, g);
+        return dvui.placeIn(r, min_size, e, g);
     }
 }
 
