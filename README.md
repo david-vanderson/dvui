@@ -14,7 +14,7 @@ How to run the built-in examples:
   - then load `zig-out/bin/index.html`
   - [online demo](https://david-vanderson.github.io)
 
-This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify widgets.
+[Online Docs](https://david-vanderson.github.io/docs) This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify widgets.
 
 Online discussion happens in #gui-dev on the zig discord server: https://discord.gg/Cz3z5mzA
 
