@@ -471,6 +471,10 @@ pub fn basicWidgets() !void {
         if (try dvui.labelClick(@src(), "https://github.com/david-vanderson/dvui", .{}, .{ .gravity_y = 0.5, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
             try dvui.openURL("https://github.com/david-vanderson/dvui");
         }
+
+        if (try dvui.labelClick(@src(), "docs", .{}, .{ .gravity_y = 0.5, .margin = .{ .x = 10 }, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
+            try dvui.openURL("https://david-vanderson.github.io/docs");
+        }
     }
 
     _ = try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
