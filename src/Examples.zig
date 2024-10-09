@@ -1641,7 +1641,7 @@ pub fn dialogs(demo_win_id: u32) !void {
         }
 
         if (try dvui.button(@src(), "Giant", .{}, .{})) {
-            try dvui.dialog(@src(), .{ .modal = false, .title = "So Much Text", .ok_label = "Too Much", .max_size = .{.w = 300, .h = 300}, .message = "This is a non modal dialog with no callafter which happens to have just way too much text in it.\n\nLuckily there is a max_size on here and if the text is too big it will be scrolled.\n\nI mean come on there is just way too much text here.\n\nCan you imagine this much text being created for a dialog?\n\nMaybe like a giant error message with a stack trace or dumping the contents of a large struct?\n\nOr a dialog asking way too many questions, or dumping a whole log into the dialog, or just a very long rant." });
+            try dvui.dialog(@src(), .{ .modal = false, .title = "So Much Text", .ok_label = "Too Much", .max_size = .{ .w = 300, .h = 300 }, .message = "This is a non modal dialog with no callafter which happens to have just way too much text in it.\n\nLuckily there is a max_size on here and if the text is too big it will be scrolled.\n\nI mean come on there is just way too much text here.\n\nCan you imagine this much text being created for a dialog?\n\nMaybe like a giant error message with a stack trace or dumping the contents of a large struct?\n\nOr a dialog asking way too many questions, or dumping a whole log into the dialog, or just a very long rant." });
         }
     }
 
@@ -2054,7 +2054,7 @@ pub fn dialogDirect() !void {
     const data = struct {
         var extra_stuff: bool = false;
     };
-    var dialog_win = try dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog, .initial_max_size = .{.w = 500} }, .{});
+    var dialog_win = try dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog, .initial_max_size = .{ .w = 500 } }, .{});
     defer dialog_win.deinit();
 
     try dvui.windowHeader("Dialog", "", &show_dialog);
