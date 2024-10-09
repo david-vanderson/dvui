@@ -92,6 +92,22 @@ pub fn build(b: *std.Build) !void {
 
         b.getInstallStep().dependOn(compile_step);
     }
+
+    const docs = b.addObject(.{
+        .name = "dvui",
+        .root_source_file = b.path("src/dvui.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const install_docs = b.addInstallDirectory(.{
+        .source_dir = docs.getEmittedDocs(),
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+    });
+
+    const docs_step = b.step("docs", "Build and install the documentation");
+    docs_step.dependOn(&install_docs.step);
 }
 
 const Backend = enum {
