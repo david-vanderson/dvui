@@ -230,7 +230,7 @@ pub fn demo() !void {
     // pad the fps label so that it doesn't trigger refresh when the number
     // changes widths
     var buf: [100]u8 = undefined;
-    const fps_str = std.fmt.bufPrint(&buf, "{d:0>4.0} fps", .{dvui.FPS()}) catch unreachable;
+    const fps_str = std.fmt.bufPrint(&buf, "{d:0>3.0} fps", .{dvui.FPS()}) catch unreachable;
     try dvui.windowHeader("DVUI Demo", fps_str, &show_demo_window);
 
     var ti = dvui.toastsFor(float.data().id);

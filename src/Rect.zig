@@ -31,6 +31,10 @@ pub fn fromPoint(p: Point) Rect {
     return Rect{ .x = p.x, .y = p.y };
 }
 
+pub fn toPoint(self: *const Rect, p: Point) Rect {
+    return Rect{ .x = self.x, .y = self.y, .w = p.x - self.x, .h = p.y - self.y };
+}
+
 pub fn toSize(self: *const Rect, s: Size) Rect {
     return Rect{ .x = self.x, .y = self.y, .w = s.w, .h = s.h };
 }
@@ -89,6 +93,13 @@ pub fn intersect(a: Rect, b: Rect) Rect {
     const x2 = @min(ax2, bx2);
     const y2 = @min(ay2, by2);
     return Rect{ .x = x, .y = y, .w = @max(0, x2 - x), .h = @max(0, y2 - y) };
+}
+
+/// True if self would be modified when clipped by r.
+pub fn clippedBy(self: *const Rect, r: Rect) bool {
+    return self.x < r.x or self.y < r.y or
+        (self.x + self.w > r.x + r.w) or
+        (self.y + self.h > r.y + r.h);
 }
 
 pub fn unionWith(a: Rect, b: Rect) Rect {
