@@ -410,7 +410,7 @@ pub fn contentScale(self: *SDLBackend) f32 {
     return self.initial_scale;
 }
 
-pub fn drawClippedTriangles(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr: dvui.Rect) void {
+pub fn drawClippedTriangles(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect) void {
     //std.debug.print("drawClippedTriangles:\n", .{});
     //for (vtx) |v, i| {
     //  std.debug.print("  {d} vertex {}\n", .{i, v});
@@ -420,30 +420,36 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?*anyopaque, vtx: []cons
     //}
 
     var oldclip: c.SDL_Rect = undefined;
-    if (sdl3) {
-        _ = c.SDL_GetRenderClipRect(self.renderer, &oldclip);
-    } else {
-        _ = c.SDL_RenderGetClipRect(self.renderer, &oldclip);
-    }
 
-    // figure out how much we are losing by truncating x and y, need to add that back to w and h
-    const clip = c.SDL_Rect{ .x = @as(c_int, @intFromFloat(clipr.x)), .y = @as(c_int, @intFromFloat(clipr.y)), .w = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x))))), .h = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.h + clipr.y - @floor(clipr.y))))) };
+    if (maybe_clipr) |clipr| {
+        if (sdl3) {
+            _ = c.SDL_GetRenderClipRect(self.renderer, &oldclip);
+        } else {
+            _ = c.SDL_RenderGetClipRect(self.renderer, &oldclip);
+        }
 
-    //std.debug.print("SDL clip {} -> SDL_Rect{{ .x = {d}, .y = {d}, .w = {d}, .h = {d} }}\n", .{ clipr, clip.x, clip.y, clip.w, clip.h });
-    if (sdl3) {
-        _ = c.SDL_SetRenderClipRect(self.renderer, &clip);
-    } else {
-        _ = c.SDL_RenderSetClipRect(self.renderer, &clip);
+        // figure out how much we are losing by truncating x and y, need to add that back to w and h
+        const clip = c.SDL_Rect{ .x = @as(c_int, @intFromFloat(clipr.x)), .y = @as(c_int, @intFromFloat(clipr.y)), .w = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x))))), .h = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.h + clipr.y - @floor(clipr.y))))) };
+        std.debug.print("sdl clip {}\n", .{clipr});
+
+        //std.debug.print("SDL clip {} -> SDL_Rect{{ .x = {d}, .y = {d}, .w = {d}, .h = {d} }}\n", .{ clipr, clip.x, clip.y, clip.w, clip.h });
+        if (sdl3) {
+            _ = c.SDL_SetRenderClipRect(self.renderer, &clip);
+        } else {
+            _ = c.SDL_RenderSetClipRect(self.renderer, &clip);
+        }
     }
 
     const tex = @as(?*c.SDL_Texture, @ptrCast(texture));
 
     _ = c.SDL_RenderGeometryRaw(self.renderer, tex, @as(*const f32, @ptrCast(&vtx[0].pos)), @sizeOf(dvui.Vertex), @as(*const c.SDL_Color, @ptrCast(@alignCast(&vtx[0].col))), @sizeOf(dvui.Vertex), @as(*const f32, @ptrCast(&vtx[0].uv)), @sizeOf(dvui.Vertex), @as(c_int, @intCast(vtx.len)), idx.ptr, @as(c_int, @intCast(idx.len)), @sizeOf(u16));
 
-    if (sdl3) {
-        _ = c.SDL_SetRenderClipRect(self.renderer, &oldclip);
-    } else {
-        _ = c.SDL_RenderSetClipRect(self.renderer, &oldclip);
+    if (maybe_clipr) |_| {
+        if (sdl3) {
+            _ = c.SDL_SetRenderClipRect(self.renderer, &oldclip);
+        } else {
+            _ = c.SDL_RenderSetClipRect(self.renderer, &oldclip);
+        }
     }
 }
 

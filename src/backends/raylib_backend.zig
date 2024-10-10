@@ -179,22 +179,24 @@ pub fn contentScale(_: *RaylibBackend) f32 {
     return 1.0;
 }
 
-pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr_in: dvui.Rect) void {
+pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr_in: ?dvui.Rect) void {
 
     //make sure all raylib draw calls are rendered
     //before rendering dvui elements
     c.rlDrawRenderBatchActive();
 
-    // clipr is in pixels, but raylib multiplies by GetWindowScaleDPI(), so we
-    // have to divide by that here
-    const clipr = dvuiRectToRaylib(clipr_in);
+    if (clipr_in) |clip_rect| {
+        // clipr is in pixels, but raylib multiplies by GetWindowScaleDPI(), so we
+        // have to divide by that here
+        const clipr = dvuiRectToRaylib(clip_rect);
 
-    // figure out how much we are losing by truncating x and y, need to add that back to w and h
-    const clipx: c_int = @intFromFloat(clipr.x);
-    const clipy: c_int = @intFromFloat(clipr.y);
-    const clipw: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.width + clipr.x - @floor(clipr.x)))));
-    const cliph: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.height + clipr.y - @floor(clipr.y)))));
-    c.BeginScissorMode(clipx, clipy, clipw, cliph);
+        // figure out how much we are losing by truncating x and y, need to add that back to w and h
+        const clipx: c_int = @intFromFloat(clipr.x);
+        const clipy: c_int = @intFromFloat(clipr.y);
+        const clipw: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.width + clipr.x - @floor(clipr.x)))));
+        const cliph: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.height + clipr.y - @floor(clipr.y)))));
+        c.BeginScissorMode(clipx, clipy, clipw, cliph);
+    }
 
     // our shader and textures are alpha premultiplied
     c.rlSetBlendMode(c.RL_BLEND_ALPHA_PREMULTIPLY);
@@ -252,7 +254,9 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     // reset blend mode back to default so raylib text rendering works
     c.rlSetBlendMode(c.RL_BLEND_ALPHA);
 
-    c.EndScissorMode();
+    if (clipr_in) |_| {
+        c.EndScissorMode();
+    }
 }
 
 pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {

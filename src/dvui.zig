@@ -832,16 +832,6 @@ pub fn cursorSet(cursor: enums.Cursor) void {
     cw.cursor_requested = cursor;
 }
 
-fn drawClippedTriangles_helper(backend_ctx: *Backend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16) void {
-    const clipr = dvui.windowRectPixels().intersect(dvui.clipGet());
-    // optimize: invert this logic outside this function. vtx and idx do not need to be built at all when this is true
-    // then, inline clipr and remove this function
-    if (clipr.empty()) {
-        return;
-    }
-    return backend_ctx.drawClippedTriangles(texture, vtx, idx, clipr);
-}
-
 /// Add point to the current path.
 ///
 /// Only valid between dvui.Window.begin() and end().
@@ -928,7 +918,7 @@ pub fn pathFillConvex(col: Color) !void {
         return;
     }
 
-    if (dvui.windowRectPixels().intersect(dvui.clipGet()).empty()) {
+    if (dvui.clipGet().empty()) {
         cw.path.clearAndFree();
         return;
     }
@@ -953,6 +943,10 @@ pub fn pathFillConvex(col: Color) !void {
     var col_trans = col;
     col_trans.a = 0;
 
+    var bounds = Rect{}; // w and h are maxx and maxy for now
+    bounds.x = dvui.windowRectPixels().w;
+    bounds.y = dvui.windowRectPixels().h;
+
     var i: usize = 0;
     while (i < cw.path.items.len) : (i += 1) {
         const ai = (i + cw.path.items.len - 1) % cw.path.items.len;
@@ -973,12 +967,20 @@ pub fn pathFillConvex(col: Color) !void {
         v.pos.y = bb.y - halfnorm.y;
         v.col = col;
         try vtx.append(v);
+        bounds.x = @min(bounds.x, v.pos.x);
+        bounds.y = @min(bounds.y, v.pos.y);
+        bounds.w = @max(bounds.w, v.pos.x);
+        bounds.h = @max(bounds.h, v.pos.y);
 
         // outer vertex
         v.pos.x = bb.x + halfnorm.x;
         v.pos.y = bb.y + halfnorm.y;
         v.col = col_trans;
         try vtx.append(v);
+        bounds.x = @min(bounds.x, v.pos.x);
+        bounds.y = @min(bounds.y, v.pos.y);
+        bounds.w = @max(bounds.w, v.pos.x);
+        bounds.h = @max(bounds.h, v.pos.y);
 
         // indexes for fill
         // triangles must be counter-clockwise (y going down) to avoid backface culling
@@ -998,7 +1000,16 @@ pub fn pathFillConvex(col: Color) !void {
         try idx.append(@as(u16, @intCast(bi * 2)));
     }
 
-    drawClippedTriangles_helper(&cw.backend, null, vtx.items, idx.items);
+    // convert bounds back to normal rect
+    bounds.w = bounds.w - bounds.x;
+    bounds.h = bounds.h - bounds.y;
+
+    var clipr: ?Rect = null;
+    if (!clipGet().equals(dvui.windowRectPixels()) and bounds.clippedBy(clipGet())) {
+        clipr = clipGet();
+    }
+
+    cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
 
     cw.path.clearAndFree();
 }
@@ -1052,7 +1063,7 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
 pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) !void {
     const cw = currentWindow();
 
-    if (dvui.windowRectPixels().intersect(dvui.clipGet()).empty()) {
+    if (dvui.clipGet().empty()) {
         cw.path.clearAndFree();
         return;
     }
@@ -1093,6 +1104,10 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     var col_trans = col;
     col_trans.a = 0;
 
+    var bounds = Rect{}; // w and h are maxx and maxy for now
+    bounds.x = dvui.windowRectPixels().w;
+    bounds.y = dvui.windowRectPixels().h;
+
     const aa_size = 1.0;
     var vtx_start: usize = 0;
     var i: usize = 0;
@@ -1129,11 +1144,19 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
                 v.pos.y = bb.y - halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size;
                 v.col = col_trans;
                 try vtx.append(v);
+                bounds.x = @min(bounds.x, v.pos.x);
+                bounds.y = @min(bounds.y, v.pos.y);
+                bounds.w = @max(bounds.w, v.pos.x);
+                bounds.h = @max(bounds.h, v.pos.y);
 
                 v.pos.x = bb.x + halfnorm.x * (thickness + aa_size) + diffbc.x * aa_size;
                 v.pos.y = bb.y + halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size;
                 v.col = col_trans;
                 try vtx.append(v);
+                bounds.x = @min(bounds.x, v.pos.x);
+                bounds.y = @min(bounds.y, v.pos.y);
+                bounds.w = @max(bounds.w, v.pos.x);
+                bounds.h = @max(bounds.h, v.pos.y);
 
                 // add indexes for endcap fringe
                 try idx.append(@as(u16, @intCast(0)));
@@ -1188,24 +1211,40 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         v.pos.y = bb.y - halfnorm.y * thickness;
         v.col = col;
         try vtx.append(v);
+        bounds.x = @min(bounds.x, v.pos.x);
+        bounds.y = @min(bounds.y, v.pos.y);
+        bounds.w = @max(bounds.w, v.pos.x);
+        bounds.h = @max(bounds.h, v.pos.y);
 
         // side 1 AA vertex
         v.pos.x = bb.x - halfnorm.x * (thickness + aa_size);
         v.pos.y = bb.y - halfnorm.y * (thickness + aa_size);
         v.col = col_trans;
         try vtx.append(v);
+        bounds.x = @min(bounds.x, v.pos.x);
+        bounds.y = @min(bounds.y, v.pos.y);
+        bounds.w = @max(bounds.w, v.pos.x);
+        bounds.h = @max(bounds.h, v.pos.y);
 
         // side 2 inner vertex
         v.pos.x = bb.x + halfnorm.x * thickness;
         v.pos.y = bb.y + halfnorm.y * thickness;
         v.col = col;
         try vtx.append(v);
+        bounds.x = @min(bounds.x, v.pos.x);
+        bounds.y = @min(bounds.y, v.pos.y);
+        bounds.w = @max(bounds.w, v.pos.x);
+        bounds.h = @max(bounds.h, v.pos.y);
 
         // side 2 AA vertex
         v.pos.x = bb.x + halfnorm.x * (thickness + aa_size);
         v.pos.y = bb.y + halfnorm.y * (thickness + aa_size);
         v.col = col_trans;
         try vtx.append(v);
+        bounds.x = @min(bounds.x, v.pos.x);
+        bounds.y = @min(bounds.y, v.pos.y);
+        bounds.w = @max(bounds.w, v.pos.x);
+        bounds.h = @max(bounds.h, v.pos.y);
 
         // triangles must be counter-clockwise (y going down) to avoid backface culling
         if (closed or ((i + 1) != cw.path.items.len)) {
@@ -1241,11 +1280,19 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
             v.pos.y = bb.y - halfnorm.y * (thickness + aa_size) - diffab.y * aa_size;
             v.col = col_trans;
             try vtx.append(v);
+            bounds.x = @min(bounds.x, v.pos.x);
+            bounds.y = @min(bounds.y, v.pos.y);
+            bounds.w = @max(bounds.w, v.pos.x);
+            bounds.h = @max(bounds.h, v.pos.y);
 
             v.pos.x = bb.x + halfnorm.x * (thickness + aa_size) - diffab.x * aa_size;
             v.pos.y = bb.y + halfnorm.y * (thickness + aa_size) - diffab.y * aa_size;
             v.col = col_trans;
             try vtx.append(v);
+            bounds.x = @min(bounds.x, v.pos.x);
+            bounds.y = @min(bounds.y, v.pos.y);
+            bounds.w = @max(bounds.w, v.pos.x);
+            bounds.h = @max(bounds.h, v.pos.y);
 
             // add indexes for endcap fringe
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
@@ -1266,7 +1313,16 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         }
     }
 
-    drawClippedTriangles_helper(&cw.backend, null, vtx.items, idx.items);
+    // convert bounds back to normal rect
+    bounds.w = bounds.w - bounds.x;
+    bounds.h = bounds.h - bounds.y;
+
+    var clipr: ?Rect = null;
+    if (!clipGet().equals(dvui.windowRectPixels()) and bounds.clippedBy(clipGet())) {
+        clipr = clipGet();
+    }
+
+    cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
 
     cw.path.clearAndFree();
 }
@@ -1513,11 +1569,12 @@ pub fn clip(new: Rect) Rect {
     return ret;
 }
 
-/// Set the current clipping rect to the given rect (in pixels).
+/// Set the current clipping rect to the given rect (in pixels) intersected
+/// with the OS window.
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn clipSet(r: Rect) void {
-    currentWindow().clipRect = r;
+    currentWindow().clipRect = windowRectPixels().intersect(r);
 }
 
 /// Set snap_to_pixels setting.  If true:
@@ -5908,8 +5965,8 @@ pub const renderTextOptions = struct {
 // only renders a single line of text
 pub fn renderText(opts: renderTextOptions) !void {
     if (opts.rs.s == 0) return;
-    if (clipGet().intersect(opts.rs.r).empty()) return;
     if (opts.text.len == 0) return;
+    if (clipGet().intersect(opts.rs.r).empty()) return;
 
     if (!std.unicode.utf8ValidateSlice(opts.text)) {
         log.warn("renderText invalid utf8 for \"{s}\"\n", .{opts.text});
@@ -6082,7 +6139,9 @@ pub fn renderText(opts: renderTextOptions) !void {
     var idx = std.ArrayList(u16).init(cw.arena());
     defer idx.deinit();
 
-    var x: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
+    const x_start: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
+    var x = x_start;
+    var max_x = x_start;
     const y: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.y) else opts.rs.r.y;
 
     if (opts.debug) {
@@ -6148,6 +6207,7 @@ pub fn renderText(opts: renderTextOptions) !void {
         }
 
         v.pos.x = x + (gi.leftBearing + gi.w) * target_fraction;
+        max_x = v.pos.x;
         v.uv[0] = gi.uv[0] + gi.w / fce.texture_atlas_size.w;
         try vtx.append(v);
 
@@ -6189,12 +6249,26 @@ pub fn renderText(opts: renderTextOptions) !void {
                 v.uv[1] = 0;
             }
 
+            const selr = Rect.fromPoint(sel_vtx[0].pos).toPoint(sel_vtx[2].pos);
+            var clipr: ?Rect = null;
+            if (!clipGet().equals(dvui.windowRectPixels()) and selr.clippedBy(clipGet())) {
+                clipr = clipGet();
+            }
+
             // triangles must be counter-clockwise (y going down) to avoid backface culling
-            drawClippedTriangles_helper(&cw.backend, null, &sel_vtx, &[_]u16{ 0, 2, 1, 0, 3, 2 });
+            cw.backend.drawClippedTriangles(null, &sel_vtx, &[_]u16{ 0, 2, 1, 0, 3, 2 }, clipr);
         }
     }
 
-    drawClippedTriangles_helper(&cw.backend, fce.texture_atlas, vtx.items, idx.items);
+    // due to floating point inaccuracies, shrink by 1/100 of a pixel before testing
+    const txtr = Rect{ .x = x_start + 0.01, .y = y + 0.01, .w = max_x - x_start - 0.02, .h = sel_max_y - y - 0.02 };
+    var clipr: ?Rect = null;
+    if (!clipGet().equals(dvui.windowRectPixels()) and txtr.clippedBy(clipGet())) {
+        clipr = clipGet();
+        //dvui.log.debug("clipr text {s} {} {}", .{ opts.text, txtr, clipr.? });
+    }
+
+    cw.backend.drawClippedTriangles(fce.texture_atlas, vtx.items, idx.items, clipr);
 }
 
 pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
@@ -6251,7 +6325,11 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
         try idx.append(@as(u16, @intCast(len + 3)));
         try idx.append(@as(u16, @intCast(len + 2)));
 
-        drawClippedTriangles_helper(&cw.backend, kv.value_ptr.texture_atlas, vtx.items, idx.items);
+        var clipr: ?Rect = null;
+        if (!clipGet().equals(dvui.windowRectPixels()) and rs.r.clippedBy(clipGet())) {
+            clipr = clipGet();
+        }
+        cw.backend.drawClippedTriangles(kv.value_ptr.texture_atlas, vtx.items, idx.items, clipr);
 
         offset += kv.value_ptr.texture_atlas_size.h;
     }
@@ -6348,7 +6426,12 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Co
     try idx.append(3);
     try idx.append(2);
 
-    drawClippedTriangles_helper(&cw.backend, tex, vtx.items, idx.items);
+    var clipr: ?Rect = null;
+    if (!clipGet().equals(dvui.windowRectPixels()) and rs.r.clippedBy(clipGet())) {
+        clipr = clipGet();
+    }
+
+    cw.backend.drawClippedTriangles(tex, vtx.items, idx.items, clipr);
 }
 
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotation: f32, colormod: Color) !void {
