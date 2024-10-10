@@ -33,6 +33,8 @@ const L = win.zig.L;
 const Dx11Backend = @This();
 pub const Context = *Dx11Backend;
 
+const log = std.log.scoped(.Dx11Backend);
+
 device: *dx.ID3D11Device,
 device_context: *dx.ID3D11DeviceContext,
 swap_chain: *dxgi.IDXGISwapChain,
@@ -51,6 +53,12 @@ options: InitOptions,
 // something dx cursor
 
 arena: std.mem.Allocator = undefined,
+
+const DvuiKey = union(enum) {
+    keyboard_key: dvui.enums.Key,
+    mouse_key: dvui.enums.Button,
+    none: void,
+};
 
 const WindowOptions = struct {
     alloc: std.mem.Allocator,
@@ -211,7 +219,7 @@ fn createWindow(instance: HINSTANCE, options: InitOptions) !WindowOptions {
     const wnd_class: WNDCLASSEX = .{
         .cbSize = @sizeOf(WNDCLASSEX),
         .style = .{ .DBLCLKS = 1, .OWNDC = 1 },
-        .lpfnWndProc = windowProc,
+        .lpfnWndProc = wndProc,
         .cbClsExtra = 0,
         .cbWndExtra = 0,
         .hInstance = instance,
@@ -354,7 +362,7 @@ fn createDeviceD3D(hwnd: HWND, opt: InitOptions) ?Dx11Backend.Directx11Options {
     };
 }
 
-fn windowProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(w.WINAPI) w.LRESULT {
+fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(w.WINAPI) w.LRESULT {
     switch (umsg) {
         ui.WM_DESTROY => {
             ui.PostQuitMessage(0);
@@ -374,18 +382,41 @@ fn windowProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callco
             // _ = resize_height; // autofix
         },
         ui.WM_KEYDOWN, ui.WM_SYSKEYDOWN => {
-            const as_vkey: key.VIRTUAL_KEY = @enumFromInt(wparam);
-            switch (as_vkey) {
-                key.VK_ESCAPE => {
-                    if (key.GetAsyncKeyState(@intFromEnum(key.VK_LSHIFT)) & 0x01 == 1) { //SHIFT+ESC = EXIT
-                        ui.PostQuitMessage(0);
-                        return 0;
-                    }
-                },
-                else => {},
+            if (std.meta.intToEnum(key.VIRTUAL_KEY, wparam)) |as_vkey| {
+                const conv_vkey = convertVKeyToDvuiKey(as_vkey);
+                log.info("read key: {any}", .{conv_vkey});
+            } else |err| {
+                log.err("invalid key found: {}", .{err});
             }
+            // _ = conv_vkey;
+            // process conv_vkey
         },
-        else => _ = .{},
+        ui.WM_LBUTTONDOWN => {
+            const lbutton = dvui.enums.Button.left;
+            log.info("read key: {any}", .{lbutton});
+        },
+        ui.WM_RBUTTONDOWN => {
+            const rbutton = dvui.enums.Button.right;
+            log.info("read key: {any}", .{rbutton});
+        },
+        ui.WM_MBUTTONDOWN => {
+            const mbutton = dvui.enums.Button.middle;
+            log.info("read key: {any}", .{mbutton});
+        },
+        ui.WM_XBUTTONDOWN => {
+            const xbutton: packed struct { _upper: u16, which: u16, _lower: u32 } = @bitCast(wparam);
+            const variant = if (xbutton.which == 1) "4" else "5";
+            log.info("read key: XBUTTON (Mouse{s})", .{variant});
+        },
+        ui.WM_MOUSEMOVE => {
+            // get mouse relative to the client area
+            const lparam_low: i32 = @truncate(lparam);
+            const bits: packed struct { x: i16, y: i16 } = @bitCast(lparam_low);
+            const mouse_x = bits.x;
+            const mouse_y = bits.y;
+            log.info("mouse (x, y): ({d}, {d})", .{ mouse_x, mouse_y });
+        },
+        else => {},
     }
 
     return ui.DefWindowProcW(hwnd, umsg, wparam, lparam);
@@ -894,19 +925,128 @@ pub fn addAllEvents(self: *Dx11Backend, window: *dvui.Window) !bool {
 }
 
 pub fn setCursor(self: *Dx11Backend, new_cursor: dvui.enums.Cursor) void {
-    _ = self; // autofix
     const converted_cursor = switch (new_cursor) {
-        .arrow => {},
-        .ibeam => {},
-        .wait, .wait_arrow => {},
-        .crosshair => {},
-        .arrow_nw_se => {},
-        .arrow_ne_sw => {},
-        .arrow_w_e => {},
-        .arrow_n_s => {},
-        .arrow_all => {},
-        .bad => {},
-        .hand => {},
+        .arrow => ui.IDC_ARROW,
+        .ibeam => ui.IDC_IBEAM,
+        .wait, .wait_arrow => ui.IDC_WAIT,
+        .crosshair => ui.IDC_CROSS,
+        .arrow_nw_se => ui.IDC_ARROW,
+        .arrow_ne_sw => ui.IDC_ARROW,
+        .arrow_w_e => ui.IDC_ARROW,
+        .arrow_n_s => ui.IDC_ARROW,
+        .arrow_all => ui.IDC_ARROW,
+        .bad => ui.IDC_NO,
+        .hand => ui.IDC_HAND,
     };
-    _ = converted_cursor; // autofix
+
+    _ = ui.LoadCursorW(self.window.?.instance, converted_cursor);
+}
+
+fn convertVKeyToDvuiKey(vkey: key.VIRTUAL_KEY) dvui.enums.Key {
+    const K = dvui.enums.Key;
+    return switch (vkey) {
+        .@"0", .NUMPAD0 => K.kp_0,
+        .@"1", .NUMPAD1 => K.kp_1,
+        .@"2", .NUMPAD2 => K.kp_2,
+        .@"3", .NUMPAD3 => K.kp_3,
+        .@"4", .NUMPAD4 => K.kp_4,
+        .@"5", .NUMPAD5 => K.kp_5,
+        .@"6", .NUMPAD6 => K.kp_6,
+        .@"7", .NUMPAD7 => K.kp_7,
+        .@"8", .NUMPAD8 => K.kp_8,
+        .@"9", .NUMPAD9 => K.kp_9,
+        .A => K.a,
+        .B => K.b,
+        .C => K.c,
+        .D => K.d,
+        .E => K.e,
+        .F => K.f,
+        .G => K.g,
+        .H => K.h,
+        .I => K.i,
+        .J => K.j,
+        .K => K.k,
+        .L => K.l,
+        .M => K.m,
+        .N => K.n,
+        .O => K.o,
+        .P => K.p,
+        .Q => K.q,
+        .R => K.r,
+        .S => K.s,
+        .T => K.t,
+        .U => K.u,
+        .V => K.v,
+        .W => K.w,
+        .X => K.x,
+        .Y => K.y,
+        .Z => K.z,
+        .BACK => K.backspace,
+        .TAB => K.tab,
+        .RETURN => K.kp_enter,
+        .F1 => K.f1,
+        .F2 => K.f2,
+        .F3 => K.f3,
+        .F4 => K.f4,
+        .F5 => K.f5,
+        .F6 => K.f6,
+        .F7 => K.f7,
+        .F8 => K.f8,
+        .F9 => K.f9,
+        .F10 => K.f10,
+        .F11 => K.f11,
+        .F12 => K.f12,
+        .F13 => K.f13,
+        .F14 => K.f14,
+        .F15 => K.f15,
+        .F16 => K.f16,
+        .F17 => K.f17,
+        .F18 => K.f18,
+        .F19 => K.f19,
+        .F20 => K.f20,
+        .F21 => K.f21,
+        .F22 => K.f22,
+        .F23 => K.f23,
+        .F24 => K.f24,
+        .SHIFT, .LSHIFT => K.left_shift,
+        .RSHIFT => K.right_shift,
+        .CONTROL, .LCONTROL => K.left_control,
+        .RCONTROL => K.right_control,
+        .MENU => K.menu,
+        .PAUSE => K.pause,
+        .ESCAPE => K.escape,
+        .SPACE => K.space,
+        .END => K.end,
+        .HOME => K.home,
+        .LEFT => K.left,
+        .RIGHT => K.right,
+        .UP => K.up,
+        .DOWN => K.down,
+        .PRINT => K.print,
+        .INSERT => K.insert,
+        .DELETE => K.delete,
+        .LWIN => K.left_command,
+        .RWIN => K.right_command,
+        .PRIOR => K.page_up,
+        .NEXT => K.page_down,
+        .MULTIPLY => K.kp_multiply,
+        .ADD => K.kp_add,
+        .SUBTRACT => K.kp_subtract,
+        .DIVIDE => K.kp_divide,
+        .NUMLOCK => K.num_lock,
+        .OEM_1 => K.semicolon,
+        .OEM_2 => K.slash,
+        .OEM_3 => K.grave,
+        .OEM_4 => K.left_bracket,
+        .OEM_5 => K.backslash,
+        .OEM_6 => K.right_bracket,
+        .OEM_7 => K.apostrophe,
+        .CAPITAL => K.caps_lock,
+        .OEM_PLUS => K.kp_equal,
+        .OEM_MINUS => K.minus,
+        else => |e| {
+            log.warn("Key {s} not supported.", .{@tagName(e)});
+            return K.unknown;
+        },
+    };
 }
