@@ -213,10 +213,11 @@ function dvui(canvasId, wasmFile) {
         wasm_renderGeometry(textureId, index_ptr, index_len, vertex_ptr, vertex_len, sizeof_vertex, offset_pos, offset_col, offset_uv, x, y, w, h) {
             //console.log("drawClippedTriangles " + textureId + " sizeof " + sizeof_vertex + " pos " + offset_pos + " col " + offset_col + " uv " + offset_uv);
 
-	    let old_scissor;
+	    //let old_scissor;
 	    let max_u16 = 0xFFFF;
 	    if (x != max_u16) {
-                old_scissor = gl.getParameter(gl.SCISSOR_BOX);
+		// just calling getParameter here is quite slow (5-10 ms per frame according to chrome)
+                //old_scissor = gl.getParameter(gl.SCISSOR_BOX);
                 gl.scissor(x, y, w, h);
             }
 
@@ -305,8 +306,8 @@ function dvui(canvasId, wasmFile) {
             gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
 
 	    if (x != max_u16) {
-		gl.scissor(old_scissor[0], old_scissor[1], old_scissor[2], old_scissor[3]);
-                //gl.scissor(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+		//gl.scissor(old_scissor[0], old_scissor[1], old_scissor[2], old_scissor[3]);
+                gl.scissor(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 	    }
         },
         wasm_cursor(name_ptr, name_len) {
