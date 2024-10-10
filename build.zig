@@ -46,6 +46,7 @@ pub fn build(b: *std.Build) !void {
             .target = b.resolveTargetQuery(webtarget),
             .optimize = optimize,
             .link_libc = true,
+            .strip = if (optimize == .ReleaseFast or optimize == .ReleaseSmall) true else false,
         });
 
         wasm.entry = .disabled;
