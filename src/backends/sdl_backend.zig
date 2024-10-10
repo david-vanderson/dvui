@@ -173,14 +173,22 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
                 }
 
                 if (mdpi) |dpi| {
-                    back.initial_scale = dpi / 100.0;
-
-                    // Windows DPIs come in 25% increments, and sometimes SDL2
-                    // reports something slightly off, which feels a bit blurry.
-                    if (builtin.os.tag == .windows)
+                    if (builtin.os.tag == .windows) {
+                        // Windows DPIs come in 25% increments, and sometimes SDL2
+                        // reports something slightly off, which feels a bit blurry.
+                        back.initial_scale = dpi / 100.0;
                         back.initial_scale = @round(back.initial_scale / 0.25) * 0.25;
+                    } else {
+                        // Other platforms get integer scaling until someone
+                        // figures out how to make it better
+                        if (dpi > 200) {
+                            back.initial_scale = 4.0;
+                        } else if (dpi > 100) {
+                            back.initial_scale = 2.0;
+                        }
+                    }
 
-                    dvui.log.info("SDL2 guessing initial backend scale {d} from dpi {}\n", .{back.initial_scale, dpi});
+                    dvui.log.info("SDL2 guessing initial backend scale {d} from dpi {d}\n", .{ back.initial_scale, dpi });
                 }
             }
 
@@ -432,7 +440,7 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?*anyopaque, vtx: []cons
 
         // figure out how much we are losing by truncating x and y, need to add that back to w and h
         const clip = c.SDL_Rect{ .x = @as(c_int, @intFromFloat(clipr.x)), .y = @as(c_int, @intFromFloat(clipr.y)), .w = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x))))), .h = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.h + clipr.y - @floor(clipr.y))))) };
-        std.debug.print("sdl clip {}\n", .{clipr});
+        //std.debug.print("sdl clip {}\n", .{clipr});
 
         //std.debug.print("SDL clip {} -> SDL_Rect{{ .x = {d}, .y = {d}, .w = {d}, .h = {d} }}\n", .{ clipr, clip.x, clip.y, clip.w, clip.h });
         if (sdl3) {
