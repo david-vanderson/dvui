@@ -323,6 +323,15 @@ pub fn minSizeForChild(self: *TextEntryWidget, s: Size) void {
 }
 
 pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
+    if (new.len == 0) return;
+
+    // strip out carraige returns, which we get from copy/paste on windows
+    if (std.mem.indexOfScalar(u8, new, '\r')) |idx| {
+        self.textTyped(new[0..idx]);
+        self.textTyped(new[idx+1..]);
+        return;
+    }
+
     var sel = self.textLayout.selectionGet(self.len);
     if (!sel.empty()) {
         // delete selection
