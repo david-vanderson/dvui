@@ -471,7 +471,6 @@ const FontCacheEntry = struct {
 
             minx = @min(minx, x + gi.leftBearing);
             maxx = @max(maxx, x + gi.leftBearing + gi.w);
-            maxx = @max(maxx, x + gi.advance);
 
             miny = @min(miny, gi.topBearing);
             maxy = @max(maxy, gi.topBearing + gi.h);

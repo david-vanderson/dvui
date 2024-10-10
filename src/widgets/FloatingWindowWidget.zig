@@ -272,13 +272,13 @@ pub fn drawBackground(self: *FloatingWindowWidget) !void {
         try dvui.pathFillConvex(col);
     }
 
-    // clip to just our window
-    dvui.clipSet(rs.r);
-
     // we are using BoxWidget to do border/background
     self.layout = BoxWidget.init(@src(), .vertical, false, self.options.override(.{ .expand = .both }));
     try self.layout.install();
     try self.layout.drawBackground();
+
+    // clip to just our window (layout has the margin)
+    dvui.clipSet(self.layout.data().borderRectScale().r);
 }
 
 fn dragPart(me: Event.Mouse, rs: RectScale) DragPart {
