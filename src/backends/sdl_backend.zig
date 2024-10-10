@@ -161,24 +161,26 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
                 }
 
                 // This doesn't seem to be helping anybody and sometimes hurts,
-                // so we'll try disabling it for now.
-                //if (mdpi == null) {
-                //    // see if we can guess correctly based on the dpi from SDL2
-                //    const display_num = c.SDL_GetWindowDisplayIndex(window);
-                //    var hdpi: f32 = undefined;
-                //    var vdpi: f32 = undefined;
-                //    _ = c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi);
-                //    mdpi = @max(hdpi, vdpi);
-                //    std.debug.print("SDLBackend dpi {d} from SDL_GetDisplayDPI\n", .{mdpi.?});
-                //}
+                // so we'll try disabling it outside of windows for now.
+                if (mdpi == null and builtin.os.tag == .windows) {
+                    // see if we can guess correctly based on the dpi from SDL2
+                    const display_num = c.SDL_GetWindowDisplayIndex(window);
+                    var hdpi: f32 = undefined;
+                    var vdpi: f32 = undefined;
+                    _ = c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi);
+                    mdpi = @max(hdpi, vdpi);
+                    std.debug.print("SDLBackend dpi {d} from SDL_GetDisplayDPI\n", .{mdpi.?});
+                }
 
                 if (mdpi) |dpi| {
-                    if (dpi > 200) {
-                        back.initial_scale = 4.0;
-                    } else if (dpi > 100) {
-                        back.initial_scale = 2.0;
-                    }
-                    dvui.log.info("SDL2 guessing initial backend scale {d}\n", .{back.initial_scale});
+                    back.initial_scale = dpi / 100.0;
+
+                    // Windows DPIs come in 25% increments, and sometimes SDL2
+                    // reports something slightly off, which feels a bit blurry.
+                    if (builtin.os.tag == .windows)
+                        back.initial_scale = @round(back.initial_scale / 0.25) * 0.25;
+
+                    dvui.log.info("SDL2 guessing initial backend scale {d} from dpi {}\n", .{back.initial_scale, dpi});
                 }
             }
 

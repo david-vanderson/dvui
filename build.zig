@@ -220,6 +220,7 @@ fn addExample(
         .root_source_file = b.path("examples/" ++ name ++ ".zig"),
         .target = target,
         .optimize = optimize,
+        .win32_manifest = b.path("./src/main.manifest"),
     });
     exe.root_module.addImport("dvui", dvui_mod);
 
