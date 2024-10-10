@@ -43,7 +43,7 @@ pub const wasm = struct {
 
     pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32, interp: u8) u32;
     pub extern fn wasm_textureDestroy(u32) void;
-    pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, x: u32, y: u32, w: u32, h: u32) void;
+    pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, x: u16, y: u16, w: u16, h: u16) void;
 
     pub extern fn wasm_cursor(name: [*]const u8, name_len: u32) void;
     pub extern fn wasm_on_screen_keyboard(x: f32, y: f32, w: f32, h: f32) void;
@@ -450,15 +450,22 @@ pub fn contentScale(_: *WebBackend) f32 {
     return 1.0;
 }
 
-pub fn drawClippedTriangles(_: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr: dvui.Rect) void {
-    // figure out how much we are losing by truncating x and y, need to add that back to w and h
-    const x: u32 = @intFromFloat(clipr.x);
-    const w: u32 = @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x)));
+pub fn drawClippedTriangles(_: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect) void {
+    var x: u16 = std.math.maxInt(u16);
+    var w: u16 = std.math.maxInt(u16);
+    var y: u16 = std.math.maxInt(u16);
+    var h: u16 = std.math.maxInt(u16);
 
-    // y needs to be converted to 0 at bottom first
-    const ry: f32 = wasm.wasm_pixel_height() - clipr.y - clipr.h;
-    const y: u32 = @intFromFloat(ry);
-    const h: u32 = @intFromFloat(@ceil(clipr.h + ry - @floor(ry)));
+    if (maybe_clipr) |clipr| {
+        // figure out how much we are losing by truncating x and y, need to add that back to w and h
+        x = @intFromFloat(clipr.x);
+        w = @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x)));
+
+        // y needs to be converted to 0 at bottom first
+        const ry: f32 = wasm.wasm_pixel_height() - clipr.y - clipr.h;
+        y = @intFromFloat(ry);
+        h = @intFromFloat(@ceil(clipr.h + ry - @floor(ry)));
+    }
 
     //dvui.log.debug("drawClippedTriangles pixels {} clipr {} ry {d} clip {d} {d} {d} {d}", .{ dvui.windowRectPixels(), clipr, ry, x, y, w, h });
 
