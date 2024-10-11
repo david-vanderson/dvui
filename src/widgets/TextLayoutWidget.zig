@@ -927,7 +927,12 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
 
     text_loop: while (txt.len > 0) {
         var linestart: f32 = 0;
-        var linewidth = container_width;
+
+        // Often we measure text for a size, then try to render text into that
+        // size.  Sometimes due to floating point this width will be very
+        // slightly less than the width of the text that textSizeEx below sees,
+        // causing a line break.  So give ourselves a tiny bit of extra room.
+        var linewidth = container_width + 0.001;
         var width = linewidth - self.insert_pt.x;
         var width_after: f32 = 0;
         for (self.corners, 0..) |corner, i| {
