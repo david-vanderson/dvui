@@ -1615,7 +1615,7 @@ pub fn scrolling() !void {
 
             tl.deinit();
 
-            var tl2 = try dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .color_fill = .{ .name = .fill_window }, .min_size_content = .{} });
+            var tl2 = try dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .color_fill = .{ .name = .fill_window } });
             try tl2.format("Reply {d}", .{i}, .{});
             tl2.deinit();
         }
