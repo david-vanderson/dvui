@@ -219,6 +219,113 @@ pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_fl
     return fwin;
 }
 
+var incrementor_state: i32 = 5;
+pub fn incrementor() !void {
+    // We want to lay out our UI horizontally, left to right.
+    var b = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+    defer b.deinit();
+
+    if (try dvui.button(@src(), "-", .{}, .{})) {
+        incrementor_state -= 1;
+    }
+
+    // Gravity here makes the label centered. 
+    try dvui.label(@src(), "{}", .{ incrementor_state }, .{ .gravity_x = 0.5, .gravity_y = 0.5});
+
+    if (try dvui.button(@src(), "+", .{}, .{})) {
+        incrementor_state += 1;
+    }
+}
+
+var calculation: f32 = 0;
+var calculand: f32 = 0;
+var active_op: ?u8 = null;
+var digits_after_dot: f32 = 0;
+pub fn calculator() !void {
+    const loop_labels = [_]u8{
+        'C', 'N', '%', '/',
+        '7', '8', '9', 'x',
+        '4', '5', '6', '-',
+        '1', '2', '3', '+',
+        '0', '.', '='
+    };
+    const loop_count = @sizeOf(@TypeOf(loop_labels)) / @sizeOf(@TypeOf(loop_labels[0]));
+
+    {
+        var b = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+        defer b.deinit();
+
+        try dvui.label(@src(), "{}", .{ calculation }, .{ .margin = .{ .x = 110 } });
+    }
+
+    for (0..5) |row_i| {
+        var b = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 110 }, .id_extra = row_i });
+        defer b.deinit();
+
+        for (row_i*4..(row_i+1)*4) |i| {
+            if (i >= loop_count) continue;
+            const letter = loop_labels[i];
+
+            const pad: f32 = if (letter == '0') 30.0 else 10.0;
+            const opts = .{ .id_extra = letter, .padding = .{ .x = pad, .w = pad } };
+            if (try dvui.button(@src(), &[_]u8{letter}, .{}, opts)) {
+                if (letter == 'C') {
+                    calculation = 0;
+                    calculand = 0;
+                    active_op = null;
+                    digits_after_dot = 0;
+                }
+
+                if (letter == '/') active_op = '/';
+                if (letter == 'x') active_op = 'x';
+                if (letter == '-') active_op = '-';
+                if (letter == '+') active_op = '+';
+                if (letter == '.') digits_after_dot = 1;
+
+                if (letter == 'N') calculation = -calculation;
+                if (letter == '%') calculation /= 100;
+
+                if (active_op == null) {
+                    if (letter >= '0' and letter <= '9') {
+                        const letterDigit: f32 = @floatFromInt(letter - '0');
+
+                        if (digits_after_dot > 0) {
+                            calculation += letterDigit / @exp(@log(10.0) * digits_after_dot);
+                            digits_after_dot += 1;
+                        } else {
+                            calculation *= 10;
+                            calculation += letterDigit;
+                        }
+                    }
+                    if (letter == '.') {}
+                }
+
+                if (active_op != null) {
+                    if (letter >= '0' and letter <= '9') {
+                        const letterDigit: f32 = @floatFromInt(letter - '0');
+                        if (digits_after_dot > 0) {
+                            calculand += letterDigit / @exp(@log(10.0) * digits_after_dot);
+                            digits_after_dot += 1;
+                        } else {
+                            calculand *= 10;
+                            calculand += letterDigit;
+                        }
+                    }
+                    if (letter == '=') {
+                        if (active_op == '/') calculation /= calculand;
+                        if (active_op == '-') calculation -= calculand;
+                        if (active_op == '+') calculation += calculand;
+                        if (active_op == 'x') calculation *= calculand;
+                        active_op = null;
+                        calculand = 0;
+                        digits_after_dot = 0;
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub fn demo() !void {
     if (!show_demo_window) {
         return;
@@ -288,6 +395,19 @@ pub fn demo() !void {
         defer b.deinit();
         try basicWidgets();
     }
+
+    if (try dvui.expander(@src(), "Incrementor", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        try incrementor();
+    }
+
+    if (try dvui.expander(@src(), "Calculator", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        defer b.deinit();
+        try calculator();
+    }
+
 
     if (try dvui.expander(@src(), "Text Entry", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
