@@ -182,6 +182,7 @@ sel_pts: [2]?Point = [2]?Point{ null, null },
 cursor_seen: bool = false,
 cursor_rect: Rect = undefined,
 scroll_to_cursor: bool = false,
+scroll_to_cursor_next_frame: bool = false,
 
 add_text_done: bool = false,
 
@@ -213,6 +214,11 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 
     self.click_num = dvui.dataGet(null, self.wd.id, "_click_num", u8) orelse 0;
 
+    if (dvui.dataGet(null, self.wd.id, "_scroll_to_cursor", bool) orelse false) {
+        dvui.dataRemove(null, self.wd.id, "_scroll_to_cursor");
+        self.scroll_to_cursor = true;
+    }
+
     return self;
 }
 
@@ -238,6 +244,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
 
         if (dvui.dataGet(null, self.wd.id, "_sel_move_expand_pt_which", @TypeOf(self.sel_move.expand_pt.which))) |w| {
             if (dvui.dataGet(null, self.wd.id, "_sel_move_expand_pt_bytes", [2]usize)) |bytes| {
+                // set done to true, only matters if we are dragging which sets it back to false
                 self.sel_move = .{ .expand_pt = .{ .which = w, .bytes = bytes, .done = true } };
             }
         }
@@ -245,7 +252,6 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
 
     if (dvui.dataGet(null, self.wd.id, "_sel_move_cursor_updown_pt", Point)) |p| {
         self.sel_move = .{ .cursor_updown = .{ .pt = p } };
-        self.scroll_to_cursor = true;
         dvui.dataRemove(null, self.wd.id, "_sel_move_cursor_updown_pt");
         if (dvui.dataGet(null, self.wd.id, "_sel_move_cursor_updown_select", bool)) |cud| {
             self.sel_move.cursor_updown.select = cud;
@@ -568,6 +574,9 @@ fn lineBreak(self: *TextLayoutWidget) void {
                 }
             }
 
+            // if we are doing something like move to end of line, we'll
+            // already have moved the cursor to the end of the text and now we
+            // find a line break
             if (!ep.done and self.cursor_seen) {
                 if (!ep.select) {
                     self.selection.moveCursor(self.selection.cursor, false);
@@ -628,7 +637,12 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
                         self.selection.moveCursor(start_idx + space, ep.select);
                         ep.done = true;
                     } else {
+                        // push the cursor to the end, we might see it in lineBreak
                         self.selection.moveCursor(start_idx + txt.len, ep.select);
+                    }
+
+                    if (ep.which == .end) {
+                        self.scroll_to_cursor_next_frame = true;
                     }
 
                     if (!ep.dragging) {
@@ -772,6 +786,7 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
                     },
                 }
 
+                self.scroll_to_cursor_next_frame = true;
                 dvui.refresh(null, @src(), self.wd.id);
             }
         },
@@ -799,8 +814,11 @@ fn cursorSeen(self: *TextLayoutWidget) void {
                     .home => {
                         self.selection.moveCursor(self.first_byte_in_line, ep.select);
                         ep.done = true;
+                        self.scroll_to_cursor_next_frame = true;
                     },
-                    .end => {},
+                    .end => {
+                        self.scroll_to_cursor_next_frame = true;
+                    },
                 }
 
                 if (!ep.dragging) {
@@ -868,14 +886,19 @@ fn cursorSeen(self: *TextLayoutWidget) void {
                 // the next frame
                 dvui.dataSet(null, self.wd.id, "_sel_move_cursor_updown_pt", updown_pt);
                 dvui.dataSet(null, self.wd.id, "_sel_move_cursor_updown_select", cud.select);
-
-                // might have already passed, so need to go again next frame
                 dvui.refresh(null, @src(), self.wd.id);
 
+                // scroll up/down to where we want the cursor, don't need
+                // overscroll because we are staying within the current text
                 var scrollto = Event{ .evt = .{ .scroll_to = .{
-                    .screen_rect = self.screenRectScale(cr_new).r,
+                    .screen_rect = self.screenRectScale(cr_new.outset(self.wd.options.paddingGet())).r,
                 } } };
                 self.processEvent(&scrollto, true);
+
+                // even though we scrolled to where we thought the cursor would
+                // be, we might have moved up from a long line to a short one
+                // and need to scroll horizontally
+                self.scroll_to_cursor_next_frame = true;
             }
         },
         .word_left_right => |*wlr| {
@@ -883,15 +906,23 @@ fn cursorSeen(self: *TextLayoutWidget) void {
                 const idx2 = @min(-wlr.count - 1, wlr.word_start_idx.len - 1);
                 self.selection.moveCursor(wlr.word_start_idx[@intCast(idx2)], wlr.select);
                 wlr.count = 0;
+
+                self.scroll_to_cursor_next_frame = true;
                 dvui.refresh(null, @src(), self.wd.id);
             }
         },
     }
 
     if (self.scroll_to_cursor) {
-        var scrollto = Event{ .evt = .{ .scroll_to = .{
-            .screen_rect = self.screenRectScale(cr.outset(self.wd.options.paddingGet())).r,
-        } } };
+        var scrollto = Event{
+            .evt = .{
+                .scroll_to = .{
+                    .screen_rect = self.screenRectScale(cr.outset(self.wd.options.paddingGet())).r,
+                    // cursor might just have transitioned to a new line, so scroll area has not expanded yet
+                    .over_scroll = true,
+                },
+            },
+        };
         self.processEvent(&scrollto, true);
     }
 }
@@ -1269,7 +1300,11 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
                 m.drag_pt = null;
             }
         },
-        .expand_pt => {},
+        .expand_pt => |*ep| {
+            if (!ep.done and !ep.select) {
+                self.selection.moveCursor(self.selection.cursor, false);
+            }
+        },
         .char_left_right => {},
         .cursor_updown => |*cud| {
             if (cud.pt) |_| {
@@ -1561,7 +1596,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .expand_pt = .{ .which = .home } };
-                    self.scroll_to_cursor = true;
                 }
                 break :blk;
             }
@@ -1570,7 +1604,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .expand_pt = .{ .which = .end } };
-                    self.scroll_to_cursor = true;
                 }
                 break :blk;
             }
@@ -1579,7 +1612,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .word_left_right = .{} };
-                    self.scroll_to_cursor = true;
                 }
                 if (self.sel_move == .word_left_right) {
                     self.sel_move.word_left_right.count -= 1;
@@ -1591,7 +1623,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .word_left_right = .{} };
-                    self.scroll_to_cursor = true;
                 }
                 if (self.sel_move == .word_left_right) {
                     self.sel_move.word_left_right.count += 1;
@@ -1627,7 +1658,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .cursor_updown = .{} };
-                    self.scroll_to_cursor = true;
                 }
                 if (self.sel_move == .cursor_updown) {
                     self.sel_move.cursor_updown.count -= 1;
@@ -1639,7 +1669,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .cursor_updown = .{} };
-                    self.scroll_to_cursor = true;
                 }
                 if (self.sel_move == .cursor_updown) {
                     self.sel_move.cursor_updown.count += 1;
@@ -1686,6 +1715,10 @@ pub fn deinit(self: *TextLayoutWidget) void {
     dvui.dataSet(null, self.wd.id, "_sel_start_r", self.sel_start_r);
     dvui.dataSet(null, self.wd.id, "_sel_end_r", self.sel_end_r);
     dvui.dataSet(null, self.wd.id, "_selection", self.selection.*);
+
+    if (self.scroll_to_cursor_next_frame) {
+        dvui.dataSet(null, self.wd.id, "_scroll_to_cursor", true);
+    }
 
     if (dvui.captured(self.wd.id)) {
         if (self.sel_move == .mouse) {

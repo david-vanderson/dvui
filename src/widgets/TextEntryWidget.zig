@@ -72,7 +72,6 @@ init_opts: InitOptions = undefined,
 text_opt: InitOptions.TextOption = undefined,
 text: []u8 = undefined,
 len: usize = undefined,
-scroll_to_cursor: bool = false,
 text_changed: bool = false,
 enter_pressed: bool = false, // not valid if multiline
 
@@ -285,19 +284,6 @@ pub fn drawCursor(self: *TextEntryWidget) !void {
         crect.w = 2;
         try dvui.pathAddRect(self.textLayout.screenRectScale(crect).r, Rect.all(0));
         try dvui.pathFillConvex(self.wd.options.color(.accent));
-
-        if (self.scroll_to_cursor) {
-            var scrollto = Event{
-                .evt = .{
-                    .scroll_to = .{
-                        .screen_rect = self.textLayout.screenRectScale(crect.outset(self.padding)).r,
-                        // cursor might just have transitioned to a new line, so scroll area has not expanded yet
-                        .over_scroll = true,
-                    },
-                },
-            };
-            self.scroll.scroll.processEvent(&scrollto, true);
-        }
     }
 }
 
@@ -328,7 +314,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
     // strip out carraige returns, which we get from copy/paste on windows
     if (std.mem.indexOfScalar(u8, new, '\r')) |idx| {
         self.textTyped(new[0..idx]);
-        self.textTyped(new[idx+1..]);
+        self.textTyped(new[idx + 1 ..]);
         return;
     }
 
@@ -410,7 +396,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
     sel.start = sel.cursor;
 
     // we might have dropped to a new line, so make sure the cursor is visible
-    self.scroll_to_cursor = true;
+    self.textLayout.scroll_to_cursor = true;
 }
 
 /// Remove all characters that not present in filter_chars.
@@ -505,14 +491,14 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
             if (ke.action == .down and ke.matchBind("text_start")) {
                 e.handled = true;
                 self.textLayout.selection.moveCursor(0, false);
-                self.scroll_to_cursor = true;
+                self.textLayout.scroll_to_cursor = true;
                 break :blk;
             }
 
             if (ke.action == .down and ke.matchBind("text_end")) {
                 e.handled = true;
                 self.textLayout.selection.moveCursor(std.math.maxInt(usize), false);
-                self.scroll_to_cursor = true;
+                self.textLayout.scroll_to_cursor = true;
                 break :blk;
             }
 
@@ -520,7 +506,6 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.textLayout.sel_move == .none) {
                     self.textLayout.sel_move = .{ .expand_pt = .{ .select = false, .which = .home } };
-                    self.scroll_to_cursor = true;
                 }
                 break :blk;
             }
@@ -529,7 +514,6 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.textLayout.sel_move == .none) {
                     self.textLayout.sel_move = .{ .expand_pt = .{ .select = false, .which = .end } };
-                    self.scroll_to_cursor = true;
                 }
                 break :blk;
             }
@@ -538,10 +522,10 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (!self.textLayout.selection.empty()) {
                     self.textLayout.selection.moveCursor(self.textLayout.selection.start, false);
+                    self.textLayout.scroll_to_cursor = true;
                 } else {
                     if (self.textLayout.sel_move == .none) {
                         self.textLayout.sel_move = .{ .word_left_right = .{ .select = false } };
-                        self.scroll_to_cursor = true;
                     }
                     if (self.textLayout.sel_move == .word_left_right) {
                         self.textLayout.sel_move.word_left_right.count -= 1;
@@ -555,10 +539,10 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 if (!self.textLayout.selection.empty()) {
                     self.textLayout.selection.moveCursor(self.textLayout.selection.end, false);
                     self.textLayout.selection.affinity = .before;
+                    self.textLayout.scroll_to_cursor = true;
                 } else {
                     if (self.textLayout.sel_move == .none) {
                         self.textLayout.sel_move = .{ .word_left_right = .{ .select = false } };
-                        self.scroll_to_cursor = true;
                     }
                     if (self.textLayout.sel_move == .word_left_right) {
                         self.textLayout.sel_move.word_left_right.count += 1;
@@ -571,7 +555,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.textLayout.sel_move == .none) {
                     self.textLayout.sel_move = .{ .char_left_right = .{ .select = false } };
-                    self.scroll_to_cursor = true;
+                    self.textLayout.scroll_to_cursor = true;
                 }
                 if (self.textLayout.sel_move == .char_left_right) {
                     self.textLayout.sel_move.char_left_right.count -= 1;
@@ -583,7 +567,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.textLayout.sel_move == .none) {
                     self.textLayout.sel_move = .{ .char_left_right = .{ .select = false } };
-                    self.scroll_to_cursor = true;
+                    self.textLayout.scroll_to_cursor = true;
                 }
                 if (self.textLayout.sel_move == .char_left_right) {
                     self.textLayout.sel_move.char_left_right.count += 1;
@@ -595,7 +579,6 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.textLayout.sel_move == .none) {
                     self.textLayout.sel_move = .{ .cursor_updown = .{ .select = false } };
-                    self.scroll_to_cursor = true;
                 }
                 if (self.textLayout.sel_move == .cursor_updown) {
                     self.textLayout.sel_move.cursor_updown.count -= 1;
@@ -607,7 +590,6 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.textLayout.sel_move == .none) {
                     self.textLayout.sel_move = .{ .cursor_updown = .{ .select = false } };
-                    self.scroll_to_cursor = true;
                 }
                 if (self.textLayout.sel_move == .cursor_updown) {
                     self.textLayout.sel_move.cursor_updown.count += 1;
@@ -627,7 +609,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             self.text[self.len] = 0;
                             sel.end = sel.start;
                             sel.cursor = sel.start;
-                            self.scroll_to_cursor = true;
+                            self.textLayout.scroll_to_cursor = true;
                             self.text_changed = true;
                         } else if (ke.matchBind("delete_prev_word")) {
                             // delete word before cursor
@@ -653,7 +635,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             }
                             sel.end = sel.cursor;
                             sel.start = sel.cursor;
-                            self.scroll_to_cursor = true;
+                            self.textLayout.scroll_to_cursor = true;
                             self.text_changed = (sel.cursor != oldcur);
                         } else if (sel.cursor > 0) {
                             // delete character just before cursor
@@ -670,7 +652,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             sel.cursor -= i;
                             sel.start = sel.cursor;
                             sel.end = sel.cursor;
-                            self.scroll_to_cursor = true;
+                            self.textLayout.scroll_to_cursor = true;
                             self.text_changed = true;
                         }
                     }
@@ -686,7 +668,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             self.text[self.len] = 0;
                             sel.end = sel.start;
                             sel.cursor = sel.start;
-                            self.scroll_to_cursor = true;
+                            self.textLayout.scroll_to_cursor = true;
                             self.text_changed = true;
                         } else if (ke.matchBind("delete_next_word")) {
                             // delete word after cursor
@@ -713,7 +695,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             sel.cursor = oldcur;
                             sel.end = sel.cursor;
                             sel.start = sel.cursor;
-                            self.scroll_to_cursor = true;
+                            self.textLayout.scroll_to_cursor = true;
                             self.text_changed = (sel.cursor != oldcur);
                         } else if (sel.cursor < self.len) {
                             // delete the character just after the cursor
@@ -815,7 +797,7 @@ pub fn cut(self: *TextEntryWidget) void {
         self.text[self.len] = 0;
         sel.end = sel.start;
         sel.cursor = sel.start;
-        self.scroll_to_cursor = true;
+        self.textLayout.scroll_to_cursor = true;
         self.text_changed = true;
     }
 }
