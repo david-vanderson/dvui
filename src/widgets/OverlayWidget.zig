@@ -42,7 +42,7 @@ pub fn screenRectScale(self: *OverlayWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *OverlayWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.padSize(s));
+    self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
 pub fn processEvent(self: *OverlayWidget, e: *Event, bubbling: bool) void {

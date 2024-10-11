@@ -92,7 +92,7 @@ pub fn screenRectScale(self: *AnimateWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *AnimateWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.padSize(s));
+    self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
 pub fn processEvent(self: *AnimateWidget, e: *Event, bubbling: bool) void {

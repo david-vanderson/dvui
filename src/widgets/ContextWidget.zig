@@ -68,7 +68,7 @@ pub fn screenRectScale(self: *ContextWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *ContextWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.padSize(s));
+    self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
 pub fn processEvent(self: *ContextWidget, e: *Event, bubbling: bool) void {

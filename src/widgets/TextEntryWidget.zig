@@ -80,7 +80,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     self.init_opts = init_opts;
     self.text_opt = init_opts.text orelse .{ .internal = .{} };
 
-    var options = defaults.addSizeM(14, 1).override(opts);
+    var options = defaults.min_sizeM(14, 1).override(opts);
 
     // padding is interpreted as the padding for the TextLayoutWidget, but
     // we also need to add it to content size because TextLayoutWidget is
@@ -305,7 +305,7 @@ pub fn screenRectScale(self: *TextEntryWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *TextEntryWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.padSize(s));
+    self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
 pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {

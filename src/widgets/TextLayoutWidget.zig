@@ -1171,7 +1171,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             // breaking lines.  If given a min width, use that.
             self.current_line_width += s.w;
         }
-        const size = self.wd.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
+        const size = self.wd.options.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
         self.wd.min_size.w = @max(self.wd.min_size.w, size.w + width_after);
         self.wd.min_size.h = @max(self.wd.min_size.h, size.h);
 
@@ -1220,7 +1220,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             self.current_line_height = line_height;
 
             if (newline) {
-                const newline_size = self.wd.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
+                const newline_size = self.wd.options.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
                 self.wd.min_size.w = @max(self.wd.min_size.w, newline_size.w);
                 self.wd.min_size.h = @max(self.wd.min_size.h, newline_size.h);
                 self.current_line_width = 0.0;
@@ -1740,7 +1740,7 @@ pub fn deinit(self: *TextLayoutWidget) void {
     // check if the widgets are taller than the text
     const left_height = (self.corners_min_size[0] orelse Size{}).h + (self.corners_min_size[2] orelse Size{}).h;
     const right_height = (self.corners_min_size[1] orelse Size{}).h + (self.corners_min_size[3] orelse Size{}).h;
-    self.wd.min_size.h = @max(self.wd.min_size.h, self.wd.padSize(.{ .h = @max(left_height, right_height) }).h);
+    self.wd.min_size.h = @max(self.wd.min_size.h, self.wd.options.padSize(.{ .h = @max(left_height, right_height) }).h);
 
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();

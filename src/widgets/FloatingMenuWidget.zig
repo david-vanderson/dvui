@@ -142,7 +142,7 @@ pub fn screenRectScale(self: *FloatingMenuWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *FloatingMenuWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.padSize(s));
+    self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
 pub fn processEvent(self: *FloatingMenuWidget, e: *Event, bubbling: bool) void {

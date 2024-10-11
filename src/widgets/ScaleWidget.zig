@@ -62,7 +62,7 @@ pub fn screenRectScale(self: *ScaleWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *ScaleWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.padSize(s.scale(self.scale)));
+    self.wd.minSizeMax(self.wd.options.padSize(s.scale(self.scale)));
 }
 
 pub fn processEvent(self: *ScaleWidget, e: *Event, bubbling: bool) void {

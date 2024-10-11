@@ -542,7 +542,7 @@ pub fn deinit(self: *ScrollContainerWidget) void {
 
     dvui.clipSet(self.prevClip);
 
-    const padded = self.wd.padSize(self.nextVirtualSize);
+    const padded = self.wd.options.padSize(self.nextVirtualSize);
     switch (self.si.horizontal) {
         .none => self.wd.min_size.w = padded.w,
         .auto => {

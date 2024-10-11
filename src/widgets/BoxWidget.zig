@@ -188,7 +188,7 @@ pub fn deinit(self: *BoxWidget) void {
         }
     }
 
-    self.wd.minSizeMax(self.wd.padSize(ms));
+    self.wd.minSizeMax(self.wd.options.padSize(ms));
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
 
