@@ -118,7 +118,7 @@ pub fn screenRectScale(self: *MenuWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *MenuWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.padSize(s));
+    self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
 pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {

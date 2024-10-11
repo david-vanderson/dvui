@@ -221,7 +221,7 @@ pub fn screenRectScale(self: *PanedWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *PanedWidget, s: dvui.Size) void {
-    self.wd.minSizeMax(self.wd.padSize(s));
+    self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
 pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {

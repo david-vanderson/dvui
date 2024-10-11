@@ -191,10 +191,6 @@ pub fn contentRectScale(self: *const WidgetData) RectScale {
     return self.rectScale().rectToRectScale(r);
 }
 
-pub fn padSize(self: *const WidgetData, s: Size) Size {
-    return s.pad(self.options.paddingGet()).pad(self.options.borderGet()).pad(self.options.marginGet());
-}
-
 pub fn minSizeMax(self: *WidgetData, s: Size) void {
     self.min_size = Size.max(self.min_size, s);
 }

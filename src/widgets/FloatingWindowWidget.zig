@@ -532,7 +532,7 @@ pub fn screenRectScale(self: *FloatingWindowWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *FloatingWindowWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.padSize(s));
+    self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
 pub fn processEvent(self: *FloatingWindowWidget, e: *Event, bubbling: bool) void {

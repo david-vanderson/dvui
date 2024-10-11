@@ -318,12 +318,16 @@ pub fn override(self: *const Options, over: Options) Options {
     return ret;
 }
 
-pub fn addSizeM(self: *const Options, wide: f32, tall: f32) Options {
+pub fn min_sizeM(self: *const Options, wide: f32, tall: f32) Options {
     return self.override(.{ .min_size_content = self.fontGet().sizeM(wide, tall) });
 }
 
-pub fn sizeM(wide: f32, tall: f32) Options {
-    return (Options{}).addSizeM(wide, tall);
+pub fn sizeM(wide: f32, tall: f32) Size {
+    return (Options{}).fontGet().sizeM(wide, tall);
+}
+
+pub fn padSize(self: *const Options, s: Size) Size {
+    return s.pad(self.paddingGet()).pad(self.borderGet()).pad(self.marginGet());
 }
 
 //pub fn format(self: *const Options, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {

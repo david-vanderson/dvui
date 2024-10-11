@@ -5263,7 +5263,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     const exp_stretch = 0.02;
     const key_percentage = 0.05;
 
-    var options = slider_entry_defaults.addSizeM(10, 1).override(opts);
+    var options = slider_entry_defaults.min_sizeM(10, 1).override(opts);
 
     var ret = false;
     var hover = false;

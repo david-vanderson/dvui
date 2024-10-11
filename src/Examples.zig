@@ -225,14 +225,14 @@ pub fn incrementor() !void {
     var b = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
     defer b.deinit();
 
-    if (try dvui.button(@src(), "-", .{}, .{})) {
+    if (try dvui.button(@src(), "-", .{}, .{ .min_size_content = dvui.Options.sizeM(2, 1) })) {
         incrementor_state -= 1;
     }
 
-    // Gravity here makes the label centered. 
-    try dvui.label(@src(), "{}", .{ incrementor_state }, .{ .gravity_x = 0.5, .gravity_y = 0.5});
+    // Gravity here makes the label centered.
+    try dvui.label(@src(), "{}", .{incrementor_state}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-    if (try dvui.button(@src(), "+", .{}, .{})) {
+    if (try dvui.button(@src(), "+", .{}, .{ .min_size_content = dvui.Options.sizeM(2, 1) })) {
         incrementor_state += 1;
     }
 }
@@ -242,33 +242,26 @@ var calculand: f32 = 0;
 var active_op: ?u8 = null;
 var digits_after_dot: f32 = 0;
 pub fn calculator() !void {
-    const loop_labels = [_]u8{
-        'C', 'N', '%', '/',
-        '7', '8', '9', 'x',
-        '4', '5', '6', '-',
-        '1', '2', '3', '+',
-        '0', '.', '='
-    };
+    const loop_labels = [_]u8{ 'C', 'N', '%', '/', '7', '8', '9', 'x', '4', '5', '6', '-', '1', '2', '3', '+', '0', '.', '=' };
     const loop_count = @sizeOf(@TypeOf(loop_labels)) / @sizeOf(@TypeOf(loop_labels[0]));
 
-    {
-        var b = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-        defer b.deinit();
-
-        try dvui.label(@src(), "{}", .{ calculation }, .{ .margin = .{ .x = 110 } });
-    }
+    try dvui.label(@src(), "{d}", .{calculation}, .{ .gravity_x = 1.0 });
 
     for (0..5) |row_i| {
         var b = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 110 }, .id_extra = row_i });
         defer b.deinit();
 
-        for (row_i*4..(row_i+1)*4) |i| {
+        for (row_i * 4..(row_i + 1) * 4) |i| {
             if (i >= loop_count) continue;
             const letter = loop_labels[i];
 
-            const pad: f32 = if (letter == '0') 30.0 else 10.0;
-            const opts = .{ .id_extra = letter, .padding = .{ .x = pad, .w = pad } };
-            if (try dvui.button(@src(), &[_]u8{letter}, .{}, opts)) {
+            var opts = dvui.ButtonWidget.defaults.min_sizeM(3, 1);
+            if (letter == '0') {
+                const extra_space = opts.padSize(.{}).w;
+                opts.min_size_content.?.w *= 2; // be twice as wide as normal
+                opts.min_size_content.?.w += extra_space; // add the extra space between 2 buttons
+            }
+            if (try dvui.button(@src(), &[_]u8{letter}, .{}, opts.override(.{ .id_extra = letter }))) {
                 if (letter == 'C') {
                     calculation = 0;
                     calculand = 0;
@@ -403,11 +396,10 @@ pub fn demo() !void {
     }
 
     if (try dvui.expander(@src(), "Calculator", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+        var b = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer b.deinit();
         try calculator();
     }
-
 
     if (try dvui.expander(@src(), "Text Entry", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
@@ -1681,7 +1673,7 @@ pub fn scrolling() !void {
         _ = try dvui.spacer(@src(), .{}, .{ .expand = .vertical });
 
         try dvui.label(@src(), "Scroll to msg:", .{}, .{});
-        const result = try dvui.textEntryNumber(@src(), usize, .{ .min = Data.msg_start, .max = Data.msg_end }, dvui.Options.sizeM(8, 1));
+        const result = try dvui.textEntryNumber(@src(), usize, .{ .min = Data.msg_start, .max = Data.msg_end }, .{ .min_size_content = dvui.Options.sizeM(8, 1) });
         const label = switch (result.value) {
             .TooBig => "Too Big",
             .TooSmall => "Too Small",
@@ -2391,7 +2383,7 @@ pub const StrokeTest = struct {
     }
 
     pub fn minSizeForChild(self: *Self, s: dvui.Size) void {
-        self.wd.minSizeMax(self.wd.padSize(s));
+        self.wd.minSizeMax(self.wd.options.padSize(s));
     }
 
     pub fn processEvent(self: *Self, e: *dvui.Event, bubbling: bool) void {

@@ -113,7 +113,7 @@ pub fn screenRectScale(self: *ButtonWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *ButtonWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.padSize(s));
+    self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
 pub fn processEvent(self: *ButtonWidget, e: *Event, bubbling: bool) void {

@@ -69,7 +69,7 @@ pub fn screenRectScale(self: *ReorderWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *ReorderWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.padSize(s));
+    self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
 pub fn matchEvent(self: *ReorderWidget, e: *dvui.Event) bool {
@@ -350,7 +350,7 @@ pub const Reorderable = struct {
     }
 
     pub fn minSizeForChild(self: *Reorderable, s: Size) void {
-        self.wd.minSizeMax(self.wd.padSize(s));
+        self.wd.minSizeMax(self.wd.options.padSize(s));
     }
 
     pub fn processEvent(self: *Reorderable, e: *dvui.Event, bubbling: bool) void {
