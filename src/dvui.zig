@@ -471,6 +471,7 @@ const FontCacheEntry = struct {
 
             minx = @min(minx, x + gi.leftBearing);
             maxx = @max(maxx, x + gi.leftBearing + gi.w);
+            maxx = @max(maxx, x + gi.advance);
 
             miny = @min(miny, gi.topBearing);
             maxy = @max(maxy, gi.topBearing + gi.h);
@@ -6260,8 +6261,8 @@ pub fn renderText(opts: renderTextOptions) !void {
         }
     }
 
-    // due to floating point inaccuracies, shrink by 1/100 of a pixel before testing
-    const txtr = Rect{ .x = x_start + 0.01, .y = y + 0.01, .w = max_x - x_start - 0.02, .h = sel_max_y - y - 0.02 };
+    // due to floating point inaccuracies, shrink by 1/1000 of a pixel before testing
+    const txtr = (Rect{ .x = x_start, .y = y, .w = max_x - x_start, .h = sel_max_y - y }).insetAll(0.001);
     var clipr: ?Rect = null;
     if (!clipGet().equals(dvui.windowRectPixels()) and txtr.clippedBy(clipGet())) {
         clipr = clipGet();
