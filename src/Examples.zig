@@ -269,10 +269,10 @@ pub fn calculator() !void {
                     digits_after_dot = 0;
                 }
 
-                if (letter == '/') active_op = '/';
-                if (letter == 'x') active_op = 'x';
-                if (letter == '-') active_op = '-';
-                if (letter == '+') active_op = '+';
+                if (letter == '/') { active_op = '/'; digits_after_dot = 0; }
+                if (letter == 'x') { active_op = 'x'; digits_after_dot = 0; }
+                if (letter == '-') { active_op = '-'; digits_after_dot = 0; }
+                if (letter == '+') { active_op = '+'; digits_after_dot = 0; }
                 if (letter == '.') digits_after_dot = 1;
 
                 if (letter == 'N') calculation = -calculation;
