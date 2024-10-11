@@ -232,7 +232,8 @@ pub fn minSizeSetAndRefresh(self: *const WidgetData) void {
 
     if (existing_min_size) |kv| {
         if (kv.value.used) {
-            dvui.log.err("{s}:{d} duplicate widget id {x} (widget highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ self.src.file, self.src.line, self.id });
+            const name: []const u8 = self.options.name orelse "???";
+            dvui.log.err("{s}:{d} duplicate widget id {x} (widget \"{s}\" highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ self.src.file, self.src.line, self.id, name });
             cw.debug_widget_id = self.id;
         }
     }
