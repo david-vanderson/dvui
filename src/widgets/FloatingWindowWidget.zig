@@ -25,7 +25,6 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     modal: bool = false,
     rect: ?*Rect = null,
-    initial_max_size: ?Size = null,
     open_flag: ?*bool = null,
     process_events_in_deinit: bool = true,
     stay_above_parent_window: bool = false,
@@ -77,7 +76,6 @@ layout: BoxWidget = undefined,
 prevClip: Rect = Rect{},
 auto_pos: bool = false,
 auto_size: u8 = 0,
-auto_size_max: ?Size = null,
 drag_part: ?DragPart = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingWindowWidget {
@@ -114,10 +112,9 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     if (autopossize) {
         if (dvui.dataGet(null, self.wd.id, "_auto_size", @TypeOf(self.auto_size))) |as| {
             self.auto_size = as;
-            self.auto_size_max = dvui.dataGet(null, self.wd.id, "_auto_size_max", Size);
         } else {
             if (self.wd.rect.w == 0 and self.wd.rect.h == 0) {
-                self.autoSize(init_opts.initial_max_size orelse .{});
+                self.autoSize();
             }
         }
 
@@ -136,10 +133,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             // if we don't, this won't change anything
             self.auto_size -= 1;
 
-            var ms = Size.max(min_size, self.options.min_sizeGet());
-            if (self.auto_size_max) |asmax| {
-                ms = Size.min(ms, asmax);
-            }
+            const ms = Size.min(Size.max(min_size, self.options.min_sizeGet()), dvui.windowRect().size());
             self.wd.rect.w = ms.w;
             self.wd.rect.h = ms.h;
 
@@ -494,15 +488,8 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
 /// If max_size width/height is zero, use up to the screen size.
 ///
 /// This might take 2 frames if there is a textLayout with break_lines.
-pub fn autoSize(self: *FloatingWindowWidget, max_size: Size) void {
+pub fn autoSize(self: *FloatingWindowWidget) void {
     self.auto_size = 2;
-    self.auto_size_max = max_size;
-    if (self.auto_size_max.?.w == 0) {
-        self.auto_size_max.?.w = dvui.windowRect().w;
-    }
-    if (self.auto_size_max.?.h == 0) {
-        self.auto_size_max.?.h = dvui.windowRect().h;
-    }
 }
 
 pub fn close(self: *FloatingWindowWidget) void {
@@ -576,9 +563,6 @@ pub fn deinit(self: *FloatingWindowWidget) void {
 
     dvui.dataSet(null, self.wd.id, "_auto_pos", self.auto_pos);
     dvui.dataSet(null, self.wd.id, "_auto_size", self.auto_size);
-    if (self.auto_size_max) |asmax| {
-        dvui.dataSet(null, self.wd.id, "_auto_size_max", asmax);
-    }
     self.wd.minSizeSetAndRefresh();
 
     // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();

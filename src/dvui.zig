@@ -3738,7 +3738,7 @@ pub const Window = struct {
             defer toast_win.deinit();
 
             toast_win.data().rect = dvui.placeIn(self.wd.rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-            toast_win.autoSize(.{});
+            toast_win.autoSize();
             try toast_win.install();
             try toast_win.drawBackground();
 
@@ -4173,7 +4173,7 @@ pub fn dialogDisplay(id: u32) !void {
 
     const maxSize = dvui.dataGet(null, id, "_max_size", Size);
 
-    var win = try floatingWindow(@src(), .{ .modal = modal, .initial_max_size = maxSize }, .{ .id_extra = id });
+    var win = try floatingWindow(@src(), .{ .modal = modal }, .{ .id_extra = id, .max_size_content = maxSize });
     defer win.deinit();
 
     var header_openflag = true;
@@ -4211,7 +4211,7 @@ pub fn dialogDisplay(id: u32) !void {
     }
 
     // Now add the scroll area which will get the remaining space
-    var scroll = try dvui.scrollArea(@src(), .{ .expand_to_fit = true }, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
+    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
     var tl = try dvui.textLayout(@src(), .{}, .{ .background = false, .gravity_x = 0.5 });
     try tl.addText(message, .{});
     tl.deinit();

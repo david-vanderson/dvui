@@ -37,7 +37,7 @@ var slider_entry_min: bool = true;
 var slider_entry_max: bool = true;
 var slider_entry_interval: bool = true;
 var slider_entry_vector: bool = false;
-var text_entry_buf = std.mem.zeroes([30]u8);
+var text_entry_buf = std.mem.zeroes([50]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
 var text_entry_multiline_allocator_buf: [1000]u8 = undefined;
@@ -82,7 +82,7 @@ const AnimatingDialog = struct {
         // once we record a response, refresh it until we close
         _ = dvui.dataGet(null, id, "response", enums.DialogResponse);
 
-        var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id });
+        var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id, .max_size_content = .{ .w = 300 } });
         const first_frame = dvui.firstFrame(win.data().id);
 
         // On the first frame the window size will be 0 so you won't see
@@ -339,7 +339,7 @@ pub fn demo() !void {
         defer toast_win.deinit();
 
         toast_win.data().rect = dvui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-        toast_win.autoSize(.{});
+        toast_win.autoSize();
         try toast_win.install();
         try toast_win.drawBackground();
 
@@ -796,7 +796,7 @@ pub fn textEntryWidgets() !void {
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
-        var te = try dvui.textEntry(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{});
+        var te = try dvui.textEntry(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{ .max_size_content = dvui.Options.sizeM(20, 0) });
         enter_pressed = te.enter_pressed;
         te.deinit();
 
@@ -1240,10 +1240,10 @@ pub fn layoutText() !void {
         }
         cbox.deinit();
 
-        cbox = try dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .{ .name = .fill_window }, .min_size_content = .{ .w = 120 } });
+        cbox = try dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .{ .name = .fill_window }, .min_size_content = .{ .w = 120 }, .max_size_content = .{ .w = 120 } });
         try dvui.icon(@src(), "aircraft", entypo.aircraft, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
         try dvui.label(@src(), "Caption Heading", .{}, .{ .font_style = .caption_heading, .gravity_x = 0.5 });
-        var tl_caption = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .w = 10 }, .background = false });
+        var tl_caption = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
         try tl_caption.addText("Here is some caption text that is in it's own text layout.", .{ .font_style = .caption });
         tl_caption.deinit();
         cbox.deinit();
@@ -1709,7 +1709,7 @@ pub fn scrolling() !void {
         }
     }
     {
-        var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
+        var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .max_size_content = .{ .h = 300 } });
         defer vbox.deinit();
 
         try dvui.label(@src(), "{d:0>4.2}% visible, offset {d} frac {d:0>4.2}", .{ Data.scroll_info.visibleFraction(.vertical) * 100.0, Data.scroll_info.viewport.y, Data.scroll_info.offsetFraction(.vertical) }, .{});
@@ -1753,7 +1753,7 @@ pub fn dialogs(demo_win_id: u32) !void {
         }
 
         if (try dvui.button(@src(), "Giant", .{}, .{})) {
-            try dvui.dialog(@src(), .{ .modal = false, .title = "So Much Text", .ok_label = "Too Much", .max_size = .{ .w = 300, .h = 300 }, .message = "This is a non modal dialog with no callafter which happens to have just way too much text in it.\n\nLuckily there is a max_size on here and if the text is too big it will be scrolled.\n\nI mean come on there is just way too much text here.\n\nCan you imagine this much text being created for a dialog?\n\nMaybe like a giant error message with a stack trace or dumping the contents of a large struct?\n\nOr a dialog asking way too many questions, or dumping a whole log into the dialog, or just a very long rant." });
+            try dvui.dialog(@src(), .{ .modal = false, .title = "So Much Text", .ok_label = "Too Much", .max_size = .{ .w = 300, .h = 300 }, .message = "This is a non modal dialog with no callafter which happens to have just way too much text in it.\n\nLuckily there is a max_size on here and if the text is too big it will be scrolled.\n\nI mean come on there is just way too much text here.\n\nCan you imagine this much text being created for a dialog?\n\nMaybe like a giant error message with a stack trace or dumping the contents of a large struct?\n\nOr a dialog asking way too many questions, or dumping a whole log into the dialog, or just a very long rant.\n\nMore lines.\n\nAnd more lines.\n\nFinally the last line." });
         }
     }
 
@@ -2166,7 +2166,7 @@ pub fn dialogDirect() !void {
     const data = struct {
         var extra_stuff: bool = false;
     };
-    var dialog_win = try dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog, .initial_max_size = .{ .w = 500 } }, .{});
+    var dialog_win = try dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog }, .{ .max_size_content = .{ .w = 500 } });
     defer dialog_win.deinit();
 
     try dvui.windowHeader("Dialog", "", &show_dialog);
@@ -2175,7 +2175,7 @@ pub fn dialogDirect() !void {
 
     if (try dvui.button(@src(), "Toggle extra stuff and fit window", .{}, .{})) {
         data.extra_stuff = !data.extra_stuff;
-        dialog_win.autoSize(.{ .w = 500 });
+        dialog_win.autoSize();
     }
 
     if (data.extra_stuff) {

@@ -103,7 +103,7 @@ pub fn install(self: *FloatingMenuWidget) !void {
 
     // we are using scroll to do border/background but floating windows
     // don't have margin, so turn that off
-    self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none, .expand_to_fit = true }, self.options.override(.{ .margin = .{}, .expand = .both, .min_size_content = .{} }));
+    self.scroll = ScrollAreaWidget.init(@src(), .{ .horizontal = .none }, self.options.override(.{ .margin = .{}, .expand = .both }));
     try self.scroll.install();
 
     if (dvui.MenuWidget.current()) |pm| {
