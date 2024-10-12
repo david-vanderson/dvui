@@ -499,45 +499,7 @@ pub fn demo() !void {
         }
 
         if (try dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
-            var b2 = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-            defer b2.deinit();
-
-            const color_field_options = .{ .fields = .{
-                .r = .{ .min = 0, .max = 255, .widget_type = .slider },
-                .g = .{ .min = 0, .max = 255, .widget_type = .slider },
-                .b = .{ .min = 0, .max = 255, .widget_type = .slider },
-                .a = .{ .disabled = true },
-            } };
-
-            try dvui.structEntryEx(@src(), "dvui.Theme", dvui.Theme, dvui.themeGet(), .{
-                .use_expander = false,
-                .label_override = "",
-                .fields = .{
-                    .name = .{ .disabled = true },
-                    .dark = .{ .widget_type = .toggle },
-                    .style_err = .{ .disabled = true },
-                    .style_accent = .{ .disabled = true },
-                    .font_body = .{ .disabled = true },
-                    .font_heading = .{ .disabled = true },
-                    .font_caption = .{ .disabled = true },
-                    .font_caption_heading = .{ .disabled = true },
-                    .font_title = .{ .disabled = true },
-                    .font_title_1 = .{ .disabled = true },
-                    .font_title_2 = .{ .disabled = true },
-                    .font_title_3 = .{ .disabled = true },
-                    .font_title_4 = .{ .disabled = true },
-                    .color_accent = color_field_options,
-                    .color_err = color_field_options,
-                    .color_text = color_field_options,
-                    .color_text_press = color_field_options,
-                    .color_fill = color_field_options,
-                    .color_fill_window = color_field_options,
-                    .color_fill_control = color_field_options,
-                    .color_fill_hover = color_field_options,
-                    .color_fill_press = color_field_options,
-                    .color_border = color_field_options,
-                },
-            });
+            try themeEditor();
         }
     }
 
@@ -554,6 +516,48 @@ pub fn demo() !void {
     if (IconBrowser.show) {
         try icon_browser();
     }
+}
+
+pub fn themeEditor() !void {
+    var b2 = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    defer b2.deinit();
+
+    const color_field_options = .{ .fields = .{
+        .r = .{ .min = 0, .max = 255, .widget_type = .slider },
+        .g = .{ .min = 0, .max = 255, .widget_type = .slider },
+        .b = .{ .min = 0, .max = 255, .widget_type = .slider },
+        .a = .{ .disabled = true },
+    } };
+
+    try dvui.structEntryEx(@src(), "dvui.Theme", dvui.Theme, dvui.themeGet(), .{
+        .use_expander = false,
+        .label_override = "",
+        .fields = .{
+            .name = .{ .disabled = true },
+            .dark = .{ .widget_type = .toggle },
+            .style_err = .{ .disabled = true },
+            .style_accent = .{ .disabled = true },
+            .font_body = .{ .disabled = true },
+            .font_heading = .{ .disabled = true },
+            .font_caption = .{ .disabled = true },
+            .font_caption_heading = .{ .disabled = true },
+            .font_title = .{ .disabled = true },
+            .font_title_1 = .{ .disabled = true },
+            .font_title_2 = .{ .disabled = true },
+            .font_title_3 = .{ .disabled = true },
+            .font_title_4 = .{ .disabled = true },
+            .color_accent = color_field_options,
+            .color_err = color_field_options,
+            .color_text = color_field_options,
+            .color_text_press = color_field_options,
+            .color_fill = color_field_options,
+            .color_fill_window = color_field_options,
+            .color_fill_control = color_field_options,
+            .color_fill_hover = color_field_options,
+            .color_fill_press = color_field_options,
+            .color_border = color_field_options,
+        },
+    });
 }
 
 pub fn themeSerialization() !void {

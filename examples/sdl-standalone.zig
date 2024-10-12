@@ -12,8 +12,6 @@ const gpa = gpa_instance.allocator();
 
 const vsync = true;
 
-var show_dialog_outside_frame: bool = false;
-
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application
 /// - render frames only when needed
@@ -39,6 +37,7 @@ pub fn main() !void {
 
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(backend.hasEvent());
+
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
@@ -68,113 +67,174 @@ pub fn main() !void {
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros, null);
         backend.waitEventTimeout(wait_event_micros);
-
-        // Example of how to show a dialog from another thread (outside of win.begin/win.end)
-        if (show_dialog_outside_frame) {
-            show_dialog_outside_frame = false;
-            try dvui.dialog(@src(), .{ .window = &win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
-        }
     }
 }
 
-fn gui_frame(backend: Backend) !void {
+const Rect = dvui.Rect;
+const demo_box_size = 120; // size of demo image, obviously
+const demo_pad      = 5;   // space between demos
+
+
+const DemoFn = *const fn() anyerror!void;
+const Demo = struct{
+    ui_fn: DemoFn,
+    label: [] const u8
+};
+
+fn demoButton(src: std.builtin.SourceLocation, demo: Demo) !bool {
+    // initialize widget and get rectangle from parent
+    var bw = dvui.ButtonWidget.init(src, .{}, .{ .id_extra = @intFromPtr(demo.ui_fn), .margin = .{}, .padding = .{} });
+
+    // make ourselves the new parent
+    try bw.install();
+
+    // process events (mouse and keyboard)
+    bw.processEvents();
+
+    // use pressed text color if desired
+    const click = bw.clicked();
+    var options: dvui.Options = .{ .gravity_x = 0.5, .gravity_y = 0.5 };
+
+    if (dvui.captured(bw.wd.id)) options = options.override(.{ .color_text = .{ .color = options.color(.text_press) } });
+
+    // this child widget:
+    // - has bw as parent
+    // - gets a rectangle from bw
+    // - draws itself
+    // - reports its min size to bw
     {
-        var m = try dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
-        defer m.deinit();
-
-        if (try dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .none })) |r| {
-            var fw = try dvui.floatingMenu(@src(), dvui.Rect.fromPoint(dvui.Point{ .x = r.x, .y = r.y + r.h }), .{});
-            defer fw.deinit();
-
-            if (try dvui.menuItemLabel(@src(), "Close Menu", .{}, .{}) != null) {
-                m.close();
+        var demo_box = try dvui.box(
+            @src(),
+            .vertical,
+            .{
+                .border = Rect.all(1),
+                .min_size_content = .{ .w = demo_box_size, .h = demo_box_size },
+                .margin = Rect.all(demo_pad),
+                .color_fill = .{ .name = if (bw.hover) .fill_hover else .fill }
             }
-        }
+        );
+        defer demo_box.deinit();
 
-        if (try dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .none })) |r| {
-            var fw = try dvui.floatingMenu(@src(), dvui.Rect.fromPoint(dvui.Point{ .x = r.x, .y = r.y + r.h }), .{});
-            defer fw.deinit();
-            _ = try dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
-            _ = try dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
-            _ = try dvui.menuItemLabel(@src(), "Dummy Super Long", .{}, .{ .expand = .horizontal });
-        }
+        const zig_favicon = @embedFile("zig-favicon.png");
+        try dvui.image(@src(), "zig favicon", zig_favicon, .{
+            .gravity_x = 0.5,
+            .gravity_y = 0.5,
+            .expand = .both,
+            .min_size_content = .{ .w = 100, .h = 100 },
+            .rotation = 0,
+        });
+
+        try dvui.labelNoFmt(@src(), demo.label, .{
+            .margin = .{ .x = 4, .w = 4 },
+            .gravity_x = 0.5,
+            .font_style = .title_4
+        });
     }
 
-    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
+    // draw focus
+    try bw.drawFocus();
+
+    // restore previous parent
+    // send our min size to parent
+    bw.deinit();
+
+    return click;
+}
+
+var demo_active: ?Demo = null;
+fn gui_frame(_: Backend) !void {
+
+    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
 
-    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
-    const lorem = "This example shows how to use dvui in a normal application.";
-    try tl.addText(lorem, .{});
-    tl.deinit();
+    if (demo_active) |demo| {
+        {
+            var b = try dvui.box(@src(), .horizontal, .{});
+            defer b.deinit();
 
-    var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    try tl2.addText(
-        \\DVUI
-        \\- paints the entire window
-        \\- can show floating windows and dialogs
-        \\- example menu at the top of the window
-        \\- rest of the window is a scroll area
-    , .{});
-    try tl2.addText("\n\n", .{});
-    try tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
-    try tl2.addText("\n\n", .{});
-    if (vsync) {
-        try tl2.addText("Framerate is capped by vsync.", .{});
+            if (try dvui.button(@src(), "<", .{}, .{ .gravity_y = 0.5 })) {
+                demo_active = null;
+            }
+            try dvui.labelNoFmt(@src(), demo.label, .{ .margin = .{ .x = 4, .y = 4, .w = 4 }, .font_style = .title_1 });
+        }
+
+        try demo.ui_fn();
     } else {
-        try tl2.addText("Framerate is uncapped.", .{});
+        try dvui.labelNoFmt(@src(), "DVUI Demos", .{ .margin = .{ .x = 4, .y = 12, .w = 4 }, .font_style = .title_1, .gravity_x = 0.5 });
+
+        var demo_area_pad = try dvui.box(
+            @src(),
+            .horizontal,
+            .{
+                .padding = Rect.all(5),
+                .expand = .both,
+            }
+        );
+        defer demo_area_pad.deinit();
+        var demo_area = try dvui.box(
+            @src(),
+            .vertical,
+            .{
+                .padding = Rect.all(5),
+                .expand = .both,
+            }
+        );
+        defer demo_area.deinit();
+
+        const demos = [_]Demo{
+            .{ .ui_fn = dvui.Examples.incrementor,        .label = "Incrementor" },
+            .{ .ui_fn = dvui.Examples.calculator,         .label = "Calculator" },
+
+            .{ .ui_fn = dvui.Examples.basicWidgets,       .label = "Basic Widgets" },
+            .{ .ui_fn = dvui.Examples.textEntryWidgets,   .label = "Text Entry" },
+
+            .{ .ui_fn = dvui.Examples.reorderLists,       .label = "Reorderables" },
+            .{ .ui_fn = dvui.Examples.menus,              .label = "Menus" },
+            .{ .ui_fn = dvui.Examples.focus,              .label = "Focus" },
+
+            .{ .ui_fn = dvui.Examples.scrolling,          .label = "Scrolling" },
+            .{ .ui_fn = dvui.Examples.animations,         .label = "Animations" },
+
+            .{ .ui_fn = dvui.Examples.themeEditor,        .label = "Theme Editor" },
+            .{ .ui_fn = dvui.Examples.themeSerialization, .label = "Save Theme" },
+
+            .{ .ui_fn = dvui.Examples.layout,             .label = "Layout" },
+            .{ .ui_fn = dvui.Examples.layoutText,         .label = "Text Layout" },
+            .{ .ui_fn = dvui.Examples.styling,            .label = "Styling" },
+
+
+            // TODO: toasts requires a window to point at ...
+            // TODO: "auto-widget from struct" requires factoring into function
+
+            .{ .ui_fn = dvui.Examples.debuggingErrors,    .label = "Debugging" },
+        };
+        const demo_area_space = @max(demo_area.childRect.w, demo_pad*2 + 1);
+        const demos_per_row: usize = @intFromFloat(@floor((demo_area_space - demo_pad*2) / (demo_box_size + 2*demo_pad)));
+        const demo_row_full_size: f32 = @floatFromInt(demo_pad*2 + demos_per_row * (demo_box_size + 2*demo_pad));
+
+        var demo_i: usize = 0;
+        for (0..(1 + demos.len / @max(1, demos_per_row))) |row_i| {
+            var demo_row = try dvui.box(
+                @src(),
+                .horizontal,
+                .{
+                    .id_extra = row_i,
+                    .gravity_x = 0.5,
+                    .min_size_content = .{ .w = demo_row_full_size }
+                }
+            );
+            defer demo_row.deinit();
+
+            for (0..demos_per_row) |_| {
+                if (demo_i >= demos.len) continue;
+
+                const demo = demos[demo_i];
+                defer demo_i += 1;
+
+                if (try demoButton(@src(), demo)) {
+                    demo_active = demo;
+                }
+            }
+        }
     }
-    try tl2.addText("\n\n", .{});
-    try tl2.addText("Cursor is always being set by dvui.", .{});
-    try tl2.addText("\n\n", .{});
-    if (dvui.useFreeType) {
-        try tl2.addText("Fonts are being rendered by FreeType 2.", .{});
-    } else {
-        try tl2.addText("Fonts are being rendered by stb_truetype.", .{});
-    }
-    tl2.deinit();
-
-    const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    if (try dvui.button(@src(), label, .{}, .{})) {
-        dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
-    }
-
-    {
-        try dvui.labelNoFmt(@src(), "These are drawn directly by the backend, not going through DVUI.", .{ .margin = .{ .x = 4 } });
-
-        var box = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
-        defer box.deinit();
-
-        // Here is some arbitrary drawing that doesn't have to go through DVUI.
-        // It can be interleaved with DVUI drawing.
-        // NOTE: This only works in the main window (not floating subwindows
-        // like dialogs).
-
-        // get the screen rectangle for the box
-        const rs = box.data().contentRectScale();
-
-        // rs.r is the pixel rectangle, rs.s is the scale factor (like for hidpi screens or display scaling)
-        var rect: Backend.c.SDL_Rect = .{ .x = @intFromFloat(rs.r.x + 4 * rs.s), .y = @intFromFloat(rs.r.y + 4 * rs.s), .w = @intFromFloat(20 * rs.s), .h = @intFromFloat(20 * rs.s) };
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
-        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
-
-        rect.x += @intFromFloat(24 * rs.s);
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 255, 0, 255);
-        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
-
-        rect.x += @intFromFloat(24 * rs.s);
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 255, 255);
-        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
-
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 255, 255);
-
-        _ = Backend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 4 * rs.s));
-    }
-
-    if (try dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
-        show_dialog_outside_frame = true;
-    }
-
-    // look at demo() for examples of dvui widgets, shows in a floating window
-    try dvui.Examples.demo();
 }
