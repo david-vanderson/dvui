@@ -33,6 +33,9 @@ const L = win.zig.L;
 const Dx11Backend = @This();
 pub const Context = *Dx11Backend;
 
+var inst: ?*Dx11Backend = null;
+var wind: ?*dvui.Window = null;
+
 const log = std.log.scoped(.Dx11Backend);
 
 device: *dx.ID3D11Device,
@@ -57,7 +60,13 @@ arena: std.mem.Allocator = undefined,
 const DvuiKey = union(enum) {
     keyboard_key: dvui.enums.Key,
     mouse_key: dvui.enums.Button,
+    mouse_event: struct { x: i16, y: i16 },
     none: void,
+};
+
+const KeyEvent = struct {
+    target: DvuiKey,
+    action: enum { down, up },
 };
 
 const WindowOptions = struct {
@@ -385,28 +394,74 @@ fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(
             if (std.meta.intToEnum(key.VIRTUAL_KEY, wparam)) |as_vkey| {
                 const conv_vkey = convertVKeyToDvuiKey(as_vkey);
                 log.info("read key: {any}", .{conv_vkey});
+                if (inst) |instance| {
+                    if (wind) |window| {
+                        const dk = DvuiKey{ .keyboard_key = conv_vkey };
+                        _ = instance.addEvent(
+                            window,
+                            KeyEvent{ .target = dk, .action = .down },
+                        ) catch {};
+                    }
+                }
             } else |err| {
                 log.err("invalid key found: {}", .{err});
             }
+
             // _ = conv_vkey;
             // process conv_vkey
         },
         ui.WM_LBUTTONDOWN => {
             const lbutton = dvui.enums.Button.left;
             log.info("read key: {any}", .{lbutton});
+            if (inst) |instance| {
+                if (wind) |window| {
+                    const dk = DvuiKey{ .mouse_key = lbutton };
+                    _ = instance.addEvent(
+                        window,
+                        KeyEvent{ .target = dk, .action = .down },
+                    ) catch {};
+                }
+            }
         },
         ui.WM_RBUTTONDOWN => {
             const rbutton = dvui.enums.Button.right;
             log.info("read key: {any}", .{rbutton});
+            if (inst) |instance| {
+                if (wind) |window| {
+                    const dk = DvuiKey{ .mouse_key = rbutton };
+                    _ = instance.addEvent(
+                        window,
+                        KeyEvent{ .target = dk, .action = .down },
+                    ) catch {};
+                }
+            }
         },
         ui.WM_MBUTTONDOWN => {
             const mbutton = dvui.enums.Button.middle;
             log.info("read key: {any}", .{mbutton});
+            if (inst) |instance| {
+                if (wind) |window| {
+                    const dk = DvuiKey{ .mouse_key = mbutton };
+                    _ = instance.addEvent(
+                        window,
+                        KeyEvent{ .target = dk, .action = .down },
+                    ) catch {};
+                }
+            }
         },
         ui.WM_XBUTTONDOWN => {
             const xbutton: packed struct { _upper: u16, which: u16, _lower: u32 } = @bitCast(wparam);
-            const variant = if (xbutton.which == 1) "4" else "5";
-            log.info("read key: XBUTTON (Mouse{s})", .{variant});
+            const variant = if (xbutton.which == 1) dvui.enums.Button.four else dvui.enums.Button.five;
+            log.info("read key: XBUTTON ({any})", .{variant});
+            if (inst) |instance| {
+                if (wind) |window| {
+                    const dk = DvuiKey{ .mouse_key = variant };
+                    _ = instance.addEvent(
+                        window,
+                        KeyEvent{ .target = dk, .action = .down },
+                    ) catch {};
+                }
+            }
         },
         ui.WM_MOUSEMOVE => {
             // get mouse relative to the client area
@@ -415,6 +470,89 @@ fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(
             const mouse_x = bits.x;
             const mouse_y = bits.y;
             log.info("mouse (x, y): ({d}, {d})", .{ mouse_x, mouse_y });
+            if (inst) |instance| {
+                if (wind) |window| {
+                    _ = instance.addEvent(
+                        window,
+                        KeyEvent{ .target = DvuiKey{
+                            .mouse_event = .{ .x = mouse_x, .y = mouse_y },
+                        }, .action = .down },
+                    ) catch {};
+                }
+            }
+        },
+        ui.WM_KEYUP, ui.WM_SYSKEYUP => {
+            if (std.meta.intToEnum(key.VIRTUAL_KEY, wparam)) |as_vkey| {
+                const conv_vkey = convertVKeyToDvuiKey(as_vkey);
+                log.info("read key: {any}", .{conv_vkey});
+                if (inst) |instance| {
+                    if (wind) |window| {
+                        const dk = DvuiKey{ .keyboard_key = conv_vkey };
+                        _ = instance.addEvent(
+                            window,
+                            KeyEvent{ .target = dk, .action = .up },
+                        ) catch {};
+                    }
+                }
+            } else |err| {
+                log.err("invalid key found: {}", .{err});
+            }
+
+            // _ = conv_vkey;
+            // process conv_vkey
+        },
+        ui.WM_LBUTTONUP => {
+            const lbutton = dvui.enums.Button.left;
+            log.info("read key: {any}", .{lbutton});
+            if (inst) |instance| {
+                if (wind) |window| {
+                    const dk = DvuiKey{ .mouse_key = lbutton };
+                    _ = instance.addEvent(
+                        window,
+                        KeyEvent{ .target = dk, .action = .up },
+                    ) catch {};
+                }
+            }
+        },
+        ui.WM_RBUTTONUP => {
+            const rbutton = dvui.enums.Button.right;
+            log.info("read key: {any}", .{rbutton});
+            if (inst) |instance| {
+                if (wind) |window| {
+                    const dk = DvuiKey{ .mouse_key = rbutton };
+                    _ = instance.addEvent(
+                        window,
+                        KeyEvent{ .target = dk, .action = .up },
+                    ) catch {};
+                }
+            }
+        },
+        ui.WM_MBUTTONUP => {
+            const mbutton = dvui.enums.Button.middle;
+            log.info("read key: {any}", .{mbutton});
+            if (inst) |instance| {
+                if (wind) |window| {
+                    const dk = DvuiKey{ .mouse_key = mbutton };
+                    _ = instance.addEvent(
+                        window,
+                        KeyEvent{ .target = dk, .action = .up },
+                    ) catch {};
+                }
+            }
+        },
+        ui.WM_XBUTTONUP => {
+            const xbutton: packed struct { _upper: u16, which: u16, _lower: u32 } = @bitCast(wparam);
+            const variant = if (xbutton.which == 1) dvui.enums.Button.four else dvui.enums.Button.five;
+            log.info("read key: XBUTTON ({any})", .{variant});
+            if (inst) |instance| {
+                if (wind) |window| {
+                    const dk = DvuiKey{ .mouse_key = variant };
+                    _ = instance.addEvent(
+                        window,
+                        KeyEvent{ .target = dk, .action = .up },
+                    ) catch {};
+                }
+            }
         },
         else => {},
     }
@@ -438,6 +576,14 @@ pub fn setViewport(self: *Dx11Backend) void {
 pub fn setDimensions(self: *Dx11Backend, rect: RECT) void {
     self.options.size.w = @floatFromInt(rect.right - rect.left);
     self.options.size.h = @floatFromInt(rect.bottom - rect.top);
+}
+
+pub fn setWindow(window: ?*dvui.Window) void {
+    wind = window;
+}
+
+pub fn setBackend(ins: ?*Dx11Backend) void {
+    inst = ins;
 }
 
 pub fn init(options: InitOptions, dx_options: Directx11Options) !Dx11Backend {
@@ -478,6 +624,9 @@ pub fn deinit(self: Dx11Backend) void {
     }
 
     self.dx_options.deinit();
+
+    setWindow(null);
+    setBackend(null);
 }
 
 fn isOk(res: win.foundation.HRESULT) bool {
@@ -916,6 +1065,28 @@ pub fn openURL(self: *Dx11Backend, url: []const u8) !void {
 
 pub fn refresh(self: *Dx11Backend) void {
     _ = self;
+}
+
+pub fn addEvent(self: *Dx11Backend, window: *dvui.Window, key_event: KeyEvent) !bool {
+    _ = self;
+    const event = key_event.target;
+    const action = key_event.action;
+    switch (event) {
+        .keyboard_key => |ev| {
+            return window.addEventKey(.{
+                .code = ev,
+                .action = if (action == .up) .up else .down,
+                .mod = dvui.enums.Mod.none,
+            });
+        },
+        .mouse_key => |ev| {
+            return window.addEventMouseButton(ev, if (action == .up) .release else .press);
+        },
+        .mouse_event => |ev| {
+            return window.addEventMouseMotion(@floatFromInt(ev.x), @floatFromInt(ev.y));
+        },
+        .none => return false,
+    }
 }
 
 pub fn addAllEvents(self: *Dx11Backend, window: *dvui.Window) !bool {

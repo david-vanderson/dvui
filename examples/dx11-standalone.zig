@@ -41,9 +41,13 @@ pub export fn main(
     }) catch return;
     defer backend.deinit();
 
+    Backend.setBackend(&backend);
+
     // init dvui Window (maps onto a single OS window)
     var win = dvui.Window.init(@src(), gpa, backend.backend(), .{}) catch return;
     defer win.deinit();
+
+    Backend.setWindow(&win);
 
     main_loop: while (true) {
         if (Backend.isExitRequested()) {
