@@ -33,7 +33,6 @@ process_events: bool = true,
 prevClip: Rect = Rect{},
 
 nextVirtualSize: Size = Size{},
-expand_to_fit: bool = false,
 seen_expanded_child: bool = false,
 
 lock_visible: bool = false,
@@ -546,9 +545,7 @@ pub fn deinit(self: *ScrollContainerWidget) void {
     switch (self.si.horizontal) {
         .none => self.wd.min_size.w = padded.w,
         .auto => {
-            if (self.expand_to_fit) {
-                self.wd.min_size.w = padded.w;
-            }
+            self.wd.min_size.w = padded.w;
             if (self.nextVirtualSize.w != self.si.virtual_size.w) {
                 self.si.virtual_size.w = self.nextVirtualSize.w;
                 dvui.refresh(null, @src(), self.wd.id);
@@ -560,9 +557,7 @@ pub fn deinit(self: *ScrollContainerWidget) void {
     switch (self.si.vertical) {
         .none => self.wd.min_size.h = padded.h,
         .auto => {
-            if (self.expand_to_fit) {
-                self.wd.min_size.h = padded.h;
-            }
+            self.wd.min_size.h = padded.h;
             if (self.nextVirtualSize.h != self.si.virtual_size.h) {
                 self.si.virtual_size.h = self.nextVirtualSize.h;
                 dvui.refresh(null, @src(), self.wd.id);

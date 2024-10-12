@@ -94,8 +94,17 @@ padding: ?Rect = null,
 // x topleft, y topright, w botright, h botleft
 corner_radius: ?Rect = null,
 
-// padding/border/margin will be added to this
+/// Widget min size will be at least this much.
+///
+/// padding/border/margin will be added to this.
 min_size_content: ?Size = null,
+
+/// Widget min size can't exceed this, even if min_size_content is larger.
+///
+/// Use when a child textLayout or scrollArea is making the parent too big.
+///
+/// padding/border/margin will be added to this.
+max_size_content: ?Size = null,
 
 // whether to fill the background
 background: ?bool = null,
@@ -224,11 +233,19 @@ pub fn corner_radiusGet(self: *const Options) Rect {
 }
 
 pub fn min_sizeGet(self: *const Options) Size {
-    return self.min_size_contentGet().pad(self.paddingGet()).pad(self.borderGet()).pad(self.marginGet());
+    return self.padSize(self.min_size_contentGet());
 }
 
 pub fn min_size_contentGet(self: *const Options) Size {
     return self.min_size_content orelse Size{};
+}
+
+pub fn max_sizeGet(self: *const Options) Size {
+    return self.padSize(self.max_size_contentGet());
+}
+
+pub fn max_size_contentGet(self: *const Options) Size {
+    return self.max_size_content orelse Size{};
 }
 
 pub fn rotationGet(self: *const Options) f32 {

@@ -1166,11 +1166,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
         // need to update insert_pt and minSize like we did because our parent
         // might size based on that (might be in a scroll area)
         self.insert_pt.x += s.w;
-        if (self.wd.options.min_size_content == null) {
-            // If not given a min width, then calculate what we'd need without
-            // breaking lines.  If given a min width, use that.
-            self.current_line_width += s.w;
-        }
+        self.current_line_width += s.w;
         const size = self.wd.options.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
         self.wd.min_size.w = @max(self.wd.min_size.w, size.w + width_after);
         self.wd.min_size.h = @max(self.wd.min_size.h, size.h);

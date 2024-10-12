@@ -100,12 +100,12 @@ pub fn main() !void {
 }
 
 fn dvui_floating_stuff() !void {
-    var float = try dvui.floatingWindow(@src(), .{.initial_max_size = .{ .w = 400, .h = 400}}, .{});
+    var float = try dvui.floatingWindow(@src(), .{}, .{ .max_size_content = .{ .w = 400, .h = 400 } });
     defer float.deinit();
 
     try dvui.windowHeader("Floating Window", "", null);
 
-    var scroll = try dvui.scrollArea(@src(), .{.expand_to_fit = true}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
+    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
     defer scroll.deinit();
 
     var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });

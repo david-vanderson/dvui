@@ -22,7 +22,7 @@ pub var defaults: Options = .{
     .border = Rect.all(1),
     .padding = Rect.all(4),
     .background = true,
-    // min_size_content is calculated in init()
+    // min_size_content/max_size_content is calculated in init()
 };
 
 const realloc_bin_size = 100;
@@ -63,6 +63,7 @@ pub const InitOptions = struct {
 wd: WidgetData = undefined,
 prevClip: Rect = undefined,
 scroll: ScrollAreaWidget = undefined,
+scroll_init_opts: ScrollAreaWidget.InitOpts = undefined,
 scrollClip: Rect = undefined,
 textLayout: TextLayoutWidget = undefined,
 textClip: Rect = undefined,
@@ -79,8 +80,23 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     var self = TextEntryWidget{};
     self.init_opts = init_opts;
     self.text_opt = init_opts.text orelse .{ .internal = .{} };
+    self.scroll_init_opts = .{
+        .vertical = if (self.init_opts.scroll_vertical orelse self.init_opts.multiline) .auto else .none,
+        .vertical_bar = self.init_opts.scroll_vertical_bar orelse .auto,
+        .horizontal = if (self.init_opts.scroll_horizontal orelse true) .auto else .none,
+        .horizontal_bar = self.init_opts.scroll_horizontal_bar orelse (if (self.init_opts.multiline) .auto else .hide),
+    };
 
     var options = defaults.min_sizeM(14, 1).override(opts);
+
+    if (options.max_size_content == null) {
+        // max size not given, so default to the same as min size for direction
+        // we can scroll in
+        const ms = options.min_size_contentGet();
+        const maxw = if (self.scroll_init_opts.horizontal == .auto) ms.w else 0;
+        const maxh = if (self.scroll_init_opts.vertical == .auto) ms.h else 0;
+        options = options.override(.{ .max_size_content = .{ .w = maxw, .h = maxh } });
+    }
 
     // padding is interpreted as the padding for the TextLayoutWidget, but
     // we also need to add it to content size because TextLayoutWidget is
@@ -89,8 +105,15 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     options.padding = null;
     options.min_size_content.?.w += self.padding.x + self.padding.w;
     options.min_size_content.?.h += self.padding.y + self.padding.h;
+    if (options.max_size_content.?.w != 0) {
+        options.max_size_content.?.w += self.padding.x + self.padding.w;
+    }
+    if (options.max_size_content.?.h != 0) {
+        options.max_size_content.?.h += self.padding.y + self.padding.h;
+    }
 
     self.wd = WidgetData.init(src, .{}, options);
+    self.scroll_init_opts.focus_id = self.wd.id;
 
     switch (self.text_opt) {
         .buffer => |b| self.text = b,
@@ -117,19 +140,13 @@ pub fn install(self: *TextEntryWidget) !void {
     self.prevClip = dvui.clip(self.wd.borderRectScale().r);
     const borderClip = dvui.clipGet();
 
-    self.scroll = ScrollAreaWidget.init(@src(), .{
-        .vertical = if (self.init_opts.scroll_vertical orelse self.init_opts.multiline) .auto else .none,
-        .vertical_bar = self.init_opts.scroll_vertical_bar orelse .auto,
-        .horizontal = if (self.init_opts.scroll_horizontal orelse true) .auto else .none,
-        .horizontal_bar = self.init_opts.scroll_horizontal_bar orelse (if (self.init_opts.multiline) .auto else .hide),
-        .focus_id = self.wd.id,
-    }, self.wd.options.strip().override(.{ .expand = .both }));
+    self.scroll = ScrollAreaWidget.init(@src(), self.scroll_init_opts, self.wd.options.strip().override(.{ .expand = .both }));
     // scrollbars process mouse events here
     try self.scroll.install();
 
     self.scrollClip = dvui.clipGet();
 
-    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .touch_edit_just_focused = false }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding, .min_size_content = .{} }));
+    self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .touch_edit_just_focused = false }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding }));
     try self.textLayout.install(.{ .focused = self.wd.id == dvui.focusedWidgetId(), .show_touch_draggables = (self.len > 0) });
     self.textClip = dvui.clipGet();
 

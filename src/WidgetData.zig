@@ -195,7 +195,12 @@ pub fn minSizeMax(self: *WidgetData, s: Size) void {
     self.min_size = Size.max(self.min_size, s);
 }
 
-pub fn minSizeSetAndRefresh(self: *const WidgetData) void {
+pub fn minSizeSetAndRefresh(self: *WidgetData) void {
+    const msContent = self.options.max_size_contentGet();
+    const max_size = self.options.padSize(msContent);
+    if (msContent.w != 0) self.min_size.w = @min(self.min_size.w, max_size.w);
+    if (msContent.h != 0) self.min_size.h = @min(self.min_size.h, max_size.h);
+
     if (dvui.minSizeGet(self.id)) |ms| {
         // If the size we got was exactly our previous min size then our min size
         // was a binding constraint.  So if our min size changed it might cause
