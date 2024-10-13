@@ -385,10 +385,12 @@ fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(
         },
         ui.WM_SIZE => {
             // // TODO: make those 2 values actually mean something in this scope
-            // const resize_width: u32 = @truncate(lparam);
-            // _ = resize_width; // autofix
-            // const resize_height: u32 = @intCast(lparam >> 16);
-            // _ = resize_height; // autofix
+            if (inst) |instance| {
+                const resize: packed struct { width: i16, height: i16, _upper: i32 } = @bitCast(lparam);
+                log.info("resizing to: {any}", .{resize});
+                instance.options.size.w = @floatFromInt(resize.width);
+                instance.options.size.h = @floatFromInt(resize.height);
+            }
         },
         ui.WM_KEYDOWN, ui.WM_SYSKEYDOWN => {
             if (std.meta.intToEnum(key.VIRTUAL_KEY, wparam)) |as_vkey| {
@@ -467,11 +469,10 @@ fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(
             // get mouse relative to the client area
             const lparam_low: i32 = @truncate(lparam);
             const bits: packed struct { x: i16, y: i16 } = @bitCast(lparam_low);
-            const mouse_x = bits.x;
-            const mouse_y = bits.y;
-            log.info("mouse (x, y): ({d}, {d})", .{ mouse_x, mouse_y });
             if (inst) |instance| {
                 if (wind) |window| {
+                    const mouse_x, const mouse_y = .{ bits.x, bits.y };
+                    log.info("mouse (x, y): ({d}, {d})", .{ mouse_x, mouse_y });
                     _ = instance.addEvent(
                         window,
                         KeyEvent{ .target = DvuiKey{
@@ -602,13 +603,21 @@ pub fn initWindow(instance: HINSTANCE, cmd_show: INT, options: InitOptions) !Dx1
     _ = ui.ShowWindow(window_options.hwnd, @bitCast(cmd_show));
     _ = gdi.UpdateWindow(window_options.hwnd);
 
-    return Dx11Backend{
+    var rect = std.mem.zeroes(win.foundation.RECT);
+    _ = ui.GetWindowRect(window_options.hwnd, &rect);
+
+    var res = Dx11Backend{
         .device = dx_options.device,
         .device_context = dx_options.device_context,
         .swap_chain = dx_options.swap_chain,
         .window = window_options,
         .options = options,
     };
+
+    res.setDimensions(rect);
+    res.setViewport(); // for now: fixed values :)
+
+    return res;
 }
 
 pub fn deinit(self: Dx11Backend) void {
@@ -718,7 +727,7 @@ fn createRasterizerState(self: *Dx11Backend) void {
     raster_desc.FillMode = dx.D3D11_FILL_MODE.SOLID;
     raster_desc.CullMode = dx.D3D11_CULL_BACK;
     raster_desc.FrontCounterClockwise = 1;
-    raster_desc.DepthClipEnable = 1;
+    raster_desc.DepthClipEnable = 0;
 
     // TODO: Create better error handling
     _ = self.device.CreateRasterizerState(&raster_desc, &self.dx_options.rasterizer);
@@ -750,7 +759,7 @@ pub fn handleSwapChainResizing(self: *Dx11Backend, width: *c_uint, height: *c_ui
     _ = self.swap_chain.ResizeBuffers(0, width.*, height.*, dxgic.DXGI_FORMAT_UNKNOWN, 0);
     width.* = 0;
     height.* = 0;
-    try self.createRenderTarget();
+    return self.createRenderTarget();
 }
 
 fn createInputLayout(self: *Dx11Backend) !void {
@@ -1017,13 +1026,16 @@ pub fn end(self: *Dx11Backend) void {
 }
 
 pub fn pixelSize(self: *Dx11Backend) dvui.Size {
-    _ = self;
-    return dvui.Size{ .w = 1280.0, .h = 720.0 };
+    const window_opt = self.window orelse return std.mem.zeroes(dvui.Size);
+    const dpi_scale: f32 = @floatFromInt(hi_dpi.GetDpiForWindow(window_opt.hwnd) / 96);
+    return dvui.Size{
+        .w = self.options.size.w * dpi_scale,
+        .h = self.options.size.h * dpi_scale,
+    };
 }
 
 pub fn windowSize(self: *Dx11Backend) dvui.Size {
-    _ = self;
-    return dvui.Size{ .w = 1280.0, .h = 720.0 };
+    return self.options.size;
 }
 
 pub fn contentScale(self: *Dx11Backend) f32 {
