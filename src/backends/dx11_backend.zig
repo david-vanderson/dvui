@@ -911,7 +911,7 @@ pub fn drawClippedTriangles(
     texture: ?*anyopaque,
     vtx: []const dvui.Vertex,
     idx: []const u16,
-    clipr: dvui.Rect,
+    clipr: ?dvui.Rect,
 ) void {
     self.setViewport();
     if (self.render_target == null) {
@@ -964,17 +964,21 @@ pub fn drawClippedTriangles(
 
     if (texture) |tex| self.recreateShaderView(tex);
 
-    var scissor_rect = std.mem.zeroes(RECT);
+    var scissor_rect: ?RECT = std.mem.zeroes(RECT);
     var nums: u32 = 1;
     self.device_context.RSGetScissorRects(&nums, @ptrCast(&scissor_rect));
 
-    const new_clip: RECT = .{
-        .left = @intFromFloat(@round(clipr.x)),
-        .top = @intFromFloat(@round(clipr.y)),
-        .right = @intFromFloat(@round(clipr.w)),
-        .bottom = @intFromFloat(@round(clipr.h)),
-    };
-    self.device_context.RSSetScissorRects(nums, @ptrCast(&new_clip));
+    if (clipr) |cr| {
+        const new_clip: RECT = .{
+            .left = @intFromFloat(@round(cr.x)),
+            .top = @intFromFloat(@round(cr.y)),
+            .right = @intFromFloat(@round(cr.w)),
+            .bottom = @intFromFloat(@round(cr.h)),
+        };
+        self.device_context.RSSetScissorRects(nums, @ptrCast(&new_clip));
+    } else {
+        scissor_rect = null;
+    }
 
     self.device_context.IASetVertexBuffers(0, 1, @ptrCast(&self.dx_options.vertex_buffer), @ptrCast(&stride), @ptrCast(&offset));
     self.device_context.IASetIndexBuffer(self.dx_options.index_buffer, dxgic.DXGI_FORMAT.R16_UINT, 0);
@@ -987,7 +991,7 @@ pub fn drawClippedTriangles(
     self.device_context.PSSetShaderResources(0, 1, @ptrCast(&self.dx_options.texture_view));
     self.device_context.PSSetSamplers(0, 1, @ptrCast(&self.dx_options.sampler));
     self.device_context.DrawIndexed(@intCast(idx.len), 0, 0);
-    self.device_context.RSSetScissorRects(nums, @ptrCast(&scissor_rect));
+    if (scissor_rect) |srect| self.device_context.RSSetScissorRects(nums, @ptrCast(&srect));
 }
 
 pub fn isExitRequested() bool {
