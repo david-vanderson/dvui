@@ -155,8 +155,6 @@ fn addDvuiModule(
         },
     });
 
-    std.debug.print("Using backend: {s}\n", .{backend_mod.root_source_file.?.getDisplayName()});
-
     backend_mod.addImport("dvui", dvui_mod);
     dvui_mod.addImport("backend", backend_mod);
 
@@ -215,7 +213,6 @@ fn addDvuiModule(
                     .os_tag = .windows,
                 });
 
-                // dvui_mod.addImport("zigwin32", zigwin32.module("zigwin32"));
                 backend_mod.addImport("zigwin32", zigwin32.module("zigwin32"));
             },
         }

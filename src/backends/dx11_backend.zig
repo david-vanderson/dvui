@@ -61,12 +61,13 @@ const DvuiKey = union(enum) {
     keyboard_key: dvui.enums.Key,
     mouse_key: dvui.enums.Button,
     mouse_event: struct { x: i16, y: i16 },
+    wheel_event: i16,
     none: void,
 };
 
 const KeyEvent = struct {
     target: DvuiKey,
-    action: enum { down, up },
+    action: enum { down, up, none },
 };
 
 const WindowOptions = struct {
@@ -197,181 +198,9 @@ const shader =
     \\}
 ;
 
-fn convertSpaceToNDC(self: *Dx11Backend, x: f32, y: f32) XMFLOAT3 {
-    return XMFLOAT3{
-        .x = (2.0 * x / self.options.size.w) - 1.0,
-        .y = 1.0 - (2.0 * y / self.options.size.h),
-        .z = 0.0,
-    };
-}
-
-fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex, signal_invalid_uv: bool) ![]SimpleVertex {
-    const simple_vertex = try self.arena.alloc(SimpleVertex, vtx.len);
-    for (vtx, simple_vertex) |v, *s| {
-        const r: f32 = @floatFromInt(v.col.r);
-        const g: f32 = @floatFromInt(v.col.g);
-        const b: f32 = @floatFromInt(v.col.b);
-        const a: f32 = @floatFromInt(v.col.a);
-
-        s.* = .{
-            .position = self.convertSpaceToNDC(v.pos.x, v.pos.y),
-            .color = .{ .r = r / 255.0, .g = g / 255.0, .b = b / 255.0, .a = a / 255.0 },
-            .texcoord = if (signal_invalid_uv) .{ .x = -1.0, .y = -1.0 } else .{ .x = v.uv[0], .y = v.uv[1] },
-        };
-    }
-
-    return simple_vertex;
-}
-
-fn createWindow(instance: HINSTANCE, options: InitOptions) !WindowOptions {
-    const wnd_title = try std.unicode.utf8ToUtf16LeAllocZ(options.allocator, options.title);
-    const wnd_class: WNDCLASSEX = .{
-        .cbSize = @sizeOf(WNDCLASSEX),
-        .style = .{ .DBLCLKS = 1, .OWNDC = 1 },
-        .lpfnWndProc = wndProc,
-        .cbClsExtra = 0,
-        .cbWndExtra = 0,
-        .hInstance = instance,
-        .hIcon = null,
-        .hCursor = ui.LoadCursorW(null, ui.IDC_ARROW),
-        .hbrBackground = null,
-        .lpszMenuName = null,
-        .lpszClassName = @ptrCast(wnd_title.ptr),
-        .hIconSm = null,
-    };
-    var wnd_size: RECT = .{
-        .left = 0,
-        .top = 0,
-        .right = @intFromFloat(options.size.w),
-        .bottom = @intFromFloat(options.size.h),
-    };
-
-    _ = ui.RegisterClassExW(&wnd_class);
-    var overlap = ui.WS_OVERLAPPEDWINDOW;
-    _ = ui.AdjustWindowRectEx(
-        @ptrCast(&wnd_size),
-        overlap,
-        w.FALSE,
-        .{ .APPWINDOW = 1, .WINDOWEDGE = 1 },
-    );
-
-    overlap.VISIBLE = 1;
-    const wnd = ui.CreateWindowExW(
-        .{ .APPWINDOW = 1, .WINDOWEDGE = 1 },
-        wnd_title,
-        wnd_title,
-        overlap,
-        ui.CW_USEDEFAULT,
-        ui.CW_USEDEFAULT,
-        0,
-        0,
-        null,
-        null,
-        instance,
-        null,
-    ) orelse {
-        std.debug.print("This didn't do anything\n", .{});
-        std.process.exit(1);
-    };
-
-    const wnd_dc = gdi.GetDC(wnd).?;
-    const dpi = hi_dpi.GetDpiForWindow(wnd);
-    const xcenter = @divFloor(hi_dpi.GetSystemMetricsForDpi(@intFromEnum(ui.SM_CXSCREEN), dpi), 2);
-    const ycenter = @divFloor(hi_dpi.GetSystemMetricsForDpi(@intFromEnum(ui.SM_CYSCREEN), dpi), 2);
-
-    const width_floor: i32 = @intFromFloat(@divFloor(options.size.w, 2));
-    const height_floor: i32 = @intFromFloat(@divFloor(options.size.h, 2));
-
-    wnd_size.left = xcenter - width_floor;
-    wnd_size.top = ycenter - height_floor;
-    wnd_size.right = wnd_size.left + width_floor;
-    wnd_size.bottom = wnd_size.top + height_floor;
-
-    _ = ui.SetWindowPos(wnd, null, wnd_size.left, wnd_size.top, wnd_size.right, wnd_size.bottom, ui.SWP_NOCOPYBITS);
-
-    return WindowOptions{
-        .alloc = options.allocator,
-        .instance = instance,
-        .hwnd = wnd,
-        .hwnd_dc = wnd_dc,
-        .utf16_wnd_title = wnd_title,
-    };
-}
-
-fn createDeviceD3D(hwnd: HWND, opt: InitOptions) ?Dx11Backend.Directx11Options {
-    var rc: RECT = undefined;
-    _ = ui.GetClientRect(hwnd, &rc);
-
-    var sd = std.mem.zeroes(dxgi.DXGI_SWAP_CHAIN_DESC);
-    sd.BufferCount = 6;
-    sd.BufferDesc.Width = @intFromFloat(opt.size.w);
-    sd.BufferDesc.Height = @intFromFloat(opt.size.h);
-    sd.BufferDesc.Format = dxgic.DXGI_FORMAT_R8G8B8A8_UNORM;
-    sd.BufferDesc.RefreshRate.Numerator = 60;
-    sd.BufferDesc.RefreshRate.Denominator = 1;
-    sd.Flags = @intFromEnum(dxgi.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
-    sd.BufferUsage = dxgi.DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    @setRuntimeSafety(false);
-    sd.OutputWindow = hwnd;
-    @setRuntimeSafety(true);
-    sd.SampleDesc.Count = 1;
-    sd.SampleDesc.Quality = 0;
-    sd.Windowed = w.TRUE;
-    sd.SwapEffect = dxgi.DXGI_SWAP_EFFECT_DISCARD;
-
-    const createDeviceFlags: dx.D3D11_CREATE_DEVICE_FLAG = .{
-        .DEBUG = 1,
-    };
-    //createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
-    var featureLevel: d3d.D3D_FEATURE_LEVEL = undefined;
-    const featureLevelArray = &[_]d3d.D3D_FEATURE_LEVEL{ d3d.D3D_FEATURE_LEVEL_11_0, d3d.D3D_FEATURE_LEVEL_10_0 };
-
-    var device: ?*dx.ID3D11Device = null;
-    var device_context: ?*dx.ID3D11DeviceContext = null;
-    var swap_chain: ?*dxgi.IDXGISwapChain = null;
-
-    var res: win.foundation.HRESULT = dx.D3D11CreateDeviceAndSwapChain(
-        null,
-        d3d.D3D_DRIVER_TYPE_HARDWARE,
-        null,
-        createDeviceFlags,
-        featureLevelArray,
-        2,
-        dx.D3D11_SDK_VERSION,
-        &sd,
-        &swap_chain,
-        &device,
-        &featureLevel,
-        &device_context,
-    );
-
-    if (res == dxgi.DXGI_ERROR_UNSUPPORTED) {
-        res = dx.D3D11CreateDeviceAndSwapChain(
-            null,
-            d3d.D3D_DRIVER_TYPE_WARP,
-            null,
-            createDeviceFlags,
-            featureLevelArray,
-            2,
-            dx.D3D11_SDK_VERSION,
-            &sd,
-            &swap_chain,
-            &device,
-            &featureLevel,
-            &device_context,
-        );
-    }
-    if (!isOk(res))
-        return null;
-
-    return Dx11Backend.Directx11Options{
-        .device = device.?,
-        .device_context = device_context.?,
-        .swap_chain = swap_chain.?,
-    };
-}
-
 fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(w.WINAPI) w.LRESULT {
+    const instance = inst orelse return ui.DefWindowProcW(hwnd, umsg, wparam, lparam);
+
     switch (umsg) {
         ui.WM_DESTROY => {
             ui.PostQuitMessage(0);
@@ -384,178 +213,144 @@ fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(
             _ = gdi.EndPaint(hwnd, &ps);
         },
         ui.WM_SIZE => {
-            // // TODO: make those 2 values actually mean something in this scope
-            if (inst) |instance| {
-                const resize: packed struct { width: i16, height: i16, _upper: i32 } = @bitCast(lparam);
-                log.info("resizing to: {any}", .{resize});
-                instance.options.size.w = @floatFromInt(resize.width);
-                instance.options.size.h = @floatFromInt(resize.height);
-                instance.handleSwapChainResizing(@intCast(resize.width), @intCast(resize.height)) catch {
-                    log.err("Failed to handle swap chain resizing...", .{});
-                };
-            }
+            const resize: packed struct { width: i16, height: i16, _upper: i32 } = @bitCast(lparam);
+            instance.options.size.w = @floatFromInt(resize.width);
+            instance.options.size.h = @floatFromInt(resize.height);
+            instance.handleSwapChainResizing(@intCast(resize.width), @intCast(resize.height)) catch {
+                log.err("Failed to handle swap chain resizing...", .{});
+            };
         },
         ui.WM_KEYDOWN, ui.WM_SYSKEYDOWN => {
             if (std.meta.intToEnum(key.VIRTUAL_KEY, wparam)) |as_vkey| {
                 const conv_vkey = convertVKeyToDvuiKey(as_vkey);
-                log.info("read key: {any}", .{conv_vkey});
-                if (inst) |instance| {
-                    if (wind) |window| {
-                        const dk = DvuiKey{ .keyboard_key = conv_vkey };
-                        _ = instance.addEvent(
-                            window,
-                            KeyEvent{ .target = dk, .action = .down },
-                        ) catch {};
-                    }
+                if (wind) |window| {
+                    const dk = DvuiKey{ .keyboard_key = conv_vkey };
+                    _ = instance.addEvent(
+                        window,
+                        KeyEvent{ .target = dk, .action = .down },
+                    ) catch {};
                 }
             } else |err| {
                 log.err("invalid key found: {}", .{err});
             }
-
-            // _ = conv_vkey;
-            // process conv_vkey
         },
         ui.WM_LBUTTONDOWN => {
             const lbutton = dvui.enums.Button.left;
-            log.info("read key: {any}", .{lbutton});
-            if (inst) |instance| {
-                if (wind) |window| {
-                    const dk = DvuiKey{ .mouse_key = lbutton };
-                    _ = instance.addEvent(
-                        window,
-                        KeyEvent{ .target = dk, .action = .down },
-                    ) catch {};
-                }
+            if (wind) |window| {
+                const dk = DvuiKey{ .mouse_key = lbutton };
+                _ = instance.addEvent(
+                    window,
+                    KeyEvent{ .target = dk, .action = .down },
+                ) catch {};
             }
         },
         ui.WM_RBUTTONDOWN => {
             const rbutton = dvui.enums.Button.right;
-            log.info("read key: {any}", .{rbutton});
-            if (inst) |instance| {
-                if (wind) |window| {
-                    const dk = DvuiKey{ .mouse_key = rbutton };
-                    _ = instance.addEvent(
-                        window,
-                        KeyEvent{ .target = dk, .action = .down },
-                    ) catch {};
-                }
+            if (wind) |window| {
+                const dk = DvuiKey{ .mouse_key = rbutton };
+                _ = instance.addEvent(
+                    window,
+                    KeyEvent{ .target = dk, .action = .down },
+                ) catch {};
             }
         },
         ui.WM_MBUTTONDOWN => {
             const mbutton = dvui.enums.Button.middle;
-            log.info("read key: {any}", .{mbutton});
-            if (inst) |instance| {
-                if (wind) |window| {
-                    const dk = DvuiKey{ .mouse_key = mbutton };
-                    _ = instance.addEvent(
-                        window,
-                        KeyEvent{ .target = dk, .action = .down },
-                    ) catch {};
-                }
+            if (wind) |window| {
+                const dk = DvuiKey{ .mouse_key = mbutton };
+                _ = instance.addEvent(
+                    window,
+                    KeyEvent{ .target = dk, .action = .down },
+                ) catch {};
             }
         },
         ui.WM_XBUTTONDOWN => {
             const xbutton: packed struct { _upper: u16, which: u16, _lower: u32 } = @bitCast(wparam);
             const variant = if (xbutton.which == 1) dvui.enums.Button.four else dvui.enums.Button.five;
-            log.info("read key: XBUTTON ({any})", .{variant});
-            if (inst) |instance| {
-                if (wind) |window| {
-                    const dk = DvuiKey{ .mouse_key = variant };
-                    _ = instance.addEvent(
-                        window,
-                        KeyEvent{ .target = dk, .action = .down },
-                    ) catch {};
-                }
+            if (wind) |window| {
+                const dk = DvuiKey{ .mouse_key = variant };
+                _ = instance.addEvent(
+                    window,
+                    KeyEvent{ .target = dk, .action = .down },
+                ) catch {};
             }
         },
         ui.WM_MOUSEMOVE => {
-            // get mouse relative to the client area
             const lparam_low: i32 = @truncate(lparam);
             const bits: packed struct { x: i16, y: i16 } = @bitCast(lparam_low);
-            if (inst) |instance| {
-                if (wind) |window| {
-                    const mouse_x, const mouse_y = .{ bits.x, bits.y };
-                    log.info("mouse (x, y): ({d}, {d})", .{ mouse_x, mouse_y });
-                    _ = instance.addEvent(
-                        window,
-                        KeyEvent{ .target = DvuiKey{
-                            .mouse_event = .{ .x = mouse_x, .y = mouse_y },
-                        }, .action = .down },
-                    ) catch {};
-                }
+            if (wind) |window| {
+                const mouse_x, const mouse_y = .{ bits.x, bits.y };
+                _ = instance.addEvent(
+                    window,
+                    KeyEvent{ .target = DvuiKey{
+                        .mouse_event = .{ .x = mouse_x, .y = mouse_y },
+                    }, .action = .down },
+                ) catch {};
             }
         },
         ui.WM_KEYUP, ui.WM_SYSKEYUP => {
             if (std.meta.intToEnum(key.VIRTUAL_KEY, wparam)) |as_vkey| {
                 const conv_vkey = convertVKeyToDvuiKey(as_vkey);
-                log.info("read key: {any}", .{conv_vkey});
-                if (inst) |instance| {
-                    if (wind) |window| {
-                        const dk = DvuiKey{ .keyboard_key = conv_vkey };
-                        _ = instance.addEvent(
-                            window,
-                            KeyEvent{ .target = dk, .action = .up },
-                        ) catch {};
-                    }
+                if (wind) |window| {
+                    const dk = DvuiKey{ .keyboard_key = conv_vkey };
+                    _ = instance.addEvent(
+                        window,
+                        KeyEvent{ .target = dk, .action = .up },
+                    ) catch {};
                 }
             } else |err| {
                 log.err("invalid key found: {}", .{err});
             }
-
-            // _ = conv_vkey;
-            // process conv_vkey
         },
         ui.WM_LBUTTONUP => {
             const lbutton = dvui.enums.Button.left;
-            log.info("read key: {any}", .{lbutton});
-            if (inst) |instance| {
-                if (wind) |window| {
-                    const dk = DvuiKey{ .mouse_key = lbutton };
-                    _ = instance.addEvent(
-                        window,
-                        KeyEvent{ .target = dk, .action = .up },
-                    ) catch {};
-                }
+            if (wind) |window| {
+                const dk = DvuiKey{ .mouse_key = lbutton };
+                _ = instance.addEvent(
+                    window,
+                    KeyEvent{ .target = dk, .action = .up },
+                ) catch {};
             }
         },
         ui.WM_RBUTTONUP => {
             const rbutton = dvui.enums.Button.right;
-            log.info("read key: {any}", .{rbutton});
-            if (inst) |instance| {
-                if (wind) |window| {
-                    const dk = DvuiKey{ .mouse_key = rbutton };
-                    _ = instance.addEvent(
-                        window,
-                        KeyEvent{ .target = dk, .action = .up },
-                    ) catch {};
-                }
+            if (wind) |window| {
+                const dk = DvuiKey{ .mouse_key = rbutton };
+                _ = instance.addEvent(
+                    window,
+                    KeyEvent{ .target = dk, .action = .up },
+                ) catch {};
             }
         },
         ui.WM_MBUTTONUP => {
             const mbutton = dvui.enums.Button.middle;
-            log.info("read key: {any}", .{mbutton});
-            if (inst) |instance| {
-                if (wind) |window| {
-                    const dk = DvuiKey{ .mouse_key = mbutton };
-                    _ = instance.addEvent(
-                        window,
-                        KeyEvent{ .target = dk, .action = .up },
-                    ) catch {};
-                }
+            if (wind) |window| {
+                const dk = DvuiKey{ .mouse_key = mbutton };
+                _ = instance.addEvent(
+                    window,
+                    KeyEvent{ .target = dk, .action = .up },
+                ) catch {};
             }
         },
         ui.WM_XBUTTONUP => {
             const xbutton: packed struct { _upper: u16, which: u16, _lower: u32 } = @bitCast(wparam);
             const variant = if (xbutton.which == 1) dvui.enums.Button.four else dvui.enums.Button.five;
-            log.info("read key: XBUTTON ({any})", .{variant});
-            if (inst) |instance| {
-                if (wind) |window| {
-                    const dk = DvuiKey{ .mouse_key = variant };
-                    _ = instance.addEvent(
-                        window,
-                        KeyEvent{ .target = dk, .action = .up },
-                    ) catch {};
-                }
+            if (wind) |window| {
+                const dk = DvuiKey{ .mouse_key = variant };
+                _ = instance.addEvent(
+                    window,
+                    KeyEvent{ .target = dk, .action = .up },
+                ) catch {};
+            }
+        },
+        ui.WM_MOUSEWHEEL => {
+            const higher: isize = @intCast(wparam >> 16);
+            const wheel_info: i16 = @truncate(higher);
+            if (wind) |window| {
+                _ = instance.addEvent(window, KeyEvent{
+                    .target = .{ .wheel_event = wheel_info },
+                    .action = .none,
+                }) catch {};
             }
         },
         else => {},
@@ -619,7 +414,7 @@ pub fn initWindow(instance: HINSTANCE, cmd_show: INT, options: InitOptions) !Dx1
     };
 
     res.setDimensions(rc);
-    res.setViewport(); // for now: fixed values :)
+    res.setViewport();
 
     res.handleSwapChainResizing(@intCast(rc.right - rc.left), @intCast(rc.bottom - rc.top)) catch {
         log.err("Failed to handle swap chain resizing...", .{});
@@ -763,7 +558,7 @@ pub fn cleanupRenderTarget(self: *Dx11Backend) void {
 }
 
 pub fn handleSwapChainResizing(self: *Dx11Backend, width: c_uint, height: c_uint) !void {
-    std.debug.print("handleSwapChainResizing {d} {d}\n", .{width, height});
+    std.debug.print("handleSwapChainResizing {d} {d}\n", .{ width, height });
     self.cleanupRenderTarget();
     _ = self.swap_chain.ResizeBuffers(0, width, height, dxgic.DXGI_FORMAT_UNKNOWN, 0);
     return self.createRenderTarget();
@@ -1108,6 +903,9 @@ pub fn addEvent(self: *Dx11Backend, window: *dvui.Window, key_event: KeyEvent) !
         .mouse_event => |ev| {
             return window.addEventMouseMotion(@floatFromInt(ev.x), @floatFromInt(ev.y));
         },
+        .wheel_event => |ev| {
+            return window.addEventMouseWheel(@floatFromInt(ev));
+        },
         .none => return false,
     }
 }
@@ -1134,6 +932,185 @@ pub fn setCursor(self: *Dx11Backend, new_cursor: dvui.enums.Cursor) void {
     };
 
     _ = ui.LoadCursorW(self.window.?.instance, converted_cursor);
+}
+
+// ############ Utilities ############
+fn convertSpaceToNDC(self: *Dx11Backend, x: f32, y: f32) XMFLOAT3 {
+    return XMFLOAT3{
+        .x = (2.0 * x / self.options.size.w) - 1.0,
+        .y = 1.0 - (2.0 * y / self.options.size.h),
+        .z = 0.0,
+    };
+}
+
+fn convertVertices(self: *Dx11Backend, vtx: []const dvui.Vertex, signal_invalid_uv: bool) ![]SimpleVertex {
+    const simple_vertex = try self.arena.alloc(SimpleVertex, vtx.len);
+    for (vtx, simple_vertex) |v, *s| {
+        const r: f32 = @floatFromInt(v.col.r);
+        const g: f32 = @floatFromInt(v.col.g);
+        const b: f32 = @floatFromInt(v.col.b);
+        const a: f32 = @floatFromInt(v.col.a);
+
+        s.* = .{
+            .position = self.convertSpaceToNDC(v.pos.x, v.pos.y),
+            .color = .{ .r = r / 255.0, .g = g / 255.0, .b = b / 255.0, .a = a / 255.0 },
+            .texcoord = if (signal_invalid_uv) .{ .x = -1.0, .y = -1.0 } else .{ .x = v.uv[0], .y = v.uv[1] },
+        };
+    }
+
+    return simple_vertex;
+}
+
+fn createWindow(instance: HINSTANCE, options: InitOptions) !WindowOptions {
+    const wnd_title = try std.unicode.utf8ToUtf16LeAllocZ(options.allocator, options.title);
+    const wnd_class: WNDCLASSEX = .{
+        .cbSize = @sizeOf(WNDCLASSEX),
+        .style = .{ .DBLCLKS = 1, .OWNDC = 1 },
+        .lpfnWndProc = wndProc,
+        .cbClsExtra = 0,
+        .cbWndExtra = 0,
+        .hInstance = instance,
+        .hIcon = null,
+        .hCursor = ui.LoadCursorW(null, ui.IDC_ARROW),
+        .hbrBackground = null,
+        .lpszMenuName = null,
+        .lpszClassName = @ptrCast(wnd_title.ptr),
+        .hIconSm = null,
+    };
+    var wnd_size: RECT = .{
+        .left = 0,
+        .top = 0,
+        .right = @intFromFloat(options.size.w),
+        .bottom = @intFromFloat(options.size.h),
+    };
+
+    _ = ui.RegisterClassExW(&wnd_class);
+    var overlap = ui.WS_OVERLAPPEDWINDOW;
+    _ = ui.AdjustWindowRectEx(
+        @ptrCast(&wnd_size),
+        overlap,
+        w.FALSE,
+        .{ .APPWINDOW = 1, .WINDOWEDGE = 1 },
+    );
+    overlap.VISIBLE = 1;
+
+    const min_size = options.min_size orelse dvui.Size{
+        .w = @floatFromInt(wnd_size.right - wnd_size.left),
+        .h = @floatFromInt(wnd_size.bottom - wnd_size.top),
+    };
+    const wnd = ui.CreateWindowExW(
+        .{ .APPWINDOW = 1, .WINDOWEDGE = 1 },
+        wnd_title,
+        wnd_title,
+        overlap,
+        ui.CW_USEDEFAULT,
+        ui.CW_USEDEFAULT,
+        @intFromFloat(min_size.w),
+        @intFromFloat(min_size.h),
+        null,
+        null,
+        instance,
+        null,
+    ) orelse {
+        std.debug.print("This didn't do anything. Error {}\n", .{win.foundation.GetLastError()});
+        std.process.exit(1);
+    };
+
+    const wnd_dc = gdi.GetDC(wnd).?;
+    const dpi = hi_dpi.GetDpiForWindow(wnd);
+    const xcenter = @divFloor(hi_dpi.GetSystemMetricsForDpi(@intFromEnum(ui.SM_CXSCREEN), dpi), 2);
+    const ycenter = @divFloor(hi_dpi.GetSystemMetricsForDpi(@intFromEnum(ui.SM_CYSCREEN), dpi), 2);
+
+    const width_floor: i32 = @intFromFloat(@divFloor(options.size.w, 2));
+    const height_floor: i32 = @intFromFloat(@divFloor(options.size.h, 2));
+
+    wnd_size.left = xcenter - width_floor;
+    wnd_size.top = ycenter - height_floor;
+    wnd_size.right = wnd_size.left + width_floor;
+    wnd_size.bottom = wnd_size.top + height_floor;
+
+    _ = ui.SetWindowPos(wnd, null, wnd_size.left, wnd_size.top, wnd_size.right, wnd_size.bottom, ui.SWP_NOCOPYBITS);
+
+    return WindowOptions{
+        .alloc = options.allocator,
+        .instance = instance,
+        .hwnd = wnd,
+        .hwnd_dc = wnd_dc,
+        .utf16_wnd_title = wnd_title,
+    };
+}
+
+fn createDeviceD3D(hwnd: HWND, opt: InitOptions) ?Dx11Backend.Directx11Options {
+    var rc: RECT = undefined;
+    _ = ui.GetClientRect(hwnd, &rc);
+
+    var sd = std.mem.zeroes(dxgi.DXGI_SWAP_CHAIN_DESC);
+    sd.BufferCount = 6;
+    sd.BufferDesc.Width = @intFromFloat(opt.size.w);
+    sd.BufferDesc.Height = @intFromFloat(opt.size.h);
+    sd.BufferDesc.Format = dxgic.DXGI_FORMAT_R8G8B8A8_UNORM;
+    sd.BufferDesc.RefreshRate.Numerator = 60;
+    sd.BufferDesc.RefreshRate.Denominator = 1;
+    sd.Flags = @intFromEnum(dxgi.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
+    sd.BufferUsage = dxgi.DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    @setRuntimeSafety(false);
+    sd.OutputWindow = hwnd;
+    @setRuntimeSafety(true);
+    sd.SampleDesc.Count = 1;
+    sd.SampleDesc.Quality = 0;
+    sd.Windowed = w.TRUE;
+    sd.SwapEffect = dxgi.DXGI_SWAP_EFFECT_DISCARD;
+
+    const createDeviceFlags: dx.D3D11_CREATE_DEVICE_FLAG = .{
+        .DEBUG = 1,
+    };
+    //createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    var featureLevel: d3d.D3D_FEATURE_LEVEL = undefined;
+    const featureLevelArray = &[_]d3d.D3D_FEATURE_LEVEL{ d3d.D3D_FEATURE_LEVEL_11_0, d3d.D3D_FEATURE_LEVEL_10_0 };
+
+    var device: ?*dx.ID3D11Device = null;
+    var device_context: ?*dx.ID3D11DeviceContext = null;
+    var swap_chain: ?*dxgi.IDXGISwapChain = null;
+
+    var res: win.foundation.HRESULT = dx.D3D11CreateDeviceAndSwapChain(
+        null,
+        d3d.D3D_DRIVER_TYPE_HARDWARE,
+        null,
+        createDeviceFlags,
+        featureLevelArray,
+        2,
+        dx.D3D11_SDK_VERSION,
+        &sd,
+        &swap_chain,
+        &device,
+        &featureLevel,
+        &device_context,
+    );
+
+    if (res == dxgi.DXGI_ERROR_UNSUPPORTED) {
+        res = dx.D3D11CreateDeviceAndSwapChain(
+            null,
+            d3d.D3D_DRIVER_TYPE_WARP,
+            null,
+            createDeviceFlags,
+            featureLevelArray,
+            2,
+            dx.D3D11_SDK_VERSION,
+            &sd,
+            &swap_chain,
+            &device,
+            &featureLevel,
+            &device_context,
+        );
+    }
+    if (!isOk(res))
+        return null;
+
+    return Dx11Backend.Directx11Options{
+        .device = device.?,
+        .device_context = device_context.?,
+        .swap_chain = swap_chain.?,
+    };
 }
 
 fn convertVKeyToDvuiKey(vkey: key.VIRTUAL_KEY) dvui.enums.Key {

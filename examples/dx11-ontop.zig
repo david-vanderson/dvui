@@ -97,7 +97,7 @@ pub export fn main(
             }
 
             if (resize_width != 0 and resize_height != 0) {
-                backend.handleSwapChainResizing(&resize_width, &resize_height) catch {
+                backend.handleSwapChainResizing(resize_width, resize_height) catch {
                     log.err("Failed to handle swap chain resizing...", .{});
                     continue;
                 };
