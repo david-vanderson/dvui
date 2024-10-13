@@ -390,6 +390,9 @@ fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(
                 log.info("resizing to: {any}", .{resize});
                 instance.options.size.w = @floatFromInt(resize.width);
                 instance.options.size.h = @floatFromInt(resize.height);
+                instance.handleSwapChainResizing(@intCast(resize.width), @intCast(resize.height)) catch {
+                    log.err("Failed to handle swap chain resizing...", .{});
+                };
             }
         },
         ui.WM_KEYDOWN, ui.WM_SYSKEYDOWN => {
@@ -614,8 +617,14 @@ pub fn initWindow(instance: HINSTANCE, cmd_show: INT, options: InitOptions) !Dx1
         .options = options,
     };
 
+    std.debug.print("setDimensions -> {}\n", .{rect});
+
     res.setDimensions(rect);
     res.setViewport(); // for now: fixed values :)
+
+    //res.handleSwapChainResizing(@intFromFloat(rect.width), @intFromFloat(rect.height)) catch {
+        //log.err("Failed to handle swap chain resizing...", .{});
+    //};
 
     return res;
 }
@@ -754,11 +763,10 @@ pub fn cleanupRenderTarget(self: *Dx11Backend) void {
     }
 }
 
-pub fn handleSwapChainResizing(self: *Dx11Backend, width: *c_uint, height: *c_uint) !void {
+pub fn handleSwapChainResizing(self: *Dx11Backend, width: c_uint, height: c_uint) !void {
+    std.debug.print("handleSwapChainResizing {d} {d}\n", .{width, height});
     self.cleanupRenderTarget();
-    _ = self.swap_chain.ResizeBuffers(0, width.*, height.*, dxgic.DXGI_FORMAT_UNKNOWN, 0);
-    width.* = 0;
-    height.* = 0;
+    _ = self.swap_chain.ResizeBuffers(0, width, height, dxgic.DXGI_FORMAT_UNKNOWN, 0);
     return self.createRenderTarget();
 }
 
