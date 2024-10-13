@@ -606,8 +606,9 @@ pub fn initWindow(instance: HINSTANCE, cmd_show: INT, options: InitOptions) !Dx1
     _ = ui.ShowWindow(window_options.hwnd, @bitCast(cmd_show));
     _ = gdi.UpdateWindow(window_options.hwnd);
 
-    var rect = std.mem.zeroes(win.foundation.RECT);
-    _ = ui.GetWindowRect(window_options.hwnd, &rect);
+    var rc: RECT = undefined;
+    _ = ui.GetClientRect(window_options.hwnd, &rc);
+    //std.debug.print("GetClientRect -> {}\n", .{rc});
 
     var res = Dx11Backend{
         .device = dx_options.device,
@@ -617,14 +618,12 @@ pub fn initWindow(instance: HINSTANCE, cmd_show: INT, options: InitOptions) !Dx1
         .options = options,
     };
 
-    std.debug.print("setDimensions -> {}\n", .{rect});
-
-    res.setDimensions(rect);
+    res.setDimensions(rc);
     res.setViewport(); // for now: fixed values :)
 
-    //res.handleSwapChainResizing(@intFromFloat(rect.width), @intFromFloat(rect.height)) catch {
-        //log.err("Failed to handle swap chain resizing...", .{});
-    //};
+    res.handleSwapChainResizing(@intCast(rc.right - rc.left), @intCast(rc.bottom - rc.top)) catch {
+        log.err("Failed to handle swap chain resizing...", .{});
+    };
 
     return res;
 }
