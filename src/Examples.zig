@@ -1291,7 +1291,8 @@ pub fn reorderLists() !void {
         var dir_entry: usize = 0;
     };
 
-    if (try dvui.expander(@src(), "Simple", .{}, .{ .expand = .horizontal })) {
+    const expander_o: dvui.ExpanderOptions = .{ .default_expanded = true };
+    if (try dvui.expander(@src(), "Simple", expander_o, .{ .expand = .horizontal })) {
         const dir: dvui.enums.Direction = if (g.dir_entry == 0) .vertical else .horizontal;
 
         var vbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
@@ -1320,7 +1321,7 @@ pub fn reorderLists() !void {
         try reorderListsSimple(dir);
     }
 
-    if (try dvui.expander(@src(), "Advanced", .{}, .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Advanced", expander_o, .{ .expand = .horizontal })) {
         var vbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer vbox.deinit();
 
