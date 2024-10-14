@@ -28,8 +28,6 @@ const gdi = graphics.gdi;
 
 const HDC = gdi.HDC;
 
-const L = win.zig.L;
-
 const Dx11Backend = @This();
 pub const Context = *Dx11Backend;
 
@@ -38,45 +36,72 @@ var wind: ?*dvui.Window = null;
 
 const log = std.log.scoped(.Dx11Backend);
 
+/// The directx device
 device: *dx.ID3D11Device,
+/// The device context
 device_context: *dx.ID3D11DeviceContext,
+/// The swap chain
 swap_chain: *dxgi.IDXGISwapChain,
 
+/// All the options that are windows window specific
 window: ?WindowOptions = null,
+/// The render target
 render_target: ?*dx.ID3D11RenderTargetView = null,
+/// The directx options. used internally.
 dx_options: DirectxOptions = .{},
+// TODO: Implement touch events
+//   might require help with that,
+//   since i have no touch input device that runs windows.
+/// Whether there are touch events
 touch_mouse_events: bool = false,
+/// Whether to log events
 log_events: bool = false,
+/// The scaling of DVUI
 initial_scale: f32 = 1.0,
-
+/// All the initialization options
+///   See: InitOptions
 options: InitOptions,
 
 // TODO: Figure out cursor situation
 // cursor_last: dvui.enums.Cursor = .arrow,
 // something dx cursor
 
+/// The arena allocator (usually)
 arena: std.mem.Allocator = undefined,
 
 const DvuiKey = union(enum) {
+    /// A keyboard button press
     keyboard_key: dvui.enums.Key,
+    /// A mouse button press
     mouse_key: dvui.enums.Button,
+    /// Mouse move event
     mouse_event: struct { x: i16, y: i16 },
+    /// Mouse wheel scroll event
     wheel_event: i16,
+    /// No action
     none: void,
 };
 
 const KeyEvent = struct {
+    /// The type of event emitted
     target: DvuiKey,
+    /// What kind of action the event emitted
     action: enum { down, up, none },
 };
 
 const WindowOptions = struct {
+    /// The general allocator used for the window initialization code
     alloc: std.mem.Allocator,
+    /// The instance of the program
     instance: HINSTANCE,
+    /// The instance of the Window
     hwnd: win.foundation.HWND,
+    /// The window DC (= Device Context)
     hwnd_dc: gdi.HDC,
 
-    // Thanks windows!
+    /// The title as *allocated* utf16 string.
+    /// Thank you windows for doing this... still.
+    /// Long live UTF-8 !!!!!
     utf16_wnd_title: [:0]u16,
 
     pub fn deinit(self: WindowOptions) void {
@@ -198,6 +223,612 @@ const shader =
     \\}
 ;
 
+/// Sets the directx viewport to the internally used dvui.Size
+/// Call this *after* setDimensions
+pub fn setViewport(self: *Dx11Backend) void {
+    var vp = dx.D3D11_VIEWPORT{
+        .TopLeftX = 0.0,
+        .TopLeftY = 0.0,
+        .Width = self.options.size.w,
+        .Height = self.options.size.h,
+        .MinDepth = 0.0,
+        .MaxDepth = 1.0,
+    };
+
+    self.device_context.RSSetViewports(1, @ptrCast(&vp));
+}
+
+/// Sets the dimensions of a window and maps it to a dvui.Size
+/// Call this *before* setViewport
+pub fn setDimensions(self: *Dx11Backend, rect: RECT) void {
+    self.options.size.w = @floatFromInt(rect.right - rect.left);
+    self.options.size.h = @floatFromInt(rect.bottom - rect.top);
+}
+
+/// Sets the global dvui.Window instance
+/// Call this after you created the dvui.Window
+/// ```zig
+/// const window = ...;
+/// Backend.setWindow(&window);
+/// ```
+pub fn setWindow(window: ?*dvui.Window) void {
+    wind = window;
+}
+
+/// Sets the global Dx11Backend
+/// Call this on the Backend (not the instance!) after the Backend has been created
+/// Example:
+/// ```zig
+/// const backend = ...;
+/// Backend.setBackend(&backend);
+/// ```
+pub fn setBackend(ins: ?*Dx11Backend) void {
+    inst = ins;
+}
+
+/// Inits a new instance of the Dx11Backend
+/// The caller has to manage their DirectX device, swapchain and device context.
+pub fn init(options: InitOptions, dx_options: Directx11Options) !Dx11Backend {
+    return Dx11Backend{
+        .device = dx_options.device,
+        .swap_chain = dx_options.swap_chain,
+        .device_context = dx_options.device_context,
+        .options = options,
+    };
+}
+
+/// Creates a new DirectX window for you, as well as initializes all the
+/// DirectX options for you
+/// The caller just needs to clean up everything by calling `deinit` on the Dx11Backend
+pub fn initWindow(instance: HINSTANCE, cmd_show: INT, options: InitOptions) !Dx11Backend {
+    const window_options = try createWindow(instance, options);
+    const dx_options = createDeviceD3D(window_options.hwnd, options) orelse return error.D3dDeviceInitFailed;
+
+    _ = ui.ShowWindow(window_options.hwnd, @bitCast(cmd_show));
+    _ = gdi.UpdateWindow(window_options.hwnd);
+
+    var rc: RECT = undefined;
+    _ = ui.GetClientRect(window_options.hwnd, &rc);
+    //std.debug.print("GetClientRect -> {}\n", .{rc});
+
+    var res = Dx11Backend{
+        .device = dx_options.device,
+        .device_context = dx_options.device_context,
+        .swap_chain = dx_options.swap_chain,
+        .window = window_options,
+        .options = options,
+    };
+
+    res.setDimensions(rc);
+    res.setViewport();
+
+    res.handleSwapChainResizing(@intCast(rc.right - rc.left), @intCast(rc.bottom - rc.top)) catch {
+        log.err("Failed to handle swap chain resizing...", .{});
+    };
+
+    return res;
+}
+
+/// Cleanup routine
+pub fn deinit(self: Dx11Backend) void {
+    if (self.window) |instance| {
+        instance.deinit();
+        _ = self.device.IUnknown.Release();
+        _ = self.device_context.IUnknown.Release();
+        _ = self.swap_chain.IUnknown.Release();
+    }
+
+    if (self.render_target) |rt| {
+        _ = rt.IUnknown.Release();
+    }
+
+    self.dx_options.deinit();
+
+    setWindow(null);
+    setBackend(null);
+}
+
+/// Resizes the SwapChain based on the new window size
+/// This is only useful if you have your own directx stuff to manage
+pub fn handleSwapChainResizing(self: *Dx11Backend, width: c_uint, height: c_uint) !void {
+    std.debug.print("handleSwapChainResizing {d} {d}\n", .{ width, height });
+    self.cleanupRenderTarget();
+    _ = self.swap_chain.ResizeBuffers(0, width, height, dxgic.DXGI_FORMAT_UNKNOWN, 0);
+    return self.createRenderTarget();
+}
+
+/// Call this first in your main event loop.
+/// This is NON-OPTIONAL!
+/// Your window will freeze otherwise.
+/// Time spent figuring this out: ~4 hours
+pub fn isExitRequested() bool {
+    var msg: ui.MSG = std.mem.zeroes(ui.MSG);
+
+    while (ui.PeekMessageA(&msg, null, 0, 0, ui.PM_REMOVE) != 0) {
+        _ = ui.TranslateMessage(&msg);
+        _ = ui.DispatchMessageW(&msg);
+        if (msg.message == ui.WM_QUIT) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+fn isOk(res: win.foundation.HRESULT) bool {
+    return res == win.foundation.S_OK;
+}
+
+fn initShader(self: *Dx11Backend) !void {
+    var error_message: ?*d3d.ID3DBlob = null;
+
+    var vs_blob: ?*d3d.ID3DBlob = null;
+    const compile_shader = d3d.fxc.D3DCompile(
+        shader.ptr,
+        shader.len,
+        null,
+        null,
+        null,
+        "VSMain",
+        "vs_4_0",
+        d3d.fxc.D3DCOMPILE_ENABLE_STRICTNESS,
+        0,
+        &vs_blob,
+        &error_message,
+    );
+    if (!isOk(compile_shader)) {
+        if (error_message == null) {
+            log.err("hresult of error message was skewed: {x}", .{compile_shader});
+            return error.VertexShaderInitFailed;
+        }
+
+        defer _ = error_message.?.IUnknown.Release();
+        const as_str: [*:0]const u8 = @ptrCast(error_message.?.vtable.GetBufferPointer(error_message.?));
+        log.err("vertex shader compilation failed with:\n{s}", .{as_str});
+        return error.VertexShaderInitFailed;
+    }
+
+    var ps_blob: ?*d3d.ID3DBlob = null;
+    const ps_res = d3d.fxc.D3DCompile(
+        shader.ptr,
+        shader.len,
+        null,
+        null,
+        null,
+        "PSMain",
+        "ps_4_0",
+        d3d.fxc.D3DCOMPILE_ENABLE_STRICTNESS,
+        0,
+        &ps_blob,
+        &error_message,
+    );
+    if (!isOk(ps_res)) {
+        if (error_message == null) {
+            std.debug.print("hresult of error message was skewed: {x}\n", .{compile_shader});
+            return error.PixelShaderInitFailed;
+        }
+
+        defer _ = error_message.?.IUnknown.Release();
+        const as_str: [*:0]const u8 = @ptrCast(error_message.?.vtable.GetBufferPointer(error_message.?));
+        std.debug.print("pixel shader compilation failed with: {s}\n", .{as_str});
+        return error.PixelShaderInitFailed;
+    }
+
+    self.dx_options.vertex_bytes = vs_blob.?;
+    const create_vs = self.device.CreateVertexShader(
+        @ptrCast(self.dx_options.vertex_bytes.?.GetBufferPointer()),
+        self.dx_options.vertex_bytes.?.GetBufferSize(),
+        null,
+        &self.dx_options.vertex_shader,
+    );
+
+    if (!isOk(create_vs)) {
+        return error.CreateVertexShaderFailed;
+    }
+
+    self.dx_options.pixel_bytes = ps_blob.?;
+    const create_ps = self.device.CreatePixelShader(
+        @ptrCast(self.dx_options.pixel_bytes.?.GetBufferPointer()),
+        self.dx_options.pixel_bytes.?.GetBufferSize(),
+        null,
+        &self.dx_options.pixel_shader,
+    );
+
+    if (!isOk(create_ps)) {
+        return error.CreatePixelShaderFailed;
+    }
+}
+
+fn createRasterizerState(self: *Dx11Backend) void {
+    var raster_desc = std.mem.zeroes(dx.D3D11_RASTERIZER_DESC);
+    raster_desc.FillMode = dx.D3D11_FILL_MODE.SOLID;
+    raster_desc.CullMode = dx.D3D11_CULL_BACK;
+    raster_desc.FrontCounterClockwise = 1;
+    raster_desc.DepthClipEnable = 0;
+
+    // TODO: Create better error handling
+    _ = self.device.CreateRasterizerState(&raster_desc, &self.dx_options.rasterizer);
+    _ = self.device_context.RSSetState(self.dx_options.rasterizer);
+}
+
+fn createRenderTarget(self: *Dx11Backend) !void {
+    var back_buffer: ?*dx.ID3D11Texture2D = null;
+
+    _ = self.swap_chain.GetBuffer(0, dx.IID_ID3D11Texture2D, @ptrCast(&back_buffer));
+    defer _ = back_buffer.?.IUnknown.Release();
+
+    _ = self.device.CreateRenderTargetView(
+        @ptrCast(back_buffer),
+        null,
+        &self.render_target,
+    );
+}
+
+fn cleanupRenderTarget(self: *Dx11Backend) void {
+    if (self.render_target) |mrtv| {
+        _ = mrtv.IUnknown.Release();
+        self.render_target = null;
+    }
+}
+
+fn createInputLayout(self: *Dx11Backend) !void {
+    const input_layout_desc = &[_]dx.D3D11_INPUT_ELEMENT_DESC{
+        .{ .SemanticName = "POSITION", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32B32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 0, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
+        .{ .SemanticName = "COLOR", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32B32A32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 12, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
+        .{ .SemanticName = "TEXCOORD", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 28, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
+    };
+
+    const num_elements = input_layout_desc.len;
+
+    const res = self.device.CreateInputLayout(
+        input_layout_desc,
+        num_elements,
+        @ptrCast(self.dx_options.vertex_bytes.?.GetBufferPointer()),
+        self.dx_options.vertex_bytes.?.GetBufferSize(),
+        &self.dx_options.vertex_layout,
+    );
+
+    if (!isOk(res)) {
+        return error.VertexLayoutCreationFailed;
+    }
+
+    self.device_context.IASetInputLayout(self.dx_options.vertex_layout);
+}
+
+fn recreateShaderView(self: *Dx11Backend, texture: *anyopaque) void {
+    const tex: *dx.ID3D11Texture2D = @ptrCast(@alignCast(texture));
+
+    const rvd = dx.D3D11_SHADER_RESOURCE_VIEW_DESC{
+        .Format = dxgic.DXGI_FORMAT.R8G8B8A8_UNORM,
+        .ViewDimension = d3d.D3D_SRV_DIMENSION_TEXTURE2D,
+        .Anonymous = .{
+            .Texture2D = .{
+                .MostDetailedMip = 0,
+                .MipLevels = 1,
+            },
+        },
+    };
+
+    const rv_result = self.device.CreateShaderResourceView(
+        &tex.ID3D11Resource,
+        &rvd,
+        &self.dx_options.texture_view,
+    );
+
+    if (!isOk(rv_result)) {
+        std.debug.print("Texture View creation failed\n", .{});
+        @panic("couldn't create texture view");
+    }
+}
+
+fn createSampler(self: *Dx11Backend) !void {
+    var samp_desc = std.mem.zeroes(dx.D3D11_SAMPLER_DESC);
+    samp_desc.Filter = dx.D3D11_FILTER.MIN_MAG_POINT_MIP_LINEAR;
+    samp_desc.AddressU = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
+    samp_desc.AddressV = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
+    samp_desc.AddressW = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
+
+    var blend_desc = std.mem.zeroes(dx.D3D11_BLEND_DESC);
+    blend_desc.RenderTarget[0].BlendEnable = 1;
+    blend_desc.RenderTarget[0].SrcBlend = dx.D3D11_BLEND_SRC_ALPHA;
+    blend_desc.RenderTarget[0].DestBlend = dx.D3D11_BLEND_INV_SRC_ALPHA;
+    blend_desc.RenderTarget[0].BlendOp = dx.D3D11_BLEND_OP_ADD;
+    blend_desc.RenderTarget[0].SrcBlendAlpha = dx.D3D11_BLEND_ONE;
+    blend_desc.RenderTarget[0].DestBlendAlpha = dx.D3D11_BLEND_ZERO;
+    blend_desc.RenderTarget[0].BlendOpAlpha = dx.D3D11_BLEND_OP_ADD;
+    blend_desc.RenderTarget[0].RenderTargetWriteMask = @intFromEnum(dx.D3D11_COLOR_WRITE_ENABLE_ALL);
+
+    // TODO: Handle errors better
+    _ = self.device.CreateBlendState(&blend_desc, &self.dx_options.blend_state);
+    _ = self.device_context.OMSetBlendState(self.dx_options.blend_state, null, 0xffffffff);
+
+    const sampler = self.device.CreateSamplerState(&samp_desc, &self.dx_options.sampler);
+
+    if (!isOk(sampler)) {
+        std.debug.print("sampler state could not be iniitialized\n", .{});
+        return error.SamplerStateUninitialized;
+    }
+}
+
+// If you don't know what they are used for... just don't use them, alright?
+fn createBuffer(self: *Dx11Backend, bind_type: anytype, comptime InitialType: type, initial_data: []const InitialType) !*dx.ID3D11Buffer {
+    var bd = std.mem.zeroes(dx.D3D11_BUFFER_DESC);
+    bd.Usage = dx.D3D11_USAGE_DEFAULT;
+    bd.ByteWidth = @intCast(@sizeOf(InitialType) * initial_data.len);
+    bd.BindFlags = bind_type;
+    bd.CPUAccessFlags = .{};
+
+    var data: dx.D3D11_SUBRESOURCE_DATA = undefined;
+    data.pSysMem = @ptrCast(initial_data.ptr);
+
+    var buffer: ?*dx.ID3D11Buffer = null;
+    _ = self.device.CreateBuffer(&bd, &data, &buffer);
+
+    if (buffer) |buf| {
+        return buf;
+    } else {
+        return error.BufferFailedToCreate;
+    }
+}
+
+// ############ Satisfy DVUI interfaces ############
+pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32, ti: dvui.enums.TextureInterpolation) *anyopaque {
+    _ = ti; // autofix
+
+    var texture: ?*dx.ID3D11Texture2D = null;
+    var tex_desc = dx.D3D11_TEXTURE2D_DESC{
+        .Width = width,
+        .Height = height,
+        .MipLevels = 1,
+        .ArraySize = 1,
+        .Format = dxgic.DXGI_FORMAT.R8G8B8A8_UNORM,
+        .SampleDesc = .{
+            .Count = 1,
+            .Quality = 0,
+        },
+        .Usage = dx.D3D11_USAGE_DEFAULT,
+        .BindFlags = dx.D3D11_BIND_SHADER_RESOURCE,
+        .CPUAccessFlags = .{},
+        .MiscFlags = .{},
+    };
+
+    var resource_data = std.mem.zeroes(dx.D3D11_SUBRESOURCE_DATA);
+    resource_data.pSysMem = pixels;
+    resource_data.SysMemPitch = width * 4; // 4 byte per pixel (RGBA)
+
+    const tex_creation = self.device.CreateTexture2D(
+        &tex_desc,
+        &resource_data,
+        &texture,
+    );
+
+    if (!isOk(tex_creation)) {
+        std.debug.print("Texture creation failed.\n", .{});
+        @panic("couldn't create texture");
+    }
+
+    return texture.?;
+}
+
+pub fn textureDestroy(self: *Dx11Backend, texture: *anyopaque) void {
+    _ = self;
+    const tex: *dx.ID3D11Texture2D = @ptrCast(@alignCast(texture));
+    _ = tex.IUnknown.Release();
+}
+
+pub fn drawClippedTriangles(
+    self: *Dx11Backend,
+    texture: ?*anyopaque,
+    vtx: []const dvui.Vertex,
+    idx: []const u16,
+    clipr: ?dvui.Rect,
+) void {
+    self.setViewport();
+    if (self.render_target == null) {
+        self.createRenderTarget() catch |err| {
+            std.debug.print("render target could not be initialized: {any}\n", .{err});
+            return;
+        };
+    }
+
+    if (self.dx_options.vertex_shader == null or self.dx_options.pixel_shader == null) {
+        self.initShader() catch |err| {
+            std.debug.print("shaders could not be initialized: {any}\n", .{err});
+            return;
+        };
+    }
+
+    if (self.dx_options.vertex_layout == null) {
+        self.createInputLayout() catch |err| {
+            std.debug.print("Failed to create vertex layout: {any}\n", .{err});
+            return;
+        };
+    }
+
+    if (self.dx_options.sampler == null) {
+        self.createSampler() catch |err| {
+            std.debug.print("sampler could not be initialized: {any}\n", .{err});
+            return;
+        };
+    }
+
+    if (self.dx_options.rasterizer == null) {
+        self.createRasterizerState();
+    }
+
+    var stride: usize = @sizeOf(SimpleVertex);
+    var offset: usize = 0;
+    const converted_vtx = self.convertVertices(vtx, texture == null) catch @panic("OOM");
+    defer self.arena.free(converted_vtx);
+
+    self.dx_options.vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {
+        std.debug.print("no vertex buffer created\n", .{});
+        return;
+    };
+    self.dx_options.index_buffer = self.createBuffer(dx.D3D11_BIND_INDEX_BUFFER, u16, idx) catch {
+        std.debug.print("no index buffer created\n", .{});
+        return;
+    };
+
+    self.setViewport();
+
+    if (texture) |tex| self.recreateShaderView(tex);
+
+    var scissor_rect: ?RECT = std.mem.zeroes(RECT);
+    var nums: u32 = 1;
+    self.device_context.RSGetScissorRects(&nums, @ptrCast(&scissor_rect));
+
+    if (clipr) |cr| {
+        const new_clip: RECT = .{
+            .left = @intFromFloat(@round(cr.x)),
+            .top = @intFromFloat(@round(cr.y)),
+            .right = @intFromFloat(@round(cr.w)),
+            .bottom = @intFromFloat(@round(cr.h)),
+        };
+        self.device_context.RSSetScissorRects(nums, @ptrCast(&new_clip));
+    } else {
+        scissor_rect = null;
+    }
+
+    self.device_context.IASetVertexBuffers(0, 1, @ptrCast(&self.dx_options.vertex_buffer), @ptrCast(&stride), @ptrCast(&offset));
+    self.device_context.IASetIndexBuffer(self.dx_options.index_buffer, dxgic.DXGI_FORMAT.R16_UINT, 0);
+    self.device_context.IASetPrimitiveTopology(d3d.D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    self.device_context.OMSetRenderTargets(1, @ptrCast(&self.render_target), null);
+    self.device_context.VSSetShader(self.dx_options.vertex_shader, null, 0);
+    self.device_context.PSSetShader(self.dx_options.pixel_shader, null, 0);
+
+    self.device_context.PSSetShaderResources(0, 1, @ptrCast(&self.dx_options.texture_view));
+    self.device_context.PSSetSamplers(0, 1, @ptrCast(&self.dx_options.sampler));
+    self.device_context.DrawIndexed(@intCast(idx.len), 0, 0);
+    if (scissor_rect) |srect| self.device_context.RSSetScissorRects(nums, @ptrCast(&srect));
+}
+
+pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
+    self.arena = arena;
+
+    var clear_color = [_]f32{ 1.0, 1.0, 1.0, 0.0 };
+    self.device_context.ClearRenderTargetView(self.render_target orelse return, @ptrCast((&clear_color).ptr));
+}
+
+pub fn end(self: *Dx11Backend) void {
+    _ = self.swap_chain.Present(if (self.options.vsync) 1 else 0, 0);
+
+    if (self.dx_options.vertex_buffer) |vb| {
+        _ = vb.IUnknown.Release();
+    }
+    self.dx_options.vertex_buffer = null;
+
+    if (self.dx_options.index_buffer) |ib| {
+        _ = ib.IUnknown.Release();
+    }
+    self.dx_options.index_buffer = null;
+}
+
+pub fn pixelSize(self: *Dx11Backend) dvui.Size {
+    const window_opt = self.window orelse return std.mem.zeroes(dvui.Size);
+    const dpi_scale: f32 = @floatFromInt(hi_dpi.GetDpiForWindow(window_opt.hwnd) / 96);
+    return dvui.Size{
+        .w = self.options.size.w * dpi_scale,
+        .h = self.options.size.h * dpi_scale,
+    };
+}
+
+pub fn windowSize(self: *Dx11Backend) dvui.Size {
+    return self.options.size;
+}
+
+pub fn contentScale(self: *Dx11Backend) f32 {
+    return self.initial_scale;
+}
+
+pub fn hasEvent(_: *Dx11Backend) bool {
+    return false;
+}
+
+pub fn backend(self: *Dx11Backend) dvui.Backend {
+    return dvui.Backend.init(self, @This());
+}
+
+pub fn nanoTime(self: *Dx11Backend) i128 {
+    _ = self;
+    return std.time.nanoTimestamp();
+}
+
+pub fn sleep(self: *Dx11Backend, ns: u64) void {
+    _ = self;
+    std.time.sleep(ns);
+}
+
+pub fn clipboardText(self: *Dx11Backend) ![]const u8 {
+    _ = self;
+    return "";
+}
+
+pub fn clipboardTextSet(self: *Dx11Backend, text: []const u8) !void {
+    _ = self;
+    _ = text;
+}
+
+pub fn openURL(self: *Dx11Backend, url: []const u8) !void {
+    _ = self;
+    _ = url;
+}
+
+pub fn refresh(self: *Dx11Backend) void {
+    _ = self;
+}
+
+pub fn addEvent(self: *Dx11Backend, window: *dvui.Window, key_event: KeyEvent) !bool {
+    _ = self;
+    const event = key_event.target;
+    const action = key_event.action;
+    switch (event) {
+        .keyboard_key => |ev| {
+            return window.addEventKey(.{
+                .code = ev,
+                .action = if (action == .up) .up else .down,
+                .mod = dvui.enums.Mod.none,
+            });
+        },
+        .mouse_key => |ev| {
+            return window.addEventMouseButton(ev, if (action == .up) .release else .press);
+        },
+        .mouse_event => |ev| {
+            return window.addEventMouseMotion(@floatFromInt(ev.x), @floatFromInt(ev.y));
+        },
+        .wheel_event => |ev| {
+            return window.addEventMouseWheel(@floatFromInt(ev));
+        },
+        .none => return false,
+    }
+}
+
+pub fn addAllEvents(self: *Dx11Backend, window: *dvui.Window) !bool {
+    _ = self;
+    _ = window;
+    return false;
+}
+
+pub fn setCursor(self: *Dx11Backend, new_cursor: dvui.enums.Cursor) void {
+    const converted_cursor = switch (new_cursor) {
+        .arrow => ui.IDC_ARROW,
+        .ibeam => ui.IDC_IBEAM,
+        .wait, .wait_arrow => ui.IDC_WAIT,
+        .crosshair => ui.IDC_CROSS,
+        .arrow_nw_se => ui.IDC_ARROW,
+        .arrow_ne_sw => ui.IDC_ARROW,
+        .arrow_w_e => ui.IDC_ARROW,
+        .arrow_n_s => ui.IDC_ARROW,
+        .arrow_all => ui.IDC_ARROW,
+        .bad => ui.IDC_NO,
+        .hand => ui.IDC_HAND,
+    };
+
+    _ = ui.LoadCursorW(self.window.?.instance, converted_cursor);
+}
+
+// ############ Event Handling via wnd proc ############
 fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(w.WINAPI) w.LRESULT {
     const instance = inst orelse return ui.DefWindowProcW(hwnd, umsg, wparam, lparam);
 
@@ -357,581 +988,6 @@ fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(
     }
 
     return ui.DefWindowProcW(hwnd, umsg, wparam, lparam);
-}
-
-pub fn setViewport(self: *Dx11Backend) void {
-    var vp = dx.D3D11_VIEWPORT{
-        .TopLeftX = 0.0,
-        .TopLeftY = 0.0,
-        .Width = self.options.size.w,
-        .Height = self.options.size.h,
-        .MinDepth = 0.0,
-        .MaxDepth = 1.0,
-    };
-
-    self.device_context.RSSetViewports(1, @ptrCast(&vp));
-}
-
-pub fn setDimensions(self: *Dx11Backend, rect: RECT) void {
-    self.options.size.w = @floatFromInt(rect.right - rect.left);
-    self.options.size.h = @floatFromInt(rect.bottom - rect.top);
-}
-
-pub fn setWindow(window: ?*dvui.Window) void {
-    wind = window;
-}
-
-pub fn setBackend(ins: ?*Dx11Backend) void {
-    inst = ins;
-}
-
-pub fn init(options: InitOptions, dx_options: Directx11Options) !Dx11Backend {
-    return Dx11Backend{
-        .device = dx_options.device,
-        .swap_chain = dx_options.swap_chain,
-        .device_context = dx_options.device_context,
-        .options = options,
-    };
-}
-
-pub fn initWindow(instance: HINSTANCE, cmd_show: INT, options: InitOptions) !Dx11Backend {
-    const window_options = try createWindow(instance, options);
-    const dx_options = createDeviceD3D(window_options.hwnd, options) orelse return error.D3dDeviceInitFailed;
-
-    _ = ui.ShowWindow(window_options.hwnd, @bitCast(cmd_show));
-    _ = gdi.UpdateWindow(window_options.hwnd);
-
-    var rc: RECT = undefined;
-    _ = ui.GetClientRect(window_options.hwnd, &rc);
-    //std.debug.print("GetClientRect -> {}\n", .{rc});
-
-    var res = Dx11Backend{
-        .device = dx_options.device,
-        .device_context = dx_options.device_context,
-        .swap_chain = dx_options.swap_chain,
-        .window = window_options,
-        .options = options,
-    };
-
-    res.setDimensions(rc);
-    res.setViewport();
-
-    res.handleSwapChainResizing(@intCast(rc.right - rc.left), @intCast(rc.bottom - rc.top)) catch {
-        log.err("Failed to handle swap chain resizing...", .{});
-    };
-
-    return res;
-}
-
-pub fn deinit(self: Dx11Backend) void {
-    if (self.window) |instance| {
-        instance.deinit();
-        _ = self.device.IUnknown.Release();
-        _ = self.device_context.IUnknown.Release();
-        _ = self.swap_chain.IUnknown.Release();
-    }
-
-    if (self.render_target) |rt| {
-        _ = rt.IUnknown.Release();
-    }
-
-    self.dx_options.deinit();
-
-    setWindow(null);
-    setBackend(null);
-}
-
-fn isOk(res: win.foundation.HRESULT) bool {
-    return res == win.foundation.S_OK;
-}
-
-fn initShader(self: *Dx11Backend) !void {
-    var error_message: ?*d3d.ID3DBlob = null;
-
-    var vs_blob: ?*d3d.ID3DBlob = null;
-    const compile_shader = d3d.fxc.D3DCompile(
-        shader.ptr,
-        shader.len,
-        null,
-        null,
-        null,
-        "VSMain",
-        "vs_4_0",
-        d3d.fxc.D3DCOMPILE_ENABLE_STRICTNESS,
-        0,
-        &vs_blob,
-        &error_message,
-    );
-    if (!isOk(compile_shader)) {
-        if (error_message == null) {
-            std.debug.print("hresult of error message was skewed: {x}\n", .{compile_shader});
-            return error.VertexShaderInitFailed;
-        }
-
-        defer _ = error_message.?.IUnknown.Release();
-        const as_str: [*:0]const u8 = @ptrCast(error_message.?.vtable.GetBufferPointer(error_message.?));
-        std.debug.print("vertex shader compilation failed with:\n{s}\n", .{as_str});
-        return error.VertexShaderInitFailed;
-    }
-
-    var ps_blob: ?*d3d.ID3DBlob = null;
-    const ps_res = d3d.fxc.D3DCompile(
-        shader.ptr,
-        shader.len,
-        null,
-        null,
-        null,
-        "PSMain",
-        "ps_4_0",
-        d3d.fxc.D3DCOMPILE_ENABLE_STRICTNESS,
-        0,
-        &ps_blob,
-        &error_message,
-    );
-    if (!isOk(ps_res)) {
-        if (error_message == null) {
-            std.debug.print("hresult of error message was skewed: {x}\n", .{compile_shader});
-            return error.PixelShaderInitFailed;
-        }
-
-        defer _ = error_message.?.IUnknown.Release();
-        const as_str: [*:0]const u8 = @ptrCast(error_message.?.vtable.GetBufferPointer(error_message.?));
-        std.debug.print("pixel shader compilation failed with: {s}\n", .{as_str});
-        return error.PixelShaderInitFailed;
-    }
-
-    self.dx_options.vertex_bytes = vs_blob.?;
-    const create_vs = self.device.CreateVertexShader(
-        @ptrCast(self.dx_options.vertex_bytes.?.GetBufferPointer()),
-        self.dx_options.vertex_bytes.?.GetBufferSize(),
-        null,
-        &self.dx_options.vertex_shader,
-    );
-
-    if (!isOk(create_vs)) {
-        return error.CreateVertexShaderFailed;
-    }
-
-    self.dx_options.pixel_bytes = ps_blob.?;
-    const create_ps = self.device.CreatePixelShader(
-        @ptrCast(self.dx_options.pixel_bytes.?.GetBufferPointer()),
-        self.dx_options.pixel_bytes.?.GetBufferSize(),
-        null,
-        &self.dx_options.pixel_shader,
-    );
-
-    if (!isOk(create_ps)) {
-        return error.CreatePixelShaderFailed;
-    }
-}
-
-fn createRasterizerState(self: *Dx11Backend) void {
-    var raster_desc = std.mem.zeroes(dx.D3D11_RASTERIZER_DESC);
-    raster_desc.FillMode = dx.D3D11_FILL_MODE.SOLID;
-    raster_desc.CullMode = dx.D3D11_CULL_BACK;
-    raster_desc.FrontCounterClockwise = 1;
-    raster_desc.DepthClipEnable = 0;
-
-    // TODO: Create better error handling
-    _ = self.device.CreateRasterizerState(&raster_desc, &self.dx_options.rasterizer);
-    _ = self.device_context.RSSetState(self.dx_options.rasterizer);
-}
-
-pub fn createRenderTarget(self: *Dx11Backend) !void {
-    var back_buffer: ?*dx.ID3D11Texture2D = null;
-
-    _ = self.swap_chain.GetBuffer(0, dx.IID_ID3D11Texture2D, @ptrCast(&back_buffer));
-    defer _ = back_buffer.?.IUnknown.Release();
-
-    _ = self.device.CreateRenderTargetView(
-        @ptrCast(back_buffer),
-        null,
-        &self.render_target,
-    );
-}
-
-pub fn cleanupRenderTarget(self: *Dx11Backend) void {
-    if (self.render_target) |mrtv| {
-        _ = mrtv.IUnknown.Release();
-        self.render_target = null;
-    }
-}
-
-pub fn handleSwapChainResizing(self: *Dx11Backend, width: c_uint, height: c_uint) !void {
-    std.debug.print("handleSwapChainResizing {d} {d}\n", .{ width, height });
-    self.cleanupRenderTarget();
-    _ = self.swap_chain.ResizeBuffers(0, width, height, dxgic.DXGI_FORMAT_UNKNOWN, 0);
-    return self.createRenderTarget();
-}
-
-fn createInputLayout(self: *Dx11Backend) !void {
-    const input_layout_desc = &[_]dx.D3D11_INPUT_ELEMENT_DESC{
-        .{ .SemanticName = "POSITION", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32B32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 0, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
-        .{ .SemanticName = "COLOR", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32B32A32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 12, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
-        .{ .SemanticName = "TEXCOORD", .SemanticIndex = 0, .Format = dxgic.DXGI_FORMAT_R32G32_FLOAT, .InputSlot = 0, .AlignedByteOffset = 28, .InputSlotClass = dx.D3D11_INPUT_PER_VERTEX_DATA, .InstanceDataStepRate = 0 },
-    };
-
-    const num_elements = input_layout_desc.len;
-
-    const res = self.device.CreateInputLayout(
-        input_layout_desc,
-        num_elements,
-        @ptrCast(self.dx_options.vertex_bytes.?.GetBufferPointer()),
-        self.dx_options.vertex_bytes.?.GetBufferSize(),
-        &self.dx_options.vertex_layout,
-    );
-
-    if (!isOk(res)) {
-        return error.VertexLayoutCreationFailed;
-    }
-
-    self.device_context.IASetInputLayout(self.dx_options.vertex_layout);
-}
-
-pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32, ti: dvui.enums.TextureInterpolation) *anyopaque {
-    _ = ti; // autofix
-
-    var texture: ?*dx.ID3D11Texture2D = null;
-    var tex_desc = dx.D3D11_TEXTURE2D_DESC{
-        .Width = width,
-        .Height = height,
-        .MipLevels = 1,
-        .ArraySize = 1,
-        .Format = dxgic.DXGI_FORMAT.R8G8B8A8_UNORM,
-        .SampleDesc = .{
-            .Count = 1,
-            .Quality = 0,
-        },
-        .Usage = dx.D3D11_USAGE_DEFAULT,
-        .BindFlags = dx.D3D11_BIND_SHADER_RESOURCE,
-        .CPUAccessFlags = .{},
-        .MiscFlags = .{},
-    };
-
-    var resource_data = std.mem.zeroes(dx.D3D11_SUBRESOURCE_DATA);
-    resource_data.pSysMem = pixels;
-    resource_data.SysMemPitch = width * 4; // 4 byte per pixel (RGBA)
-
-    const tex_creation = self.device.CreateTexture2D(
-        &tex_desc,
-        &resource_data,
-        &texture,
-    );
-
-    if (!isOk(tex_creation)) {
-        std.debug.print("Texture creation failed.\n", .{});
-        @panic("couldn't create texture");
-    }
-
-    return texture.?;
-}
-
-pub fn textureDestroy(self: *Dx11Backend, texture: *anyopaque) void {
-    // if (true) return;
-    _ = self;
-    const tex: *dx.ID3D11Texture2D = @ptrCast(@alignCast(texture));
-    _ = tex.IUnknown.Release();
-}
-
-fn recreateShaderView(self: *Dx11Backend, texture: *anyopaque) void {
-    const tex: *dx.ID3D11Texture2D = @ptrCast(@alignCast(texture));
-
-    const rvd = dx.D3D11_SHADER_RESOURCE_VIEW_DESC{
-        .Format = dxgic.DXGI_FORMAT.R8G8B8A8_UNORM,
-        .ViewDimension = d3d.D3D_SRV_DIMENSION_TEXTURE2D,
-        .Anonymous = .{
-            .Texture2D = .{
-                .MostDetailedMip = 0,
-                .MipLevels = 1,
-            },
-        },
-    };
-
-    const rv_result = self.device.CreateShaderResourceView(
-        &tex.ID3D11Resource,
-        &rvd,
-        &self.dx_options.texture_view,
-    );
-
-    if (!isOk(rv_result)) {
-        std.debug.print("Texture View creation failed\n", .{});
-        @panic("couldn't create texture view");
-    }
-}
-
-fn createSampler(self: *Dx11Backend) !void {
-    var samp_desc = std.mem.zeroes(dx.D3D11_SAMPLER_DESC);
-    samp_desc.Filter = dx.D3D11_FILTER.MIN_MAG_POINT_MIP_LINEAR;
-    samp_desc.AddressU = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
-    samp_desc.AddressV = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
-    samp_desc.AddressW = dx.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
-
-    var blend_desc = std.mem.zeroes(dx.D3D11_BLEND_DESC);
-    blend_desc.RenderTarget[0].BlendEnable = 1;
-    blend_desc.RenderTarget[0].SrcBlend = dx.D3D11_BLEND_SRC_ALPHA;
-    blend_desc.RenderTarget[0].DestBlend = dx.D3D11_BLEND_INV_SRC_ALPHA;
-    blend_desc.RenderTarget[0].BlendOp = dx.D3D11_BLEND_OP_ADD;
-    blend_desc.RenderTarget[0].SrcBlendAlpha = dx.D3D11_BLEND_ONE;
-    blend_desc.RenderTarget[0].DestBlendAlpha = dx.D3D11_BLEND_ZERO;
-    blend_desc.RenderTarget[0].BlendOpAlpha = dx.D3D11_BLEND_OP_ADD;
-    blend_desc.RenderTarget[0].RenderTargetWriteMask = @intFromEnum(dx.D3D11_COLOR_WRITE_ENABLE_ALL);
-
-    _ = self.device.CreateBlendState(&blend_desc, &self.dx_options.blend_state);
-    _ = self.device_context.OMSetBlendState(self.dx_options.blend_state, null, 0xffffffff);
-
-    const sampler = self.device.CreateSamplerState(&samp_desc, &self.dx_options.sampler);
-
-    if (!isOk(sampler)) {
-        std.debug.print("sampler state could not be iniitialized\n", .{});
-        return error.SamplerStateUninitialized;
-    }
-}
-
-// If you don't know what they are used for... just don't use them, alright?
-fn createBuffer(self: *Dx11Backend, bind_type: anytype, comptime InitialType: type, initial_data: []const InitialType) !*dx.ID3D11Buffer {
-    var bd = std.mem.zeroes(dx.D3D11_BUFFER_DESC);
-    bd.Usage = dx.D3D11_USAGE_DEFAULT;
-    bd.ByteWidth = @intCast(@sizeOf(InitialType) * initial_data.len);
-    bd.BindFlags = bind_type;
-    bd.CPUAccessFlags = .{};
-
-    var data: dx.D3D11_SUBRESOURCE_DATA = undefined;
-    data.pSysMem = @ptrCast(initial_data.ptr);
-
-    var buffer: ?*dx.ID3D11Buffer = null;
-    _ = self.device.CreateBuffer(&bd, &data, &buffer);
-
-    if (buffer) |buf| {
-        return buf;
-    } else {
-        return error.BufferFailedToCreate;
-    }
-}
-
-pub fn drawClippedTriangles(
-    self: *Dx11Backend,
-    texture: ?*anyopaque,
-    vtx: []const dvui.Vertex,
-    idx: []const u16,
-    clipr: ?dvui.Rect,
-) void {
-    self.setViewport();
-    if (self.render_target == null) {
-        self.createRenderTarget() catch |err| {
-            std.debug.print("render target could not be initialized: {any}\n", .{err});
-            return;
-        };
-    }
-
-    if (self.dx_options.vertex_shader == null or self.dx_options.pixel_shader == null) {
-        self.initShader() catch |err| {
-            std.debug.print("shaders could not be initialized: {any}\n", .{err});
-            return;
-        };
-    }
-
-    if (self.dx_options.vertex_layout == null) {
-        self.createInputLayout() catch |err| {
-            std.debug.print("Failed to create vertex layout: {any}\n", .{err});
-            return;
-        };
-    }
-
-    if (self.dx_options.sampler == null) {
-        self.createSampler() catch |err| {
-            std.debug.print("sampler could not be initialized: {any}\n", .{err});
-            return;
-        };
-    }
-
-    if (self.dx_options.rasterizer == null) {
-        self.createRasterizerState();
-    }
-
-    var stride: usize = @sizeOf(SimpleVertex);
-    var offset: usize = 0;
-    const converted_vtx = self.convertVertices(vtx, texture == null) catch @panic("OOM");
-    defer self.arena.free(converted_vtx);
-
-    self.dx_options.vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {
-        std.debug.print("no vertex buffer created\n", .{});
-        return;
-    };
-    self.dx_options.index_buffer = self.createBuffer(dx.D3D11_BIND_INDEX_BUFFER, u16, idx) catch {
-        std.debug.print("no index buffer created\n", .{});
-        return;
-    };
-
-    self.setViewport();
-
-    if (texture) |tex| self.recreateShaderView(tex);
-
-    var scissor_rect: ?RECT = std.mem.zeroes(RECT);
-    var nums: u32 = 1;
-    self.device_context.RSGetScissorRects(&nums, @ptrCast(&scissor_rect));
-
-    if (clipr) |cr| {
-        const new_clip: RECT = .{
-            .left = @intFromFloat(@round(cr.x)),
-            .top = @intFromFloat(@round(cr.y)),
-            .right = @intFromFloat(@round(cr.w)),
-            .bottom = @intFromFloat(@round(cr.h)),
-        };
-        self.device_context.RSSetScissorRects(nums, @ptrCast(&new_clip));
-    } else {
-        scissor_rect = null;
-    }
-
-    self.device_context.IASetVertexBuffers(0, 1, @ptrCast(&self.dx_options.vertex_buffer), @ptrCast(&stride), @ptrCast(&offset));
-    self.device_context.IASetIndexBuffer(self.dx_options.index_buffer, dxgic.DXGI_FORMAT.R16_UINT, 0);
-    self.device_context.IASetPrimitiveTopology(d3d.D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    self.device_context.OMSetRenderTargets(1, @ptrCast(&self.render_target), null);
-    self.device_context.VSSetShader(self.dx_options.vertex_shader, null, 0);
-    self.device_context.PSSetShader(self.dx_options.pixel_shader, null, 0);
-
-    self.device_context.PSSetShaderResources(0, 1, @ptrCast(&self.dx_options.texture_view));
-    self.device_context.PSSetSamplers(0, 1, @ptrCast(&self.dx_options.sampler));
-    self.device_context.DrawIndexed(@intCast(idx.len), 0, 0);
-    if (scissor_rect) |srect| self.device_context.RSSetScissorRects(nums, @ptrCast(&srect));
-}
-
-pub fn isExitRequested() bool {
-    var msg: ui.MSG = std.mem.zeroes(ui.MSG);
-
-    while (ui.PeekMessageA(&msg, null, 0, 0, ui.PM_REMOVE) != 0) {
-        _ = ui.TranslateMessage(&msg);
-        _ = ui.DispatchMessageW(&msg);
-        if (msg.message == ui.WM_QUIT) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
-    self.arena = arena;
-
-    var clear_color = [_]f32{ 1.0, 1.0, 1.0, 0.0 };
-    self.device_context.ClearRenderTargetView(self.render_target orelse return, @ptrCast((&clear_color).ptr));
-}
-
-pub fn end(self: *Dx11Backend) void {
-    _ = self.swap_chain.Present(if (self.options.vsync) 1 else 0, 0);
-
-    if (self.dx_options.vertex_buffer) |vb| {
-        _ = vb.IUnknown.Release();
-    }
-    self.dx_options.vertex_buffer = null;
-
-    if (self.dx_options.index_buffer) |ib| {
-        _ = ib.IUnknown.Release();
-    }
-    self.dx_options.index_buffer = null;
-}
-
-pub fn pixelSize(self: *Dx11Backend) dvui.Size {
-    const window_opt = self.window orelse return std.mem.zeroes(dvui.Size);
-    const dpi_scale: f32 = @floatFromInt(hi_dpi.GetDpiForWindow(window_opt.hwnd) / 96);
-    return dvui.Size{
-        .w = self.options.size.w * dpi_scale,
-        .h = self.options.size.h * dpi_scale,
-    };
-}
-
-pub fn windowSize(self: *Dx11Backend) dvui.Size {
-    return self.options.size;
-}
-
-pub fn contentScale(self: *Dx11Backend) f32 {
-    return self.initial_scale;
-}
-
-pub fn hasEvent(_: *Dx11Backend) bool {
-    return false;
-}
-
-pub fn backend(self: *Dx11Backend) dvui.Backend {
-    return dvui.Backend.init(self, @This());
-}
-
-pub fn nanoTime(self: *Dx11Backend) i128 {
-    _ = self;
-    return std.time.nanoTimestamp();
-}
-
-pub fn sleep(self: *Dx11Backend, ns: u64) void {
-    _ = self;
-    std.time.sleep(ns);
-}
-
-pub fn clipboardText(self: *Dx11Backend) ![]const u8 {
-    _ = self;
-    return "";
-}
-
-pub fn clipboardTextSet(self: *Dx11Backend, text: []const u8) !void {
-    _ = self;
-    _ = text;
-}
-
-pub fn openURL(self: *Dx11Backend, url: []const u8) !void {
-    _ = self;
-    _ = url;
-}
-
-pub fn refresh(self: *Dx11Backend) void {
-    _ = self;
-}
-
-pub fn addEvent(self: *Dx11Backend, window: *dvui.Window, key_event: KeyEvent) !bool {
-    _ = self;
-    const event = key_event.target;
-    const action = key_event.action;
-    switch (event) {
-        .keyboard_key => |ev| {
-            return window.addEventKey(.{
-                .code = ev,
-                .action = if (action == .up) .up else .down,
-                .mod = dvui.enums.Mod.none,
-            });
-        },
-        .mouse_key => |ev| {
-            return window.addEventMouseButton(ev, if (action == .up) .release else .press);
-        },
-        .mouse_event => |ev| {
-            return window.addEventMouseMotion(@floatFromInt(ev.x), @floatFromInt(ev.y));
-        },
-        .wheel_event => |ev| {
-            return window.addEventMouseWheel(@floatFromInt(ev));
-        },
-        .none => return false,
-    }
-}
-
-pub fn addAllEvents(self: *Dx11Backend, window: *dvui.Window) !bool {
-    _ = self;
-    _ = window;
-    return false;
-}
-
-pub fn setCursor(self: *Dx11Backend, new_cursor: dvui.enums.Cursor) void {
-    const converted_cursor = switch (new_cursor) {
-        .arrow => ui.IDC_ARROW,
-        .ibeam => ui.IDC_IBEAM,
-        .wait, .wait_arrow => ui.IDC_WAIT,
-        .crosshair => ui.IDC_CROSS,
-        .arrow_nw_se => ui.IDC_ARROW,
-        .arrow_ne_sw => ui.IDC_ARROW,
-        .arrow_w_e => ui.IDC_ARROW,
-        .arrow_n_s => ui.IDC_ARROW,
-        .arrow_all => ui.IDC_ARROW,
-        .bad => ui.IDC_NO,
-        .hand => ui.IDC_HAND,
-    };
-
-    _ = ui.LoadCursorW(self.window.?.instance, converted_cursor);
 }
 
 // ############ Utilities ############
