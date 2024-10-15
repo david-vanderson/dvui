@@ -11,9 +11,9 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 const vsync = true;
-const DEMO_VIEW = true;
 
 var show_dialog_outside_frame: bool = false;
+var g_backend: ?Backend = null;
 
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application
@@ -30,6 +30,7 @@ pub fn main() !void {
         .title = "DVUI SDL Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
     });
+    g_backend = backend;
     defer backend.deinit();
 
     // init dvui Window (maps onto a single OS window)
@@ -54,11 +55,13 @@ pub fn main() !void {
         _ = Backend.c.SDL_RenderClear(backend.renderer);
 
         // both dvui and SDL drawing
-        if (DEMO_VIEW) {
-            try dvui.DemoView.demoView();
-        } else {
-            try gui_frame(backend);
-        }
+        try dvui.DemoView.demoView(&.{
+            .{
+                .label = "SDL-N-DVUI",
+                .scale = 0.2,
+                .ui_fn = gui_frame
+            }
+        });
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
@@ -82,7 +85,9 @@ pub fn main() !void {
     }
 }
 
-fn gui_frame(backend: Backend) !void {
+fn gui_frame() !void {
+    const backend = g_backend orelse return;
+
     {
         var m = try dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();
