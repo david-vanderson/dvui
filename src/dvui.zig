@@ -25,6 +25,7 @@ pub const WidgetData = @import("WidgetData.zig");
 pub const entypo = @import("icons/entypo.zig");
 pub const AnimateWidget = @import("widgets/AnimateWidget.zig");
 pub const BoxWidget = @import("widgets/BoxWidget.zig");
+pub const FlexBoxWidget = @import("widgets/FlexBoxWidget.zig");
 pub const ReorderWidget = @import("widgets/ReorderWidget.zig");
 pub const Reorderable = ReorderWidget.Reorderable;
 pub const ButtonWidget = @import("widgets/ButtonWidget.zig");
@@ -4686,6 +4687,14 @@ pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options)
 pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena().create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, true, opts);
+    try ret.install();
+    try ret.drawBackground();
+    return ret;
+}
+
+pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) !*FlexBoxWidget {
+    var ret = try currentWindow().arena().create(FlexBoxWidget);
+    ret.* = FlexBoxWidget.init(src, init_opts, opts);
     try ret.install();
     try ret.drawBackground();
     return ret;
