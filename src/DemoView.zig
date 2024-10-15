@@ -6,7 +6,7 @@ const demo_box_size = 120; // size of demo image, obviously
 const demo_pad      = 5;   // space between demos
 
 const DemoFn = *const fn() anyerror!void;
-const Demo = struct{
+pub const Demo = struct{
     scale: f32,
     ui_fn: DemoFn,
     label: [] const u8
@@ -128,7 +128,7 @@ fn demoButton(src: std.builtin.SourceLocation, demo: Demo) !bool {
 }
 
 var demo_active: ?Demo = null;
-pub fn demoView() !void {
+pub fn demoView(backend_demos: []const Demo) !void {
 
     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
@@ -167,7 +167,9 @@ pub fn demoView() !void {
         );
         defer demo_area.deinit();
 
-        const demos = [_]Demo{
+        const demo_area_space = @max(demo_area.childRect.w, demo_pad*2 + 1);
+
+        try layoutDemos(demo_area_space, &[_]Demo{
             .{ .ui_fn = dvui.Examples.incrementor,        .scale = 1.150, .label = "Incrementor" },
             .{ .ui_fn = dvui.Examples.calculator,         .scale = 0.600, .label = "Calculator" },
 
@@ -193,33 +195,58 @@ pub fn demoView() !void {
             // TODO: toasts requires a window to point at ...
             // TODO: "auto-widget from struct" requires factoring into function
 
-        };
-        const demo_area_space = @max(demo_area.childRect.w, demo_pad*2 + 1);
-        const demos_per_row: usize = @intFromFloat(@floor((demo_area_space - demo_pad*2) / (demo_box_size + 2*demo_pad)));
-        const demo_row_full_size: f32 = @floatFromInt(demo_pad*2 + demos_per_row * (demo_box_size + 2*demo_pad));
+        });
 
-        var demo_i: usize = 0;
-        for (0..(1 + demos.len / @max(1, demos_per_row))) |row_i| {
-            var demo_row = try dvui.box(
+        {
+            var b = try dvui.box(
                 @src(),
-                .horizontal,
+                .vertical,
                 .{
-                    .id_extra = row_i,
-                    .gravity_x = 0.5,
-                    .min_size_content = .{ .w = demo_row_full_size }
+                    .expand = .both,
                 }
             );
-            defer demo_row.deinit();
+            defer b.deinit();
 
-            for (0..demos_per_row) |_| {
-                if (demo_i >= demos.len) continue;
-
-                const demo = demos[demo_i];
-                defer demo_i += 1;
-
-                if (try demoButton(@src(), demo)) {
-                    demo_active = demo;
+            try dvui.labelNoFmt(
+                @src(),
+                "Platform-specific demos",
+                .{
+                    .margin = .{ .x = 4, .y = 12, .w = 4 },
+                    .font_style = .title_1,
+                    .gravity_x = 0.5
                 }
+            );
+            try layoutDemos(demo_area_space, backend_demos);
+        }
+    }
+}
+
+fn layoutDemos(width: f32, demos: []const Demo) !void {
+    const demo_area_space = width;
+    const demos_per_row: usize = @intFromFloat(@floor((demo_area_space - demo_pad*2) / (demo_box_size + 2*demo_pad)));
+    const demo_row_full_size: f32 = @floatFromInt(demo_pad*2 + demos_per_row * (demo_box_size + 2*demo_pad));
+
+    var demo_i: usize = 0;
+    for (0..(1 + demos.len / @max(1, demos_per_row))) |row_i| {
+        var demo_row = try dvui.box(
+            @src(),
+            .horizontal,
+            .{
+                .id_extra = row_i,
+                .gravity_x = 0.5,
+                .min_size_content = .{ .w = demo_row_full_size }
+            }
+        );
+        defer demo_row.deinit();
+
+        for (0..demos_per_row) |_| {
+            if (demo_i >= demos.len) continue;
+
+            const demo = demos[demo_i];
+            defer demo_i += 1;
+
+            if (try demoButton(@src(), demo)) {
+                demo_active = demo;
             }
         }
     }
