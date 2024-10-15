@@ -54,7 +54,7 @@ pub fn main() !void {
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
         _ = Backend.c.SDL_RenderClear(backend.renderer);
 
-        // both dvui and SDL drawing
+        // The demos we pass in here show up under "Platform-specific demos"
         try dvui.DemoView.demoView(&.{
             .{
                 .label = "SDL-N-DVUI",
@@ -85,6 +85,7 @@ pub fn main() !void {
     }
 }
 
+// both dvui and SDL drawing
 fn gui_frame() !void {
     const backend = g_backend orelse return;
 
