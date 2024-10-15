@@ -62,9 +62,8 @@ initial_scale: f32 = 1.0,
 ///   See: InitOptions
 options: InitOptions,
 
-// TODO: Figure out cursor situation
-// cursor_last: dvui.enums.Cursor = .arrow,
-// something dx cursor
+/// The cursor that has been set
+cursor_last: dvui.enums.Cursor = .arrow,
 
 /// The arena allocator (usually)
 arena: std.mem.Allocator = undefined,
@@ -126,6 +125,7 @@ const DirectxOptions = struct {
     blend_state: ?*dx.ID3D11BlendState = null,
 
     pub fn deinit(self: DirectxOptions) void {
+        // is there really no way to express this better?
         if (self.vertex_shader) |vs| {
             _ = vs.IUnknown.Release();
         }
@@ -331,7 +331,6 @@ pub fn deinit(self: Dx11Backend) void {
 /// Resizes the SwapChain based on the new window size
 /// This is only useful if you have your own directx stuff to manage
 pub fn handleSwapChainResizing(self: *Dx11Backend, width: c_uint, height: c_uint) !void {
-    std.debug.print("handleSwapChainResizing {d} {d}\n", .{ width, height });
     self.cleanupRenderTarget();
     _ = self.swap_chain.ResizeBuffers(0, width, height, dxgic.DXGI_FORMAT_UNKNOWN, 0);
     return self.createRenderTarget();
@@ -404,13 +403,13 @@ fn initShader(self: *Dx11Backend) !void {
     );
     if (!isOk(ps_res)) {
         if (error_message == null) {
-            std.debug.print("hresult of error message was skewed: {x}\n", .{compile_shader});
+            log.err("hresult of error message was skewed: {x}", .{compile_shader});
             return error.PixelShaderInitFailed;
         }
 
         defer _ = error_message.?.IUnknown.Release();
         const as_str: [*:0]const u8 = @ptrCast(error_message.?.vtable.GetBufferPointer(error_message.?));
-        std.debug.print("pixel shader compilation failed with: {s}\n", .{as_str});
+        log.err("pixel shader compilation failed with: {s}", .{as_str});
         return error.PixelShaderInitFailed;
     }
 
@@ -439,16 +438,19 @@ fn initShader(self: *Dx11Backend) !void {
     }
 }
 
-fn createRasterizerState(self: *Dx11Backend) void {
+fn createRasterizerState(self: *Dx11Backend) !void {
     var raster_desc = std.mem.zeroes(dx.D3D11_RASTERIZER_DESC);
     raster_desc.FillMode = dx.D3D11_FILL_MODE.SOLID;
     raster_desc.CullMode = dx.D3D11_CULL_BACK;
     raster_desc.FrontCounterClockwise = 1;
     raster_desc.DepthClipEnable = 0;
 
-    // TODO: Create better error handling
-    _ = self.device.CreateRasterizerState(&raster_desc, &self.dx_options.rasterizer);
-    _ = self.device_context.RSSetState(self.dx_options.rasterizer);
+    const rasterizer_res = self.device.CreateRasterizerState(&raster_desc, &self.dx_options.rasterizer);
+    if (!isOk(rasterizer_res)) {
+        return error.RasterizerInitFailed;
+    }
+
+    self.device_context.RSSetState(self.dx_options.rasterizer);
 }
 
 fn createRenderTarget(self: *Dx11Backend) !void {
@@ -509,6 +511,10 @@ fn recreateShaderView(self: *Dx11Backend, texture: *anyopaque) void {
         },
     };
 
+    if (self.dx_options.texture_view) |tv| {
+        _ = tv.IUnknown.Release();
+    }
+
     const rv_result = self.device.CreateShaderResourceView(
         &tex.ID3D11Resource,
         &rvd,
@@ -516,7 +522,7 @@ fn recreateShaderView(self: *Dx11Backend, texture: *anyopaque) void {
     );
 
     if (!isOk(rv_result)) {
-        std.debug.print("Texture View creation failed\n", .{});
+        log.err("Texture View creation failed", .{});
         @panic("couldn't create texture view");
     }
 }
@@ -545,7 +551,7 @@ fn createSampler(self: *Dx11Backend) !void {
     const sampler = self.device.CreateSamplerState(&samp_desc, &self.dx_options.sampler);
 
     if (!isOk(sampler)) {
-        std.debug.print("sampler state could not be iniitialized\n", .{});
+        log.err("sampler state could not be iniitialized", .{});
         return error.SamplerStateUninitialized;
     }
 }
@@ -603,7 +609,7 @@ pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32,
     );
 
     if (!isOk(tex_creation)) {
-        std.debug.print("Texture creation failed.\n", .{});
+        log.err("Texture creation failed.", .{});
         @panic("couldn't create texture");
     }
 
@@ -626,34 +632,36 @@ pub fn drawClippedTriangles(
     self.setViewport();
     if (self.render_target == null) {
         self.createRenderTarget() catch |err| {
-            std.debug.print("render target could not be initialized: {any}\n", .{err});
+            log.err("render target could not be initialized: {}", .{err});
             return;
         };
     }
 
     if (self.dx_options.vertex_shader == null or self.dx_options.pixel_shader == null) {
         self.initShader() catch |err| {
-            std.debug.print("shaders could not be initialized: {any}\n", .{err});
+            log.err("shaders could not be initialized: {}", .{err});
             return;
         };
     }
 
     if (self.dx_options.vertex_layout == null) {
         self.createInputLayout() catch |err| {
-            std.debug.print("Failed to create vertex layout: {any}\n", .{err});
+            log.err("Failed to create vertex layout: {}", .{err});
             return;
         };
     }
 
     if (self.dx_options.sampler == null) {
         self.createSampler() catch |err| {
-            std.debug.print("sampler could not be initialized: {any}\n", .{err});
+            log.err("sampler could not be initialized: {}", .{err});
             return;
         };
     }
 
     if (self.dx_options.rasterizer == null) {
-        self.createRasterizerState();
+        self.createRasterizerState() catch |err| {
+            log.err("Creating rasterizer failed: {}", .{err});
+        };
     }
 
     var stride: usize = @sizeOf(SimpleVertex);
@@ -662,11 +670,11 @@ pub fn drawClippedTriangles(
     defer self.arena.free(converted_vtx);
 
     self.dx_options.vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {
-        std.debug.print("no vertex buffer created\n", .{});
+        log.err("no vertex buffer created", .{});
         return;
     };
     self.dx_options.index_buffer = self.createBuffer(dx.D3D11_BIND_INDEX_BUFFER, u16, idx) catch {
-        std.debug.print("no index buffer created\n", .{});
+        log.err("no index buffer created", .{});
         return;
     };
 
@@ -706,7 +714,6 @@ pub fn drawClippedTriangles(
 
 pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
     self.arena = arena;
-
     var clear_color = [_]f32{ 1.0, 1.0, 1.0, 0.0 };
     self.device_context.ClearRenderTargetView(self.render_target orelse return, @ptrCast((&clear_color).ptr));
 }
@@ -761,13 +768,57 @@ pub fn sleep(self: *Dx11Backend, ns: u64) void {
 }
 
 pub fn clipboardText(self: *Dx11Backend) ![]const u8 {
-    _ = self;
-    return "";
+    const data_x = win.system.data_exchange;
+    const opened = data_x.OpenClipboard(self.window.?.hwnd) == win.zig.TRUE;
+    defer _ = data_x.CloseClipboard();
+    if (!opened) {
+        return "";
+    }
+
+    // istg, windows. why. why utf16.
+    const data_handle = data_x.GetClipboardData(@intFromEnum(win.system.system_services.CF_UNICODETEXT)) orelse return "";
+
+    var res: []u8 = undefined;
+    {
+        const handle: isize = @intCast(@intFromPtr(data_handle));
+        const data: [*:0]u16 = @ptrCast(@alignCast(win.system.memory.GlobalLock(handle) orelse return ""));
+        defer _ = win.system.memory.GlobalUnlock(handle);
+
+        // we want this to be a sane format.
+        const len = std.mem.indexOfSentinel(u16, 0, data);
+        res = std.unicode.utf16leToUtf8Alloc(self.arena, data[0..len]) catch return error.OutOfMemory;
+    }
+
+    return res;
 }
 
 pub fn clipboardTextSet(self: *Dx11Backend, text: []const u8) !void {
-    _ = self;
-    _ = text;
+    const data_x = win.system.data_exchange;
+    const memory = win.system.memory;
+    const opened = data_x.OpenClipboard(self.window.?.hwnd) == win.zig.TRUE;
+    defer _ = data_x.CloseClipboard();
+    if (!opened) {
+        return;
+    }
+
+    const handle = memory.GlobalAlloc(memory.GMEM_MOVEABLE, text.len * @sizeOf(u16) + 1); // don't forget the nullbyte
+    if (handle != 0x0) {
+        const as_utf16 = std.unicode.utf8ToUtf16LeAlloc(self.arena, text) catch return error.OutOfMemory;
+        defer self.arena.free(as_utf16);
+
+        const data: [*:0]u16 = @ptrCast(@alignCast(win.system.memory.GlobalLock(handle) orelse return));
+        defer _ = win.system.memory.GlobalUnlock(handle);
+
+        for (as_utf16, 0..) |wide, i| {
+            data[i] = wide;
+        }
+    } else {
+        return error.OutOfMemory;
+    }
+
+    _ = data_x.EmptyClipboard();
+    const handle_usize: usize = @intCast(handle);
+    _ = data_x.SetClipboardData(@intFromEnum(win.system.system_services.CF_UNICODETEXT), @ptrFromInt(handle_usize));
 }
 
 pub fn openURL(self: *Dx11Backend, url: []const u8) !void {
@@ -829,7 +880,7 @@ pub fn setCursor(self: *Dx11Backend, new_cursor: dvui.enums.Cursor) void {
 }
 
 // ############ Event Handling via wnd proc ############
-fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(w.WINAPI) w.LRESULT {
+pub fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(w.WINAPI) w.LRESULT {
     const instance = inst orelse return ui.DefWindowProcW(hwnd, umsg, wparam, lparam);
 
     switch (umsg) {
@@ -1068,7 +1119,7 @@ fn createWindow(instance: HINSTANCE, options: InitOptions) !WindowOptions {
         instance,
         null,
     ) orelse {
-        std.debug.print("This didn't do anything. Error {}\n", .{win.foundation.GetLastError()});
+        log.err("Failed to create window: {}\nQuitting...", .{win.foundation.GetLastError()});
         std.process.exit(1);
     };
 

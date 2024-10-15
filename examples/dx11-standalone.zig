@@ -49,9 +49,17 @@ pub export fn main(
 
     Backend.setWindow(&win);
 
+    var iterations: usize = 1_000;
     main_loop: while (true) {
         if (Backend.isExitRequested()) {
             break :main_loop;
+        }
+
+        if (iterations == 0) {
+            break :main_loop;
+        } else {
+            std.debug.print("{d}\n", .{iterations});
+            iterations -= 1;
         }
 
         // beginWait coordinates with waitTime below to run frames only when needed
