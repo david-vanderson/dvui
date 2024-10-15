@@ -229,6 +229,7 @@ Each widget has the following options that can be changed through the Options st
 - border (on each side)
 - padding (space inside border)
 - min_size_content (margin/border/padding added to get min size)
+- max_size_content (margin/border/padding added to get maximum min size)
 - background (fills space inside border with background color)
 - corner_radius (for each corner)
 - colors (either RGBA value or named)

@@ -257,6 +257,7 @@ pub fn rotationGet(self: *const Options) f32 {
 // (container with label) the container uses:
 // - rect
 // - min_size_content
+// - max_size_content
 // - margin
 // - border
 // - background
@@ -274,6 +275,7 @@ pub fn strip(self: *const Options) Options {
         .name = null,
         .rect = null,
         .min_size_content = null,
+        .max_size_content = null,
         .expand = null,
         .gravity_x = null,
         .gravity_y = null,
