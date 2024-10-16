@@ -669,10 +669,21 @@ pub fn drawClippedTriangles(
     const converted_vtx = self.convertVertices(vtx, texture == null) catch @panic("OOM");
     defer self.arena.free(converted_vtx);
 
+    // Do yourself a favour and don't touch it.
+    // End() isn't being called all the time, so it's kind of futile.
+    if (self.dx_options.vertex_buffer) |vb| {
+        _ = vb.IUnknown.Release();
+    }
     self.dx_options.vertex_buffer = self.createBuffer(dx.D3D11_BIND_VERTEX_BUFFER, SimpleVertex, converted_vtx) catch {
         log.err("no vertex buffer created", .{});
         return;
     };
+
+    // Do yourself a favour and don't touch it.
+    // End() isn't being called all the time, so it's kind of futile.
+    if (self.dx_options.index_buffer) |ib| {
+        _ = ib.IUnknown.Release();
+    }
     self.dx_options.index_buffer = self.createBuffer(dx.D3D11_BIND_INDEX_BUFFER, u16, idx) catch {
         log.err("no index buffer created", .{});
         return;
@@ -720,16 +731,6 @@ pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
 
 pub fn end(self: *Dx11Backend) void {
     _ = self.swap_chain.Present(if (self.options.vsync) 1 else 0, 0);
-
-    if (self.dx_options.vertex_buffer) |vb| {
-        _ = vb.IUnknown.Release();
-    }
-    self.dx_options.vertex_buffer = null;
-
-    if (self.dx_options.index_buffer) |ib| {
-        _ = ib.IUnknown.Release();
-    }
-    self.dx_options.index_buffer = null;
 }
 
 pub fn pixelSize(self: *Dx11Backend) dvui.Size {
