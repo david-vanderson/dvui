@@ -109,6 +109,8 @@ pub fn build(b: *std.Build) !void {
 
     const docs_step = b.step("docs", "Build and install the documentation");
     docs_step.dependOn(&install_docs.step);
+
+    b.getInstallStep().dependOn(docs_step);
 }
 
 const Backend = enum {
