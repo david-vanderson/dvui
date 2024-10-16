@@ -44,7 +44,7 @@ device_context: *dx.ID3D11DeviceContext,
 swap_chain: *dxgi.IDXGISwapChain,
 
 /// All the options that are windows window specific
-window: ?WindowOptions = null,
+window: WindowOptions,
 /// The render target
 render_target: ?*dx.ID3D11RenderTargetView = null,
 /// The directx options. used internally.
@@ -89,25 +89,31 @@ const KeyEvent = struct {
 };
 
 const WindowOptions = struct {
+    /// Whether the Dx11 Backend shall manage the window resources.
+    is_window_owned: bool = false,
     /// The general allocator used for the window initialization code
-    alloc: std.mem.Allocator,
+    alloc: ?std.mem.Allocator = null,
     /// The instance of the program
-    instance: HINSTANCE,
+    instance: ?HINSTANCE = null,
     /// The instance of the Window
     hwnd: win.foundation.HWND,
     /// The window DC (= Device Context)
-    hwnd_dc: gdi.HDC,
+    hwnd_dc: ?gdi.HDC = null,
 
     /// The title as *allocated* utf16 string.
     /// Thank you windows for doing this... still.
     /// Long live UTF-8 !!!!!
-    utf16_wnd_title: [:0]u16,
+    utf16_wnd_title: ?[:0]u16 = null,
 
     pub fn deinit(self: WindowOptions) void {
-        _ = gdi.ReleaseDC(self.hwnd, self.hwnd_dc);
-        _ = ui.UnregisterClassW(self.utf16_wnd_title, self.instance);
-        _ = ui.DestroyWindow(self.hwnd);
-        self.alloc.free(self.utf16_wnd_title);
+        if (!self.is_window_owned) return;
+
+        if (self.alloc) |alloc| {
+            _ = gdi.ReleaseDC(self.hwnd, self.hwnd_dc);
+            _ = ui.UnregisterClassW(self.utf16_wnd_title.?, self.instance.?);
+            _ = ui.DestroyWindow(self.hwnd);
+            alloc.free(self.utf16_wnd_title.?);
+        }
     }
 };
 
@@ -268,12 +274,15 @@ pub fn setBackend(ins: ?*Dx11Backend) void {
 
 /// Inits a new instance of the Dx11Backend
 /// The caller has to manage their DirectX device, swapchain and device context.
-pub fn init(options: InitOptions, dx_options: Directx11Options) !Dx11Backend {
+pub fn init(options: InitOptions, dx_options: Directx11Options, hwnd: HWND) !Dx11Backend {
     return Dx11Backend{
         .device = dx_options.device,
         .swap_chain = dx_options.swap_chain,
         .device_context = dx_options.device_context,
         .options = options,
+        .window = .{
+            .hwnd = hwnd,
+        },
     };
 }
 
@@ -311,8 +320,8 @@ pub fn initWindow(instance: HINSTANCE, cmd_show: INT, options: InitOptions) !Dx1
 
 /// Cleanup routine
 pub fn deinit(self: Dx11Backend) void {
-    if (self.window) |instance| {
-        instance.deinit();
+    if (self.window.is_window_owned) {
+        self.window.deinit();
         _ = self.device.IUnknown.Release();
         _ = self.device_context.IUnknown.Release();
         _ = self.swap_chain.IUnknown.Release();
@@ -631,7 +640,6 @@ pub fn drawClippedTriangles(
 ) void {
     self.setViewport();
 
-    std.debug.print("in draw clipped...\n", .{});
     if (self.render_target == null) {
         self.createRenderTarget() catch |err| {
             log.err("render target could not be initialized: {}", .{err});
@@ -736,8 +744,7 @@ pub fn end(self: *Dx11Backend) void {
 }
 
 pub fn pixelSize(self: *Dx11Backend) dvui.Size {
-    const window_opt = self.window orelse return std.mem.zeroes(dvui.Size);
-    const dpi_scale: f32 = @floatFromInt(hi_dpi.GetDpiForWindow(window_opt.hwnd) / 96);
+    const dpi_scale: f32 = @floatFromInt(hi_dpi.GetDpiForWindow(self.window.hwnd) / 96);
     return dvui.Size{
         .w = self.options.size.w * dpi_scale,
         .h = self.options.size.h * dpi_scale,
@@ -772,7 +779,7 @@ pub fn sleep(self: *Dx11Backend, ns: u64) void {
 
 pub fn clipboardText(self: *Dx11Backend) ![]const u8 {
     const data_x = win.system.data_exchange;
-    const opened = data_x.OpenClipboard(self.window.?.hwnd) == win.zig.TRUE;
+    const opened = data_x.OpenClipboard(self.window.hwnd) == win.zig.TRUE;
     defer _ = data_x.CloseClipboard();
     if (!opened) {
         return "";
@@ -798,7 +805,7 @@ pub fn clipboardText(self: *Dx11Backend) ![]const u8 {
 pub fn clipboardTextSet(self: *Dx11Backend, text: []const u8) !void {
     const data_x = win.system.data_exchange;
     const memory = win.system.memory;
-    const opened = data_x.OpenClipboard(self.window.?.hwnd) == win.zig.TRUE;
+    const opened = data_x.OpenClipboard(self.window.hwnd) == win.zig.TRUE;
     defer _ = data_x.CloseClipboard();
     if (!opened) {
         return;
@@ -865,6 +872,7 @@ pub fn addAllEvents(self: *Dx11Backend, window: *dvui.Window) !bool {
 }
 
 pub fn setCursor(self: *Dx11Backend, new_cursor: dvui.enums.Cursor) void {
+    if (self.window.instance == null) return;
     const converted_cursor = switch (new_cursor) {
         .arrow => ui.IDC_ARROW,
         .ibeam => ui.IDC_IBEAM,
@@ -879,7 +887,7 @@ pub fn setCursor(self: *Dx11Backend, new_cursor: dvui.enums.Cursor) void {
         .hand => ui.IDC_HAND,
     };
 
-    _ = ui.LoadCursorW(self.window.?.instance, converted_cursor);
+    _ = ui.LoadCursorW(self.window.instance.?, converted_cursor);
 }
 
 // ############ Event Handling via wnd proc ############
@@ -919,7 +927,7 @@ pub fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callc
                 log.err("invalid key found: {}", .{err});
             }
         },
-        ui.WM_LBUTTONDOWN => {
+        ui.WM_LBUTTONDOWN, ui.WM_LBUTTONDBLCLK => {
             const lbutton = dvui.enums.Button.left;
             if (wind) |window| {
                 const dk = DvuiKey{ .mouse_key = lbutton };
@@ -1142,6 +1150,7 @@ fn createWindow(instance: HINSTANCE, options: InitOptions) !WindowOptions {
     _ = ui.SetWindowPos(wnd, null, wnd_size.left, wnd_size.top, wnd_size.right, wnd_size.bottom, ui.SWP_NOCOPYBITS);
 
     return WindowOptions{
+        .is_window_owned = true,
         .alloc = options.allocator,
         .instance = instance,
         .hwnd = wnd,

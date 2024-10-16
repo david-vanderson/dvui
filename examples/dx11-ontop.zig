@@ -68,7 +68,7 @@ pub export fn main(
 
     if (createDeviceD3D(wnd)) |options| {
         log.info("Successfully created device.", .{});
-        var backend = Backend.init(init_options, options) catch return 1;
+        var backend = Backend.init(init_options, options, wnd) catch return 1;
         defer backend.deinit();
 
         // IMPORTANT! We need to have the instance of the backend available statically.
