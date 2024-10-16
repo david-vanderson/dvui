@@ -3,7 +3,7 @@ const dvui = @import("dvui");
 comptime {
     std.debug.assert(dvui.backend_kind == .dx11);
 }
-const Dx11Backend = dvui.backend;
+const Backend = dvui.backend;
 
 const zwin = @import("zigwin32");
 const ui = zwin.ui.windows_and_messaging;
@@ -57,7 +57,7 @@ pub export fn main(
     defer _ = UnregisterClassW(wnd_title, instance);
     defer _ = DestroyWindow(wnd);
 
-    const init_options = Dx11Backend.InitOptions{
+    const init_options = Backend.InitOptions{
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
@@ -68,103 +68,78 @@ pub export fn main(
 
     if (createDeviceD3D(wnd)) |options| {
         log.info("Successfully created device.", .{});
-        var backend = Dx11Backend.init(init_options, options) catch return 1;
+        var backend = Backend.init(init_options, options) catch return 1;
         defer backend.deinit();
+
+        // IMPORTANT! We need to have the instance of the backend available statically.
+        Backend.setBackend(&backend);
+
         log.info("Dx11 backend also init.", .{});
 
         _ = ShowWindow(wnd, cmd_show);
         _ = UpdateWindow(wnd);
 
-        var rect = std.mem.zeroes(zwin.foundation.RECT);
-        _ = ui.GetWindowRect(wnd, &rect);
-
-        backend.setDimensions(rect);
-        backend.setViewport(); // for now: fixed values :)
-
         var win = dvui.Window.init(@src(), gpa, backend.backend(), .{}) catch return 1;
-        log.info("dvui window also init.", .{});
         defer win.deinit();
 
-        var msg: ui.MSG = std.mem.zeroes(ui.MSG);
-        const PM_REMOVE = 0x0001;
+        // IMPORTANT! The backend unfortunately also needs an instance of the dvui window ^^
+        Backend.setWindow(&win);
+
+        log.info("dvui window also init.", .{});
+
         main_loop: while (true) {
-            while (PeekMessageA(&msg, null, 0, 0, PM_REMOVE) != 0) {
-                _ = TranslateMessage(&msg);
-                _ = DispatchMessageW(&msg);
-                if (msg.message == ui.WM_QUIT) {
-                    break :main_loop;
-                }
+            // This handles the main windows events
+            if (Backend.isExitRequested()) {
+                break :main_loop;
             }
 
-            if (resize_width != 0 and resize_height != 0) {
-                backend.handleSwapChainResizing(resize_width, resize_height) catch {
-                    log.err("Failed to handle swap chain resizing...", .{});
-                    continue;
-                };
-            }
+            // beginWait coordinates with waitTime below to run frames only when needed
+            const nstime = win.beginWait(backend.hasEvent());
 
-            rect = std.mem.zeroes(zwin.foundation.RECT);
-            _ = ui.GetWindowRect(wnd, &rect);
-
-            backend.setDimensions(rect);
-
-            win.begin(std.time.nanoTimestamp()) catch {
+            // marks the beginning of a frame for dvui, can call dvui functions after this
+            win.begin(nstime) catch {
                 log.err("win.begin() failed.", .{});
                 return 1;
             };
 
-            // log.info("post begin", .{});
-
+            // draw some fancy dvui stuff
             dvui_floating_stuff() catch {
                 log.err("Oh no something went horribly wrong!", .{});
             };
-            // var pixel_data = [_]u8{ 0xff, 0xff, 0x00, 0xff, 0x00, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0xff, 0xff, 0x00, 0xff, 0xff };
-            // const tex = dvui.textureCreate((&pixel_data).ptr, 2, 2, .nearest);
-            // dvui.textureDestroyLater(tex);
 
-            // var frame_box = dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 100, .h = 100 } }) catch continue;
-            // dvui.renderTexture(tex, frame_box.data().contentRectScale(), 0, .{}) catch {
-            //     continue;
-            // };
-            // frame_box.deinit();
-
-            // _ = dvui.button(@src(), "button", .{}, .{}) catch {};
-
-            //  {
-            // const vtx = [_]dvui.Vertex{
-            //     .{ .pos = .{ .x = 100, .y = 100 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
-            //     .{ .pos = .{ .x = 200, .y = 100 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
-            //     .{ .pos = .{ .x = 200, .y = 200 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
-            // };
-            // const idx = [_]u16{ 0, 2, 1 };
-            // backend.drawClippedTriangles(null, &vtx, &idx, .{ .x = 0, .y = 0, .w = 400, .h = 400 });
-            //  }
-
-            //  {
-            // const vtx = [_]dvui.Vertex{
-            //     .{ .pos = .{ .x = 300, .y = 300 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
-            //     .{ .pos = .{ .x = 400, .y = 300 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
-            //     .{ .pos = .{ .x = 400, .y = 400 }, .col = dvui.Color.white, .uv = .{ 0, 0 } },
-            // };
-            // const idx = [_]u16{ 0, 1, 2 };
-            // backend.drawClippedTriangles(null, &vtx, &idx, .{ .x = 0, .y = 0, .w = 400, .h = 400 });
-            //  }
-
-            // log.info("post dvui_floating_stuff", .{});
-
-            _ = win.end(.{}) catch {
-                log.err("win.end() failed.", .{});
-                return 1;
-            };
+            // marks end of dvui frame, don't call dvui functions after this
+            // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
+            _ = win.end(.{}) catch continue;
         }
     } else {
-        log.err("createDevice rip", .{});
+        log.err("createDevice was not successful", .{});
         return 1;
     }
 
     return 0;
 }
 
+fn windowProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(WINAPI) w.LRESULT {
+    switch (umsg) {
+        ui.WM_KEYDOWN, ui.WM_SYSKEYDOWN => {
+            switch (wparam) {
+                @intFromEnum(zwin.ui.input.keyboard_and_mouse.VK_ESCAPE) => { //SHIFT+ESC = EXIT
+                    if (GetAsyncKeyState(@intFromEnum(zwin.ui.input.keyboard_and_mouse.VK_LSHIFT)) & 0x01 == 1) {
+                        ui.PostQuitMessage(0);
+                        return 0;
+                    }
+                },
+                else => {},
+            }
+        },
+        else => {},
+    }
+
+    // Call the wndProc from the Dx11 Backend directly, it handles all sorts of mouse events!
+    return Backend.wndProc(hwnd, umsg, wparam, lparam);
+}
+
+// boilerplate, no need to look at this ugly mess...
 fn createWindow(hInstance: HINSTANCE) void {
     const wnd_class: WNDCLASSEX = .{
         .cbSize = @sizeOf(WNDCLASSEX),
@@ -180,9 +155,9 @@ fn createWindow(hInstance: HINSTANCE) void {
         .lpszClassName = @ptrCast(wnd_title),
         .hIconSm = null,
     };
-    std.debug.print("register class: {x}\n", .{ui.RegisterClassExW(&wnd_class)});
+    _ = ui.RegisterClassExW(&wnd_class);
     var overlap = ui.WS_OVERLAPPEDWINDOW;
-    std.debug.print("adjust window rect: {x}\n", .{ui.AdjustWindowRectEx(@ptrCast(&wnd_size), overlap, w.FALSE, .{ .APPWINDOW = 1, .WINDOWEDGE = 1 })});
+    _ = ui.AdjustWindowRectEx(@ptrCast(&wnd_size), overlap, w.FALSE, .{ .APPWINDOW = 1, .WINDOWEDGE = 1 });
     overlap.VISIBLE = 1;
     wnd = ui.CreateWindowExW(.{ .APPWINDOW = 1, .WINDOWEDGE = 1 }, wnd_title, wnd_title, overlap, ui.CW_USEDEFAULT, ui.CW_USEDEFAULT, 0, 0, null, null, hInstance, null) orelse {
         std.debug.print("This didn't do anything\n", .{});
@@ -200,7 +175,7 @@ fn createWindow(hInstance: HINSTANCE) void {
     _ = ui.SetWindowPos(wnd, null, wnd_size.left, wnd_size.top, wnd_size.right, wnd_size.bottom, ui.SWP_NOCOPYBITS);
 }
 
-fn createDeviceD3D(hWnd: HWND) ?Dx11Backend.Directx11Options {
+fn createDeviceD3D(hWnd: HWND) ?Backend.Directx11Options {
     var rc: RECT = undefined;
     _ = GetClientRect(hWnd, &rc);
 
@@ -266,44 +241,11 @@ fn createDeviceD3D(hWnd: HWND) ?Dx11Backend.Directx11Options {
     if (res != zwin.foundation.S_OK)
         return null;
 
-    return Dx11Backend.Directx11Options{
+    return Backend.Directx11Options{
         .device = device.?,
         .device_context = device_context.?,
         .swap_chain = swap_chain.?,
     };
-}
-
-fn windowProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(WINAPI) w.LRESULT {
-    switch (umsg) {
-        ui.WM_DESTROY => {
-            ui.PostQuitMessage(0);
-            return 0;
-        },
-        ui.WM_PAINT => {
-            var ps: zwin.graphics.gdi.PAINTSTRUCT = undefined;
-            const hdc: HDC = BeginPaint(hwnd, &ps) orelse undefined;
-            _ = FillRect(hdc, @ptrCast(&ps.rcPaint), @ptrFromInt(@intFromEnum(ui.COLOR_WINDOW) + 1));
-            _ = EndPaint(hwnd, &ps);
-        },
-        ui.WM_SIZE => {
-            resize_width = loword(lparam);
-            resize_height = hiword(lparam);
-        },
-        ui.WM_KEYDOWN, ui.WM_SYSKEYDOWN => {
-            switch (wparam) {
-                @intFromEnum(zwin.ui.input.keyboard_and_mouse.VK_ESCAPE) => { //SHIFT+ESC = EXIT
-                    if (GetAsyncKeyState(@intFromEnum(zwin.ui.input.keyboard_and_mouse.VK_LSHIFT)) & 0x01 == 1) {
-                        ui.PostQuitMessage(0);
-                        return 0;
-                    }
-                },
-                else => {},
-            }
-        },
-        else => _ = .{},
-    }
-
-    return ui.DefWindowProcW(hwnd, umsg, wparam, lparam);
 }
 
 fn dvui_floating_stuff() !void {

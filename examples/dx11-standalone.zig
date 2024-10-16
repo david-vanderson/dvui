@@ -50,6 +50,7 @@ pub export fn main(
     Backend.setWindow(&win);
 
     main_loop: while (true) {
+        // This handles the main windows events
         if (Backend.isExitRequested()) {
             break :main_loop;
         }
@@ -60,10 +61,6 @@ pub export fn main(
         // marks the beginning of a frame for dvui, can call dvui functions after this
         win.begin(nstime) catch {};
 
-        // send all SDL events to dvui for processing
-        const quit = backend.addAllEvents(&win) catch continue;
-        if (quit) break :main_loop;
-
         // both dvui and dx11 drawing
         gui_frame() catch {};
 
@@ -73,10 +70,6 @@ pub export fn main(
 
         // cursor management
         backend.setCursor(win.cursorRequested());
-
-        // // waitTime and beginWait combine to achieve variable framerates
-        // const wait_event_micros = win.waitTime(end_micros, null);
-        // backend.waitEventTimeout(wait_event_micros);
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
         if (show_dialog_outside_frame) {

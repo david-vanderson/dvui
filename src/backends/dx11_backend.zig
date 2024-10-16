@@ -630,6 +630,8 @@ pub fn drawClippedTriangles(
     clipr: ?dvui.Rect,
 ) void {
     self.setViewport();
+
+    std.debug.print("in draw clipped...\n", .{});
     if (self.render_target == null) {
         self.createRenderTarget() catch |err| {
             log.err("render target could not be initialized: {}", .{err});
