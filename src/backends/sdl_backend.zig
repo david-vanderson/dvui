@@ -324,6 +324,16 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
     }
 }
 
+pub fn setOSKPosition(self: *SDLBackend, rect: ?dvui.Rect) void {
+    _ = self;
+    if (rect) |r| {
+        c.SDL_SetTextInputRect(&c.SDL_Rect{ .x = @intFromFloat(r.x), .y = @intFromFloat(r.y), .w = @intFromFloat(r.w), .h = @intFromFloat(r.h) });
+        c.SDL_StartTextInput();
+    } else {
+        c.SDL_StopTextInput();
+    }
+}
+
 pub fn deinit(self: *SDLBackend) void {
     for (self.cursor_backing) |cursor| {
         if (cursor) |cur| {
@@ -528,6 +538,12 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
 
             return try win.addEventText(txt);
+        },
+        if (sdl3) c.SDL_EVENT_TEXT_EDITING else c.SDL_TEXTEDITING => {
+            if (self.log_events) {
+                std.debug.print("sdl event TEXTEDITING {s}\n", .{event.edit.text});
+            }
+            return false;
         },
         if (sdl3) c.SDL_EVENT_MOUSE_MOTION else c.SDL_MOUSEMOTION => {
             const touch = event.motion.which == c.SDL_TOUCH_MOUSEID;
