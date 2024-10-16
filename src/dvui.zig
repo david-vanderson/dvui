@@ -2288,6 +2288,8 @@ const TabIndex = struct {
 ///
 /// A null tab_index means it will be visited after all normal values.  All
 /// null widgets are visited in order of calling tabIndexSet.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn tabIndexSet(widget_id: u32, tab_index: ?u16) !void {
     if (tab_index != null and tab_index.? == 0)
         return;
@@ -2297,6 +2299,12 @@ pub fn tabIndexSet(widget_id: u32, tab_index: ?u16) !void {
     try cw.tab_index.append(ti);
 }
 
+/// Move focus to the next widget in tab index order.  Uses the tab index values from last frame.
+///
+/// If you are calling this due to processing an event, you can pass Event.num
+/// and any further events will have their focus adjusted.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn tabIndexNext(event_num: ?u16) void {
     const cw = currentWindow();
     const widgetId = focusedWidgetId();
@@ -2337,6 +2345,12 @@ pub fn tabIndexNext(event_num: ?u16) void {
     focusWidget(newId, null, event_num);
 }
 
+/// Move focus to the previous widget in tab index order.  Uses the tab index values from last frame.
+///
+/// If you are calling this due to processing an event, you can pass Event.num
+/// and any further events will have their focus adjusted.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn tabIndexPrev(event_num: ?u16) void {
     const cw = currentWindow();
     const widgetId = focusedWidgetId();
