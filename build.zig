@@ -3,11 +3,7 @@ const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 
 pub fn build(b: *std.Build) !void {
-    const use_dx = b.option(bool, "use_dx", "Whether or not to use DirectX backend(s)") orelse true;
-
-    const target = if (use_dx) b.resolveTargetQuery(.{
-        .os_tag = .windows,
-    }) else b.standardTargetOptions(.{});
+    const target = b.standardTargetOptions(.{});
 
     const optimize = b.standardOptimizeOption(.{});
 
@@ -15,14 +11,17 @@ pub fn build(b: *std.Build) !void {
 
     const dvui_sdl = addDvuiModule(b, target, optimize, link_backend, .sdl);
     const dvui_raylib = addDvuiModule(b, target, optimize, link_backend, .raylib);
-    const dvui_dx11 = addDvuiModule(b, target, optimize, link_backend, .dx11);
 
     addExample(b, target, optimize, "sdl-standalone", dvui_sdl);
     addExample(b, target, optimize, "sdl-ontop", dvui_sdl);
     addExample(b, target, optimize, "raylib-standalone", dvui_raylib);
     addExample(b, target, optimize, "raylib-ontop", dvui_raylib);
-    addExample(b, target, optimize, "dx11-ontop", dvui_dx11);
-    addExample(b, target, optimize, "dx11-standalone", dvui_dx11);
+
+    if (target.result.os.tag == .windows) {
+        const dvui_dx11 = addDvuiModule(b, target, optimize, link_backend, .dx11);
+        addExample(b, target, optimize, "dx11-ontop", dvui_dx11);
+        addExample(b, target, optimize, "dx11-standalone", dvui_dx11);
+    }
 
     // web test
     {
@@ -160,7 +159,6 @@ fn addDvuiModule(
 
     dvui_mod.addCSourceFiles(.{ .files = &.{
         "src/stb/stb_truetype_impl.c",
-        "src/stb/stb_image_impl.c",
     } });
 
     if (link_backend) {
@@ -206,14 +204,13 @@ fn addDvuiModule(
                 }
             },
             .dx11 => {
-                const zigwin32 = b.dependency("zigwin32", .{});
+                dvui_mod.addCSourceFiles(.{ .files = &.{
+                    "src/stb/stb_image_impl.c",
+                } });
 
-                // If dx11 is used, we have to force windows.
-                backend_mod.resolved_target = b.resolveTargetQuery(.{
-                    .os_tag = .windows,
-                });
-
-                backend_mod.addImport("zigwin32", zigwin32.module("zigwin32"));
+                if (b.lazyDependency("zigwin32", .{})) |zigwin32| {
+                    backend_mod.addImport("zigwin32", zigwin32.module("zigwin32"));
+                }
             },
         }
     }
@@ -249,8 +246,10 @@ fn addExample(
     });
     exe.root_module.addImport("dvui", dvui_mod);
 
-    // TODO: This may just be only used for directx
-    exe.root_module.addImport("zigwin32", b.dependency("zigwin32", .{}).module("zigwin32"));
+    if (target.result.os.tag == .windows) {
+        // TODO: This may just be only used for directx
+        exe.root_module.addImport("zigwin32", b.dependency("zigwin32", .{}).module("zigwin32"));
+    }
 
     const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
     compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
