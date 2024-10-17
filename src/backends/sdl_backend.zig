@@ -130,9 +130,9 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
                 var mdpi: ?f32 = null;
 
                 // for X11, try to grab the output of xrdb -query
-                //*customization:	-color
-                //Xft.dpi:	96
-                //Xft.antialias:	1
+                //*customization: -color
+                //Xft.dpi: 96
+                //Xft.antialias: 1
                 if (mdpi == null and builtin.os.tag == .linux) {
                     var stdout = std.ArrayList(u8).init(options.allocator);
                     defer stdout.deinit();
