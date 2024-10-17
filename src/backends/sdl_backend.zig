@@ -130,9 +130,9 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
                 var mdpi: ?f32 = null;
 
                 // for X11, try to grab the output of xrdb -query
-                //*customization:	-color
-                //Xft.dpi:	96
-                //Xft.antialias:	1
+                //*customization: -color
+                //Xft.dpi: 96
+                //Xft.antialias: 1
                 if (mdpi == null and builtin.os.tag == .linux) {
                     var stdout = std.ArrayList(u8).init(options.allocator);
                     defer stdout.deinit();
@@ -321,6 +321,16 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
         } else {
             dvui.log.err("SDL_CreateSystemCursor \"{s}\" failed\n", .{@tagName(cursor)});
         }
+    }
+}
+
+pub fn setOSKPosition(self: *SDLBackend, rect: ?dvui.Rect) void {
+    _ = self;
+    if (rect) |r| {
+        c.SDL_SetTextInputRect(&c.SDL_Rect{ .x = @intFromFloat(r.x), .y = @intFromFloat(r.y), .w = @intFromFloat(r.w), .h = @intFromFloat(r.h) });
+        c.SDL_StartTextInput();
+    } else {
+        c.SDL_StopTextInput();
     }
 }
 
@@ -528,6 +538,12 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
 
             return try win.addEventText(txt);
+        },
+        if (sdl3) c.SDL_EVENT_TEXT_EDITING else c.SDL_TEXTEDITING => {
+            if (self.log_events) {
+                std.debug.print("sdl event TEXTEDITING {s}\n", .{event.edit.text});
+            }
+            return false;
         },
         if (sdl3) c.SDL_EVENT_MOUSE_MOTION else c.SDL_MOUSEMOTION => {
             const touch = event.motion.which == c.SDL_TOUCH_MOUSEID;

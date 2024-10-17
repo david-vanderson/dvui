@@ -221,9 +221,10 @@ Sometimes a widget will just want to observe events but not mark them as process
 
 
 ## Min Size and Layout
-A widget receives its position and size from its parent.  The widget sends these fields of the Options struct to the parent:
-* min_size_content - the minimum size requested for this widget's content area
-  * padding/border/margin are automatically added
+A widget receives its position and size from its parent.  The widget sends these data to the parent:
+* min_size - the minimum size requested for this widget (includes content, padding, border, and margin)
+  * usually this is the max of Options.min_size_content (plus padding/border/margin) and the min_size calculated for this widget from last frame
+  * the min_size calculated from last frame is capped by Options.max_size_content (plus padding/border/margin)
 * expand - whether to take up all the space available
   * horizontal or vertical or both
 * gravity_x, gravity_y - position a non-expanded widget inside a larger rectangle

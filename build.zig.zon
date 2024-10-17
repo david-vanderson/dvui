@@ -24,5 +24,11 @@
             .hash = "12205f060d3476715771890d6e30bc052ca2d420dcae7875db2a4bd876ac506008a9",
             .lazy = true,
         },
+        // required for the directx11 backend
+        .zigwin32 = .{
+            .url = "git+https://github.com/marlersoft/zigwin32#407a4c7b869ee3d10db520fdfae8b9faf9b2adb5",
+            .hash = "1220cc9c9028e20f4ec2ece1155ae3479acc1cc509f9ab93acb74e8f5bbf8eefd2a9",
+            .lazy = true,
+        },
     },
 }

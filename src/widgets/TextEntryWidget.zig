@@ -213,7 +213,7 @@ pub fn draw(self: *TextEntryWidget) !void {
     const focused = (self.wd.id == dvui.focusedWidgetId());
 
     if (focused) {
-        dvui.wantOnScreenKeyboard(.{});
+        dvui.wantOnScreenKeyboard(self.wd.borderRectScale().r);
     }
 
     // set clip back to what textLayout had, so we don't draw over the scrollbars
