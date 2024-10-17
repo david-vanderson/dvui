@@ -1181,7 +1181,7 @@ fn createDeviceD3D(hwnd: HWND, opt: InitOptions) ?Dx11Backend.Directx11Options {
     sd.SwapEffect = dxgi.DXGI_SWAP_EFFECT_DISCARD;
 
     const createDeviceFlags: dx.D3D11_CREATE_DEVICE_FLAG = .{
-        .DEBUG = 1,
+        .DEBUG = 0,
     };
     //createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
     var featureLevel: d3d.D3D_FEATURE_LEVEL = undefined;

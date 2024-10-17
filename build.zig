@@ -248,7 +248,9 @@ fn addExample(
 
     if (target.result.os.tag == .windows) {
         // TODO: This may just be only used for directx
-        exe.root_module.addImport("zigwin32", b.dependency("zigwin32", .{}).module("zigwin32"));
+        if (b.lazyDependency("zigwin32", .{})) |zigwin32| {
+            exe.root_module.addImport("zigwin32", zigwin32.module("zigwin32"));
+        }
     }
 
     const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
