@@ -4,6 +4,7 @@ const Compile = std.Build.Step.Compile;
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
+
     const optimize = b.standardOptimizeOption(.{});
 
     const link_backend = b.option(bool, "link_backend", "Should dvui link the chosen backend?") orelse true;
@@ -15,6 +16,12 @@ pub fn build(b: *std.Build) !void {
     addExample(b, target, optimize, "sdl-ontop", dvui_sdl);
     addExample(b, target, optimize, "raylib-standalone", dvui_raylib);
     addExample(b, target, optimize, "raylib-ontop", dvui_raylib);
+
+    if (target.result.os.tag == .windows) {
+        const dvui_dx11 = addDvuiModule(b, target, optimize, link_backend, .dx11);
+        addExample(b, target, optimize, "dx11-ontop", dvui_dx11);
+        addExample(b, target, optimize, "dx11-standalone", dvui_dx11);
+    }
 
     // web test
     {
@@ -109,11 +116,14 @@ pub fn build(b: *std.Build) !void {
 
     const docs_step = b.step("docs", "Build and install the documentation");
     docs_step.dependOn(&install_docs.step);
+
+    b.getInstallStep().dependOn(docs_step);
 }
 
 const Backend = enum {
     raylib,
     sdl,
+    dx11,
 };
 
 fn addDvuiModule(
@@ -140,8 +150,10 @@ fn addDvuiModule(
         .link_libc = switch (backend) {
             .raylib => true,
             .sdl => true,
+            .dx11 => true,
         },
     });
+
     backend_mod.addImport("dvui", dvui_mod);
     dvui_mod.addImport("backend", backend_mod);
 
@@ -191,6 +203,15 @@ fn addDvuiModule(
                     }
                 }
             },
+            .dx11 => {
+                dvui_mod.addCSourceFiles(.{ .files = &.{
+                    "src/stb/stb_image_impl.c",
+                } });
+
+                if (b.lazyDependency("zigwin32", .{})) |zigwin32| {
+                    backend_mod.addImport("zigwin32", zigwin32.module("zigwin32"));
+                }
+            },
         }
     }
     dvui_mod.addIncludePath(b.path("src/stb"));
@@ -224,6 +245,13 @@ fn addExample(
         .win32_manifest = b.path("./src/main.manifest"),
     });
     exe.root_module.addImport("dvui", dvui_mod);
+
+    if (target.result.os.tag == .windows) {
+        // TODO: This may just be only used for directx
+        if (b.lazyDependency("zigwin32", .{})) |zigwin32| {
+            exe.root_module.addImport("zigwin32", zigwin32.module("zigwin32"));
+        }
+    }
 
     const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
     compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
@@ -264,4 +292,4 @@ fn addExample(
 
 //    const run_step = b.step(name, "Run " ++ name);
 //    run_step.dependOn(run_cmd);
-//}
+// }

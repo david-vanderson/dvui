@@ -26,6 +26,7 @@ pub const WidgetData = @import("WidgetData.zig");
 pub const entypo = @import("icons/entypo.zig");
 pub const AnimateWidget = @import("widgets/AnimateWidget.zig");
 pub const BoxWidget = @import("widgets/BoxWidget.zig");
+pub const FlexBoxWidget = @import("widgets/FlexBoxWidget.zig");
 pub const ReorderWidget = @import("widgets/ReorderWidget.zig");
 pub const Reorderable = ReorderWidget.Reorderable;
 pub const ButtonWidget = @import("widgets/ButtonWidget.zig");
@@ -2288,6 +2289,8 @@ const TabIndex = struct {
 ///
 /// A null tab_index means it will be visited after all normal values.  All
 /// null widgets are visited in order of calling tabIndexSet.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn tabIndexSet(widget_id: u32, tab_index: ?u16) !void {
     if (tab_index != null and tab_index.? == 0)
         return;
@@ -2297,6 +2300,12 @@ pub fn tabIndexSet(widget_id: u32, tab_index: ?u16) !void {
     try cw.tab_index.append(ti);
 }
 
+/// Move focus to the next widget in tab index order.  Uses the tab index values from last frame.
+///
+/// If you are calling this due to processing an event, you can pass Event.num
+/// and any further events will have their focus adjusted.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn tabIndexNext(event_num: ?u16) void {
     const cw = currentWindow();
     const widgetId = focusedWidgetId();
@@ -2337,6 +2346,12 @@ pub fn tabIndexNext(event_num: ?u16) void {
     focusWidget(newId, null, event_num);
 }
 
+/// Move focus to the previous widget in tab index order.  Uses the tab index values from last frame.
+///
+/// If you are calling this due to processing an event, you can pass Event.num
+/// and any further events will have their focus adjusted.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn tabIndexPrev(event_num: ?u16) void {
     const cw = currentWindow();
     const widgetId = focusedWidgetId();
@@ -2378,10 +2393,18 @@ pub fn tabIndexPrev(event_num: ?u16) void {
     focusWidget(newId, null, event_num);
 }
 
-// r is in pixels
+/// Wigets that accept text input should call this on frames they have focus.
+///
+/// r is in pixels.
+///
+/// It communicates:
+/// * text input should happen (maybe shows an on screen keyboard)
+/// * rect on screen (position possible IME window)
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn wantOnScreenKeyboard(r: Rect) void {
     const cw = currentWindow();
-    cw.osk_focused_widget_text_rect = r;
+    cw.osk_focused_widget_text_rect = r.scale(1 / cw.natural_scale);
 }
 
 // maps to OS window
@@ -2433,7 +2456,7 @@ pub const Window = struct {
     // id of the subwindow that has focus
     focused_subwindowId: u32 = 0,
 
-    // handling the OSK (on screen keyboard)
+    // handling the OSK (on screen keyboard) - natural pixels
     osk_focused_widget_text_rect: ?Rect = null,
 
     snap_to_pixels: bool = true,
@@ -3476,6 +3499,11 @@ pub const Window = struct {
         }
     }
 
+    /// If a widget called wantOnScreenKeyboard this frame, return the rect (in
+    /// natural pixels) of where the text input is happening.
+    ///
+    /// Apps and backends should use this to show an on screen keyboard and/or
+    /// position an IME window.
     pub fn OSKRequested(self: *const Self) ?Rect {
         return self.osk_focused_widget_text_rect;
     }
@@ -4692,6 +4720,14 @@ pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Opt
     return ret;
 }
 
+pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) !*FlexBoxWidget {
+    var ret = try currentWindow().arena().create(FlexBoxWidget);
+    ret.* = FlexBoxWidget.init(src, init_opts, opts);
+    try ret.install();
+    try ret.drawBackground();
+    return ret;
+}
+
 pub fn reorder(src: std.builtin.SourceLocation, opts: Options) !*ReorderWidget {
     var ret = try currentWindow().arena().create(ReorderWidget);
     ret.* = ReorderWidget.init(src, opts);
@@ -5289,8 +5325,6 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     _ = dataGet(null, b.data().id, "_start_v", f32);
 
     if (text_mode) {
-        dvui.wantOnScreenKeyboard(.{});
-
         var te_buf = dataGetSlice(null, b.data().id, "_buf", []u8) orelse blk: {
             var buf = [_]u8{0} ** 20;
             _ = std.fmt.bufPrintZ(&buf, "{d:0.3}", .{init_opts.value.*}) catch {};
@@ -5354,7 +5388,10 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             }
         }
 
-        if (b.data().id != focusedWidgetId()) {
+        if (b.data().id == focusedWidgetId()) {
+            dvui.wantOnScreenKeyboard(b.data().borderRectScale().r);
+        } else {
+
             // we lost focus
             text_mode = false;
             new_val = std.fmt.parseFloat(f32, te_buf[0..te.len]) catch null;

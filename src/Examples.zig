@@ -1196,6 +1196,23 @@ pub fn layout() !void {
         }
     }
 
+    try dvui.label(@src(), "FlexBox", .{}, .{});
+    {
+        var fbox = try dvui.flexbox(@src(), .{}, .{ .border = dvui.Rect.all(1), .background = true, .padding = .{.w = 4, .h = 4} });
+        defer fbox.deinit();
+
+        for (0..10) |i| {
+            var labelbox = try dvui.box(@src(), .vertical, .{ .id_extra = i, .margin = .{.x = 4, .y = 4}, .border = dvui.Rect.all(1) });
+            defer labelbox.deinit();
+
+            if (i % 2 == 0) {
+                try dvui.label(@src(), "Box {d}", .{i}, .{.expand = .both, .gravity_x = 0.5, .gravity_y = 0.5});
+            } else {
+                try dvui.label(@src(), "Large\nBox {d}", .{i}, .{.expand = .both, .gravity_x = 0.5, .gravity_y = 0.5});
+            }
+        }
+    }
+
     try dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{});
     {
         var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = paned_collapsed_width }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 100 } });

@@ -1,9 +1,14 @@
 const std = @import("std");
 const dvui = @import("dvui");
 comptime {
-    std.debug.assert(dvui.backend_kind == .sdl);
+    std.debug.assert(dvui.backend_kind == .dx11);
 }
 const Backend = dvui.backend;
+
+const w = std.os.windows;
+const HINSTANCE = w.HINSTANCE;
+const LPWSTR = w.LPWSTR;
+const INT = w.INT;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
@@ -13,83 +18,68 @@ const gpa = gpa_instance.allocator();
 const vsync = true;
 
 var show_dialog_outside_frame: bool = false;
-var g_backend: ?Backend = null;
 
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application
 /// - render frames only when needed
-pub fn main() !void {
+pub export fn main(
+    instance: HINSTANCE,
+    _: ?HINSTANCE,
+    _: ?LPWSTR,
+    cmd_show: INT,
+) void {
     defer _ = gpa_instance.deinit();
 
-    // init SDL backend (creates and owns OS window)
-    var backend = try Backend.initWindow(.{
+    // init dx11 backend (creates and owns OS window)
+    var backend = Backend.initWindow(instance, cmd_show, .{
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = vsync,
-        .title = "DVUI SDL Standalone Example",
+        .title = "DVUI DX11 Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
-    });
-    g_backend = backend;
+    }) catch return;
     defer backend.deinit();
 
+    Backend.setBackend(&backend);
+
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
+    var win = dvui.Window.init(@src(), gpa, backend.backend(), .{}) catch return;
     defer win.deinit();
 
+    Backend.setWindow(&win);
+
     main_loop: while (true) {
+        // This handles the main windows events
+        if (Backend.isExitRequested()) {
+            break :main_loop;
+        }
 
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(backend.hasEvent());
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(nstime);
+        win.begin(nstime) catch {};
 
-        // send all SDL events to dvui for processing
-        const quit = try backend.addAllEvents(&win);
-        if (quit) break :main_loop;
-
-        // if dvui widgets might not cover the whole window, then need to clear
-        // the previous frame's render
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
-        _ = Backend.c.SDL_RenderClear(backend.renderer);
-
-        // The demos we pass in here show up under "Platform-specific demos"
-        try dvui.DemoView.demoView(&.{
-            .{
-                .label = "SDL-N-DVUI",
-                .scale = 0.2,
-                .ui_fn = gui_frame
-            }
-        });
+        // both dvui and dx11 drawing
+        gui_frame() catch {};
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
-        const end_micros = try win.end(.{});
+        _ = win.end(.{}) catch continue;
 
         // cursor management
         backend.setCursor(win.cursorRequested());
-        backend.setOSKPosition(win.OSKRequested());
-
-        // render frame to OS
-        backend.renderPresent();
-
-        // waitTime and beginWait combine to achieve variable framerates
-        const wait_event_micros = win.waitTime(end_micros, null);
-        backend.waitEventTimeout(wait_event_micros);
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
         if (show_dialog_outside_frame) {
             show_dialog_outside_frame = false;
-            try dvui.dialog(@src(), .{ .window = &win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
+            dvui.dialog(@src(), .{ .window = &win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." }) catch {};
         }
     }
 }
 
-// both dvui and SDL drawing
 fn gui_frame() !void {
-    const backend = g_backend orelse return;
-
     {
         var m = try dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();
@@ -161,26 +151,6 @@ fn gui_frame() !void {
         // It can be interleaved with DVUI drawing.
         // NOTE: This only works in the main window (not floating subwindows
         // like dialogs).
-
-        // get the screen rectangle for the box
-        const rs = box.data().contentRectScale();
-
-        // rs.r is the pixel rectangle, rs.s is the scale factor (like for hidpi screens or display scaling)
-        var rect: Backend.c.SDL_Rect = .{ .x = @intFromFloat(rs.r.x + 4 * rs.s), .y = @intFromFloat(rs.r.y + 4 * rs.s), .w = @intFromFloat(20 * rs.s), .h = @intFromFloat(20 * rs.s) };
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
-        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
-
-        rect.x += @intFromFloat(24 * rs.s);
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 255, 0, 255);
-        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
-
-        rect.x += @intFromFloat(24 * rs.s);
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 255, 255);
-        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
-
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 255, 255);
-
-        _ = Backend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 4 * rs.s));
     }
 
     if (try dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
