@@ -31,10 +31,12 @@ pub const InitOptions = struct {
     window_avoid: enum {
         none,
 
-        // if we would spawn at the same position as an existing window,
-        // move us downright a bit
+        // nudge away from previously focused subwindow, might land on another
+        nudge_once,
+
+        // nudge away from all subwindows
         nudge,
-    } = .none,
+    } = .nudge_once,
 };
 
 const DragPart = enum {
@@ -165,33 +167,31 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
                 self.wd.rect.y = @round(self.wd.rect.y * s) / s;
             }
 
-            if (prev_focus) |pf| {
-                if (self.wd.rect.topLeft().equals(pf.topLeft())) {
-                    // if we ended up directly on top, nudge downright a bit
-                    self.wd.rect.x += 24;
-                    self.wd.rect.y += 24;
+            if (self.init_options.window_avoid != .none) {
+                if (prev_focus) |pf| {
+                    if (self.wd.rect.topLeft().equals(pf.topLeft())) {
+                        // if we ended up directly on top, nudge downright a bit
+                        self.wd.rect.x += 24;
+                        self.wd.rect.y += 24;
+                    }
                 }
             }
 
-            const cw = dvui.currentWindow();
+            if (self.init_options.window_avoid == .nudge) {
+                const cw = dvui.currentWindow();
 
-            // we might nudge onto another window, so have to keep checking until we don't
-            var nudge = true;
-            while (nudge) {
-                nudge = false;
-                // don't check against subwindows[0] - that's that main window
-                for (cw.subwindows.items[1..]) |subw| {
-                    if (subw.id != self.wd.id and subw.rect.topLeft().equals(self.wd.rect.topLeft())) {
-                        self.wd.rect.x += 24;
-                        self.wd.rect.y += 24;
-                        nudge = true;
+                // we might nudge onto another window, so have to keep checking until we don't
+                var nudge = true;
+                while (nudge) {
+                    nudge = false;
+                    // don't check against subwindows[0] - that's that main window
+                    for (cw.subwindows.items[1..]) |subw| {
+                        if (subw.id != self.wd.id and subw.rect.topLeft().equals(self.wd.rect.topLeft())) {
+                            self.wd.rect.x += 24;
+                            self.wd.rect.y += 24;
+                            nudge = true;
+                        }
                     }
-                }
-
-                if (self.init_options.window_avoid == .nudge) {
-                    continue;
-                } else {
-                    break;
                 }
             }
 
