@@ -31,10 +31,12 @@ pub const InitOptions = struct {
     window_avoid: enum {
         none,
 
-        // if we would spawn at the same position as an existing window,
-        // move us downright a bit
+        // nudge away from previously focused subwindow, might land on another
+        nudge_once,
+
+        // nudge away from all subwindows
         nudge,
-    } = .none,
+    } = .nudge_once,
 };
 
 const DragPart = enum {
@@ -140,7 +142,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             //std.debug.print("autosize to {}\n", .{self.wd.rect});
         }
 
-        var prev_focus = dvui.windowRect();
+        var prev_focus: ?Rect = null;
         if (dvui.dataGet(null, self.wd.id, "_prev_focus_rect", Rect)) |r| {
             dvui.dataRemove(null, self.wd.id, "_prev_focus_rect");
             prev_focus = r;
@@ -155,9 +157,9 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             // only position ourselves once by default
             self.auto_pos = false;
 
-            // center on prev_focus
-            self.wd.rect.x = prev_focus.x + (prev_focus.w - self.wd.rect.w) / 2;
-            self.wd.rect.y = prev_focus.y + (prev_focus.h - self.wd.rect.h) / 2;
+            const centering = prev_focus orelse dvui.windowRect();
+            self.wd.rect.x = centering.x + (centering.w - self.wd.rect.w) / 2;
+            self.wd.rect.y = centering.y + (centering.h - self.wd.rect.h) / 2;
 
             if (dvui.snapToPixels()) {
                 const s = self.wd.rectScale().s;
@@ -165,31 +167,31 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
                 self.wd.rect.y = @round(self.wd.rect.y * s) / s;
             }
 
-            while (self.wd.rect.topLeft().equals(prev_focus.topLeft())) {
-                // if we ended up directly on top, nudge downright a bit
-                self.wd.rect.x += 24;
-                self.wd.rect.y += 24;
-            }
-
-            const cw = dvui.currentWindow();
-
-            // we might nudge onto another window, so have to keep checking until we don't
-            var nudge = true;
-            while (nudge) {
-                nudge = false;
-                // don't check against subwindows[0] - that's that main window
-                for (cw.subwindows.items[1..]) |subw| {
-                    if (subw.rect.topLeft().equals(self.wd.rect.topLeft())) {
+            if (self.init_options.window_avoid != .none) {
+                if (prev_focus) |pf| {
+                    if (self.wd.rect.topLeft().equals(pf.topLeft())) {
+                        // if we ended up directly on top, nudge downright a bit
                         self.wd.rect.x += 24;
                         self.wd.rect.y += 24;
-                        nudge = true;
                     }
                 }
+            }
 
-                if (self.init_options.window_avoid == .nudge) {
-                    continue;
-                } else {
-                    break;
+            if (self.init_options.window_avoid == .nudge) {
+                const cw = dvui.currentWindow();
+
+                // we might nudge onto another window, so have to keep checking until we don't
+                var nudge = true;
+                while (nudge) {
+                    nudge = false;
+                    // don't check against subwindows[0] - that's that main window
+                    for (cw.subwindows.items[1..]) |subw| {
+                        if (subw.id != self.wd.id and subw.rect.topLeft().equals(self.wd.rect.topLeft())) {
+                            self.wd.rect.x += 24;
+                            self.wd.rect.y += 24;
+                            nudge = true;
+                        }
+                    }
                 }
             }
 
@@ -224,7 +226,9 @@ pub fn install(self: *FloatingWindowWidget) !void {
         // windows a chance to grab the previously focused rect
 
         const cw = dvui.currentWindow();
-        dvui.dataSet(null, self.wd.id, "_prev_focus_rect", cw.subwindowFocused().rect);
+        if (dvui.focusedSubwindowId() != cw.wd.id) {
+            dvui.dataSet(null, self.wd.id, "_prev_focus_rect", cw.subwindowFocused().rect);
+        }
 
         // need a second frame to fit contents
         dvui.refresh(null, @src(), self.wd.id);
