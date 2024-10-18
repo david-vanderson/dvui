@@ -936,24 +936,17 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
     self.current_line_height = @max(self.current_line_height, line_height);
     var txt = text;
 
-    const rect = self.wd.contentRect();
-    var container_width = rect.w;
+    var container_width = self.wd.contentRect().w;
     if (container_width == 0) {
         // if we are not being shown at all, probably this is the first
         // frame for us and we should calculate our min height assuming we
         // get at least our min width
 
-        var assumed_min_width = self.wd.options.min_size_contentGet().w;
-        if (assumed_min_width == 0) {
-            assumed_min_width = 500;
+        container_width = self.wd.options.min_size_contentGet().w;
+        if (container_width == 0) {
+            // wasn't given a min width, assume something
+            container_width = 500;
         }
-
-        // do this dance so we aren't repeating the contentRect
-        // calculations here
-        const given_width = self.wd.rect.w;
-        self.wd.rect.w = @max(given_width, assumed_min_width);
-        container_width = self.wd.contentRect().w;
-        self.wd.rect.w = given_width;
     }
 
     text_loop: while (txt.len > 0) {
@@ -1148,7 +1141,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             self.selMoveText(txt[0..end], self.bytes_seen);
         }
 
-        const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, rect.h - self.insert_pt.y) });
+        const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, self.wd.contentRect().h - self.insert_pt.y) });
         //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
         const rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
         try dvui.renderText(.{
