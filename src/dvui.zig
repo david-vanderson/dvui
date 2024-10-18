@@ -2531,6 +2531,7 @@ pub const Window = struct {
     debug_widget_id: u32 = 0, // 0 means no widget is selected
     debug_info_name_rect: []const u8 = "",
     debug_info_src_id_extra: []const u8 = "",
+    debug_under_focus: bool = false,
     debug_under_mouse: bool = false,
     debug_under_mouse_esc_needed: bool = false,
     debug_under_mouse_quitting: bool = false,
@@ -3793,6 +3794,10 @@ pub const Window = struct {
         self.debug_under_mouse = false;
         defer self.debug_under_mouse = dum;
 
+        var duf = self.debug_under_focus;
+        self.debug_under_focus = false;
+        defer self.debug_under_focus = duf;
+
         var float = try dvui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
         defer float.deinit();
 
@@ -3829,6 +3834,10 @@ pub const Window = struct {
         if (try dvui.button(@src(), if (dum) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{}, .{})) {
             dum = !dum;
             self.debug_under_mouse_esc_needed = dum;
+        }
+
+        if (try dvui.button(@src(), if (duf) "Stop" else "Debug Focus", .{}, .{})) {
+            duf = !duf;
         }
 
         const logit = self.debugRefresh(null);
