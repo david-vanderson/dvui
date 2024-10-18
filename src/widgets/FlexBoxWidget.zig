@@ -51,7 +51,20 @@ pub fn rectFor(self: *FlexBoxWidget, id: u32, min_size: Size, e: Options.Expand,
     _ = e;
     _ = g;
 
-    if (self.insert_pt.x > 0 and self.insert_pt.x + min_size.w > self.wd.contentRect().w) {
+    var container_width = self.wd.contentRect().w;
+    if (container_width == 0) {
+        // if we are not being shown at all, probably this is the first
+        // frame for us and we should calculate our min height assuming we
+        // get at least our min width
+
+        container_width = self.wd.options.min_size_contentGet().w;
+        if (container_width == 0) {
+            // wasn't given a min width, assume something
+            container_width = 500;
+        }
+    }
+
+    if (self.insert_pt.x > 0 and self.insert_pt.x + min_size.w > container_width) {
         // we ran off the end and didn't start at the left edge, break
         self.insert_pt.x = 0;
         self.insert_pt.y += self.row_size.h;
