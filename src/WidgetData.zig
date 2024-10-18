@@ -68,6 +68,11 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
 pub fn register(self: *const WidgetData) !void {
     var cw = dvui.currentWindow();
     const name: []const u8 = self.options.name orelse "???";
+
+    if (cw.debug_under_focus and self.id == dvui.focusedWidgetId()) {
+        cw.debug_widget_id = self.id;
+    }
+
     if (cw.debug_under_mouse or self.id == cw.debug_widget_id) {
         var rs = self.rectScale();
 
