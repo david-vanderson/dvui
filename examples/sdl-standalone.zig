@@ -11,6 +11,7 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 const vsync = true;
+var scale_val: f32 = 1.0;
 
 var show_dialog_outside_frame: bool = false;
 var g_backend: ?Backend = null;
@@ -55,13 +56,8 @@ pub fn main() !void {
         _ = Backend.c.SDL_RenderClear(backend.renderer);
 
         // The demos we pass in here show up under "Platform-specific demos"
-        try dvui.DemoView.demoView(&.{
-            .{
-                .label = "SDL-N-DVUI",
-                .scale = 0.2,
-                .ui_fn = gui_frame
-            }
-        });
+        try gui_frame();
+        //try dvui.DemoView.demoView(&.{.{ .label = "SDL-N-DVUI", .scale = 0.2, .ui_fn = gui_frame }});
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
@@ -152,7 +148,23 @@ fn gui_frame() !void {
     }
 
     {
-        try dvui.labelNoFmt(@src(), "These are drawn directly by the backend, not going through DVUI.", .{ .margin = .{ .x = 4 } });
+        var scaler = try dvui.scale(@src(), scale_val, .{ .expand = .horizontal });
+        defer scaler.deinit();
+
+        {
+            var hbox = try dvui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
+
+            if (try dvui.button(@src(), "Zoom In", .{}, .{})) {
+                scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
+            }
+
+            if (try dvui.button(@src(), "Zoom Out", .{}, .{})) {
+                scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
+            }
+        }
+
+        try dvui.labelNoFmt(@src(), "Below is drawn directly by the backend, not going through DVUI.", .{ .margin = .{ .x = 4 } });
 
         var box = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 40 }, .background = true, .margin = .{ .x = 8, .w = 8 } });
         defer box.deinit();
@@ -165,7 +177,8 @@ fn gui_frame() !void {
         // get the screen rectangle for the box
         const rs = box.data().contentRectScale();
 
-        // rs.r is the pixel rectangle, rs.s is the scale factor (like for hidpi screens or display scaling)
+        // rs.r is the pixel rectangle, rs.s is the scale factor (like for
+        // hidpi screens or display scaling)
         var rect: Backend.c.SDL_Rect = .{ .x = @intFromFloat(rs.r.x + 4 * rs.s), .y = @intFromFloat(rs.r.y + 4 * rs.s), .w = @intFromFloat(20 * rs.s), .h = @intFromFloat(20 * rs.s) };
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
         _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
