@@ -57,7 +57,6 @@ pub fn main() !void {
 
         // The demos we pass in here show up under "Platform-specific demos"
         try gui_frame();
-        //try dvui.DemoView.demoView(&.{.{ .label = "SDL-N-DVUI", .scale = 0.2, .ui_fn = gui_frame }});
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()

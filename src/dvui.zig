@@ -10,7 +10,6 @@ pub const fnv = std.hash.Fnv1a_32;
 pub const Backend = @import("Backend.zig");
 pub const Color = @import("Color.zig");
 pub const Examples = @import("Examples.zig");
-pub const DemoView = @import("DemoView.zig");
 pub const Event = @import("Event.zig");
 pub const Font = @import("Font.zig");
 pub const Options = @import("Options.zig");

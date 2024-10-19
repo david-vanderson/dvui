@@ -55,13 +55,7 @@ pub fn main() !void {
         // the previous frame's render
         backend.clear();
 
-        try dvui.DemoView.demoView(&.{
-            .{
-                .label = "Ray-N-DVUI",
-                .scale = 0.2,
-                .ui_fn = dvui_frame
-            }
-        });
+        try dvui_frame();
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
