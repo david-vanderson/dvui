@@ -219,29 +219,14 @@ pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_fl
     return fwin;
 }
 
-var incrementor_state: i32 = 5;
-pub fn incrementor() !void {
-    // We want to lay out our UI horizontally, left to right.
-    var b = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-    defer b.deinit();
-
-    if (try dvui.button(@src(), "-", .{}, .{ .min_size_content = dvui.Options.sizeM(2, 1) })) {
-        incrementor_state -= 1;
-    }
-
-    // Gravity here makes the label centered.
-    try dvui.label(@src(), "{}", .{incrementor_state}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
-
-    if (try dvui.button(@src(), "+", .{}, .{ .min_size_content = dvui.Options.sizeM(2, 1) })) {
-        incrementor_state += 1;
-    }
-}
-
 var calculation: f32 = 0;
 var calculand: f32 = 0;
 var active_op: ?u8 = null;
 var digits_after_dot: f32 = 0;
 pub fn calculator() !void {
+    var vbox = try dvui.box(@src(), .vertical, .{});
+    defer vbox.deinit();
+
     const loop_labels = [_]u8{ 'C', 'N', '%', '/', '7', '8', '9', 'x', '4', '5', '6', '-', '1', '2', '3', '+', '0', '.', '=' };
     const loop_count = @sizeOf(@TypeOf(loop_labels)) / @sizeOf(@TypeOf(loop_labels[0]));
 
@@ -269,10 +254,22 @@ pub fn calculator() !void {
                     digits_after_dot = 0;
                 }
 
-                if (letter == '/') { active_op = '/'; digits_after_dot = 0; }
-                if (letter == 'x') { active_op = 'x'; digits_after_dot = 0; }
-                if (letter == '-') { active_op = '-'; digits_after_dot = 0; }
-                if (letter == '+') { active_op = '+'; digits_after_dot = 0; }
+                if (letter == '/') {
+                    active_op = '/';
+                    digits_after_dot = 0;
+                }
+                if (letter == 'x') {
+                    active_op = 'x';
+                    digits_after_dot = 0;
+                }
+                if (letter == '-') {
+                    active_op = '-';
+                    digits_after_dot = 0;
+                }
+                if (letter == '+') {
+                    active_op = '+';
+                    digits_after_dot = 0;
+                }
                 if (letter == '.') digits_after_dot = 1;
 
                 if (letter == 'N') calculation = -calculation;
@@ -319,12 +316,97 @@ pub fn calculator() !void {
     }
 }
 
+pub const demoKind = enum {
+    basic_widgets,
+    calculator,
+    text_entry,
+    styling,
+    layout,
+    text_layout,
+    reorderable,
+    menus,
+    focus,
+    scrolling,
+    dialogs,
+    animations,
+    struct_ui,
+    debugging,
+
+    pub fn name(self: demoKind) []const u8 {
+        return switch (self) {
+            .basic_widgets => "Basic Widgets",
+            .calculator => "Calculator",
+            .text_entry => "Text Entry",
+            .styling => "Styling",
+            .layout => "Layout",
+            .text_layout => "Text Layout",
+            .reorderable => "Reorderable List",
+            .menus => "Menus",
+            .focus => "Focus",
+            .scrolling => "Scrolling",
+            .dialogs => "Dialogs / Toasts",
+            .animations => "Animations",
+            .struct_ui => "Struct UI\n(Experimental)",
+            .debugging => "Debugging",
+        };
+    }
+
+    pub fn scale(self: demoKind) f32 {
+        return switch (self) {
+            .basic_widgets => 0.33,
+            .calculator => 0.6,
+            .text_entry => 0.5,
+            .styling => 0.5,
+            .layout => 0.2,
+            .text_layout => 0.35,
+            .reorderable => 0.29,
+            .menus => 0.43,
+            .focus => 0.74,
+            .scrolling => 0.42,
+            .dialogs => 0.5,
+            .animations => 0.5,
+            .struct_ui => 0.5,
+            .debugging => 0.44,
+        };
+    }
+};
+
+pub var demo_active: demoKind = .basic_widgets;
+
+const demoButtonResult = struct {
+    button: *ButtonWidget,
+    box: *dvui.BoxWidget,
+
+    pub fn deinit(self: *demoButtonResult) void {
+        self.box.deinit();
+        self.button.deinit();
+    }
+};
+
+fn demoButton(src: std.builtin.SourceLocation, label: []const u8, opts: Options) !demoButtonResult {
+    var bw = try dvui.currentWindow().arena().create(ButtonWidget);
+    bw.* = dvui.ButtonWidget.init(src, .{}, opts);
+    try bw.install();
+    bw.processEvents();
+    try bw.drawBackground();
+    try bw.drawFocus();
+
+    const box = try dvui.box(@src(), .vertical, .{ .expand = .both });
+
+    var options: dvui.Options = .{ .gravity_x = 0.5, .gravity_y = 1.0 };
+    if (dvui.captured(bw.wd.id)) options = options.override(.{ .color_text = .{ .color = options.color(.text_press) } });
+
+    try dvui.label(@src(), "{s}", .{label}, options);
+
+    return .{ .button = bw, .box = box };
+}
+
 pub fn demo() !void {
     if (!show_demo_window) {
         return;
     }
 
-    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 440, .h = 400 } });
+    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 600, .h = 400 }, .max_size_content = .{ .w = 600 } });
     defer float.deinit();
 
     // pad the fps label so that it doesn't trigger refresh when the number
@@ -354,198 +436,195 @@ pub fn demo() !void {
     var scaler = try dvui.scale(@src(), scale_val, .{ .expand = .both });
     defer scaler.deinit();
 
-    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
-    defer scroll.deinit();
+    //var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
+    //defer scroll.deinit();
 
-    var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
-    defer vbox.deinit();
+    var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = 601 }, .{ .expand = .horizontal, .background = false, .min_size_content = .{ .h = 100 } });
+    blk: {
+        var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
+        defer scroll.deinit();
 
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-        if (try dvui.button(@src(), "Debug Window", .{}, .{})) {
-            dvui.toggleDebugWindow();
+        if (paned.collapsed() and paned.split_ratio == 0) {
+            break :blk;
         }
 
-        try dvui.Theme.picker(@src(), .{});
-    }
+        {
+            var hbox = try dvui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
+            if (try dvui.button(@src(), "Debug Window", .{}, .{})) {
+                dvui.toggleDebugWindow();
+            }
 
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
+            try dvui.Theme.picker(@src(), .{});
 
-        if (try dvui.button(@src(), "Zoom In", .{}, .{})) {
-            scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
+            if (try dvui.button(@src(), "Zoom In", .{}, .{})) {
+                scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
+            }
+
+            if (try dvui.button(@src(), "Zoom Out", .{}, .{})) {
+                scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
+            }
         }
 
-        if (try dvui.button(@src(), "Zoom Out", .{}, .{})) {
-            scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
-        }
-    }
+        var fbox = try dvui.flexbox(@src(), .{}, .{ .expand = .both, .background = true });
+        defer fbox.deinit();
 
-    if (try dvui.expander(@src(), "Basic Widgets", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try basicWidgets();
-    }
+        inline for (0..@typeInfo(demoKind).Enum.fields.len) |i| {
+            const e = @as(demoKind, @enumFromInt(i));
+            var db = try demoButton(@src(), e.name(), .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = dvui.Size.all(120), .margin = Rect.all(5), .color_fill = .{ .name = .fill } });
 
-    if (try dvui.expander(@src(), "Incrementor", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try incrementor();
-    }
+            const demo_scaler = try dvui.scale(@src(), e.scale(), .{ .expand = .both });
 
-    if (try dvui.expander(@src(), "Calculator", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try calculator();
-    }
-
-    if (try dvui.expander(@src(), "Text Entry", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try textEntryWidgets();
-    }
-
-    if (try dvui.expander(@src(), "Styling", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try styling();
-    }
-
-    if (try dvui.expander(@src(), "Layout", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try layout();
-    }
-
-    if (try dvui.expander(@src(), "Text Layout", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try layoutText();
-    }
-
-    if (try dvui.expander(@src(), "Reorderable Lists", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try reorderLists();
-    }
-
-    if (try dvui.expander(@src(), "Menus", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try menus();
-    }
-
-    if (try dvui.expander(@src(), "Focus", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try focus();
-    }
-
-    if (try dvui.expander(@src(), "Scrolling", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try scrolling();
-    }
-
-    if (try dvui.expander(@src(), "Dialogs and Toasts", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try dialogs(float.data().id);
-    }
-
-    if (try dvui.expander(@src(), "Animations", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try animations();
-    }
-
-    if (try dvui.expander(@src(), "Theme Parsing", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try themeSerialization();
-    }
-
-    if (try dvui.expander(@src(), "Struct UI Widget (Experimental)", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-
-        const Top = struct {
-            const TopChild = struct {
-                a_dir: dvui.enums.Direction = undefined,
+            try switch (e) {
+                .basic_widgets => basicWidgets(),
+                .calculator => calculator(),
+                .text_entry => textEntryWidgets(),
+                .styling => styling(),
+                .layout => layout(),
+                .text_layout => layoutText(),
+                .reorderable => reorderLists(),
+                .menus => menus(),
+                .focus => focus(),
+                .scrolling => scrolling(),
+                .dialogs => dialogs(float.data().id),
+                .animations => animations(),
+                .struct_ui => structUI(),
+                .debugging => debuggingErrors(),
             };
 
-            const init_data = [_]TopChild{ .{ .a_dir = .vertical }, .{ .a_dir = .horizontal } };
-            var mut_array = init_data;
-            var ptr: TopChild = TopChild{ .a_dir = .horizontal };
+            demo_scaler.deinit();
 
-            a_u8: u8 = 1,
-            a_f32: f32 = 2.0,
-            a_i8: i8 = 1,
-            a_f64: f64 = 2.0,
-            a_bool: bool = false,
-            a_ptr: *TopChild = undefined,
-            a_struct: TopChild = .{ .a_dir = .vertical },
-            a_str: []const u8 = &[_]u8{0} ** 20,
-            a_slice: []TopChild = undefined,
+            if (db.button.clicked()) {
+                demo_active = e;
+                if (paned.collapsed()) {
+                    paned.animateSplit(0.0);
+                }
+            }
+            db.deinit();
+        }
+    }
 
-            var instance: @This() = .{ .a_slice = &mut_array, .a_ptr = &ptr };
+    {
+        var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
+        defer scroll.deinit();
+
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+
+        if (paned.collapsed() and try dvui.button(@src(), "Back to Demos", .{}, .{ .min_size_content = .{ .h = 30 } })) {
+            paned.animateSplit(1.0);
+        }
+
+        try dvui.label(@src(), "{s}", .{demo_active.name()}, .{ .font_style = .title_2, .gravity_y = 0.5 });
+        hbox.deinit();
+
+        var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both, .padding = Rect.all(4) });
+        defer vbox.deinit();
+
+        try switch (demo_active) {
+            .basic_widgets => basicWidgets(),
+            .calculator => calculator(),
+            .text_entry => textEntryWidgets(),
+            .styling => styling(),
+            .layout => layout(),
+            .text_layout => layoutText(),
+            .reorderable => reorderLists(),
+            .menus => menus(),
+            .focus => focus(),
+            .scrolling => scrolling(),
+            .dialogs => dialogs(float.data().id),
+            .animations => animations(),
+            .struct_ui => structUI(),
+            .debugging => debuggingErrors(),
         };
-
-        try dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
-        {
-            try dvui.structEntryAlloc(@src(), dvui.currentWindow().gpa, Top, &Top.instance, .{ .margin = .{ .x = 10 } });
-        }
-
-        if (try dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
-            var b2 = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-            defer b2.deinit();
-
-            const color_field_options = .{ .fields = .{
-                .r = .{ .min = 0, .max = 255, .widget_type = .slider },
-                .g = .{ .min = 0, .max = 255, .widget_type = .slider },
-                .b = .{ .min = 0, .max = 255, .widget_type = .slider },
-                .a = .{ .disabled = true },
-            } };
-
-            try dvui.structEntryEx(@src(), "dvui.Theme", dvui.Theme, dvui.themeGet(), .{
-                .use_expander = false,
-                .label_override = "",
-                .fields = .{
-                    .name = .{ .disabled = true },
-                    .dark = .{ .widget_type = .toggle },
-                    .style_err = .{ .disabled = true },
-                    .style_accent = .{ .disabled = true },
-                    .font_body = .{ .disabled = true },
-                    .font_heading = .{ .disabled = true },
-                    .font_caption = .{ .disabled = true },
-                    .font_caption_heading = .{ .disabled = true },
-                    .font_title = .{ .disabled = true },
-                    .font_title_1 = .{ .disabled = true },
-                    .font_title_2 = .{ .disabled = true },
-                    .font_title_3 = .{ .disabled = true },
-                    .font_title_4 = .{ .disabled = true },
-                    .color_accent = color_field_options,
-                    .color_err = color_field_options,
-                    .color_text = color_field_options,
-                    .color_text_press = color_field_options,
-                    .color_fill = color_field_options,
-                    .color_fill_window = color_field_options,
-                    .color_fill_control = color_field_options,
-                    .color_fill_hover = color_field_options,
-                    .color_fill_press = color_field_options,
-                    .color_border = color_field_options,
-                },
-            });
-        }
     }
 
-    if (try dvui.expander(@src(), "Debugging and Errors", .{}, .{ .expand = .horizontal })) {
-        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-        defer b.deinit();
-        try debuggingErrors();
-    }
+    paned.deinit();
+
+    //if (try dvui.expander(@src(), "Basic Widgets", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try basicWidgets();
+    //}
+
+    //if (try dvui.expander(@src(), "Calculator", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try calculator();
+    //}
+
+    //if (try dvui.expander(@src(), "Text Entry", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try textEntryWidgets();
+    //}
+
+    //if (try dvui.expander(@src(), "Styling", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try styling();
+    //}
+
+    //if (try dvui.expander(@src(), "Layout", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try layout();
+    //}
+
+    //if (try dvui.expander(@src(), "Text Layout", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try layoutText();
+    //}
+
+    //if (try dvui.expander(@src(), "Reorderable Lists", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try reorderLists();
+    //}
+
+    //if (try dvui.expander(@src(), "Menus", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try menus();
+    //}
+
+    //if (try dvui.expander(@src(), "Focus", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try focus();
+    //}
+
+    //if (try dvui.expander(@src(), "Scrolling", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try scrolling();
+    //}
+
+    //if (try dvui.expander(@src(), "Dialogs and Toasts", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try dialogs(float.data().id);
+    //}
+
+    //if (try dvui.expander(@src(), "Animations", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try animations();
+    //}
+
+    //if (try dvui.expander(@src(), "Theme Parsing", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try themeSerialization();
+    //}
+
+    //if (try dvui.expander(@src(), "Struct UI Widget (Experimental)", .{}, .{ .expand = .horizontal })) {}
+
+    //if (try dvui.expander(@src(), "Debugging and Errors", .{}, .{ .expand = .horizontal })) {
+    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    //    defer b.deinit();
+    //    try debuggingErrors();
+    //}
 
     if (show_dialog) {
         try dialogDirect();
@@ -554,6 +633,84 @@ pub fn demo() !void {
     if (IconBrowser.show) {
         try icon_browser();
     }
+}
+
+pub fn structUI() !void {
+    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    defer b.deinit();
+
+    const Top = struct {
+        const TopChild = struct {
+            a_dir: dvui.enums.Direction = undefined,
+        };
+
+        const init_data = [_]TopChild{ .{ .a_dir = .vertical }, .{ .a_dir = .horizontal } };
+        var mut_array = init_data;
+        var ptr: TopChild = TopChild{ .a_dir = .horizontal };
+
+        a_u8: u8 = 1,
+        a_f32: f32 = 2.0,
+        a_i8: i8 = 1,
+        a_f64: f64 = 2.0,
+        a_bool: bool = false,
+        a_ptr: *TopChild = undefined,
+        a_struct: TopChild = .{ .a_dir = .vertical },
+        a_str: []const u8 = &[_]u8{0} ** 20,
+        a_slice: []TopChild = undefined,
+
+        var instance: @This() = .{ .a_slice = &mut_array, .a_ptr = &ptr };
+    };
+
+    try dvui.label(@src(), "Show UI elements for all fields of a struct:", .{}, .{});
+    {
+        try dvui.structEntryAlloc(@src(), dvui.currentWindow().gpa, Top, &Top.instance, .{ .margin = .{ .x = 10 } });
+    }
+
+    if (try dvui.expander(@src(), "Edit Current Theme", .{}, .{ .expand = .horizontal })) {
+        try themeEditor();
+    }
+}
+
+pub fn themeEditor() !void {
+    var b2 = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
+    defer b2.deinit();
+
+    const color_field_options = .{ .fields = .{
+        .r = .{ .min = 0, .max = 255, .widget_type = .slider },
+        .g = .{ .min = 0, .max = 255, .widget_type = .slider },
+        .b = .{ .min = 0, .max = 255, .widget_type = .slider },
+        .a = .{ .disabled = true },
+    } };
+
+    try dvui.structEntryEx(@src(), "dvui.Theme", dvui.Theme, dvui.themeGet(), .{
+        .use_expander = false,
+        .label_override = "",
+        .fields = .{
+            .name = .{ .disabled = true },
+            .dark = .{ .widget_type = .toggle },
+            .style_err = .{ .disabled = true },
+            .style_accent = .{ .disabled = true },
+            .font_body = .{ .disabled = true },
+            .font_heading = .{ .disabled = true },
+            .font_caption = .{ .disabled = true },
+            .font_caption_heading = .{ .disabled = true },
+            .font_title = .{ .disabled = true },
+            .font_title_1 = .{ .disabled = true },
+            .font_title_2 = .{ .disabled = true },
+            .font_title_3 = .{ .disabled = true },
+            .font_title_4 = .{ .disabled = true },
+            .color_accent = color_field_options,
+            .color_err = color_field_options,
+            .color_text = color_field_options,
+            .color_text_press = color_field_options,
+            .color_fill = color_field_options,
+            .color_fill_window = color_field_options,
+            .color_fill_control = color_field_options,
+            .color_fill_hover = color_field_options,
+            .color_fill_press = color_field_options,
+            .color_border = color_field_options,
+        },
+    });
 }
 
 pub fn themeSerialization() !void {
@@ -1194,17 +1351,17 @@ pub fn layout() !void {
 
     try dvui.label(@src(), "FlexBox", .{}, .{});
     {
-        var fbox = try dvui.flexbox(@src(), .{}, .{ .border = dvui.Rect.all(1), .background = true, .padding = .{.w = 4, .h = 4} });
+        var fbox = try dvui.flexbox(@src(), .{}, .{ .border = dvui.Rect.all(1), .background = true, .padding = .{ .w = 4, .h = 4 } });
         defer fbox.deinit();
 
         for (0..10) |i| {
-            var labelbox = try dvui.box(@src(), .vertical, .{ .id_extra = i, .margin = .{.x = 4, .y = 4}, .border = dvui.Rect.all(1) });
+            var labelbox = try dvui.box(@src(), .vertical, .{ .id_extra = i, .margin = .{ .x = 4, .y = 4 }, .border = dvui.Rect.all(1), .background = true });
             defer labelbox.deinit();
 
             if (i % 2 == 0) {
-                try dvui.label(@src(), "Box {d}", .{i}, .{.expand = .both, .gravity_x = 0.5, .gravity_y = 0.5});
+                try dvui.label(@src(), "Box {d}", .{i}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
             } else {
-                try dvui.label(@src(), "Large\nBox {d}", .{i}, .{.expand = .both, .gravity_x = 0.5, .gravity_y = 0.5});
+                try dvui.label(@src(), "Large\nBox {d}", .{i}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
             }
         }
     }
@@ -1304,7 +1461,8 @@ pub fn reorderLists() !void {
         var dir_entry: usize = 0;
     };
 
-    if (try dvui.expander(@src(), "Simple", .{}, .{ .expand = .horizontal })) {
+    const expander_o: dvui.ExpanderOptions = .{ .default_expanded = true };
+    if (try dvui.expander(@src(), "Simple", expander_o, .{ .expand = .horizontal })) {
         const dir: dvui.enums.Direction = if (g.dir_entry == 0) .vertical else .horizontal;
 
         var vbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
@@ -1333,7 +1491,7 @@ pub fn reorderLists() !void {
         try reorderListsSimple(dir);
     }
 
-    if (try dvui.expander(@src(), "Advanced", .{}, .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Advanced", expander_o, .{ .expand = .horizontal })) {
         var vbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer vbox.deinit();
 
