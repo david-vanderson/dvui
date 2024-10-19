@@ -1456,15 +1456,19 @@ pub fn layoutText() !void {
     }
 }
 
+const reorderLayout = enum {
+    vertical,
+    horizontal,
+    flex,
+};
+
 pub fn reorderLists() !void {
     const g = struct {
-        var dir_entry: usize = 0;
+        var layout: reorderLayout = .vertical;
     };
 
     const expander_o: dvui.ExpanderOptions = .{ .default_expanded = true };
     if (try dvui.expander(@src(), "Simple", expander_o, .{ .expand = .horizontal })) {
-        const dir: dvui.enums.Direction = if (g.dir_entry == 0) .vertical else .horizontal;
-
         var vbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer vbox.deinit();
 
@@ -1472,10 +1476,10 @@ pub fn reorderLists() !void {
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
             defer hbox2.deinit();
 
-            const entries = [_][]const u8{ "Vertical", "Horizontal" };
-            for (0..2) |i| {
-                if (try dvui.radio(@src(), g.dir_entry == i, entries[i], .{ .id_extra = i })) {
-                    g.dir_entry = i;
+            const entries = [_][]const u8{ "Vertical", "Horizontal", "Flex" };
+            for (0..3) |i| {
+                if (try dvui.radio(@src(), @intFromEnum(g.layout) == i, entries[i], .{ .id_extra = i })) {
+                    g.layout = @enumFromInt(i);
                 }
             }
         }
@@ -1488,7 +1492,7 @@ pub fn reorderLists() !void {
             try dvui.label(@src(), "to reorder.", .{}, .{});
         }
 
-        try reorderListsSimple(dir);
+        try reorderListsSimple(g.layout);
     }
 
     if (try dvui.expander(@src(), "Advanced", expander_o, .{ .expand = .horizontal })) {
@@ -1500,7 +1504,7 @@ pub fn reorderLists() !void {
     }
 }
 
-pub fn reorderListsSimple(dir: dvui.enums.Direction) !void {
+pub fn reorderListsSimple(lay: reorderLayout) !void {
     const g = struct {
         var dir_entry: usize = 0;
         var strings = [6][]const u8{ "zero", "one", "two", "three", "four", "five" };
@@ -1514,8 +1518,17 @@ pub fn reorderListsSimple(dir: dvui.enums.Direction) !void {
     defer reorder.deinit();
 
     // this box determines layout of list - could be any layout widget
-    var vbox = try dvui.box(@src(), dir, .{ .expand = .both });
-    defer vbox.deinit();
+    var vbox: ?*dvui.BoxWidget = null;
+    var fbox: ?*dvui.FlexBoxWidget = null;
+    switch (lay) {
+        .vertical => vbox = try dvui.box(@src(), .vertical, .{ .expand = .both }),
+        .horizontal => vbox = try dvui.box(@src(), .horizontal, .{ .expand = .both }),
+        .flex => fbox = try dvui.flexbox(@src(), .{}, .{ .expand = .both }),
+    }
+    defer {
+        if (vbox) |vb| vb.deinit();
+        if (fbox) |fb| fb.deinit();
+    }
 
     for (g.strings[0..g.strings.len], 0..) |s, i| {
 
