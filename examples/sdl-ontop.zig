@@ -8,6 +8,9 @@ const gpa = gpa_instance.allocator();
 
 pub const c = SDLBackend.c;
 
+const vsync = false;
+const show_demo = false;
+
 var window: *c.SDL_Window = undefined;
 var renderer: *c.SDL_Renderer = undefined;
 
@@ -15,6 +18,8 @@ var renderer: *c.SDL_Renderer = undefined;
 /// - dvui renders only floating windows
 /// - framerate is managed by application, not dvui
 pub fn main() !void {
+    dvui.Examples.show_demo_window = show_demo;
+
     // app_init is a stand-in for what your application is already doing to set things up
     try app_init();
 
@@ -117,7 +122,12 @@ fn dvui_floating_stuff() !void {
     var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
     try tl2.addText("The dvui is painting only floating windows and dialogs.", .{});
     try tl2.addText("\n\n", .{});
-    try tl2.addText("Framerate is managed by the application (in this demo capped at vsync).", .{});
+    try tl2.addText("Framerate is managed by the application", .{});
+    if (vsync) {
+        try tl2.addText(" (capped at vsync)", .{});
+    } else {
+        try tl2.addText(" (uncapped - no vsync)", .{});
+    }
     try tl2.addText("\n\n", .{});
     try tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
     try tl2.addText("\n\n", .{});
@@ -150,7 +160,7 @@ fn app_init() !void {
 
     _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
-    renderer = c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_PRESENTVSYNC) orelse {
+    renderer = c.SDL_CreateRenderer(window, -1, if (vsync) c.SDL_RENDERER_PRESENTVSYNC else 0) orelse {
         std.debug.print("Failed to create renderer: {s}\n", .{c.SDL_GetError()});
         return error.BackendError;
     };

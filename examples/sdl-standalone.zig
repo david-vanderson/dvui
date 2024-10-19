@@ -11,6 +11,7 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 const vsync = true;
+const show_demo = false;
 var scale_val: f32 = 1.0;
 
 var show_dialog_outside_frame: bool = false;
@@ -20,6 +21,8 @@ var g_backend: ?Backend = null;
 /// - dvui renders the whole application
 /// - render frames only when needed
 pub fn main() !void {
+    dvui.Examples.show_demo_window = show_demo;
+
     defer _ = gpa_instance.deinit();
 
     // init SDL backend (creates and owns OS window)
