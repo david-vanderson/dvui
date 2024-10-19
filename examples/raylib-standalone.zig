@@ -55,7 +55,13 @@ pub fn main() !void {
         // the previous frame's render
         backend.clear();
 
-        try dvui_frame();
+        try dvui.DemoView.demoView(&.{
+            .{
+                .label = "Ray-N-DVUI",
+                .scale = 0.2,
+                .ui_fn = dvui_frame
+            }
+        });
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
@@ -132,6 +138,11 @@ fn dvui_frame() !void {
     }
     tl2.deinit();
 
+    const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
+    if (try dvui.button(@src(), label, .{}, .{})) {
+        dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
+    }
+
     {
         var scaler = try dvui.scale(@src(), scale_val, .{ .expand = .horizontal });
         defer scaler.deinit();
@@ -169,11 +180,6 @@ fn dvui_frame() !void {
         const r = RaylibBackend.dvuiRectToRaylib(rs.r);
         const s = rs.s / dvui.windowNaturalScale();
         c.DrawText("Congrats! You created your first window!", @intFromFloat(r.x + 10 * s), @intFromFloat(r.y + 10 * s), @intFromFloat(20 * s), c.LIGHTGRAY);
-    }
-
-    const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    if (try dvui.button(@src(), label, .{}, .{})) {
-        dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
     if (try dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
