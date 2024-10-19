@@ -22,6 +22,7 @@ rect: Rect = Rect{},
 min_size: Size = Size{},
 options: Options = undefined,
 src: std.builtin.SourceLocation,
+rect_scale_cache: ?RectScale = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     var self = WidgetData{ .src = src };
@@ -65,7 +66,9 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     return self;
 }
 
-pub fn register(self: *const WidgetData) !void {
+pub fn register(self: *WidgetData) !void {
+    self.rect_scale_cache = self.rectScale();
+
     var cw = dvui.currentWindow();
     const name: []const u8 = self.options.name orelse "???";
 
@@ -160,6 +163,10 @@ pub fn focusBorder(self: *const WidgetData) !void {
 }
 
 pub fn rectScale(self: *const WidgetData) RectScale {
+    if (self.rect_scale_cache) |rsc| {
+        return rsc;
+    }
+
     if (self.init_options.subwindow) {
         const s = dvui.windowNaturalScale();
         const scaled = self.rect.scale(s);
