@@ -6,11 +6,79 @@ zig 0.14:
 check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
+doc comments and publish
+update web-test and publish
 
-figure out what we get when pressing fn-up/down on mac
-- do we just get page_up/page_down?
 
-textEntry doesn't need its own scroll_to_cursor
+can we save rendering commands and render to a texture we can get back?
+- that would help plotting
+- could make the demoButton's contents be static (cached images)
+
+
+should do tabIndexSet if the element has size, so even if it's scrolled off the screen we still go to it
+- when we do tabIndexNext/Prev it should focus that element and then also send a scroll_to message from that widget - how?
+
+Is there a way to turn off tab indexing for stuff inside DemoButton?
+- also turn off focus?
+
+Add filter (nearest, linear) to image rendering
+
+add animating example of a dialog that opens down and closes up
+- replace the Scale one
+
+
+textEntry: fix scroll_to_cursor
+char_left
+char_right
+backspace
+backspace with selection
+delete_prev_word
+delete
+delete with selection
+delete_next_word
+enter
+text
+select_all
+
+
+This was on current arch linux. The zig sdl package expects GLES/gl.h to exist, but on arch linux it is GLES2/gl2.h (or GLES3/gl3.h?). The system sdl package is (obviously) configured correctly, so it builds fine with that.
+
+does it help web-test size to leave out some fonts and icons?
+
+
+scrollContainer:
+- doesn't do multiple widgets going horizontally
+  - rectFor or minSizeForChild
+- add a direction to scrollContainer that controls the direction widgets are added in
+
+
+
+lock_visible
+- also take into account any viewport movement that frame from events/velocity
+
+
+do some profiling of the scrolling demo and add caching to BoxWidget?
+- add some profiling infrastructure?
+- if cache is true and we are outside clipping rectangle, then can skip children and just go again with our minSize
+
+
+add Options.id_override to forcefully set the id
+- use in textEntryNumber
+- use in reoder so things don't reset when they get dragged/dropped
+- search for all uses of extendId
+
+
+add event handling demo
+- use stroke test as a starting point and redo it
+- show how to get mouse events?
+- show how to alter keyboard events for textEntry?
+
+
+textLayout:
+- check that min width/height works when there are top corner widgets (top left, top right, both) but no text
+
+
+try to decouple background from border
 
 
 textEntryNumber example - show how to initialize with number and write back if the number validates?
@@ -42,11 +110,6 @@ web-test: need to enlarge all the fonts, not just adwaita?
 maybe toasts subwindow need some kind of outline?
 
 
-
-FlexWidget
-- layout widget that lays out children on a row by row (or col by col) basis
-- add flex as option for reorderable example
-
 test ability to scroll_drag on a touch screen - do we need a curtain area around the edge of the scrollarea/screen where touch events will cause a scroll drag?
 
 
@@ -70,73 +133,21 @@ text rendering:
 - see if the vertical weirdness is global, maybe a canvas size thing?  Does it happen in the SDL demo?
 
 
-zig.news writeup for how to do a build.zig step with a zig function
-
 add cursors to examples (row of buttons or something one for each cursor)
-
-UI scaling on Windows (and browsers) causes fonts to look blurry, maybe if snap to pixels is true, we round to nearest font size and then don't adjust for target_fraction?
-
-firefox mouse-over menu items causes them to flicker?
-- only the top level items File, Edit, not ones inside a floating menu
-
-if textLayout is doing touch editing and gets a mouse down event, it should end touch editing
 
 touch editing - when a paste or text insertion happens, toggle off the touch editing
 
-colorspace conversions (see issue)
-
-switch options font selection to the same scheme as colors
-
-
 on hidpi display, selecting a bunch of text leaves small gaps noticeable in the selection background
 - only if the text is added char by char
-
-textLayout/textEntry touch editing:
-- floating context needs smarter positioning if it can't go above the widget
-
-touch pinch zoom (window? subwindow?) - integrated with ScrollContainer?
-
 
 paned should have an "autopos" mode where when not collapsed it will use the expand of the children to determine split
 - this way you can have the split automatically be not 50/50
 
 
-textEntry key updown (shift-updown for textLayout) needs to be fixed to be able to do another updown each frame
-- probably should always record a rect position for selection start/cursor/end
-- figure out where cursor is from updown_pt from last frame
-- from there determine new cursor point and store for next frame
-- can we not check sel_mouse_down_pt = null and other stuff for each key?
-
-see if we can get the mach backend working again
-- maybe just use the glfw part of mach?
-- can we also get it working in a browser?
-
-don't use box for slider, use WidgetData directly?  Other widgets?
-
-should box do something intelligent about dividing space if snap_to_pixels is on?
-
-add hyperlink functionality to textLayout
-
-add more keyboard shortcuts to textEntry
-- select all
-- home
-- end
-- pgup/pgdown
-
-touch scrolling velocity should be based on how far the finger has moved in the last bit of time (not how much it moved in the last event)
-
 need a button for sizing/rotation for icon and raster that works continuously while you hold it down
 - add option to Button where when in the down position it keeps refreshing
 
-add FlexLayoutWidget
-- doesn't have independent min height/width (works like textLayout)
-- start with no expand, and only left->right top->bottom
-
-if using standalone, should be able to draw using SDL stuff into a widget
-- so base window needs to not delay rendering so you can render ontop of widget backgrounds
-
 when new events come in, we assign the focus id, but probably shouldn't once we see a focus mouse event
-
 
 need a strategy for activating paste from a menu, because the widget will lose focus when the menu is activated
 - when the menu gets focus, maybe it saves the previous focus id?
@@ -148,64 +159,16 @@ add inertia to scrolling
 
 switch from my freetype fork to Mach's
 
-scaling:
-- when we are at 125% on linux x11 gnome, then the fonts look bad?
-- test on Windows
-- test on Mac
-
-change BoxWidget to take InitOptions
-
-change MenuWidget to take InitOptions
-- also should take parentSubwindowId
-
-popupSet - can this be done as a static var inside PopupWidget?
-
-
-send updates to tinyvg
-
 maybe builtin button should record multiple clicks?
 - helps in low framerate situations
-
-demo:
-- add uses of animate
-
-icon browser: when clicking an icon, copy the buttonIcon line of code and show a toast
-- can the demo have more of these kind of "click to copy the code" things?
-
-look into why mouse events seem delayed when using vsync
-- try only calling SDL_PollEvent (or pump events) once per frame? (and using peep events to actually get the events)
-
-unify Widget and WidgetData somehow?
 
 TextLayout support for large documents
 - need a function to say "we are skipping a bunch of bytes" (might be useful for code folding as well)
 - addTextDone needs to not always set cursor because there might be lots of text remaining that we aren't rendering
 
-get mach example working again
-- MachBackend should save the passed allocator
-
-
 add alpha to Options as well and multiply it by the theme alpha
 
-example toast that includes "undo"
-
-add disabled to options so the seek forward/backward icons can be grayed out?
-- need to add ability to gray out things too (alpha to options?)
-- is disabled just a visual thing?
-  - can still tab/click on it?
-- when disabled, can't tab to that thing?
-  - if focused and disabled, call tabIndexNext
-
-
-can't format {d:02} needs {d:0>2}?
-
 add backend function to allow screensaver
-
-audit backends for how to use them on top of an existing app
-
-separate background and border drawing:
-- embed a convex polygon triangulator?  Will need for arbitrary pathing in any case
-- can draw border by walking along both arcs in parallel trying to keep the angle of the line between the points alternating around 45 deg
 
 cross-widget dragging (for stuff like docking)
 - dragPreStart and dragStart take a ?[]const u8 ("_dock")
@@ -214,42 +177,6 @@ cross-widget dragging (for stuff like docking)
 - widgets that only do mouse capture dragging can pass null
 - other widgets have to coordinate via the string
   - need to be able to call dragging outside of processing events so you can change appearance if the drag you are interested in is happening
-
-for normal animations should be able to do a wrapper widget
-- can animate from 0 to min_size (gotten from deinit)
-- can deanimate from current size to 0
-- floating windows are different since they aren't in the normal flow
- - need a special wrapper for them which doesn't insert itself into the heirarchy just adjusts values
-
-look into logging, how to use it in general and how to use it for gui stuff?
-- const scope_name = std.log.scoped(.whatever);
-- Then define a log function with the appropriate signature in your root file?
-- maybe can use WidgetData.init to help with logging or debug mode?
-
-how can I get mach to not build all it's stuff when I'm compiling an sdl example?
-- need for it to do the work in a build step rather than when the build step is being made
-
--Dtarget=wasm32-freestanding-none
-
-mach-test: no tab key?
-
-linux mach-test: moving GUI Demo window around lags
-
-more docs
-- tabindex
-- seamless animations
-
-start making real demo() contents
-- document stuff inside there?
-- following dear imgui demo
- - Basic Widgets
-  - radio
-  - hold-repeat buttons
-  - tooltips
-  - dropdown selection
-- mouse cursors
-- gravity
-- themes
 
 Tooltips:
 - wrapper around thing you want the tooltip for
@@ -275,71 +202,9 @@ Tooltips:
       - if staying alive and we have a ttp parent, tell that parent we are live
   }
 
-
-test what happens if std.time.nanoTimestamp() jumps backwards or forwards
-- if backwards just a tiny bit, stay on frame_time_ns?
-- if backwards more (or forwards a lot), reset frame_time_ns and also shift any animations?
-- check begin() and beginWait()
-
-
-text input support in mach
-clipboard support in mach
-
 xstart and ystart for textSize
 
 kerning
-- check how sdl_ttf does it
-
-popup needs to align it's text with the label that popped it
-- take a flag for whether it's popping updown or sideways, then adjust x or y to account for border and padding
-
-switch to adwaita default font?
-
-mach: do clipping in the shader?
-
-premultiplied alpha for all textures (and vertices from PathStroke/Fill?)
-- also font glyphs
-- what is SDL_rendergeometry doing?
 
 when we have a widget that has captured the mouse, need to capture the mouse in the underlying window system so click-dragging works even when the mouse pointer goes outside the window
-
-some visual indication of non-focused windows
-- maybe change focus color inside?
-
-hover and highlight properties need to propogate down to children so that icons can draw properly in buttons where the button is highlighted but not the icon directly?
-  - maybe as part of the Options struct?
-
-
-dialog
-- maybe a flag on floatingwindow?
-- have a separate function that does the nextWindowCleanup
-  - always call in deinit, but also user can call that and get result if the user pressed esc
-  - are there other things a user could press?
-- rss textentry should bubble up the enter that it doesn't process so the dialog can record that it should "submit"
- - maybe always bubble up dialog-related key presses?
-
-maybe use stb_truetype or whatever so we don't need sdl_ttf?
-- translate-c is failing for a few of the functions
-- could make separate repo just like stb_image
-
-change cursorlayout from top-to-bottom to left-to-right with optional extra floating widgets that get routed around
-- save info for each line
-  - size and baseline offset
-  - height is max of (height of items without baseline) and max of (max of baselines, max of underhangs) of items with baselines
-  - if new size/baseline is different, cueFrame()
-- replace menubar horizontal box with textlayout so that lots of menus will wrap
-
-baseline alignment
-- maybe only inside TextLayout?
-- vertical alignment needs additional .baseline
-- rectFor provides baseline float offset from top of rect
-- minSize needs to send baseline offset
-- PlaceIn honors .baseline alignment
-
-make Alt do special stuff with the menubar
-
-scroll widget when stuff is being added/deleted
-- lock to top if there previously
-- scroll to bottom if there previously
-- otherwise scroll to widget that was in the middle?
 
