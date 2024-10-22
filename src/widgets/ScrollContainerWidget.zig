@@ -478,15 +478,19 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     dvui.focusWidget(self.wd.id, null, e.num);
                 } else if (me.action == .wheel_y) {
                     // scroll vertically if we can, otherwise try horizontal
-                    if (self.si.vertical != .none) {
+                    // use scrollMax instead of self.si.vertical != .none so
+                    // that if we possibly could scroll vertically but there's
+                    // not enough content to show the scrollbar, we'll try
+                    // horizontal
+                    if (self.si.scrollMax(.vertical) > 0) {
                         if ((me.data.wheel_y > 0 and self.si.viewport.y <= 0) or (me.data.wheel_y < 0 and self.si.viewport.y >= self.si.scrollMax(.vertical))) {
-                            // propogate the scroll event because we are already maxxed out
+                            // try horizontal or propogate the scroll event because we are already maxxed out
                         } else {
                             e.handled = true;
                             self.si.scrollByOffset(.vertical, -me.data.wheel_y);
                             dvui.refresh(null, @src(), self.wd.id);
                         }
-                    } else if (self.si.horizontal != .none) {
+                    } else if (self.si.scrollMax(.horizontal) > 0) {
                         if ((me.data.wheel_y > 0 and self.si.viewport.x <= 0) or (me.data.wheel_y < 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
                             // propogate the scroll event because we are already maxxed out
                         } else {
