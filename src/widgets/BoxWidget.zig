@@ -69,6 +69,10 @@ pub fn drawBackground(self: *BoxWidget) !void {
     try self.wd.borderAndBackground(.{});
 }
 
+pub fn matchEvent(self: *BoxWidget, e: *Event) bool {
+    return dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
+}
+
 pub fn widget(self: *BoxWidget) Widget {
     return Widget.init(self, data, rectFor, screenRectScale, minSizeForChild, processEvent);
 }
