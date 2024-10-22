@@ -478,23 +478,23 @@ pub fn demo() !void {
 
             const demo_scaler = try dvui.scale(@src(), e.scale(), .{ .expand = .both });
 
-            try switch (e) {
-                .basic_widgets => basicWidgets(),
-                .calculator => calculator(),
-                .text_entry => textEntryWidgets(),
-                .styling => styling(),
-                .layout => layout(),
-                .text_layout => layoutText(),
-                .reorderable => reorderLists(),
-                .menus => menus(),
-                .focus => focus(),
-                .scrolling => scrolling(),
-                .scroll_canvas => scrollCanvas(),
-                .dialogs => dialogs(float.data().id),
-                .animations => animations(),
-                .struct_ui => structUI(),
-                .debugging => debuggingErrors(),
-            };
+            switch (e) {
+                .basic_widgets => try basicWidgets(),
+                .calculator => try calculator(),
+                .text_entry => try textEntryWidgets(),
+                .styling => try styling(),
+                .layout => try layout(),
+                .text_layout => try layoutText(),
+                .reorderable => try reorderLists(),
+                .menus => try menus(),
+                .focus => try focus(),
+                .scrolling => try scrolling(),
+                .scroll_canvas => {},
+                .dialogs => try dialogs(float.data().id),
+                .animations => try animations(),
+                .struct_ui => try structUI(),
+                .debugging => try debuggingErrors(),
+            }
 
             demo_scaler.deinit();
 
@@ -1949,7 +1949,7 @@ pub fn scrollCanvas() !void {
         var boxes: [2]Point = .{ .{ .x = 50, .y = 10 }, .{ .x = 50, .y = 100 } };
 
         pub fn data2Scroll(p: Point) Point {
-            return p.plus(origin).diff(scroll_info.viewport.topLeft());
+            return p.plus(origin);
         }
 
         pub fn scroll2Data(p: Point) Point {
