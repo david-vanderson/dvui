@@ -327,6 +327,7 @@ pub const demoKind = enum {
     menus,
     focus,
     scrolling,
+    scroll_canvas,
     dialogs,
     animations,
     struct_ui,
@@ -344,6 +345,7 @@ pub const demoKind = enum {
             .menus => "Menus",
             .focus => "Focus",
             .scrolling => "Scrolling",
+            .scroll_canvas => "Scroll Canvas",
             .dialogs => "Dialogs / Toasts",
             .animations => "Animations",
             .struct_ui => "Struct UI\n(Experimental)",
@@ -363,6 +365,7 @@ pub const demoKind = enum {
             .menus => 0.43,
             .focus => 0.74,
             .scrolling => 0.42,
+            .scroll_canvas => 0.5,
             .dialogs => 0.5,
             .animations => 0.5,
             .struct_ui => 0.5,
@@ -486,6 +489,7 @@ pub fn demo() !void {
                 .menus => menus(),
                 .focus => focus(),
                 .scrolling => scrolling(),
+                .scroll_canvas => scrollCanvas(),
                 .dialogs => dialogs(float.data().id),
                 .animations => animations(),
                 .struct_ui => structUI(),
@@ -531,6 +535,7 @@ pub fn demo() !void {
             .menus => menus(),
             .focus => focus(),
             .scrolling => scrolling(),
+            .scroll_canvas => scrollCanvas(),
             .dialogs => dialogs(float.data().id),
             .animations => animations(),
             .struct_ui => structUI(),
@@ -1935,6 +1940,187 @@ pub fn scrolling() !void {
 
     // todo: add button to show icon browser with note about how that works
 
+}
+
+pub fn scrollCanvas() !void {
+    const Data = struct {
+        var scroll_info: ScrollInfo = .{ .vertical = .given, .horizontal = .given };
+        var origin: Point = .{};
+        var boxes: [2]Point = .{ .{ .x = 50, .y = 10 }, .{ .x = 50, .y = 100 } };
+
+        pub fn data2Scroll(p: Point) Point {
+            return p.plus(origin).diff(scroll_info.viewport.topLeft());
+        }
+
+        pub fn scroll2Data(p: Point) Point {
+            return p.diff(origin);
+        }
+    };
+
+    var vbox = try dvui.box(@src(), .vertical, .{});
+    defer vbox.deinit();
+
+    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .color_fill = .{ .name = .fill_window } });
+    try tl.addText("Click-drag to pan\n", .{});
+    //try tl.addText("Ctrl-wheel to zoom\n", .{});
+    try tl.format("Virtual size {d}x{d}\n", .{ Data.scroll_info.virtual_size.w, Data.scroll_info.virtual_size.h }, .{});
+    try tl.format("Scroll Offset {d}x{d}\n", .{ Data.scroll_info.viewport.x, Data.scroll_info.viewport.y }, .{});
+    try tl.format("Origin {d}x{d}\n", .{ Data.origin.x, Data.origin.y }, .{});
+    tl.deinit();
+
+    var scroll = try dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info }, .{ .expand = .both, .min_size_content = .{ .w = 300, .h = 300 } });
+
+    var mouseP = scroll.scroll.data().contentRectScale().pointFromScreen(dvui.currentWindow().mouse_pt);
+    mouseP = mouseP.plus(Data.origin).plus(Data.scroll_info.viewport.topLeft());
+
+    // keep record of bounding box
+    var mbbox: ?Rect = null;
+
+    for (&Data.boxes, 0..) |*b, i| {
+        var dragBox = try dvui.box(@src(), .vertical, .{
+            .id_extra = i,
+            .rect = dvui.Rect{ .x = Data.origin.x + b.x, .y = Data.origin.y + b.y },
+            .padding = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
+            .background = true,
+            .color_fill = .{ .name = .fill_window },
+            .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
+            .corner_radius = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
+            .color_border = .{ .color = dvui.Color.black },
+        });
+
+        const boxRect = dragBox.data().rect; // already has origin added (already in scroll coords)
+        if (mbbox) |_| {
+            mbbox = mbbox.?.unionWith(boxRect);
+        } else {
+            mbbox = boxRect;
+        }
+
+        try dvui.label(@src(), "Box {d} {d}x{d}", .{ i, b.x, b.y }, .{});
+        if (try dvui.button(@src(), "Move Right", .{}, .{})) {
+            b.x += 10;
+        }
+
+        // process events to drag the box around
+        const evts = dvui.events();
+        for (evts) |*e| {
+            if (!dragBox.matchEvent(e))
+                continue;
+
+            switch (e.evt) {
+                .mouse => |me| {
+                    if (me.action == .press and me.button.pointer()) {
+                        e.handled = true;
+                        dvui.captureMouse(dragBox.data().id);
+                        const rs = dragBox.data().rectScale();
+                        dvui.dragPreStart(me.p, null, rs.pointFromScreen(me.p));
+                    } else if (me.action == .release and me.button.pointer()) {
+                        if (dvui.captured(dragBox.data().id)) {
+                            e.handled = true;
+                            dvui.captureMouse(null);
+                        }
+                    } else if (me.action == .motion) {
+                        if (dvui.captured(dragBox.data().id)) {
+                            if (dvui.dragging(me.p)) |_| {
+                                const rs = dragBox.data().rectScale();
+                                const offset = rs.pointFromScreen(me.p).diff(dvui.dragOffset()); // how far mouse is from topleft in dragBox coords
+                                b.* = Data.scroll2Data(dragBox.data().rect.topLeft().plus(offset));
+                                dvui.refresh(null, @src(), scroll.scroll.data().id);
+
+                                var scrolldrag = dvui.Event{ .evt = .{ .scroll_drag = .{
+                                    .mouse_pt = e.evt.mouse.p,
+                                    .screen_rect = dragBox.data().rectScale().r,
+                                    .capture_id = dragBox.data().id,
+                                } } };
+                                dragBox.processEvent(&scrolldrag, true);
+                            }
+                        }
+                    }
+                },
+                else => {},
+            }
+        }
+
+        dragBox.deinit();
+    }
+
+    // process scroll area events after boxes so the boxes get first pick (so
+    // the button works)
+    const evts = dvui.events();
+    for (evts) |*e| {
+        if (!scroll.scroll.matchEvent(e))
+            continue;
+
+        switch (e.evt) {
+            .mouse => |me| {
+                if (me.action == .press and me.button.pointer()) {
+                    e.handled = true;
+                    dvui.captureMouse(scroll.scroll.data().id);
+                    dvui.dragPreStart(me.p, null, Point{});
+                } else if (me.action == .release and me.button.pointer()) {
+                    if (dvui.captured(scroll.scroll.data().id)) {
+                        e.handled = true;
+                        dvui.captureMouse(null);
+                    }
+                } else if (me.action == .motion) {
+                    if (dvui.captured(scroll.scroll.data().id)) {
+                        if (dvui.dragging(me.p)) |dps| {
+                            const rs = scroll.scroll.data().rectScale();
+                            Data.scroll_info.viewport.x -= dps.x / rs.s;
+                            Data.scroll_info.viewport.y -= dps.y / rs.s;
+                            dvui.refresh(null, @src(), scroll.scroll.data().id);
+                        }
+                    }
+                }
+            },
+            else => {},
+        }
+    }
+
+    // deinit is where scroll processes events
+    scroll.deinit();
+
+    // don't mess with scrolling if we aren't being shown (prevents weirdness
+    // when starting out)
+    if (!Data.scroll_info.viewport.empty()) {
+        // add current viewport plus padding
+        const pad = 10;
+        var bbox = Data.scroll_info.viewport.outsetAll(pad);
+        if (mbbox != null) {
+            bbox = bbox.unionWith(mbbox.?);
+        }
+
+        //std.debug.print("bbox {}\n", .{bbox});
+
+        // adjust top if needed
+        if (bbox.y != 0) {
+            const adj = -bbox.y;
+            Data.scroll_info.virtual_size.h += adj;
+            Data.scroll_info.viewport.y += adj;
+            Data.origin.y += adj;
+            dvui.refresh(null, @src(), scroll.scroll.data().id);
+        }
+
+        // adjust left if needed
+        if (bbox.x != 0) {
+            const adj = -bbox.x;
+            Data.scroll_info.virtual_size.w += adj;
+            Data.scroll_info.viewport.x += adj;
+            Data.origin.x += adj;
+            dvui.refresh(null, @src(), scroll.scroll.data().id);
+        }
+
+        // adjust bottom if needed
+        if (bbox.h != Data.scroll_info.virtual_size.h) {
+            Data.scroll_info.virtual_size.h = bbox.h;
+            dvui.refresh(null, @src(), scroll.scroll.data().id);
+        }
+
+        // adjust right if needed
+        if (bbox.w != Data.scroll_info.virtual_size.w) {
+            Data.scroll_info.virtual_size.w = bbox.w;
+            dvui.refresh(null, @src(), scroll.scroll.data().id);
+        }
+    }
 }
 
 pub fn dialogs(demo_win_id: u32) !void {
