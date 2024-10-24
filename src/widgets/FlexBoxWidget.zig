@@ -14,6 +14,7 @@ pub const InitOptions = struct {};
 
 wd: WidgetData = undefined,
 init_options: InitOptions = undefined,
+prevClip: Rect = Rect{},
 insert_pt: dvui.Point = .{},
 row_size: Size = .{},
 max_row_width: f32 = 0.0,
@@ -32,10 +33,15 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 pub fn install(self: *FlexBoxWidget) !void {
     try self.wd.register();
     dvui.parentSet(self.widget());
+
+    self.prevClip = dvui.clip(self.wd.contentRectScale().r);
 }
 
 pub fn drawBackground(self: *FlexBoxWidget) !void {
+    const clip = dvui.clipGet();
+    dvui.clipSet(self.prevClip);
     try self.wd.borderAndBackground(.{});
+    dvui.clipSet(clip);
 }
 
 pub fn widget(self: *FlexBoxWidget) Widget {
@@ -101,6 +107,7 @@ pub fn processEvent(self: *FlexBoxWidget, e: *dvui.Event, bubbling: bool) void {
 
 pub fn deinit(self: *FlexBoxWidget) void {
     dvui.dataSet(null, self.wd.id, "_mrw", self.max_row_width);
+    dvui.clipSet(self.prevClip);
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);
