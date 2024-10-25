@@ -111,7 +111,7 @@ fn update() !i32 {
     const end_micros = try win.end(.{});
 
     backend.setCursor(win.cursorRequested());
-    backend.setOSKPosition(win.OSKRequested());
+    backend.textInputRect(win.textInputRequested());
 
     const wait_event_micros = win.waitTime(end_micros, null);
     return @intCast(@divTrunc(wait_event_micros, 1000));

@@ -94,7 +94,7 @@ pub fn main() !void {
             // cursor should be handled by application
             backend.setCursor(.bad);
         }
-        backend.setOSKPosition(win.OSKRequested());
+        backend.textInputRect(win.textInputRequested());
 
         // render frame to OS
         backend.renderPresent();
