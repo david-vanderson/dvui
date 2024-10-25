@@ -324,7 +324,7 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
     }
 }
 
-pub fn setOSKPosition(self: *SDLBackend, rect: ?dvui.Rect) void {
+pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect) void {
     _ = self;
     if (rect) |r| {
         c.SDL_SetTextInputRect(&c.SDL_Rect{ .x = @intFromFloat(r.x), .y = @intFromFloat(r.y), .w = @intFromFloat(r.w), .h = @intFromFloat(r.h) });

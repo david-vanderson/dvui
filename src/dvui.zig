@@ -2401,9 +2401,9 @@ pub fn tabIndexPrev(event_num: ?u16) void {
 /// * rect on screen (position possible IME window)
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn wantOnScreenKeyboard(r: Rect) void {
+pub fn wantTextInput(r: Rect) void {
     const cw = currentWindow();
-    cw.osk_focused_widget_text_rect = r.scale(1 / cw.natural_scale);
+    cw.text_input_rect = r.scale(1 / cw.natural_scale);
 }
 
 // maps to OS window
@@ -2455,8 +2455,10 @@ pub const Window = struct {
     // id of the subwindow that has focus
     focused_subwindowId: u32 = 0,
 
-    // handling the OSK (on screen keyboard) - natural pixels
-    osk_focused_widget_text_rect: ?Rect = null,
+    // rect on screen (in natural pixels) telling the backend where our text input box is:
+    // * when non-null, we want an on screen keyboard if needed (phones)
+    // * when showing the IME input window, position it near this
+    text_input_rect: ?Rect = null,
 
     snap_to_pixels: bool = true,
     alpha: f32 = 1.0,
@@ -3246,7 +3248,7 @@ pub const Window = struct {
 
         self.rendering = true;
         self.cursor_requested = .arrow;
-        self.osk_focused_widget_text_rect = null;
+        self.text_input_rect = null;
         self.debug_info_name_rect = "";
         self.debug_info_src_id_extra = "";
         if (self.debug_under_mouse) {
@@ -3499,13 +3501,13 @@ pub const Window = struct {
         }
     }
 
-    /// If a widget called wantOnScreenKeyboard this frame, return the rect (in
+    /// If a widget called wantTextInput this frame, return the rect (in
     /// natural pixels) of where the text input is happening.
     ///
     /// Apps and backends should use this to show an on screen keyboard and/or
     /// position an IME window.
-    pub fn OSKRequested(self: *const Self) ?Rect {
-        return self.osk_focused_widget_text_rect;
+    pub fn textInputRequested(self: *const Self) ?Rect {
+        return self.text_input_rect;
     }
 
     pub fn renderCommands(self: *Self, queue: *std.ArrayList(RenderCmd)) !void {
@@ -5397,7 +5399,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         }
 
         if (b.data().id == focusedWidgetId()) {
-            dvui.wantOnScreenKeyboard(b.data().borderRectScale().r);
+            dvui.wantTextInput(b.data().borderRectScale().r);
         } else {
 
             // we lost focus

@@ -67,7 +67,7 @@ pub fn main() !void {
 
         // cursor management
         backend.setCursor(win.cursorRequested());
-        backend.setOSKPosition(win.OSKRequested());
+        backend.textInputRect(win.textInputRequested());
 
         // render frame to OS
         backend.renderPresent();
