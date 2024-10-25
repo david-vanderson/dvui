@@ -539,7 +539,6 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (!self.textLayout.selection.empty()) {
                     self.textLayout.selection.moveCursor(self.textLayout.selection.start, false);
-                    self.textLayout.scroll_to_cursor = true;
                 } else {
                     if (self.textLayout.sel_move == .none) {
                         self.textLayout.sel_move = .{ .word_left_right = .{ .select = false } };
@@ -556,7 +555,6 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 if (!self.textLayout.selection.empty()) {
                     self.textLayout.selection.moveCursor(self.textLayout.selection.end, false);
                     self.textLayout.selection.affinity = .before;
-                    self.textLayout.scroll_to_cursor = true;
                 } else {
                     if (self.textLayout.sel_move == .none) {
                         self.textLayout.sel_move = .{ .word_left_right = .{ .select = false } };
@@ -572,7 +570,6 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.textLayout.sel_move == .none) {
                     self.textLayout.sel_move = .{ .char_left_right = .{ .select = false } };
-                    self.textLayout.scroll_to_cursor = true;
                 }
                 if (self.textLayout.sel_move == .char_left_right) {
                     self.textLayout.sel_move.char_left_right.count -= 1;
@@ -584,7 +581,6 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.textLayout.sel_move == .none) {
                     self.textLayout.sel_move = .{ .char_left_right = .{ .select = false } };
-                    self.textLayout.scroll_to_cursor = true;
                 }
                 if (self.textLayout.sel_move == .char_left_right) {
                     self.textLayout.sel_move.char_left_right.count += 1;
@@ -724,6 +720,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             std.mem.copyForwards(u8, self.text[sel.cursor..], self.text[sel.cursor + i .. self.len]);
                             self.len -= i;
                             self.text[self.len] = 0;
+                            self.textLayout.scroll_to_cursor = true;
                             self.text_changed = true;
                         }
                     }

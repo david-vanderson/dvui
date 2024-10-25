@@ -10,6 +10,7 @@ doc comments and publish
 update web-test and publish
 
 
+
 can we save rendering commands and render to a texture we can get back?
 - that would help plotting
 - could make the demoButton's contents be static (cached images)
@@ -26,19 +27,6 @@ Add filter (nearest, linear) to image rendering
 add animating example of a dialog that opens down and closes up
 - replace the Scale one
 
-
-textEntry: fix scroll_to_cursor
-char_left
-char_right
-backspace
-backspace with selection
-delete_prev_word
-delete
-delete with selection
-delete_next_word
-enter
-text
-select_all
 
 
 This was on current arch linux. The zig sdl package expects GLES/gl.h to exist, but on arch linux it is GLES2/gl2.h (or GLES3/gl3.h?). The system sdl package is (obviously) configured correctly, so it builds fine with that.

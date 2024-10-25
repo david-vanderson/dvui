@@ -691,6 +691,7 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
 
                 clr.count -= 1;
 
+                self.scroll_to_cursor_next_frame = true;
                 dvui.refresh(null, @src(), self.wd.id);
             }
         },
@@ -871,6 +872,7 @@ fn cursorSeen(self: *TextLayoutWidget) void {
 
                 clr.count = 0;
 
+                self.scroll_to_cursor_next_frame = true;
                 dvui.refresh(null, @src(), self.wd.id);
             }
         },
@@ -1623,7 +1625,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .char_left_right = .{} };
-                    self.scroll_to_cursor = true;
                 }
                 if (self.sel_move == .char_left_right) {
                     self.sel_move.char_left_right.count -= 1;
@@ -1635,7 +1636,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .char_left_right = .{} };
-                    self.scroll_to_cursor = true;
                 }
                 if (self.sel_move == .char_left_right) {
                     self.sel_move.char_left_right.count += 1;
