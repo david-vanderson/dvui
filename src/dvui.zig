@@ -81,7 +81,7 @@ pub const c = @cImport({
 
 var ft2lib: if (useFreeType) c.FT_Library else void = undefined;
 
-pub const Error = error{ OutOfMemory, InvalidUtf8, freetypeError, tvgError, stbiError };
+pub const Error = error{ OutOfMemory, InvalidUtf8, freetypeError, tvgError, stbiError, textureError };
 
 pub const log = std.log.scoped(.dvui);
 const dvui = @This();
@@ -685,7 +685,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
     return entry;
 }
 
-pub const RenderCmd = struct {
+pub const RenderCommand = struct {
     clip: Rect,
     snap: bool,
     cmd: union(enum) {
@@ -713,6 +713,78 @@ pub const RenderCmd = struct {
         },
     },
 };
+
+/// Record dvui rendering for later use in renderCommands() likely targetting a
+/// texture.
+///
+/// This is useful if you want to cache a rendering as a texture for
+/// performance, or want to export the rendering to a file.
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn recordRenderCommands(queue: ?*std.ArrayList(RenderCommand), after: ?*std.ArrayList(RenderCommand)) void {
+    var cw = currentWindow();
+    cw.record_render_queue = queue;
+    cw.record_render_queue_after = after;
+}
+
+/// Render a list of RenderCommands previously recorded.  See recordRenderCommands().
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn renderCommands(queue: std.ArrayList(RenderCommand), offset: Rect) !void {
+    var cw = currentWindow();
+    const oldsnap = cw.snap_to_pixels;
+    const oldclip = clipGet();
+    const old_rendering = cw.rendering;
+
+    cw.rendering = true;
+    for (queue.items) |*drc| {
+        cw.snap_to_pixels = drc.snap;
+        clipSet(drc.clip.offsetNeg(offset));
+        switch (drc.cmd) {
+            .text => |t| {
+                var opts = t;
+                opts.rs.r = opts.rs.r.offsetNeg(offset);
+                try renderText(opts);
+            },
+            .debug_font_atlases => |t| {
+                var rs = t.rs;
+                rs.r = rs.r.offsetNeg(offset);
+                try debugRenderFontAtlases(rs, t.color);
+            },
+            .texture => |t| {
+                var rs = t.rs;
+                rs.r = rs.r.offsetNeg(offset);
+                try renderTexture(t.tex, rs, t.rotation, t.colormod);
+            },
+            .pathFillConvex => |pf| {
+                if (offset.x != 0 or offset.y != 0) {
+                    for (pf.path.items) |*pt| {
+                        pt.x -= offset.x;
+                        pt.y -= offset.y;
+                    }
+                }
+                try cw.path.appendSlice(pf.path.items);
+                try pathFillConvex(pf.color);
+                pf.path.deinit();
+            },
+            .pathStroke => |ps| {
+                if (offset.x != 0 or offset.y != 0) {
+                    for (ps.path.items) |*pt| {
+                        pt.x -= offset.x;
+                        pt.y -= offset.y;
+                    }
+                }
+                try cw.path.appendSlice(ps.path.items);
+                try pathStrokeRaw(ps.closed, ps.thickness, ps.endcap_style, ps.color);
+                ps.path.deinit();
+            },
+        }
+    }
+
+    clipSet(oldclip);
+    cw.snap_to_pixels = oldsnap;
+    cw.rendering = old_rendering;
+}
 
 /// Id of the currently focused subwindow.  Used by FloatingMenuWidget to
 /// detect when to stop showing.
@@ -925,16 +997,21 @@ pub fn pathFillConvex(col: Color) !void {
         return;
     }
 
-    if (!cw.rendering) {
+    if (!cw.rendering or cw.record_render_queue != null) {
         var path_copy = std.ArrayList(Point).init(cw.arena());
         try path_copy.appendSlice(cw.path.items);
-        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
 
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
+        if (cw.record_render_queue) |q| {
+            try q.append(cmd);
+        }
 
-        cw.path.clearAndFree();
-        return;
+        if (!cw.rendering) {
+            var sw = cw.subwindowCurrent();
+            try sw.render_cmds.append(cmd);
+            cw.path.clearAndFree();
+            return;
+        }
     }
 
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), cw.path.items.len * 2);
@@ -1044,22 +1121,35 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
         return;
     }
 
-    if (after or !cw.rendering) {
+    if (after or !cw.rendering or cw.record_render_queue != null) {
         var path_copy = std.ArrayList(Point).init(cw.arena());
         try path_copy.appendSlice(cw.path.items);
-        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
 
-        var sw = cw.subwindowCurrent();
         if (after) {
-            try sw.render_cmds_after.append(cmd);
+            if (cw.record_render_queue_after) |q| {
+                try q.append(cmd);
+            }
         } else {
-            try sw.render_cmds.append(cmd);
+            if (cw.record_render_queue) |q| {
+                try q.append(cmd);
+            }
         }
 
-        cw.path.clearAndFree();
-    } else {
-        try pathStrokeRaw(closed_in, thickness, endcap_style, col);
+        if (after or !cw.rendering) {
+            var sw = cw.subwindowCurrent();
+            if (after) {
+                try sw.render_cmds_after.append(cmd);
+            } else {
+                try sw.render_cmds.append(cmd);
+            }
+
+            cw.path.clearAndFree();
+            return;
+        }
     }
+
+    try pathStrokeRaw(closed_in, thickness, endcap_style, col);
 }
 
 pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) !void {
@@ -1346,14 +1436,14 @@ pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_ab
                 log.warn("subwindowAdd {x} is clearing some drawing commands (did you try to draw between subwindowCurrentSet and subwindowAdd?)\n", .{id});
             }
 
-            sw.render_cmds = std.ArrayList(RenderCmd).init(arena);
-            sw.render_cmds_after = std.ArrayList(RenderCmd).init(arena);
+            sw.render_cmds = std.ArrayList(RenderCommand).init(arena);
+            sw.render_cmds_after = std.ArrayList(RenderCommand).init(arena);
             return;
         }
     }
 
     // haven't seen this window before
-    const sw = Window.Subwindow{ .id = id, .rect = rect, .rect_pixels = rect_pixels, .modal = modal, .stay_above_parent_window = stay_above_parent_window, .render_cmds = std.ArrayList(RenderCmd).init(arena), .render_cmds_after = std.ArrayList(RenderCmd).init(arena) };
+    const sw = Window.Subwindow{ .id = id, .rect = rect, .rect_pixels = rect_pixels, .modal = modal, .stay_above_parent_window = stay_above_parent_window, .render_cmds = std.ArrayList(RenderCommand).init(arena), .render_cmds_after = std.ArrayList(RenderCommand).init(arena) };
     if (stay_above_parent_window) |subwin_id| {
         // it wants to be above subwin_id
         var i: usize = 0;
@@ -2415,8 +2505,8 @@ pub const Window = struct {
         rect: Rect = Rect{},
         rect_pixels: Rect = Rect{},
         focused_widgetId: ?u32 = null,
-        render_cmds: std.ArrayList(RenderCmd),
-        render_cmds_after: std.ArrayList(RenderCmd),
+        render_cmds: std.ArrayList(RenderCommand),
+        render_cmds_after: std.ArrayList(RenderCommand),
         used: bool = true,
         modal: bool = false,
         stay_above_parent_window: ?u32 = null,
@@ -2527,6 +2617,8 @@ pub const Window = struct {
     texture_trash: std.ArrayList(*anyopaque) = undefined,
     path: std.ArrayList(Point) = undefined,
     rendering: bool = true,
+    record_render_queue: ?*std.ArrayList(RenderCommand) = null,
+    record_render_queue_after: ?*std.ArrayList(RenderCommand) = null,
 
     debug_window_show: bool = false,
     debug_widget_id: u32 = 0, // 0 means no widget is selected
@@ -3247,6 +3339,8 @@ pub const Window = struct {
         current_window = self;
 
         self.rendering = true;
+        self.record_render_queue = null;
+        self.record_render_queue_after = null;
         self.cursor_requested = .arrow;
         self.text_input_rect = null;
         self.debug_info_name_rect = "";
@@ -3508,38 +3602,6 @@ pub const Window = struct {
     /// position an IME window.
     pub fn textInputRequested(self: *const Self) ?Rect {
         return self.text_input_rect;
-    }
-
-    pub fn renderCommands(self: *Self, queue: *std.ArrayList(RenderCmd)) !void {
-        for (queue.items) |*drc| {
-            // don't need to reset these after because we reset them after
-            // calling renderCommands
-            currentWindow().snap_to_pixels = drc.snap;
-            clipSet(drc.clip);
-            switch (drc.cmd) {
-                .text => |t| {
-                    try renderText(t);
-                },
-                .debug_font_atlases => |t| {
-                    try debugRenderFontAtlases(t.rs, t.color);
-                },
-                .texture => |t| {
-                    try renderTexture(t.tex, t.rs, t.rotation, t.colormod);
-                },
-                .pathFillConvex => |pf| {
-                    try self.path.appendSlice(pf.path.items);
-                    try pathFillConvex(pf.color);
-                    pf.path.deinit();
-                },
-                .pathStroke => |ps| {
-                    try self.path.appendSlice(ps.path.items);
-                    try pathStrokeRaw(ps.closed, ps.thickness, ps.endcap_style, ps.color);
-                    ps.path.deinit();
-                },
-            }
-        }
-
-        queue.clearAndFree();
     }
 
     // data is copied into internal storage
@@ -3884,15 +3946,13 @@ pub const Window = struct {
             try self.debugWindowShow();
         }
 
-        const oldsnap = self.snap_to_pixels;
-        const oldclip = clipGet();
-        self.rendering = true;
         for (self.subwindows.items) |*sw| {
-            try self.renderCommands(&sw.render_cmds);
-            try self.renderCommands(&sw.render_cmds_after);
+            try dvui.renderCommands(sw.render_cmds, .{});
+            sw.render_cmds.clearAndFree();
+
+            try dvui.renderCommands(sw.render_cmds_after, .{});
+            sw.render_cmds_after.clearAndFree();
         }
-        clipSet(oldclip);
-        self.snap_to_pixels = oldsnap;
 
         for (self.texture_trash.items) |tex| {
             self.backend.textureDestroy(tex);
@@ -6024,15 +6084,20 @@ pub fn renderText(opts: renderTextOptions) !void {
 
     var cw = currentWindow();
 
-    if (!cw.rendering) {
+    if (!cw.rendering or cw.record_render_queue != null) {
         var opts_copy = opts;
         opts_copy.text = try cw.arena().dupe(u8, opts.text);
-        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
 
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
+        if (cw.record_render_queue) |q| {
+            try q.append(cmd);
+        }
 
-        return;
+        if (!cw.rendering) {
+            var sw = cw.subwindowCurrent();
+            try sw.render_cmds.append(cmd);
+            return;
+        }
     }
 
     const target_size = opts.font.size * opts.rs.s;
@@ -6326,12 +6391,13 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 
     var cw = currentWindow();
 
+    const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .debug_font_atlases = .{ .rs = rs, .color = color } } };
+    if (cw.record_render_queue) |q| {
+        try q.append(cmd);
+    }
     if (!cw.rendering) {
-        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .debug_font_atlases = .{ .rs = rs, .color = color } } };
-
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
-
         return;
     }
 
@@ -6391,7 +6457,16 @@ pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enum
     return currentWindow().backend.textureCreate(pixels, width, height, interpolation);
 }
 
-/// Destroy a texture created with textureCreate() and the end of the frame.
+/// Create a texture that can be rendered with renderTexture() and drawn to
+/// with renderTarget().
+///
+/// Remember to destroy the texture at some point, see textureDestroyLater().
+pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.TextureInterpolation) !*anyopaque {
+    return try currentWindow().backend.textureCreateTarget(width, height, interpolation);
+}
+
+/// Destroy a texture created with textureCreate() or textureCreateTarget() at
+/// the end of the frame.
 ///
 /// While backend.textureDestroy() immediately destroys the texture, this
 /// function deferres the destruction until the end of the frame, so it is safe
@@ -6408,13 +6483,18 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Co
 
     var cw = currentWindow();
 
-    if (!cw.rendering) {
-        const cmd = RenderCmd{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .rotation = rotation, .colormod = colormod } } };
+    if (!cw.rendering or cw.record_render_queue != null) {
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .rotation = rotation, .colormod = colormod } } };
 
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
+        if (cw.record_render_queue) |q| {
+            try q.append(cmd);
+        }
 
-        return;
+        if (!cw.rendering) {
+            var sw = cw.subwindowCurrent();
+            try sw.render_cmds.append(cmd);
+            return;
+        }
     }
 
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), 4);

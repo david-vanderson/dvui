@@ -204,4 +204,65 @@ fn gui_frame() !void {
 
     // look at demo() for examples of dvui widgets, shows in a floating window
     try dvui.Examples.demo();
+
+    const G = struct {
+        var tex: ?*anyopaque = null;
+    };
+
+    const dim = 100;
+
+    var box = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
+
+    // start saving rendering calls
+    var render_cmds = std.ArrayList(dvui.RenderCommand).init(dvui.currentWindow().arena());
+    var after_cmds = std.ArrayList(dvui.RenderCommand).init(dvui.currentWindow().arena());
+    dvui.recordRenderCommands(&render_cmds, &after_cmds);
+    defer dvui.recordRenderCommands(null, null);
+
+    var te = try dvui.textEntry(@src(), .{}, .{});
+    te.deinit();
+    if (try dvui.button(@src(), "Render to Texture", .{}, .{})) {
+
+        // stop saving rendering calls
+        dvui.recordRenderCommands(null, null);
+
+        // make a texture
+        if (G.tex) |t| {
+            dvui.textureDestroyLater(t);
+        }
+        G.tex = try dvui.textureCreateTarget(dim, dim, .linear);
+
+        // set that texture as the target
+        _ = Backend.c.SDL_SetRenderTarget(backend.renderer, @ptrCast(G.tex));
+        // must set clip to texture size
+        _ = Backend.c.SDL_RenderSetClipRect(backend.renderer, &Backend.c.SDL_Rect{ .x = 0, .y = 0, .w = @intFromFloat(dim), .h = @intFromFloat(dim) });
+
+        // target back to screen
+        defer _ = Backend.c.SDL_SetRenderTarget(backend.renderer, null);
+
+        // turn on direct rendering
+        const old_render = dvui.renderingSet(true);
+        defer _ = dvui.renderingSet(old_render);
+
+        // clipping
+        const old_clip = dvui.clipGet();
+        defer dvui.clipSet(old_clip);
+        dvui.clipSet(dvui.windowRectPixels());
+
+        // fill texture background
+        try dvui.pathAddRect(.{ .w = dim, .h = dim }, .{});
+        try dvui.pathFillConvex(dvui.themeGet().color_accent);
+
+        // replay saved rendering calls
+        try dvui.renderCommands(render_cmds, box.data().contentRectScale().r);
+        try dvui.renderCommands(after_cmds, box.data().contentRectScale().r);
+    }
+    box.deinit();
+
+    // pull info out of texture and display as image
+    if (G.tex) |t| {
+        var tbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 }, .min_size_content = .{ .w = dim, .h = dim } });
+        try dvui.renderTexture(t, tbox.data().contentRectScale(), 0, .{});
+        tbox.deinit();
+    }
 }
