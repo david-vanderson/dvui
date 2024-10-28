@@ -65,12 +65,12 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
 
     var renderer: *c.SDL_Renderer = undefined;
     if (sdl3) {
-        renderer = c.SDL_CreateRenderer(window, null, if (options.vsync) c.SDL_RENDERER_PRESENTVSYNC else 0) orelse {
+        renderer = c.SDL_CreateRenderer(window, null, @intCast(c.SDL_RENDERER_TARGETTEXTURE | (if (options.vsync) c.SDL_RENDERER_PRESENTVSYNC else 0))) orelse {
             dvui.log.err("SDL: Failed to create renderer: {s}\n", .{c.SDL_GetError()});
             return error.BackendError;
         };
     } else {
-        renderer = c.SDL_CreateRenderer(window, -1, if (options.vsync) c.SDL_RENDERER_PRESENTVSYNC else 0) orelse {
+        renderer = c.SDL_CreateRenderer(window, -1, @intCast(c.SDL_RENDERER_TARGETTEXTURE | (if (options.vsync) c.SDL_RENDERER_PRESENTVSYNC else 0))) orelse {
             dvui.log.err("SDL: Failed to create renderer: {s}\n", .{c.SDL_GetError()});
             return error.BackendError;
         };
@@ -496,6 +496,16 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32, 
     }
 
     const texture = c.SDL_CreateTextureFromSurface(self.renderer, surface) orelse unreachable;
+    return texture;
+}
+
+pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
+    switch (interpolation) {
+        .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
+        .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
+    }
+
+    const texture = c.SDL_CreateTexture(self.renderer, c.SDL_PIXELFORMAT_ABGR8888, c.SDL_TEXTUREACCESS_TARGET, @intCast(width), @intCast(height)) orelse unreachable;
     return texture;
 }
 
