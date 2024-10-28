@@ -83,6 +83,10 @@ pub fn offsetNeg(self: *const Rect, r: Rect) Rect {
     return Rect{ .x = self.x - r.x, .y = self.y - r.y, .w = self.w, .h = self.h };
 }
 
+pub fn offsetNegPoint(self: *const Rect, p: Point) Rect {
+    return Rect{ .x = self.x - p.x, .y = self.y - p.y, .w = self.w, .h = self.h };
+}
+
 pub fn intersect(a: Rect, b: Rect) Rect {
     const ax2 = a.x + a.w;
     const ay2 = a.y + a.h;

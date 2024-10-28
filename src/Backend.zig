@@ -60,6 +60,10 @@ const VTableTypes = struct {
     /// be used by dvui.
     pub const textureDestroy = *const fn (ctx: Context, texture: *anyopaque) void;
 
+    /// Render future drawClippedTriangles() to the passed texture (or screen
+    /// if null).
+    pub const renderTarget = *const fn (ctx: Context, texture: ?*anyopaque) void;
+
     /// Get clipboard content (text only)
     pub const clipboardText = *const fn (ctx: Context) error{OutOfMemory}![]const u8;
 
@@ -90,6 +94,7 @@ pub const VTable = struct {
     textureCreate: I.textureCreate,
     textureCreateTarget: I.textureCreateTarget,
     textureDestroy: I.textureDestroy,
+    renderTarget: I.renderTarget,
     clipboardText: I.clipboardText,
     clipboardTextSet: I.clipboardTextSet,
     openURL: I.openURL,
@@ -162,6 +167,9 @@ pub fn textureCreateTarget(self: *Backend, width: u32, height: u32, interpolatio
 }
 pub fn textureDestroy(self: *Backend, texture: *anyopaque) void {
     return self.vtable.textureDestroy(self.ctx, texture);
+}
+pub fn renderTarget(self: *Backend, texture: ?*anyopaque) void {
+    return self.vtable.renderTarget(self.ctx, texture);
 }
 pub fn clipboardText(self: *Backend) error{OutOfMemory}![]const u8 {
     return self.vtable.clipboardText(self.ctx);

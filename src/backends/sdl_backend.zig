@@ -513,6 +513,13 @@ pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
     c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(texture)));
 }
 
+pub fn renderTarget(self: *SDLBackend, texture: ?*anyopaque) void {
+    _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(texture));
+
+    // by default sdl2 sets an empty clip, let's ensure it is the full texture/screen
+    _ = c.SDL_RenderSetClipRect(self.renderer, &c.SDL_Rect{ .x = 0, .y = 0, .w = std.math.maxInt(c_int), .h = std.math.maxInt(c_int) });
+}
+
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
     switch (event.type) {
         if (sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
