@@ -714,78 +714,6 @@ pub const RenderCommand = struct {
     },
 };
 
-/// Record dvui rendering for later use in renderCommands() likely targetting a
-/// texture.
-///
-/// This is useful if you want to cache a rendering as a texture for
-/// performance, or want to export the rendering to a file.
-///
-/// Only valid between dvui.Window.begin() and end().
-pub fn recordRenderCommands(queue: ?*std.ArrayList(RenderCommand), after: ?*std.ArrayList(RenderCommand)) void {
-    var cw = currentWindow();
-    cw.record_render_queue = queue;
-    cw.record_render_queue_after = after;
-}
-
-/// Render a list of RenderCommands previously recorded.  See recordRenderCommands().
-///
-/// Only valid between dvui.Window.begin() and end().
-pub fn renderCommands(queue: std.ArrayList(RenderCommand), offset: Rect) !void {
-    var cw = currentWindow();
-    const oldsnap = cw.snap_to_pixels;
-    const oldclip = clipGet();
-    const old_rendering = cw.rendering;
-
-    cw.rendering = true;
-    for (queue.items) |*drc| {
-        cw.snap_to_pixels = drc.snap;
-        clipSet(drc.clip.offsetNeg(offset));
-        switch (drc.cmd) {
-            .text => |t| {
-                var opts = t;
-                opts.rs.r = opts.rs.r.offsetNeg(offset);
-                try renderText(opts);
-            },
-            .debug_font_atlases => |t| {
-                var rs = t.rs;
-                rs.r = rs.r.offsetNeg(offset);
-                try debugRenderFontAtlases(rs, t.color);
-            },
-            .texture => |t| {
-                var rs = t.rs;
-                rs.r = rs.r.offsetNeg(offset);
-                try renderTexture(t.tex, rs, t.rotation, t.colormod);
-            },
-            .pathFillConvex => |pf| {
-                if (offset.x != 0 or offset.y != 0) {
-                    for (pf.path.items) |*pt| {
-                        pt.x -= offset.x;
-                        pt.y -= offset.y;
-                    }
-                }
-                try cw.path.appendSlice(pf.path.items);
-                try pathFillConvex(pf.color);
-                pf.path.deinit();
-            },
-            .pathStroke => |ps| {
-                if (offset.x != 0 or offset.y != 0) {
-                    for (ps.path.items) |*pt| {
-                        pt.x -= offset.x;
-                        pt.y -= offset.y;
-                    }
-                }
-                try cw.path.appendSlice(ps.path.items);
-                try pathStrokeRaw(ps.closed, ps.thickness, ps.endcap_style, ps.color);
-                ps.path.deinit();
-            },
-        }
-    }
-
-    clipSet(oldclip);
-    cw.snap_to_pixels = oldsnap;
-    cw.rendering = old_rendering;
-}
-
 /// Id of the currently focused subwindow.  Used by FloatingMenuWidget to
 /// detect when to stop showing.
 ///
@@ -997,21 +925,15 @@ pub fn pathFillConvex(col: Color) !void {
         return;
     }
 
-    if (!cw.rendering or cw.record_render_queue != null) {
+    if (!cw.render_target.rendering) {
         var path_copy = std.ArrayList(Point).init(cw.arena());
         try path_copy.appendSlice(cw.path.items);
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
 
-        if (cw.record_render_queue) |q| {
-            try q.append(cmd);
-        }
-
-        if (!cw.rendering) {
-            var sw = cw.subwindowCurrent();
-            try sw.render_cmds.append(cmd);
-            cw.path.clearAndFree();
-            return;
-        }
+        var sw = cw.subwindowCurrent();
+        try sw.render_cmds.append(cmd);
+        cw.path.clearAndFree();
+        return;
     }
 
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), cw.path.items.len * 2);
@@ -1031,9 +953,9 @@ pub fn pathFillConvex(col: Color) !void {
         const ai = (i + cw.path.items.len - 1) % cw.path.items.len;
         const bi = i % cw.path.items.len;
         const ci = (i + 1) % cw.path.items.len;
-        const aa = cw.path.items[ai];
-        const bb = cw.path.items[bi];
-        const cc = cw.path.items[ci];
+        const aa = cw.path.items[ai].diff(cw.render_target.offset);
+        const bb = cw.path.items[bi].diff(cw.render_target.offset);
+        const cc = cw.path.items[ci].diff(cw.render_target.offset);
 
         const diffab = Point.diff(aa, bb).normalize();
         const diffbc = Point.diff(bb, cc).normalize();
@@ -1083,9 +1005,10 @@ pub fn pathFillConvex(col: Color) !void {
     bounds.w = bounds.w - bounds.x;
     bounds.h = bounds.h - bounds.y;
 
+    const clipR = clipGet().offsetNegPoint(cw.render_target.offset);
     var clipr: ?Rect = null;
-    if (!clipGet().equals(dvui.windowRectPixels()) and bounds.clippedBy(clipGet())) {
-        clipr = clipGet();
+    if (!clipGet().equals(dvui.windowRectPixels()) and bounds.clippedBy(clipR)) {
+        clipr = clipR;
     }
 
     cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
@@ -1121,32 +1044,20 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
         return;
     }
 
-    if (after or !cw.rendering or cw.record_render_queue != null) {
+    if (after or !cw.render_target.rendering) {
         var path_copy = std.ArrayList(Point).init(cw.arena());
         try path_copy.appendSlice(cw.path.items);
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
 
+        var sw = cw.subwindowCurrent();
         if (after) {
-            if (cw.record_render_queue_after) |q| {
-                try q.append(cmd);
-            }
+            try sw.render_cmds_after.append(cmd);
         } else {
-            if (cw.record_render_queue) |q| {
-                try q.append(cmd);
-            }
+            try sw.render_cmds.append(cmd);
         }
 
-        if (after or !cw.rendering) {
-            var sw = cw.subwindowCurrent();
-            if (after) {
-                try sw.render_cmds_after.append(cmd);
-            } else {
-                try sw.render_cmds.append(cmd);
-            }
-
-            cw.path.clearAndFree();
-            return;
-        }
+        cw.path.clearAndFree();
+        return;
     }
 
     try pathStrokeRaw(closed_in, thickness, endcap_style, col);
@@ -1162,7 +1073,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
 
     if (cw.path.items.len == 1) {
         // draw a circle with radius thickness at that point
-        const center = cw.path.items[0];
+        const center = cw.path.items[0].diff(cw.render_target.offset);
 
         // remove old path so we don't have a center point
         cw.path.clearAndFree();
@@ -1207,9 +1118,9 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         const ai = (i + cw.path.items.len - 1) % cw.path.items.len;
         const bi = i % cw.path.items.len;
         const ci = (i + 1) % cw.path.items.len;
-        const aa = cw.path.items[ai];
-        var bb = cw.path.items[bi];
-        const cc = cw.path.items[ci];
+        const aa = cw.path.items[ai].diff(cw.render_target.offset);
+        var bb = cw.path.items[bi].diff(cw.render_target.offset);
+        const cc = cw.path.items[ci].diff(cw.render_target.offset);
 
         // the amount to move from bb to the edge of the line
         var halfnorm: Point = undefined;
@@ -1409,9 +1320,10 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     bounds.w = bounds.w - bounds.x;
     bounds.h = bounds.h - bounds.y;
 
+    const clipR = clipGet().offsetNegPoint(cw.render_target.offset);
     var clipr: ?Rect = null;
-    if (!clipGet().equals(dvui.windowRectPixels()) and bounds.clippedBy(clipGet())) {
-        clipr = clipGet();
+    if (!clipGet().equals(dvui.windowRectPixels()) and bounds.clippedBy(clipR)) {
+        clipr = clipR;
     }
 
     cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
@@ -1809,8 +1721,8 @@ pub fn parentReset(id: u32, w: Widget) void {
 
 pub fn renderingSet(r: bool) bool {
     const cw = currentWindow();
-    const ret = cw.rendering;
-    cw.rendering = r;
+    const ret = cw.render_target.rendering;
+    cw.render_target.rendering = r;
     return ret;
 }
 
@@ -2616,9 +2528,7 @@ pub const Window = struct {
     _arena: std.heap.ArenaAllocator,
     texture_trash: std.ArrayList(*anyopaque) = undefined,
     path: std.ArrayList(Point) = undefined,
-    rendering: bool = true,
-    record_render_queue: ?*std.ArrayList(RenderCommand) = null,
-    record_render_queue_after: ?*std.ArrayList(RenderCommand) = null,
+    render_target: RenderTarget = .{ .texture = null, .offset = .{} },
 
     debug_window_show: bool = false,
     debug_widget_id: u32 = 0, // 0 means no widget is selected
@@ -3338,9 +3248,6 @@ pub const Window = struct {
         self.previous_window = current_window;
         current_window = self;
 
-        self.rendering = true;
-        self.record_render_queue = null;
-        self.record_render_queue_after = null;
         self.cursor_requested = .arrow;
         self.text_input_rect = null;
         self.debug_info_name_rect = "";
@@ -3602,6 +3509,43 @@ pub const Window = struct {
     /// position an IME window.
     pub fn textInputRequested(self: *const Self) ?Rect {
         return self.text_input_rect;
+    }
+
+    pub fn renderCommands(self: *Self, queue: std.ArrayList(RenderCommand)) !void {
+        const oldsnap = snapToPixels();
+        defer _ = snapToPixelsSet(oldsnap);
+
+        const oldclip = clipGet();
+        defer clipSet(oldclip);
+
+        const old_rendering = renderingSet(true);
+        defer _ = renderingSet(old_rendering);
+
+        for (queue.items) |*drc| {
+            _ = snapToPixelsSet(drc.snap);
+            clipSet(drc.clip);
+            switch (drc.cmd) {
+                .text => |t| {
+                    try renderText(t);
+                },
+                .debug_font_atlases => |t| {
+                    try debugRenderFontAtlases(t.rs, t.color);
+                },
+                .texture => |t| {
+                    try renderTexture(t.tex, t.rs, t.rotation, t.colormod);
+                },
+                .pathFillConvex => |pf| {
+                    try self.path.appendSlice(pf.path.items);
+                    try pathFillConvex(pf.color);
+                    pf.path.deinit();
+                },
+                .pathStroke => |ps| {
+                    try self.path.appendSlice(ps.path.items);
+                    try pathStrokeRaw(ps.closed, ps.thickness, ps.endcap_style, ps.color);
+                    ps.path.deinit();
+                },
+            }
+        }
     }
 
     // data is copied into internal storage
@@ -3947,10 +3891,10 @@ pub const Window = struct {
         }
 
         for (self.subwindows.items) |*sw| {
-            try dvui.renderCommands(sw.render_cmds, .{});
+            try self.renderCommands(sw.render_cmds);
             sw.render_cmds.clearAndFree();
 
-            try dvui.renderCommands(sw.render_cmds_after, .{});
+            try self.renderCommands(sw.render_cmds_after);
             sw.render_cmds_after.clearAndFree();
         }
 
@@ -6084,21 +6028,18 @@ pub fn renderText(opts: renderTextOptions) !void {
 
     var cw = currentWindow();
 
-    if (!cw.rendering or cw.record_render_queue != null) {
+    if (!cw.render_target.rendering) {
         var opts_copy = opts;
         opts_copy.text = try cw.arena().dupe(u8, opts.text);
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .text = opts_copy } };
 
-        if (cw.record_render_queue) |q| {
-            try q.append(cmd);
-        }
-
-        if (!cw.rendering) {
-            var sw = cw.subwindowCurrent();
-            try sw.render_cmds.append(cmd);
-            return;
-        }
+        var sw = cw.subwindowCurrent();
+        try sw.render_cmds.append(cmd);
+        return;
     }
+
+    const r = opts.rs.r.offsetNegPoint(cw.render_target.offset);
+    const clipR = clipGet().offsetNegPoint(cw.render_target.offset);
 
     const target_size = opts.font.size * opts.rs.s;
     const sized_font = opts.font.resize(target_size);
@@ -6253,10 +6194,10 @@ pub fn renderText(opts: renderTextOptions) !void {
     var idx = std.ArrayList(u16).init(cw.arena());
     defer idx.deinit();
 
-    const x_start: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.x) else opts.rs.r.x;
+    const x_start: f32 = if (cw.snap_to_pixels) @round(r.x) else r.x;
     var x = x_start;
     var max_x = x_start;
-    const y: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.y) else opts.rs.r.y;
+    const y: f32 = if (cw.snap_to_pixels) @round(r.y) else r.y;
 
     if (opts.debug) {
         log.debug("renderText x {d} y {d}\n", .{ x, y });
@@ -6349,9 +6290,9 @@ pub fn renderText(opts: renderTextOptions) !void {
         if (opts.sel_color_bg) |bgcol| {
             var sel_vtx: [4]Vertex = undefined;
             sel_vtx[0].pos.x = sel_start_x;
-            sel_vtx[0].pos.y = opts.rs.r.y;
+            sel_vtx[0].pos.y = r.y;
             sel_vtx[3].pos.x = sel_start_x;
-            sel_vtx[3].pos.y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor);
+            sel_vtx[3].pos.y = @max(sel_max_y, r.y + fce.height * target_fraction * opts.font.line_height_factor);
             sel_vtx[1].pos.x = sel_end_x;
             sel_vtx[1].pos.y = sel_vtx[0].pos.y;
             sel_vtx[2].pos.x = sel_end_x;
@@ -6365,8 +6306,8 @@ pub fn renderText(opts: renderTextOptions) !void {
 
             const selr = Rect.fromPoint(sel_vtx[0].pos).toPoint(sel_vtx[2].pos);
             var clipr: ?Rect = null;
-            if (!clipGet().equals(dvui.windowRectPixels()) and selr.clippedBy(clipGet())) {
-                clipr = clipGet();
+            if (!clipGet().equals(dvui.windowRectPixels()) and selr.clippedBy(clipR)) {
+                clipr = clipR;
             }
 
             // triangles must be counter-clockwise (y going down) to avoid backface culling
@@ -6377,8 +6318,8 @@ pub fn renderText(opts: renderTextOptions) !void {
     // due to floating point inaccuracies, shrink by 1/1000 of a pixel before testing
     const txtr = (Rect{ .x = x_start, .y = y, .w = max_x - x_start, .h = sel_max_y - y }).insetAll(0.001);
     var clipr: ?Rect = null;
-    if (!clipGet().equals(dvui.windowRectPixels()) and txtr.clippedBy(clipGet())) {
-        clipr = clipGet();
+    if (!clipGet().equals(dvui.windowRectPixels()) and txtr.clippedBy(clipR)) {
+        clipr = clipR;
         //dvui.log.debug("clipr text {s} {} {}", .{ opts.text, txtr, clipr.? });
     }
 
@@ -6392,17 +6333,16 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
     var cw = currentWindow();
 
     const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .debug_font_atlases = .{ .rs = rs, .color = color } } };
-    if (cw.record_render_queue) |q| {
-        try q.append(cmd);
-    }
-    if (!cw.rendering) {
+    if (!cw.render_target.rendering) {
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
         return;
     }
 
-    const x: f32 = if (cw.snap_to_pixels) @round(rs.r.x) else rs.r.x;
-    const y: f32 = if (cw.snap_to_pixels) @round(rs.r.y) else rs.r.y;
+    const r = rs.r.offsetNegPoint(cw.render_target.offset);
+
+    const x: f32 = if (cw.snap_to_pixels) @round(r.x) else r.x;
+    const y: f32 = if (cw.snap_to_pixels) @round(r.y) else r.y;
 
     var offset: f32 = 0;
     var it = cw.font_cache.iterator();
@@ -6440,9 +6380,10 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
         try idx.append(@as(u16, @intCast(len + 3)));
         try idx.append(@as(u16, @intCast(len + 2)));
 
+        const clipR = clipGet().offsetNegPoint(cw.render_target.offset);
         var clipr: ?Rect = null;
-        if (!clipGet().equals(dvui.windowRectPixels()) and rs.r.clippedBy(clipGet())) {
-            clipr = clipGet();
+        if (!clipGet().equals(dvui.windowRectPixels()) and r.clippedBy(clipR)) {
+            clipr = clipR;
         }
         cw.backend.drawClippedTriangles(kv.value_ptr.texture_atlas, vtx.items, idx.items, clipr);
 
@@ -6453,6 +6394,8 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 /// Create a texture that can be rendered with renderTexture().
 ///
 /// Remember to destroy the texture at some point, see textureDestroyLater().
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enums.TextureInterpolation) *anyopaque {
     return currentWindow().backend.textureCreate(pixels, width, height, interpolation);
 }
@@ -6461,6 +6404,8 @@ pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enum
 /// with renderTarget().
 ///
 /// Remember to destroy the texture at some point, see textureDestroyLater().
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.TextureInterpolation) !*anyopaque {
     return try currentWindow().backend.textureCreateTarget(width, height, interpolation);
 }
@@ -6471,10 +6416,35 @@ pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.Texture
 /// While backend.textureDestroy() immediately destroys the texture, this
 /// function deferres the destruction until the end of the frame, so it is safe
 /// to use even in a subwindow where rendering is deferred.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn textureDestroyLater(texture: *anyopaque) void {
     currentWindow().texture_trash.append(texture) catch |err| {
         dvui.log.err("textureDestroyLater got {!}\n", .{err});
     };
+}
+
+pub const RenderTarget = struct {
+    texture: ?*anyopaque,
+    offset: Point,
+    rendering: bool = true,
+};
+
+/// Change where dvui renders.  Can pass output from textureCreateTarget() or
+/// null for the screen.  Returns the previous target/offset.
+///
+/// offset will be subtracted from all dvui rendering, useful as the point on
+/// the screen the texture will map to.
+///
+/// Useful for caching expensive renders or to save a render for export.
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn renderTarget(args: RenderTarget) RenderTarget {
+    var cw = currentWindow();
+    const ret = cw.render_target;
+    cw.render_target = args;
+    cw.backend.renderTarget(args.texture);
+    return ret;
 }
 
 pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Color) !void {
@@ -6483,30 +6453,26 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Co
 
     var cw = currentWindow();
 
-    if (!cw.rendering or cw.record_render_queue != null) {
+    if (!cw.render_target.rendering) {
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .rotation = rotation, .colormod = colormod } } };
 
-        if (cw.record_render_queue) |q| {
-            try q.append(cmd);
-        }
-
-        if (!cw.rendering) {
-            var sw = cw.subwindowCurrent();
-            try sw.render_cmds.append(cmd);
-            return;
-        }
+        var sw = cw.subwindowCurrent();
+        try sw.render_cmds.append(cmd);
+        return;
     }
+
+    const r = rs.r.offsetNegPoint(cw.render_target.offset);
 
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), 4);
     defer vtx.deinit();
     var idx = try std.ArrayList(u16).initCapacity(cw.arena(), 6);
     defer idx.deinit();
 
-    const x: f32 = if (cw.snap_to_pixels) @round(rs.r.x) else rs.r.x;
-    const y: f32 = if (cw.snap_to_pixels) @round(rs.r.y) else rs.r.y;
+    const x: f32 = if (cw.snap_to_pixels) @round(r.x) else r.x;
+    const y: f32 = if (cw.snap_to_pixels) @round(r.y) else r.y;
 
-    const xw = rs.r.x + rs.r.w;
-    const yh = rs.r.y + rs.r.h;
+    const xw = r.x + r.w;
+    const yh = r.y + r.h;
 
     const midx = (x + xw) / 2;
     const midy = (y + yh) / 2;
@@ -6555,9 +6521,10 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Co
     try idx.append(3);
     try idx.append(2);
 
+    const clipR = clipGet().offsetNegPoint(cw.render_target.offset);
     var clipr: ?Rect = null;
-    if (!clipGet().equals(dvui.windowRectPixels()) and rs.r.clippedBy(clipGet())) {
-        clipr = clipGet();
+    if (!clipGet().equals(dvui.windowRectPixels()) and r.clippedBy(clipR)) {
+        clipr = clipR;
     }
 
     cw.backend.drawClippedTriangles(tex, vtx.items, idx.items, clipr);

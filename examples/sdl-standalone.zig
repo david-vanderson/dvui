@@ -207,61 +207,72 @@ fn gui_frame() !void {
 
     const G = struct {
         var tex: ?*anyopaque = null;
+        var tex_size: dvui.Size = .{};
+        var buf = "Hello World".*;
+        var toggle: bool = false;
     };
 
-    const dim = 100;
+    var te = try dvui.textEntry(@src(), .{ .text = .{ .buffer = &G.buf } }, .{});
+    te.deinit();
+    _ = try dvui.checkbox(@src(), &G.toggle, "Toggle", .{});
 
     var box = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
 
-    // start saving rendering calls
-    var render_cmds = std.ArrayList(dvui.RenderCommand).init(dvui.currentWindow().arena());
-    var after_cmds = std.ArrayList(dvui.RenderCommand).init(dvui.currentWindow().arena());
-    dvui.recordRenderCommands(&render_cmds, &after_cmds);
-    defer dvui.recordRenderCommands(null, null);
-
-    var te = try dvui.textEntry(@src(), .{}, .{});
-    te.deinit();
-    if (try dvui.button(@src(), "Render to Texture", .{}, .{})) {
-
-        // stop saving rendering calls
-        dvui.recordRenderCommands(null, null);
-
-        // make a texture
-        if (G.tex) |t| {
-            dvui.textureDestroyLater(t);
+    if (G.tex == null) {
+        // need to give all these widgets a frame to get to their normal size
+        var cacheable = false;
+        if (dvui.dataGet(null, box.data().id, "size", dvui.Size)) |bs| {
+            //std.debug.print("bs {} box {}\n", .{ bs, box.data().rect.size() });
+            if (bs.w == box.data().rect.w and bs.h == box.data().rect.h) {
+                cacheable = true;
+            }
         }
-        G.tex = try dvui.textureCreateTarget(dim, dim, .linear);
 
-        // set that texture as the target
-        _ = Backend.c.SDL_SetRenderTarget(backend.renderer, @ptrCast(G.tex));
-        // must set clip to texture size
-        _ = Backend.c.SDL_RenderSetClipRect(backend.renderer, &Backend.c.SDL_Rect{ .x = 0, .y = 0, .w = @intFromFloat(dim), .h = @intFromFloat(dim) });
+        dvui.dataSet(null, box.data().id, "size", box.data().rect.size());
 
-        // target back to screen
-        defer _ = Backend.c.SDL_SetRenderTarget(backend.renderer, null);
+        var old_target: dvui.RenderTarget = undefined;
+        if (cacheable) {
+            //std.debug.print("regen cache\n", .{});
 
-        // turn on direct rendering
-        const old_render = dvui.renderingSet(true);
-        defer _ = dvui.renderingSet(old_render);
+            const rs = box.data().contentRectScale();
+            G.tex = try dvui.textureCreateTarget(@intFromFloat(rs.r.w), @intFromFloat(rs.r.h), .linear);
+            G.tex_size = rs.r.size();
 
-        // clipping
-        const old_clip = dvui.clipGet();
-        defer dvui.clipSet(old_clip);
-        dvui.clipSet(dvui.windowRectPixels());
+            old_target = dvui.renderTarget(.{ .texture = G.tex, .offset = rs.r.topLeft() });
 
-        // fill texture background
-        try dvui.pathAddRect(.{ .w = dim, .h = dim }, .{});
-        try dvui.pathFillConvex(dvui.themeGet().color_accent);
+            // fill texture background
+            try dvui.pathAddRect(rs.r, .{});
+            try dvui.pathFillConvex(dvui.themeGet().color_accent);
+        }
 
-        // replay saved rendering calls
-        try dvui.renderCommands(render_cmds, box.data().contentRectScale().r);
-        try dvui.renderCommands(after_cmds, box.data().contentRectScale().r);
+        var te2 = try dvui.textEntry(@src(), .{ .text = .{ .buffer = &G.buf } }, .{});
+        te2.deinit();
+
+        _ = try dvui.checkbox(@src(), &G.toggle, "Toggle", .{});
+
+        if (cacheable) {
+            _ = dvui.renderTarget(old_target);
+        }
+    }
+
+    if (G.tex) |t| {
+        // successful cache
+        try dvui.renderTexture(t, box.data().contentRectScale(), 0, .{});
+        box.data().minSizeMax(box.data().rect.size());
     }
     box.deinit();
 
+    if (try dvui.button(@src(), "Regen Cache", .{}, .{})) {
+        // clear the cache
+        if (G.tex) |t| {
+            dvui.textureDestroyLater(t);
+        }
+        G.tex = null;
+    }
+
     // pull info out of texture and display as image
     if (G.tex) |t| {
-        var tbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 }, .min_size_content = .{ .w = dim, .h = dim } });
+        var tbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 }, .min_size_content = G.tex_size });
         try dvui.renderTexture(t, tbox.data().contentRectScale(), 0, .{});
         tbox.deinit();
     }
