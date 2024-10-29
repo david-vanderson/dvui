@@ -25,6 +25,7 @@ pub const WidgetData = @import("WidgetData.zig");
 pub const entypo = @import("icons/entypo.zig");
 pub const AnimateWidget = @import("widgets/AnimateWidget.zig");
 pub const BoxWidget = @import("widgets/BoxWidget.zig");
+pub const CacheWidget = @import("widgets/CacheWidget.zig");
 pub const FlexBoxWidget = @import("widgets/FlexBoxWidget.zig");
 pub const ReorderWidget = @import("widgets/ReorderWidget.zig");
 pub const Reorderable = ReorderWidget.Reorderable;
@@ -912,7 +913,7 @@ pub fn pathAddArc(center: Point, radius: f32, start: f32, end: f32, skip_end: bo
 /// Fill the current path (must be convex) with col and free the path.
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn pathFillConvex(col: Color) !void {
+pub fn pathFillConvex(color: Color) !void {
     const cw = currentWindow();
 
     if (cw.path.items.len < 3) {
@@ -928,7 +929,7 @@ pub fn pathFillConvex(col: Color) !void {
     if (!cw.render_target.rendering) {
         var path_copy = std.ArrayList(Point).init(cw.arena());
         try path_copy.appendSlice(cw.path.items);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = col } } };
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = color } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
@@ -941,8 +942,8 @@ pub fn pathFillConvex(col: Color) !void {
     const idx_count = (cw.path.items.len - 2) * 3 + cw.path.items.len * 6;
     var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
     defer idx.deinit();
-    var col_trans = col;
-    col_trans.a = 0;
+    const col = color.alphaMultiply();
+    const col_trans = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
     var bounds = Rect{}; // w and h are maxx and maxy for now
     bounds.x = dvui.windowRectPixels().w;
@@ -1063,7 +1064,7 @@ pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_styl
     try pathStrokeRaw(closed_in, thickness, endcap_style, col);
 }
 
-pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) !void {
+pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, color: Color) !void {
     const cw = currentWindow();
 
     if (dvui.clipGet().empty()) {
@@ -1079,7 +1080,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         cw.path.clearAndFree();
 
         try pathAddArc(center, thickness, math.pi * 2.0, 0, true);
-        try pathFillConvex(col);
+        try pathFillConvex(color);
         cw.path.clearAndFree();
         return;
     }
@@ -1104,8 +1105,8 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     }
     var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
     defer idx.deinit();
-    var col_trans = col;
-    col_trans.a = 0;
+    const col = color.alphaMultiply();
+    const col_trans = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
     var bounds = Rect{}; // w and h are maxx and maxy for now
     bounds.x = dvui.windowRectPixels().w;
@@ -3532,7 +3533,7 @@ pub const Window = struct {
                     try debugRenderFontAtlases(t.rs, t.color);
                 },
                 .texture => |t| {
-                    try renderTexture(t.tex, t.rs, t.rotation, t.colormod);
+                    try renderTexture(t.tex, t.rs, .{ .rotation = t.rotation, .colormod = t.colormod });
                 },
                 .pathFillConvex => |pf| {
                     try self.path.appendSlice(pf.path.items);
@@ -4739,6 +4740,16 @@ pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOpt
     ret.* = FlexBoxWidget.init(src, init_opts, opts);
     try ret.install();
     try ret.drawBackground();
+    return ret;
+}
+
+pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) !*CacheWidget {
+    var ret = try currentWindow().arena().create(CacheWidget);
+    ret.* = CacheWidget.init(src, init_opts, opts);
+    if (init_opts.invalidate) {
+        try ret.invalidate();
+    }
+    try ret.install();
     return ret;
 }
 
@@ -6092,13 +6103,14 @@ pub fn renderText(opts: renderTextOptions) !void {
         size.h += 2 * pad;
 
         var pixels = try cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
-        // set all pixels as white but with zero alpha
-        for (pixels, 0..) |*p, i| {
-            if (i % 4 == 3) {
-                p.* = 0;
-            } else {
-                p.* = 255;
-            }
+        // set all pixels to zero alpha
+        for (pixels) |*p| {
+            p.* = 0;
+            //if (i % 4 == 3) {
+            //    p.* = 0;
+            //} else {
+            //    p.* = 255;
+            //}
         }
 
         //const num_glyphs = fce.glyph_info.count();
@@ -6138,10 +6150,10 @@ pub fn renderText(opts: renderTextOptions) !void {
                             // because of the extra edge, offset by 1 row and 1 col
                             const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) * 4 + (x + col + pad) * 4));
 
-                            // not doing premultiplied alpha (yet), so keep the white color but adjust the alpha
-                            //pixels[di] = src;
-                            //pixels[di+1] = src;
-                            //pixels[di+2] = src;
+                            // this should be premultiplied white, but that is not working with sdl - for white text I see black fringes around the edge
+                            pixels[di] = 0xff;
+                            pixels[di + 1] = 0xff;
+                            pixels[di + 2] = 0xff;
                             pixels[di + 3] = src;
                         }
                     }
@@ -6160,17 +6172,12 @@ pub fn renderText(opts: renderTextOptions) !void {
                     const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x * 4));
                     for (0..out_h) |row| {
                         for (0..out_w) |col| {
-                            pixels[di + (row + pad) * stride + (col + pad) * 4 + 3] = bitmap[row * out_w + col];
-                        }
-                    }
-
-                    if (false) {
-                        for (0..out_h + pad) |row| {
-                            for (0..out_w + pad) |col| {
-                                if (row < pad or row >= out_h or col < pad or col >= out_w) {
-                                    pixels[di + row * stride + col * 4 + 3] = 200;
-                                }
-                            }
+                            const src = bitmap[row * out_w + col];
+                            const dest = di + (row + pad) * stride + (col + pad) * 4;
+                            pixels[dest + 0] = 0xff;
+                            pixels[dest + 1] = 0xff;
+                            pixels[dest + 2] = 0xff;
+                            pixels[dest + 3] = src;
                         }
                     }
                 }
@@ -6249,6 +6256,7 @@ pub fn renderText(opts: renderTextOptions) !void {
         v.pos.x = x + gi.leftBearing * target_fraction;
         v.pos.y = y + gi.topBearing * target_fraction;
         v.col = if (sel_in) opts.sel_color orelse opts.color else opts.color;
+        v.col = v.col.alphaMultiply();
         v.uv = gi.uv;
         try vtx.append(v);
 
@@ -6299,7 +6307,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             sel_vtx[2].pos.y = sel_vtx[3].pos.y;
 
             for (&sel_vtx) |*v| {
-                v.col = bgcol;
+                v.col = bgcol.alphaMultiply();
                 v.uv[0] = 0;
                 v.uv[1] = 0;
             }
@@ -6343,6 +6351,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 
     const x: f32 = if (cw.snap_to_pixels) @round(r.x) else r.x;
     const y: f32 = if (cw.snap_to_pixels) @round(r.y) else r.y;
+    const col = color.alphaMultiply();
 
     var offset: f32 = 0;
     var it = cw.font_cache.iterator();
@@ -6356,7 +6365,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
         var v: Vertex = undefined;
         v.pos.x = x;
         v.pos.y = y + offset;
-        v.col = color;
+        v.col = col;
         v.uv = .{ 0, 0 };
         try vtx.append(v);
 
@@ -6447,19 +6456,27 @@ pub fn renderTarget(args: RenderTarget) RenderTarget {
     return ret;
 }
 
-pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Color) !void {
+pub const RenderTextureOptions = struct {
+    rotation: f32 = 0,
+    colormod: Color = .{},
+    uv: ?Rect = null,
+};
+
+pub fn renderTexture(tex: *anyopaque, rs: RectScale, opts: RenderTextureOptions) !void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
     var cw = currentWindow();
 
     if (!cw.render_target.rendering) {
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .rotation = rotation, .colormod = colormod } } };
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .rotation = opts.rotation, .colormod = opts.colormod } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
         return;
     }
+
+    const uv: Rect = opts.uv orelse Rect{ .x = 0, .y = 0, .w = 1, .h = 1 };
 
     const r = rs.r.offsetNegPoint(cw.render_target.offset);
 
@@ -6477,39 +6494,41 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, rotation: f32, colormod: Co
     const midx = (x + xw) / 2;
     const midy = (y + yh) / 2;
 
+    const rot = opts.rotation;
+
     var v: Vertex = undefined;
     v.pos.x = x;
     v.pos.y = y;
-    v.col = colormod;
-    v.uv[0] = 0;
-    v.uv[1] = 0;
-    if (rotation != 0) {
-        v.pos.x = midx + (x - midx) * @cos(rotation) - (y - midy) * @sin(rotation);
-        v.pos.y = midy + (x - midx) * @sin(rotation) + (y - midy) * @cos(rotation);
+    v.col = opts.colormod.alphaMultiply();
+    v.uv[0] = uv.x;
+    v.uv[1] = uv.y;
+    if (rot != 0) {
+        v.pos.x = midx + (x - midx) * @cos(rot) - (y - midy) * @sin(rot);
+        v.pos.y = midy + (x - midx) * @sin(rot) + (y - midy) * @cos(rot);
     }
     try vtx.append(v);
 
     v.pos.x = xw;
-    v.uv[0] = 1;
-    if (rotation != 0) {
-        v.pos.x = midx + (xw - midx) * @cos(rotation) - (y - midy) * @sin(rotation);
-        v.pos.y = midy + (xw - midx) * @sin(rotation) + (y - midy) * @cos(rotation);
+    v.uv[0] = uv.w;
+    if (rot != 0) {
+        v.pos.x = midx + (xw - midx) * @cos(rot) - (y - midy) * @sin(rot);
+        v.pos.y = midy + (xw - midx) * @sin(rot) + (y - midy) * @cos(rot);
     }
     try vtx.append(v);
 
     v.pos.y = yh;
-    v.uv[1] = 1;
-    if (rotation != 0) {
-        v.pos.x = midx + (xw - midx) * @cos(rotation) - (yh - midy) * @sin(rotation);
-        v.pos.y = midy + (xw - midx) * @sin(rotation) + (yh - midy) * @cos(rotation);
+    v.uv[1] = uv.h;
+    if (rot != 0) {
+        v.pos.x = midx + (xw - midx) * @cos(rot) - (yh - midy) * @sin(rot);
+        v.pos.y = midy + (xw - midx) * @sin(rot) + (yh - midy) * @cos(rot);
     }
     try vtx.append(v);
 
     v.pos.x = x;
-    v.uv[0] = 0;
-    if (rotation != 0) {
-        v.pos.x = midx + (x - midx) * @cos(rotation) - (yh - midy) * @sin(rotation);
-        v.pos.y = midy + (x - midx) * @sin(rotation) + (yh - midy) * @cos(rotation);
+    v.uv[0] = uv.x;
+    if (rot != 0) {
+        v.pos.x = midx + (x - midx) * @cos(rot) - (yh - midy) * @sin(rot);
+        v.pos.y = midy + (x - midx) * @sin(rot) + (yh - midy) * @cos(rot);
     }
     try vtx.append(v);
 
@@ -6540,7 +6559,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotati
 
     const tce = iconTexture(name, tvg_bytes, @as(u32, @intFromFloat(ask_height))) catch return;
 
-    try renderTexture(tce.texture, rs, rotation, colormod);
+    try renderTexture(tce.texture, rs, .{ .rotation = rotation, .colormod = colormod });
 }
 
 pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntry {
@@ -6591,5 +6610,5 @@ pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, rot
     if (clipGet().intersect(rs.r).empty()) return;
 
     const tce = imageTexture(name, image_bytes) catch return;
-    try renderTexture(tce.texture, rs, rotation, colormod);
+    try renderTexture(tce.texture, rs, .{ .rotation = rotation, .colormod = colormod });
 }

@@ -76,7 +76,11 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         };
     }
 
-    _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_BLEND);
+    // do premultiplied alpha blending:
+    // * rendering to a texture and then rendering the texture works the same
+    // * any filtering happening across pixels won't bleed in transparent rgb values
+    const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
+    _ = c.SDL_SetRenderDrawBlendMode(renderer, pma_blend);
 
     var back = init(window, renderer);
     back.we_own_window = true;
@@ -506,6 +510,23 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
     }
 
     const texture = c.SDL_CreateTexture(self.renderer, c.SDL_PIXELFORMAT_ABGR8888, c.SDL_TEXTUREACCESS_TARGET, @intCast(width), @intCast(height)) orelse unreachable;
+    const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
+    _ = c.SDL_SetTextureBlendMode(texture, pma_blend);
+    //_ = c.SDL_SetTextureBlendMode(texture, c.SDL_BLENDMODE_BLEND);
+
+    // make sure texture starts out transparent
+    const old = c.SDL_GetRenderTarget(self.renderer);
+    defer _ = c.SDL_SetRenderTarget(self.renderer, old);
+
+    var oldBlend: [1]c_uint = undefined;
+    _ = c.SDL_GetRenderDrawBlendMode(self.renderer, &oldBlend);
+    defer _ = c.SDL_SetRenderDrawBlendMode(self.renderer, oldBlend[0]);
+
+    _ = c.SDL_SetRenderTarget(self.renderer, texture);
+    _ = c.SDL_SetRenderDrawBlendMode(self.renderer, c.SDL_BLENDMODE_NONE);
+    _ = c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0);
+    _ = c.SDL_RenderFillRect(self.renderer, null);
+
     return texture;
 }
 

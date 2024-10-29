@@ -376,34 +376,6 @@ pub const demoKind = enum {
 
 pub var demo_active: demoKind = .basic_widgets;
 
-const demoButtonResult = struct {
-    button: *ButtonWidget,
-    box: *dvui.BoxWidget,
-
-    pub fn deinit(self: *demoButtonResult) void {
-        self.box.deinit();
-        self.button.deinit();
-    }
-};
-
-fn demoButton(src: std.builtin.SourceLocation, label: []const u8, opts: Options) !demoButtonResult {
-    var bw = try dvui.currentWindow().arena().create(ButtonWidget);
-    bw.* = dvui.ButtonWidget.init(src, .{}, opts);
-    try bw.install();
-    bw.processEvents();
-    try bw.drawBackground();
-    try bw.drawFocus();
-
-    const box = try dvui.box(@src(), .vertical, .{ .expand = .both });
-
-    var options: dvui.Options = .{ .gravity_x = 0.5, .gravity_y = 1.0 };
-    if (dvui.captured(bw.wd.id)) options = options.override(.{ .color_text = .{ .color = options.color(.text_press) } });
-
-    try dvui.label(@src(), "{s}", .{label}, options);
-
-    return .{ .button = bw, .box = box };
-}
-
 pub fn demo() !void {
     if (!show_demo_window) {
         return;
@@ -443,6 +415,9 @@ pub fn demo() !void {
     //defer scroll.deinit();
 
     var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = 601 }, .{ .expand = .horizontal, .background = false, .min_size_content = .{ .h = 100 } });
+    //if (dvui.firstFrame(paned.data().id)) {
+    //    paned.split_ratio = 0;
+    //}
     blk: {
         var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
         defer scroll.deinit();
@@ -451,6 +426,7 @@ pub fn demo() !void {
             break :blk;
         }
 
+        var invalidate: u8 = 0;
         {
             var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
@@ -467,6 +443,10 @@ pub fn demo() !void {
             if (try dvui.button(@src(), "Zoom Out", .{}, .{})) {
                 scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
             }
+
+            if (try dvui.button(@src(), "Invalidate", .{}, .{})) {
+                invalidate = 1;
+            }
         }
 
         var fbox = try dvui.flexbox(@src(), .{}, .{ .expand = .both, .background = true });
@@ -474,37 +454,54 @@ pub fn demo() !void {
 
         inline for (0..@typeInfo(demoKind).Enum.fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
-            var db = try demoButton(@src(), e.name(), .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = dvui.Size.all(120), .margin = Rect.all(5), .color_fill = .{ .name = .fill } });
+            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = dvui.Size.all(120), .margin = Rect.all(5), .color_fill = .{ .name = .fill } });
+            try bw.install();
+            bw.processEvents();
+            try bw.drawBackground();
 
-            const demo_scaler = try dvui.scale(@src(), e.scale(), .{ .expand = .both });
+            const cache = try dvui.cache(@src(), .{ .invalidate = invalidate > 0 }, .{ .expand = .both });
+            if (cache.uncached()) {
+                const box = try dvui.box(@src(), .vertical, .{ .expand = .both });
+                defer box.deinit();
 
-            switch (e) {
-                .basic_widgets => try basicWidgets(),
-                .calculator => try calculator(),
-                .text_entry => try textEntryWidgets(),
-                .styling => try styling(),
-                .layout => try layout(),
-                .text_layout => try layoutText(),
-                .reorderable => try reorderLists(),
-                .menus => try menus(),
-                .focus => try focus(),
-                .scrolling => try scrolling(),
-                .scroll_canvas => {},
-                .dialogs => try dialogs(float.data().id),
-                .animations => try animations(),
-                .struct_ui => try structUI(),
-                .debugging => try debuggingErrors(),
+                var options: dvui.Options = .{ .gravity_x = 0.5, .gravity_y = 1.0 };
+                if (dvui.captured(bw.wd.id)) options = options.override(.{ .color_text = .{ .color = options.color(.text_press) } });
+
+                try dvui.label(@src(), "{s}", .{e.name()}, options);
+
+                const demo_scaler = try dvui.scale(@src(), e.scale(), .{ .expand = .both });
+
+                switch (e) {
+                    .basic_widgets => try basicWidgets(),
+                    .calculator => try calculator(),
+                    .text_entry => try textEntryWidgets(),
+                    .styling => try styling(),
+                    .layout => try layout(),
+                    .text_layout => try layoutText(),
+                    .reorderable => try reorderLists(),
+                    .menus => try menus(),
+                    .focus => try focus(),
+                    .scrolling => try scrolling(),
+                    .scroll_canvas => {},
+                    .dialogs => try dialogs(float.data().id),
+                    .animations => try animations(),
+                    .struct_ui => try structUI(),
+                    .debugging => try debuggingErrors(),
+                }
+
+                demo_scaler.deinit();
             }
+            cache.deinit();
 
-            demo_scaler.deinit();
+            try bw.drawFocus();
 
-            if (db.button.clicked()) {
+            if (bw.clicked()) {
                 demo_active = e;
                 if (paned.collapsed()) {
                     paned.animateSplit(0.0);
                 }
             }
-            db.deinit();
+            bw.deinit();
         }
     }
 
@@ -2441,7 +2438,7 @@ pub fn animations() !void {
         dvui.textureDestroyLater(tex);
 
         var frame_box = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 50, .h = 50 } });
-        try dvui.renderTexture(tex, frame_box.data().contentRectScale(), 0, .{});
+        try dvui.renderTexture(tex, frame_box.data().contentRectScale(), .{});
         frame_box.deinit();
     }
 }
