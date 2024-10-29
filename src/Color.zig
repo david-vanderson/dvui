@@ -8,6 +8,15 @@ g: u8 = 0xff,
 b: u8 = 0xff,
 a: u8 = 0xff,
 
+/// Convert normal color to premultiplied alpha.
+pub fn alphaMultiply(self: @This()) @This() {
+    var c = self;
+    c.r = @intCast(@divTrunc(@as(u16, c.r) * c.a, 255));
+    c.g = @intCast(@divTrunc(@as(u16, c.g) * c.a, 255));
+    c.b = @intCast(@divTrunc(@as(u16, c.b) * c.a, 255));
+    return c;
+}
+
 /// Returns brightness of the color as a value between 0 and 1
 pub fn brightness(self: @This()) f32 {
     const red: f32 = @as(f32, @floatFromInt(self.r)) / 255.0;
