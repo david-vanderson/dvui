@@ -15,9 +15,10 @@ pub const InitOptions = struct {
 };
 
 wd: WidgetData = undefined,
-tex: ?*anyopaque = null,
+hash: u32 = undefined,
 caching: bool = false,
 old_target: dvui.RenderTarget = undefined,
+old_clip: ?Rect = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) CacheWidget {
     _ = init_opts;
@@ -25,20 +26,44 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     const defaults = Options{ .name = "Cache" };
     self.wd = WidgetData.init(src, .{}, defaults.override(opts));
 
-    self.tex = dvui.dataGet(null, self.wd.id, "_tex", *anyopaque);
-
+    self.hash = dvui.hashIdKey(self.wd.id, "_tex");
     return self;
+}
+
+fn tce(self: *CacheWidget) ?dvui.TextureCacheEntry {
+    const cw = dvui.currentWindow();
+    if (cw.texture_cache.getPtr(self.hash)) |t| {
+        t.used = true;
+        return t.*;
+    }
+
+    return null;
+}
+
+fn drawTce(self: *CacheWidget, t: dvui.TextureCacheEntry) !void {
+    const rs = self.wd.contentRectScale();
+    const uw = rs.r.w / t.size.w;
+    const vh = rs.r.h / t.size.h;
+
+    try dvui.renderTexture(t.texture, rs, .{ .uv = .{ .w = uw, .h = vh }, .debug = self.wd.options.debugGet() });
+    if (self.wd.options.debugGet()) {
+        dvui.log.debug("drawing {d} {d} {d}x{d} {d}x{d} {d} {d}", .{ rs.r.x, rs.r.y, rs.r.w, rs.r.h, t.size.w, t.size.h, uw, vh });
+    }
 }
 
 /// Must be called before install().
 pub fn invalidate(self: *CacheWidget) !void {
-    if (self.tex) |t| {
+    if (self.tce()) |t| {
         // if we had a texture, show it this frame because our contents needs a frame to get sizing
-        try dvui.renderTexture(t, self.wd.contentRectScale(), .{});
-        dvui.textureDestroyLater(t);
+        try self.drawTce(t);
+
+        dvui.textureDestroyLater(t.texture);
+        _ = dvui.currentWindow().texture_cache.remove(self.hash);
+
+        // now we've shown the texture, so prevent any widgets from drawing on top of it this frame
+        // - can happen if some widgets precalculate their size (like label)
+        self.old_clip = dvui.clip(.{});
     }
-    dvui.dataRemove(null, self.wd.id, "_tex");
-    self.tex = null;
 }
 
 pub fn install(self: *CacheWidget) !void {
@@ -46,15 +71,9 @@ pub fn install(self: *CacheWidget) !void {
     try self.wd.register();
     try self.wd.borderAndBackground(.{});
 
-    if (self.tex) |t| {
+    if (self.tce()) |t| {
         // successful cache, draw texture and enforce min size
-        var rs = self.wd.contentRectScale();
-        rs.r.w = @floor(rs.r.w);
-        rs.r.h = @floor(rs.r.h);
-        if (self.wd.options.debugGet()) {
-            std.debug.print("cached tex {}\n", .{rs.r});
-        }
-        try dvui.renderTexture(t, rs, .{});
+        try self.drawTce(t);
         self.wd.minSizeMax(self.wd.rect.size());
     } else {
 
@@ -69,18 +88,23 @@ pub fn install(self: *CacheWidget) !void {
 
         if (self.caching) {
             const rs = self.wd.contentRectScale();
-            const w: u32 = @intFromFloat(rs.r.w);
-            const h: u32 = @intFromFloat(rs.r.h);
-            if (self.wd.options.debugGet()) {
-                std.debug.print("caching {d} {d}\n", .{ w, h });
-            }
-            self.tex = dvui.textureCreateTarget(@intFromFloat(rs.r.w), @intFromFloat(rs.r.h), .linear) catch blk: {
+            const w: u32 = @intFromFloat(@ceil(rs.r.w));
+            const h: u32 = @intFromFloat(@ceil(rs.r.h));
+            const tex = dvui.textureCreateTarget(w, h, .linear) catch blk: {
                 self.caching = false;
                 break :blk null;
             };
 
             if (self.caching) {
-                self.old_target = dvui.renderTarget(.{ .texture = self.tex, .offset = rs.r.topLeft() });
+                const entry = dvui.TextureCacheEntry{ .texture = tex.?, .size = .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) } };
+                try dvui.currentWindow().texture_cache.put(self.hash, entry);
+
+                var offset = rs.r.topLeft();
+                if (dvui.snapToPixels()) {
+                    offset.x = @round(offset.x);
+                    offset.y = @round(offset.y);
+                }
+                self.old_target = dvui.renderTarget(.{ .texture = tex.?, .offset = offset });
             }
         }
     }
@@ -88,7 +112,7 @@ pub fn install(self: *CacheWidget) !void {
 
 /// Must be called after install().
 pub fn uncached(self: *CacheWidget) bool {
-    return (self.caching or self.tex == null);
+    return (self.caching or self.tce() == null);
 }
 
 pub fn widget(self: *CacheWidget) Widget {
@@ -120,12 +144,17 @@ pub fn processEvent(self: *CacheWidget, e: *dvui.Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *CacheWidget) void {
+    if (self.old_clip) |clip| {
+        dvui.clipSet(clip);
+    }
     if (self.caching) {
         _ = dvui.renderTarget(self.old_target);
-        dvui.renderTexture(self.tex.?, self.wd.contentRectScale(), .{}) catch {
-            dvui.log.debug("{x} CacheWidget.deinit failed to render texture\n", .{self.wd.id});
-        };
-        dvui.dataSet(null, self.wd.id, "_tex", self.tex.?);
+        if (self.tce()) |t| {
+            // successful cache, draw texture
+            self.drawTce(t) catch {
+                dvui.log.debug("{x} CacheWidget.deinit failed to render texture\n", .{self.wd.id});
+            };
+        }
     }
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
