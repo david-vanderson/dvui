@@ -627,7 +627,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     return cw.font_cache.getPtr(fontHash).?;
 }
 
-const TextureCacheEntry = struct {
+pub const TextureCacheEntry = struct {
     texture: *anyopaque,
     size: Size,
     used: bool = true,
@@ -698,8 +698,7 @@ pub const RenderCommand = struct {
         texture: struct {
             tex: *anyopaque,
             rs: RectScale,
-            rotation: f32,
-            colormod: Color,
+            opts: RenderTextureOptions,
         },
         pathFillConvex: struct {
             path: std.ArrayList(Point),
@@ -3533,7 +3532,7 @@ pub const Window = struct {
                     try debugRenderFontAtlases(t.rs, t.color);
                 },
                 .texture => |t| {
-                    try renderTexture(t.tex, t.rs, .{ .rotation = t.rotation, .colormod = t.colormod });
+                    try renderTexture(t.tex, t.rs, t.opts);
                 },
                 .pathFillConvex => |pf| {
                     try self.path.appendSlice(pf.path.items);
@@ -6460,6 +6459,7 @@ pub const RenderTextureOptions = struct {
     rotation: f32 = 0,
     colormod: Color = .{},
     uv: ?Rect = null,
+    debug: bool = false,
 };
 
 pub fn renderTexture(tex: *anyopaque, rs: RectScale, opts: RenderTextureOptions) !void {
@@ -6469,7 +6469,7 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, opts: RenderTextureOptions)
     var cw = currentWindow();
 
     if (!cw.render_target.rendering) {
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .rotation = opts.rotation, .colormod = opts.colormod } } };
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .opts = opts } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
@@ -6488,8 +6488,12 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, opts: RenderTextureOptions)
     const x: f32 = if (cw.snap_to_pixels) @round(r.x) else r.x;
     const y: f32 = if (cw.snap_to_pixels) @round(r.y) else r.y;
 
-    const xw = r.x + r.w;
-    const yh = r.y + r.h;
+    if (opts.debug) {
+        log.debug("renderTexture at {d} {d} {d}x{d} uv {}", .{ x, y, r.w, r.h, uv });
+    }
+
+    const xw = x + r.w;
+    const yh = y + r.h;
 
     const midx = (x + xw) / 2;
     const midy = (y + yh) / 2;
