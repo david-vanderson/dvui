@@ -586,7 +586,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
                     .height = @ceil(height),
                     .ascent = @floor(ascent),
                     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-                    .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
+                    .texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
                     .texture_atlas_size = size,
                     .texture_atlas_regen = true,
                 };
@@ -614,7 +614,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
             .height = height,
             .ascent = ascent,
             .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-            .texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
+            .texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
             .texture_atlas_size = size,
             .texture_atlas_regen = true,
         };
@@ -676,7 +676,12 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
     };
     defer render.deinit(cw.arena());
 
-    const texture = cw.backend.textureCreate(@as([*]u8, @ptrCast(render.pixels.ptr)), render.width, render.height, .linear);
+    var pixels: []u8 = undefined;
+    pixels.ptr = @ptrCast(render.pixels.ptr);
+    pixels.len = render.width * render.height * 4;
+    Color.alphaMultiplyPixels(pixels);
+
+    const texture = textureCreate(pixels.ptr, render.width, render.height, .linear);
 
     //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, render.width, render.height });
 
@@ -6149,10 +6154,10 @@ pub fn renderText(opts: renderTextOptions) !void {
                             // because of the extra edge, offset by 1 row and 1 col
                             const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) * 4 + (x + col + pad) * 4));
 
-                            // this should be premultiplied white, but that is not working with sdl - for white text I see black fringes around the edge
-                            pixels[di] = 0xff;
-                            pixels[di + 1] = 0xff;
-                            pixels[di + 2] = 0xff;
+                            // premultiplied white
+                            pixels[di] = src;
+                            pixels[di + 1] = src;
+                            pixels[di + 2] = src;
                             pixels[di + 3] = src;
                         }
                     }
@@ -6173,9 +6178,11 @@ pub fn renderText(opts: renderTextOptions) !void {
                         for (0..out_w) |col| {
                             const src = bitmap[row * out_w + col];
                             const dest = di + (row + pad) * stride + (col + pad) * 4;
-                            pixels[dest + 0] = 0xff;
-                            pixels[dest + 1] = 0xff;
-                            pixels[dest + 2] = 0xff;
+
+                            // premultiplied white
+                            pixels[dest + 0] = src;
+                            pixels[dest + 1] = src;
+                            pixels[dest + 2] = src;
                             pixels[dest + 3] = src;
                         }
                     }
@@ -6191,7 +6198,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             }
         }
 
-        fce.texture_atlas = cw.backend.textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
+        fce.texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
         fce.texture_atlas_size = size;
     }
 
@@ -6399,7 +6406,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
     }
 }
 
-/// Create a texture that can be rendered with renderTexture().
+/// Create a texture that can be rendered with renderTexture().  pixels is RGBA premultiplied alpha.
 ///
 /// Remember to destroy the texture at some point, see textureDestroyLater().
 ///
@@ -6586,7 +6593,12 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
 
     defer c.stbi_image_free(data);
 
-    const texture = cw.backend.textureCreate(data, @intCast(w), @intCast(h), .linear);
+    var pixels: []u8 = undefined;
+    pixels.ptr = data;
+    pixels.len = @intCast(w * h * 4);
+    Color.alphaMultiplyPixels(pixels);
+
+    const texture = textureCreate(pixels.ptr, @intCast(w), @intCast(h), .linear);
 
     //std.debug.print("created image texture \"{s}\" size {d}x{d}\n", .{ name, w, h });
     //const usizeh: usize = @intCast(h);

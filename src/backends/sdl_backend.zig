@@ -478,8 +478,6 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?*anyopaque, vtx: []cons
 }
 
 pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {
-    // TODO: is SDL converting to premultiplied alpha internally?
-
     switch (interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
         .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
@@ -500,6 +498,8 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32, 
     }
 
     const texture = c.SDL_CreateTextureFromSurface(self.renderer, surface) orelse unreachable;
+    const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
+    _ = c.SDL_SetTextureBlendMode(texture, pma_blend);
     return texture;
 }
 
