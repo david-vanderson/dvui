@@ -540,7 +540,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
             break :blk Font.default_ttf_bytes;
         }
     };
-    log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
+    //log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
 
     var entry: FontCacheEntry = undefined;
 
@@ -620,7 +620,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         };
     }
 
-    log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
+    //log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
 
     try cw.font_cache.put(fontHash, entry);
 
