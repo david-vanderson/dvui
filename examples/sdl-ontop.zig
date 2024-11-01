@@ -1,6 +1,8 @@
 const std = @import("std");
 const dvui = @import("dvui");
-comptime { std.debug.assert(dvui.backend_kind == .sdl); }
+comptime {
+    std.debug.assert(dvui.backend_kind == .sdl);
+}
 const SDLBackend = dvui.backend;
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
