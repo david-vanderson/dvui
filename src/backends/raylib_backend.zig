@@ -36,7 +36,6 @@ const vertexSource =
     \\{
     \\    fragTexCoord = vertexTexCoord;
     \\    fragColor = vertexColor / 255.0;
-    \\    fragColor.rgb *= fragColor.a;  // convert to premultiplied alpha
     \\    gl_Position = mvp*vec4(vertexPosition, 1.0);
     \\}
 ;
@@ -260,16 +259,6 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
 }
 
 pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {
-    // convert to premultiplied alpha
-    for (0..height) |h| {
-        for (0..width) |w| {
-            const i = (h * width + w) * 4;
-            const a: u16 = pixels[i + 3];
-            pixels[i] = @intCast(@divTrunc(@as(u16, pixels[i]) * a, 255));
-            pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * a, 255));
-            pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * a, 255));
-        }
-    }
     const texid = c.rlLoadTexture(pixels, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
 
     switch (interpolation) {
@@ -287,6 +276,19 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, 
     c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_T, c.RL_TEXTURE_WRAP_CLAMP);
 
     return @ptrFromInt(texid);
+}
+
+pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
+    _ = self;
+    _ = width;
+    _ = height;
+    _ = interpolation;
+    return error.textureError;
+}
+
+pub fn renderTarget(self: *RaylibBackend, texture: ?*anyopaque) void {
+    _ = self;
+    _ = texture;
 }
 
 pub fn textureDestroy(_: *RaylibBackend, texture: *anyopaque) void {
