@@ -6416,7 +6416,7 @@ pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enum
 }
 
 /// Create a texture that can be rendered with renderTexture() and drawn to
-/// with renderTarget().
+/// with renderTarget().  Starts transparent (all zero).
 ///
 /// Remember to destroy the texture at some point, see textureDestroyLater().
 ///

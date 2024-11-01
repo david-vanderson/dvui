@@ -426,7 +426,7 @@ pub fn demo() !void {
             break :blk;
         }
 
-        var invalidate: u8 = 0;
+        var invalidate: bool = false;
         {
             var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
@@ -445,7 +445,7 @@ pub fn demo() !void {
             }
 
             if (try dvui.button(@src(), "Invalidate", .{}, .{})) {
-                invalidate = 1;
+                invalidate = true;
             }
         }
 
@@ -453,14 +453,25 @@ pub fn demo() !void {
         defer fbox.deinit();
 
         inline for (0..@typeInfo(demoKind).Enum.fields.len) |i| {
+            //if (i != 2) {
+            //    break :dblk;
+            //}
             const e = @as(demoKind, @enumFromInt(i));
             var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = dvui.Size.all(120), .margin = Rect.all(5), .color_fill = .{ .name = .fill } });
             try bw.install();
             bw.processEvents();
             try bw.drawBackground();
 
-            const cache = try dvui.cache(@src(), .{ .invalidate = invalidate > 0 }, .{ .expand = .both });
-            if (cache.uncached()) {
+            const use_cache = false;
+            //if (i % 2 == 0) {
+            //    use_cache = true;
+            //}
+
+            var cache: *dvui.CacheWidget = undefined;
+            if (use_cache) {
+                cache = try dvui.cache(@src(), .{ .invalidate = invalidate }, .{ .expand = .both });
+            }
+            if (!use_cache or cache.uncached()) {
                 const box = try dvui.box(@src(), .vertical, .{ .expand = .both });
                 defer box.deinit();
 
@@ -491,7 +502,10 @@ pub fn demo() !void {
 
                 demo_scaler.deinit();
             }
-            cache.deinit();
+
+            if (use_cache) {
+                cache.deinit();
+            }
 
             try bw.drawFocus();
 
