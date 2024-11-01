@@ -16,6 +16,7 @@ pub const InitOptions = struct {
 
 wd: WidgetData = undefined,
 hash: u32 = undefined,
+refresh_prev_value: u8 = undefined,
 caching: bool = false,
 old_target: dvui.RenderTarget = undefined,
 old_clip: ?Rect = null,
@@ -27,6 +28,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     self.wd = WidgetData.init(src, .{}, defaults.override(opts));
 
     self.hash = dvui.hashIdKey(self.wd.id, "_tex");
+    self.refresh_prev_value = dvui.currentWindow().extra_frames_needed;
+    dvui.currentWindow().extra_frames_needed = 0;
     return self;
 }
 
@@ -77,14 +80,10 @@ pub fn install(self: *CacheWidget) !void {
         self.wd.minSizeMax(self.wd.rect.size());
     } else {
 
-        // try to cache, but only do it if our size was stable from last frame (to prevent caching on startup)
-        if (dvui.dataGet(null, self.wd.id, "_size", dvui.Size)) |bs| {
-            if (bs.w == self.wd.rect.w and bs.h == self.wd.rect.h) {
-                self.caching = true;
-            }
+        // we need to cache, but only do it if we didn't have any refreshes from last frame
+        if (dvui.dataGet(null, self.wd.id, "_cache_now", bool) orelse false) {
+            self.caching = true;
         }
-
-        dvui.dataSet(null, self.wd.id, "_size", self.wd.rect.size());
 
         if (self.caching) {
             const rs = self.wd.contentRectScale();
@@ -144,6 +143,13 @@ pub fn processEvent(self: *CacheWidget, e: *dvui.Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *CacheWidget) void {
+    if (self.uncached()) {
+        if (dvui.currentWindow().extra_frames_needed == 0) {
+            dvui.dataSet(null, self.wd.id, "_cache_now", true);
+        }
+    }
+    dvui.currentWindow().extra_frames_needed = @max(dvui.currentWindow().extra_frames_needed, self.refresh_prev_value);
+
     if (self.old_clip) |clip| {
         dvui.clipSet(clip);
     }
