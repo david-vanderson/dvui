@@ -6155,7 +6155,7 @@ pub fn renderText(opts: renderTextOptions) !void {
                             const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(size.w)) * 4 + (x + col + pad) * 4));
 
                             // premultiplied white
-                            pixels[di] = src;
+                            pixels[di + 0] = src;
                             pixels[di + 1] = src;
                             pixels[di + 2] = src;
                             pixels[di + 3] = src;
