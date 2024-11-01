@@ -492,17 +492,6 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?*anyopaque, vtx: []const d
 pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {
     _ = self;
 
-    // convert to premultiplied alpha
-    for (0..height) |h| {
-        for (0..width) |w| {
-            const i = (h * width + w) * 4;
-            const a: u16 = pixels[i + 3];
-            pixels[i] = @intCast(@divTrunc(@as(u16, pixels[i]) * a, 255));
-            pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * a, 255));
-            pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * a, 255));
-        }
-    }
-
     const wasm_interp: u8 = switch (interpolation) {
         .nearest => 0,
         .linear => 1,
@@ -510,6 +499,19 @@ pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32, 
 
     const id = wasm.wasm_textureCreate(pixels, width, height, wasm_interp);
     return @ptrFromInt(id);
+}
+
+pub fn textureCreateTarget(self: *WebBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
+    _ = self;
+    _ = width;
+    _ = height;
+    _ = interpolation;
+    return error.textureError;
+}
+
+pub fn renderTarget(self: *WebBackend, texture: ?*anyopaque) void {
+    _ = self;
+    _ = texture;
 }
 
 pub fn textureDestroy(_: *WebBackend, texture: *anyopaque) void {

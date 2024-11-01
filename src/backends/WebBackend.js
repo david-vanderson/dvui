@@ -20,7 +20,6 @@ function dvui(canvasId, wasmFile) {
         void main() {
           gl_Position = uMatrix * aVertexPosition;
           vColor = aVertexColor / 255.0;  // normalize u8 colors to 0-1
-          vColor.rgb *= vColor.a;  // convert to premultiplied alpha
           vTextureCoord = aTextureCoord;
         }
     `;
@@ -41,7 +40,6 @@ function dvui(canvasId, wasmFile) {
         void main() {
           gl_Position = uMatrix * aVertexPosition;
           vColor = aVertexColor / 255.0;  // normalize u8 colors to 0-1
-          vColor.rgb *= vColor.a;  // convert to premultiplied alpha
           vTextureCoord = aTextureCoord;
         }
     `;
