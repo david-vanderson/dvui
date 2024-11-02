@@ -66,23 +66,24 @@ pub fn main() !void {
         _ = c.SDL_RenderClear(renderer);
 
         // draw some SDL stuff with dvui floating stuff in the middle
-        var rect: c.SDL_Rect = .{ .x = 10, .y = 10, .w = 20, .h = 20 };
+        const rect: c.SDL_Rect = .{ .x = 10, .y = 10, .w = 20, .h = 20 };
+        var rect2 = rect;
         _ = c.SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        _ = c.SDL_RenderFillRect(renderer, &rect);
+        _ = c.SDL_RenderFillRect(renderer, &rect2);
 
         try dvui_floating_stuff();
 
-        rect.x += 24;
+        rect2.x += 24;
         _ = c.SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-        _ = c.SDL_RenderFillRect(renderer, &rect);
+        _ = c.SDL_RenderFillRect(renderer, &rect2);
 
-        rect.x += 24;
+        rect2.x += 24;
         _ = c.SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
-        _ = c.SDL_RenderFillRect(renderer, &rect);
+        _ = c.SDL_RenderFillRect(renderer, &rect2);
 
         _ = c.SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
 
-        _ = c.SDL_RenderDrawLine(renderer, rect.x + 4, rect.y + 30, rect.x + 100, rect.y + 4);
+        _ = c.SDL_RenderDrawLine(renderer, rect.x, rect.y + 30, rect.x + 100, rect.y + 30);
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()

@@ -195,7 +195,7 @@ fn gui_frame() !void {
 
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 255, 255);
 
-        _ = Backend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 4 * rs.s));
+        _ = Backend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s));
     }
 
     if (try dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
