@@ -157,6 +157,7 @@ pub fn deinit(self: *CacheWidget) void {
         _ = dvui.renderTarget(self.old_target);
         if (self.tce()) |t| {
             // successful cache, draw texture
+            dvui.dataRemove(null, self.wd.id, "_cache_now");
             self.drawTce(t) catch {
                 dvui.log.debug("{x} CacheWidget.deinit failed to render texture\n", .{self.wd.id});
             };
