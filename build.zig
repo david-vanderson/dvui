@@ -247,6 +247,7 @@ fn addExample(
     exe.root_module.addImport("dvui", dvui_mod);
 
     if (target.result.os.tag == .windows) {
+        exe.subsystem = .Windows;
         // TODO: This may just be only used for directx
         if (b.lazyDependency("zigwin32", .{})) |zigwin32| {
             exe.root_module.addImport("zigwin32", zigwin32.module("zigwin32"));
