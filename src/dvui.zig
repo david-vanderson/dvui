@@ -4074,13 +4074,14 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !void {
     var over = try dvui.overlay(@src(), .{ .expand = .horizontal });
 
+    try dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading });
+
     if (openflag) |of| {
-        if (try dvui.buttonIcon(@src(), "close", entypo.cross, .{}, .{ .min_size_content = .{ .h = 16 }, .corner_radius = Rect.all(16), .padding = Rect.all(0), .margin = Rect.all(2) })) {
+        if (try dvui.buttonIcon(@src(), "close", entypo.cross, .{}, .{ .min_size_content = .{ .h = 18 }, .corner_radius = Rect.all(1000), .padding = Rect.all(0), .margin = Rect.all(2), .gravity_y = 0.5 })) {
             of.* = false;
         }
     }
 
-    try dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading });
     try dvui.labelNoFmt(@src(), right_str, .{ .gravity_x = 1.0 });
 
     const evts = events();
