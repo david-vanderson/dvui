@@ -2860,7 +2860,7 @@ pub const Window = struct {
     /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventKey(self: *Self, event: Event.Key) !bool {
         if (self.debug_under_mouse and self.debug_under_mouse_esc_needed and event.action == .down and event.code == .escape) {
-            // a left click will stop the debug stuff from following the mouse,
+            // an escape will stop the debug stuff from following the mouse,
             // but need to stop it at the end of the frame when we've gotten
             // the info
             self.debug_under_mouse_quitting = true;
@@ -3796,6 +3796,7 @@ pub const Window = struct {
     fn debugWindowShow(self: *Self) !void {
         if (self.debug_under_mouse_quitting) {
             self.debug_under_mouse = false;
+            self.debug_under_mouse_esc_needed = false;
             self.debug_under_mouse_quitting = false;
         }
 
@@ -3810,7 +3811,7 @@ pub const Window = struct {
         self.debug_under_focus = false;
         defer self.debug_under_focus = duf;
 
-        var float = try dvui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
+        var float = try dvui.floatingWindow(@src(), .{ .open_flag = &self.debug_window_show }, .{ .min_size_content = .{ .w = 300, .h = 600 } });
         defer float.deinit();
 
         try dvui.windowHeader("DVUI Debug", "", &self.debug_window_show);
