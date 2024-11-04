@@ -2069,7 +2069,7 @@ pub fn scrollCanvas() !void {
     const evts = dvui.events();
     for (evts) |*e| {
         if (e.evt == .key and e.evt.key.matchBind("ctrl/cmd")) {
-            ctrl_down = (e.evt.key.action == .down);
+            ctrl_down = (e.evt.key.action == .down or e.evt.key.action == .repeat);
         }
 
         if (!scroll.scroll.matchEvent(e))

@@ -547,7 +547,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             const code = SDL_keysym_to_dvui(event.key.keysym.sym);
             const mod = SDL_keymod_to_dvui(event.key.keysym.mod);
             if (self.log_events) {
-                std.debug.print("sdl event KEYDOWN {d} {s} {b}\n", .{ event.key.keysym.sym, @tagName(code), mod });
+                std.debug.print("sdl event KEYDOWN {d} {s} {b} {d}\n", .{ event.key.keysym.sym, @tagName(code), mod, event.key.repeat });
             }
 
             return try win.addEventKey(.{
