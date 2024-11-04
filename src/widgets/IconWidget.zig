@@ -43,8 +43,7 @@ pub fn matchEvent(self: *IconWidget, e: *dvui.Event) bool {
 }
 
 pub fn draw(self: *IconWidget) !void {
-    const rect = dvui.placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
-    const rs = self.wd.parent.screenRectScale(rect);
+    const rs = self.wd.parent.screenRectScale(self.wd.contentRect());
     try dvui.renderIcon(self.name, self.tvg_bytes, rs, self.wd.options.rotationGet(), self.wd.options.color(.text));
 }
 

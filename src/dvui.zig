@@ -2081,12 +2081,32 @@ pub fn placeIn(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravit
     size.w = @min(size.w, avail.w);
     size.h = @min(size.h, avail.h);
 
-    if (e.isHorizontal()) {
-        size.w = avail.w;
-    }
-
-    if (e.isVertical()) {
-        size.h = avail.h;
+    switch (e) {
+        .none => {},
+        .horizontal => {
+            size.w = avail.w;
+        },
+        .vertical => {
+            size.h = avail.h;
+        },
+        .both => {
+            size = avail.size();
+        },
+        .ratio => {
+            if (min_size.w != 0 and min_size.h != 0) {
+                const ratio = min_size.w / min_size.h;
+                const aratio = (avail.w - size.w) / (avail.h - size.h);
+                if (aratio > ratio) {
+                    // height is constraint
+                    size.w = avail.h * ratio;
+                    size.h = avail.h;
+                } else {
+                    // width is constraint
+                    size.w = avail.w;
+                    size.h = avail.w / ratio;
+                }
+            }
+        },
     }
 
     var r = avail.shrinkToSize(size);
@@ -4075,10 +4095,10 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !void {
     var over = try dvui.overlay(@src(), .{ .expand = .horizontal });
 
-    try dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading });
+    try dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
 
     if (openflag) |of| {
-        if (try dvui.buttonIcon(@src(), "close", entypo.cross, .{}, .{ .min_size_content = .{ .h = 18 }, .corner_radius = Rect.all(1000), .padding = Rect.all(0), .margin = Rect.all(2), .gravity_y = 0.5 })) {
+        if (try dvui.buttonIcon(@src(), "close", entypo.cross, .{}, .{ .font_style = .heading, .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio })) {
             of.* = false;
         }
     }
@@ -5129,7 +5149,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
 
     // pass min_size_content through to the icon so that it will figure out the
     // min width based on the height
-    try icon(@src(), name, tvg_bytes, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content }));
+    try icon(@src(), name, tvg_bytes, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio }));
 
     const click = bw.clicked();
     try bw.drawFocus();

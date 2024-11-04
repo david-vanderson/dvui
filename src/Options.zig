@@ -15,6 +15,9 @@ pub const Expand = enum {
     vertical,
     both,
 
+    /// Expand while keeping aspect ratio.
+    ratio,
+
     pub fn isHorizontal(self: Expand) bool {
         return (self == .horizontal or self == .both);
     }

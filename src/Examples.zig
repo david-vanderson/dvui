@@ -1018,7 +1018,7 @@ pub fn textEntryWidgets() !void {
             "toggle",
             if (text_entry_password_buf_obf_enable) entypo.eye_with_line else entypo.eye,
             .{},
-            .{ .gravity_y = 0.5, .min_size_content = .{ .h = 12 } },
+            .{ .gravity_y = 0.5 },
         )) {
             text_entry_password_buf_obf_enable = !text_entry_password_buf_obf_enable;
         }
@@ -1417,11 +1417,11 @@ pub fn layoutText() !void {
         try tl.install(.{});
         defer tl.deinit();
 
-        var cbox = try dvui.box(@src(), .vertical, .{ .padding = .{ .w = 4 } });
-        if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{}, .{ .min_size_content = .{ .h = 18 } })) {
+        var cbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .w = 6 }, .min_size_content = .{ .w = 40 } });
+        if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{}, .{ .min_size_content = .{ .h = 20 }, .expand = .ratio })) {
             try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
         }
-        if (try dvui.buttonIcon(@src(), "more", entypo.dots_three_vertical, .{}, .{ .min_size_content = .{ .h = 18 } })) {
+        if (try dvui.buttonIcon(@src(), "more", entypo.dots_three_vertical, .{}, .{ .min_size_content = .{ .h = 20 }, .expand = .ratio })) {
             try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
         }
         cbox.deinit();
