@@ -893,9 +893,9 @@ pub fn dropdownAdvanced() !void {
         try dvui.icon(@src(), "air", entypo.air, .{ .gravity_y = 0.5 });
 
         if (g.choice) |c| {
-            try dvui.label(@src(), "Dropdown Choice {d}", .{c}, .{ .gravity_y = 0.5, .padding = .{.x = 6, .w = 6 } });
+            try dvui.label(@src(), "Dropdown Choice {d}", .{c}, .{ .gravity_y = 0.5, .padding = .{ .x = 6, .w = 6 } });
         } else {
-            try dvui.label(@src(), "Advanced Dropdown", .{}, .{ .gravity_y = 0.5, .padding = .{.x = 6, .w = 6 } });
+            try dvui.label(@src(), "Advanced Dropdown", .{}, .{ .gravity_y = 0.5, .padding = .{ .x = 6, .w = 6 } });
         }
 
         try dvui.icon(@src(), "dropdown_triangle", entypo.chevron_small_down, .{ .gravity_y = 0.5 });
@@ -915,7 +915,7 @@ pub fn dropdownAdvanced() !void {
             var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
 
             try dvui.icon(@src(), "aircraft landing", entypo.aircraft_landing, opts.override(.{ .gravity_y = 0.5 }));
-            try dvui.labelNoFmt(@src(), "icon with text", opts.override(.{.padding = .{ .x = 6 }}));
+            try dvui.labelNoFmt(@src(), "icon with text", opts.override(.{ .padding = .{ .x = 6 } }));
 
             if (mi.activeRect()) |_| {
                 dd.close();
