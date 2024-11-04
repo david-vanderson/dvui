@@ -4659,7 +4659,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     defer bcbox.deinit();
     try bcbox.install();
     try bcbox.drawBackground();
-    const size = try options.fontGet().lineHeight();
+    const size = options.fontGet().textHeight();
     if (expanded) {
         try icon(@src(), "down_arrow", entypo.triangle_down, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
     } else {
@@ -5744,7 +5744,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     var b = try box(@src(), .horizontal, options.strip().override(.{ .expand = .both }));
     defer b.deinit();
 
-    const check_size = try options.fontGet().lineHeight();
+    const check_size = options.fontGet().textHeight();
     const s = try spacer(@src(), Size.all(check_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
@@ -5830,7 +5830,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     var b = try box(@src(), .horizontal, options.strip().override(.{ .expand = .both }));
     defer b.deinit();
 
-    const radio_size = try options.fontGet().lineHeight();
+    const radio_size = options.fontGet().textHeight();
     const s = try spacer(@src(), Size.all(radio_size), .{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();

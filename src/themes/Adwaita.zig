@@ -28,8 +28,8 @@ pub const light = Theme{
 
     .font_body = .{ .size = 16, .name = "Vera" },
     .font_heading = .{ .size = 16, .name = "VeraBd" },
-    .font_caption = .{ .size = 13, .name = "Vera" },
-    .font_caption_heading = .{ .size = 13, .name = "VeraBd" },
+    .font_caption = .{ .size = 13, .name = "Vera", .line_height_factor = 1.1 },
+    .font_caption_heading = .{ .size = 13, .name = "VeraBd", .line_height_factor = 1.1 },
     .font_title = .{ .size = 28, .name = "Vera" },
     .font_title_1 = .{ .size = 24, .name = "VeraBd" },
     .font_title_2 = .{ .size = 22, .name = "VeraBd" },
@@ -88,8 +88,8 @@ pub const dark = Theme{
 
     .font_body = .{ .size = 16, .name = "Vera" },
     .font_heading = .{ .size = 16, .name = "VeraBd" },
-    .font_caption = .{ .size = 13, .name = "Vera" },
-    .font_caption_heading = .{ .size = 13, .name = "VeraBd" },
+    .font_caption = .{ .size = 13, .name = "Vera", .line_height_factor = 1.1 },
+    .font_caption_heading = .{ .size = 13, .name = "VeraBd", .line_height_factor = 1.1 },
     .font_title = .{ .size = 28, .name = "Vera" },
     .font_title_1 = .{ .size = 24, .name = "VeraBd" },
     .font_title_2 = .{ .size = 22, .name = "VeraBd" },

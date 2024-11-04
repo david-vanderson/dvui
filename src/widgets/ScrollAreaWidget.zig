@@ -82,17 +82,19 @@ pub fn install(self: *ScrollAreaWidget) !void {
 
     const focus_target = self.init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", u32);
 
+    // due to floating point inaccuracies, give ourselves a tiny bit of extra wiggle room
+
     var do_vbar = false;
     var do_hbar = false;
     if (self.si.vertical != .none) {
-        if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar == .auto and (self.si.virtual_size.h > self.si.viewport.h))) {
+        if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar == .auto and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
             do_vbar = true;
             self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
         }
     }
 
     if (self.si.horizontal != .none) {
-        if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar == .auto and (self.si.virtual_size.w > self.si.viewport.w))) {
+        if (self.init_opts.horizontal_bar == .show or (self.init_opts.horizontal_bar == .auto and (self.si.virtual_size.w > (self.si.viewport.w + 0.001)))) {
             do_hbar = true;
             self.si.viewport.h -= ScrollBarWidget.defaults.min_sizeGet().h;
         }
@@ -101,7 +103,7 @@ pub fn install(self: *ScrollAreaWidget) !void {
     // test for vbar again because hbar might have removed some of our room
     if (!do_vbar) {
         if (self.si.vertical != .none) {
-            if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar == .auto and (self.si.virtual_size.h > self.si.viewport.h))) {
+            if (self.init_opts.vertical_bar == .show or (self.init_opts.vertical_bar == .auto and (self.si.virtual_size.h > (self.si.viewport.h + 0.001)))) {
                 do_vbar = true;
                 self.si.viewport.w -= ScrollBarWidget.defaults.min_sizeGet().w;
             }

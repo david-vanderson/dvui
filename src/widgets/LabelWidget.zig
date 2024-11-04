@@ -49,8 +49,18 @@ pub fn draw(self: *LabelWidget) !void {
     var rs = self.wd.parent.screenRectScale(rect);
     const oldclip = dvui.clip(rs.r);
     var iter = std.mem.split(u8, self.label_str, "\n");
+    var line_height_adj: f32 = undefined;
+    var first: bool = true;
     while (iter.next()) |line| {
-        const lineRect = dvui.placeIn(self.wd.contentRect(), try self.wd.options.fontGet().textSize(line), .none, self.wd.options.gravityGet());
+        if (first) {
+            line_height_adj = self.wd.options.fontGet().textHeight() * (self.wd.options.fontGet().line_height_factor - 1.0);
+            first = false;
+        } else {
+            rs.r.y += rs.s * line_height_adj;
+        }
+
+        const tsize = try self.wd.options.fontGet().textSize(line);
+        const lineRect = dvui.placeIn(self.wd.contentRect(), tsize, .none, self.wd.options.gravityGet());
         const liners = self.wd.parent.screenRectScale(lineRect);
 
         rs.r.x = liners.r.x;
@@ -61,7 +71,7 @@ pub fn draw(self: *LabelWidget) !void {
             .color = self.wd.options.color(.text),
             .debug = self.wd.options.debugGet(),
         });
-        rs.r.y += rs.s * try self.wd.options.fontGet().lineHeight();
+        rs.r.y += rs.s * tsize.h;
     }
     dvui.clipSet(oldclip);
 }

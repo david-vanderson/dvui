@@ -138,8 +138,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             const ms = Size.min(Size.max(min_size, self.options.min_sizeGet()), dvui.windowRect().size());
             self.wd.rect.w = ms.w;
             self.wd.rect.h = ms.h;
-
-            //std.debug.print("autosize to {}\n", .{self.wd.rect});
         }
 
         var prev_focus: ?Rect = null;
