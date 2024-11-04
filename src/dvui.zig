@@ -5120,7 +5120,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
 }
 
 pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) !bool {
-    const defaults = Options{.padding = Rect.all(4)};
+    const defaults = Options{ .padding = Rect.all(4) };
     var bw = ButtonWidget.init(src, init_opts, defaults.override(opts));
     try bw.install();
     bw.processEvents();
