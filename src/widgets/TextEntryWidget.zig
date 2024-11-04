@@ -20,7 +20,7 @@ pub var defaults: Options = .{
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .border = Rect.all(1),
-    .padding = Rect.all(4),
+    .padding = Rect.all(6),
     .background = true,
     // min_size_content/max_size_content is calculated in init()
 };

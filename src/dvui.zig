@@ -4416,7 +4416,7 @@ pub const DropdownWidget = struct {
         .color_fill = .{ .name = .fill_control },
         .margin = Rect.all(4),
         .corner_radius = Rect.all(5),
-        .padding = Rect.all(4),
+        .padding = Rect.all(6),
         .background = true,
         .name = "Dropdown",
     };
@@ -4461,6 +4461,7 @@ pub const DropdownWidget = struct {
             try lw.install();
             try lw.draw();
             lw.deinit();
+            _ = try spacer(@src(), .{ .w = 6 }, .{});
             try icon(@src(), "dropdown_triangle", entypo.chevron_small_down, self.options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }));
 
             hbox.deinit();
@@ -4626,7 +4627,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 }
 
 pub var expander_defaults: Options = .{
-    .padding = Rect.all(2),
+    .padding = Rect.all(4),
     .font_style = .heading,
 };
 
@@ -5119,7 +5120,8 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
 }
 
 pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) !bool {
-    var bw = ButtonWidget.init(src, init_opts, opts);
+    const defaults = Options{.padding = Rect.all(4)};
+    var bw = ButtonWidget.init(src, init_opts, defaults.override(opts));
     try bw.install();
     bw.processEvents();
     try bw.drawBackground();
@@ -5721,7 +5723,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 pub var checkbox_defaults: Options = .{
     .name = "Checkbox",
     .corner_radius = dvui.Rect.all(2),
-    .padding = Rect.all(4),
+    .padding = Rect.all(6),
 };
 
 pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, opts: Options) !bool {
@@ -5808,7 +5810,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 pub var radio_defaults: Options = .{
     .name = "Radio",
     .corner_radius = dvui.Rect.all(2),
-    .padding = Rect.all(4),
+    .padding = Rect.all(6),
 };
 
 pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const u8, opts: Options) !bool {

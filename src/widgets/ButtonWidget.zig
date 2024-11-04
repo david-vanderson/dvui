@@ -18,7 +18,7 @@ pub var defaults: Options = .{
     .color_fill = .{ .name = .fill_control },
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
-    .padding = Rect.all(4),
+    .padding = Rect.all(6),
     .background = true,
 };
 
