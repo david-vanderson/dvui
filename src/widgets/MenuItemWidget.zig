@@ -14,7 +14,7 @@ const MenuItemWidget = @This();
 pub var defaults: Options = .{
     .name = "MenuItem",
     .corner_radius = Rect.all(5),
-    .padding = Rect.all(4),
+    .padding = Rect.all(6),
 };
 
 pub const InitOptions = struct {

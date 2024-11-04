@@ -892,16 +892,12 @@ pub fn dropdownAdvanced() !void {
         var hbox2 = try dvui.box(@src(), .horizontal, .{ .expand = .both });
         try dvui.icon(@src(), "air", entypo.air, .{ .gravity_y = 0.5 });
 
-        var lw: LabelWidget = undefined;
         if (g.choice) |c| {
-            lw = try LabelWidget.init(@src(), "Dropdown Choice {d}", .{c}, .{ .gravity_y = 0.5 });
+            try dvui.label(@src(), "Dropdown Choice {d}", .{c}, .{ .gravity_y = 0.5, .padding = .{.x = 6, .w = 6 } });
         } else {
-            lw = try LabelWidget.init(@src(), "Advanced Dropdown", .{}, .{ .gravity_y = 0.5 });
+            try dvui.label(@src(), "Advanced Dropdown", .{}, .{ .gravity_y = 0.5, .padding = .{.x = 6, .w = 6 } });
         }
 
-        try lw.install();
-        try lw.draw();
-        lw.deinit();
         try dvui.icon(@src(), "dropdown_triangle", entypo.chevron_small_down, .{ .gravity_y = 0.5 });
 
         hbox2.deinit();
@@ -919,7 +915,7 @@ pub fn dropdownAdvanced() !void {
             var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
 
             try dvui.icon(@src(), "aircraft landing", entypo.aircraft_landing, opts.override(.{ .gravity_y = 0.5 }));
-            try dvui.labelNoFmt(@src(), "icon with text", opts);
+            try dvui.labelNoFmt(@src(), "icon with text", opts.override(.{.padding = .{ .x = 6 }}));
 
             if (mi.activeRect()) |_| {
                 dd.close();
@@ -941,7 +937,7 @@ pub fn dropdownAdvanced() !void {
             var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
 
             try dvui.image(@src(), "zig favicon", zig_favicon, opts.override(.{ .gravity_x = 0.5 }));
-            try dvui.labelNoFmt(@src(), "image above text", opts.override(.{ .gravity_x = 0.5 }));
+            try dvui.labelNoFmt(@src(), "image above text", opts.override(.{ .gravity_x = 0.5, .padding = .{} }));
 
             if (mi.activeRect()) |_| {
                 dd.close();
@@ -1422,10 +1418,10 @@ pub fn layoutText() !void {
         defer tl.deinit();
 
         var cbox = try dvui.box(@src(), .vertical, .{ .padding = .{ .w = 4 } });
-        if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{}, .{ .padding = Rect.all(6), .min_size_content = .{ .h = 18 } })) {
+        if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{}, .{ .min_size_content = .{ .h = 18 } })) {
             try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
         }
-        if (try dvui.buttonIcon(@src(), "more", entypo.dots_three_vertical, .{}, .{ .padding = Rect.all(6), .min_size_content = .{ .h = 18 } })) {
+        if (try dvui.buttonIcon(@src(), "more", entypo.dots_three_vertical, .{}, .{ .min_size_content = .{ .h = 18 } })) {
             try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
         }
         cbox.deinit();
