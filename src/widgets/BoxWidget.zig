@@ -27,6 +27,7 @@ min_space_taken: f32 = 0,
 total_weight: f32 = 0,
 childRect: Rect = Rect{}, //TODO rename this to child_rect for naming consistency
 extra_pixels: f32 = 0,
+ratio_extra: f32 = 0,
 
 pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, equal_space: bool, opts: Options) BoxWidget {
     var self = BoxWidget{};
@@ -97,8 +98,28 @@ pub fn rectFor(self: *BoxWidget, id: u32, min_size: Size, e: Options.Expand, g: 
     }
 
     var rect = self.childRect;
-    rect.w = @min(rect.w, min_size.w);
-    rect.h = @min(rect.h, min_size.h);
+
+    var ms = min_size;
+    self.ratio_extra = 0;
+    if (e == .ratio and ms.w != 0 and ms.h != 0) {
+        switch (self.dir) {
+            .horizontal => {
+                const ratio = ms.w / ms.h;
+                ms.h = rect.h;
+                ms.w = rect.h * ratio;
+                self.ratio_extra = ms.w - min_size.w;
+            },
+            .vertical => {
+                const ratio = ms.h / ms.w;
+                ms.h = rect.w * ratio;
+                ms.w = rect.w;
+                self.ratio_extra = ms.h - min_size.h;
+            },
+        }
+    }
+
+    rect.w = @min(rect.w, ms.w);
+    rect.h = @min(rect.h, ms.h);
 
     if (self.dir == .horizontal) {
         rect.h = self.childRect.h;
@@ -132,7 +153,7 @@ pub fn rectFor(self: *BoxWidget, id: u32, min_size: Size, e: Options.Expand, g: 
         }
     }
 
-    return dvui.placeIn(rect, min_size, e, g);
+    return dvui.placeIn(rect, ms, e, g);
 }
 
 pub fn screenRectScale(self: *BoxWidget, rect: Rect) RectScale {
@@ -142,16 +163,16 @@ pub fn screenRectScale(self: *BoxWidget, rect: Rect) RectScale {
 pub fn minSizeForChild(self: *BoxWidget, s: Size) void {
     if (self.dir == .horizontal) {
         if (self.equal_space) {
-            self.min_space_taken = @max(self.min_space_taken, s.w);
+            self.min_space_taken = @max(self.min_space_taken, s.w + self.ratio_extra);
         } else {
-            self.min_space_taken += s.w;
+            self.min_space_taken += s.w + self.ratio_extra;
         }
         self.max_thick = @max(self.max_thick, s.h);
     } else {
         if (self.equal_space) {
-            self.min_space_taken = @max(self.min_space_taken, s.h);
+            self.min_space_taken = @max(self.min_space_taken, s.h + self.ratio_extra);
         } else {
-            self.min_space_taken += s.h;
+            self.min_space_taken += s.h + self.ratio_extra;
         }
         self.max_thick = @max(self.max_thick, s.w);
     }

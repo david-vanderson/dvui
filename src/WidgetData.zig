@@ -55,6 +55,9 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
             self.rect.h = ms.h;
         }
     } else {
+        if (self.options.expandGet() == .ratio and (ms.w == 0 or ms.h == 0)) {
+            dvui.log.debug("rectFor {x} expand is .ratio but min size is zero\n", .{self.id});
+        }
         self.rect = self.parent.rectFor(self.id, ms, self.options.expandGet(), self.options.gravityGet());
     }
 
