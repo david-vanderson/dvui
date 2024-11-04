@@ -54,7 +54,7 @@ var layout_expand_horizontal: bool = false;
 var layout_expand_vertical: bool = false;
 var show_dialog: bool = false;
 var scale_val: f32 = 1.0;
-var line_height_factor: f32 = 1.0;
+var line_height_factor: f32 = 1.2;
 var backbox_color: dvui.Color = .{};
 var hsluv_hsl: dvui.Color.HSLuv = .{ .l = 50 };
 var hsluv_rgb: dvui.Color = .{};
@@ -1430,7 +1430,7 @@ pub fn layoutText() !void {
         }
         cbox.deinit();
 
-        cbox = try dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .{ .name = .fill_window }, .min_size_content = .{ .w = 120 }, .max_size_content = .{ .w = 120 } });
+        cbox = try dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .{ .name = .fill_window }, .min_size_content = .{ .w = 160 }, .max_size_content = .{ .w = 160 } });
         try dvui.icon(@src(), "aircraft", entypo.aircraft, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
         try dvui.label(@src(), "Caption Heading", .{}, .{ .font_style = .caption_heading, .gravity_x = 0.5 });
         var tl_caption = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
@@ -2608,8 +2608,8 @@ pub fn dialogDirect() !void {
     defer dialog_win.deinit();
 
     try dvui.windowHeader("Dialog", "", &show_dialog);
-    try dvui.label(@src(), "Asking a Question", .{}, .{ .font_style = .title_4 });
-    try dvui.label(@src(), "This dialog is being shown in a direct style, controlled entirely in user code.", .{}, .{});
+    try dvui.label(@src(), "Asking a Question", .{}, .{ .font_style = .title_4, .gravity_x = 0.5 });
+    try dvui.label(@src(), "This dialog is directly called by user code.", .{}, .{ .gravity_x = 0.5 });
 
     if (try dvui.button(@src(), "Toggle extra stuff and fit window", .{}, .{})) {
         data.extra_stuff = !data.extra_stuff;
@@ -2620,7 +2620,7 @@ pub fn dialogDirect() !void {
         try dvui.label(@src(), "This is some extra stuff\nwith a multi-line label\nthat has 3 lines", .{}, .{ .margin = .{ .x = 4 } });
 
         var tl = try dvui.textLayout(@src(), .{}, .{});
-        try tl.addText("Here is a textLayout with a bunch of text in it that would overflow the right edge but we are calling autoSize() with a max width", .{});
+        try tl.addText("Here is a textLayout with a bunch of text in it that would overflow the right edge but the dialog has a max_size_content", .{});
         tl.deinit();
     }
 
