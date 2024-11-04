@@ -5725,6 +5725,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
     try pathFillConvex(options.color(.fill));
 
     const perc = @max(0, @min(1, init_opts.percent));
+    if (perc == 0) return;
 
     var part = rs.r;
     switch (init_opts.dir) {
