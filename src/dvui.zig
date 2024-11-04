@@ -5378,7 +5378,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         const evts = events();
         for (evts) |*e| {
             if (e.evt == .key and e.evt.key.matchBind("ctrl/cmd")) {
-                ctrl_down = (e.evt.key.action == .down);
+                ctrl_down = (e.evt.key.action == .down or e.evt.key.action == .repeat);
             }
 
             if (!text_mode) {
@@ -5450,7 +5450,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         const evts = events();
         for (evts) |*e| {
             if (e.evt == .key and e.evt.key.matchBind("ctrl/cmd")) {
-                ctrl_down = (e.evt.key.action == .down);
+                ctrl_down = (e.evt.key.action == .down or e.evt.key.action == .repeat);
             }
 
             if (!eventMatch(e, .{ .id = b.data().id, .r = rs.r }))
