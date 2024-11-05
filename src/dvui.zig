@@ -950,8 +950,10 @@ pub fn pathFillConvex(color: Color) !void {
     const col_trans = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
     var bounds = Rect{}; // w and h are maxx and maxy for now
-    bounds.x = dvui.windowRectPixels().w;
-    bounds.y = dvui.windowRectPixels().h;
+    bounds.x = std.math.floatMax(f32);
+    bounds.y = bounds.x;
+    bounds.w = -bounds.x;
+    bounds.h = -bounds.x;
 
     var i: usize = 0;
     while (i < cw.path.items.len) : (i += 1) {
@@ -1010,11 +1012,8 @@ pub fn pathFillConvex(color: Color) !void {
     bounds.w = bounds.w - bounds.x;
     bounds.h = bounds.h - bounds.y;
 
-    const clipR = clipGet().offsetNegPoint(cw.render_target.offset);
-    var clipr: ?Rect = null;
-    if (!clipGet().equals(dvui.windowRectPixels()) and bounds.clippedBy(clipR)) {
-        clipr = clipR;
-    }
+    const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
+    const clipr: ?Rect = if (bounds.clippedBy(clip_offset)) clip_offset else null;
 
     cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
 
@@ -1113,8 +1112,10 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     const col_trans = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
     var bounds = Rect{}; // w and h are maxx and maxy for now
-    bounds.x = dvui.windowRectPixels().w;
-    bounds.y = dvui.windowRectPixels().h;
+    bounds.x = std.math.floatMax(f32);
+    bounds.y = bounds.x;
+    bounds.w = -bounds.x;
+    bounds.h = -bounds.x;
 
     const aa_size = 1.0;
     var vtx_start: usize = 0;
@@ -1325,11 +1326,8 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     bounds.w = bounds.w - bounds.x;
     bounds.h = bounds.h - bounds.y;
 
-    const clipR = clipGet().offsetNegPoint(cw.render_target.offset);
-    var clipr: ?Rect = null;
-    if (!clipGet().equals(dvui.windowRectPixels()) and bounds.clippedBy(clipR)) {
-        clipr = clipR;
-    }
+    const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
+    const clipr: ?Rect = if (bounds.clippedBy(clip_offset)) clip_offset else null;
 
     cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
 
@@ -1568,7 +1566,7 @@ pub fn clipGet() Rect {
 /// Intersect the given rect (in pixels) with the current clipping rect and set
 /// as the new clipping rect.
 ///
-/// Returns the previous clipping rect.
+/// Returns the previous clipping rect, use clipSet to restore it.
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn clip(new: Rect) Rect {
@@ -1578,12 +1576,11 @@ pub fn clip(new: Rect) Rect {
     return ret;
 }
 
-/// Set the current clipping rect to the given rect (in pixels) intersected
-/// with the OS window.
+/// Set the current clipping rect to the given rect (in pixels).
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn clipSet(r: Rect) void {
-    currentWindow().clipRect = windowRectPixels().intersect(r);
+    currentWindow().clipRect = r;
 }
 
 /// Set snap_to_pixels setting.  If true:
@@ -6079,7 +6076,6 @@ pub fn renderText(opts: renderTextOptions) !void {
     }
 
     const r = opts.rs.r.offsetNegPoint(cw.render_target.offset);
-    const clipR = clipGet().offsetNegPoint(cw.render_target.offset);
 
     const target_size = opts.font.size * opts.rs.s;
     const sized_font = opts.font.resize(target_size);
@@ -6344,10 +6340,8 @@ pub fn renderText(opts: renderTextOptions) !void {
             }
 
             const selr = Rect.fromPoint(sel_vtx[0].pos).toPoint(sel_vtx[2].pos);
-            var clipr: ?Rect = null;
-            if (!clipGet().equals(dvui.windowRectPixels()) and selr.clippedBy(clipR)) {
-                clipr = clipR;
-            }
+            const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
+            const clipr: ?Rect = if (selr.clippedBy(clip_offset)) clip_offset else null;
 
             // triangles must be counter-clockwise (y going down) to avoid backface culling
             cw.backend.drawClippedTriangles(null, &sel_vtx, &[_]u16{ 0, 2, 1, 0, 3, 2 }, clipr);
@@ -6356,11 +6350,8 @@ pub fn renderText(opts: renderTextOptions) !void {
 
     // due to floating point inaccuracies, shrink by 1/1000 of a pixel before testing
     const txtr = (Rect{ .x = x_start, .y = y, .w = max_x - x_start, .h = sel_max_y - y }).insetAll(0.001);
-    var clipr: ?Rect = null;
-    if (!clipGet().equals(dvui.windowRectPixels()) and txtr.clippedBy(clipR)) {
-        clipr = clipR;
-        //dvui.log.debug("clipr text {s} {} {}", .{ opts.text, txtr, clipr.? });
-    }
+    const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
+    const clipr: ?Rect = if (txtr.clippedBy(clip_offset)) clip_offset else null;
 
     cw.backend.drawClippedTriangles(fce.texture_atlas, vtx.items, idx.items, clipr);
 }
@@ -6420,11 +6411,9 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
         try idx.append(@as(u16, @intCast(len + 3)));
         try idx.append(@as(u16, @intCast(len + 2)));
 
-        const clipR = clipGet().offsetNegPoint(cw.render_target.offset);
-        var clipr: ?Rect = null;
-        if (!clipGet().equals(dvui.windowRectPixels()) and r.clippedBy(clipR)) {
-            clipr = clipR;
-        }
+        const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
+        const clipr: ?Rect = if (r.clippedBy(clip_offset)) clip_offset else null;
+
         cw.backend.drawClippedTriangles(kv.value_ptr.texture_atlas, vtx.items, idx.items, clipr);
 
         offset += kv.value_ptr.texture_atlas_size.h;
@@ -6576,11 +6565,8 @@ pub fn renderTexture(tex: *anyopaque, rs: RectScale, opts: RenderTextureOptions)
     try idx.append(3);
     try idx.append(2);
 
-    const clipR = clipGet().offsetNegPoint(cw.render_target.offset);
-    var clipr: ?Rect = null;
-    if (!clipGet().equals(dvui.windowRectPixels()) and r.clippedBy(clipR)) {
-        clipr = clipR;
-    }
+    const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
+    const clipr: ?Rect = if (r.clippedBy(clip_offset)) clip_offset else null;
 
     cw.backend.drawClippedTriangles(tex, vtx.items, idx.items, clipr);
 }

@@ -49,9 +49,9 @@ fn drawTce(self: *CacheWidget, t: dvui.TextureCacheEntry) !void {
     const rs = self.wd.contentRectScale();
 
     try dvui.renderTexture(t.texture, rs, .{ .uv = (Rect{}).toSize(self.tex_uv), .debug = self.wd.options.debugGet() });
-    if (self.wd.options.debugGet()) {
-        dvui.log.debug("drawing {d} {d} {d}x{d} {d}x{d} {d} {d}", .{ rs.r.x, rs.r.y, rs.r.w, rs.r.h, t.size.w, t.size.h, self.tex_uv.w, self.tex_uv.h });
-    }
+    //if (self.wd.options.debugGet()) {
+    //    dvui.log.debug("drawing {d} {d} {d}x{d} {d}x{d} {d} {d}", .{ rs.r.x, rs.r.y, rs.r.w, rs.r.h, t.size.w, t.size.h, self.tex_uv.w, self.tex_uv.h });
+    //}
 }
 
 /// Must be called before install().
@@ -92,10 +92,9 @@ pub fn install(self: *CacheWidget) !void {
             self.tex_uv = .{ .w = rs.r.w / @ceil(rs.r.w), .h = rs.r.h / @ceil(rs.r.h) };
             var tex: ?*anyopaque = null;
 
-            // don't cache if we are off the screen even partially
-            if (rs.r.clippedBy(dvui.clipGet())) {
-                self.caching = false;
-            }
+            // clip to just us, even if we are off screen
+            self.old_clip = dvui.clipGet();
+            dvui.clipSet(rs.r);
 
             if (self.caching) {
                 tex = dvui.textureCreateTarget(w, h, .linear) catch blk: {
