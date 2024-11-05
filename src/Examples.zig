@@ -414,7 +414,7 @@ pub fn demo() !void {
     //var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
     //defer scroll.deinit();
 
-    var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = 601 }, .{ .expand = .horizontal, .background = false, .min_size_content = .{ .h = 100 } });
+    var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = 601 }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 100 } });
     //if (dvui.firstFrame(paned.data().id)) {
     //    paned.split_ratio = 0;
     //}
@@ -434,17 +434,17 @@ pub fn demo() !void {
                 dvui.toggleDebugWindow();
             }
 
-            try dvui.Theme.picker(@src(), .{});
+            if (try dvui.Theme.picker(@src(), .{})) {
+                invalidate = true;
+            }
 
             if (try dvui.button(@src(), "Zoom In", .{}, .{})) {
                 scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
+                invalidate = true;
             }
 
             if (try dvui.button(@src(), "Zoom Out", .{}, .{})) {
                 scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
-            }
-
-            if (try dvui.button(@src(), "Invalidate", .{}, .{})) {
                 invalidate = true;
             }
         }
@@ -453,20 +453,13 @@ pub fn demo() !void {
         defer fbox.deinit();
 
         inline for (0..@typeInfo(demoKind).Enum.fields.len) |i| {
-            //if (i != 2) {
-            //    break :dblk;
-            //}
             const e = @as(demoKind, @enumFromInt(i));
             var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = dvui.Size.all(120), .margin = Rect.all(5), .color_fill = .{ .name = .fill } });
             try bw.install();
             bw.processEvents();
             try bw.drawBackground();
 
-            const use_cache = false;
-            //if (i % 2 == 0) {
-            //    use_cache = true;
-            //}
-
+            const use_cache = true;
             var cache: *dvui.CacheWidget = undefined;
             if (use_cache) {
                 cache = try dvui.cache(@src(), .{ .invalidate = invalidate }, .{ .expand = .both });

@@ -88,7 +88,9 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
     return ret;
 }
 
-pub fn picker(src: std.builtin.SourceLocation, opts: Options) !void {
+pub fn picker(src: std.builtin.SourceLocation, opts: Options) !bool {
+    var picked = false;
+
     const defaults: Options = .{
         .name = "Theme Picker",
         .min_size_content = .{ .w = 120 },
@@ -117,12 +119,15 @@ pub fn picker(src: std.builtin.SourceLocation, opts: Options) !void {
         for (cw.themes.values()) |*theme| {
             if (try dd.addChoiceLabel(theme.name)) {
                 dvui.themeSet(theme);
+                picked = true;
                 break;
             }
         }
     }
 
     dd.deinit();
+
+    return picked;
 }
 
 pub const QuickTheme = struct {
