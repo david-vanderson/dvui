@@ -1448,9 +1448,9 @@ pub fn dragOffset() Point {
     return cw.drag_offset;
 }
 
-/// If a mouse drag is happening, return the pixel difference between the drag
-/// starting location (from dragPreStart() or dragStart()) and p.  Otherwise
-/// return null, meaning a drag hasn't started yet.
+/// If a mouse drag is happening, return the pixel difference to p from the
+/// previous dragging call or the drag starting location (from dragPreStart()
+/// or dragStart()).  Otherwise return null, meaning a drag hasn't started yet.
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn dragging(p: Point) ?Point {
