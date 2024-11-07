@@ -568,22 +568,31 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
 
             if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_left")) {
                 e.handled = true;
-                if (self.textLayout.sel_move == .none) {
-                    self.textLayout.sel_move = .{ .char_left_right = .{ .select = false } };
-                }
-                if (self.textLayout.sel_move == .char_left_right) {
-                    self.textLayout.sel_move.char_left_right.count -= 1;
+                if (!self.textLayout.selection.empty()) {
+                    self.textLayout.selection.moveCursor(self.textLayout.selection.start, false);
+                } else {
+                    if (self.textLayout.sel_move == .none) {
+                        self.textLayout.sel_move = .{ .char_left_right = .{ .select = false } };
+                    }
+                    if (self.textLayout.sel_move == .char_left_right) {
+                        self.textLayout.sel_move.char_left_right.count -= 1;
+                    }
                 }
                 break :blk;
             }
 
             if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_right")) {
                 e.handled = true;
-                if (self.textLayout.sel_move == .none) {
-                    self.textLayout.sel_move = .{ .char_left_right = .{ .select = false } };
-                }
-                if (self.textLayout.sel_move == .char_left_right) {
-                    self.textLayout.sel_move.char_left_right.count += 1;
+                if (!self.textLayout.selection.empty()) {
+                    self.textLayout.selection.moveCursor(self.textLayout.selection.end, false);
+                    self.textLayout.selection.affinity = .before;
+                } else {
+                    if (self.textLayout.sel_move == .none) {
+                        self.textLayout.sel_move = .{ .char_left_right = .{ .select = false } };
+                    }
+                    if (self.textLayout.sel_move == .char_left_right) {
+                        self.textLayout.sel_move.char_left_right.count += 1;
+                    }
                 }
                 break :blk;
             }
