@@ -92,10 +92,6 @@ pub fn install(self: *CacheWidget) !void {
             self.tex_uv = .{ .w = rs.r.w / @ceil(rs.r.w), .h = rs.r.h / @ceil(rs.r.h) };
             var tex: ?*anyopaque = null;
 
-            // clip to just us, even if we are off screen
-            self.old_clip = dvui.clipGet();
-            dvui.clipSet(rs.r);
-
             if (self.caching) {
                 tex = dvui.textureCreateTarget(w, h, .linear) catch blk: {
                     self.caching = false;
@@ -113,6 +109,10 @@ pub fn install(self: *CacheWidget) !void {
                     offset.y = @round(offset.y);
                 }
                 self.old_target = dvui.renderTarget(.{ .texture = tex.?, .offset = offset });
+
+                // clip to just us, even if we are off screen
+                self.old_clip = dvui.clipGet();
+                dvui.clipSet(rs.r);
             }
         }
     }
