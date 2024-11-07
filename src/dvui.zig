@@ -1395,6 +1395,12 @@ pub fn subwindowCurrentId() u32 {
     return cw.subwindow_currentId;
 }
 
+pub const DragStartOptions = struct {
+    cursor: ?enums.Cursor = null,
+    offset: Point = .{},
+    name: []const u8 = "",
+};
+
 /// Prepare for a possible mouse drag.  This will detect a drag, and also a
 /// normal click (mouse down and up without a drag).
 ///
@@ -1412,12 +1418,13 @@ pub fn subwindowCurrentId() u32 {
 /// See dragStart() to immediately start a drag.
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn dragPreStart(p: Point, cursor: ?enums.Cursor, offset: Point) void {
+pub fn dragPreStart(p: Point, options: DragStartOptions) void {
     const cw = currentWindow();
     cw.drag_state = .prestart;
     cw.drag_pt = p;
-    cw.drag_offset = offset;
-    cw.cursor_dragging = cursor;
+    cw.drag_offset = options.offset;
+    cw.cursor_dragging = options.cursor;
+    cw.drag_name = options.name;
 }
 
 /// Start a mouse drag from p.  Use when only dragging is possible (normal
@@ -1432,12 +1439,13 @@ pub fn dragPreStart(p: Point, cursor: ?enums.Cursor, offset: Point) void {
 /// recover where to move the true corner.
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn dragStart(p: Point, cursor: ?enums.Cursor, offset: Point) void {
+pub fn dragStart(p: Point, options: DragStartOptions) void {
     const cw = currentWindow();
     cw.drag_state = .dragging;
     cw.drag_pt = p;
-    cw.drag_offset = offset;
-    cw.cursor_dragging = cursor;
+    cw.drag_offset = options.offset;
+    cw.cursor_dragging = options.cursor;
+    cw.drag_name = options.name;
 }
 
 /// Get offset previously given to dragPreStart() or dragStart().  See those.
@@ -1476,8 +1484,17 @@ pub fn dragging(p: Point) ?Point {
     }
 }
 
-/// Stop any mouse drag.  This is called for you in captureMouse(null) because
-/// most drags end at the same time as mouse capture.
+/// True if dragging and dragStart (or dragPreStart) was given name.
+///
+/// Useful for cross-widget drags.
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn draggingName(name: []const u8) bool {
+    const cw = currentWindow();
+    return cw.drag_state == .dragging and cw.drag_name.len > 0 and std.mem.eql(u8, name, cw.drag_name);
+}
+
+/// Stop any mouse drag.
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn dragEnd() void {
@@ -1506,8 +1523,6 @@ pub fn captureMouse(id: ?u32) void {
     cw.captureID = id;
     if (id != null) {
         cw.captured_last_frame = true;
-    } else {
-        dragEnd();
     }
 }
 
@@ -1536,6 +1551,7 @@ pub fn captureMouseMaintain(id: u32) void {
                 // cancel the capture, and cancel
                 // any drag being done
                 captureMouse(null);
+                dragEnd();
                 return;
             }
         }
@@ -2505,6 +2521,7 @@ pub const Window = struct {
     } = .none,
     drag_pt: Point = Point{},
     drag_offset: Point = Point{},
+    drag_name: []const u8 = "",
 
     frame_time_ns: i128 = 0,
     loop_wait_target: ?i128 = null,
@@ -3431,10 +3448,8 @@ pub const Window = struct {
         }
 
         if (!self.captured_last_frame) {
-            // widget that had capture went away, also end any drag that might
-            // have been happening
+            // widget that had capture went away
             self.captureID = null;
-            self.drag_state = .none;
         }
         self.captured_last_frame = false;
 
@@ -3929,6 +3944,12 @@ pub const Window = struct {
         // we wouldn't even get them bubbled
         const evts = events();
         for (evts) |*e| {
+            if (self.drag_state != .none and e.evt == .mouse and e.evt.mouse.action == .release) {
+                log.debug("clearing drag ({s}) for unhandled mouse release", .{self.drag_name});
+                self.drag_state = .none;
+                self.drag_name = "";
+            }
+
             if (!eventMatch(e, .{ .id = self.wd.id, .r = self.rect_pixels, .cleanup = true }))
                 continue;
 
@@ -4964,7 +4985,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
                     dvui.captureMouse(lwid);
 
                     // for touch events, we want to cancel our click if a drag is started
-                    dvui.dragPreStart(me.p, null, Point{});
+                    dvui.dragPreStart(me.p, .{});
                 } else if (me.action == .release and me.button.pointer()) {
                     // mouse button was released, do we still have mouse capture?
                     if (dvui.captured(lwid)) {
@@ -4972,6 +4993,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
 
                         // cancel our capture
                         dvui.captureMouse(null);
+                        dvui.dragEnd();
 
                         // if the release was within our border, the click is successful
                         if (lw.data().borderRectScale().r.contains(me.p)) {
@@ -4991,6 +5013,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
                             // that means the person probably didn't want to
                             // touch this button, they were trying to scroll
                             dvui.captureMouse(null);
+                            dvui.dragEnd();
                         }
                     }
                 } else if (me.action == .position) {
@@ -5206,6 +5229,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
                 } else if (me.action == .release and me.button.pointer()) {
                     // stop capture
                     captureMouse(null);
+                    dragEnd();
                     e.handled = true;
                 } else if (me.action == .motion and captured(b.data().id)) {
                     // handle only if we have capture
@@ -5495,6 +5519,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     } else if (me.action == .release and me.button.pointer()) {
                         e.handled = true;
                         captureMouse(null);
+                        dragEnd();
                         dataRemove(null, b.data().id, "_start_x");
                         dataRemove(null, b.data().id, "_start_v");
                     } else if (me.action == .motion and captured(b.data().id)) {

@@ -507,6 +507,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                 } else if (me.action == .release and dvui.captured(self.wd.id)) {
                     e.handled = true;
                     dvui.captureMouse(null);
+                    dvui.dragEnd();
                 } else if (me.action == .motion and me.button.touch()) {
                     // Need to capture here because it's common for the touch
                     // down to happen on top of a different widget.  Example is

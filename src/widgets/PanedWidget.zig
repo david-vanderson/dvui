@@ -250,11 +250,12 @@ pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 // capture and start drag
                 dvui.captureMouse(self.wd.id);
-                dvui.dragPreStart(e.evt.mouse.p, cursor, Point{});
+                dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = cursor });
             } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                 e.handled = true;
                 // stop possible drag and capture
                 dvui.captureMouse(null);
+                dvui.dragEnd();
             } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
                 e.handled = true;
                 // move if dragging

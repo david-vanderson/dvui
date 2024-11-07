@@ -95,6 +95,7 @@ pub fn processEvent(self: *ReorderWidget, e: *dvui.Event, bubbling: bool) void {
                 if ((me.action == .press or me.action == .release) and me.button.pointer()) {
                     self.drag_ending = true;
                     dvui.captureMouse(null);
+                    dvui.dragEnd();
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (me.action == .motion) {
                     self.drag_point = me.p;
@@ -169,7 +170,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
                     dvui.captureMouse(iw.wd.id);
                     const reo_top_left: ?dvui.Point = if (init_opts.reorderable) |reo| reo.wd.rectScale().r.topLeft() else null;
                     const top_left: ?dvui.Point = init_opts.top_left orelse reo_top_left;
-                    dvui.dragPreStart(me.p, null, (top_left orelse iw.wd.rectScale().r.topLeft()).diff(me.p));
+                    dvui.dragPreStart(me.p, .{ .offset = (top_left orelse iw.wd.rectScale().r.topLeft()).diff(me.p) });
                 } else if (me.action == .motion) {
                     if (dvui.captured(iw.wd.id)) {
                         e.handled = true;

@@ -158,14 +158,6 @@ add alpha to Options as well and multiply it by the theme alpha
 
 add backend function to allow screensaver
 
-cross-widget dragging (for stuff like docking)
-- dragPreStart and dragStart take a ?[]const u8 ("_dock")
-- dragging also takes a ?[]const u8
-  - will return the point if either widget has mouse capture or string matches
-- widgets that only do mouse capture dragging can pass null
-- other widgets have to coordinate via the string
-  - need to be able to call dragging outside of processing events so you can change appearance if the drag you are interested in is happening
-
 Tooltips:
 - wrapper around thing you want the tooltip for
 - floating windows similar to popup
