@@ -320,6 +320,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                         offset.y -= self.sel_start_r.h * 0.5 * rs.s;
                     } else if (me.action == .release and me.button.touch()) {
                         dvui.captureMouse(null);
+                        dvui.dragEnd();
                     } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
                         const corner = me.p.plus(offset);
                         self.sel_pts[0] = self.wd.contentRectScale().pointFromScreen(corner);
@@ -389,6 +390,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                         offset.y -= self.sel_start_r.h * 0.5 * rs.s;
                     } else if (me.action == .release and me.button.touch()) {
                         dvui.captureMouse(null);
+                        dvui.dragEnd();
                     } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
                         const corner = me.p.plus(offset);
                         self.sel_pts[0] = self.sel_start_r.topLeft().plus(.{ .y = self.sel_start_r.h / 2 });
@@ -1479,7 +1481,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 // capture and start drag
                 dvui.captureMouse(self.wd.id);
-                dvui.dragPreStart(me.p, .ibeam, Point{});
+                dvui.dragPreStart(me.p, .{ .cursor = .ibeam });
 
                 if (me.button.touch()) {
                     self.te_focus_on_touchdown = self.focus_at_start;
@@ -1548,6 +1550,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     }
 
                     dvui.captureMouse(null);
+                    dvui.dragEnd();
                 }
             } else if (me.action == .motion and dvui.captured(self.wd.id)) {
                 if (dvui.dragging(me.p)) |_| {
@@ -1570,6 +1573,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     } else {
                         // user intended to scroll with a finger swipe
                         dvui.captureMouse(null); // stop possible drag and capture
+                        dvui.dragEnd();
                     }
                 }
             } else if (me.action == .motion) {

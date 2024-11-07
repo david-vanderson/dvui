@@ -128,11 +128,12 @@ pub fn processEvent(self: *ButtonWidget, e: *Event, bubbling: bool) void {
                 dvui.captureMouse(self.wd.id);
 
                 // drag prestart is just for touch events
-                dvui.dragPreStart(me.p, null, Point{});
+                dvui.dragPreStart(me.p, .{});
             } else if (me.action == .release and me.button.pointer()) {
                 if (dvui.captured(self.wd.id)) {
                     e.handled = true;
                     dvui.captureMouse(null);
+                    dvui.dragEnd();
                     if (self.data().borderRectScale().r.contains(me.p)) {
                         self.click = true;
                         dvui.refresh(null, @src(), self.wd.id);
@@ -145,6 +146,7 @@ pub fn processEvent(self: *ButtonWidget, e: *Event, bubbling: bool) void {
                         // means the person probably didn't want to touch
                         // this button, maybe they were trying to scroll
                         dvui.captureMouse(null);
+                        dvui.dragEnd();
                     }
                 }
             } else if (me.action == .position) {
