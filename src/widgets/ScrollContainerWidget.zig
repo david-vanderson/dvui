@@ -102,7 +102,7 @@ pub fn matchEvent(self: *ScrollContainerWidget, e: *Event) bool {
         self.finger_down = false;
     }
 
-    return dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
+    return dvui.eventMatchSimple(e, self.data());
 }
 
 pub fn processEvents(self: *ScrollContainerWidget) void {
@@ -464,10 +464,9 @@ pub fn processMotionScrollEvent(self: *ScrollContainerWidget, e: *dvui.Event, mo
 }
 
 pub fn processEventsAfter(self: *ScrollContainerWidget) void {
-    const rs = self.wd.borderRectScale();
     const evts = dvui.events();
     for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r }))
+        if (!dvui.eventMatchSimple(e, self.data()))
             continue;
 
         switch (e.evt) {

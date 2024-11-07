@@ -39,7 +39,7 @@ pub fn install(self: *IconWidget) !void {
 }
 
 pub fn matchEvent(self: *IconWidget, e: *dvui.Event) bool {
-    return dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.wd.borderRectScale().r });
+    return dvui.eventMatchSimple(e, &self.wd);
 }
 
 pub fn draw(self: *IconWidget) !void {

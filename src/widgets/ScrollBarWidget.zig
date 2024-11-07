@@ -81,7 +81,7 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect) void {
     const rs = self.wd.borderRectScale();
     const evts = dvui.events();
     for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = rs.r }))
+        if (!dvui.eventMatchSimple(e, self.data()))
             continue;
 
         switch (e.evt) {

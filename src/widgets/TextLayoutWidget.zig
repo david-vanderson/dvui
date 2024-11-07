@@ -1456,7 +1456,7 @@ pub fn matchEvent(self: *TextLayoutWidget, e: *Event) bool {
         dvui.refresh(null, @src(), self.wd.id);
     }
 
-    return dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
+    return dvui.eventMatchSimple(e, self.data());
 }
 
 pub fn processEvents(self: *TextLayoutWidget) void {

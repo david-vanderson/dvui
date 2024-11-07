@@ -49,7 +49,7 @@ pub fn install(self: *ButtonWidget) !void {
 }
 
 pub fn matchEvent(self: *ButtonWidget, e: *Event) bool {
-    return dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
+    return dvui.eventMatchSimple(e, self.data());
 }
 
 pub fn processEvents(self: *ButtonWidget) void {

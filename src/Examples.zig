@@ -2012,7 +2012,7 @@ pub fn scrollCanvas() !void {
         // if user is dragging a box, we want first crack at events
         if (dragging_box) {
             for (evts) |*e| {
-                if (!dvui.eventMatch(e, .{ .id = dragBox.data().id, .r = dragBox.data().borderRectScale().r })) {
+                if (!dvui.eventMatchSimple(e, dragBox.data())) {
                     continue;
                 }
 
@@ -2055,7 +2055,7 @@ pub fn scrollCanvas() !void {
             defer hbox.deinit();
 
             for (evts) |*e| {
-                if (!dvui.eventMatch(e, .{ .id = hbox.data().id, .r = hbox.data().borderRectScale().r })) {
+                if (!dvui.eventMatchSimple(e, hbox.data())) {
                     continue;
                 }
             }
@@ -2071,7 +2071,7 @@ pub fn scrollCanvas() !void {
                 dvui.captureMouseMaintain(dbox.data().id);
 
                 for (evts) |*e| {
-                    if (!dvui.eventMatch(e, .{ .id = dbox.data().id, .r = dbox.data().borderRectScale().r })) {
+                    if (!dvui.eventMatchSimple(e, dbox.data())) {
                         continue;
                     }
 
@@ -2870,7 +2870,7 @@ pub const StrokeTest = struct {
 
         const evts = dvui.events();
         for (evts) |*e| {
-            if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
+            if (!dvui.eventMatchSimple(e, self.data()))
                 continue;
 
             self.processEvent(e, false);
