@@ -100,7 +100,7 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
 }
 
 pub fn matchEvent(self: *MenuItemWidget, e: *Event) bool {
-    return dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
+    return dvui.eventMatchSimple(e, self.data());
 }
 
 pub fn processEvents(self: *MenuItemWidget) void {

@@ -73,7 +73,7 @@ pub fn minSizeForChild(self: *ReorderWidget, s: Size) void {
 }
 
 pub fn matchEvent(self: *ReorderWidget, e: *dvui.Event) bool {
-    return dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.wd.borderRectScale().r });
+    return dvui.eventMatchSimple(e, self.data());
 }
 
 pub fn processEvents(self: *ReorderWidget) void {

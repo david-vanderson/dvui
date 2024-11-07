@@ -104,7 +104,7 @@ pub fn install(self: *PanedWidget) !void {
 }
 
 pub fn matchEvent(self: *PanedWidget, e: *Event) bool {
-    return dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
+    return dvui.eventMatchSimple(e, self.data());
 }
 
 pub fn processEvents(self: *PanedWidget) void {

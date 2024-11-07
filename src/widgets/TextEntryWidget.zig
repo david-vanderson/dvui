@@ -194,7 +194,7 @@ pub fn install(self: *TextEntryWidget) !void {
 pub fn matchEvent(self: *TextEntryWidget, e: *Event) bool {
     // textLayout could be passively listening to events in matchEvent, so
     // don't short circuit
-    const match1 = dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.wd.borderRectScale().r });
+    const match1 = dvui.eventMatchSimple(e, self.data());
     const match2 = self.textLayout.matchEvent(e);
     return match1 or match2;
 }

@@ -71,7 +71,7 @@ pub fn drawBackground(self: *BoxWidget) !void {
 }
 
 pub fn matchEvent(self: *BoxWidget, e: *Event) bool {
-    return dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r });
+    return dvui.eventMatchSimple(e, self.data());
 }
 
 pub fn widget(self: *BoxWidget) Widget {

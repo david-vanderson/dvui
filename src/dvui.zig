@@ -2136,6 +2136,13 @@ pub fn events() []Event {
     return currentWindow().events.items;
 }
 
+/// Wrapper around eventMatch for normal usage.
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn eventMatchSimple(e: *Event, wd: *WidgetData) bool {
+    return eventMatch(e, .{ .id = wd.id, .r = wd.borderRectScale().r });
+}
+
 pub const EventMatchOptions = struct {
     id: u32,
     r: Rect,
@@ -2446,7 +2453,10 @@ pub fn wantTextInput(r: Rect) void {
     cw.text_input_rect = r.scale(1 / cw.natural_scale);
 }
 
-// maps to OS window
+/// Maps to an OS window, and saves all the state needed between frames.
+/// Usually this is created at app startup and deinit() called on app shutdown.
+///
+/// currentWindow() returns this when between begin()/end().
 pub const Window = struct {
     const Self = @This();
 

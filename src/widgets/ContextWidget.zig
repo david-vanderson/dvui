@@ -89,10 +89,9 @@ pub fn processEvent(self: *ContextWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn processMouseEventsAfter(self: *ContextWidget) void {
-    const rs = self.wd.borderRectScale();
     const evts = dvui.events();
     for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = rs.r }))
+        if (!dvui.eventMatchSimple(e, self.data()))
             continue;
 
         switch (e.evt) {

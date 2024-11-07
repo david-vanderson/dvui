@@ -82,7 +82,7 @@ pub fn install(self: *MenuWidget) !void {
 
     const evts = dvui.events();
     for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.data().borderRectScale().r }))
+        if (!dvui.eventMatchSimple(e, self.data()))
             continue;
 
         self.processEvent(e, false);
