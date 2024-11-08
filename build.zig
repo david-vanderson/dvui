@@ -2,15 +2,34 @@ const std = @import("std");
 const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 
+pub const LinuxDisplayBackend = enum {
+    X11,
+    Wayland,
+    Both,
+};
+
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
 
     const optimize = b.standardOptimizeOption(.{});
 
     const link_backend = b.option(bool, "link_backend", "Should dvui link the chosen backend?") orelse true;
+    const linux_display_backend: LinuxDisplayBackend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
+        _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
+            error.EnvironmentVariableNotFound => break :blk .X11,
+            else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
+        };
 
-    const dvui_sdl = addDvuiModule(b, target, optimize, link_backend, .sdl);
-    const dvui_raylib = addDvuiModule(b, target, optimize, link_backend, .raylib);
+        _ = std.process.getEnvVarOwned(b.allocator, "DISPLAY") catch |err| switch (err) {
+            error.EnvironmentVariableNotFound => break :blk .Wayland,
+            else => @panic("Unknown error checking for DISPLAY environment variable"),
+        };
+
+        break :blk .Both;
+    };
+
+    const dvui_sdl = addDvuiModule(b, target, optimize, link_backend, .sdl, linux_display_backend);
+    const dvui_raylib = addDvuiModule(b, target, optimize, link_backend, .raylib, linux_display_backend);
 
     addExample(b, target, optimize, "sdl-standalone", dvui_sdl);
     addExample(b, target, optimize, "sdl-ontop", dvui_sdl);
@@ -18,7 +37,7 @@ pub fn build(b: *std.Build) !void {
     addExample(b, target, optimize, "raylib-ontop", dvui_raylib);
 
     if (target.result.os.tag == .windows) {
-        const dvui_dx11 = addDvuiModule(b, target, optimize, link_backend, .dx11);
+        const dvui_dx11 = addDvuiModule(b, target, optimize, link_backend, .dx11, linux_display_backend);
         addExample(b, target, optimize, "dx11-ontop", dvui_dx11);
         addExample(b, target, optimize, "dx11-standalone", dvui_dx11);
     }
@@ -132,6 +151,7 @@ fn addDvuiModule(
     optimize: std.builtin.OptimizeMode,
     link_backend: bool,
     comptime backend: Backend,
+    linux_display_backend: LinuxDisplayBackend,
 ) *std.Build.Module {
     const dvui_mod = b.addModule("dvui_" ++ @tagName(backend), .{
         .root_source_file = b.path("src/dvui.zig"),
@@ -164,17 +184,12 @@ fn addDvuiModule(
     if (link_backend) {
         switch (backend) {
             .raylib => {
-                var raylib_linux_display: []const u8 = "Wayland";
-                _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
-                    error.EnvironmentVariableNotFound => raylib_linux_display = "X11",
-                    else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
-                };
                 const maybe_ray = b.lazyDependency(
                     "raylib",
                     .{
                         .target = target,
                         .optimize = optimize,
-                        .linux_display_backend = raylib_linux_display,
+                        .linux_display_backend = linux_display_backend,
                     },
                 );
                 if (maybe_ray) |ray| {
