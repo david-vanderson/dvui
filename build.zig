@@ -164,7 +164,7 @@ fn addDvuiModule(
     if (link_backend) {
         switch (backend) {
             .raylib => {
-                var raylib_linux_display: []const u8 = "Both";
+                var raylib_linux_display: []const u8 = "Wayland";
                 _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
                     error.EnvironmentVariableNotFound => raylib_linux_display = "X11",
                     else => @panic("Unknown error checking for WAYLAND_DISPLAY environment variable"),
