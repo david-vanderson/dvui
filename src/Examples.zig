@@ -2176,6 +2176,10 @@ pub fn scrollCanvas() !void {
                         dvui.dragEnd();
                     }
                 } else if (me.action == .motion) {
+                    if (me.button.touch() and dragging_box) {
+                        // eat touch motion events so they don't scroll
+                        e.handled = true;
+                    }
                     if (dvui.captured(scroll.scroll.data().id)) {
                         if (dvui.dragging(me.p)) |dps| {
                             e.handled = true;
