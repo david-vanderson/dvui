@@ -27,7 +27,7 @@ pub fn main() !void {
     // initWindow() means the backend calls CloseWindow for you in deinit()
     var backend = try RaylibBackend.initWindow(.{
         .allocator = gpa,
-        .size = .{ .w = 800.0, .h = 450.0 },
+        .size = .{ .w = 800.0, .h = 600.0 },
         .vsync = vsync,
         .title = "DVUI Raylib Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
