@@ -2023,9 +2023,11 @@ pub fn scrollCanvas() !void {
                             dvui.dragEnd();
                             dvui.refresh(null, @src(), dragBox.data().id);
 
-                            // move box to new home
-                            Data.box_contents[Data.drag_box_window] -= 1;
-                            Data.box_contents[1 - Data.drag_box_window] += 1;
+                            if (Data.drag_box_window != i) {
+                                // move box to new home
+                                Data.box_contents[Data.drag_box_window] -= 1;
+                                Data.box_contents[1 - Data.drag_box_window] += 1;
+                            }
                         } else if (me.action == .position) {
                             e.handled = true;
                             dvui.cursorSet(.crosshair);
