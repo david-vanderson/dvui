@@ -12,6 +12,9 @@ pub const c = @cImport({
 const RaylibBackend = @This();
 pub const Context = *RaylibBackend;
 
+var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+const gpa = gpa_instance.allocator();
+
 we_own_window: bool = false,
 shader: c.Shader = undefined,
 VAO: u32 = undefined,
@@ -23,6 +26,10 @@ mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButton
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
 dvui_consumed_events: bool = false,
 cursor_last: dvui.enums.Cursor = .arrow,
+frame_buffers: std.AutoArrayHashMap(u32, u32) = std.AutoArrayHashMap(u32, u32).init(gpa),
+texture_sizes: std.AutoArrayHashMap(u32, dvui.Size) = std.AutoArrayHashMap(u32, dvui.Size).init(gpa),
+fb_width: ?c_int = null,
+fb_height: ?c_int = null,
 
 const vertexSource =
     \\#version 330
@@ -188,13 +195,18 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
         // clipr is in pixels, but raylib multiplies by GetWindowScaleDPI(), so we
         // have to divide by that here
         const clipr = dvuiRectToRaylib(clip_rect);
+        _ = clipr;
 
-        // figure out how much we are losing by truncating x and y, need to add that back to w and h
-        const clipx: c_int = @intFromFloat(clipr.x);
-        const clipy: c_int = @intFromFloat(clipr.y);
-        const clipw: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.width + clipr.x - @floor(clipr.x)))));
-        const cliph: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.height + clipr.y - @floor(clipr.y)))));
-        c.BeginScissorMode(clipx, clipy, clipw, cliph);
+        if (self.fb_width == null) {
+            // figure out how much we are losing by truncating x and y, need to add that back to w and h
+            //const clipx: c_int = @intFromFloat(clipr.x);
+            //const clipy: c_int = @intFromFloat(clipr.y);
+            //const clipw: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.width + clipr.x - @floor(clipr.x)))));
+            //const cliph: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.height + clipr.y - @floor(clipr.y)))));
+            //c.BeginScissorMode(clipx, clipy, clipw, cliph);
+        } else {
+            //c.BeginScissorMode(0, 0, 1000, 1000);
+        }
     }
 
     // our shader and textures are alpha premultiplied
@@ -203,7 +215,13 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     const shader = self.shader;
     c.rlEnableShader(shader.id);
 
-    const mat = c.MatrixOrtho(0, @floatFromInt(c.GetRenderWidth()), @floatFromInt(c.GetRenderHeight()), 0, -1, 1);
+    var mat: c.Matrix = undefined;
+    mat = c.MatrixOrtho(0, @floatFromInt(self.fb_width orelse c.GetRenderWidth()), @floatFromInt(self.fb_height orelse c.GetRenderHeight()), 0, -1, 1);
+    if (self.fb_width != null) {
+        // TODO: this worked in the web backend, but for raylib we get nothing
+        //mat.m5 *= -1;
+        //mat.m13 *= -1;
+    }
     c.SetShaderValueMatrix(shader, @intCast(shader.locs[c.RL_SHADER_LOC_MATRIX_MVP]), mat);
 
     _ = c.rlEnableVertexArray(@intCast(self.VAO));
@@ -254,7 +272,9 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     c.rlSetBlendMode(c.RL_BLEND_ALPHA);
 
     if (clipr_in) |_| {
-        c.EndScissorMode();
+        if (self.fb_width == null) {
+            //c.EndScissorMode();
+        }
     }
 }
 
@@ -279,21 +299,83 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, 
 }
 
 pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
-    _ = self;
-    _ = width;
-    _ = height;
-    _ = interpolation;
-    return error.textureError;
+    const id = c.rlLoadFramebuffer(); // Load an empty framebuffer
+    if (id == 0) {
+        return error.textureError;
+    }
+
+    c.rlEnableFramebuffer(id);
+    defer c.rlDisableFramebuffer();
+
+    // Create color texture (default to RGBA)
+    const texid = c.rlLoadTexture(null, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
+    switch (interpolation) {
+        .nearest => {
+            c.rlTextureParameters(texid, c.RL_TEXTURE_MIN_FILTER, c.RL_TEXTURE_FILTER_NEAREST);
+            c.rlTextureParameters(texid, c.RL_TEXTURE_MAG_FILTER, c.RL_TEXTURE_FILTER_NEAREST);
+        },
+        .linear => {
+            c.rlTextureParameters(texid, c.RL_TEXTURE_MIN_FILTER, c.RL_TEXTURE_FILTER_LINEAR);
+            c.rlTextureParameters(texid, c.RL_TEXTURE_MAG_FILTER, c.RL_TEXTURE_FILTER_LINEAR);
+        },
+    }
+
+    c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_S, c.RL_TEXTURE_WRAP_CLAMP);
+    c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_T, c.RL_TEXTURE_WRAP_CLAMP);
+
+    c.rlFramebufferAttach(id, texid, c.RL_ATTACHMENT_COLOR_CHANNEL0, c.RL_ATTACHMENT_TEXTURE2D, 0);
+
+    // Check if fbo is complete with attachments (valid)
+    if (!c.rlFramebufferComplete(id)) {
+        return error.textureError;
+    }
+
+    self.frame_buffers.put(texid, id) catch unreachable;
+    self.texture_sizes.put(texid, .{ .w = @floatFromInt(width), .h = @floatFromInt(height) }) catch unreachable;
+
+    self.renderTarget(@ptrFromInt(texid));
+    c.ClearBackground(c.BLANK);
+    self.renderTarget(null);
+
+    return @ptrFromInt(texid);
 }
 
 pub fn renderTarget(self: *RaylibBackend, texture: ?*anyopaque) void {
-    _ = self;
-    _ = texture;
+    if (texture) |tex| {
+        const texid = @intFromPtr(tex);
+        var target: c.RenderTexture2D = undefined;
+        target.id = self.frame_buffers.get(@intCast(texid)) orelse unreachable;
+        target.texture.id = @intCast(texid);
+        const size = self.texture_sizes.get(@intCast(texid)) orelse unreachable;
+        target.texture.width = @intFromFloat(size.w);
+        target.texture.height = @intFromFloat(size.h);
+        self.fb_width = target.texture.width;
+        self.fb_height = target.texture.height;
+
+        c.BeginTextureMode(target);
+
+        //c.rlMatrixMode(c.RL_PROJECTION); // Switch to projection matrix
+        //c.rlLoadIdentity(); // Reset current matrix (projection)
+
+        //c.rlMatrixMode(c.RL_MODELVIEW); // Switch back to modelview matrix
+        //c.rlLoadIdentity(); // Reset current matrix (modelview)
+    } else {
+        c.EndTextureMode();
+
+        self.fb_width = null;
+        self.fb_height = null;
+    }
 }
 
-pub fn textureDestroy(_: *RaylibBackend, texture: *anyopaque) void {
+pub fn textureDestroy(self: *RaylibBackend, texture: *anyopaque) void {
     const texid = @intFromPtr(texture);
     c.rlUnloadTexture(@intCast(texid));
+
+    if (self.frame_buffers.fetchSwapRemove(@intCast(texid))) |kv| {
+        c.rlUnloadFramebuffer(kv.value);
+    }
+
+    _ = self.texture_sizes.swapRemove(@intCast(texid));
 }
 
 pub fn clipboardText(_: *RaylibBackend) ![]const u8 {
