@@ -41,9 +41,12 @@ pub const wasm = struct {
     pub extern fn wasm_canvas_width() f32;
     pub extern fn wasm_canvas_height() f32;
 
+    pub extern fn wasm_frame_buffer() u8;
     pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32, interp: u8) u32;
+    pub extern fn wasm_textureCreateTarget(width: u32, height: u32, interp: u8) u32;
+    pub extern fn wasm_renderTarget(u32) void;
     pub extern fn wasm_textureDestroy(u32) void;
-    pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, x: u16, y: u16, w: u16, h: u16) void;
+    pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, clip: u8, x: i32, y: i32, w: i32, h: i32) void;
 
     pub extern fn wasm_cursor(name: [*]const u8, name_len: u32) void;
     pub extern fn wasm_text_input(x: f32, y: f32, w: f32, h: f32) void;
@@ -451,23 +454,28 @@ pub fn contentScale(_: *WebBackend) f32 {
 }
 
 pub fn drawClippedTriangles(_: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect) void {
-    var x: u16 = std.math.maxInt(u16);
-    var w: u16 = std.math.maxInt(u16);
-    var y: u16 = std.math.maxInt(u16);
-    var h: u16 = std.math.maxInt(u16);
+    var x: i32 = std.math.maxInt(i32);
+    var w: i32 = std.math.maxInt(i32);
+    var y: i32 = std.math.maxInt(i32);
+    var h: i32 = std.math.maxInt(i32);
 
     if (maybe_clipr) |clipr| {
         // figure out how much we are losing by truncating x and y, need to add that back to w and h
         x = @intFromFloat(clipr.x);
         w = @intFromFloat(@ceil(clipr.w + clipr.x - @floor(clipr.x)));
 
-        // y needs to be converted to 0 at bottom first
-        const ry: f32 = wasm.wasm_pixel_height() - clipr.y - clipr.h;
-        y = @intFromFloat(ry);
-        h = @intFromFloat(@ceil(clipr.h + ry - @floor(ry)));
+        if (wasm.wasm_frame_buffer() == 0) {
+            // y needs to be converted to 0 at bottom first
+            const ry: f32 = wasm.wasm_pixel_height() - clipr.y - clipr.h;
+            y = @intFromFloat(ry);
+            h = @intFromFloat(@ceil(clipr.h + ry - @floor(ry)));
+        } else {
+            y = @intFromFloat(clipr.y);
+            h = @intFromFloat(@ceil(clipr.h + clipr.y - @floor(clipr.y)));
+        }
     }
 
-    //dvui.log.debug("drawClippedTriangles pixels {} clipr {} ry {d} clip {d} {d} {d} {d}", .{ dvui.windowRectPixels(), clipr, ry, x, y, w, h });
+    //dvui.log.debug("drawClippedTriangles pixels {} clipr {?} clip {d} {d} {d} {d}", .{ dvui.windowRectPixels(), maybe_clipr, x, y, w, h });
 
     const index_slice = std.mem.sliceAsBytes(idx);
     const vertex_slice = std.mem.sliceAsBytes(vtx);
@@ -482,6 +490,7 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?*anyopaque, vtx: []const d
         @offsetOf(dvui.Vertex, "pos"),
         @offsetOf(dvui.Vertex, "col"),
         @offsetOf(dvui.Vertex, "uv"),
+        if (maybe_clipr == null) 0 else 1,
         x,
         y,
         w,
@@ -503,15 +512,22 @@ pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32, 
 
 pub fn textureCreateTarget(self: *WebBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
     _ = self;
-    _ = width;
-    _ = height;
-    _ = interpolation;
-    return error.textureError;
+    const wasm_interp: u8 = switch (interpolation) {
+        .nearest => 0,
+        .linear => 1,
+    };
+
+    const id = wasm.wasm_textureCreateTarget(width, height, wasm_interp);
+    return @ptrFromInt(id);
 }
 
 pub fn renderTarget(self: *WebBackend, texture: ?*anyopaque) void {
     _ = self;
-    _ = texture;
+    if (texture) |tex| {
+        wasm.wasm_renderTarget(@as(u32, @intFromPtr(tex)));
+    } else {
+        wasm.wasm_renderTarget(0);
+    }
 }
 
 pub fn textureDestroy(_: *WebBackend, texture: *anyopaque) void {
