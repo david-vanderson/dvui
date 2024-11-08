@@ -195,17 +195,21 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
         // clipr is in pixels, but raylib multiplies by GetWindowScaleDPI(), so we
         // have to divide by that here
         const clipr = dvuiRectToRaylib(clip_rect);
-        _ = clipr;
+
+        // figure out how much we are losing by truncating x and y, need to add that back to w and h
+        const clipx: c_int = @intFromFloat(clipr.x);
+        const clipw: c_int = @intFromFloat(@ceil(clipr.width + clipr.x - @floor(clipr.x)));
 
         if (self.fb_width == null) {
-            // figure out how much we are losing by truncating x and y, need to add that back to w and h
-            //const clipx: c_int = @intFromFloat(clipr.x);
-            //const clipy: c_int = @intFromFloat(clipr.y);
-            //const clipw: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.width + clipr.x - @floor(clipr.x)))));
-            //const cliph: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.height + clipr.y - @floor(clipr.y)))));
-            //c.BeginScissorMode(clipx, clipy, clipw, cliph);
+            const clipy: c_int = @intFromFloat(clipr.y);
+            const cliph: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.height + clipr.y - @floor(clipr.y)))));
+            c.BeginScissorMode(clipx, clipy, clipw, cliph);
         } else {
-            //c.BeginScissorMode(0, 0, 1000, 1000);
+            // need to swap y
+            const ry: f32 = @as(f32, @floatFromInt(self.fb_height.?)) / dvui.windowNaturalScale() - clipr.y - clipr.height;
+            const y: c_int = @intFromFloat(ry);
+            const h: c_int = @intFromFloat(@ceil(clipr.height + ry - @floor(ry)));
+            c.BeginScissorMode(clipx, y, clipw, h);
         }
     }
 
@@ -218,9 +222,10 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     var mat: c.Matrix = undefined;
     mat = c.MatrixOrtho(0, @floatFromInt(self.fb_width orelse c.GetRenderWidth()), @floatFromInt(self.fb_height orelse c.GetRenderHeight()), 0, -1, 1);
     if (self.fb_width != null) {
-        // TODO: this worked in the web backend, but for raylib we get nothing
-        //mat.m5 *= -1;
-        //mat.m13 *= -1;
+        // We are rendering to a texture, so invert y
+        // * this changes the backface culling, but we turned that off in renderTarget
+        mat.m5 *= -1;
+        mat.m13 *= -1;
     }
     c.SetShaderValueMatrix(shader, @intCast(shader.locs[c.RL_SHADER_LOC_MATRIX_MVP]), mat);
 
@@ -272,9 +277,7 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     c.rlSetBlendMode(c.RL_BLEND_ALPHA);
 
     if (clipr_in) |_| {
-        if (self.fb_width == null) {
-            //c.EndScissorMode();
-        }
+        c.EndScissorMode();
     }
 }
 
@@ -354,13 +357,14 @@ pub fn renderTarget(self: *RaylibBackend, texture: ?*anyopaque) void {
 
         c.BeginTextureMode(target);
 
-        //c.rlMatrixMode(c.RL_PROJECTION); // Switch to projection matrix
-        //c.rlLoadIdentity(); // Reset current matrix (projection)
-
-        //c.rlMatrixMode(c.RL_MODELVIEW); // Switch back to modelview matrix
-        //c.rlLoadIdentity(); // Reset current matrix (modelview)
+        // Need this because:
+        // * raylib renders to textures with 0,0 in bottom left corner
+        // * to undo that we render with inverted y
+        // * that changes the backface culling
+        c.rlDisableBackfaceCulling();
     } else {
         c.EndTextureMode();
+        c.rlEnableBackfaceCulling();
 
         self.fb_width = null;
         self.fb_height = null;
