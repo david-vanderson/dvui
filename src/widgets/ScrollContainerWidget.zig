@@ -274,7 +274,6 @@ pub fn minSizeForChild(self: *ScrollContainerWidget, s: Size) void {
 pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) void {
     switch (e.evt) {
         .mouse => |me| {
-            // for finger down we let the event go through but stop any velocity scrolling
             if (me.action == .press and me.button.touch()) {
                 // stop any current scrolling
                 if (self.si.velocity.x != 0 or self.si.velocity.y != 0) {
