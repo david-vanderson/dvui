@@ -3954,7 +3954,7 @@ pub const Window = struct {
         // we wouldn't even get them bubbled
         const evts = events();
         for (evts) |*e| {
-            if (self.drag_state != .none and e.evt == .mouse and e.evt.mouse.action == .release) {
+            if (self.drag_state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
                 log.debug("clearing drag ({s}) for unhandled mouse release", .{self.drag_name});
                 self.drag_state = .none;
                 self.drag_name = "";
