@@ -53,7 +53,7 @@ const VTableTypes = struct {
 
     /// Create a texture that can be rendered to with renderTarget().  The
     /// returned pointer is what will later be passed to drawClippedTriangles.
-    pub const textureCreateTarget = *const fn (ctx: Context, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) error{textureError}!*anyopaque;
+    pub const textureCreateTarget = *const fn (ctx: Context, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!*anyopaque;
 
     /// Destroy texture that was previously made with textureCreate() or
     /// textureCreateTarget().  After this call, this texture pointer will not

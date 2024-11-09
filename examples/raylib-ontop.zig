@@ -25,7 +25,7 @@ pub fn main() !void {
 
     // init Raylib backend
     // init() means the app owns the window (and must call CloseWindow itself)
-    var backend = RaylibBackend.init();
+    var backend = RaylibBackend.init(gpa);
     defer backend.deinit();
     backend.log_events = true;
 
