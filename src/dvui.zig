@@ -82,7 +82,7 @@ pub const c = @cImport({
 
 var ft2lib: if (useFreeType) c.FT_Library else void = undefined;
 
-pub const Error = error{ OutOfMemory, InvalidUtf8, freetypeError, tvgError, stbiError, textureError };
+pub const Error = error{ OutOfMemory, InvalidUtf8, freetypeError, tvgError, stbiError };
 
 pub const log = std.log.scoped(.dvui);
 const dvui = @This();
