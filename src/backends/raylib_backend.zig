@@ -12,9 +12,7 @@ pub const c = @cImport({
 const RaylibBackend = @This();
 pub const Context = *RaylibBackend;
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
-
+gpa: std.mem.Allocator = undefined,
 we_own_window: bool = false,
 shader: c.Shader = undefined,
 VAO: u32 = undefined,
@@ -26,8 +24,8 @@ mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButton
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
 dvui_consumed_events: bool = false,
 cursor_last: dvui.enums.Cursor = .arrow,
-frame_buffers: std.AutoArrayHashMap(u32, u32) = std.AutoArrayHashMap(u32, u32).init(gpa),
-texture_sizes: std.AutoArrayHashMap(u32, dvui.Size) = std.AutoArrayHashMap(u32, dvui.Size).init(gpa),
+frame_buffers: std.AutoArrayHashMap(u32, u32) = undefined,
+texture_sizes: std.AutoArrayHashMap(u32, dvui.Size) = undefined,
 fb_width: ?c_int = null,
 fb_height: ?c_int = null,
 
@@ -65,8 +63,8 @@ const fragSource =
 ;
 
 pub const InitOptions = struct {
-    /// The allocator used for temporary allocations used during init()
-    allocator: std.mem.Allocator,
+    /// allocator used for general backend bookkeeping
+    gpa: std.mem.Allocator,
     /// The initial size of the application window
     size: dvui.Size,
     /// Set the minimum size of the window
@@ -125,12 +123,12 @@ pub fn clear(_: *RaylibBackend) void {}
 pub fn initWindow(options: InitOptions) !RaylibBackend {
     createWindow(options);
 
-    var back = init();
+    var back = init(options.gpa);
     back.we_own_window = true;
     return back;
 }
 
-pub fn init() RaylibBackend {
+pub fn init(gpa: std.mem.Allocator) RaylibBackend {
     if (!c.IsWindowReady()) {
         @panic(
             \\OS Window must be created before initializing dvui raylib backend.
@@ -138,6 +136,9 @@ pub fn init() RaylibBackend {
     }
 
     return RaylibBackend{
+        .gpa = gpa,
+        .frame_buffers = std.AutoArrayHashMap(u32, u32).init(gpa),
+        .texture_sizes = std.AutoArrayHashMap(u32, dvui.Size).init(gpa),
         .shader = c.LoadShaderFromMemory(vertexSource, fragSource),
         .VAO = @intCast(c.rlLoadVertexArray()),
     };
@@ -148,6 +149,8 @@ pub fn shouldBlockRaylibInput(self: *RaylibBackend) bool {
 }
 
 pub fn deinit(self: *RaylibBackend) void {
+    self.frame_buffers.deinit();
+    self.texture_sizes.deinit();
     c.UnloadShader(self.shader);
     c.rlUnloadVertexArray(@intCast(self.VAO));
 
@@ -304,7 +307,8 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, 
 pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
     const id = c.rlLoadFramebuffer(); // Load an empty framebuffer
     if (id == 0) {
-        return error.textureError;
+        dvui.log.debug("Raylib textureCreateTarget: rlLoadFramebuffer() failed\n", .{});
+        return error.TextureCreate;
     }
 
     c.rlEnableFramebuffer(id);
@@ -330,11 +334,12 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
 
     // Check if fbo is complete with attachments (valid)
     if (!c.rlFramebufferComplete(id)) {
-        return error.textureError;
+        dvui.log.debug("Raylib textureCreateTarget: rlFramebufferComplete() false\n", .{});
+        return error.TextureCreate;
     }
 
-    self.frame_buffers.put(texid, id) catch unreachable;
-    self.texture_sizes.put(texid, .{ .w = @floatFromInt(width), .h = @floatFromInt(height) }) catch unreachable;
+    try self.frame_buffers.put(texid, id);
+    try self.texture_sizes.put(texid, .{ .w = @floatFromInt(width), .h = @floatFromInt(height) });
 
     self.renderTarget(@ptrFromInt(texid));
     c.ClearBackground(c.BLANK);
@@ -343,6 +348,8 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
     return @ptrFromInt(texid);
 }
 
+/// Render future drawClippedTriangles() to the passed texture (or screen
+/// if null).
 pub fn renderTarget(self: *RaylibBackend, texture: ?*anyopaque) void {
     if (texture) |tex| {
         const texid = @intFromPtr(tex);
