@@ -12,6 +12,7 @@ pub const c = @cImport({
 const RaylibBackend = @This();
 pub const Context = *RaylibBackend;
 
+gpa: std.mem.Allocator = undefined,
 we_own_window: bool = false,
 shader: c.Shader = undefined,
 VAO: u32 = undefined,
@@ -23,6 +24,10 @@ mouse_button_cache: [RaylibMouseButtons.len]bool = .{false} ** RaylibMouseButton
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
 dvui_consumed_events: bool = false,
 cursor_last: dvui.enums.Cursor = .arrow,
+frame_buffers: std.AutoArrayHashMap(u32, u32) = undefined,
+texture_sizes: std.AutoArrayHashMap(u32, dvui.Size) = undefined,
+fb_width: ?c_int = null,
+fb_height: ?c_int = null,
 
 const vertexSource =
     \\#version 330
@@ -58,8 +63,8 @@ const fragSource =
 ;
 
 pub const InitOptions = struct {
-    /// The allocator used for temporary allocations used during init()
-    allocator: std.mem.Allocator,
+    /// allocator used for general backend bookkeeping
+    gpa: std.mem.Allocator,
     /// The initial size of the application window
     size: dvui.Size,
     /// Set the minimum size of the window
@@ -118,12 +123,12 @@ pub fn clear(_: *RaylibBackend) void {}
 pub fn initWindow(options: InitOptions) !RaylibBackend {
     createWindow(options);
 
-    var back = init();
+    var back = init(options.gpa);
     back.we_own_window = true;
     return back;
 }
 
-pub fn init() RaylibBackend {
+pub fn init(gpa: std.mem.Allocator) RaylibBackend {
     if (!c.IsWindowReady()) {
         @panic(
             \\OS Window must be created before initializing dvui raylib backend.
@@ -131,6 +136,9 @@ pub fn init() RaylibBackend {
     }
 
     return RaylibBackend{
+        .gpa = gpa,
+        .frame_buffers = std.AutoArrayHashMap(u32, u32).init(gpa),
+        .texture_sizes = std.AutoArrayHashMap(u32, dvui.Size).init(gpa),
         .shader = c.LoadShaderFromMemory(vertexSource, fragSource),
         .VAO = @intCast(c.rlLoadVertexArray()),
     };
@@ -141,6 +149,8 @@ pub fn shouldBlockRaylibInput(self: *RaylibBackend) bool {
 }
 
 pub fn deinit(self: *RaylibBackend) void {
+    self.frame_buffers.deinit();
+    self.texture_sizes.deinit();
     c.UnloadShader(self.shader);
     c.rlUnloadVertexArray(@intCast(self.VAO));
 
@@ -191,10 +201,19 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
 
         // figure out how much we are losing by truncating x and y, need to add that back to w and h
         const clipx: c_int = @intFromFloat(clipr.x);
-        const clipy: c_int = @intFromFloat(clipr.y);
-        const clipw: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.width + clipr.x - @floor(clipr.x)))));
-        const cliph: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.height + clipr.y - @floor(clipr.y)))));
-        c.BeginScissorMode(clipx, clipy, clipw, cliph);
+        const clipw: c_int = @intFromFloat(@ceil(clipr.width + clipr.x - @floor(clipr.x)));
+
+        if (self.fb_width == null) {
+            const clipy: c_int = @intFromFloat(clipr.y);
+            const cliph: c_int = @max(0, @as(c_int, @intFromFloat(@ceil(clipr.height + clipr.y - @floor(clipr.y)))));
+            c.BeginScissorMode(clipx, clipy, clipw, cliph);
+        } else {
+            // need to swap y
+            const ry: f32 = @as(f32, @floatFromInt(self.fb_height.?)) / dvui.windowNaturalScale() - clipr.y - clipr.height;
+            const y: c_int = @intFromFloat(ry);
+            const h: c_int = @intFromFloat(@ceil(clipr.height + ry - @floor(ry)));
+            c.BeginScissorMode(clipx, y, clipw, h);
+        }
     }
 
     // our shader and textures are alpha premultiplied
@@ -203,7 +222,14 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     const shader = self.shader;
     c.rlEnableShader(shader.id);
 
-    const mat = c.MatrixOrtho(0, @floatFromInt(c.GetRenderWidth()), @floatFromInt(c.GetRenderHeight()), 0, -1, 1);
+    var mat: c.Matrix = undefined;
+    mat = c.MatrixOrtho(0, @floatFromInt(self.fb_width orelse c.GetRenderWidth()), @floatFromInt(self.fb_height orelse c.GetRenderHeight()), 0, -1, 1);
+    if (self.fb_width != null) {
+        // We are rendering to a texture, so invert y
+        // * this changes the backface culling, but we turned that off in renderTarget
+        mat.m5 *= -1;
+        mat.m13 *= -1;
+    }
     c.SetShaderValueMatrix(shader, @intCast(shader.locs[c.RL_SHADER_LOC_MATRIX_MVP]), mat);
 
     _ = c.rlEnableVertexArray(@intCast(self.VAO));
@@ -279,21 +305,88 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, 
 }
 
 pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
-    _ = self;
-    _ = width;
-    _ = height;
-    _ = interpolation;
-    return error.textureError;
+    const id = c.rlLoadFramebuffer(); // Load an empty framebuffer
+    if (id == 0) {
+        dvui.log.debug("Raylib textureCreateTarget: rlLoadFramebuffer() failed\n", .{});
+        return error.TextureCreate;
+    }
+
+    c.rlEnableFramebuffer(id);
+    defer c.rlDisableFramebuffer();
+
+    // Create color texture (default to RGBA)
+    const texid = c.rlLoadTexture(null, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
+    switch (interpolation) {
+        .nearest => {
+            c.rlTextureParameters(texid, c.RL_TEXTURE_MIN_FILTER, c.RL_TEXTURE_FILTER_NEAREST);
+            c.rlTextureParameters(texid, c.RL_TEXTURE_MAG_FILTER, c.RL_TEXTURE_FILTER_NEAREST);
+        },
+        .linear => {
+            c.rlTextureParameters(texid, c.RL_TEXTURE_MIN_FILTER, c.RL_TEXTURE_FILTER_LINEAR);
+            c.rlTextureParameters(texid, c.RL_TEXTURE_MAG_FILTER, c.RL_TEXTURE_FILTER_LINEAR);
+        },
+    }
+
+    c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_S, c.RL_TEXTURE_WRAP_CLAMP);
+    c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_T, c.RL_TEXTURE_WRAP_CLAMP);
+
+    c.rlFramebufferAttach(id, texid, c.RL_ATTACHMENT_COLOR_CHANNEL0, c.RL_ATTACHMENT_TEXTURE2D, 0);
+
+    // Check if fbo is complete with attachments (valid)
+    if (!c.rlFramebufferComplete(id)) {
+        dvui.log.debug("Raylib textureCreateTarget: rlFramebufferComplete() false\n", .{});
+        return error.TextureCreate;
+    }
+
+    try self.frame_buffers.put(texid, id);
+    try self.texture_sizes.put(texid, .{ .w = @floatFromInt(width), .h = @floatFromInt(height) });
+
+    self.renderTarget(@ptrFromInt(texid));
+    c.ClearBackground(c.BLANK);
+    self.renderTarget(null);
+
+    return @ptrFromInt(texid);
 }
 
+/// Render future drawClippedTriangles() to the passed texture (or screen
+/// if null).
 pub fn renderTarget(self: *RaylibBackend, texture: ?*anyopaque) void {
-    _ = self;
-    _ = texture;
+    if (texture) |tex| {
+        const texid = @intFromPtr(tex);
+        var target: c.RenderTexture2D = undefined;
+        target.id = self.frame_buffers.get(@intCast(texid)) orelse unreachable;
+        target.texture.id = @intCast(texid);
+        const size = self.texture_sizes.get(@intCast(texid)) orelse unreachable;
+        target.texture.width = @intFromFloat(size.w);
+        target.texture.height = @intFromFloat(size.h);
+        self.fb_width = target.texture.width;
+        self.fb_height = target.texture.height;
+
+        c.BeginTextureMode(target);
+
+        // Need this because:
+        // * raylib renders to textures with 0,0 in bottom left corner
+        // * to undo that we render with inverted y
+        // * that changes the backface culling
+        c.rlDisableBackfaceCulling();
+    } else {
+        c.EndTextureMode();
+        c.rlEnableBackfaceCulling();
+
+        self.fb_width = null;
+        self.fb_height = null;
+    }
 }
 
-pub fn textureDestroy(_: *RaylibBackend, texture: *anyopaque) void {
+pub fn textureDestroy(self: *RaylibBackend, texture: *anyopaque) void {
     const texid = @intFromPtr(texture);
     c.rlUnloadTexture(@intCast(texid));
+
+    if (self.frame_buffers.fetchSwapRemove(@intCast(texid))) |kv| {
+        c.rlUnloadFramebuffer(kv.value);
+    }
+
+    _ = self.texture_sizes.swapRemove(@intCast(texid));
 }
 
 pub fn clipboardText(_: *RaylibBackend) ![]const u8 {
