@@ -36,10 +36,21 @@ pub fn brightness(self: @This()) f32 {
     return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
+/// Hue Saturation Lightness
+///
+/// https://www.hsluv.org/
+/// src/hsluv.zig is hand-translated from https://github.com/hsluv/hsluv-c
 pub const HSLuv = struct {
+    /// Hue 0-360
     h: f32 = 0.0,
+
+    /// Saturation 0-100
     s: f32 = 100.0,
+
+    /// Lightness 0-100
     l: f32 = 100.0,
+
+    /// Alpha 0-100
     a: f32 = 100.0,
 
     pub fn color(self: HSLuv) Color {
