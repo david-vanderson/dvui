@@ -608,6 +608,7 @@ function dvui(canvasId, wasmFile) {
             oskCheck();
         });
         canvas.addEventListener("wheel", (ev) => {
+	    ev.preventDefault();
             wasmResult.instance.exports.add_event(4, 0, 0, ev.deltaY, 0);
             requestRender();
         });
