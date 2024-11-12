@@ -1072,6 +1072,15 @@ pub fn wndProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callc
                 }) catch {};
             }
         },
+        ui.WM_CHAR => {
+            if (wind) |window| {
+                const ascii_char: u8 = @truncate(wparam);
+                if (std.ascii.isPrint(ascii_char)) {
+                    const string: []const u8 = &.{ascii_char};
+                    _ = window.addEventText(string) catch {};
+                }
+            }
+        },
         else => {},
     }
 
@@ -1299,7 +1308,7 @@ fn convertVKeyToDvuiKey(vkey: key.VIRTUAL_KEY) dvui.enums.Key {
         .Z => K.z,
         .BACK => K.backspace,
         .TAB => K.tab,
-        .RETURN => K.kp_enter,
+        .RETURN => K.enter,
         .F1 => K.f1,
         .F2 => K.f2,
         .F3 => K.f3,
