@@ -545,11 +545,11 @@ fn createSampler(self: *Dx11Backend) !void {
 
     var blend_desc = std.mem.zeroes(dx.D3D11_BLEND_DESC);
     blend_desc.RenderTarget[0].BlendEnable = 1;
-    blend_desc.RenderTarget[0].SrcBlend = dx.D3D11_BLEND_SRC_ALPHA;
+    blend_desc.RenderTarget[0].SrcBlend = dx.D3D11_BLEND_ONE;
     blend_desc.RenderTarget[0].DestBlend = dx.D3D11_BLEND_INV_SRC_ALPHA;
     blend_desc.RenderTarget[0].BlendOp = dx.D3D11_BLEND_OP_ADD;
     blend_desc.RenderTarget[0].SrcBlendAlpha = dx.D3D11_BLEND_ONE;
-    blend_desc.RenderTarget[0].DestBlendAlpha = dx.D3D11_BLEND_ZERO;
+    blend_desc.RenderTarget[0].DestBlendAlpha = dx.D3D11_BLEND_INV_SRC_ALPHA;
     blend_desc.RenderTarget[0].BlendOpAlpha = dx.D3D11_BLEND_OP_ADD;
     blend_desc.RenderTarget[0].RenderTargetWriteMask = @intFromEnum(dx.D3D11_COLOR_WRITE_ENABLE_ALL);
 
@@ -625,10 +625,25 @@ pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32,
     return texture.?;
 }
 
+pub fn textureCreateTarget(self: *Dx11Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
+    _ = self;
+    _ = width;
+    _ = height;
+    _ = interpolation;
+    dvui.log.debug("dx11 textureCreateTarget unimplemented", .{});
+    return error.TextureCreate;
+}
+
 pub fn textureDestroy(self: *Dx11Backend, texture: *anyopaque) void {
     _ = self;
     const tex: *dx.ID3D11Texture2D = @ptrCast(@alignCast(texture));
     _ = tex.IUnknown.Release();
+}
+
+pub fn renderTarget(self: *Dx11Backend, texture: ?*anyopaque) void {
+    _ = self;
+    _ = texture;
+    dvui.log.debug("dx11 renderTarget unimplemented", .{});
 }
 
 pub fn drawClippedTriangles(
