@@ -2918,7 +2918,7 @@ pub const Window = struct {
             .num = self.event_num,
             .evt = .{ .key = event },
             .focus_windowId = self.focused_subwindowId,
-            .focus_widgetId = self.subwindowFocused().focused_widgetId,
+            .focus_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
         });
 
         const ret = (self.wd.id != self.focused_subwindowId);
@@ -2941,7 +2941,7 @@ pub const Window = struct {
             .num = self.event_num,
             .evt = .{ .text = try self._arena.allocator().dupe(u8, text) },
             .focus_windowId = self.focused_subwindowId,
-            .focus_widgetId = self.subwindowFocused().focused_widgetId,
+            .focus_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
         });
 
         const ret = (self.wd.id != self.focused_subwindowId);
