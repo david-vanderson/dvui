@@ -453,6 +453,7 @@ fn createRasterizerState(self: *Dx11Backend) !void {
     raster_desc.CullMode = dx.D3D11_CULL_BACK;
     raster_desc.FrontCounterClockwise = 1;
     raster_desc.DepthClipEnable = 0;
+    raster_desc.ScissorEnable = 1;
 
     const rasterizer_res = self.device.CreateRasterizerState(&raster_desc, &self.dx_options.rasterizer);
     if (!isOk(rasterizer_res)) {
@@ -724,10 +725,10 @@ pub fn drawClippedTriangles(
 
     if (clipr) |cr| {
         const new_clip: RECT = .{
-            .left = @intFromFloat(@round(cr.x)),
-            .top = @intFromFloat(@round(cr.y)),
-            .right = @intFromFloat(@round(cr.w)),
-            .bottom = @intFromFloat(@round(cr.h)),
+            .left = @intFromFloat(cr.x),
+            .top = @intFromFloat(cr.y),
+            .right = @intFromFloat(@ceil(cr.x + cr.w)),
+            .bottom = @intFromFloat(@ceil(cr.y + cr.h)),
         };
         self.device_context.RSSetScissorRects(nums, @ptrCast(&new_clip));
     } else {
@@ -750,6 +751,16 @@ pub fn drawClippedTriangles(
 
 pub fn begin(self: *Dx11Backend, arena: std.mem.Allocator) void {
     self.arena = arena;
+
+    const pixel_size = self.pixelSize();
+    var scissor_rect: RECT = .{
+        .left = 0,
+        .top = 0,
+        .right = @intFromFloat(@round(pixel_size.w)),
+        .bottom = @intFromFloat(@round(pixel_size.h)),
+    };
+    self.device_context.RSSetScissorRects(1, @ptrCast(&scissor_rect));
+
     var clear_color = [_]f32{ 1.0, 1.0, 1.0, 0.0 };
     self.device_context.ClearRenderTargetView(self.render_target orelse return, @ptrCast((&clear_color).ptr));
 }
