@@ -411,6 +411,9 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
     sel.cursor += new_len;
     sel.end = sel.cursor;
     sel.start = sel.cursor;
+    if (std.mem.indexOfScalar(u8, new[0..new_len], '\n') != null) {
+        sel.affinity = .after;
+    }
 
     // we might have dropped to a new line, so make sure the cursor is visible
     self.textLayout.scroll_to_cursor = true;
