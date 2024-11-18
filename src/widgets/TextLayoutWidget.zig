@@ -35,9 +35,6 @@ pub const InitOptions = struct {
     /// If true, break text on space to fit (or any character if width is < 10 Ms)
     break_lines: bool = true,
 
-    /// If false, ignore font line_height_factor
-    multiline: bool = true,
-
     // Whether to enter touch editing mode on a touch-release (no drag) if we
     // were not focused before the touch.
     touch_edit_just_focused: bool = true,
@@ -108,7 +105,6 @@ insert_pt: Point = Point{},
 current_line_height: f32 = 0.0,
 prevClip: Rect = Rect{},
 break_lines: bool = undefined,
-multiline: bool = undefined,
 current_line_width: f32 = 0.0, // width of lines if break_lines was false
 touch_edit_just_focused: bool = undefined,
 
@@ -208,7 +204,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     const options = defaults.override(opts);
     var self = TextLayoutWidget{ .wd = WidgetData.init(src, .{}, options), .selection_in = init_opts.selection };
     self.break_lines = init_opts.break_lines;
-    self.multiline = init_opts.multiline;
     self.touch_edit_just_focused = init_opts.touch_edit_just_focused;
     self.touch_editing = dvui.dataGet(null, self.wd.id, "_touch_editing", bool) orelse false;
     self.te_first = dvui.dataGet(null, self.wd.id, "_te_first", bool) orelse true;
@@ -943,7 +938,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
 
     const options = self.wd.options.override(opts);
     const msize = options.fontGet().sizeM(1, 1);
-    const line_height = if (self.multiline) options.fontGet().lineHeight() else options.fontGet().textHeight();
+    const line_height = options.fontGet().lineHeight();
     self.current_line_height = @max(self.current_line_height, line_height);
     var txt = text;
 
@@ -972,7 +967,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
         var width_after: f32 = 0;
         for (self.corners, 0..) |corner, i| {
             if (corner) |cor| {
-                if (@max(cor.y, self.insert_pt.y) < @min(cor.y + cor.h, self.insert_pt.y + self.current_line_height)) {
+                if (@max(cor.y, self.insert_pt.y) < @min(cor.y + cor.h, self.insert_pt.y + msize.h)) {
                     linewidth -= cor.w;
                     if (linestart == cor.x) {
                         // used below - if we moved over for a widget, we
@@ -999,13 +994,11 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
 
         // get slice of text that fits within width or ends with newline
         var s = try options.fontGet().textSizeEx(txt, if (self.break_lines) width else null, &end, .before);
-        if (self.multiline) s.h *= options.fontGet().line_height_factor;
 
         // ensure we always get at least 1 codepoint so we make progress
         if (end == 0) {
             end = std.unicode.utf8ByteSequenceLength(txt[0]) catch 1;
             s = try options.fontGet().textSize(txt[0..end]);
-            if (self.multiline) s.h *= options.fontGet().line_height_factor;
         }
 
         const newline = (txt[end - 1] == '\n');
@@ -1024,7 +1017,6 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                 if (spaceIdx) |si| {
                     end = si + 1;
                     s = try options.fontGet().textSize(txt[0..end]);
-                    if (self.multiline) s.h *= options.fontGet().line_height_factor;
                     break :blk; // this part will fit
                 }
 
@@ -1270,10 +1262,10 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
     self.selection.end = @min(self.selection.end, self.bytes_seen);
 
     const options = self.wd.options.override(opts);
-    const line_height = if (self.multiline) options.fontGet().lineHeight() else options.fontGet().textHeight();
+    const text_height = options.fontGet().textHeight();
 
     if (!self.cursor_seen) {
-        self.cursor_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = line_height };
+        self.cursor_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = text_height };
         self.cursorSeen();
     }
 
@@ -1329,7 +1321,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
     }
 
     if (self.selection.start > self.bytes_seen or self.bytes_seen == 0) {
-        self.sel_start_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = line_height };
+        self.sel_start_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = text_height };
         if (self.selection.start > self.bytes_seen) {
             dvui.refresh(null, @src(), self.wd.id);
         }
@@ -1343,7 +1335,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {
     }
 
     if (self.selection.end > self.bytes_seen or self.bytes_seen == 0) {
-        self.sel_end_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = line_height };
+        self.sel_end_r = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = text_height };
         if (self.selection.end > self.bytes_seen) {
             dvui.refresh(null, @src(), self.wd.id);
         }
