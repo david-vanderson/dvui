@@ -9,12 +9,76 @@ check zig std lib for bytesAsSlice alignment - should it always aligncast?
 doc comments and publish
 update web-test and publish
 
+redo screenshot
+
+
+file open dialogs
+
+
+tooltips
+
+
+need a way to get a string description of a keybind to display to user
+
+alignment widget adds margin, but maybe should add a spacer instead?
+- see if that makes the Text Entry example settle better
+
+
+clean up refresh tracking
+
+
+Consolidate TextureCacheEntry stuff
+- outside code should be able to use it
+
+make textureCreate* properly return errors
+
+Dialog autosize should use refresh tracking
+
+overhaul path construction so we con't maintain an implicit path
+
+
+record/replay render commands
+- make CacheWidget do it by recording the commands and replaying them if there was no refresh
+
+doc comments for recordRenderCommands
+- what function do you use to target a texture?
+- what function do you use to export a texture as pixel data?
 
 
 can we save rendering commands and render to a texture we can get back?
 - that would help plotting
 - could make the demoButton's contents be static (cached images)
 
+        if (try dvui.button(@src(), "Export Texture", .{}, .{})) {
+            // set that texture as the target
+            _ = Backend.c.SDL_SetRenderTarget(backend.renderer, @ptrCast(G.tex));
+            // target back to screen
+            defer _ = Backend.c.SDL_SetRenderTarget(backend.renderer, null);
+
+            const pixels = try gpa.alloc(u8, dim * dim * 4);
+            defer gpa.free(pixels);
+            _ = Backend.c.SDL_RenderReadPixels(backend.renderer, null, 0, pixels.ptr, dim * 4);
+
+            var out_len: c_int = undefined;
+            const png_data = dvui.c.stbi_write_png_to_mem(pixels.ptr, dim * 4, dim, dim, 4, &out_len);
+            defer dvui.c.free(png_data);
+            var png_slice: []u8 = undefined;
+            png_slice.ptr = png_data;
+            png_slice.len = @intCast(out_len);
+
+            // base64 encode
+            const b64_encoder = std.base64.standard.Encoder;
+            const prefix = "data:image/png;base64,";
+            const encoded_size = prefix.len + b64_encoder.calcSize(@intCast(out_len));
+            var encoded = try gpa.alloc(u8, encoded_size);
+            encoded[0..prefix.len].* = prefix.*;
+            defer gpa.free(encoded);
+
+            _ = b64_encoder.encode(encoded[prefix.len..], png_slice);
+
+            //std.debug.print("output {s}\n", .{encoded});
+            //try dvui.openURL(encoded);
+        }
 
 should do tabIndexSet if the element has size, so even if it's scrolled off the screen we still go to it
 - when we do tabIndexNext/Prev it should focus that element and then also send a scroll_to message from that widget - how?
@@ -22,14 +86,9 @@ should do tabIndexSet if the element has size, so even if it's scrolled off the 
 Is there a way to turn off tab indexing for stuff inside DemoButton?
 - also turn off focus?
 
-Add filter (nearest, linear) to image rendering
-
 add animating example of a dialog that opens down and closes up
 - replace the Scale one
 
-
-
-This was on current arch linux. The zig sdl package expects GLES/gl.h to exist, but on arch linux it is GLES2/gl2.h (or GLES3/gl3.h?). The system sdl package is (obviously) configured correctly, so it builds fine with that.
 
 does it help web-test size to leave out some fonts and icons?
 

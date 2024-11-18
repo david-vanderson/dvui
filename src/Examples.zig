@@ -353,23 +353,23 @@ pub const demoKind = enum {
         };
     }
 
-    pub fn scale(self: demoKind) f32 {
+    pub fn scaleOffset(self: demoKind) struct { scale: f32, offset: dvui.Point } {
         return switch (self) {
-            .basic_widgets => 0.33,
-            .calculator => 0.6,
-            .text_entry => 0.5,
-            .styling => 0.5,
-            .layout => 0.2,
-            .text_layout => 0.35,
-            .reorderable => 0.29,
-            .menus => 0.43,
-            .focus => 0.74,
-            .scrolling => 0.42,
-            .scroll_canvas => 0.5,
-            .dialogs => 0.5,
-            .animations => 0.5,
-            .struct_ui => 0.5,
-            .debugging => 0.44,
+            .basic_widgets => .{ .scale = 0.45, .offset = .{} },
+            .calculator => .{ .scale = 0.45, .offset = .{} },
+            .text_entry => .{ .scale = 0.45, .offset = .{} },
+            .styling => .{ .scale = 0.45, .offset = .{} },
+            .layout => .{ .scale = 0.45, .offset = .{ .x = -50 } },
+            .text_layout => .{ .scale = 0.45, .offset = .{} },
+            .reorderable => .{ .scale = 0.45, .offset = .{ .y = -200 } },
+            .menus => .{ .scale = 0.45, .offset = .{} },
+            .focus => .{ .scale = 0.45, .offset = .{} },
+            .scrolling => .{ .scale = 0.45, .offset = .{ .x = -150, .y = 0 } },
+            .scroll_canvas => .{ .scale = 0.35, .offset = .{ .y = -120 } },
+            .dialogs => .{ .scale = 0.45, .offset = .{} },
+            .animations => .{ .scale = 0.45, .offset = .{} },
+            .struct_ui => .{ .scale = 0.45, .offset = .{} },
+            .debugging => .{ .scale = 0.45, .offset = .{} },
         };
     }
 };
@@ -470,7 +470,14 @@ pub fn demo() !void {
 
                 try dvui.label(@src(), "{s}", .{e.name()}, options);
 
-                const demo_scaler = try dvui.scale(@src(), e.scale(), .{ .expand = .both });
+                const demo_scaler = try dvui.scale(@src(), e.scaleOffset().scale, .{ .expand = .both });
+                defer demo_scaler.deinit();
+
+                const oldclip = dvui.clip(demo_scaler.data().contentRectScale().r);
+                defer dvui.clipSet(oldclip);
+
+                const box2 = try dvui.box(@src(), .vertical, .{ .rect = dvui.Rect.fromPoint(e.scaleOffset().offset).toSize(.{ .w = 400, .h = 1000 }) });
+                defer box2.deinit();
 
                 switch (e) {
                     .basic_widgets => try basicWidgets(),
@@ -483,14 +490,12 @@ pub fn demo() !void {
                     .menus => try menus(),
                     .focus => try focus(),
                     .scrolling => try scrolling(),
-                    .scroll_canvas => {},
+                    .scroll_canvas => try scrollCanvas(),
                     .dialogs => try dialogs(float.data().id),
                     .animations => try animations(),
                     .struct_ui => try structUI(),
                     .debugging => try debuggingErrors(),
                 }
-
-                demo_scaler.deinit();
             }
 
             if (use_cache) {
@@ -1963,7 +1968,7 @@ pub fn scrollCanvas() !void {
     try tl.format("Virtual size {d}x{d}\n", .{ Data.scroll_info.virtual_size.w, Data.scroll_info.virtual_size.h }, .{});
     try tl.format("Scroll Offset {d}x{d}\n", .{ Data.scroll_info.viewport.x, Data.scroll_info.viewport.y }, .{});
     try tl.format("Origin {d}x{d}\n", .{ Data.origin.x, Data.origin.y }, .{});
-    try tl.format("Scale {d}\n", .{Data.scale}, .{});
+    try tl.format("Scale {d}", .{Data.scale}, .{});
     tl.deinit();
 
     var scroll = try dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info }, .{ .expand = .both, .min_size_content = .{ .w = 300, .h = 300 } });
