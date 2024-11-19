@@ -209,18 +209,24 @@ fn addDvuiModule(
                 if (b.systemIntegrationOption("sdl2", .{})) {
                     backend_mod.linkSystemLibrary("SDL2", .{});
                 } else {
-                    const sdl_dep = b.lazyDependency("sdl", .{
-                        .target = target,
-                        .optimize = optimize,
-
-                        // Trying to compile opengles (version 1) fails on
-                        // newer linux distros like Arch, because they don't
-                        // have /usr/include/GLES/gl.h
-                        // https://github.com/david-vanderson/dvui/issues/131
-                        .render_driver_ogl_es = false,
-                    });
-                    if (sdl_dep) |sd| {
-                        backend_mod.linkLibrary(sd.artifact("SDL2"));
+                    if (target.result.os.tag == .linux) {
+                        const sdl_dep = b.lazyDependency("sdl", .{
+                            .target = target,
+                            .optimize = optimize,
+                            // trying to compile opengles (version 1) fails on
+                            // newer linux distros like arch, because they don't
+                            // have /usr/include/gles/gl.h
+                            // https://github.com/david-vanderson/dvui/issues/131
+                            .render_driver_ogl_es = false,
+                        });
+                        if (sdl_dep) |sd| {
+                            backend_mod.linkLibrary(sd.artifact("SDL2"));
+                        }
+                    } else {
+                        const sdl_dep = b.lazyDependency("sdl", .{ .target = target, .optimize = optimize });
+                        if (sdl_dep) |sd| {
+                            backend_mod.linkLibrary(sd.artifact("SDL2"));
+                        }
                     }
                 }
             },
