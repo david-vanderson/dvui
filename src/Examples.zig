@@ -1051,11 +1051,6 @@ pub fn textEntryWidgets() !void {
         try dvui.label(@src(), "bytes {d}\nallocated {d}\nlimit {d}", .{ bytes, text_entry_multiline_buf.len, text_entry_multiline_allocator_buf.len }, .{ .gravity_y = 0.5 });
     }
 
-    const S = struct {
-        var type_dropdown_val: usize = 0;
-        var min: bool = false;
-        var max: bool = false;
-    };
     const parse_types = [_]type{ u8, i8, u16, i16, u32, i32, f32, f64 };
     const parse_typenames: [parse_types.len][]const u8 = blk: {
         var temp: [parse_types.len][]const u8 = undefined;
@@ -1063,6 +1058,13 @@ pub fn textEntryWidgets() !void {
             temp[i] = @typeName(T);
         }
         break :blk temp;
+    };
+
+    const S = struct {
+        var type_dropdown_val: usize = 0;
+        var min: bool = false;
+        var max: bool = false;
+        var value: f64 = 0;
     };
 
     {
@@ -1080,8 +1082,32 @@ pub fn textEntryWidgets() !void {
 
         inline for (parse_types, 0..) |T, i| {
             if (i == S.type_dropdown_val) {
-                const result = try dvui.textEntryNumber(@src(), T, .{ .min = if (S.min) 0 else null, .max = if (S.max) 100 else null, .show_min_max = true }, .{});
+                var value: T = undefined;
+                if (@typeInfo(T) == .Int) {
+                    S.value = std.math.clamp(S.value, std.math.minInt(T), std.math.maxInt(T));
+                    value = @intFromFloat(S.value);
+                    S.value = @floatFromInt(value);
+                } else {
+                    value = @floatCast(S.value);
+                }
+                const result = try dvui.textEntryNumber(@src(), T, .{ .value = &value, .min = if (S.min) 0 else null, .max = if (S.max) 100 else null, .show_min_max = true }, .{ .id_extra = i });
                 try displayTextEntryNumberResult(result);
+
+                if (result.changed) {
+                    if (@typeInfo(T) == .Int) {
+                        S.value = @floatFromInt(value);
+                    } else {
+                        S.value = @floatCast(value);
+                    }
+                    dvui.animation(hbox_aligned.data().id, "value_changed", .{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 500_000 });
+                }
+
+                if (dvui.animationGet(hbox_aligned.data().id, "value_changed")) |a| {
+                    const prev_alpha = dvui.themeGet().alpha;
+                    dvui.themeGet().alpha *= a.lerp();
+                    try dvui.label(@src(), "Changed!", .{}, .{ .gravity_y = 0.5 });
+                    dvui.themeGet().alpha = prev_alpha;
+                }
             }
         }
     }
@@ -1097,6 +1123,7 @@ pub fn textEntryWidgets() !void {
 
         _ = try dvui.checkbox(@src(), &S.min, "Min", .{});
         _ = try dvui.checkbox(@src(), &S.max, "Max", .{});
+        _ = try dvui.label(@src(), "Stored {d}", .{S.value}, .{});
     }
 
     try dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});
@@ -1117,7 +1144,7 @@ pub fn displayTextEntryNumberResult(result: anytype) !void {
             try dvui.label(@src(), "Invalid", .{}, .{ .gravity_y = 0.5 });
         },
         .Valid => |num| {
-            try dvui.label(@src(), "{d}", .{num}, .{ .gravity_y = 0.5 });
+            try dvui.label(@src(), "Parsed {d}", .{num}, .{ .gravity_y = 0.5 });
         },
     }
 }

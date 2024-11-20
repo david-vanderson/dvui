@@ -12,6 +12,7 @@ update web-test and publish
 redo screenshot
 
 
+
 file open dialogs
 
 
@@ -111,7 +112,7 @@ do some profiling of the scrolling demo and add caching to BoxWidget?
 
 add Options.id_override to forcefully set the id
 - use in textEntryNumber
-- use in reoder so things don't reset when they get dragged/dropped
+- use in reroder so things don't reset when they get dragged/dropped
 - search for all uses of extendId
 
 
@@ -126,9 +127,6 @@ textLayout:
 
 
 try to decouple background from border
-
-
-textEntryNumber example - show how to initialize with number and write back if the number validates?
 
 
 consolidate touch editing selection
