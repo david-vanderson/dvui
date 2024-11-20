@@ -5988,6 +5988,9 @@ pub fn TextEntryNumberResult(comptime T: type) type {
             TooSmall: void,
             Empty: void,
         } = .Invalid,
+
+        /// True if given a value pointer and wrote a valid value back to it.
+        changed: bool = false,
         enter_pressed: bool = false,
     };
 }
@@ -6003,13 +6006,18 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         else => unreachable,
     };
 
-    const id = dvui.parentGet().extendId(src, 0);
+    const id = dvui.parentGet().extendId(src, opts.idExtra());
 
     const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 32);
 
     //initialize with input number
     if (init_opts.value) |num| {
-        _ = try std.fmt.bufPrint(buffer, "{d}", .{num.*});
+        const old_value = dataGet(null, id, "value", T);
+        if (old_value == null or old_value.? != num.*) {
+            dataSet(null, id, "value", num.*);
+            @memset(buffer, 0); // clear out anything that was there before
+            _ = try std.fmt.bufPrint(buffer, "{d}", .{num.*});
+        }
     }
 
     const cw = currentWindow();
@@ -6043,7 +6051,11 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     } else {
         result.value = .{ .Valid = num.? };
         if (init_opts.value) |value_ptr| {
-            value_ptr.* = num.?;
+            if ((te.enter_pressed or te.text_changed) and value_ptr.* != num.?) {
+                dataSet(null, id, "value", num.?);
+                value_ptr.* = num.?;
+                result.changed = true;
+            }
         }
     }
 
