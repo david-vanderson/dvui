@@ -6061,7 +6061,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     try te.draw();
 
-    if (result.value != .Empty and result.value != .Valid) {
+    if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
         try dvui.pathAddRect(rs.r.outsetAll(1), te.data().options.corner_radiusGet());
         const color = dvui.themeGet().color_err;
