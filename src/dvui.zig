@@ -1388,10 +1388,18 @@ pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_ab
     }
 }
 
-pub fn subwindowCurrentSet(id: u32) u32 {
+pub const subwindowCurrentSetReturn = struct {
+    id: u32,
+    rect: Rect, // natural pixels
+};
+
+pub fn subwindowCurrentSet(id: u32, rect: ?Rect) subwindowCurrentSetReturn {
     const cw = currentWindow();
-    const ret = cw.subwindow_currentId;
+    const ret: subwindowCurrentSetReturn = .{ .id = cw.subwindow_currentId, .rect = cw.subwindow_currentRect };
     cw.subwindow_currentId = id;
+    if (rect) |r| {
+        cw.subwindow_currentRect = r;
+    }
     return ret;
 }
 
@@ -2507,6 +2515,12 @@ pub const Window = struct {
     // id of the subwindow widgets are being added to
     subwindow_currentId: u32 = 0,
 
+    // pixel screen rect of the last subwindow to give us one, dialogs use this
+    // to center themselves on
+    // - FloatingWindowWidget does
+    // - FloatingWidget and FloatingMenuWidget do not
+    subwindow_currentRect: Rect = .{},
+
     // id of the subwindow that has focus
     focused_subwindowId: u32 = 0,
 
@@ -3393,7 +3407,7 @@ pub const Window = struct {
 
         try subwindowAdd(self.wd.id, self.wd.rect, self.rect_pixels, false, null);
 
-        _ = subwindowCurrentSet(self.wd.id);
+        _ = subwindowCurrentSet(self.wd.id, self.wd.rect);
 
         self.extra_frames_needed -|= 1;
         self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
@@ -4233,6 +4247,7 @@ pub fn dialog(src: std.builtin.SourceLocation, opts: DialogOptions) !void {
     dataSetSlice(opts.window, id, "_title", opts.title);
     dataSetSlice(opts.window, id, "_message", opts.message);
     dataSetSlice(opts.window, id, "_ok_label", opts.ok_label);
+    dataSet(opts.window, id, "_center_on", (opts.window orelse currentWindow()).subwindow_currentRect);
     if (opts.cancel_label) |cl| {
         dataSetSlice(opts.window, id, "_cancel_label", cl);
     }
@@ -4270,13 +4285,15 @@ pub fn dialogDisplay(id: u32) !void {
         return;
     };
 
+    const center_on = dvui.dataGet(null, id, "_center_on", Rect) orelse currentWindow().subwindow_currentRect;
+
     const cancel_label = dvui.dataGetSlice(null, id, "_cancel_label", []u8);
 
     const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
     const maxSize = dvui.dataGet(null, id, "_max_size", Size);
 
-    var win = try floatingWindow(@src(), .{ .modal = modal }, .{ .id_extra = id, .max_size_content = maxSize });
+    var win = try floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .id_extra = id, .max_size_content = maxSize });
     defer win.deinit();
 
     var header_openflag = true;

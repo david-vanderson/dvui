@@ -70,7 +70,7 @@ pub fn init(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) F
 pub fn install(self: *FloatingMenuWidget) !void {
     dvui.parentSet(self.widget());
 
-    self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id);
+    self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id, null).id;
     self.parent_popup = popupSet(self);
 
     if (dvui.minSizeGet(self.wd.id)) |_| {
@@ -242,7 +242,7 @@ pub fn deinit(self: *FloatingMenuWidget) void {
 
     _ = popupSet(self.parent_popup);
     dvui.parentReset(self.wd.id, self.wd.parent);
-    _ = dvui.subwindowCurrentSet(self.prev_windowId);
+    _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);
 }

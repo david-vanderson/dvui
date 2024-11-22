@@ -25,6 +25,7 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     modal: bool = false,
     rect: ?*Rect = null,
+    center_on: ?Rect = null,
     open_flag: ?*bool = null,
     process_events_in_deinit: bool = true,
     stay_above_parent_window: bool = false,
@@ -73,7 +74,7 @@ prev_rendering: bool = undefined,
 wd: WidgetData = undefined,
 init_options: InitOptions = undefined,
 options: Options = undefined,
-prev_windowId: u32 = 0,
+prev_windowInfo: dvui.subwindowCurrentSetReturn = undefined,
 layout: BoxWidget = undefined,
 prevClip: Rect = Rect{},
 auto_pos: bool = false,
@@ -140,22 +141,11 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             self.wd.rect.h = ms.h;
         }
 
-        var prev_focus: ?Rect = null;
-        if (dvui.dataGet(null, self.wd.id, "_prev_focus_rect", Rect)) |r| {
-            dvui.dataRemove(null, self.wd.id, "_prev_focus_rect");
-            prev_focus = r;
-
-            // second frame for us, but since new windows grab the
-            // previously focused window rect, any focused window needs to
-            // have a non-zero size
-            dvui.focusSubwindow(self.wd.id, null);
-        }
-
         if (self.auto_pos) {
             // only position ourselves once by default
             self.auto_pos = false;
 
-            const centering = prev_focus orelse dvui.windowRect();
+            const centering = self.init_options.center_on orelse dvui.currentWindow().subwindow_currentRect;
             self.wd.rect.x = centering.x + (centering.w - self.wd.rect.w) / 2;
             self.wd.rect.y = centering.y + (centering.h - self.wd.rect.h) / 2;
 
@@ -166,12 +156,10 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             }
 
             if (self.init_options.window_avoid != .none) {
-                if (prev_focus) |pf| {
-                    if (self.wd.rect.topLeft().equals(pf.topLeft())) {
-                        // if we ended up directly on top, nudge downright a bit
-                        self.wd.rect.x += 24;
-                        self.wd.rect.y += 24;
-                    }
+                if (self.wd.rect.topLeft().equals(centering.topLeft())) {
+                    // if we ended up directly on top, nudge downright a bit
+                    self.wd.rect.x += 24;
+                    self.wd.rect.y += 24;
                 }
             }
 
@@ -212,20 +200,13 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 
 pub fn install(self: *FloatingWindowWidget) !void {
     if (dvui.firstFrame(self.wd.id)) {
+        dvui.focusSubwindow(self.wd.id, null);
+
         // write back before we hide ourselves for the first frame
         dvui.dataSet(null, self.wd.id, "_rect", self.wd.rect);
         if (self.init_options.rect) |ior| {
             // send rect back to user
             ior.* = self.wd.rect;
-        }
-
-        // there might be multiple new windows, so we aren't going to
-        // switch focus until the second frame, which gives all the new
-        // windows a chance to grab the previously focused rect
-
-        const cw = dvui.currentWindow();
-        if (dvui.focusedSubwindowId() != cw.wd.id) {
-            dvui.dataSet(null, self.wd.id, "_prev_focus_rect", cw.subwindowFocused().rect);
         }
 
         // need a second frame to fit contents
@@ -245,7 +226,7 @@ pub fn install(self: *FloatingWindowWidget) !void {
     }
 
     dvui.parentSet(self.widget());
-    self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id);
+    self.prev_windowInfo = dvui.subwindowCurrentSet(self.wd.id, self.wd.rectScale().r);
 
     // reset clip to whole OS window
     // - if modal fade everything below us
@@ -256,7 +237,7 @@ pub fn install(self: *FloatingWindowWidget) !void {
 
 pub fn drawBackground(self: *FloatingWindowWidget) !void {
     const rs = self.wd.rectScale();
-    try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowId else null);
+    try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowInfo.id else null);
     dvui.captureMouseMaintain(self.wd.id);
     try self.wd.register();
 
@@ -572,7 +553,7 @@ pub fn deinit(self: *FloatingWindowWidget) void {
     // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();
 
     dvui.parentReset(self.wd.id, self.wd.parent);
-    _ = dvui.subwindowCurrentSet(self.prev_windowId);
+    _ = dvui.subwindowCurrentSet(self.prev_windowInfo.id, self.prev_windowInfo.rect);
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);
 }
