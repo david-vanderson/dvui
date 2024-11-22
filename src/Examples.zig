@@ -2375,36 +2375,101 @@ pub fn dialogs(demo_win_id: u32) !void {
         }
     }
 
-    if (!builtin.single_threaded) {
-        try dvui.label(@src(), "Example of how to show a dialog/toast from another thread", .{}, .{});
-        {
-            var hbox = try dvui.box(@src(), .horizontal, .{});
-            defer hbox.deinit();
+    try dvui.label(@src(), "\nDialogs and toasts from other threads", .{}, .{});
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
 
-            if (try dvui.button(@src(), "Dialog after 1 second", .{}, .{})) {
+        if (try dvui.button(@src(), "Dialog after 1 second", .{}, .{})) {
+            if (!builtin.single_threaded) {
                 const bg_thread = try std.Thread.spawn(.{}, background_dialog, .{ dvui.currentWindow(), 1_000_000_000 });
                 bg_thread.detach();
-            }
-
-            if (try dvui.button(@src(), "Toast after 1 second", .{}, .{})) {
-                const bg_thread = try std.Thread.spawn(.{}, background_toast, .{ dvui.currentWindow(), 1_000_000_000, demo_win_id });
-                bg_thread.detach();
+            } else {
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in single-threaded" });
             }
         }
 
-        {
-            var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
-            defer hbox.deinit();
+        if (try dvui.button(@src(), "Toast after 1 second", .{}, .{})) {
+            if (!builtin.single_threaded) {
+                const bg_thread = try std.Thread.spawn(.{}, background_toast, .{ dvui.currentWindow(), 1_000_000_000, demo_win_id });
+                bg_thread.detach();
+            } else {
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in single-threaded" });
+            }
+        }
+    }
 
-            if (try dvui.button(@src(), "Show Progress from another Thread", .{}, .{})) {
-                progress_mutex.lock();
-                progress_val = 0;
-                progress_mutex.unlock();
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+        defer hbox.deinit();
+
+        if (try dvui.button(@src(), "Show Progress from another Thread", .{}, .{})) {
+            progress_mutex.lock();
+            progress_val = 0;
+            progress_mutex.unlock();
+            if (!builtin.single_threaded) {
                 const bg_thread = try std.Thread.spawn(.{}, background_progress, .{ dvui.currentWindow(), 2_000_000_000 });
                 bg_thread.detach();
+            } else {
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in single-threaded" });
             }
+        }
 
-            try dvui.progress(@src(), .{ .percent = progress_val }, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
+        try dvui.progress(@src(), .{ .percent = progress_val }, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
+    }
+
+    try dvui.label(@src(), "\nNative Dialogs", .{}, .{});
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        if (try dvui.button(@src(), "Open File", .{}, .{})) {
+            if (dvui.wasm) {
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in web" });
+            } else {
+                const filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "dvui native file open", .filters = &.{ "*.png", "*.jpg" }, .filter_description = "images" });
+                if (filename) |f| {
+                    try dvui.dialog(@src(), .{ .modal = false, .title = "File Open Result", .ok_label = "Done", .message = f });
+                }
+            }
+        }
+
+        if (try dvui.button(@src(), "Open Multiple Files", .{}, .{})) {
+            if (dvui.wasm) {
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in web" });
+            } else {
+                const filenames = try dvui.dialogNativeFileOpenMultiple(dvui.currentWindow().arena(), .{ .title = "dvui native file open multiple", .filter_description = "images" });
+                if (filenames) |fs| {
+                    const msg = try std.mem.join(dvui.currentWindow().arena(), "\n", fs);
+                    try dvui.dialog(@src(), .{ .modal = false, .title = "File Open Multiple Result", .ok_label = "Done", .message = msg });
+                }
+            }
+        }
+    }
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        if (try dvui.button(@src(), "Open Folder", .{}, .{})) {
+            if (dvui.wasm) {
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in web" });
+            } else {
+                const filename = try dvui.dialogNativeFolderSelect(dvui.currentWindow().arena(), .{ .title = "dvui native folder select" });
+                if (filename) |f| {
+                    try dvui.dialog(@src(), .{ .modal = false, .title = "Folder Select Result", .ok_label = "Done", .message = f });
+                }
+            }
+        }
+
+        if (try dvui.button(@src(), "Save File", .{}, .{})) {
+            if (dvui.wasm) {
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in web" });
+            } else {
+                const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{ .title = "dvui native file save" });
+                if (filename) |f| {
+                    try dvui.dialog(@src(), .{ .modal = false, .title = "File Save Result", .ok_label = "Done", .message = f });
+                }
+            }
         }
     }
 }

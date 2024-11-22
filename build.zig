@@ -159,6 +159,11 @@ fn addDvuiModule(
         .optimize = optimize,
     });
 
+    if (target.result.os.tag == .windows) {
+        // tinyfiledialogs needs this
+        dvui_mod.linkSystemLibrary("comdlg32", .{});
+    }
+
     const options = b.addOptions();
     options.addOption(Backend, "backend", backend);
     dvui_mod.addOptions("build_options", options);
@@ -177,8 +182,14 @@ fn addDvuiModule(
     backend_mod.addImport("dvui", dvui_mod);
     dvui_mod.addImport("backend", backend_mod);
 
+    dvui_mod.addIncludePath(b.path("src/stb"));
     dvui_mod.addCSourceFiles(.{ .files = &.{
         "src/stb/stb_truetype_impl.c",
+    } });
+
+    dvui_mod.addIncludePath(b.path("src/tfd"));
+    dvui_mod.addCSourceFiles(.{ .files = &.{
+        "src/tfd/tinyfiledialogs.c",
     } });
 
     if (link_backend) {
@@ -241,7 +252,6 @@ fn addDvuiModule(
             },
         }
     }
-    dvui_mod.addIncludePath(b.path("src/stb"));
 
     if (b.systemIntegrationOption("freetype", .{})) {
         dvui_mod.linkSystemLibrary("freetype", .{});
