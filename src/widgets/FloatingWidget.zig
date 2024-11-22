@@ -54,7 +54,7 @@ pub fn init(src: std.builtin.SourceLocation, opts_in: Options) FloatingWidget {
 pub fn install(self: *FloatingWidget) !void {
     dvui.parentSet(self.widget());
 
-    self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id);
+    self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id, null).id;
 
     const rs = self.wd.rectScale();
 
@@ -111,7 +111,7 @@ pub fn deinit(self: *FloatingWidget) void {
     // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();
 
     dvui.parentReset(self.wd.id, self.wd.parent);
-    _ = dvui.subwindowCurrentSet(self.prev_windowId);
+    _ = dvui.subwindowCurrentSet(self.prev_windowId, null);
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);
 }
