@@ -12,10 +12,6 @@ update web-test and publish
 redo screenshot
 
 
-
-file open dialogs
-
-
 tooltips
 
 

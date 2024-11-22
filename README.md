@@ -47,6 +47,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
   - [stb_truetype](https://github.com/nothings/stb)
 - Touch support
   - Including selection draggables in text entries
+- Native file dialogs via [tinyfiledialogs](https://sourceforge.net/projects/tinyfiledialogs)
 - Animations
 - Themes
 - FPS throttling

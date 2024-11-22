@@ -57,7 +57,8 @@ pub const structEntryExAlloc = se.structEntryExAlloc;
 
 pub const enums = @import("enums.zig");
 
-pub const useFreeType = (builtin.target.cpu.arch != .wasm32);
+pub const wasm = (builtin.target.cpu.arch == .wasm32);
+pub const useFreeType = !wasm;
 
 pub const c = @cImport({
     // musl fails to compile saying missing "bits/setjmp.h", and nobody should
@@ -78,6 +79,10 @@ pub const c = @cImport({
     }
 
     @cInclude("stb_image.h");
+
+    if (!wasm) {
+        @cInclude("tinyfiledialogs.h");
+    }
 });
 
 var ft2lib: if (useFreeType) c.FT_Library else void = undefined;
@@ -4314,6 +4319,196 @@ pub fn dialogDisplay(id: u32) !void {
     try tl.addText(message, .{});
     tl.deinit();
     scroll.deinit();
+}
+
+pub const DialogNativeFileOptions = struct {
+    /// Title of the dialog window
+    title: ?[]const u8 = null,
+
+    /// Starting file or directory (if ends with /)
+    path: ?[]const u8 = null,
+
+    /// Filter files shown .filters = .{"*.png", "*.jpg"}
+    filters: ?[]const []const u8 = null,
+
+    /// Description for filters given ("image files")
+    filter_description: ?[]const u8 = null,
+};
+
+/// Block while showing a native file open dialog.  Return the selected file
+/// path or null if cancelled.  See dialogNativeFileOpenMultiple()
+///
+/// Not thread safe, but can be used from any thread.
+///
+/// Returned string is created by passed allocator.  Not implemented for web (returns null).
+pub fn dialogNativeFileOpen(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) !?[]const u8 {
+    if (wasm) {
+        return null;
+    }
+
+    return dialogNativeFileInternal(true, false, alloc, opts);
+}
+
+/// Block while showing a native file open dialog with multiple selection.
+/// Return the selected file paths or null if cancelled.
+///
+/// Not thread safe, but can be used from any thread.
+///
+/// Returned slice and strings are created by passed allocator.  Not implemented for web (returns null).
+pub fn dialogNativeFileOpenMultiple(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) !?[][]const u8 {
+    if (wasm) {
+        return null;
+    }
+
+    return dialogNativeFileInternal(true, true, alloc, opts);
+}
+
+/// Block while showing a native file save dialog.  Return the selected file
+/// path or null if cancelled.
+///
+/// Not thread safe, but can be used from any thread.
+///
+/// Returned string is created by passed allocator.  Not implemented for web (returns null).
+pub fn dialogNativeFileSave(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) !?[]const u8 {
+    if (wasm) {
+        return null;
+    }
+
+    return dialogNativeFileInternal(false, false, alloc, opts);
+}
+
+fn dialogNativeFileInternal(comptime open: bool, comptime multiple: bool, alloc: std.mem.Allocator, opts: DialogNativeFileOptions) if (multiple) error{OutOfMemory}!?[][]const u8 else error{OutOfMemory}!?[]const u8 {
+    var backing: [500]u8 = undefined;
+    var buf: []u8 = &backing;
+
+    var title: ?[*:0]const u8 = null;
+    if (opts.title) |t| {
+        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{t}) catch null;
+        if (dupe) |dt| {
+            title = dt.ptr;
+            buf = buf[dt.len + 1 ..];
+        }
+    }
+
+    var path: ?[*:0]const u8 = null;
+    if (opts.path) |p| {
+        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{p}) catch null;
+        if (dupe) |dp| {
+            path = dp.ptr;
+            buf = buf[dp.len + 1 ..];
+        }
+    }
+
+    var filters_backing: [20:null]?[*:0]const u8 = undefined;
+    var filters: ?[*:null]?[*:0]const u8 = null;
+    var filter_count: usize = 0;
+    if (opts.filters) |fs| {
+        filters = &filters_backing;
+        for (fs, 0..) |f, i| {
+            if (i == filters_backing.len) {
+                log.err("dialogNativeFileOpen got too many filters {d}, only using {d}", .{ fs.len, filters_backing.len });
+                break;
+            }
+            const dupe = std.fmt.bufPrintZ(buf, "{s}", .{f}) catch null;
+            if (dupe) |df| {
+                filters.?[i] = df;
+                filters.?[i + 1] = null;
+                filter_count = i + 1;
+                buf = buf[df.len + 1 ..];
+            }
+        }
+    }
+
+    var filter_desc: ?[*:0]const u8 = null;
+    if (opts.filter_description) |fd| {
+        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{fd}) catch null;
+        if (dupe) |dfd| {
+            filter_desc = dfd.ptr;
+            buf = buf[dfd.len + 1 ..];
+        }
+    }
+
+    var result: if (multiple) ?[][]const u8 else ?[]const u8 = null;
+    const tfd_ret = blk: {
+        if (open) {
+            break :blk dvui.c.tinyfd_openFileDialog(title, path, @intCast(filter_count), filters, filter_desc, if (multiple) 1 else 0);
+        } else {
+            break :blk dvui.c.tinyfd_saveFileDialog(title, path, @intCast(filter_count), filters, filter_desc);
+        }
+    };
+
+    if (tfd_ret) |r| {
+        if (multiple) {
+            const r_slice = std.mem.sliceTo(r, 0);
+            const num = std.mem.count(u8, r_slice, "|") + 1;
+            result = try alloc.alloc([]const u8, num);
+            var it = std.mem.splitScalar(u8, r_slice, '|');
+            var i: usize = 0;
+            while (it.next()) |f| {
+                result.?[i] = try alloc.dupe(u8, f);
+                i += 1;
+            }
+        } else {
+            result = try alloc.dupe(u8, std.mem.sliceTo(r, 0));
+        }
+    }
+
+    // TODO: tinyfd maintains malloced memory from call to call, and we should
+    // figure out a way to get it to release that.
+
+    return result;
+}
+
+pub const DialogNativeFolderSelectOptions = struct {
+    /// Title of the dialog window
+    title: ?[]const u8 = null,
+
+    /// Starting file or directory (if ends with /)
+    path: ?[]const u8 = null,
+};
+
+/// Block while showing a native folder select dialog. Return the selected
+/// folder path or null if cancelled.
+///
+/// Not thread safe, but can be used from any thread.
+///
+/// Returned string is created by passed allocator.  Not implemented for web (returns null).
+pub fn dialogNativeFolderSelect(alloc: std.mem.Allocator, opts: DialogNativeFolderSelectOptions) error{OutOfMemory}!?[]const u8 {
+    if (wasm) {
+        return null;
+    }
+
+    var backing: [500]u8 = undefined;
+    var buf: []u8 = &backing;
+
+    var title: ?[*:0]const u8 = null;
+    if (opts.title) |t| {
+        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{t}) catch null;
+        if (dupe) |dt| {
+            title = dt.ptr;
+            buf = buf[dt.len + 1 ..];
+        }
+    }
+
+    var path: ?[*:0]const u8 = null;
+    if (opts.path) |p| {
+        const dupe = std.fmt.bufPrintZ(buf, "{s}", .{p}) catch null;
+        if (dupe) |dp| {
+            path = dp.ptr;
+            buf = buf[dp.len + 1 ..];
+        }
+    }
+
+    var result: ?[]const u8 = null;
+    const tfd_ret = dvui.c.tinyfd_selectFolderDialog(title, path);
+    if (tfd_ret) |r| {
+        result = try alloc.dupe(u8, std.mem.sliceTo(r, 0));
+    }
+
+    // TODO: tinyfd maintains malloced memory from call to call, and we should
+    // figure out a way to get it to release that.
+
+    return result;
 }
 
 pub const Toast = struct {
