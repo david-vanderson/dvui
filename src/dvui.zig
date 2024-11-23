@@ -4965,10 +4965,18 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     return ret;
 }
 
-pub fn context(src: std.builtin.SourceLocation, opts: Options) !*ContextWidget {
+/// Context menu.  Pass a screen space pixel rect in init_opts, then
+/// .activePoint() says whether to show a menu.
+///
+/// The menu code should happen before deinit(), but don't put regular widgets
+/// directly inside Context.
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) !*ContextWidget {
     var ret = try currentWindow().arena().create(ContextWidget);
-    ret.* = ContextWidget.init(src, opts);
+    ret.* = ContextWidget.init(src, init_opts, opts);
     try ret.install();
+    ret.processEvents();
     return ret;
 }
 
