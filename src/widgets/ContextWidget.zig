@@ -12,16 +12,23 @@ const WidgetData = dvui.WidgetData;
 
 const ContextWidget = @This();
 
+pub const InitOptions = struct {
+    /// Screen space pixel rect where right-click triggers the context menu
+    rect: Rect,
+};
+
 wd: WidgetData = undefined,
+init_options: InitOptions = undefined,
 
 winId: u32 = undefined,
 focused: bool = false,
 activePt: Point = Point{},
 
-pub fn init(src: std.builtin.SourceLocation, opts: Options) ContextWidget {
+pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ContextWidget {
     var self = ContextWidget{};
     const defaults = Options{ .name = "Context" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
+    self.wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = dvui.parentGet().data().rectScale().rectFromScreen(init_opts.rect) }));
+    self.init_options = init_opts;
     self.winId = dvui.subwindowCurrentId();
     if (dvui.focusedWidgetIdInCurrentSubwindow()) |fid| {
         if (fid == self.wd.id) {
@@ -60,6 +67,7 @@ pub fn data(self: *ContextWidget) *WidgetData {
 
 pub fn rectFor(self: *ContextWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
+    dvui.log.debug("{s}:{d} ContextWidget should not have normal child widgets, only menu stuff", .{ self.wd.src.file, self.wd.src.line });
     return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
 }
 
@@ -71,9 +79,39 @@ pub fn minSizeForChild(self: *ContextWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
+pub fn processEvents(self: *ContextWidget) void {
+    const evts = dvui.events();
+    for (evts) |*e| {
+        if (!dvui.eventMatchSimple(e, self.data()))
+            continue;
+
+        self.processEvent(e, false);
+    }
+}
+
 pub fn processEvent(self: *ContextWidget, e: *Event, bubbling: bool) void {
     _ = bubbling;
     switch (e.evt) {
+        .mouse => |me| {
+            if (me.action == .focus and me.button == .right) {
+                // eat any right button focus events so they don't get
+                // caught by the containing window cleanup and cause us
+                // to lose the focus we are about to get from the right
+                // press below
+                e.handled = true;
+            } else if (me.action == .press and me.button == .right) {
+                e.handled = true;
+
+                dvui.focusWidget(self.wd.id, null, e.num);
+                self.focused = true;
+
+                // scale the point back to natural so we can use it in Popup
+                self.activePt = me.p.scale(1 / dvui.windowNaturalScale());
+
+                // offset just enough so when Popup first appears nothing is highlighted
+                self.activePt.x += 1;
+            }
+        },
         .close_popup => {
             if (self.focused) {
                 // we are getting a bubbled event, so the window we are in is not the current one
@@ -88,44 +126,14 @@ pub fn processEvent(self: *ContextWidget, e: *Event, bubbling: bool) void {
     }
 }
 
-pub fn processMouseEventsAfter(self: *ContextWidget) void {
-    const evts = dvui.events();
-    for (evts) |*e| {
-        if (!dvui.eventMatchSimple(e, self.data()))
-            continue;
-
-        switch (e.evt) {
-            .mouse => |me| {
-                if (me.action == .focus and me.button == .right) {
-                    // eat any right button focus events so they don't get
-                    // caught by the containing window cleanup and cause us
-                    // to lose the focus we are about to get from the right
-                    // press below
-                    e.handled = true;
-                } else if (me.action == .press and me.button == .right) {
-                    e.handled = true;
-
-                    dvui.focusWidget(self.wd.id, null, e.num);
-                    self.focused = true;
-
-                    // scale the point back to natural so we can use it in Popup
-                    self.activePt = me.p.scale(1 / dvui.windowNaturalScale());
-
-                    // offset just enough so when Popup first appears nothing is highlighted
-                    self.activePt.x += 1;
-                }
-            },
-            else => {},
-        }
-    }
-}
-
 pub fn deinit(self: *ContextWidget) void {
-    self.processMouseEventsAfter();
     if (self.focused) {
         dvui.dataSet(null, self.wd.id, "_activePt", self.activePt);
     }
-    self.wd.minSizeSetAndRefresh();
-    self.wd.minSizeReportToParent();
+
+    // we are always given a rect, so we don't do normal layout, don't do these
+    //self.wd.minSizeSetAndRefresh();
+    //self.wd.minSizeReportToParent();
+
     dvui.parentReset(self.wd.id, self.wd.parent);
 }

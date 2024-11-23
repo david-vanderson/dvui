@@ -1708,22 +1708,25 @@ pub fn reorderListsAdvanced() !void {
 }
 
 pub fn menus() !void {
-    const ctext = try dvui.context(@src(), .{ .expand = .horizontal });
-    defer ctext.deinit();
+    var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both });
+    defer vbox.deinit();
 
-    if (ctext.activePoint()) |cp| {
-        var fw2 = try dvui.floatingMenu(@src(), Rect.fromPoint(cp), .{});
-        defer fw2.deinit();
+    {
+        const ctext = try dvui.context(@src(), .{ .rect = vbox.data().borderRectScale().r }, .{});
+        defer ctext.deinit();
 
-        _ = try dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
-        _ = try dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
-        if ((try dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal })) != null) {
-            fw2.close();
+        if (ctext.activePoint()) |cp| {
+            var fw2 = try dvui.floatingMenu(@src(), Rect.fromPoint(cp), .{});
+            defer fw2.deinit();
+
+            try submenus();
+            _ = try dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
+            _ = try dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
+            if ((try dvui.menuItemLabel(@src(), "Close Menu", .{}, .{ .expand = .horizontal })) != null) {
+                fw2.close();
+            }
         }
     }
-
-    var vbox = try dvui.box(@src(), .vertical, .{});
-    defer vbox.deinit();
 
     {
         var m = try dvui.menu(@src(), .horizontal, .{});
