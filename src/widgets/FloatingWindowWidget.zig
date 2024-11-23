@@ -78,7 +78,8 @@ prev_windowInfo: dvui.subwindowCurrentSetReturn = undefined,
 layout: BoxWidget = undefined,
 prevClip: Rect = Rect{},
 auto_pos: bool = false,
-auto_size: u8 = 0,
+auto_size: bool = false,
+auto_size_refresh_prev_value: ?u8 = null,
 drag_part: ?DragPart = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingWindowWidget {
@@ -129,12 +130,11 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     }
 
     if (dvui.minSizeGet(self.wd.id)) |min_size| {
-        if (self.auto_size > 0) {
-            // size ourselves for 2 frames, because we might have a textLayout
-            // which gets its width the first frame and its height the second
-            //
-            // if we don't, this won't change anything
-            self.auto_size -= 1;
+        if (self.auto_size) {
+            // Track if any of our children called refresh(), and in deinit we
+            // will turn off auto_size if none of them did.
+            self.auto_size_refresh_prev_value = dvui.currentWindow().extra_frames_needed;
+            dvui.currentWindow().extra_frames_needed = 0;
 
             const ms = Size.min(Size.max(min_size, self.options.min_sizeGet()), dvui.windowRect().size());
             self.wd.rect.w = ms.w;
@@ -474,7 +474,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
 ///
 /// This might take 2 frames if there is a textLayout with break_lines.
 pub fn autoSize(self: *FloatingWindowWidget) void {
-    self.auto_size = 2;
+    self.auto_size = true;
 }
 
 pub fn close(self: *FloatingWindowWidget) void {
@@ -527,11 +527,18 @@ pub fn processEvent(self: *FloatingWindowWidget, e: *Event, bubbling: bool) void
 }
 
 pub fn deinit(self: *FloatingWindowWidget) void {
+    self.layout.deinit();
+
+    if (self.auto_size_refresh_prev_value) |pv| {
+        if (dvui.currentWindow().extra_frames_needed == 0) {
+            self.auto_size = false;
+        }
+        dvui.currentWindow().extra_frames_needed = @max(dvui.currentWindow().extra_frames_needed, pv);
+    }
+
     if (self.init_options.process_events_in_deinit) {
         self.processEventsAfter();
     }
-
-    self.layout.deinit();
 
     if (!dvui.firstFrame(self.wd.id)) {
         // if firstFrame, we already did this in install
