@@ -83,13 +83,18 @@ const AnimatingDialog = struct {
         _ = dvui.dataGet(null, id, "response", enums.DialogResponse);
 
         var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id, .max_size_content = .{ .w = 300 } });
-        const first_frame = dvui.firstFrame(win.data().id);
+
+        if (dvui.firstFrame(win.data().id)) {
+            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 0, .end_val = 1.0, .end_time = 200_000 });
+        }
+
         const winHeight = win.data().rect.h;
 
-        // To animate a window, we need both a percent and a target window
-        // size (see calls to animate below).
         if (dvui.animationGet(win.data().id, "rect_percent")) |a| {
             win.data().rect.h *= a.lerp();
+
+            // mucking with the window size can screw up the windows auto sizing, so force it
+            win.autoSize();
 
             if (a.done() and a.end_val == 0) {
                 dvui.dialogRemove(id);
@@ -133,16 +138,8 @@ const AnimatingDialog = struct {
 
         win.deinit();
 
-        if (first_frame) {
-            // On the first frame, scaler will have a scale value of 1 so
-            // the min size of the window is our target, which is why we do
-            // this after win.deinit so the min size will be available
-            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 0, .end_val = 1.0, .end_time = 300_000 });
-        }
-
         if (closing) {
-            // If we are closing, start from our current size
-            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 1.0, .end_val = 0, .end_time = 300_000 });
+            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 1.0, .end_val = 0, .end_time = 200_000 });
         }
     }
 
