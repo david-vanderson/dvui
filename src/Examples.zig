@@ -84,56 +84,31 @@ const AnimatingDialog = struct {
 
         var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id, .max_size_content = .{ .w = 300 } });
         const first_frame = dvui.firstFrame(win.data().id);
-
-        // On the first frame the window size will be 0 so you won't see
-        // anything, but we need the scaleval to be 1 so the window will
-        // calculate its min_size correctly.
-        var scaleval: f32 = 1.0;
+        const winHeight = win.data().rect.h;
 
         // To animate a window, we need both a percent and a target window
         // size (see calls to animate below).
         if (dvui.animationGet(win.data().id, "rect_percent")) |a| {
-            if (dvui.dataGet(null, win.data().id, "window_size", Size)) |target_size| {
-                scaleval = a.lerp();
+            win.data().rect.h *= a.lerp();
 
-                // since the window is animating, calculate the center to
-                // animate around that
-                var r = win.data().rect;
-                r.x += r.w / 2;
-                r.y += r.h / 2;
+            if (a.done() and a.end_val == 0) {
+                dvui.dialogRemove(id);
 
-                const dw = target_size.w * scaleval;
-                const dh = target_size.h * scaleval;
-                r.x -= dw / 2;
-                r.w = dw;
-                r.y -= dh / 2;
-                r.h = dh;
-
-                win.data().rect = r;
-
-                if (a.done() and a.end_val == 0) {
-                    dvui.dialogRemove(id);
-
-                    if (callafter) |ca| {
-                        const response = dvui.dataGet(null, id, "response", enums.DialogResponse) orelse {
-                            std.log.debug("Error: no response for dialog {x}\n", .{id});
-                            return;
-                        };
-                        try ca(id, response);
-                    }
-
-                    return;
+                if (callafter) |ca| {
+                    const response = dvui.dataGet(null, id, "response", enums.DialogResponse) orelse {
+                        std.log.debug("Error: no response for dialog {x}\n", .{id});
+                        return;
+                    };
+                    try ca(id, response);
                 }
+
+                return;
             }
         }
 
         try win.install();
         win.processEventsBefore();
         try win.drawBackground();
-
-        var scaler = try dvui.scale(@src(), scaleval, .{ .expand = .horizontal });
-
-        var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
 
         var closing: bool = false;
 
@@ -153,8 +128,9 @@ const AnimatingDialog = struct {
             dvui.dataSet(null, id, "response", enums.DialogResponse.ok);
         }
 
-        vbox.deinit();
-        scaler.deinit();
+        // restore saved win rect so our change is not persisted to next frame
+        win.data().rect.h = winHeight;
+
         win.deinit();
 
         if (first_frame) {
@@ -162,19 +138,17 @@ const AnimatingDialog = struct {
             // the min size of the window is our target, which is why we do
             // this after win.deinit so the min size will be available
             dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 0, .end_val = 1.0, .end_time = 300_000 });
-            dvui.dataSet(null, win.data().id, "window_size", win.data().min_size);
         }
 
         if (closing) {
             // If we are closing, start from our current size
             dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 1.0, .end_val = 0, .end_time = 300_000 });
-            dvui.dataSet(null, win.data().id, "window_size", win.data().rect.size());
         }
     }
 
     pub fn after(id: u32, response: enums.DialogResponse) Error!void {
         _ = id;
-        std.log.debug("You clicked \"{s}\"\n", .{@tagName(response)});
+        std.log.debug("You clicked \"{s}\"", .{@tagName(response)});
     }
 };
 
@@ -2567,8 +2541,8 @@ pub fn animations() !void {
         }
     }
 
-    if (try dvui.button(@src(), "Animating Dialog (Scale)", .{}, .{})) {
-        try dvui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog (Scale)", .message = "This shows how to animate dialogs and other floating windows by changing the scale.", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
+    if (try dvui.button(@src(), "Animating Dialog (drop)", .{}, .{})) {
+        try dvui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog (drop)", .message = "This shows how to animate dialogs and other floating windows.", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
     }
 
     if (try dvui.button(@src(), "Animating Window (Rect)", .{}, .{})) {
@@ -2588,7 +2562,7 @@ pub fn animations() !void {
         defer win.deinit();
 
         var keep_open = true;
-        try dvui.windowHeader("Animating Window (Rect)", "", &keep_open);
+        try dvui.windowHeader("Animating Window (center)", "", &keep_open);
         if (!keep_open) {
             animating_window_closing = true;
         }
