@@ -325,13 +325,13 @@ pub fn minSizeForChild(self: *TextEntryWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
-pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
+pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
     if (new.len == 0) return;
 
     // strip out carraige returns, which we get from copy/paste on windows
     if (std.mem.indexOfScalar(u8, new, '\r')) |idx| {
-        self.textTyped(new[0..idx]);
-        self.textTyped(new[idx + 1 ..]);
+        self.textTyped(new[0..idx], selected);
+        self.textTyped(new[idx + 1 ..], selected);
         return;
     }
 
@@ -408,9 +408,15 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8) void {
 
     // insert
     std.mem.copyForwards(u8, self.text[sel.cursor..], new[0..new_len]);
-    sel.cursor += new_len;
-    sel.end = sel.cursor;
-    sel.start = sel.cursor;
+    if (selected) {
+        sel.start = sel.cursor;
+        sel.cursor += new_len;
+        sel.end = sel.cursor;
+    } else {
+        sel.cursor += new_len;
+        sel.end = sel.cursor;
+        sel.start = sel.cursor;
+    }
     if (std.mem.indexOfScalar(u8, new[0..new_len], '\n') != null) {
         sel.affinity = .after;
     }
@@ -741,7 +747,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                     if (ke.action == .down or ke.action == .repeat) {
                         e.handled = true;
                         if (self.init_opts.multiline) {
-                            self.textTyped("\n");
+                            self.textTyped("\n", false);
                         } else {
                             self.enter_pressed = true;
                             dvui.refresh(null, @src(), self.wd.id);
@@ -753,17 +759,17 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
         },
         .text => |te| {
             e.handled = true;
-            var new = std.mem.sliceTo(te, 0);
+            var new = std.mem.sliceTo(te.txt, 0);
             if (self.init_opts.multiline) {
-                self.textTyped(new);
+                self.textTyped(new, te.selected);
             } else {
                 var i: usize = 0;
                 while (i < new.len) {
                     if (std.mem.indexOfScalar(u8, new[i..], '\n')) |idx| {
-                        self.textTyped(new[i..][0..idx]);
+                        self.textTyped(new[i..][0..idx], te.selected);
                         i += idx + 1;
                     } else {
-                        self.textTyped(new[i..]);
+                        self.textTyped(new[i..], te.selected);
                         break;
                     }
                 }
@@ -794,15 +800,15 @@ pub fn paste(self: *TextEntryWidget) void {
     };
 
     if (self.init_opts.multiline) {
-        self.textTyped(clip_text);
+        self.textTyped(clip_text, false);
     } else {
         var i: usize = 0;
         while (i < clip_text.len) {
             if (std.mem.indexOfScalar(u8, clip_text[i..], '\n')) |idx| {
-                self.textTyped(clip_text[i..][0..idx]);
+                self.textTyped(clip_text[i..][0..idx], false);
                 i += idx + 1;
             } else {
-                self.textTyped(clip_text[i..]);
+                self.textTyped(clip_text[i..], false);
                 break;
             }
         }
