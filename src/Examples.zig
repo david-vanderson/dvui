@@ -1013,7 +1013,7 @@ pub fn textEntryWidgets() !void {
 
         if (!text_entry_multiline_initialized) {
             text_entry_multiline_initialized = true;
-            te.textTyped("This multiline text\nentry can scroll\nin both directions.");
+            te.textTyped("This multiline text\nentry can scroll\nin both directions.", false);
         }
 
         const bytes = te.len;

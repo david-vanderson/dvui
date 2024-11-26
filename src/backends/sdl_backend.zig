@@ -579,9 +579,9 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
         },
         if (sdl3) c.SDL_EVENT_TEXT_EDITING else c.SDL_TEXTEDITING => {
             if (self.log_events) {
-                std.debug.print("sdl event TEXTEDITING {s}\n", .{event.edit.text});
+                std.debug.print("sdl event TEXTEDITING {s} start {d} len {d}\n", .{ event.edit.text, event.edit.start, event.edit.length });
             }
-            return false;
+            return try win.addEventTextEx(event.text.text[0..@intCast(event.edit.length)], true);
         },
         if (sdl3) c.SDL_EVENT_MOUSE_MOTION else c.SDL_MOUSEMOTION => {
             const touch = event.motion.which == c.SDL_TOUCH_MOUSEID;

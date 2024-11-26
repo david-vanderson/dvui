@@ -2953,12 +2953,16 @@ pub const Window = struct {
     /// for a frame either before begin() or just after begin() and before
     /// calling normal dvui widgets.  end() clears the event list.
     pub fn addEventText(self: *Self, text: []const u8) !bool {
+        return try self.addEventTextEx(text, false);
+    }
+
+    pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) !bool {
         self.positionMouseEventRemove();
 
         self.event_num += 1;
         try self.events.append(self.arena(), Event{
             .num = self.event_num,
-            .evt = .{ .text = try self._arena.allocator().dupe(u8, text) },
+            .evt = .{ .text = .{ .txt = try self._arena.allocator().dupe(u8, text), .selected = selected } },
             .focus_windowId = self.focused_subwindowId,
             .focus_widgetId = if (self.subwindows.items.len == 0) null else self.subwindowFocused().focused_widgetId,
         });

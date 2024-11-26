@@ -18,7 +18,7 @@ evt: union(enum) {
 
     // bubbleable
     key: Key,
-    text: []u8,
+    text: Text,
     close_popup: ClosePopup,
     scroll_drag: ScrollDrag,
     scroll_to: ScrollTo,
@@ -31,6 +31,11 @@ evt: union(enum) {
 pub fn bubbleable(self: *const Event) bool {
     return (!self.handled and (self.evt != .mouse));
 }
+
+pub const Text = struct {
+    txt: []u8,
+    selected: bool = false,
+};
 
 pub const Key = struct {
     code: enums.Key,
