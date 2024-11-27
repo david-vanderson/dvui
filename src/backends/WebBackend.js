@@ -109,8 +109,8 @@ function dvui(canvasId, wasmFile) {
         if (textInputRect.length == 0) {
             gl.canvas.focus();
         } else {
-	    hidden_input.style.left = textInputRect[0] + 'px';
-	    hidden_input.style.top = textInputRect[1] + 'px';
+	    hidden_input.style.left = (window.scrollX + canvasElem.getBoundingClientRect().left + textInputRect[0]) + 'px';
+	    hidden_input.style.top = (window.scrollY + canvasElem.getBoundingClientRect().top + textInputRect[1]) + 'px';
 	    hidden_input.style.width = textInputRect[2] + 'px';
 	    hidden_input.style.height = textInputRect[3] + 'px';
             hidden_input.focus();
@@ -430,9 +430,9 @@ function dvui(canvasId, wasmFile) {
         //div.style.height = 0;
         //div.style.overflow = "hidden";
         hidden_input = document.createElement("input");
-	hidden_input.style.position = "absolute";
-	hidden_input.style.left = 0;
-	hidden_input.style.top = 0;
+        hidden_input.style.position = "absolute";
+        hidden_input.style.left = (window.scrollX + canvas.getBoundingClientRect().left) + "px";
+        hidden_input.style.top = (window.scrollY + canvas.getBoundingClientRect().top) + "px";
         div.appendChild(hidden_input);
         document.body.prepend(div);
 
