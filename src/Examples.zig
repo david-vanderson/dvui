@@ -835,7 +835,7 @@ pub fn basicWidgets() !void {
             icon_image_size_extra = @max(0, icon_image_size_extra - 1);
         }
 
-        if (try dvui.buttonIcon(@src(), "cc", entypo.cc, .{}, .{ .gravity_y = 0.5 })) {
+        if (try dvui.buttonIcon(@src(), "cw", entypo.cw, .{}, .{ .gravity_y = 0.5 })) {
             icon_image_rotation = icon_image_rotation + 5 * std.math.pi / 180.0;
         }
 
