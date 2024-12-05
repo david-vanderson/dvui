@@ -12,7 +12,11 @@ update web-test and publish
 redo screenshot
 
 
-menus don't show on top of other subwindows
+need to copy back out pixels from render targets to normal textures
+
+
+make simple plot with option to save the image
+- save to file on desktop, save to dataurl on web?
 
 
 tooltips
@@ -24,25 +28,10 @@ alignment widget adds margin, but maybe should add a spacer instead?
 - see if that makes the Text Entry example settle better
 
 
-clean up refresh tracking
+overhaul path construction so we don't maintain an implicit path
 
-
-Consolidate TextureCacheEntry stuff
-- outside code should be able to use it
 
 make textureCreate* properly return errors
-
-Dialog autosize should use refresh tracking
-
-overhaul path construction so we con't maintain an implicit path
-
-
-record/replay render commands
-- make CacheWidget do it by recording the commands and replaying them if there was no refresh
-
-doc comments for recordRenderCommands
-- what function do you use to target a texture?
-- what function do you use to export a texture as pixel data?
 
 
 can we save rendering commands and render to a texture we can get back?
@@ -83,12 +72,6 @@ can we save rendering commands and render to a texture we can get back?
 should do tabIndexSet if the element has size, so even if it's scrolled off the screen we still go to it
 - when we do tabIndexNext/Prev it should focus that element and then also send a scroll_to message from that widget - how?
 
-Is there a way to turn off tab indexing for stuff inside DemoButton?
-- also turn off focus?
-
-
-does it help web-test size to leave out some fonts and icons?
-
 
 scrollContainer:
 - doesn't do multiple widgets going horizontally
@@ -111,11 +94,6 @@ add Options.id_override to forcefully set the id
 - use in reroder so things don't reset when they get dragged/dropped
 - search for all uses of extendId
 
-
-add event handling demo
-- use stroke test as a starting point and redo it
-- show how to get mouse events?
-- show how to alter keyboard events for textEntry?
 
 
 textLayout:
@@ -145,8 +123,6 @@ touch dragging should probably not work when the size of the stuff inside the sc
 
 README needs a section on themes
 - and how the new fields interact
-
-web-test: need to enlarge all the fonts, not just adwaita?
 
 maybe toasts subwindow need some kind of outline?
 

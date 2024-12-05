@@ -44,6 +44,7 @@ pub const wasm = struct {
     pub extern fn wasm_frame_buffer() u8;
     pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32, interp: u8) u32;
     pub extern fn wasm_textureCreateTarget(width: u32, height: u32, interp: u8) u32;
+    pub extern fn wasm_textureRead(texture: u32, pixels_out: [*]u8, width: u32, height: u32) void;
     pub extern fn wasm_renderTarget(u32) void;
     pub extern fn wasm_textureDestroy(u32) void;
     pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, clip: u8, x: i32, y: i32, w: i32, h: i32) void;
@@ -530,6 +531,10 @@ pub fn renderTarget(self: *WebBackend, texture: ?*anyopaque) void {
     } else {
         wasm.wasm_renderTarget(0);
     }
+}
+
+pub fn textureRead(_: *WebBackend, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) error{TextureRead}!void {
+    wasm.wasm_textureRead(@as(u32, @intFromPtr(texture)), pixels_out, width, height);
 }
 
 pub fn textureDestroy(_: *WebBackend, texture: *anyopaque) void {

@@ -378,6 +378,23 @@ pub fn renderTarget(self: *RaylibBackend, texture: ?*anyopaque) void {
     }
 }
 
+pub fn textureRead(_: *RaylibBackend, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) error{TextureRead}!void {
+    var t: c.Texture2D = undefined;
+    t.id = @intCast(@intFromPtr(texture));
+    t.width = @intCast(width);
+    t.height = @intCast(height);
+    t.mipmaps = 1;
+    t.format = c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
+
+    const img = c.LoadImageFromTexture(t);
+    defer c.UnloadImage(img);
+
+    const imgData: [*]u8 = @ptrCast(img.data.?);
+    for (0..width * height * 4) |i| {
+        pixels_out[i] = imgData[i];
+    }
+}
+
 pub fn textureDestroy(self: *RaylibBackend, texture: *anyopaque) void {
     const texid = @intFromPtr(texture);
     c.rlUnloadTexture(@intCast(texid));

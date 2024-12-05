@@ -247,6 +247,17 @@ function dvui(canvasId, wasmFile) {
 
 	    return id;
 	},
+        wasm_textureRead(textureId, pixels_out, width, height) {
+            const texture = textures.get(textureId)[0];
+
+	    gl.bindFramebuffer(gl.FRAMEBUFFER, frame_buffer);
+	    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+
+	    var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, pixels_out, width * height * 4);
+	    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, dest, 0);
+	
+	    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+	},
 	wasm_renderTarget(id) {
 	    if (id === 0) {
 		using_fb = false;

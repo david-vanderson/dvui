@@ -55,6 +55,9 @@ const VTableTypes = struct {
     /// returned pointer is what will later be passed to drawClippedTriangles.
     pub const textureCreateTarget = *const fn (ctx: Context, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!*anyopaque;
 
+    /// Read pixel data (RGBA) from texture into pixel.
+    pub const textureRead = *const fn (ctx: Context, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) error{TextureRead}!void;
+
     /// Destroy texture that was previously made with textureCreate() or
     /// textureCreateTarget().  After this call, this texture pointer will not
     /// be used by dvui.
@@ -93,6 +96,7 @@ pub const VTable = struct {
     drawClippedTriangles: I.drawClippedTriangles,
     textureCreate: I.textureCreate,
     textureCreateTarget: I.textureCreateTarget,
+    textureRead: I.textureRead,
     textureDestroy: I.textureDestroy,
     renderTarget: I.renderTarget,
     clipboardText: I.clipboardText,
@@ -164,6 +168,9 @@ pub fn textureCreate(self: *Backend, pixels: [*]u8, width: u32, height: u32, int
 }
 pub fn textureCreateTarget(self: *Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
     return try self.vtable.textureCreateTarget(self.ctx, width, height, interpolation);
+}
+pub fn textureRead(self: *Backend, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) !void {
+    return try self.vtable.textureRead(self.ctx, texture, pixels_out, width, height);
 }
 pub fn textureDestroy(self: *Backend, texture: *anyopaque) void {
     return self.vtable.textureDestroy(self.ctx, texture);
