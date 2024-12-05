@@ -541,7 +541,7 @@ pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, wi
     //std.debug.print("renderer name {s} formats:\n", .{info.name});
     for (0..info.num_texture_formats) |i| {
         //std.debug.print("  {s}\n", .{c.SDL_GetPixelFormatName(info.texture_formats[i])});
-        if (i == c.SDL_PIXELFORMAT_ABGR8888) {
+        if (info.texture_formats[i] == c.SDL_PIXELFORMAT_ABGR8888) {
             swap_rb = false;
         }
     }
