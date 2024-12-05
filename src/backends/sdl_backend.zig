@@ -531,6 +531,7 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
 }
 
 pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) error{TextureRead}!void {
+    _ = height;
     const orig_target = c.SDL_GetRenderTarget(self.renderer);
 
     _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(texture));
@@ -539,8 +540,15 @@ pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, wi
     var w: c_int = undefined;
     var h: c_int = undefined;
     _ = c.SDL_QueryTexture(@ptrCast(texture), &format, &access, &w, &h);
-    //std.debug.print("query texture: {s} {d} {d} {d} width {d}\n", .{c.SDL_GetPixelFormatName(format), access, w, h, width});
+    std.debug.print("query texture: {s} {d} {d} {d} width {d}\n", .{c.SDL_GetPixelFormatName(format), access, w, h, width});
     _ = c.SDL_RenderReadPixels(self.renderer, null, 0, pixels_out, @intCast(width * 4));
+
+    var info: c.SDL_RendererInfo = undefined;
+    _ = c.SDL_GetRendererInfo( self.renderer, &info );
+    //std.debug.print("renderer name {s} formats:\n", .{info.name});
+    //for (0..info.num_texture_formats) |i| {
+    //    std.debug.print("  {s}\n", .{c.SDL_GetPixelFormatName(info.texture_formats[i])});
+    //}
 
     //for (0..width * height) |i| {
     //    const r = pixels_out[i * 4 + 0];
