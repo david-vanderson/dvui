@@ -530,12 +530,30 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
     return texture;
 }
 
-pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, width: u32, _: u32) error{TextureRead}!void {
+pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) error{TextureRead}!void {
     const orig_target = c.SDL_GetRenderTarget(self.renderer);
-    defer _ = c.SDL_SetRenderTarget(self.renderer, orig_target);
 
     _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(texture));
+    var format: u32 = undefined;
+    var access: c_int = undefined;
+    var w: c_int = undefined;
+    var h: c_int = undefined;
+    _ = c.SDL_QueryTexture(@ptrCast(texture), &format, &access, &w, &h);
+    //std.debug.print("query texture: {s} {d} {d} {d} width {d}\n", .{c.SDL_GetPixelFormatName(format), access, w, h, width});
     _ = c.SDL_RenderReadPixels(self.renderer, null, 0, pixels_out, @intCast(width * 4));
+
+    //for (0..width * height) |i| {
+    //    const r = pixels_out[i * 4 + 0];
+    //    const g = pixels_out[i * 4 + 1];
+    //    const b = pixels_out[i * 4 + 2];
+    //    pixels_out[i * 4 + 0] = b;
+    //    pixels_out[i * 4 + 1] = g;
+    //    pixels_out[i * 4 + 2] = r;
+    //}
+
+    //_ = c.SDL_ConvertPixels(@intCast(width), @intCast(height), format, pixels_out, @intCast(width * 4), c.SDL_PIXELFORMAT_ARGB8888, pixels_out, @intCast(width * 4));
+    
+    _ = c.SDL_SetRenderTarget(self.renderer, orig_target);
 }
 
 pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
