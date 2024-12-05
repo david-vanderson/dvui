@@ -6710,6 +6710,13 @@ pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.Texture
     return try currentWindow().backend.textureCreateTarget(width, height, interpolation);
 }
 
+/// Read pixels from texture created with textureCreateTarget().
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn textureRead(texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) !void {
+    try currentWindow().backend.textureRead(texture, pixels_out, width, height);
+}
+
 /// Destroy a texture created with textureCreate() or textureCreateTarget() at
 /// the end of the frame.
 ///

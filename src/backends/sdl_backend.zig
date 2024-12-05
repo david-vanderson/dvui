@@ -530,6 +530,14 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
     return texture;
 }
 
+pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, width: u32, _: u32) error{TextureRead}!void {
+    const orig_target = c.SDL_GetRenderTarget(self.renderer);
+    defer _ = c.SDL_SetRenderTarget(self.renderer, orig_target);
+
+    _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(texture));
+    _ = c.SDL_RenderReadPixels(self.renderer, null, 0, pixels_out, @intCast(width * 4));
+}
+
 pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
     c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(texture)));
 }

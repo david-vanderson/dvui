@@ -35,17 +35,17 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-fn tce(self: *CacheWidget) ?dvui.TextureCacheEntry {
+fn tce(self: *CacheWidget) ?*dvui.TextureCacheEntry {
     const cw = dvui.currentWindow();
     if (cw.texture_cache.getPtr(self.hash)) |t| {
         t.used = true;
-        return t.*;
+        return t;
     }
 
     return null;
 }
 
-fn drawTce(self: *CacheWidget, t: dvui.TextureCacheEntry) !void {
+fn drawTce(self: *CacheWidget, t: *dvui.TextureCacheEntry) !void {
     const rs = self.wd.contentRectScale();
 
     try dvui.renderTexture(t.texture, rs, .{ .uv = (Rect{}).toSize(self.tex_uv), .debug = self.wd.options.debugGet() });
@@ -164,10 +164,23 @@ pub fn deinit(self: *CacheWidget) void {
     }
     if (self.caching) {
         _ = dvui.renderTarget(self.old_target);
+
         if (self.tce()) |t| {
-            // successful cache, draw texture
+            // successful cache, copy pixels to regular texture and draw
+
+            const size: usize = @intFromFloat(t.size.w * t.size.h * 4);
+            const px = dvui.currentWindow().arena().alloc(u8, size) catch null;
+            if (px) |pixels| {
+                defer dvui.currentWindow().arena().free(pixels);
+                dvui.textureRead(t.texture, pixels.ptr, @intFromFloat(t.size.w), @intFromFloat(t.size.h)) catch unreachable;
+
+                dvui.textureDestroyLater(t.texture);
+                t.texture = dvui.textureCreate(pixels.ptr, @intFromFloat(t.size.w), @intFromFloat(t.size.h), .linear);
+            }
+
             dvui.dataSet(null, self.wd.id, "_tex_uv", self.tex_uv);
             dvui.dataRemove(null, self.wd.id, "_cache_now");
+
             self.drawTce(t) catch {
                 dvui.log.debug("{x} CacheWidget.deinit failed to render texture\n", .{self.wd.id});
             };
