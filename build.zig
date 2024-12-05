@@ -162,6 +162,7 @@ fn addDvuiModule(
     if (target.result.os.tag == .windows) {
         // tinyfiledialogs needs this
         dvui_mod.linkSystemLibrary("comdlg32", .{});
+        dvui_mod.linkSystemLibrary("ole32", .{});
     }
 
     const options = b.addOptions();

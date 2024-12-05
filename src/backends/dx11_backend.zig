@@ -635,6 +635,16 @@ pub fn textureCreateTarget(self: *Dx11Backend, width: u32, height: u32, interpol
     return error.TextureCreate;
 }
 
+pub fn textureRead(self: *Dx11Backend, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) error{TextureRead}!void {
+    _ = self;
+    _ = texture;
+    _ = pixels_out;
+    _ = width;
+    _ = height;
+    dvui.log.debug("dx11 textureRead unimplemented", .{});
+    return error.TextureRead;
+}
+
 pub fn textureDestroy(self: *Dx11Backend, texture: *anyopaque) void {
     _ = self;
     const tex: *dx.ID3D11Texture2D = @ptrCast(@alignCast(texture));
