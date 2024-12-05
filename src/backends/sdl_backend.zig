@@ -531,37 +531,42 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
 }
 
 pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) error{TextureRead}!void {
-    _ = height;
-    const orig_target = c.SDL_GetRenderTarget(self.renderer);
 
-    _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(texture));
-    var format: u32 = undefined;
-    var access: c_int = undefined;
-    var w: c_int = undefined;
-    var h: c_int = undefined;
-    _ = c.SDL_QueryTexture(@ptrCast(texture), &format, &access, &w, &h);
-    std.debug.print("query texture: {s} {d} {d} {d} width {d}\n", .{c.SDL_GetPixelFormatName(format), access, w, h, width});
-    _ = c.SDL_RenderReadPixels(self.renderer, null, 0, pixels_out, @intCast(width * 4));
-
+    // If SDL picks directX11 as a rendering backend, it could not support
+    // SDL_PIXELFORMAT_ABGR8888 so this works around that.  For some reason sdl
+    // crashes if we ask it to do the conversion for us.
+    var swap_rb = true;
     var info: c.SDL_RendererInfo = undefined;
     _ = c.SDL_GetRendererInfo( self.renderer, &info );
     //std.debug.print("renderer name {s} formats:\n", .{info.name});
-    //for (0..info.num_texture_formats) |i| {
-    //    std.debug.print("  {s}\n", .{c.SDL_GetPixelFormatName(info.texture_formats[i])});
-    //}
+    for (0..info.num_texture_formats) |i| {
+        //std.debug.print("  {s}\n", .{c.SDL_GetPixelFormatName(info.texture_formats[i])});
+        if (i == c.SDL_PIXELFORMAT_ABGR8888) {
+            swap_rb = false;
+        }
+    }
 
-    //for (0..width * height) |i| {
-    //    const r = pixels_out[i * 4 + 0];
-    //    const g = pixels_out[i * 4 + 1];
-    //    const b = pixels_out[i * 4 + 2];
-    //    pixels_out[i * 4 + 0] = b;
-    //    pixels_out[i * 4 + 1] = g;
-    //    pixels_out[i * 4 + 2] = r;
-    //}
+    //var format: u32 = undefined;
+    //var access: c_int = undefined;
+    //var w: c_int = undefined;
+    //var h: c_int = undefined;
+    //_ = c.SDL_QueryTexture(@ptrCast(texture), &format, &access, &w, &h);
+    //std.debug.print("query texture: {s} {d} {d} {d} width {d}\n", .{c.SDL_GetPixelFormatName(format), access, w, h, width});
 
-    //_ = c.SDL_ConvertPixels(@intCast(width), @intCast(height), format, pixels_out, @intCast(width * 4), c.SDL_PIXELFORMAT_ARGB8888, pixels_out, @intCast(width * 4));
-    
-    _ = c.SDL_SetRenderTarget(self.renderer, orig_target);
+    const orig_target = c.SDL_GetRenderTarget(self.renderer);
+    _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(texture));
+    defer _ = c.SDL_SetRenderTarget(self.renderer, orig_target);
+
+    _ = c.SDL_RenderReadPixels(self.renderer, null, if (swap_rb) c.SDL_PIXELFORMAT_ARGB8888 else c.SDL_PIXELFORMAT_ABGR8888, pixels_out, @intCast(width * 4));
+
+    if (swap_rb) {
+        for (0..width * height) |i| {
+            const r = pixels_out[i * 4 + 0];
+            const b = pixels_out[i * 4 + 2];
+            pixels_out[i * 4 + 0] = b;
+            pixels_out[i * 4 + 2] = r;
+        }
+    }
 }
 
 pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
