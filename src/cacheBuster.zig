@@ -33,7 +33,7 @@ pub fn main() !void {
     const needle = "TEMPLATE_HASH_WITH_PADDING__ITS_64_BYTES_LONG_THE_SAME_AS_SHA256";
     var pos: usize = 0;
     while (std.mem.indexOfPos(u8, template_bytes, pos, needle)) |idx| {
-        pos += idx + needle.len;
+        pos = idx + needle.len;
         _ = try std.fmt.bufPrint(template_bytes[idx..][0..needle.len], "{s}", .{std.fmt.fmtSliceHexLower(&hash)});
     }
 
