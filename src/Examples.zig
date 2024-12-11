@@ -714,9 +714,6 @@ pub fn basicWidgets(demo_win_id: u32) !void {
 
 
         {
-            var vbox = try dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
-            defer vbox.deinit();
-
             var bw = ButtonWidget.init(@src(), .{}, .{ .gravity_y = 0.5 });
             defer bw.deinit();
             try bw.install();
