@@ -5533,7 +5533,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     const click = bw.clicked();
     var options = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-    if (captured(bw.wd.id)) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
+    if (bw.pressed()) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
 
     // this child widget:
     // - has bw as parent
@@ -6188,7 +6188,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     const rs = s.borderRectScale();
 
     if (bw.wd.visible()) {
-        try checkmark(target.*, bw.focused(), rs, bw.capture(), bw.hovered(), options);
+        try checkmark(target.*, bw.focused(), rs, bw.pressed(), bw.hovered(), options);
     }
 
     if (label_str) |str| {
@@ -6274,7 +6274,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     const rs = s.borderRectScale();
 
     if (bw.wd.visible()) {
-        try radioCircle(active, bw.focused(), rs, bw.capture(), bw.hovered(), options);
+        try radioCircle(active, bw.focused(), rs, bw.pressed(), bw.hovered(), options);
     }
 
     if (label_str) |str| {
