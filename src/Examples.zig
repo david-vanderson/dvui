@@ -21,6 +21,7 @@ const enums = dvui.enums;
 const zig_favicon = @embedFile("zig-favicon.png");
 
 pub var show_demo_window: bool = false;
+var checkbox_gray: bool = true;
 var checkbox_bool: bool = false;
 const RadioChoice = enum(u8) {
     one = 1,
@@ -712,27 +713,38 @@ pub fn basicWidgets(demo_win_id: u32) !void {
         _ = try dvui.button(@src(), "Button", .{}, .{ .gravity_y = 0.5 });
         _ = try dvui.button(@src(), "Multi-line\nButton", .{}, .{});
 
-
         {
-            var bw = ButtonWidget.init(@src(), .{}, .{ .gravity_y = 0.5 });
-            defer bw.deinit();
-            try bw.install();
-            bw.processEvents();
-            try bw.drawBackground();
-            try bw.drawFocus();
+            var vbox = try dvui.box(@src(), .vertical, .{});
+            defer vbox.deinit();
 
-            const opts = bw.data().options.strip().override(.{ .gravity_y = 0.5, .color_text = .{ .name = .fill_press } });
+            {
+                var color: ?dvui.Options.ColorOrName = null;
+                if (checkbox_gray) {
+                    // blend text and control colors
+                    color = .{ .color = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control) };
+                }
+                var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .gravity_y = 0.5, .color_text = color });
+                defer bw.deinit();
+                try bw.install();
+                bw.processEvents();
+                try bw.drawBackground();
+                try bw.drawFocus();
 
-            var bbox = try dvui.box(@src(), .horizontal, opts);
-            defer bbox.deinit();
+                const opts = bw.data().options.strip().override(.{ .gravity_y = 0.5 });
 
-            try dvui.icon(@src(), "cycle", entypo.cycle, opts);
-            _ = try dvui.spacer(@src(), .{ .w = 4 }, .{});
-            try dvui.labelNoFmt(@src(), "Icon+Gray", opts);
+                var bbox = try dvui.box(@src(), .horizontal, opts);
+                defer bbox.deinit();
 
-            if (bw.clicked()) {
-                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "This button is grayed out\nbut still clickable." });
+                try dvui.icon(@src(), "cycle", entypo.cycle, opts);
+                _ = try dvui.spacer(@src(), .{ .w = 4 }, .{});
+                try dvui.labelNoFmt(@src(), "Icon+Gray", opts);
+
+                if (bw.clicked()) {
+                    try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "This button is grayed out\nbut still clickable." });
+                }
             }
+
+            _ = try dvui.checkbox(@src(), &checkbox_gray, "Gray", .{});
         }
     }
 

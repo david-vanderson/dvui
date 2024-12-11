@@ -110,6 +110,16 @@ pub fn format(self: *const Color, comptime _: []const u8, _: std.fmt.FormatOptio
 pub const white = Color{ .r = 0xff, .g = 0xff, .b = 0xff };
 pub const black = Color{ .r = 0x00, .g = 0x00, .b = 0x00 };
 
+/// Average two colors component-wise
+pub fn average(self: Color, other: Color) Color {
+    return Color{
+        .r = @intCast((@as(u9, @intCast(self.r)) + other.r) / 2),
+        .g = @intCast((@as(u9, @intCast(self.g)) + other.g) / 2),
+        .b = @intCast((@as(u9, @intCast(self.b)) + other.b) / 2),
+        .a = @intCast((@as(u9, @intCast(self.a)) + other.a) / 2),
+    };
+}
+
 const clamp = std.math.clamp;
 
 const FieldEnum = std.meta.FieldEnum(@This());
