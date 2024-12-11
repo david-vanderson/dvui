@@ -313,7 +313,7 @@ pub const demoKind = enum {
             .layout => "Layout",
             .text_layout => "Text Layout",
             .reorderable => "Reorderable",
-            .menus => "Menus",
+            .menus => "Menus / Tabs",
             .focus => "Focus",
             .scrolling => "Scrolling",
             .scroll_canvas => "Scroll Canvas",
@@ -1760,6 +1760,81 @@ pub fn menus() !void {
     }
 
     try dvui.labelNoFmt(@src(), "Right click for a context menu", .{});
+
+    _ = try dvui.spacer(@src(), .{ .h = 20 }, .{});
+
+    {
+        const Data = struct {
+            var tab: usize = 0;
+            var layout: dvui.enums.Direction = .vertical;
+        };
+
+        {
+            var hbox = try dvui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
+
+            const entries = [_][]const u8{ "Horizontal", "Vertical" };
+            for (0..2) |i| {
+                if (try dvui.radio(@src(), @intFromEnum(Data.layout) == i, entries[i], .{ .id_extra = i })) {
+                    Data.layout = @enumFromInt(i);
+                }
+            }
+        }
+
+        // reverse orientation because horizontal tabs go above content
+        var tbox = try dvui.box(@src(), if (Data.layout == .vertical) .horizontal else .vertical, .{ .max_size_content = .{ .w = 400, .h = 200 } });
+        defer tbox.deinit();
+
+        {
+            var tabs = dvui.TabsWidget.init(@src(), .{ .dir = Data.layout }, .{ .expand = if (Data.layout == .horizontal) .horizontal else .vertical });
+            try tabs.install();
+            defer tabs.deinit();
+
+            inline for (0..8) |i| {
+                const tabname = std.fmt.comptimePrint("Tab {d}", .{i});
+                if (i != 3) {
+                    // easy label only
+                    if (try tabs.addTabLabel(Data.tab == i, tabname)) {
+                        Data.tab = i;
+                    }
+                } else {
+                    // directly put whatever in the tab
+                    var tab = try tabs.addTab(Data.tab == i, .{});
+                    defer tab.deinit();
+
+                    var tab_box = try dvui.box(@src(), .horizontal, .{});
+                    defer tab_box.deinit();
+
+                    try dvui.icon(@src(), "cycle", entypo.cycle, .{});
+
+                    _ = try dvui.spacer(@src(), .{ .w = 4 }, .{});
+
+                    var label_opts = tab.data().options.strip();
+                    if (dvui.captured(tab.data().id)) {
+                        label_opts.color_text = .{ .name = .text_press };
+                    }
+
+                    try dvui.labelNoFmt(@src(), tabname, label_opts);
+
+                    if (tab.clicked()) {
+                        Data.tab = i;
+                    }
+                }
+            }
+        }
+
+        {
+            var border = dvui.Rect.all(1);
+            switch (Data.layout) {
+                .horizontal => border.y = 0,
+                .vertical => border.x = 0,
+            }
+            var vbox3 = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window }, .border = border });
+            defer vbox3.deinit();
+
+            try dvui.label(@src(), "This is tab {d}", .{Data.tab}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
+        }
+    }
 }
 
 pub fn submenus() !void {
