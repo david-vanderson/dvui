@@ -65,6 +65,10 @@ pub fn install(self: *ScrollAreaWidget) !void {
     } else if (dvui.dataGet(null, self.hbox.data().id, "_scroll_info", ScrollInfo)) |si| {
         self.si_store = si;
         self.si = &self.si_store; // can't take pointer to self in init, so we do it in install
+
+        // outside code might have changed what direction we scroll in
+        self.si.vertical = self.init_opts.vertical orelse .auto;
+        self.si.horizontal = self.init_opts.horizontal orelse .none;
     } else {
         self.si = &self.si_store; // can't take pointer to self in init, so we do it in install
         self.si.vertical = self.init_opts.vertical orelse .auto;
