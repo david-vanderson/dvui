@@ -87,7 +87,7 @@ pub fn hovered(self: *ButtonWidget) bool {
     return self.hover;
 }
 
-pub fn capture(self: *ButtonWidget) bool {
+pub fn pressed(self: *ButtonWidget) bool {
     return dvui.captured(self.wd.id);
 }
 
