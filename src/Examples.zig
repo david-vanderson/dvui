@@ -451,7 +451,7 @@ pub fn demo() !void {
                 defer box2.deinit();
 
                 switch (e) {
-                    .basic_widgets => try basicWidgets(),
+                    .basic_widgets => try basicWidgets(float.data().id),
                     .calculator => try calculator(),
                     .text_entry => try textEntryWidgets(),
                     .styling => try styling(),
@@ -502,7 +502,7 @@ pub fn demo() !void {
         defer vbox.deinit();
 
         try switch (demo_active) {
-            .basic_widgets => basicWidgets(),
+            .basic_widgets => basicWidgets(float.data().id),
             .calculator => calculator(),
             .text_entry => textEntryWidgets(),
             .styling => styling(),
@@ -702,7 +702,7 @@ pub fn themeSerialization() !void {
     try dvui.labelNoFmt(@src(), "TODO: demonstrate loading a quicktheme here", .{});
 }
 
-pub fn basicWidgets() !void {
+pub fn basicWidgets(demo_win_id: u32) !void {
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -711,6 +711,32 @@ pub fn basicWidgets() !void {
         try dvui.label(@src(), "Multi-line\nLabel", .{}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
         _ = try dvui.button(@src(), "Button", .{}, .{ .gravity_y = 0.5 });
         _ = try dvui.button(@src(), "Multi-line\nButton", .{}, .{});
+
+
+        {
+            var vbox = try dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
+            defer vbox.deinit();
+
+            var bw = ButtonWidget.init(@src(), .{}, .{ .gravity_y = 0.5 });
+            defer bw.deinit();
+            try bw.install();
+            bw.processEvents();
+            try bw.drawBackground();
+            try bw.drawFocus();
+
+            const opts = bw.data().options.strip().override(.{ .gravity_y = 0.5, .color_text = .{ .name = .fill_press } });
+
+            var bbox = try dvui.box(@src(), .horizontal, opts);
+            defer bbox.deinit();
+
+            try dvui.icon(@src(), "cycle", entypo.cycle, opts);
+            _ = try dvui.spacer(@src(), .{ .w = 4 }, .{});
+            try dvui.labelNoFmt(@src(), "Icon+Gray", opts);
+
+            if (bw.clicked()) {
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "This button is grayed out\nbut still clickable." });
+            }
+        }
     }
 
     {
