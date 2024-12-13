@@ -1553,6 +1553,14 @@ pub fn reorderListsSimple(lay: reorderLayout) !void {
     var removed_idx: ?usize = null;
     var insert_before_idx: ?usize = null;
 
+    var scroll: ?*dvui.ScrollAreaWidget = null;
+    if (lay == .horizontal) {
+        scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{ });
+    }
+    defer {
+        if (scroll) |sc| sc.deinit();
+    }
+
     // reorder widget must wrap entire list
     var reorder = try dvui.reorder(@src(), .{ .min_size_content = .{ .w = 120 }, .background = true, .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4) });
     defer reorder.deinit();
@@ -1573,7 +1581,7 @@ pub fn reorderListsSimple(lay: reorderLayout) !void {
     for (g.strings[0..g.strings.len], 0..) |s, i| {
 
         // make a reorderable for each entry in the list
-        var reorderable = try reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal });
+        var reorderable = try reorder.reorderable(@src(), .{}, .{ .id_extra = i, .expand = .horizontal, .min_size_content = dvui.Options.sizeM(8, 1) });
         defer reorderable.deinit();
 
         if (reorderable.removed()) {
