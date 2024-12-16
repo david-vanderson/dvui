@@ -1211,7 +1211,6 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
         if (newline or txt.len > 0) {
             self.insert_pt.y += self.current_line_height;
             self.insert_pt.x = 0;
-            self.first_byte_in_line = self.bytes_seen;
             self.current_line_height = line_height;
 
             if (newline) {
@@ -1222,6 +1221,8 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             } else if (txt.len > 0) {
                 self.lineBreak();
             }
+
+            self.first_byte_in_line = self.bytes_seen;
         }
 
         if (newline and (self.selection.start == self.bytes_seen)) {
