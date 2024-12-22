@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const dvui = @import("dvui");
 comptime {
     std.debug.assert(dvui.backend_kind == .sdl);
@@ -10,20 +11,27 @@ const window_icon_png = @embedFile("zig-favicon.png");
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
-const vsync = true;
-const show_demo = false;
+const vsync = false;
+const show_demo = true;
 var scale_val: f32 = 1.0;
 
 var show_dialog_outside_frame: bool = false;
 var g_backend: ?Backend = null;
+var g_win: ?*dvui.Window = null;
 
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application
 /// - render frames only when needed
+///
 pub fn main() !void {
+    if (@import("builtin").os.tag == .windows) { // optional
+        // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
+        _ = winapi.AttachConsole(0xFFFFFFFF);
+    }
+
     dvui.Examples.show_demo_window = show_demo;
 
-    defer _ = gpa_instance.deinit();
+    defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
 
     // init SDL backend (creates and owns OS window)
     var backend = try Backend.initWindow(.{
@@ -181,21 +189,35 @@ fn gui_frame() !void {
 
         // rs.r is the pixel rectangle, rs.s is the scale factor (like for
         // hidpi screens or display scaling)
-        var rect: Backend.c.SDL_Rect = .{ .x = @intFromFloat(rs.r.x + 4 * rs.s), .y = @intFromFloat(rs.r.y + 4 * rs.s), .w = @intFromFloat(20 * rs.s), .h = @intFromFloat(20 * rs.s) };
+        var rect: if (Backend.sdl3) Backend.c.SDL_FRect else Backend.c.SDL_Rect = undefined;
+        if (Backend.sdl3) rect = .{
+            .x = (rs.r.x + 4 * rs.s),
+            .y = (rs.r.y + 4 * rs.s),
+            .w = (20 * rs.s),
+            .h = (20 * rs.s),
+        } else rect = .{
+            .x = @intFromFloat(rs.r.x + 4 * rs.s),
+            .y = @intFromFloat(rs.r.y + 4 * rs.s),
+            .w = @intFromFloat(20 * rs.s),
+            .h = @intFromFloat(20 * rs.s),
+        };
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
         _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
 
-        rect.x += @intFromFloat(24 * rs.s);
+        rect.x += if (Backend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 255, 0, 255);
         _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
 
-        rect.x += @intFromFloat(24 * rs.s);
+        rect.x += if (Backend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 255, 255);
         _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
 
         _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 255, 255);
 
-        _ = Backend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s));
+        if (Backend.sdl3)
+            _ = Backend.c.SDL_RenderLine(backend.renderer, (rs.r.x + 4 * rs.s), (rs.r.y + 30 * rs.s), (rs.r.x + rs.r.w - 8 * rs.s), (rs.r.y + 30 * rs.s))
+        else
+            _ = Backend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s));
     }
 
     if (try dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
@@ -205,3 +227,8 @@ fn gui_frame() !void {
     // look at demo() for examples of dvui widgets, shows in a floating window
     try dvui.Examples.demo();
 }
+
+// Optional: windows os only
+const winapi = if (builtin.os.tag == .windows) struct {
+    extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
+} else struct {};
