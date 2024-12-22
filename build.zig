@@ -230,6 +230,11 @@ fn addDvuiModule(
                         backend_mod.linkLibrary(sdl3.artifact("sdl3"));
                         backend_mod.addImport("sdl3_c", sdl3.module("sdl"));
                     }
+                } else if (b.systemIntegrationOption("sdl3", .{})) {
+                    // SDL3 from system
+                    sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
+                    sdl_options.addOption(bool, "from_system", true);
+                    backend_mod.linkSystemLibrary("SDL3", .{});
                 } else {
                     sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
                     if (target.result.os.tag == .linux) {

@@ -4,9 +4,18 @@ const dvui = @import("dvui");
 
 const sdl_options = @import("sdl_options");
 pub const sdl3 = sdl_options.version.major == 3;
-pub const c = if (sdl3) @import("sdl3_c") else @cImport({
-    @cInclude("SDL2/SDL.h");
-});
+pub const c = blk: {
+    if (sdl3) {
+        if (@hasDecl(sdl_options, "from_system") and sdl_options.from_system) {
+            break :blk @cImport({
+                @cInclude("SDL3/SDL.h");
+            });
+        } else break :blk @import("sdl3_c");
+    }
+    break :blk @cImport({
+        @cInclude("SDL2/SDL.h");
+    });
+};
 
 const SDLBackend = @This();
 pub const Context = *SDLBackend;
@@ -931,4 +940,23 @@ pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
             break :blk .unknown;
         },
     };
+}
+
+pub fn getSDLVersion() std.SemanticVersion {
+    if (sdl3) {
+        const v: u32 = @bitCast(c.SDL_GetVersion());
+        return .{
+            .major = @divTrunc(v, 1000000),
+            .minor = @mod(@divTrunc(v, 1000), 1000),
+            .patch = @mod(v, 1000),
+        };
+    } else {
+        var v: c.SDL_version = .{};
+        c.SDL_GetVersion(&v);
+        return .{
+            .major = @intCast(v.major),
+            .minor = @intCast(v.minor),
+            .patch = @intCast(v.patch),
+        };
+    }
 }
