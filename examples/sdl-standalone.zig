@@ -28,6 +28,7 @@ pub fn main() !void {
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         _ = winapi.AttachConsole(0xFFFFFFFF);
     }
+    std.log.info("SDL version: {}", .{Backend.getSDLVersion()});
 
     dvui.Examples.show_demo_window = show_demo;
 
