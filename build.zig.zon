@@ -8,6 +8,11 @@
             .hash = "1220fb0249c15493882350f135bc8b56c389a7f5131cc1b1a5208db472fa00e26b52",
             .lazy = true,
         },
+        .sdl3 = .{
+            .lazy = true,
+            .url = "https://github.com/swan-www/zig_sdl3/archive/refs/tags/3.1.6.tar.gz",
+            .hash = "12203db5d6acf22b69b929ee32194e6352ca9406f0192e7d72dbc2907a1df4e32d8c",
+        },
         .freetype = .{
             .url = "https://github.com/david-vanderson/freetype/archive/a62b6192d81952e64b8c16504427f3e28ef10e5f.tar.gz",
             .hash = "12203988c200e30d2fbc2678bb3e49eb3f117cc79faf8d228b63e54d8cdf278378e1",

@@ -1,11 +1,11 @@
-const sdl3 = false;
-
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
 
-pub const c = @cImport({
-    @cInclude(if (sdl3) "SDL3/SDL.h" else "SDL2/SDL.h");
+const sdl_options = @import("sdl_options");
+pub const sdl3 = sdl_options.version.major == 3;
+pub const c = if (sdl3) @import("sdl3_c") else @cImport({
+    @cInclude("SDL2/SDL.h");
 });
 
 const SDLBackend = @This();
@@ -40,12 +40,12 @@ pub const InitOptions = struct {
 };
 
 pub fn initWindow(options: InitOptions) !SDLBackend {
-    _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+    if (!sdl3) _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
     // use the string version instead of the #define so we compile with SDL < 2.24
     _ = c.SDL_SetHint("SDL_HINT_WINDOWS_DPI_SCALING", "1");
 
-    if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
+    if (c.SDL_Init(c.SDL_INIT_VIDEO) != if (sdl3) true else 0) {
         dvui.log.err("SDL: Couldn't initialize SDL: {s}", .{c.SDL_GetError()});
         return error.BackendError;
     }
@@ -65,7 +65,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
 
     var renderer: *c.SDL_Renderer = undefined;
     if (sdl3) {
-        renderer = c.SDL_CreateRenderer(window, null, @intCast(c.SDL_RENDERER_TARGETTEXTURE | (if (options.vsync) c.SDL_RENDERER_PRESENTVSYNC else 0))) orelse {
+        renderer = c.SDL_CreateRenderer(window, null) orelse {
             dvui.log.err("SDL: Failed to create renderer: {s}", .{c.SDL_GetError()});
             return error.BackendError;
         };
@@ -235,10 +235,14 @@ pub fn setIconFromFileContent(self: *SDLBackend, file_content: []const u8) void 
 }
 
 pub fn setIconFromABGR8888(self: *SDLBackend, data: [*]const u8, icon_w: c_int, icon_h: c_int) void {
-    const surface = c.SDL_CreateRGBSurfaceWithFormatFrom(@ptrCast(@constCast(data)), icon_w, icon_h, 32, 4 * icon_w, c.SDL_PIXELFORMAT_ABGR8888);
-    defer c.SDL_FreeSurface(surface);
+    const surface = if (sdl3)
+        c.SDL_CreateSurfaceFrom(icon_w, icon_h, c.SDL_PIXELFORMAT_ABGR8888, @ptrCast(@constCast(data)), 4 * icon_w)
+    else
+        c.SDL_CreateRGBSurfaceWithFormatFrom(@ptrCast(@constCast(data)), icon_w, icon_h, 32, 4 * icon_w, c.SDL_PIXELFORMAT_ABGR8888);
 
-    c.SDL_SetWindowIcon(self.window, surface);
+    defer if (sdl3) c.SDL_DestroySurface(surface) else c.SDL_FreeSurface(surface);
+
+    _ = c.SDL_SetWindowIcon(self.window, surface);
 }
 
 pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) void {
@@ -262,7 +266,7 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) void {
 pub fn refresh(self: *SDLBackend) void {
     _ = self;
     var ue = std.mem.zeroes(c.SDL_Event);
-    ue.type = c.SDL_USEREVENT;
+    ue.type = if (sdl3) c.SDL_EVENT_USER else c.SDL_USEREVENT;
     _ = c.SDL_PushEvent(&ue);
 }
 
@@ -272,13 +276,14 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
     //std.debug.print("bailing\n", .{});
     //}
     var event: c.SDL_Event = undefined;
-    while (c.SDL_PollEvent(&event) != 0) {
+    const poll_got_event = if (sdl3) true else 1;
+    while (c.SDL_PollEvent(&event) == poll_got_event) {
         _ = try self.addEvent(win, event);
         switch (event.type) {
             if (sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT => {
                 return true;
             },
-            // revisit with sdl3
+            // TODO: revisit with sdl3
             //c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
             //std.debug.print("sdl window scale changed event\n", .{});
             //},
@@ -301,18 +306,18 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
         if (!tried) {
             self.cursor_backing_tried[enum_int] = true;
             self.cursor_backing[enum_int] = switch (cursor) {
-                .arrow => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_ARROW),
-                .ibeam => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_IBEAM),
+                .arrow => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_DEFAULT else c.SDL_SYSTEM_CURSOR_ARROW),
+                .ibeam => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_TEXT else c.SDL_SYSTEM_CURSOR_IBEAM),
                 .wait => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_WAIT),
-                .wait_arrow => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_WAITARROW),
+                .wait_arrow => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_PROGRESS else c.SDL_SYSTEM_CURSOR_WAITARROW),
                 .crosshair => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_CROSSHAIR),
-                .arrow_nw_se => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENWSE),
-                .arrow_ne_sw => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENESW),
-                .arrow_w_e => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZEWE),
-                .arrow_n_s => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZENS),
-                .arrow_all => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_SIZEALL),
-                .bad => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_NO),
-                .hand => c.SDL_CreateSystemCursor(c.SDL_SYSTEM_CURSOR_HAND),
+                .arrow_nw_se => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_NWSE_RESIZE else c.SDL_SYSTEM_CURSOR_SIZENWSE),
+                .arrow_ne_sw => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_NESW_RESIZE else c.SDL_SYSTEM_CURSOR_SIZENESW),
+                .arrow_w_e => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_EW_RESIZE else c.SDL_SYSTEM_CURSOR_SIZEWE),
+                .arrow_n_s => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_NS_RESIZE else c.SDL_SYSTEM_CURSOR_SIZENS),
+                .arrow_all => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_MOVE else c.SDL_SYSTEM_CURSOR_SIZEALL),
+                .bad => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_NOT_ALLOWED else c.SDL_SYSTEM_CURSOR_NO),
+                .hand => c.SDL_CreateSystemCursor(if (sdl3) c.SDL_SYSTEM_CURSOR_POINTER else c.SDL_SYSTEM_CURSOR_HAND),
             };
         }
 
@@ -329,12 +334,14 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
 }
 
 pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect) void {
-    _ = self;
     if (rect) |r| {
-        c.SDL_SetTextInputRect(&c.SDL_Rect{ .x = @intFromFloat(r.x), .y = @intFromFloat(r.y), .w = @intFromFloat(r.w), .h = @intFromFloat(r.h) });
-        c.SDL_StartTextInput();
+        if (sdl3) {
+            const cursor = 0; // TODO: review what it does
+            _ = c.SDL_SetTextInputArea(self.window, &c.SDL_Rect{ .x = @intFromFloat(r.x), .y = @intFromFloat(r.y), .w = @intFromFloat(r.w), .h = @intFromFloat(r.h) }, cursor);
+        } else c.SDL_SetTextInputRect(&c.SDL_Rect{ .x = @intFromFloat(r.x), .y = @intFromFloat(r.y), .w = @intFromFloat(r.w), .h = @intFromFloat(r.h) });
+        _ = if (sdl3) c.SDL_StartTextInput(self.window) else c.SDL_StartTextInput();
     } else {
-        c.SDL_StopTextInput();
+        _ = if (sdl3) c.SDL_StopTextInput(self.window) else c.SDL_StopTextInput();
     }
 }
 
@@ -365,7 +372,7 @@ pub fn renderPresent(self: *SDLBackend) void {
 }
 
 pub fn hasEvent(_: *SDLBackend) bool {
-    return c.SDL_PollEvent(null) == 1;
+    return c.SDL_PollEvent(null) == if (sdl3) true else 1;
 }
 
 pub fn backend(self: *SDLBackend) dvui.Backend {
@@ -407,7 +414,7 @@ pub fn openURL(self: *SDLBackend, url: []const u8) !void {
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) void {
     self.arena = arena;
     const size = self.pixelSize();
-    _ = c.SDL_RenderSetClipRect(self.renderer, &c.SDL_Rect{ .x = 0, .y = 0, .w = @intFromFloat(size.w), .h = @intFromFloat(size.h) });
+    _ = if (sdl3) c.SDL_SetRenderClipRect(self.renderer, &c.SDL_Rect{ .x = 0, .y = 0, .w = @intFromFloat(size.w), .h = @intFromFloat(size.h) }) else c.SDL_RenderSetClipRect(self.renderer, &c.SDL_Rect{ .x = 0, .y = 0, .w = @intFromFloat(size.w), .h = @intFromFloat(size.h) });
 }
 
 pub fn end(_: *SDLBackend) void {}
@@ -464,9 +471,50 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?*anyopaque, vtx: []cons
         }
     }
 
-    const tex = @as(?*c.SDL_Texture, @ptrCast(texture));
+    const tex = @as(?*c.SDL_Texture, @ptrCast(@alignCast(texture)));
 
-    _ = c.SDL_RenderGeometryRaw(self.renderer, tex, @as(*const f32, @ptrCast(&vtx[0].pos)), @sizeOf(dvui.Vertex), @as(*const c.SDL_Color, @ptrCast(@alignCast(&vtx[0].col))), @sizeOf(dvui.Vertex), @as(*const f32, @ptrCast(&vtx[0].uv)), @sizeOf(dvui.Vertex), @as(c_int, @intCast(vtx.len)), idx.ptr, @as(c_int, @intCast(idx.len)), @sizeOf(u16));
+    if (sdl3) {
+        // not great, but seems sdl3 strictly accepts color only in floats
+        // TODO: review if better solution is possible
+        const vcols = self.arena.alloc(c.SDL_FColor, vtx.len) catch return;
+        defer self.arena.free(vcols);
+        for (vcols, 0..) |*col, i| {
+            col.r = @as(f32, @floatFromInt(vtx[i].col.r)) / 255.0;
+            col.g = @as(f32, @floatFromInt(vtx[i].col.g)) / 255.0;
+            col.b = @as(f32, @floatFromInt(vtx[i].col.b)) / 255.0;
+            col.a = @as(f32, @floatFromInt(vtx[i].col.a)) / 255.0;
+        }
+
+        _ = c.SDL_RenderGeometryRaw(
+            self.renderer,
+            tex,
+            @as(*const f32, @ptrCast(&vtx[0].pos)),
+            @sizeOf(dvui.Vertex),
+            vcols.ptr,
+            @sizeOf(c.SDL_FColor),
+            @as(*const f32, @ptrCast(&vtx[0].uv)),
+            @sizeOf(dvui.Vertex),
+            @as(c_int, @intCast(vtx.len)),
+            idx.ptr,
+            @as(c_int, @intCast(idx.len)),
+            @sizeOf(u16),
+        );
+    } else {
+        _ = c.SDL_RenderGeometryRaw(
+            self.renderer,
+            tex,
+            @as(*const f32, @ptrCast(&vtx[0].pos)),
+            @sizeOf(dvui.Vertex),
+            @as(*const c.SDL_Color, @ptrCast(@alignCast(&vtx[0].col))),
+            @sizeOf(dvui.Vertex),
+            @as(*const f32, @ptrCast(&vtx[0].uv)),
+            @sizeOf(dvui.Vertex),
+            @as(c_int, @intCast(vtx.len)),
+            idx.ptr,
+            @as(c_int, @intCast(idx.len)),
+            @sizeOf(u16),
+        );
+    }
 
     if (maybe_clipr) |_| {
         if (sdl3) {
@@ -478,14 +526,14 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?*anyopaque, vtx: []cons
 }
 
 pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {
-    switch (interpolation) {
+    if (!sdl3) switch (interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
         .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
-    }
+    };
 
     var surface: *c.SDL_Surface = undefined;
     if (sdl3) {
-        surface = c.SDL_CreateSurfaceFrom(pixels, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), @as(c_int, @intCast(4 * width)), c.SDL_PIXELFORMAT_ABGR8888);
+        surface = c.SDL_CreateSurfaceFrom(@as(c_int, @intCast(width)), @as(c_int, @intCast(height)), c.SDL_PIXELFORMAT_ABGR8888, pixels, @as(c_int, @intCast(4 * width)));
     } else {
         surface = c.SDL_CreateRGBSurfaceWithFormatFrom(pixels, @as(c_int, @intCast(width)), @as(c_int, @intCast(height)), 32, @as(c_int, @intCast(4 * width)), c.SDL_PIXELFORMAT_ABGR8888);
     }
@@ -504,10 +552,10 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32, 
 }
 
 pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
-    switch (interpolation) {
+    if (!sdl3) switch (interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
         .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
-    }
+    };
 
     const texture = c.SDL_CreateTexture(self.renderer, c.SDL_PIXELFORMAT_ABGR8888, c.SDL_TEXTUREACCESS_TARGET, @intCast(width), @intCast(height)) orelse unreachable;
     const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
@@ -531,13 +579,29 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
 }
 
 pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) error{TextureRead}!void {
+    if (SDLBackend.sdl3) {
+        const orig_target = c.SDL_GetRenderTarget(self.renderer);
+        _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture)));
+        defer _ = c.SDL_SetRenderTarget(self.renderer, orig_target);
 
+        var surface: *c.SDL_Surface = c.SDL_RenderReadPixels(self.renderer, null) orelse return error.TextureRead;
+        defer c.SDL_DestroySurface(surface);
+        if (width * height != surface.*.w * surface.*.h) return error.TextureRead;
+        // TODO: most common format is RGBA8888, doing conversion during copy to pixels_out should be faster
+        if (surface.*.format != c.SDL_PIXELFORMAT_ABGR8888) {
+            const s = surface;
+            defer c.SDL_DestroySurface(s);
+            surface = c.SDL_ConvertSurface(surface, c.SDL_PIXELFORMAT_ABGR8888) orelse return error.TextureRead;
+        }
+        @memcpy(pixels_out[0 .. width * height * 4], @as(?[*]u8, @ptrCast(surface.*.pixels)).?[0 .. width * height * 4]);
+        return;
+    }
     // If SDL picks directX11 as a rendering backend, it could not support
     // SDL_PIXELFORMAT_ABGR8888 so this works around that.  For some reason sdl
     // crashes if we ask it to do the conversion for us.
     var swap_rb = true;
     var info: c.SDL_RendererInfo = undefined;
-    _ = c.SDL_GetRendererInfo( self.renderer, &info );
+    _ = c.SDL_GetRendererInfo(self.renderer, &info);
     //std.debug.print("renderer name {s} formats:\n", .{info.name});
     for (0..info.num_texture_formats) |i| {
         //std.debug.print("  {s}\n", .{c.SDL_GetPixelFormatName(info.texture_formats[i])});
@@ -570,36 +634,39 @@ pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, wi
 }
 
 pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
-    c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(texture)));
+    c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture))));
 }
 
 pub fn renderTarget(self: *SDLBackend, texture: ?*anyopaque) void {
-    _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(texture));
+    _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture)));
 
     // by default sdl2 sets an empty clip, let's ensure it is the full texture/screen
-    _ = c.SDL_RenderSetClipRect(self.renderer, &c.SDL_Rect{ .x = 0, .y = 0, .w = std.math.maxInt(c_int), .h = std.math.maxInt(c_int) });
+    //_ = if (sdl3) c.SDL_SetRenderClipRect(self.renderer, &c.SDL_Rect{ .x = 0, .y = 0, .w = std.math.maxInt(c_int), .h = std.math.maxInt(c_int) }) else
+    if (!sdl3) _ = c.SDL_RenderSetClipRect(self.renderer, &c.SDL_Rect{ .x = 0, .y = 0, .w = std.math.maxInt(c_int), .h = std.math.maxInt(c_int) });
 }
 
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
     switch (event.type) {
         if (sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
-            const code = SDL_keysym_to_dvui(event.key.keysym.sym);
-            const mod = SDL_keymod_to_dvui(event.key.keysym.mod);
+            const sdl_key: i32 = if (sdl3) @intCast(event.key.key) else event.key.keysym.sym;
+            const code = SDL_keysym_to_dvui(@intCast(sdl_key));
+            const mod = SDL_keymod_to_dvui(if (sdl3) @intCast(event.key.mod) else event.key.keysym.mod);
             if (self.log_events) {
-                std.debug.print("sdl event KEYDOWN {d} {s} {b} {d}\n", .{ event.key.keysym.sym, @tagName(code), mod, event.key.repeat });
+                std.debug.print("sdl event KEYDOWN {} {s} {} {}\n", .{ sdl_key, @tagName(code), mod, event.key.repeat });
             }
 
             return try win.addEventKey(.{
                 .code = code,
-                .action = if (event.key.repeat > 0) .repeat else .down,
+                .action = if (if (sdl3) event.key.repeat else event.key.repeat != 0) .repeat else .down,
                 .mod = mod,
             });
         },
         if (sdl3) c.SDL_EVENT_KEY_UP else c.SDL_KEYUP => {
-            const code = SDL_keysym_to_dvui(event.key.keysym.sym);
-            const mod = SDL_keymod_to_dvui(event.key.keysym.mod);
+            const sdl_key: i32 = if (sdl3) @intCast(event.key.key) else event.key.keysym.sym;
+            const code = SDL_keysym_to_dvui(@intCast(sdl_key));
+            const mod = SDL_keymod_to_dvui(if (sdl3) @intCast(event.key.mod) else event.key.keysym.mod);
             if (self.log_events) {
-                std.debug.print("sdl event KEYUP {d} {s} {b}\n", .{ event.key.keysym.sym, @tagName(code), mod });
+                std.debug.print("sdl event KEYUP {} {s} {}\n", .{ sdl_key, @tagName(code), mod });
             }
 
             return try win.addEventKey(.{
@@ -609,7 +676,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             });
         },
         if (sdl3) c.SDL_EVENT_TEXT_INPUT else c.SDL_TEXTINPUT => {
-            const txt = std.mem.sliceTo(&event.text.text, 0);
+            const txt = std.mem.sliceTo(if (sdl3) event.text.text else &event.text.text, 0);
             if (self.log_events) {
                 std.debug.print("sdl event TEXTINPUT {s}\n", .{txt});
             }
@@ -688,23 +755,23 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
 
             return try win.addEventMouseWheel(ticks_adj);
         },
-        if (sdl3) c.SDL_FINGERDOWN else c.SDL_FINGERDOWN => {
+        if (sdl3) c.SDL_EVENT_FINGER_DOWN else c.SDL_FINGERDOWN => {
             if (self.log_events) {
-                std.debug.print("sdl event FINGERDOWN {d} {d} {d}\n", .{ event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
+                std.debug.print("sdl event FINGERDOWN {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
             }
 
             return try win.addEventPointer(.touch0, .press, .{ .x = event.tfinger.x, .y = event.tfinger.y });
         },
-        if (sdl3) c.SDL_FINGERUP else c.SDL_FINGERUP => {
+        if (sdl3) c.SDL_EVENT_FINGER_UP else c.SDL_FINGERUP => {
             if (self.log_events) {
-                std.debug.print("sdl event FINGERUP {d} {d} {d}\n", .{ event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
+                std.debug.print("sdl event FINGERUP {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
             }
 
             return try win.addEventPointer(.touch0, .release, .{ .x = event.tfinger.x, .y = event.tfinger.y });
         },
-        if (sdl3) c.SDL_FINGERMOTION else c.SDL_FINGERMOTION => {
+        if (sdl3) c.SDL_EVENT_FINGER_MOTION else c.SDL_FINGERMOTION => {
             if (self.log_events) {
-                std.debug.print("sdl event FINGERMOTION {d} {d} {d} {d} {d}\n", .{ event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy });
+                std.debug.print("sdl event FINGERMOTION {d} {d} {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy });
             }
 
             return try win.addEventTouchMotion(.touch0, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy);
@@ -750,32 +817,32 @@ pub fn SDL_keymod_to_dvui(keymod: u16) dvui.enums.Mod {
 
 pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
     return switch (keysym) {
-        c.SDLK_a => .a,
-        c.SDLK_b => .b,
-        c.SDLK_c => .c,
-        c.SDLK_d => .d,
-        c.SDLK_e => .e,
-        c.SDLK_f => .f,
-        c.SDLK_g => .g,
-        c.SDLK_h => .h,
-        c.SDLK_i => .i,
-        c.SDLK_j => .j,
-        c.SDLK_k => .k,
-        c.SDLK_l => .l,
-        c.SDLK_m => .m,
-        c.SDLK_n => .n,
-        c.SDLK_o => .o,
-        c.SDLK_p => .p,
-        c.SDLK_q => .q,
-        c.SDLK_r => .r,
-        c.SDLK_s => .s,
-        c.SDLK_t => .t,
-        c.SDLK_u => .u,
-        c.SDLK_v => .v,
-        c.SDLK_w => .w,
-        c.SDLK_x => .x,
-        c.SDLK_y => .y,
-        c.SDLK_z => .z,
+        if (sdl3) c.SDLK_A else c.SDLK_a => .a,
+        if (sdl3) c.SDLK_B else c.SDLK_b => .b,
+        if (sdl3) c.SDLK_C else c.SDLK_c => .c,
+        if (sdl3) c.SDLK_D else c.SDLK_d => .d,
+        if (sdl3) c.SDLK_E else c.SDLK_e => .e,
+        if (sdl3) c.SDLK_F else c.SDLK_f => .f,
+        if (sdl3) c.SDLK_G else c.SDLK_g => .g,
+        if (sdl3) c.SDLK_H else c.SDLK_h => .h,
+        if (sdl3) c.SDLK_I else c.SDLK_i => .i,
+        if (sdl3) c.SDLK_J else c.SDLK_j => .j,
+        if (sdl3) c.SDLK_K else c.SDLK_k => .k,
+        if (sdl3) c.SDLK_L else c.SDLK_l => .l,
+        if (sdl3) c.SDLK_M else c.SDLK_m => .m,
+        if (sdl3) c.SDLK_N else c.SDLK_n => .n,
+        if (sdl3) c.SDLK_O else c.SDLK_o => .o,
+        if (sdl3) c.SDLK_P else c.SDLK_p => .p,
+        if (sdl3) c.SDLK_Q else c.SDLK_q => .q,
+        if (sdl3) c.SDLK_R else c.SDLK_r => .r,
+        if (sdl3) c.SDLK_S else c.SDLK_s => .s,
+        if (sdl3) c.SDLK_T else c.SDLK_t => .t,
+        if (sdl3) c.SDLK_U else c.SDLK_u => .u,
+        if (sdl3) c.SDLK_V else c.SDLK_v => .v,
+        if (sdl3) c.SDLK_W else c.SDLK_w => .w,
+        if (sdl3) c.SDLK_X else c.SDLK_x => .x,
+        if (sdl3) c.SDLK_Y else c.SDLK_y => .y,
+        if (sdl3) c.SDLK_Z else c.SDLK_z => .z,
 
         c.SDLK_0 => .zero,
         c.SDLK_1 => .one,
@@ -853,11 +920,11 @@ pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
         c.SDLK_RIGHTBRACKET => .right_bracket,
         c.SDLK_BACKSLASH => .backslash,
         c.SDLK_SEMICOLON => .semicolon,
-        c.SDLK_QUOTE => .apostrophe,
+        if (sdl3) c.SDLK_APOSTROPHE else c.SDLK_QUOTE => .apostrophe,
         c.SDLK_COMMA => .comma,
         c.SDLK_PERIOD => .period,
         c.SDLK_SLASH => .slash,
-        c.SDLK_BACKQUOTE => .grave,
+        if (sdl3) c.SDLK_GRAVE else c.SDLK_BACKQUOTE => .grave,
 
         else => blk: {
             dvui.log.debug("SDL_keysym_to_dvui unknown keysym {d}", .{keysym});
