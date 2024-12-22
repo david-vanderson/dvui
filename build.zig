@@ -218,10 +218,22 @@ fn addDvuiModule(
                 dvui_mod.addCSourceFiles(.{ .files = &.{
                     "src/stb/stb_image_impl.c",
                 } });
+                var sdl_options = b.addOptions();
                 if (b.systemIntegrationOption("sdl2", .{})) {
+                    // SDL2 from system
+                    sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
                     backend_mod.linkSystemLibrary("SDL2", .{});
+                } else if (b.option(bool, "sdl3", "Use SDL3 compiled from source") orelse false) {
+                    // SDL3 compiled from source
+                    sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
+                    if (b.lazyDependency("sdl3", .{})) |sdl3| {
+                        backend_mod.linkLibrary(sdl3.artifact("sdl3"));
+                        backend_mod.addImport("sdl3_c", sdl3.module("sdl"));
+                    }
                 } else {
+                    sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
                     if (target.result.os.tag == .linux) {
+                        // SDL2 from system
                         const sdl_dep = b.lazyDependency("sdl", .{
                             .target = target,
                             .optimize = optimize,
@@ -235,12 +247,14 @@ fn addDvuiModule(
                             backend_mod.linkLibrary(sd.artifact("SDL2"));
                         }
                     } else {
+                        // SDL2 compiled from source
                         const sdl_dep = b.lazyDependency("sdl", .{ .target = target, .optimize = optimize });
                         if (sdl_dep) |sd| {
                             backend_mod.linkLibrary(sd.artifact("SDL2"));
                         }
                     }
                 }
+                backend_mod.addOptions("sdl_options", sdl_options);
             },
             .dx11 => {
                 dvui_mod.addCSourceFiles(.{ .files = &.{
