@@ -1894,18 +1894,18 @@ pub fn dataSetSlice(win: ?*Window, id: u32, key: []const u8, data: anytype) void
 /// entries that you want to fill in after.
 pub fn dataSetSliceCopies(win: ?*Window, id: u32, key: []const u8, data: anytype, num_copies: usize) void {
     const dt = @typeInfo(@TypeOf(data));
-    if (dt == .Pointer and dt.Pointer.size == .Slice) {
-        if (dt.Pointer.sentinel) |s| {
-            dataSetAdvanced(win, id, key, @as([:@as(*const dt.Pointer.child, @alignCast(@ptrCast(s))).*]dt.Pointer.child, @constCast(data)), true, num_copies);
+    if (dt == .pointer and dt.pointer.size == .Slice) {
+        if (dt.pointer.sentinel) |s| {
+            dataSetAdvanced(win, id, key, @as([:@as(*const dt.pointer.child, @alignCast(@ptrCast(s))).*]dt.pointer.child, @constCast(data)), true, num_copies);
         } else {
-            dataSetAdvanced(win, id, key, @as([]dt.Pointer.child, @constCast(data)), true, num_copies);
+            dataSetAdvanced(win, id, key, @as([]dt.pointer.child, @constCast(data)), true, num_copies);
         }
-    } else if (dt == .Pointer and dt.Pointer.size == .One and @typeInfo(dt.Pointer.child) == .Array) {
-        const child_type = @typeInfo(dt.Pointer.child);
-        if (child_type.Array.sentinel) |s| {
-            dataSetAdvanced(win, id, key, @as([:@as(*const child_type.Array.child, @alignCast(@ptrCast(s))).*]child_type.Array.child, @constCast(data)), true, num_copies);
+    } else if (dt == .pointer and dt.pointer.size == .One and @typeInfo(dt.pointer.child) == .array) {
+        const child_type = @typeInfo(dt.pointer.child);
+        if (child_type.array.sentinel) |s| {
+            dataSetAdvanced(win, id, key, @as([:@as(*const child_type.array.child, @alignCast(@ptrCast(s))).*]child_type.array.child, @constCast(data)), true, num_copies);
         } else {
-            dataSetAdvanced(win, id, key, @as([]child_type.Array.child, @constCast(data)), true, num_copies);
+            dataSetAdvanced(win, id, key, @as([]child_type.array.child, @constCast(data)), true, num_copies);
         }
     } else {
         @compileError("dataSetSlice needs a slice or pointer to array, given " ++ @typeName(@TypeOf(data)));
@@ -2030,15 +2030,15 @@ pub fn dataGetPtr(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?*T
 /// id/key combination.
 pub fn dataGetSlice(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
     const dt = @typeInfo(T);
-    if (dt != .Pointer or dt.Pointer.size != .Slice) {
+    if (dt != .pointer or dt.pointer.size != .Slice) {
         @compileError("dataGetSlice needs a slice, given " ++ @typeName(T));
     }
 
     if (dataGetInternal(win, id, key, T, true)) |bytes| {
-        if (dt.Pointer.sentinel) |sentinel| {
-            return @as([:@as(*const dt.Pointer.child, @alignCast(@ptrCast(sentinel))).*]align(@alignOf(dt.Pointer.child)) dt.Pointer.child, @alignCast(@ptrCast(std.mem.bytesAsSlice(dt.Pointer.child, bytes[0 .. bytes.len - @sizeOf(dt.Pointer.child)]))));
+        if (dt.pointer.sentinel) |sentinel| {
+            return @as([:@as(*const dt.pointer.child, @alignCast(@ptrCast(sentinel))).*]align(@alignOf(dt.pointer.child)) dt.pointer.child, @alignCast(@ptrCast(std.mem.bytesAsSlice(dt.pointer.child, bytes[0 .. bytes.len - @sizeOf(dt.pointer.child)]))));
         } else {
-            return @as([]align(@alignOf(dt.Pointer.child)) dt.Pointer.child, @alignCast(std.mem.bytesAsSlice(dt.Pointer.child, bytes)));
+            return @as([]align(@alignOf(dt.pointer.child)) dt.pointer.child, @alignCast(std.mem.bytesAsSlice(dt.pointer.child, bytes)));
         }
     } else {
         return null;
@@ -2058,7 +2058,7 @@ pub fn dataGetSlice(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?
 /// The returned slice points to internal storage, which will be freed after
 /// a frame where there is no call to any dataGet/dataSet functions for that
 /// id/key combination.
-pub fn dataGetSliceDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: []const @typeInfo(T).Pointer.child) T {
+pub fn dataGetSliceDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
     return dataGetSlice(win, id, key, T) orelse blk: {
         dataSetSlice(win, id, key, default);
         break :blk dataGetSlice(win, id, key, T).?;
@@ -3627,8 +3627,8 @@ pub const Window = struct {
         var bytes: []const u8 = undefined;
         if (copy_slice) {
             bytes = std.mem.sliceAsBytes(data_in);
-            if (dt.Pointer.sentinel != null) {
-                bytes.len += @sizeOf(dt.Pointer.child);
+            if (dt.pointer.sentinel != null) {
+                bytes.len += @sizeOf(dt.pointer.child);
             }
         } else {
             bytes = std.mem.asBytes(&data_in);
@@ -3636,7 +3636,7 @@ pub const Window = struct {
 
         const alignment = comptime blk: {
             if (copy_slice) {
-                break :blk dt.Pointer.alignment;
+                break :blk dt.pointer.alignment;
             } else {
                 break :blk @alignOf(@TypeOf(data_in));
             }
@@ -6046,7 +6046,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 fn isF32Slice(comptime ptr: std.builtin.Type.Pointer, comptime child_info: std.builtin.Type) bool {
     const is_slice = ptr.size == .Slice;
     const holds_f32 = switch (child_info) {
-        .Float => |f| f.bits == 32,
+        .float => |f| f.bits == 32,
         else => false,
     };
 
@@ -6063,7 +6063,7 @@ fn isF32Slice(comptime ptr: std.builtin.Type.Pointer, comptime child_info: std.b
 
 fn checkAndCastDataPtr(comptime num_components: u32, value: anytype) *[num_components]f32 {
     switch (@typeInfo(@TypeOf(value))) {
-        .Pointer => |ptr| {
+        .pointer => |ptr| {
             const child_info = @typeInfo(ptr.child);
             const is_f32_slice = comptime isF32Slice(ptr, child_info);
 
@@ -6074,8 +6074,8 @@ fn checkAndCastDataPtr(comptime num_components: u32, value: anytype) *[num_compo
             // If not slice, need to check for arrays and vectors.
             // Need to also check the length.
             const data_len = switch (child_info) {
-                .Vector => |vec| vec.len,
-                .Array => |arr| arr.len,
+                .vector => |vec| vec.len,
+                .array => |arr| arr.len,
                 else => @compileError("Must supply a pointer to a vector or array!"),
             };
 
@@ -6380,11 +6380,11 @@ pub fn TextEntryNumberResult(comptime T: type) type {
 pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryNumberInitOptions(T), opts: Options) !TextEntryNumberResult(T) {
     const base_filter = "1234567890";
     const filter = switch (@typeInfo(T)) {
-        .Int => |int| switch (int.signedness) {
+        .int => |int| switch (int.signedness) {
             .signed => base_filter ++ "+-",
             .unsigned => base_filter ++ "+",
         },
-        .Float => base_filter ++ "+-.e",
+        .float => base_filter ++ "+-.e",
         else => unreachable,
     };
 
@@ -6416,8 +6416,8 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     // validation
     const text = te.getText();
     const num = switch (@typeInfo(T)) {
-        .Int => std.fmt.parseInt(T, text, 10) catch null,
-        .Float => std.fmt.parseFloat(T, text) catch null,
+        .int => std.fmt.parseInt(T, text, 10) catch null,
+        .float => std.fmt.parseFloat(T, text) catch null,
         else => unreachable,
     };
 

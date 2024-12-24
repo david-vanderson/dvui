@@ -131,7 +131,7 @@ pub const TTFBytes = struct {
 
 pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap([]const u8) {
     var result = std.StringHashMap([]const u8).init(allocator);
-    inline for (@typeInfo(TTFBytes).Struct.decls) |decl| {
+    inline for (@typeInfo(TTFBytes).@"struct".decls) |decl| {
         try result.put(decl.name, @field(TTFBytes, decl.name));
     }
     return result;
