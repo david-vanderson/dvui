@@ -245,10 +245,11 @@ const FontCacheEntry = struct {
     texture_atlas_size: Size,
     texture_atlas_regen: bool,
 
-    pub fn deinit(self: *FontCacheEntry) void {
+    pub fn deinit(self: *FontCacheEntry, win: *Window) void {
         if (useFreeType) {
             _ = c.FT_Done_Face(self.face);
         }
+        win.backend.textureDestroy(self.texture_atlas);
     }
 
     pub const OpenFlags = packed struct(c_int) {
@@ -624,10 +625,13 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
             .texture_atlas_regen = true,
         };
     }
-
     //log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
 
-    try cw.font_cache.put(fontHash, entry);
+    errdefer {
+        std.debug.assert(false);
+        textureDestroyLater(entry.texture_atlas);
+    }
+    try cw.font_cache.putNoClobber(fontHash, entry);
 
     return cw.font_cache.getPtr(fontHash).?;
 }
@@ -2829,7 +2833,7 @@ pub const Window = struct {
             var it = self.font_cache.iterator();
             while (it.next()) |item| {
                 item.value_ptr.glyph_info.deinit();
-                item.value_ptr.deinit();
+                item.value_ptr.deinit(self);
             }
             self.font_cache.deinit();
         }
@@ -3454,7 +3458,7 @@ pub const Window = struct {
             for (deadFonts.items) |id| {
                 var tce = self.font_cache.fetchRemove(id).?;
                 tce.value.glyph_info.deinit();
-                tce.value.deinit();
+                tce.value.deinit(self);
             }
 
             //std.debug.print("font_cache {d}\n", .{self.font_cache.count()});
