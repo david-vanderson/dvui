@@ -39,6 +39,7 @@ var slider_entry_max: bool = true;
 var slider_entry_interval: bool = true;
 var slider_entry_vector: bool = false;
 var text_entry_buf = std.mem.zeroes([50]u8);
+var text_entry_ime_buf = std.mem.zeroes([50]u8);
 var text_entry_password_buf = std.mem.zeroes([30]u8);
 var text_entry_password_buf_obf_enable: bool = true;
 var text_entry_multiline_allocator_buf: [1000]u8 = undefined;
@@ -1000,6 +1001,30 @@ pub fn textEntryWidgets() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
+        try dvui.label(@src(), "IME composition", .{}, .{ .gravity_y = 0.5 });
+
+        // align text entry
+        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer hbox_aligned.deinit();
+        left_alignment.record(hbox.data().id, hbox_aligned.data());
+
+        var te = try dvui.textEntry(
+            @src(),
+            .{ .text = .{ .buffer = &text_entry_ime_buf } },
+            .{
+                .max_size_content = dvui.Options.sizeM(20, 0),
+                .font = dvui.Font{ .name = "NotoSansKr", .size = 20 },
+            },
+        );
+        te.deinit();
+
+        try dvui.label(@src(), "(limit {d})", .{text_entry_ime_buf.len}, .{ .gravity_y = 0.5 });
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
         try dvui.label(@src(), "Password", .{}, .{ .gravity_y = 0.5 });
 
         // align text entry
@@ -1555,7 +1580,7 @@ pub fn reorderListsSimple(lay: reorderLayout) !void {
 
     var scroll: ?*dvui.ScrollAreaWidget = null;
     if (lay == .horizontal) {
-        scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{ });
+        scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{});
     }
     defer {
         if (scroll) |sc| sc.deinit();

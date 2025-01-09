@@ -127,6 +127,15 @@ pub const TTFBytes = struct {
     pub const OpenDyslexicBd = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold.otf");
     pub const OpenDyslexicIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Italic.otf");
     pub const OpenDyslexicBdIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold-Italic.otf");
+    pub const NotoSansKr = @embedFile("fonts/Noto_Sans_KR/static/NotoSansKR-Regular.ttf");
+    pub const NotoSansKrBl = @embedFile("fonts/Noto_Sans_KR/static/NotoSansKR-Black.ttf");
+    pub const NotoSansKrBd = @embedFile("fonts/Noto_Sans_KR/static/NotoSansKR-Bold.ttf");
+    pub const NotoSansKrExBd = @embedFile("fonts/Noto_Sans_KR/static/NotoSansKR-ExtraBold.ttf");
+    pub const NotoSansKrExLi = @embedFile("fonts/Noto_Sans_KR/static/NotoSansKR-ExtraLight.ttf");
+    pub const NotoSansKrLi = @embedFile("fonts/Noto_Sans_KR/static/NotoSansKR-Light.ttf");
+    pub const NotoSansKrMe = @embedFile("fonts/Noto_Sans_KR/static/NotoSansKR-Medium.ttf");
+    pub const NotoSansKrSeBd = @embedFile("fonts/Noto_Sans_KR/static/NotoSansKR-SemiBold.ttf");
+    pub const NotoSansKrTh = @embedFile("fonts/Noto_Sans_KR/static/NotoSansKR-Thin.ttf");
 };
 
 pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap([]const u8) {
