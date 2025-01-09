@@ -421,7 +421,7 @@ pub fn demo() !void {
         var fbox = try dvui.flexbox(@src(), .{}, .{ .expand = .both, .background = true });
         defer fbox.deinit();
 
-        inline for (0..@typeInfo(demoKind).Enum.fields.len) |i| {
+        inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
             var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = dvui.Size.all(120), .margin = Rect.all(5), .color_fill = .{ .name = .fill } });
             try bw.install();
@@ -658,7 +658,7 @@ pub fn themeEditor() !void {
     var b2 = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
     defer b2.deinit();
 
-    const color_field_options = .{ .fields = .{
+    const color_field_options = dvui.StructFieldOptions(dvui.Color){ .fields = .{
         .r = .{ .min = 0, .max = 255, .widget_type = .slider },
         .g = .{ .min = 0, .max = 255, .widget_type = .slider },
         .b = .{ .min = 0, .max = 255, .widget_type = .slider },
@@ -1201,7 +1201,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
         inline for (parse_types, 0..) |T, i| {
             if (i == S.type_dropdown_val) {
                 var value: T = undefined;
-                if (@typeInfo(T) == .Int) {
+                if (@typeInfo(T) == .int) {
                     S.value = std.math.clamp(S.value, std.math.minInt(T), std.math.maxInt(T));
                     value = @intFromFloat(S.value);
                     S.value = @floatFromInt(value);
@@ -1212,7 +1212,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
                 try displayTextEntryNumberResult(result);
 
                 if (result.changed) {
-                    if (@typeInfo(T) == .Int) {
+                    if (@typeInfo(T) == .int) {
                         S.value = @floatFromInt(value);
                     } else {
                         S.value = @floatCast(value);

@@ -254,13 +254,13 @@ fn textFieldWidget(
 
     comptime var treatment: ProvidedPointerTreatment = .display_only;
     comptime if (!alloc) {
-        if (@typeInfo(T).Pointer.is_const) {
+        if (@typeInfo(T).pointer.is_const) {
             treatment = .display_only;
         } else {
             treatment = .mutate_value_in_place_only;
         }
     } else {
-        if (@typeInfo(T).Pointer.is_const) {
+        if (@typeInfo(T).pointer.is_const) {
             treatment = .copy_value_and_alloc_new;
         } else {
             treatment = .mutate_value_and_realloc;
@@ -471,7 +471,7 @@ pub fn pointerFieldWidget(
 //=======Single Item pointer and options=======
 pub fn SinglePointerFieldOptions(comptime T: type) type {
     return struct {
-        child: FieldOptions(@typeInfo(T).Pointer.child) = .{},
+        child: FieldOptions(@typeInfo(T).pointer.child) = .{},
         disabled: bool = false,
         //label_override: ?[]const u8 = null,
     };
@@ -490,7 +490,7 @@ pub fn singlePointerFieldWidget(
     var box = try dvui.box(@src(), .horizontal, .{});
     defer box.deinit();
 
-    const Child = @typeInfo(T).Pointer.child;
+    const Child = @typeInfo(T).pointer.child;
 
     const ProvidedPointerTreatment = enum {
         mutate_value_in_place,
@@ -500,13 +500,13 @@ pub fn singlePointerFieldWidget(
 
     comptime var treatment: ProvidedPointerTreatment = .display_only;
     comptime if (alloc == false) {
-        if (@typeInfo(T).Pointer.is_const) {
+        if (@typeInfo(T).pointer.is_const) {
             treatment = .display_only;
         } else {
             treatment = .mutate_value_in_place;
         }
     } else if (alloc == true) {
-        if (@typeInfo(T).Pointer.is_const) {
+        if (@typeInfo(T).pointer.is_const) {
             treatment = .copy_value_and_alloc_new;
         } else {
             treatment = .mutate_value_in_place;
@@ -559,7 +559,7 @@ pub fn arrayFieldWidget(
 //=======Single Item pointer and options=======
 pub fn SliceFieldOptions(comptime T: type) type {
     return struct {
-        child: FieldOptions(@typeInfo(T).Pointer.child) = .{},
+        child: FieldOptions(@typeInfo(T).pointer.child) = .{},
         label_override: ?[]const u8 = null,
         disabled: bool = false,
     };
@@ -574,9 +574,9 @@ pub fn sliceFieldWidget(
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
 ) !void {
-    if (@typeInfo(T).Pointer.size != .Slice) @compileError("must be called with slice");
+    if (@typeInfo(T).pointer.size != .Slice) @compileError("must be called with slice");
 
-    const Child = @typeInfo(T).Pointer.child;
+    const Child = @typeInfo(T).pointer.child;
 
     const ProvidedPointerTreatment = enum {
         mutate_value_and_realloc,
@@ -587,13 +587,13 @@ pub fn sliceFieldWidget(
 
     comptime var treatment: ProvidedPointerTreatment = .display_only;
     comptime if (alloc == false) {
-        if (@typeInfo(T).Pointer.is_const) {
+        if (@typeInfo(T).pointer.is_const) {
             treatment = .display_only;
         } else {
             treatment = .mutate_value_in_place_only;
         }
     } else if (alloc == true) {
-        if (@typeInfo(T).Pointer.is_const) {
+        if (@typeInfo(T).pointer.is_const) {
             treatment = .copy_value_and_alloc_new;
         } else {
             treatment = .mutate_value_and_realloc;
@@ -719,7 +719,7 @@ fn structFieldWidget(
 ) !void {
     if (@typeInfo(T) != .@"struct") @compileError("Input Type Must Be A Struct");
     if (opt.disabled) return;
-    const fields = @typeInfo(T).Struct.fields;
+    const fields = @typeInfo(T).@"struct".fields;
 
     var box = try dvui.box(@src(), .vertical, .{ .expand = .both });
     defer box.deinit();
@@ -932,13 +932,13 @@ pub fn structEntryExAlloc(
 //    const T = @TypeOf(value);
 //    var result: T = undefined;
 //
-//    inline for (@typeInfo(T).Struct.fields) |field| {
+//    inline for (@typeInfo(T).@"struct".fields) |field| {
 //        const info = @typeInfo(field.type);
-//        if (info == .Pointer) {
+//        if (info == .pointer) {
 //            switch (info.size) {
 //                .Slice => {
 //                    @field(result, field.name) = try allocator.dupe(info.child, @field(value, field.name));
-//                    if (@typeInfo(info.child) == .Struct) {
+//                    if (@typeInfo(info.child) == .@"struct") {
 //                        for (@field(result, field.name), 0..) |*val, i| {
 //                            val.* = try deepCopyStruct(allocator, @field(value, field.name)[i]);
 //                        }
@@ -946,7 +946,7 @@ pub fn structEntryExAlloc(
 //                },
 //                .One => {
 //                    @field(result, field.name) = try allocator.create(info.child);
-//                    if (@typeInfo(info.child) == .Struct) {
+//                    if (@typeInfo(info.child) == .@"struct") {
 //                        @field(result, field.name).* = try deepCopyStruct(allocator, @field(value, field.name));
 //                    } else {
 //                        @field(result, field.name).* = @field(value, field.name);
@@ -954,7 +954,7 @@ pub fn structEntryExAlloc(
 //                },
 //                else => @compileError("Cannot copy *C and Many pointers"),
 //            }
-//        } else if (info == .Struct) {
+//        } else if (info == .@"struct") {
 //            @field(result, field.name) = try deepCopyStruct(allocator, @field(value, field.name));
 //        } else {
 //            @field(result, field.name) = @field(value, field.name);

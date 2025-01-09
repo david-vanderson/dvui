@@ -54,6 +54,7 @@ pub const structEntry = se.structEntry;
 pub const structEntryEx = se.structEntryEx;
 pub const structEntryAlloc = se.structEntryAlloc;
 pub const structEntryExAlloc = se.structEntryExAlloc;
+pub const StructFieldOptions = se.StructFieldOptions;
 
 pub const enums = @import("enums.zig");
 
@@ -565,7 +566,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     var entry: FontCacheEntry = undefined;
 
     // make debug texture atlas so we can see if something later goes wrong
-    const size = .{ .w = 10, .h = 10 };
+    const size = Size{ .w = 10, .h = 10 };
     const pixels = try cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
     @memset(pixels, 255);
 
@@ -970,7 +971,7 @@ pub fn pathFillConvex(color: Color) !void {
     var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
     defer idx.deinit();
     const col = color.alphaMultiply();
-    const col_trans = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
+    const col_trans = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
     var bounds = Rect{}; // w and h are maxx and maxy for now
     bounds.x = std.math.floatMax(f32);
@@ -1132,7 +1133,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
     defer idx.deinit();
     const col = color.alphaMultiply();
-    const col_trans = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
+    const col_trans = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
     var bounds = Rect{}; // w and h are maxx and maxy for now
     bounds.x = std.math.floatMax(f32);
@@ -2677,7 +2678,7 @@ pub const Window = struct {
         try self.themes.putNoClobber("Adwaita Light", @import("themes/Adwaita.zig").light);
         try self.themes.putNoClobber("Adwaita Dark", @import("themes/Adwaita.zig").dark);
 
-        inline for (@typeInfo(Theme.QuickTheme.builtin).Struct.decls) |decl| {
+        inline for (@typeInfo(Theme.QuickTheme.builtin).@"struct".decls) |decl| {
             const quick_theme = Theme.QuickTheme.fromString(self.arena(), @field(Theme.QuickTheme.builtin, decl.name)) catch {
                 @panic("Failure loading builtin theme. This is a problem with DVUI.");
             };
@@ -3954,7 +3955,7 @@ pub const Window = struct {
         var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
         defer scroll.deinit();
 
-        var iter = std.mem.split(u8, self.debug_under_mouse_info, "\n");
+        var iter = std.mem.splitScalar(u8, self.debug_under_mouse_info, '\n');
         var i: usize = 0;
         while (iter.next()) |line| : (i += 1) {
             if (line.len > 0) {
@@ -6130,7 +6131,7 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
 
     var any_changed = false;
     inline for (0..num_components) |i| {
-        const component_opts = .{
+        const component_opts = dvui.SliderEntryInitOptions{
             .value = &data_arr[i],
             .min = init_opts.min,
             .max = init_opts.max,
