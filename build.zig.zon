@@ -4,23 +4,22 @@
     .paths = .{""},
     .dependencies = .{
         .sdl = .{
-            .url = "https://github.com/allyourcodebase/SDL/archive/a9107e9ab042a2d6c76c73c0a485352ccb216ffc.tar.gz",
-            .hash = "1220fb0249c15493882350f135bc8b56c389a7f5131cc1b1a5208db472fa00e26b52",
+            .url = "git+https://github.com/allyourcodebase/SDL#a13d7e80e8d847db2b2ff8f334d57eb5bbb489dd",
+            .hash = "12200aa79b05aaeefff144b9e376371e2e7ddc982b9207d146163baf56361331a834",
             .lazy = true,
         },
         .sdl3 = .{
-            .lazy = true,
-            .url = "https://github.com/swan-www/zig_sdl3/archive/refs/tags/3.1.6.tar.gz",
-            .hash = "12203db5d6acf22b69b929ee32194e6352ca9406f0192e7d72dbc2907a1df4e32d8c",
+            .url = "git+https://github.com/rohlem/zig_sdl3-update-zig#8737ef1810285b95b3aa04f534dd85b6e016afbc",
+            .hash = "12207ab67f1a9f7994f5ffcba0b8294360d95ab583026934e750848179fc48dab735",
         },
         .freetype = .{
-            .url = "https://github.com/david-vanderson/freetype/archive/a62b6192d81952e64b8c16504427f3e28ef10e5f.tar.gz",
-            .hash = "12203988c200e30d2fbc2678bb3e49eb3f117cc79faf8d228b63e54d8cdf278378e1",
+            .url = "git+https://github.com/rohlem/freetype-update-zig#a50182dc5787a8d49dd1ad922699a1c8771aa34a",
+            .hash = "12203811b00197ba9f939a8114941bdb18d421c3fa498ec4045bc9ce0c91a5a20b9f",
             .lazy = true,
         },
         .raylib = .{
-            .url = "https://github.com/raysan5/raylib/archive/63ae57d2e31afa8bc8cab7f17f0e44afa4e7552d.tar.gz",
-            .hash = "122078aed9bcba3e2319105d04324bf923a52c65405c3662457cf73e7ef28f445e52",
+            .url = "git+https://github.com/raysan5/raylib#433cc23ea4511fbeddc0fccc597cde91f5756d59",
+            .hash = "1220d18e6fba0a609f3afb055c2876d93e19b3f54f3e2e730c3fd261efd78ccd6002",
             .lazy = true,
         },
         //used in the raylib-ontop example
@@ -31,8 +30,8 @@
         },
         // required for the directx11 backend
         .zigwin32 = .{
-            .url = "git+https://github.com/marlersoft/zigwin32#407a4c7b869ee3d10db520fdfae8b9faf9b2adb5",
-            .hash = "1220cc9c9028e20f4ec2ece1155ae3479acc1cc509f9ab93acb74e8f5bbf8eefd2a9",
+            .url = "git+https://github.com/rohlem/zigwin32-update-zig#406caae350880d15da93d7087f7560897f1a532d",
+            .hash = "1220327265a70f5a41aac138b1571985a7b135c0a3014043be6976a758dfd726fc5d",
             .lazy = true,
         },
     },

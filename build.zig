@@ -44,7 +44,12 @@ pub fn build(b: *std.Build) !void {
 
     // web test
     {
-        const webtarget = std.Target.Query{
+        const webtarget_library = std.Target.Query{
+            .cpu_arch = .wasm32,
+            .os_tag = .wasi,
+            .abi = .musl,
+        };
+        const webtarget_exe = std.Target.Query{
             .cpu_arch = .wasm32,
             .os_tag = .freestanding,
             .abi = .musl,
@@ -52,7 +57,7 @@ pub fn build(b: *std.Build) !void {
 
         const dvui_mod_web = b.addModule("dvui_web", .{
             .root_source_file = b.path("src/dvui.zig"),
-            .target = b.resolveTargetQuery(webtarget),
+            .target = b.resolveTargetQuery(webtarget_library),
             .optimize = optimize,
         });
 
@@ -69,7 +74,7 @@ pub fn build(b: *std.Build) !void {
         const wasm = b.addExecutable(.{
             .name = "web-test",
             .root_source_file = b.path("examples/web-test.zig"),
-            .target = b.resolveTargetQuery(webtarget),
+            .target = b.resolveTargetQuery(webtarget_exe),
             .optimize = optimize,
             .link_libc = true,
             .strip = if (optimize == .ReleaseFast or optimize == .ReleaseSmall) true else false,
