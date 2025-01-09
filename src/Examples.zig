@@ -1027,6 +1027,29 @@ pub fn textEntryWidgets() !void {
         try dvui.label(@src(), "(limit {d})", .{text_entry_password_buf.len}, .{ .gravity_y = 0.5 });
     }
 
+    const Sfont = struct {
+        var dropdown: usize = 0;
+
+        pub fn compareStrings(_: void, lhs: []const u8, rhs: []const u8) bool {
+            return std.mem.order(u8, lhs, rhs).compare(std.math.CompareOperator.lt);
+        }
+    };
+
+    var font_entries: [][]const u8 = try dvui.currentWindow().arena().alloc([]const u8, dvui.currentWindow().font_bytes.count() + 1);
+    {
+        font_entries[0] = "Theme Body";
+        var it = dvui.currentWindow().font_bytes.keyIterator();
+        var i: usize = 0;
+        while (it.next()) |v| {
+            i += 1;
+            font_entries[i] = v.*;
+        }
+
+        std.mem.sort([]const u8, font_entries[1..], {}, Sfont.compareStrings);
+
+        Sfont.dropdown = @min(Sfont.dropdown, font_entries.len - 1);
+    }
+
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -1038,11 +1061,17 @@ pub fn textEntryWidgets() !void {
         defer hbox_aligned.deinit();
         left_alignment.record(hbox.data().id, hbox_aligned.data());
 
+        var font = dvui.themeGet().font_body;
+        if (Sfont.dropdown > 0) {
+            font.name = font_entries[Sfont.dropdown];
+        }
+
         var te = try dvui.textEntry(
             @src(),
             .{ .multiline = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf, .allocator = text_entry_multiline_fba.allocator() } } },
             .{
                 .min_size_content = .{ .w = 150, .h = 80 },
+                .font = font,
             },
         );
 
@@ -1056,6 +1085,22 @@ pub fn textEntryWidgets() !void {
 
         try dvui.label(@src(), "bytes {d}\nallocated {d}\nlimit {d}", .{ bytes, text_entry_multiline_buf.len, text_entry_multiline_allocator_buf.len }, .{ .gravity_y = 0.5 });
     }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Multiline Font", .{}, .{ .gravity_y = 0.5 });
+
+        // align
+        var box_aligned = try dvui.box(@src(), .vertical, .{ .margin = left_alignment.margin(hbox.data().id) });
+        defer box_aligned.deinit();
+        left_alignment.record(hbox.data().id, box_aligned.data());
+
+        _ = try dvui.dropdown(@src(), font_entries, &Sfont.dropdown, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
+    }
+
+    _ = try dvui.spacer(@src(), .{ .h = 20 }, .{});
 
     const parse_types = [_]type{ u8, i8, u16, i16, u32, i32, f32, f64 };
     const parse_typenames: [parse_types.len][]const u8 = blk: {
@@ -1555,7 +1600,7 @@ pub fn reorderListsSimple(lay: reorderLayout) !void {
 
     var scroll: ?*dvui.ScrollAreaWidget = null;
     if (lay == .horizontal) {
-        scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{ });
+        scroll = try dvui.scrollArea(@src(), .{ .horizontal = .auto }, .{});
     }
     defer {
         if (scroll) |sc| sc.deinit();

@@ -387,7 +387,7 @@ const FontCacheEntry = struct {
     pub fn hash(font: Font) u32 {
         var h = fnv.init();
         var bytes: []const u8 = undefined;
-        if (currentWindow().ttf_bytes_database.get(font.name)) |ttf_bytes| {
+        if (currentWindow().font_bytes.get(font.name)) |ttf_bytes| {
             bytes = ttf_bytes;
         } else {
             bytes = Font.default_ttf_bytes;
@@ -539,7 +539,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
 
     //ttf bytes
     const bytes = blk: {
-        if (currentWindow().ttf_bytes_database.get(font.name)) |ttf_bytes| {
+        if (currentWindow().font_bytes.get(font.name)) |ttf_bytes| {
             break :blk ttf_bytes;
         } else {
             log.warn("Font \"{s}\" not in dvui database, using default", .{font.name});
@@ -2576,7 +2576,7 @@ pub const Window = struct {
     tab_index_prev: std.ArrayList(TabIndex),
     tab_index: std.ArrayList(TabIndex),
     font_cache: std.AutoHashMap(u32, FontCacheEntry),
-    ttf_bytes_database: std.StringHashMap([]const u8),
+    font_bytes: std.StringHashMap([]const u8),
     texture_cache: std.AutoHashMap(u32, TextureCacheEntry),
     dialog_mutex: std.Thread.Mutex,
     dialogs: std.ArrayList(Dialog),
@@ -2656,7 +2656,7 @@ pub const Window = struct {
             .debug_refresh_mutex = std.Thread.Mutex{},
             .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
             .backend = backend_ctx,
-            .ttf_bytes_database = try Font.initTTFBytesDatabase(gpa),
+            .font_bytes = try Font.initTTFBytesDatabase(gpa),
             .themes = std.StringArrayHashMap(Theme).init(gpa),
         };
 
@@ -2850,7 +2850,7 @@ pub const Window = struct {
         self.toasts.deinit();
         self.keybinds.deinit();
         self._arena.deinit();
-        self.ttf_bytes_database.deinit();
+        self.font_bytes.deinit();
         {
             for (self.themes.values()) |*theme| {
                 theme.deinit(self.gpa);
