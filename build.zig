@@ -236,9 +236,9 @@ fn addDvuiModule(
                     sdl_options.addOption(bool, "from_system", true);
                     backend_mod.linkSystemLibrary("SDL3", .{});
                 } else {
+                    // SDL2 compiled from source
                     sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
                     if (target.result.os.tag == .linux) {
-                        // SDL2 from system
                         const sdl_dep = b.lazyDependency("sdl", .{
                             .target = target,
                             .optimize = optimize,
@@ -252,7 +252,6 @@ fn addDvuiModule(
                             backend_mod.linkLibrary(sd.artifact("SDL2"));
                         }
                     } else {
-                        // SDL2 compiled from source
                         const sdl_dep = b.lazyDependency("sdl", .{ .target = target, .optimize = optimize });
                         if (sdl_dep) |sd| {
                             backend_mod.linkLibrary(sd.artifact("SDL2"));
