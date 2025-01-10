@@ -454,7 +454,7 @@ pub fn demo() !void {
                 switch (e) {
                     .basic_widgets => try basicWidgets(float.data().id),
                     .calculator => try calculator(),
-                    .text_entry => try textEntryWidgets(),
+                    .text_entry => try textEntryWidgets(float.data().id),
                     .styling => try styling(),
                     .layout => try layout(),
                     .text_layout => try layoutText(),
@@ -505,7 +505,7 @@ pub fn demo() !void {
         try switch (demo_active) {
             .basic_widgets => basicWidgets(float.data().id),
             .calculator => calculator(),
-            .text_entry => textEntryWidgets(),
+            .text_entry => try textEntryWidgets(float.data().id),
             .styling => styling(),
             .layout => layout(),
             .text_layout => layoutText(),
@@ -950,7 +950,7 @@ pub fn dropdownAdvanced() !void {
     dd.deinit();
 }
 
-pub fn textEntryWidgets() !void {
+pub fn textEntryWidgets(demo_win_id: u32) !void {
     var left_alignment = dvui.Alignment.init();
     defer left_alignment.deinit();
 
@@ -1092,12 +1092,108 @@ pub fn textEntryWidgets() !void {
 
         try dvui.label(@src(), "Multiline Font", .{}, .{ .gravity_y = 0.5 });
 
-        // align
-        var box_aligned = try dvui.box(@src(), .vertical, .{ .margin = left_alignment.margin(hbox.data().id) });
-        defer box_aligned.deinit();
-        left_alignment.record(hbox.data().id, box_aligned.data());
+        {
+            // align
+            var wd = try dvui.spacer(@src(), .{}, .{ .margin = left_alignment.margin(hbox.data().id) });
+            left_alignment.record(hbox.data().id, &wd);
+        }
 
         _ = try dvui.dropdown(@src(), font_entries, &Sfont.dropdown, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        {
+            // align
+            var wd = try dvui.spacer(@src(), .{}, .{ .margin = left_alignment.margin(hbox.data().id) });
+            left_alignment.record(hbox.data().id, &wd);
+        }
+
+        var vbox = try dvui.box(@src(), .vertical, .{});
+        defer vbox.deinit();
+
+        var la2 = dvui.Alignment.init();
+        defer la2.deinit();
+
+        var hbox2 = try dvui.box(@src(), .horizontal, .{});
+        try dvui.label(@src(), "Name", .{}, .{ .gravity_y = 0.5 });
+
+        {
+            var wd = try dvui.spacer(@src(), .{}, .{ .margin = la2.margin(hbox2.data().id) });
+            la2.record(hbox2.data().id, &wd);
+        }
+
+        var te_name = try dvui.textEntry(@src(), .{}, .{});
+        te_name.deinit();
+        hbox2.deinit();
+
+        var hbox3 = try dvui.box(@src(), .horizontal, .{});
+
+        var new_filename: ?[]const u8 = null;
+
+        if (try dvui.buttonIcon(@src(), "select font", entypo.folder, .{}, .{ .min_size_content = .{ .h = 20 }, .expand = .ratio, .gravity_x = 1.0 })) {
+            if (dvui.wasm) {
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
+            } else {
+                new_filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "Pick Font File" });
+            }
+        }
+
+        try dvui.label(@src(), "File", .{}, .{ .gravity_y = 0.5 });
+
+        var wd2 = try dvui.spacer(@src(), .{}, .{ .margin = la2.margin(hbox3.data().id) });
+        la2.record(hbox3.data().id, &wd2);
+
+        var te_file = try dvui.textEntry(@src(), .{}, .{});
+        if (new_filename) |f| {
+            te_file.textLayout.selection.selectAll();
+            te_file.textTyped(f, false);
+        }
+        te_file.deinit();
+        hbox3.deinit();
+
+        if (try dvui.button(@src(), "Add Font", .{}, .{})) {
+            if (dvui.wasm) {
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
+            } else {
+                const name = te_name.getText();
+                if (name.len == 0) {
+                    try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Add a Name" });
+                } else if (dvui.currentWindow().font_bytes.contains(name)) {
+                    try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Already have font named \"{s}\"", .{name}) });
+                } else {
+                    const filename = te_file.getText();
+                    var bytes: ?[]u8 = null;
+                    if (!std.fs.path.isAbsolute(filename)) {
+                        try dvui.dialog(@src(), .{ .title = "File Error", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename}) });
+                    } else {
+                        const file = std.fs.openFileAbsolute(filename, .{}) catch blk: {
+                            try dvui.dialog(@src(), .{ .title = "File Error", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename}) });
+                            break :blk null;
+                        };
+                        if (file) |f| {
+                            bytes = f.reader().readAllAlloc(dvui.currentWindow().gpa, 30_000_000) catch null;
+                        }
+                    }
+
+                    if (bytes) |b| {
+                        try dvui.currentWindow().font_bytes.put(name, b);
+
+                        _ = dvui.fontCacheGet(.{ .name = name, .size = 14 }) catch {
+                            _ = dvui.currentWindow().font_bytes.remove(name);
+                            dvui.currentWindow().gpa.free(b);
+                            try dvui.dialog(@src(), .{ .title = "Bad Font", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "\"{s}\" is not a valid font", .{filename}) });
+                        };
+
+                        if (dvui.currentWindow().font_bytes.contains(name)) {
+                            try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Added font named \"{s}\"", .{name}) });
+                        }
+                    }
+                }
+            }
+        }
     }
 
     _ = try dvui.spacer(@src(), .{ .h = 20 }, .{});
@@ -2562,7 +2658,7 @@ pub fn dialogs(demo_win_id: u32) !void {
 
         if (try dvui.button(@src(), "Open File", .{}, .{})) {
             if (dvui.wasm) {
-                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in web" });
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
             } else {
                 const filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "dvui native file open", .filters = &.{ "*.png", "*.jpg" }, .filter_description = "images" });
                 if (filename) |f| {
@@ -2573,7 +2669,7 @@ pub fn dialogs(demo_win_id: u32) !void {
 
         if (try dvui.button(@src(), "Open Multiple Files", .{}, .{})) {
             if (dvui.wasm) {
-                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in web" });
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
             } else {
                 const filenames = try dvui.dialogNativeFileOpenMultiple(dvui.currentWindow().arena(), .{ .title = "dvui native file open multiple", .filter_description = "images" });
                 if (filenames) |fs| {
@@ -2589,7 +2685,7 @@ pub fn dialogs(demo_win_id: u32) !void {
 
         if (try dvui.button(@src(), "Open Folder", .{}, .{})) {
             if (dvui.wasm) {
-                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in web" });
+                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
             } else {
                 const filename = try dvui.dialogNativeFolderSelect(dvui.currentWindow().arena(), .{ .title = "dvui native folder select" });
                 if (filename) |f| {
