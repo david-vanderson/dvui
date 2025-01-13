@@ -53,6 +53,8 @@ pub const wasm = struct {
     pub extern fn wasm_text_input(x: f32, y: f32, w: f32, h: f32) void;
     pub extern fn wasm_open_url(ptr: [*]const u8, len: usize) void;
     pub extern fn wasm_clipboardTextSet(ptr: [*]const u8, len: usize) void;
+
+    pub extern fn wasm_add_noto_font() void;
 };
 
 export const __stack_chk_guard: c_ulong = 0xBAAAAAAD;
@@ -119,6 +121,12 @@ export fn gpa_free(ptr: [*c]u8, len: usize) void {
 export fn arena_u8(len: usize) [*c]u8 {
     const buf = arena.alloc(u8, len) catch return @ptrFromInt(0);
     return buf.ptr;
+}
+
+export fn new_font(ptr: [*c]u8, len: usize) void {
+    if (win) |w| {
+        w.font_bytes.put("Noto", ptr[0..len]) catch unreachable;
+    }
 }
 
 export fn add_event(kind: u8, int1: u32, int2: u32, float1: f32, float2: f32) void {

@@ -134,5 +134,10 @@ pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap([]c
     inline for (@typeInfo(TTFBytes).Struct.decls) |decl| {
         try result.put(decl.name, @field(TTFBytes, decl.name));
     }
+
+    if (!dvui.wasm) {
+        try result.put("Noto", @embedFile("fonts/NotoSansKR-Regular.ttf"));
+    }
+
     return result;
 }

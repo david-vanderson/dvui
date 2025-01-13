@@ -3,6 +3,13 @@ async function dvui_sleep(ms) {
     await new Promise(r => setTimeout(r, ms));
 }
 
+async function dvui_fetch(url) {
+    let x = await fetch(url);
+    let blob = await x.blob();
+    //console.log("dvui_fetch: " + blob.size);
+    return new Uint8Array(await blob.arrayBuffer());
+}
+
 function dvui(canvasId, wasmFile) {
 
     const vertexShaderSource_webgl = `
@@ -423,6 +430,15 @@ function dvui(canvasId, wasmFile) {
                 hidden_input.value = "";
                 oskCheck();
             }
+        },
+	wasm_add_noto_font: () => {
+	    dvui_fetch("NotoSansKR-Regular.ttf").then((bytes) => {
+		    //console.log("bytes len " + bytes.length);
+		    const ptr = wasmResult.instance.exports.gpa_u8(bytes.length);
+		    var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, bytes.length);
+		    dest.set(bytes);
+		    wasmResult.instance.exports.new_font(ptr, bytes.length);
+	    });
         },
       },
     };

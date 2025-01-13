@@ -91,6 +91,7 @@ pub fn build(b: *std.Build) !void {
             "arena_u8",
             "gpa_u8",
             "gpa_free",
+            "new_font",
         };
 
         wasm.root_module.addImport("WebBackend", web_mod);
@@ -112,10 +113,13 @@ pub fn build(b: *std.Build) !void {
         cb_run.addFileArg(wasm.getEmittedBin());
         const output = cb_run.captureStdOut();
 
+        const install_noto = b.addInstallBinFile(b.path("src/fonts/NotoSansKR-Regular.ttf"), "NotoSansKR-Regular.ttf");
+
         const compile_step = b.step("web-test", "Compile the Web test");
         compile_step.dependOn(&b.addInstallFileWithDir(output, .prefix, "bin/index.html").step);
         compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/WebBackend.js"), .prefix, "bin/WebBackend.js").step);
         compile_step.dependOn(&install_wasm.step);
+        compile_step.dependOn(&install_noto.step);
 
         b.getInstallStep().dependOn(compile_step);
     }
