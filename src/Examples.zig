@@ -1117,47 +1117,45 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
         var la2 = dvui.Alignment.init();
         defer la2.deinit();
 
-        var hbox2 = try dvui.box(@src(), .horizontal, .{});
-        try dvui.label(@src(), "Name", .{}, .{ .gravity_y = 0.5 });
+        if (dvui.wasm) {
+            if (try dvui.button(@src(), "Add Noto Font", .{}, .{})) {
+                dvui.backend.wasm.wasm_add_noto_font();
+            }
+        } else {
+            var hbox2 = try dvui.box(@src(), .horizontal, .{});
+            try dvui.label(@src(), "Name", .{}, .{ .gravity_y = 0.5 });
 
-        {
-            var wd = try dvui.spacer(@src(), .{}, .{ .margin = la2.margin(hbox2.data().id) });
-            la2.record(hbox2.data().id, &wd);
-        }
+            {
+                var wd = try dvui.spacer(@src(), .{}, .{ .margin = la2.margin(hbox2.data().id) });
+                la2.record(hbox2.data().id, &wd);
+            }
 
-        var te_name = try dvui.textEntry(@src(), .{}, .{});
-        te_name.deinit();
-        hbox2.deinit();
+            var te_name = try dvui.textEntry(@src(), .{}, .{});
+            te_name.deinit();
+            hbox2.deinit();
 
-        var hbox3 = try dvui.box(@src(), .horizontal, .{});
+            var hbox3 = try dvui.box(@src(), .horizontal, .{});
 
-        var new_filename: ?[]const u8 = null;
+            var new_filename: ?[]const u8 = null;
 
-        if (try dvui.buttonIcon(@src(), "select font", entypo.folder, .{}, .{ .min_size_content = .{ .h = 20 }, .expand = .ratio, .gravity_x = 1.0 })) {
-            if (dvui.wasm) {
-                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
-            } else {
+            if (try dvui.buttonIcon(@src(), "select font", entypo.folder, .{}, .{ .min_size_content = .{ .h = 20 }, .expand = .ratio, .gravity_x = 1.0 })) {
                 new_filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "Pick Font File" });
             }
-        }
 
-        try dvui.label(@src(), "File", .{}, .{ .gravity_y = 0.5 });
+            try dvui.label(@src(), "File", .{}, .{ .gravity_y = 0.5 });
 
-        var wd2 = try dvui.spacer(@src(), .{}, .{ .margin = la2.margin(hbox3.data().id) });
-        la2.record(hbox3.data().id, &wd2);
+            var wd2 = try dvui.spacer(@src(), .{}, .{ .margin = la2.margin(hbox3.data().id) });
+            la2.record(hbox3.data().id, &wd2);
 
-        var te_file = try dvui.textEntry(@src(), .{}, .{});
-        if (new_filename) |f| {
-            te_file.textLayout.selection.selectAll();
-            te_file.textTyped(f, false);
-        }
-        te_file.deinit();
-        hbox3.deinit();
+            var te_file = try dvui.textEntry(@src(), .{}, .{});
+            if (new_filename) |f| {
+                te_file.textLayout.selection.selectAll();
+                te_file.textTyped(f, false);
+            }
+            te_file.deinit();
+            hbox3.deinit();
 
-        if (try dvui.button(@src(), "Add Font", .{}, .{})) {
-            if (dvui.wasm) {
-                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
-            } else {
+            if (try dvui.button(@src(), "Add Font", .{}, .{})) {
                 const name = te_name.getText();
                 if (name.len == 0) {
                     try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Add a Name" });
