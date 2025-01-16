@@ -140,6 +140,12 @@ pub const Alignment = struct {
         };
     }
 
+    pub fn spacer(self: *Alignment, src: std.builtin.SourceLocation, id: u32) !void {
+        const uniqueId = dvui.parentGet().extendId(src, id);
+        var wd = try dvui.spacer(src, .{}, .{ .margin = self.margin(uniqueId), .id_extra = id });
+        self.record(uniqueId, &wd);
+    }
+
     pub fn margin(self: *Alignment, id: u32) Rect {
         if (self.max) |m| {
             if (dvui.dataGet(null, id, "_align", f32)) |a| {

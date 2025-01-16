@@ -961,10 +961,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
         try dvui.label(@src(), "Singleline", .{}, .{ .gravity_y = 0.5 });
 
-        // align text entry
-        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
-        defer hbox_aligned.deinit();
-        left_alignment.record(hbox.data().id, hbox_aligned.data());
+        try left_alignment.spacer(@src(), 0);
 
         var te = try dvui.textEntry(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{ .max_size_content = dvui.Options.sizeM(20, 0) });
         enter_pressed = te.enter_pressed;
@@ -977,10 +974,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        // align to text entries
-        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
-        defer hbox_aligned.deinit();
-        left_alignment.record(hbox.data().id, hbox_aligned.data());
+        try left_alignment.spacer(@src(), 0);
 
         try dvui.label(@src(), "press enter", .{}, .{ .gravity_y = 0.5 });
 
@@ -1002,10 +996,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
         try dvui.label(@src(), "Password", .{}, .{ .gravity_y = 0.5 });
 
-        // align text entry
-        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
-        defer hbox_aligned.deinit();
-        left_alignment.record(hbox.data().id, hbox_aligned.data());
+        try left_alignment.spacer(@src(), 0);
 
         var te = try dvui.textEntry(@src(), .{
             .text = .{ .buffer = &text_entry_password_buf },
@@ -1056,10 +1047,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
         try dvui.label(@src(), "Multiline", .{}, .{ .gravity_y = 0.5 });
 
-        // align text entry
-        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
-        defer hbox_aligned.deinit();
-        left_alignment.record(hbox.data().id, hbox_aligned.data());
+        try left_alignment.spacer(@src(), 0);
 
         var font = dvui.themeGet().font_body;
         if (Sfont.dropdown > 0) {
@@ -1092,11 +1080,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
         try dvui.label(@src(), "Multiline Font", .{}, .{ .gravity_y = 0.5 });
 
-        {
-            // align
-            var wd = try dvui.spacer(@src(), .{}, .{ .margin = left_alignment.margin(hbox.data().id) });
-            left_alignment.record(hbox.data().id, &wd);
-        }
+        try left_alignment.spacer(@src(), 0);
 
         _ = try dvui.dropdown(@src(), font_entries, &Sfont.dropdown, .{ .min_size_content = .{ .w = 100 }, .gravity_y = 0.5 });
     }
@@ -1105,11 +1089,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        {
-            // align
-            var wd = try dvui.spacer(@src(), .{}, .{ .margin = left_alignment.margin(hbox.data().id) });
-            left_alignment.record(hbox.data().id, &wd);
-        }
+        try left_alignment.spacer(@src(), 0);
 
         var vbox = try dvui.box(@src(), .vertical, .{});
         defer vbox.deinit();
@@ -1125,10 +1105,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
             try dvui.label(@src(), "Name", .{}, .{ .gravity_y = 0.5 });
 
-            {
-                var wd = try dvui.spacer(@src(), .{}, .{ .margin = la2.margin(hbox2.data().id) });
-                la2.record(hbox2.data().id, &wd);
-            }
+            try la2.spacer(@src(), 0);
 
             var te_name = try dvui.textEntry(@src(), .{}, .{});
             te_name.deinit();
@@ -1144,8 +1121,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
             try dvui.label(@src(), "File", .{}, .{ .gravity_y = 0.5 });
 
-            var wd2 = try dvui.spacer(@src(), .{}, .{ .margin = la2.margin(hbox3.data().id) });
-            la2.record(hbox3.data().id, &wd2);
+            try la2.spacer(@src(), 0);
 
             var te_file = try dvui.textEntry(@src(), .{}, .{});
             if (new_filename) |f| {
@@ -1220,10 +1196,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
         _ = try dvui.dropdown(@src(), &parse_typenames, &S.type_dropdown_val, .{ .min_size_content = .{ .w = 20 }, .gravity_y = 0.5 });
 
-        // align text entry
-        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
-        defer hbox_aligned.deinit();
-        left_alignment.record(hbox.data().id, hbox_aligned.data());
+        try left_alignment.spacer(@src(), 0);
 
         inline for (parse_types, 0..) |T, i| {
             if (i == S.type_dropdown_val) {
@@ -1244,10 +1217,10 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
                     } else {
                         S.value = @floatCast(value);
                     }
-                    dvui.animation(hbox_aligned.data().id, "value_changed", .{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 500_000 });
+                    dvui.animation(hbox.data().id, "value_changed", .{ .start_val = 1.0, .end_val = 0, .start_time = 0, .end_time = 500_000 });
                 }
 
-                if (dvui.animationGet(hbox_aligned.data().id, "value_changed")) |a| {
+                if (dvui.animationGet(hbox.data().id, "value_changed")) |a| {
                     const prev_alpha = dvui.themeGet().alpha;
                     dvui.themeGet().alpha *= a.lerp();
                     try dvui.label(@src(), "Changed!", .{}, .{ .gravity_y = 0.5 });
@@ -1261,15 +1234,14 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        // align with text entries
-        var hbox_aligned = try dvui.box(@src(), .horizontal, .{ .margin = left_alignment.margin(hbox.data().id) });
-        defer hbox_aligned.deinit();
-        left_alignment.record(hbox.data().id, hbox_aligned.data());
+        try left_alignment.spacer(@src(), 0);
 
         _ = try dvui.checkbox(@src(), &S.min, "Min", .{});
         _ = try dvui.checkbox(@src(), &S.max, "Max", .{});
         _ = try dvui.label(@src(), "Stored {d}", .{S.value}, .{});
     }
+
+    _ = try dvui.spacer(@src(), .{ .h = 20 }, .{});
 
     try dvui.label(@src(), "The text entries in this section are left-aligned", .{}, .{});
 }
