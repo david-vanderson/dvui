@@ -225,6 +225,14 @@ pub fn frameTimeNS() i128 {
     return currentWindow().frame_time_ns;
 }
 
+/// The bytes of a truetype font file and whether to free it.
+pub const FontBytesEntry = struct {
+    ttf_bytes: []const u8,
+
+    /// If true, ttf_bytes was allocated by Window.gpa and will be freed by it.
+    alloced: bool,
+};
+
 const GlyphInfo = struct {
     advance: f32, // horizontal distance to move the pen
     leftBearing: f32, // horizontal distance from pen to bounding box left edge
@@ -387,8 +395,8 @@ const FontCacheEntry = struct {
     pub fn hash(font: Font) u32 {
         var h = fnv.init();
         var bytes: []const u8 = undefined;
-        if (currentWindow().font_bytes.get(font.name)) |ttf_bytes| {
-            bytes = ttf_bytes;
+        if (currentWindow().font_bytes.get(font.name)) |fbe| {
+            bytes = fbe.ttf_bytes;
         } else {
             bytes = Font.default_ttf_bytes;
         }
@@ -539,8 +547,8 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
 
     //ttf bytes
     const bytes = blk: {
-        if (currentWindow().font_bytes.get(font.name)) |ttf_bytes| {
-            break :blk ttf_bytes;
+        if (currentWindow().font_bytes.get(font.name)) |fbe| {
+            break :blk fbe.ttf_bytes;
         } else {
             log.warn("Font \"{s}\" not in dvui database, using default", .{font.name});
             break :blk Font.default_ttf_bytes;
@@ -2576,7 +2584,7 @@ pub const Window = struct {
     tab_index_prev: std.ArrayList(TabIndex),
     tab_index: std.ArrayList(TabIndex),
     font_cache: std.AutoHashMap(u32, FontCacheEntry),
-    font_bytes: std.StringHashMap([]const u8),
+    font_bytes: std.StringHashMap(FontBytesEntry),
     texture_cache: std.AutoHashMap(u32, TextureCacheEntry),
     dialog_mutex: std.Thread.Mutex,
     dialogs: std.ArrayList(Dialog),
@@ -2850,7 +2858,17 @@ pub const Window = struct {
         self.toasts.deinit();
         self.keybinds.deinit();
         self._arena.deinit();
+
+        {
+            var it = self.font_bytes.valueIterator();
+            while (it.next()) |fbe| {
+                if (fbe.alloced) {
+                    self.gpa.free(fbe.ttf_bytes);
+                }
+            }
+        }
         self.font_bytes.deinit();
+
         {
             for (self.themes.values()) |*theme| {
                 theme.deinit(self.gpa);
