@@ -129,14 +129,14 @@ pub const TTFBytes = struct {
     //pub const OpenDyslexicBdIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold-Italic.otf");
 };
 
-pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap([]const u8) {
-    var result = std.StringHashMap([]const u8).init(allocator);
+pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap(dvui.FontBytesEntry) {
+    var result = std.StringHashMap(dvui.FontBytesEntry).init(allocator);
     inline for (@typeInfo(TTFBytes).Struct.decls) |decl| {
-        try result.put(decl.name, @field(TTFBytes, decl.name));
+        try result.put(decl.name, dvui.FontBytesEntry{ .ttf_bytes = @field(TTFBytes, decl.name), .alloced = false });
     }
 
     if (!dvui.wasm) {
-        try result.put("Noto", @embedFile("fonts/NotoSansKR-Regular.ttf"));
+        try result.put("Noto", dvui.FontBytesEntry{ .ttf_bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"), .alloced = false });
     }
 
     return result;

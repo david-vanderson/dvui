@@ -1177,7 +1177,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
                     }
 
                     if (bytes) |b| {
-                        try dvui.currentWindow().font_bytes.put(name, b);
+                        try dvui.currentWindow().font_bytes.put(name, dvui.FontBytesEntry{ .ttf_bytes = b, .alloced = true });
 
                         _ = dvui.fontCacheGet(.{ .name = name, .size = 14 }) catch {
                             _ = dvui.currentWindow().font_bytes.remove(name);
