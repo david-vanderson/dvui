@@ -125,7 +125,7 @@ export fn arena_u8(len: usize) [*c]u8 {
 
 export fn new_font(ptr: [*c]u8, len: usize) void {
     if (win) |w| {
-        w.font_bytes.put("Noto", ptr[0..len]) catch unreachable;
+        w.font_bytes.put("Noto", dvui.FontBytesEntry{ .ttf_bytes = ptr[0..len], .allocator = gpa }) catch unreachable;
     }
 }
 

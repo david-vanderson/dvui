@@ -229,8 +229,8 @@ pub fn frameTimeNS() i128 {
 pub const FontBytesEntry = struct {
     ttf_bytes: []const u8,
 
-    /// If true, ttf_bytes was allocated by Window.gpa and will be freed by it.
-    alloced: bool,
+    /// If not null, this will be used to free ttf_bytes.
+    allocator: ?std.mem.Allocator,
 };
 
 const GlyphInfo = struct {
@@ -2862,8 +2862,8 @@ pub const Window = struct {
         {
             var it = self.font_bytes.valueIterator();
             while (it.next()) |fbe| {
-                if (fbe.alloced) {
-                    self.gpa.free(fbe.ttf_bytes);
+                if (fbe.allocator) |a| {
+                    a.free(fbe.ttf_bytes);
                 }
             }
         }
