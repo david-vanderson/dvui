@@ -132,11 +132,11 @@ pub const TTFBytes = struct {
 pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap(dvui.FontBytesEntry) {
     var result = std.StringHashMap(dvui.FontBytesEntry).init(allocator);
     inline for (@typeInfo(TTFBytes).Struct.decls) |decl| {
-        try result.put(decl.name, dvui.FontBytesEntry{ .ttf_bytes = @field(TTFBytes, decl.name), .alloced = false });
+        try result.put(decl.name, dvui.FontBytesEntry{ .ttf_bytes = @field(TTFBytes, decl.name), .allocator = null });
     }
 
     if (!dvui.wasm) {
-        try result.put("Noto", dvui.FontBytesEntry{ .ttf_bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"), .alloced = false });
+        try result.put("Noto", dvui.FontBytesEntry{ .ttf_bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"), .allocator = null });
     }
 
     return result;
