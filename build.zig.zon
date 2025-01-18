@@ -11,6 +11,7 @@
         .sdl3 = .{
             .url = "git+https://github.com/rohlem/zig_sdl3-update-zig#8737ef1810285b95b3aa04f534dd85b6e016afbc",
             .hash = "12207ab67f1a9f7994f5ffcba0b8294360d95ab583026934e750848179fc48dab735",
+            .lazy = true,
         },
         .freetype = .{
             .url = "git+https://github.com/rohlem/freetype-update-zig#a50182dc5787a8d49dd1ad922699a1c8771aa34a",
