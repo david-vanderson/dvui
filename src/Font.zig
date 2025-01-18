@@ -131,7 +131,7 @@ pub const TTFBytes = struct {
 
 pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap(dvui.FontBytesEntry) {
     var result = std.StringHashMap(dvui.FontBytesEntry).init(allocator);
-    inline for (@typeInfo(TTFBytes).Struct.decls) |decl| {
+    inline for (@typeInfo(TTFBytes).@"struct".decls) |decl| {
         try result.put(decl.name, dvui.FontBytesEntry{ .ttf_bytes = @field(TTFBytes, decl.name), .allocator = null });
     }
 

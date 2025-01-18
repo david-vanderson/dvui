@@ -105,7 +105,7 @@ pub fn build(b: *std.Build) !void {
         const cb = b.addExecutable(.{
             .name = "cacheBuster",
             .root_source_file = b.path("src/cacheBuster.zig"),
-            .target = b.host,
+            .target = b.graph.host,
         });
         const cb_run = b.addRunArtifact(cb);
         cb_run.addFileArg(b.path("src/backends/index.html"));
