@@ -231,8 +231,7 @@ fn addDvuiModule(
                     // SDL3 compiled from source
                     sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
                     if (b.lazyDependency("sdl3", .{})) |sdl3| {
-                        backend_mod.linkLibrary(sdl3.artifact("sdl3"));
-                        backend_mod.addImport("sdl3_c", sdl3.module("sdl"));
+                        backend_mod.linkLibrary(sdl3.artifact("SDL3"));
                     }
                 } else if (b.systemIntegrationOption("sdl3", .{})) {
                     // SDL3 from system
