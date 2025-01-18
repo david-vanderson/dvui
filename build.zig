@@ -230,7 +230,10 @@ fn addDvuiModule(
                 } else if (b.option(bool, "sdl3", "Use SDL3 compiled from source") orelse false) {
                     // SDL3 compiled from source
                     sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
-                    if (b.lazyDependency("sdl3", .{})) |sdl3| {
+                    if (b.lazyDependency("sdl3", .{
+                        .target = target,
+                        .optimize = optimize,
+                    })) |sdl3| {
                         backend_mod.linkLibrary(sdl3.artifact("SDL3"));
                     }
                 } else if (b.systemIntegrationOption("sdl3", .{})) {
