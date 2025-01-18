@@ -4,8 +4,8 @@
     .paths = .{""},
     .dependencies = .{
         .sdl = .{
-            .url = "git+https://github.com/allyourcodebase/SDL#a13d7e80e8d847db2b2ff8f334d57eb5bbb489dd",
-            .hash = "12200aa79b05aaeefff144b9e376371e2e7ddc982b9207d146163baf56361331a834",
+            .url = "git+https://github.com/rohlem/SDL#4abe06a7497eea7e5aeb3705951c2fced0491cb4",
+            .hash = "1220647b4508a0226ad9825586e683d68aef6d227fdab84b3c3b029366eec9ef18dd",
             .lazy = true,
         },
         .sdl3 = .{
@@ -31,8 +31,8 @@
         },
         // required for the directx11 backend
         .zigwin32 = .{
-            .url = "git+https://github.com/rohlem/zigwin32-update-zig#406caae350880d15da93d7087f7560897f1a532d",
-            .hash = "1220327265a70f5a41aac138b1571985a7b135c0a3014043be6976a758dfd726fc5d",
+            .url = "git+https://github.com/rohlem/zigwin32-update-zig#5d6055e7c8cea4c508f33c0d8641fdf1fe30f9ea",
+            .hash = "122073b611033d3660fca78fb588d2fd97bbdad96be8c688c5a00f8b85c4a5e3d871",
             .lazy = true,
         },
     },

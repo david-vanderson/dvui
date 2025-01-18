@@ -435,13 +435,13 @@ pub fn optionalFieldWidget(
 pub fn PointerFieldOptions(comptime T: type) type {
     const info = @typeInfo(T).pointer;
 
-    if (info.size == .Slice and info.child == u8) {
+    if (info.size == .slice and info.child == u8) {
         return TextFieldOptions;
-    } else if (info.size == .Slice) {
+    } else if (info.size == .slice) {
         return SliceFieldOptions(T);
-    } else if (info.size == .One) {
+    } else if (info.size == .one) {
         return SinglePointerFieldOptions(T);
-    } else if (info.size == .C or info.size == .Many) {
+    } else if (info.size == .c or info.size == .many) {
         @compileError("Many item pointers disallowed");
     }
 }
@@ -457,13 +457,13 @@ pub fn pointerFieldWidget(
 ) !void {
     const info = @typeInfo(T).pointer;
 
-    if (info.size == .Slice and info.child == u8) {
+    if (info.size == .slice and info.child == u8) {
         try textFieldWidget(name, T, result, opt, alloc, allocator, alignment);
-    } else if (info.size == .Slice) {
+    } else if (info.size == .slice) {
         try sliceFieldWidget(name, T, result, opt, alloc, allocator, alignment);
-    } else if (info.size == .One) {
+    } else if (info.size == .one) {
         try singlePointerFieldWidget(name, T, result, opt, alloc, allocator, alignment);
-    } else if (info.size == .C or info.size == .Many) {
+    } else if (info.size == .c or info.size == .many) {
         @compileError("structEntry does not support *C or Many pointers");
     }
 }
@@ -574,7 +574,7 @@ pub fn sliceFieldWidget(
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
 ) !void {
-    if (@typeInfo(T).pointer.size != .Slice) @compileError("must be called with slice");
+    if (@typeInfo(T).pointer.size != .slice) @compileError("must be called with slice");
 
     const Child = @typeInfo(T).pointer.child;
 
@@ -804,7 +804,7 @@ pub fn NamespaceFieldOptions(comptime T: type) type {
         const FieldType = FieldOptions(field.type);
         fields[i] = .{
             .alignment = 1,
-            .default_value = @alignCast(@ptrCast(&(@as(FieldType, FieldType{})))),
+            .default_value_ptr = &(@as(FieldType, FieldType{})),
             .is_comptime = false,
             .name = field.name,
             .type = FieldType,
@@ -936,7 +936,7 @@ pub fn structEntryExAlloc(
 //        const info = @typeInfo(field.type);
 //        if (info == .pointer) {
 //            switch (info.size) {
-//                .Slice => {
+//                .slice => {
 //                    @field(result, field.name) = try allocator.dupe(info.child, @field(value, field.name));
 //                    if (@typeInfo(info.child) == .@"struct") {
 //                        for (@field(result, field.name), 0..) |*val, i| {
@@ -944,7 +944,7 @@ pub fn structEntryExAlloc(
 //                        }
 //                    }
 //                },
-//                .One => {
+//                .one => {
 //                    @field(result, field.name) = try allocator.create(info.child);
 //                    if (@typeInfo(info.child) == .@"struct") {
 //                        @field(result, field.name).* = try deepCopyStruct(allocator, @field(value, field.name));
