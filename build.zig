@@ -51,7 +51,7 @@ pub fn build(b: *std.Build) !void {
         };
         const webtarget_exe = std.Target.Query{
             .cpu_arch = .wasm32,
-            .os_tag = .freestanding,
+            .os_tag = .freestanding, //change to .wasi once, build fails, change back to .freestanding, build succeeds
             .abi = .musl,
         };
 
