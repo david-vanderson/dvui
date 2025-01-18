@@ -203,9 +203,9 @@ fn createDeviceD3D(hWnd: HWND) ?Backend.Directx11Options {
     var featureLevel: d3d.D3D_FEATURE_LEVEL = undefined;
     const featureLevelArray = &[_]d3d.D3D_FEATURE_LEVEL{ d3d.D3D_FEATURE_LEVEL_11_0, d3d.D3D_FEATURE_LEVEL_10_0 };
 
-    var device: ?*dx.ID3D11Device = null;
-    var device_context: ?*dx.ID3D11DeviceContext = null;
-    var swap_chain: ?*dxgi.IDXGISwapChain = null;
+    var device: *dx.ID3D11Device = undefined;
+    var device_context: *dx.ID3D11DeviceContext = undefined;
+    var swap_chain: *dxgi.IDXGISwapChain = undefined;
 
     var res: zwin.foundation.HRESULT = dx.D3D11CreateDeviceAndSwapChain(
         null,
@@ -242,9 +242,9 @@ fn createDeviceD3D(hWnd: HWND) ?Backend.Directx11Options {
         return null;
 
     return Backend.Directx11Options{
-        .device = device.?,
-        .device_context = device_context.?,
-        .swap_chain = swap_chain.?,
+        .device = device,
+        .device_context = device_context,
+        .swap_chain = swap_chain,
     };
 }
 

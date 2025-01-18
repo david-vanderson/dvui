@@ -54,6 +54,7 @@ pub const structEntry = se.structEntry;
 pub const structEntryEx = se.structEntryEx;
 pub const structEntryAlloc = se.structEntryAlloc;
 pub const structEntryExAlloc = se.structEntryExAlloc;
+pub const StructFieldOptions = se.StructFieldOptions;
 
 pub const enums = @import("enums.zig");
 
@@ -565,7 +566,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     var entry: FontCacheEntry = undefined;
 
     // make debug texture atlas so we can see if something later goes wrong
-    const size = .{ .w = 10, .h = 10 };
+    const size = Size{ .w = 10, .h = 10 };
     const pixels = try cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
     @memset(pixels, 255);
 
@@ -970,7 +971,7 @@ pub fn pathFillConvex(color: Color) !void {
     var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
     defer idx.deinit();
     const col = color.alphaMultiply();
-    const col_trans = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
+    const col_trans = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
     var bounds = Rect{}; // w and h are maxx and maxy for now
     bounds.x = std.math.floatMax(f32);
@@ -1132,7 +1133,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
     defer idx.deinit();
     const col = color.alphaMultiply();
-    const col_trans = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
+    const col_trans = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
     var bounds = Rect{}; // w and h are maxx and maxy for now
     bounds.x = std.math.floatMax(f32);
@@ -1912,18 +1913,18 @@ pub fn dataSetSlice(win: ?*Window, id: u32, key: []const u8, data: anytype) void
 /// entries that you want to fill in after.
 pub fn dataSetSliceCopies(win: ?*Window, id: u32, key: []const u8, data: anytype, num_copies: usize) void {
     const dt = @typeInfo(@TypeOf(data));
-    if (dt == .Pointer and dt.Pointer.size == .Slice) {
-        if (dt.Pointer.sentinel) |s| {
-            dataSetAdvanced(win, id, key, @as([:@as(*const dt.Pointer.child, @alignCast(@ptrCast(s))).*]dt.Pointer.child, @constCast(data)), true, num_copies);
+    if (dt == .pointer and dt.pointer.size == .slice) {
+        if (dt.pointer.sentinel()) |s| {
+            dataSetAdvanced(win, id, key, @as([:s]dt.pointer.child, @constCast(data)), true, num_copies);
         } else {
-            dataSetAdvanced(win, id, key, @as([]dt.Pointer.child, @constCast(data)), true, num_copies);
+            dataSetAdvanced(win, id, key, @as([]dt.pointer.child, @constCast(data)), true, num_copies);
         }
-    } else if (dt == .Pointer and dt.Pointer.size == .One and @typeInfo(dt.Pointer.child) == .Array) {
-        const child_type = @typeInfo(dt.Pointer.child);
-        if (child_type.Array.sentinel) |s| {
-            dataSetAdvanced(win, id, key, @as([:@as(*const child_type.Array.child, @alignCast(@ptrCast(s))).*]child_type.Array.child, @constCast(data)), true, num_copies);
+    } else if (dt == .pointer and dt.pointer.size == .one and @typeInfo(dt.pointer.child) == .array) {
+        const child_type = @typeInfo(dt.pointer.child);
+        if (child_type.array.sentinel()) |s| {
+            dataSetAdvanced(win, id, key, @as([:s]child_type.array.child, @constCast(data)), true, num_copies);
         } else {
-            dataSetAdvanced(win, id, key, @as([]child_type.Array.child, @constCast(data)), true, num_copies);
+            dataSetAdvanced(win, id, key, @as([]child_type.array.child, @constCast(data)), true, num_copies);
         }
     } else {
         @compileError("dataSetSlice needs a slice or pointer to array, given " ++ @typeName(@TypeOf(data)));
@@ -2048,15 +2049,15 @@ pub fn dataGetPtr(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?*T
 /// id/key combination.
 pub fn dataGetSlice(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
     const dt = @typeInfo(T);
-    if (dt != .Pointer or dt.Pointer.size != .Slice) {
+    if (dt != .pointer or dt.pointer.size != .slice) {
         @compileError("dataGetSlice needs a slice, given " ++ @typeName(T));
     }
 
     if (dataGetInternal(win, id, key, T, true)) |bytes| {
-        if (dt.Pointer.sentinel) |sentinel| {
-            return @as([:@as(*const dt.Pointer.child, @alignCast(@ptrCast(sentinel))).*]align(@alignOf(dt.Pointer.child)) dt.Pointer.child, @alignCast(@ptrCast(std.mem.bytesAsSlice(dt.Pointer.child, bytes[0 .. bytes.len - @sizeOf(dt.Pointer.child)]))));
+        if (dt.pointer.sentinel()) |sentinel| {
+            return @as([:sentinel]align(@alignOf(dt.pointer.child)) dt.pointer.child, @alignCast(@ptrCast(std.mem.bytesAsSlice(dt.pointer.child, bytes[0 .. bytes.len - @sizeOf(dt.pointer.child)]))));
         } else {
-            return @as([]align(@alignOf(dt.Pointer.child)) dt.Pointer.child, @alignCast(std.mem.bytesAsSlice(dt.Pointer.child, bytes)));
+            return @as([]align(@alignOf(dt.pointer.child)) dt.pointer.child, @alignCast(std.mem.bytesAsSlice(dt.pointer.child, bytes)));
         }
     } else {
         return null;
@@ -2076,7 +2077,7 @@ pub fn dataGetSlice(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?
 /// The returned slice points to internal storage, which will be freed after
 /// a frame where there is no call to any dataGet/dataSet functions for that
 /// id/key combination.
-pub fn dataGetSliceDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: []const @typeInfo(T).Pointer.child) T {
+pub fn dataGetSliceDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
     return dataGetSlice(win, id, key, T) orelse blk: {
         dataSetSlice(win, id, key, default);
         break :blk dataGetSlice(win, id, key, T).?;
@@ -2677,7 +2678,7 @@ pub const Window = struct {
         try self.themes.putNoClobber("Adwaita Light", @import("themes/Adwaita.zig").light);
         try self.themes.putNoClobber("Adwaita Dark", @import("themes/Adwaita.zig").dark);
 
-        inline for (@typeInfo(Theme.QuickTheme.builtin).Struct.decls) |decl| {
+        inline for (@typeInfo(Theme.QuickTheme.builtin).@"struct".decls) |decl| {
             const quick_theme = Theme.QuickTheme.fromString(self.arena(), @field(Theme.QuickTheme.builtin, decl.name)) catch {
                 @panic("Failure loading builtin theme. This is a problem with DVUI.");
             };
@@ -3655,8 +3656,8 @@ pub const Window = struct {
         var bytes: []const u8 = undefined;
         if (copy_slice) {
             bytes = std.mem.sliceAsBytes(data_in);
-            if (dt.Pointer.sentinel != null) {
-                bytes.len += @sizeOf(dt.Pointer.child);
+            if (dt.pointer.sentinel() != null) {
+                bytes.len += @sizeOf(dt.pointer.child);
             }
         } else {
             bytes = std.mem.asBytes(&data_in);
@@ -3664,7 +3665,7 @@ pub const Window = struct {
 
         const alignment = comptime blk: {
             if (copy_slice) {
-                break :blk dt.Pointer.alignment;
+                break :blk dt.pointer.alignment;
             } else {
                 break :blk @alignOf(@TypeOf(data_in));
             }
@@ -3954,7 +3955,7 @@ pub const Window = struct {
         var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
         defer scroll.deinit();
 
-        var iter = std.mem.split(u8, self.debug_under_mouse_info, "\n");
+        var iter = std.mem.splitScalar(u8, self.debug_under_mouse_info, '\n');
         var i: usize = 0;
         while (iter.next()) |line| : (i += 1) {
             if (line.len > 0) {
@@ -6072,9 +6073,9 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 }
 
 fn isF32Slice(comptime ptr: std.builtin.Type.Pointer, comptime child_info: std.builtin.Type) bool {
-    const is_slice = ptr.size == .Slice;
+    const is_slice = ptr.size == .slice;
     const holds_f32 = switch (child_info) {
-        .Float => |f| f.bits == 32,
+        .float => |f| f.bits == 32,
         else => false,
     };
 
@@ -6091,7 +6092,7 @@ fn isF32Slice(comptime ptr: std.builtin.Type.Pointer, comptime child_info: std.b
 
 fn checkAndCastDataPtr(comptime num_components: u32, value: anytype) *[num_components]f32 {
     switch (@typeInfo(@TypeOf(value))) {
-        .Pointer => |ptr| {
+        .pointer => |ptr| {
             const child_info = @typeInfo(ptr.child);
             const is_f32_slice = comptime isF32Slice(ptr, child_info);
 
@@ -6102,8 +6103,8 @@ fn checkAndCastDataPtr(comptime num_components: u32, value: anytype) *[num_compo
             // If not slice, need to check for arrays and vectors.
             // Need to also check the length.
             const data_len = switch (child_info) {
-                .Vector => |vec| vec.len,
-                .Array => |arr| arr.len,
+                .vector => |vec| vec.len,
+                .array => |arr| arr.len,
                 else => @compileError("Must supply a pointer to a vector or array!"),
             };
 
@@ -6130,7 +6131,7 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
 
     var any_changed = false;
     inline for (0..num_components) |i| {
-        const component_opts = .{
+        const component_opts = dvui.SliderEntryInitOptions{
             .value = &data_arr[i],
             .min = init_opts.min,
             .max = init_opts.max,
@@ -6408,11 +6409,11 @@ pub fn TextEntryNumberResult(comptime T: type) type {
 pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryNumberInitOptions(T), opts: Options) !TextEntryNumberResult(T) {
     const base_filter = "1234567890";
     const filter = switch (@typeInfo(T)) {
-        .Int => |int| switch (int.signedness) {
+        .int => |int| switch (int.signedness) {
             .signed => base_filter ++ "+-",
             .unsigned => base_filter ++ "+",
         },
-        .Float => base_filter ++ "+-.e",
+        .float => base_filter ++ "+-.e",
         else => unreachable,
     };
 
@@ -6444,8 +6445,8 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     // validation
     const text = te.getText();
     const num = switch (@typeInfo(T)) {
-        .Int => std.fmt.parseInt(T, text, 10) catch null,
-        .Float => std.fmt.parseFloat(T, text) catch null,
+        .int => std.fmt.parseInt(T, text, 10) catch null,
+        .float => std.fmt.parseFloat(T, text) catch null,
         else => unreachable,
     };
 

@@ -48,7 +48,7 @@ pub fn draw(self: *LabelWidget) !void {
     const rect = dvui.placeIn(self.wd.contentRect(), self.wd.options.min_size_contentGet(), .none, self.wd.options.gravityGet());
     var rs = self.wd.parent.screenRectScale(rect);
     const oldclip = dvui.clip(rs.r);
-    var iter = std.mem.split(u8, self.label_str, "\n");
+    var iter = std.mem.splitScalar(u8, self.label_str, '\n');
     var line_height_adj: f32 = undefined;
     var first: bool = true;
     while (iter.next()) |line| {
