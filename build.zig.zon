@@ -10,7 +10,7 @@
         },
         .sdl3 = .{
             .lazy = true,
-            .url = "git+https://github.com/castholm/SDL.git#0f9b915d86e948d7fa09de1a5bb912a0d7d203f1",
+            .url = "https://github.com/castholm/SDL.git#0f9b915d86e948d7fa09de1a5bb912a0d7d203f1",
             .hash = "1220eb863a14352c788fee12d7e9158a47af176bbef1070263edbb344cc1c3b72fdf",
         },
         .freetype = .{
