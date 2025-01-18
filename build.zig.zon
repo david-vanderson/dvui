@@ -10,8 +10,8 @@
         },
         .sdl3 = .{
             .lazy = true,
-            .url = "https://github.com/swan-www/zig_sdl3/archive/refs/tags/3.1.6.tar.gz",
-            .hash = "12203db5d6acf22b69b929ee32194e6352ca9406f0192e7d72dbc2907a1df4e32d8c",
+            .url = "git+https://github.com/castholm/SDL.git#0f9b915d86e948d7fa09de1a5bb912a0d7d203f1",
+            .hash = "1220eb863a14352c788fee12d7e9158a47af176bbef1070263edbb344cc1c3b72fdf",
         },
         .freetype = .{
             .url = "https://github.com/david-vanderson/freetype/archive/a62b6192d81952e64b8c16504427f3e28ef10e5f.tar.gz",
