@@ -14,13 +14,9 @@ How to run the built-in examples:
   - then load `zig-out/bin/index.html`
   - [online demo](https://david-vanderson.github.io)
 - SDL3:
-  - Windows (SDL3 built from source): 
-    - ```zig build sdl-standalone -Dsdl3```
-    - ```zig build sdl-ontop -Dsdl3```
-  - Linux (SDL3 dev must be installed on system):
-    - ```zig build sdl-standalone  -fsys=sdl3```
-    - ```zig build sdl-ontop -fsys=sdl3```
-    - if you encounter error `No Wayland` also add flag `-Dlinux_display_backend=X11`
+  - ```zig build sdl-standalone -Dsdl3```
+  - ```zig build sdl-ontop -Dsdl3```
+  - if you encounter error `No Wayland` also add flag `-Dlinux_display_backend=X11`
   
 
 [Online Docs](https://david-vanderson.github.io/docs) This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify widgets.

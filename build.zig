@@ -236,11 +236,6 @@ fn addDvuiModule(
                     })) |sdl3| {
                         backend_mod.linkLibrary(sdl3.artifact("SDL3"));
                     }
-                } else if (b.systemIntegrationOption("sdl3", .{})) {
-                    // SDL3 from system
-                    sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
-                    sdl_options.addOption(bool, "from_system", true);
-                    backend_mod.linkSystemLibrary("SDL3", .{});
                 } else {
                     // SDL2 compiled from source
                     sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
