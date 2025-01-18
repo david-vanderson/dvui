@@ -91,7 +91,7 @@ pub fn build(b: *std.Build) !void {
             "arena_u8",
             "gpa_u8",
             "gpa_free",
-            "new_font",
+            "new_font_ttf",
         };
 
         wasm.root_module.addImport("WebBackend", web_mod);

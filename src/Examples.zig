@@ -1026,10 +1026,10 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
         }
     };
 
-    var font_entries: [][]const u8 = try dvui.currentWindow().arena().alloc([]const u8, dvui.currentWindow().font_bytes.count() + 1);
+    var font_entries: [][]const u8 = try dvui.currentWindow().arena().alloc([]const u8, dvui.currentWindow().font_cache.count() + 1);
     {
         font_entries[0] = "Theme Body";
-        var it = dvui.currentWindow().font_bytes.keyIterator();
+        var it = dvui.currentWindow().font_cache.valueIterator();
         var i: usize = 0;
         while (it.next()) |v| {
             i += 1;

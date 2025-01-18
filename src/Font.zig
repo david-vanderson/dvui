@@ -9,13 +9,18 @@ const Font = @This();
 size: f32,
 line_height_factor: f32 = 1.2,
 name: []const u8,
+bytes_hash: u32,
 
 pub fn resize(self: *const Font, s: f32) Font {
-    return Font{ .size = s, .line_height_factor = self.line_height_factor, .name = self.name };
+    var font = self.*;
+    font.size = s;
+    return font;
 }
 
 pub fn lineHeightFactor(self: *const Font, factor: f32) Font {
-    return Font{ .size = self.size, .line_height_factor = factor, .name = self.name };
+    var font = self.*;
+    font.line_height_factor = factor;
+    return font;
 }
 
 pub fn textHeight(self: *const Font) f32 {
@@ -129,15 +134,15 @@ pub const TTFBytes = struct {
     //pub const OpenDyslexicBdIt = @embedFile("fonts/OpenDyslexic/compiled/OpenDyslexic-Bold-Italic.otf");
 };
 
-pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap(dvui.FontBytesEntry) {
-    var result = std.StringHashMap(dvui.FontBytesEntry).init(allocator);
-    inline for (@typeInfo(TTFBytes).Struct.decls) |decl| {
-        try result.put(decl.name, dvui.FontBytesEntry{ .ttf_bytes = @field(TTFBytes, decl.name), .allocator = null });
-    }
+// pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap(dvui.FontBytesEntry) {
+//     var result = std.StringHashMap(dvui.FontBytesEntry).init(allocator);
+//     inline for (@typeInfo(TTFBytes).Struct.decls) |decl| {
+//         try result.put(decl.name, dvui.FontBytesEntry{ .ttf_bytes = @field(TTFBytes, decl.name), .allocator = null });
+//     }
 
-    if (!dvui.wasm) {
-        try result.put("Noto", dvui.FontBytesEntry{ .ttf_bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"), .allocator = null });
-    }
+//     if (!dvui.wasm) {
+//         try result.put("Noto", dvui.FontBytesEntry{ .ttf_bytes = @embedFile("fonts/NotoSansKR-Regular.ttf"), .allocator = null });
+//     }
 
-    return result;
-}
+//     return result;
+// }

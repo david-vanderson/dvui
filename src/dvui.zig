@@ -231,14 +231,6 @@ pub fn frameTimeNS() i128 {
     return currentWindow().frame_time_ns;
 }
 
-/// The bytes of a truetype font file and whether to free it.
-pub const FontBytesEntry = struct {
-    ttf_bytes: []const u8,
-
-    /// If not null, this will be used to free ttf_bytes.
-    allocator: ?std.mem.Allocator,
-};
-
 const GlyphInfo = struct {
     advance: f32, // horizontal distance to move the pen
     leftBearing: f32, // horizontal distance from pen to bounding box left edge
@@ -249,6 +241,7 @@ const GlyphInfo = struct {
 };
 
 const FontCacheEntry = struct {
+    name: std.ArrayList(u8),
     used: bool = true,
     face: if (useFreeType) c.FT_Face else c.stbtt_fontinfo,
     scaleFactor: f32,
@@ -264,6 +257,8 @@ const FontCacheEntry = struct {
             _ = c.FT_Done_Face(self.face);
         }
         win.backend.textureDestroy(self.texture_atlas);
+        self.name.deinit();
+        self.glyph_info.deinit();
     }
 
     pub const OpenFlags = packed struct(c_int) {
@@ -398,19 +393,6 @@ const FontCacheEntry = struct {
         };
     }
 
-    pub fn hash(font: Font) u32 {
-        var h = fnv.init();
-        var bytes: []const u8 = undefined;
-        if (currentWindow().font_bytes.get(font.name)) |fbe| {
-            bytes = fbe.ttf_bytes;
-        } else {
-            bytes = Font.default_ttf_bytes;
-        }
-        h.update(std.mem.asBytes(&bytes.ptr));
-        h.update(std.mem.asBytes(&font.size));
-        return h.final();
-    }
-
     pub fn glyphInfoGet(self: *FontCacheEntry, codepoint: u32, font_name: []const u8) !GlyphInfo {
         if (self.glyph_info.get(codepoint)) |gi| {
             return gi;
@@ -542,24 +524,9 @@ const FontCacheEntry = struct {
     }
 };
 
-// Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
-pub fn fontCacheGet(font: Font) !*FontCacheEntry {
+fn loadFont(name: []u8, bytes: []u8, fontHash: u32) void {
     var cw = currentWindow();
-    const fontHash = FontCacheEntry.hash(font);
-    if (cw.font_cache.getPtr(fontHash)) |fce| {
-        fce.used = true;
-        return fce;
-    }
 
-    //ttf bytes
-    const bytes = blk: {
-        if (currentWindow().font_bytes.get(font.name)) |fbe| {
-            break :blk fbe.ttf_bytes;
-        } else {
-            log.warn("Font \"{s}\" not in dvui database, using default", .{font.name});
-            break :blk Font.default_ttf_bytes;
-        }
-    };
     //log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
 
     var entry: FontCacheEntry = undefined;
@@ -578,7 +545,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         args.memory_base = bytes.ptr;
         args.memory_size = @as(u31, @intCast(bytes.len));
         FontCacheEntry.intToError(c.FT_Open_Face(ft2lib, &args, 0, &face)) catch |err| {
-            log.warn("fontCacheGet freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, font.name });
+            log.warn("fontCacheGet freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, name });
             return error.freetypeError;
         };
 
@@ -648,6 +615,28 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     try cw.font_cache.putNoClobber(fontHash, entry);
 
     return cw.font_cache.getPtr(fontHash).?;
+}
+pub fn fontLoadTTF(name: []u8, bytes: []u8) void {
+    loadFont(name, bytes, hashFont(bytes));
+}
+
+fn hashFont(bytes: []u8) u32 {
+    var h = fnv.init();
+    h.update(std.mem.asBytes(&bytes.ptr));
+    return h.final();
+}
+
+// Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
+pub fn fontCacheGet(font: Font) !*FontCacheEntry {
+    var cw = currentWindow();
+    const fontHash = font.bytes_hash;
+    if (cw.font_cache.getPtr(fontHash)) |fce| {
+        fce.used = true;
+        return fce;
+    }
+
+    const name = font.name;
+    const bytes = Font.default_ttf_bytes;
 }
 
 pub const TextureCacheEntry = struct {
@@ -2590,7 +2579,6 @@ pub const Window = struct {
     tab_index_prev: std.ArrayList(TabIndex),
     tab_index: std.ArrayList(TabIndex),
     font_cache: std.AutoHashMap(u32, FontCacheEntry),
-    font_bytes: std.StringHashMap(FontBytesEntry),
     texture_cache: std.AutoHashMap(u32, TextureCacheEntry),
     dialog_mutex: std.Thread.Mutex,
     dialogs: std.ArrayList(Dialog),
@@ -2670,7 +2658,6 @@ pub const Window = struct {
             .debug_refresh_mutex = std.Thread.Mutex{},
             .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
             .backend = backend_ctx,
-            .font_bytes = try Font.initTTFBytesDatabase(gpa),
             .themes = std.StringArrayHashMap(Theme).init(gpa),
         };
 
@@ -2864,16 +2851,6 @@ pub const Window = struct {
         self.toasts.deinit();
         self.keybinds.deinit();
         self._arena.deinit();
-
-        {
-            var it = self.font_bytes.valueIterator();
-            while (it.next()) |fbe| {
-                if (fbe.allocator) |a| {
-                    a.free(fbe.ttf_bytes);
-                }
-            }
-        }
-        self.font_bytes.deinit();
 
         {
             for (self.themes.values()) |*theme| {

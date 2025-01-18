@@ -22,19 +22,23 @@ const light_err_fill = err_hsl.color();
 const light_err_fill_hover = err_hsl.lighten(-10).color();
 const light_err_border = err_hsl.lighten(-20).color();
 
+pub fn builtinFont(comptime name: []u8, size: f32, factor: f32) Font {
+    return Font{ .name = name, .size = size, .line_height_factor = factor, .bytes_hash = @field(Font.TTFBytes, name) };
+}
+
 pub const light = Theme{
     .name = "Adwaita Light",
     .dark = false,
 
-    .font_body = .{ .size = 16, .name = "Vera" },
-    .font_heading = .{ .size = 16, .name = "VeraBd" },
-    .font_caption = .{ .size = 13, .name = "Vera", .line_height_factor = 1.1 },
-    .font_caption_heading = .{ .size = 13, .name = "VeraBd", .line_height_factor = 1.1 },
-    .font_title = .{ .size = 28, .name = "Vera" },
-    .font_title_1 = .{ .size = 24, .name = "VeraBd" },
-    .font_title_2 = .{ .size = 22, .name = "VeraBd" },
-    .font_title_3 = .{ .size = 20, .name = "VeraBd" },
-    .font_title_4 = .{ .size = 18, .name = "VeraBd" },
+    .font_body = builtinFont(16, "Vera", 1.2),
+    .font_heading = builtinFont(16, "VeraBd", 1.2),
+    .font_caption = builtinFont(13, "Vera", 1.1),
+    .font_caption_heading = builtinFont(13, "VeraBd", 1.1),
+    .font_title = builtinFont(28, "Vera", 1.2),
+    .font_title_1 = builtinFont(24, "VeraBd", 1.2),
+    .font_title_2 = builtinFont(22, "VeraBd", 1.2),
+    .font_title_3 = builtinFont(20, "VeraBd", 1.2),
+    .font_title_4 = builtinFont(18, "VeraBd", 1.2),
 
     .color_accent = accent_hsl.color(),
     .color_err = err_hsl.color(),
@@ -86,15 +90,15 @@ pub const dark = Theme{
     .name = "Adwaita Dark",
     .dark = true,
 
-    .font_body = .{ .size = 16, .name = "Vera" },
-    .font_heading = .{ .size = 16, .name = "VeraBd" },
-    .font_caption = .{ .size = 13, .name = "Vera", .line_height_factor = 1.1 },
-    .font_caption_heading = .{ .size = 13, .name = "VeraBd", .line_height_factor = 1.1 },
-    .font_title = .{ .size = 28, .name = "Vera" },
-    .font_title_1 = .{ .size = 24, .name = "VeraBd" },
-    .font_title_2 = .{ .size = 22, .name = "VeraBd" },
-    .font_title_3 = .{ .size = 20, .name = "VeraBd" },
-    .font_title_4 = .{ .size = 18, .name = "VeraBd" },
+    .font_body = builtinFont(16, "Vera", 1.2),
+    .font_heading = builtinFont(16, "VeraBd", 1.2),
+    .font_caption = builtinFont(13, "Vera", 1.1),
+    .font_caption_heading = builtinFont(13, "VeraBd", 1.1),
+    .font_title = builtinFont(28, "Vera", 1.2),
+    .font_title_1 = builtinFont(24, "VeraBd", 1.2),
+    .font_title_2 = builtinFont(22, "VeraBd", 1.2),
+    .font_title_3 = builtinFont(20, "VeraBd", 1.2),
+    .font_title_4 = builtinFont(18, "VeraBd", 1.2),
 
     .color_accent = accent_hsl.color(),
     .color_err = dark_err,
