@@ -6,11 +6,10 @@ const sdl_options = @import("sdl_options");
 pub const sdl3 = sdl_options.version.major == 3;
 pub const c = blk: {
     if (sdl3) {
-        if (@hasDecl(sdl_options, "from_system") and sdl_options.from_system) {
-            break :blk @cImport({
-                @cInclude("SDL3/SDL.h");
-            });
-        } else break :blk @import("sdl3_c");
+        break :blk @cImport({
+            @cDefine("SDL_DISABLE_OLD_NAMES", {});
+            @cInclude("SDL3/SDL.h");
+        });
     }
     break :blk @cImport({
         @cInclude("SDL2/SDL.h");
@@ -693,7 +692,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             return try win.addEventText(txt);
         },
         if (sdl3) c.SDL_EVENT_TEXT_EDITING else c.SDL_TEXTEDITING => {
-            const strlen: u8 = @intCast(c.SDL_strlen(&event.edit.text));
+            const strlen: u8 = @intCast(c.SDL_strlen(if (sdl3) event.edit.text else &event.edit.text));
             if (self.log_events) {
                 std.debug.print("sdl event TEXTEDITING {s} start {d} len {d} strlen {d}\n", .{ event.edit.text, event.edit.start, event.edit.length, strlen });
             }
