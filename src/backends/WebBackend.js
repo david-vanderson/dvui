@@ -437,7 +437,10 @@ function dvui(canvasId, wasmFile) {
 		    const ptr = wasmResult.instance.exports.gpa_u8(bytes.length);
 		    var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, bytes.length);
 		    dest.set(bytes);
-		    wasmResult.instance.exports.new_font(ptr, bytes.length);
+            const ptr2 = wasmResult.instance.exports.arena_u8(5);
+		    var dest2 = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr2, bytes.length);
+            const written = new TextEncoder().encodeInto("Noto", dest2)
+		    wasmResult.instance.exports.new_font_ttf(ptr2, written.written);
 	    });
         },
       },

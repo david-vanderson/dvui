@@ -123,10 +123,8 @@ export fn arena_u8(len: usize) [*c]u8 {
     return buf.ptr;
 }
 
-export fn new_font(ptr: [*c]u8, len: usize) void {
-    if (win) |w| {
-        w.font_bytes.put("Noto", dvui.FontBytesEntry{ .ttf_bytes = ptr[0..len], .allocator = gpa }) catch unreachable;
-    }
+export fn new_font_ttf(font_name: [*]u8, font_name_len: usize, ptr: [*c]u8, len: usize) void {
+    _ = dvui.fontLoadTTF(font_name[0..font_name_len], ptr[0..len]);
 }
 
 export fn add_event(kind: u8, int1: u32, int2: u32, float1: f32, float2: f32) void {
