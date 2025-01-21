@@ -29,12 +29,15 @@ pub fn build(b: *std.Build) !void {
     };
 
     const dvui_sdl = addDvuiModule(b, target, optimize, link_backend, .sdl, linux_display_backend);
-    const dvui_raylib = addDvuiModule(b, target, optimize, link_backend, .raylib, linux_display_backend);
-
     addExample(b, target, optimize, "sdl-standalone", dvui_sdl);
     addExample(b, target, optimize, "sdl-ontop", dvui_sdl);
-    addExample(b, target, optimize, "raylib-standalone", dvui_raylib);
-    addExample(b, target, optimize, "raylib-ontop", dvui_raylib);
+
+    if (target.result.os.tag != .macos) {
+        // raylib isn't quite ready for zig 0.14 on macos
+        const dvui_raylib = addDvuiModule(b, target, optimize, link_backend, .raylib, linux_display_backend);
+        addExample(b, target, optimize, "raylib-standalone", dvui_raylib);
+        addExample(b, target, optimize, "raylib-ontop", dvui_raylib);
+    }
 
     if (target.result.os.tag == .windows) {
         const dvui_dx11 = addDvuiModule(b, target, optimize, link_backend, .dx11, linux_display_backend);
