@@ -423,24 +423,28 @@ fn initShader(self: *Dx11Backend) !void {
     }
 
     self.dx_options.vertex_bytes = vs_blob.?;
+    var vertex_shader_result: @TypeOf(self.dx_options.vertex_shader.?) = undefined;
     const create_vs = self.device.CreateVertexShader(
         @ptrCast(self.dx_options.vertex_bytes.?.GetBufferPointer()),
         self.dx_options.vertex_bytes.?.GetBufferSize(),
         null,
-        &self.dx_options.vertex_shader,
+        &vertex_shader_result,
     );
+    self.dx_options.vertex_shader = vertex_shader_result;
 
     if (!isOk(create_vs)) {
         return error.CreateVertexShaderFailed;
     }
 
     self.dx_options.pixel_bytes = ps_blob.?;
+    var pixel_shader_result: @TypeOf(self.dx_options.pixel_shader.?) = undefined;
     const create_ps = self.device.CreatePixelShader(
         @ptrCast(self.dx_options.pixel_bytes.?.GetBufferPointer()),
         self.dx_options.pixel_bytes.?.GetBufferSize(),
         null,
-        &self.dx_options.pixel_shader,
+        &pixel_shader_result,
     );
+    self.dx_options.pixel_shader = pixel_shader_result;
 
     if (!isOk(create_ps)) {
         return error.CreatePixelShaderFailed;
@@ -455,7 +459,9 @@ fn createRasterizerState(self: *Dx11Backend) !void {
     raster_desc.DepthClipEnable = 0;
     raster_desc.ScissorEnable = 1;
 
-    const rasterizer_res = self.device.CreateRasterizerState(&raster_desc, &self.dx_options.rasterizer);
+    var rasterizer_result: @TypeOf(self.dx_options.rasterizer.?) = undefined;
+    const rasterizer_res = self.device.CreateRasterizerState(&raster_desc, &rasterizer_result);
+    self.dx_options.rasterizer = rasterizer_result;
     if (!isOk(rasterizer_res)) {
         return error.RasterizerInitFailed;
     }
@@ -469,11 +475,13 @@ fn createRenderTarget(self: *Dx11Backend) !void {
     _ = self.swap_chain.GetBuffer(0, dx.IID_ID3D11Texture2D, @ptrCast(&back_buffer));
     defer _ = back_buffer.?.IUnknown.Release();
 
+    var render_target_result: @TypeOf(self.render_target.?) = undefined;
     _ = self.device.CreateRenderTargetView(
         @ptrCast(back_buffer),
         null,
-        &self.render_target,
+        &render_target_result,
     );
+    self.render_target = render_target_result;
 }
 
 fn cleanupRenderTarget(self: *Dx11Backend) void {
@@ -492,13 +500,15 @@ fn createInputLayout(self: *Dx11Backend) !void {
 
     const num_elements = input_layout_desc.len;
 
+    var vertex_layout_result: @TypeOf(self.dx_options.vertex_layout.?) = undefined;
     const res = self.device.CreateInputLayout(
         input_layout_desc,
         num_elements,
         @ptrCast(self.dx_options.vertex_bytes.?.GetBufferPointer()),
         self.dx_options.vertex_bytes.?.GetBufferSize(),
-        &self.dx_options.vertex_layout,
+        &vertex_layout_result,
     );
+    self.dx_options.vertex_layout = vertex_layout_result;
 
     if (!isOk(res)) {
         return error.VertexLayoutCreationFailed;
@@ -525,11 +535,13 @@ fn recreateShaderView(self: *Dx11Backend, texture: *anyopaque) void {
         _ = tv.IUnknown.Release();
     }
 
+    var texture_view_result: @TypeOf(self.dx_options.texture_view.?) = undefined;
     const rv_result = self.device.CreateShaderResourceView(
         &tex.ID3D11Resource,
         &rvd,
-        &self.dx_options.texture_view,
+        &texture_view_result,
     );
+    self.dx_options.texture_view = texture_view_result;
 
     if (!isOk(rv_result)) {
         log.err("Texture View creation failed", .{});
@@ -555,10 +567,14 @@ fn createSampler(self: *Dx11Backend) !void {
     blend_desc.RenderTarget[0].RenderTargetWriteMask = @intFromEnum(dx.D3D11_COLOR_WRITE_ENABLE_ALL);
 
     // TODO: Handle errors better
-    _ = self.device.CreateBlendState(&blend_desc, &self.dx_options.blend_state);
+    var blend_state_result: @TypeOf(self.dx_options.blend_state.?) = undefined;
+    _ = self.device.CreateBlendState(&blend_desc, &blend_state_result);
+    self.dx_options.blend_state = blend_state_result;
     _ = self.device_context.OMSetBlendState(self.dx_options.blend_state, null, 0xffffffff);
 
-    const sampler = self.device.CreateSamplerState(&samp_desc, &self.dx_options.sampler);
+    var sampler_result: @TypeOf(self.dx_options.sampler.?) = undefined;
+    const sampler = self.device.CreateSamplerState(&samp_desc, &sampler_result);
+    self.dx_options.sampler = sampler_result;
 
     if (!isOk(sampler)) {
         log.err("sampler state could not be iniitialized", .{});
@@ -577,21 +593,22 @@ fn createBuffer(self: *Dx11Backend, bind_type: anytype, comptime InitialType: ty
     var data: dx.D3D11_SUBRESOURCE_DATA = undefined;
     data.pSysMem = @ptrCast(initial_data.ptr);
 
-    var buffer: ?*dx.ID3D11Buffer = null;
+    var buffer: *dx.ID3D11Buffer = undefined;
     _ = self.device.CreateBuffer(&bd, &data, &buffer);
 
-    if (buffer) |buf| {
-        return buf;
-    } else {
-        return error.BufferFailedToCreate;
-    }
+    // argument no longer pointer-to-optional since zigwin32 update - 2025-01-10
+    //if (buffer) |buf| {
+    return buffer;
+    //} else {
+    //    return error.BufferFailedToCreate;
+    //}
 }
 
 // ############ Satisfy DVUI interfaces ############
 pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32, ti: dvui.enums.TextureInterpolation) *anyopaque {
     _ = ti; // autofix
 
-    var texture: ?*dx.ID3D11Texture2D = null;
+    var texture: *dx.ID3D11Texture2D = undefined;
     var tex_desc = dx.D3D11_TEXTURE2D_DESC{
         .Width = width,
         .Height = height,
@@ -623,7 +640,7 @@ pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32,
         @panic("couldn't create texture");
     }
 
-    return texture.?;
+    return texture;
 }
 
 pub fn textureCreateTarget(self: *Dx11Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
@@ -832,7 +849,7 @@ pub fn clipboardText(self: *Dx11Backend) ![]const u8 {
 
         // we want this to be a sane format.
         const len = std.mem.indexOfSentinel(u16, 0, data);
-        res = std.unicode.utf16leToUtf8Alloc(self.arena, data[0..len]) catch return error.OutOfMemory;
+        res = std.unicode.utf16LeToUtf8Alloc(self.arena, data[0..len]) catch return error.OutOfMemory;
     }
 
     return res;
@@ -1232,9 +1249,9 @@ fn createDeviceD3D(hwnd: HWND, opt: InitOptions) ?Dx11Backend.Directx11Options {
     var featureLevel: d3d.D3D_FEATURE_LEVEL = undefined;
     const featureLevelArray = &[_]d3d.D3D_FEATURE_LEVEL{ d3d.D3D_FEATURE_LEVEL_11_0, d3d.D3D_FEATURE_LEVEL_10_0 };
 
-    var device: ?*dx.ID3D11Device = null;
-    var device_context: ?*dx.ID3D11DeviceContext = null;
-    var swap_chain: ?*dxgi.IDXGISwapChain = null;
+    var device: *dx.ID3D11Device = undefined;
+    var device_context: *dx.ID3D11DeviceContext = undefined;
+    var swap_chain: *dxgi.IDXGISwapChain = undefined;
 
     var res: win.foundation.HRESULT = dx.D3D11CreateDeviceAndSwapChain(
         null,
@@ -1271,9 +1288,9 @@ fn createDeviceD3D(hwnd: HWND, opt: InitOptions) ?Dx11Backend.Directx11Options {
         return null;
 
     return Dx11Backend.Directx11Options{
-        .device = device.?,
-        .device_context = device_context.?,
-        .swap_chain = swap_chain.?,
+        .device = device,
+        .device_context = device_context,
+        .swap_chain = swap_chain,
     };
 }
 
