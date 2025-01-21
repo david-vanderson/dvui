@@ -215,13 +215,16 @@ pub fn Parser(comptime Reader: type) type {
             return items;
         }
 
+        fn SetDualTempStorageResult(comptime T1: type, comptime T2: type) type {
+            return struct { first: []T1, second: []T2 };
+        }
         fn setDualTempStorage(
             self: *Self,
             comptime T1: type,
             length1: usize,
             comptime T2: type,
             length2: usize,
-        ) !struct { first: []T1, second: []T2 } {
+        ) !SetDualTempStorageResult(T1, T2) {
             // temp_buffer is aligned to 16, so we don't have to worry about
             // alignment for T1
             try self.temp_buffer.resize(@sizeOf(T1) * length1 + @sizeOf(T2) * length2 + (@alignOf(T2) - 1));
@@ -229,7 +232,7 @@ pub fn Parser(comptime Reader: type) type {
             // T2 alignment could be larger than T1
             const offset = std.mem.alignForward(usize, @sizeOf(T1) * length1, @alignOf(T2));
 
-            const result = .{
+            const result = SetDualTempStorageResult(T1, T2){
                 .first = std.mem.bytesAsSlice(T1, self.temp_buffer.items[0 .. @sizeOf(T1) * length1]),
                 .second = @as([]T2, @alignCast(std.mem.bytesAsSlice(T2, self.temp_buffer.items[offset..][0 .. @sizeOf(T2) * length2]))),
             };
@@ -629,7 +632,7 @@ fn convertStyleType(value: u2) !StyleType {
 }
 
 fn MapZeroToMax(comptime T: type) type {
-    const info = @typeInfo(T).Int;
+    const info = @typeInfo(T).int;
     return std.meta.Int(.unsigned, info.bits + 1);
 }
 fn mapZeroToMax(value: anytype) MapZeroToMax(@TypeOf(value)) {

@@ -44,15 +44,20 @@ pub fn build(b: *std.Build) !void {
 
     // web test
     {
-        const webtarget = std.Target.Query{
+        const webtarget_library = std.Target.Query{
             .cpu_arch = .wasm32,
-            .os_tag = .freestanding,
+            .os_tag = .wasi,
+            .abi = .musl,
+        };
+        const webtarget_exe = std.Target.Query{
+            .cpu_arch = .wasm32,
+            .os_tag = .freestanding, //the initial build of this fails for me. => change to .wasi once, build fails, change back to .freestanding, build succeeds
             .abi = .musl,
         };
 
         const dvui_mod_web = b.addModule("dvui_web", .{
             .root_source_file = b.path("src/dvui.zig"),
-            .target = b.resolveTargetQuery(webtarget),
+            .target = b.resolveTargetQuery(webtarget_library),
             .optimize = optimize,
         });
 
@@ -69,7 +74,7 @@ pub fn build(b: *std.Build) !void {
         const wasm = b.addExecutable(.{
             .name = "web-test",
             .root_source_file = b.path("examples/web-test.zig"),
-            .target = b.resolveTargetQuery(webtarget),
+            .target = b.resolveTargetQuery(webtarget_exe),
             .optimize = optimize,
             .link_libc = true,
             .strip = if (optimize == .ReleaseFast or optimize == .ReleaseSmall) true else false,
@@ -105,7 +110,7 @@ pub fn build(b: *std.Build) !void {
         const cb = b.addExecutable(.{
             .name = "cacheBuster",
             .root_source_file = b.path("src/cacheBuster.zig"),
-            .target = b.host,
+            .target = b.graph.host,
         });
         const cb_run = b.addRunArtifact(cb);
         cb_run.addFileArg(b.path("src/backends/index.html"));
@@ -212,8 +217,22 @@ fn addDvuiModule(
                     backend_mod.linkLibrary(ray.artifact("raylib"));
                     // This seems wonky to me, but is copied from raylib's src/build.zig
                     if (b.lazyDependency("raygui", .{})) |raygui_dep| {
-                        if (b.lazyImport(@This(), "raylib")) |raylib_build| {
-                            raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
+                        if (b.lazyImport(@This(), "raylib")) |_| {
+                            // we want to write this:
+                            //raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
+                            // but that causes a second invocation of the raylib dependency but without our linux_display_backend
+                            // so it defaults to .Both which causes an error if there is no wayland-scanner
+
+                            const raylib = ray.artifact("raylib");
+                            var gen_step = b.addWriteFiles();
+                            raylib.step.dependOn(&gen_step.step);
+
+                            const raygui_c_path = gen_step.add("raygui.c", "#define RAYGUI_IMPLEMENTATION\n#include \"raygui.h\"\n");
+                            raylib.addCSourceFile(.{ .file = raygui_c_path });
+                            raylib.addIncludePath(raygui_dep.path("src"));
+                            raylib.addIncludePath(ray.path("src"));
+
+                            raylib.installHeader(raygui_dep.path("src/raygui.h"), "raygui.h");
                         }
                     }
                 }

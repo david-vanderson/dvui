@@ -331,7 +331,7 @@ pub fn wrapInner(self: *const Options) Options {
 pub fn override(self: *const Options, over: Options) Options {
     var ret = self.*;
 
-    inline for (@typeInfo(Options).Struct.fields) |f| {
+    inline for (@typeInfo(Options).@"struct".fields) |f| {
         if (@field(over, f.name)) |fval| {
             @field(ret, f.name) = fval;
         }

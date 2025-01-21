@@ -4,23 +4,23 @@
     .paths = .{""},
     .dependencies = .{
         .sdl = .{
-            .url = "https://github.com/allyourcodebase/SDL/archive/a9107e9ab042a2d6c76c73c0a485352ccb216ffc.tar.gz",
-            .hash = "1220fb0249c15493882350f135bc8b56c389a7f5131cc1b1a5208db472fa00e26b52",
+            .url = "git+https://github.com/rohlem/SDL#4abe06a7497eea7e5aeb3705951c2fced0491cb4",
+            .hash = "1220647b4508a0226ad9825586e683d68aef6d227fdab84b3c3b029366eec9ef18dd",
             .lazy = true,
         },
         .sdl3 = .{
-            .lazy = true,
             .url = "git+https://github.com/castholm/SDL.git#0f9b915d86e948d7fa09de1a5bb912a0d7d203f1",
             .hash = "1220eb863a14352c788fee12d7e9158a47af176bbef1070263edbb344cc1c3b72fdf",
+            .lazy = true,
         },
         .freetype = .{
-            .url = "https://github.com/david-vanderson/freetype/archive/a62b6192d81952e64b8c16504427f3e28ef10e5f.tar.gz",
-            .hash = "12203988c200e30d2fbc2678bb3e49eb3f117cc79faf8d228b63e54d8cdf278378e1",
+            .url = "git+https://github.com/rohlem/freetype-update-zig#a50182dc5787a8d49dd1ad922699a1c8771aa34a",
+            .hash = "12203811b00197ba9f939a8114941bdb18d421c3fa498ec4045bc9ce0c91a5a20b9f",
             .lazy = true,
         },
         .raylib = .{
-            .url = "https://github.com/raysan5/raylib/archive/63ae57d2e31afa8bc8cab7f17f0e44afa4e7552d.tar.gz",
-            .hash = "122078aed9bcba3e2319105d04324bf923a52c65405c3662457cf73e7ef28f445e52",
+            .url = "git+https://github.com/raysan5/raylib#433cc23ea4511fbeddc0fccc597cde91f5756d59",
+            .hash = "1220d18e6fba0a609f3afb055c2876d93e19b3f54f3e2e730c3fd261efd78ccd6002",
             .lazy = true,
         },
         //used in the raylib-ontop example
@@ -31,8 +31,8 @@
         },
         // required for the directx11 backend
         .zigwin32 = .{
-            .url = "git+https://github.com/marlersoft/zigwin32#407a4c7b869ee3d10db520fdfae8b9faf9b2adb5",
-            .hash = "1220cc9c9028e20f4ec2ece1155ae3479acc1cc509f9ab93acb74e8f5bbf8eefd2a9",
+            .url = "git+https://github.com/rohlem/zigwin32-update-zig#5d6055e7c8cea4c508f33c0d8641fdf1fe30f9ea",
+            .hash = "122073b611033d3660fca78fb588d2fd97bbdad96be8c688c5a00f8b85c4a5e3d871",
             .lazy = true,
         },
     },

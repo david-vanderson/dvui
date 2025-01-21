@@ -26,8 +26,8 @@ touch_mouse_events: bool = false,
 log_events: bool = false,
 initial_scale: f32 = 1.0,
 cursor_last: dvui.enums.Cursor = .arrow,
-cursor_backing: [@typeInfo(dvui.enums.Cursor).Enum.fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.enums.Cursor).Enum.fields.len,
-cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).Enum.fields.len]bool = [_]bool{false} ** @typeInfo(dvui.enums.Cursor).Enum.fields.len,
+cursor_backing: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.enums.Cursor).@"enum".fields.len,
+cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]bool = [_]bool{false} ** @typeInfo(dvui.enums.Cursor).@"enum".fields.len,
 arena: std.mem.Allocator = undefined,
 
 pub const InitOptions = struct {
