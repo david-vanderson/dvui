@@ -9,8 +9,8 @@
             .lazy = true,
         },
         .sdl3 = .{
-            .url = "git+https://github.com/castholm/SDL.git#0f9b915d86e948d7fa09de1a5bb912a0d7d203f1",
-            .hash = "1220eb863a14352c788fee12d7e9158a47af176bbef1070263edbb344cc1c3b72fdf",
+            .url = "git+https://github.com/castholm/SDL.git?ref=HEAD#bbc8dfb78c2a71f10b21548b58dfe5ac46cc3fef",
+            .hash = "122046c6dcdcf941e6e5b1e8fa273185d04420e56436d47b906308eaf70208222f59",
             .lazy = true,
         },
         .freetype = .{
