@@ -1913,15 +1913,15 @@ pub fn dataSetSlice(win: ?*Window, id: u32, key: []const u8, data: anytype) void
 /// entries that you want to fill in after.
 pub fn dataSetSliceCopies(win: ?*Window, id: u32, key: []const u8, data: anytype, num_copies: usize) void {
     const dt = @typeInfo(@TypeOf(data));
-    if (dt == .pointer and dt.pointer.size == .slice) {
-        if (dt.pointer.sentinel()) |s| {
+    if (dt == .pointer and dt.pointer.size == .Slice) {
+        if (dt.pointer.sentinel) |s| {
             dataSetAdvanced(win, id, key, @as([:s]dt.pointer.child, @constCast(data)), true, num_copies);
         } else {
             dataSetAdvanced(win, id, key, @as([]dt.pointer.child, @constCast(data)), true, num_copies);
         }
-    } else if (dt == .pointer and dt.pointer.size == .one and @typeInfo(dt.pointer.child) == .array) {
+    } else if (dt == .pointer and dt.pointer.size == .One and @typeInfo(dt.pointer.child) == .array) {
         const child_type = @typeInfo(dt.pointer.child);
-        if (child_type.array.sentinel()) |s| {
+        if (child_type.array.sentinel) |s| {
             dataSetAdvanced(win, id, key, @as([:s]child_type.array.child, @constCast(data)), true, num_copies);
         } else {
             dataSetAdvanced(win, id, key, @as([]child_type.array.child, @constCast(data)), true, num_copies);
@@ -2049,12 +2049,12 @@ pub fn dataGetPtr(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?*T
 /// id/key combination.
 pub fn dataGetSlice(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
     const dt = @typeInfo(T);
-    if (dt != .pointer or dt.pointer.size != .slice) {
+    if (dt != .pointer or dt.pointer.size != .Slice) {
         @compileError("dataGetSlice needs a slice, given " ++ @typeName(T));
     }
 
     if (dataGetInternal(win, id, key, T, true)) |bytes| {
-        if (dt.pointer.sentinel()) |sentinel| {
+        if (dt.pointer.sentinel) |sentinel| {
             return @as([:sentinel]align(@alignOf(dt.pointer.child)) dt.pointer.child, @alignCast(@ptrCast(std.mem.bytesAsSlice(dt.pointer.child, bytes[0 .. bytes.len - @sizeOf(dt.pointer.child)]))));
         } else {
             return @as([]align(@alignOf(dt.pointer.child)) dt.pointer.child, @alignCast(std.mem.bytesAsSlice(dt.pointer.child, bytes)));
@@ -3656,7 +3656,7 @@ pub const Window = struct {
         var bytes: []const u8 = undefined;
         if (copy_slice) {
             bytes = std.mem.sliceAsBytes(data_in);
-            if (dt.pointer.sentinel() != null) {
+            if (dt.pointer.sentinel != null) {
                 bytes.len += @sizeOf(dt.pointer.child);
             }
         } else {
@@ -6073,7 +6073,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 }
 
 fn isF32Slice(comptime ptr: std.builtin.Type.Pointer, comptime child_info: std.builtin.Type) bool {
-    const is_slice = ptr.size == .slice;
+    const is_slice = ptr.size == .Slice;
     const holds_f32 = switch (child_info) {
         .float => |f| f.bits == 32,
         else => false,
