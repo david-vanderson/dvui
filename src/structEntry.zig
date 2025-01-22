@@ -435,11 +435,11 @@ pub fn optionalFieldWidget(
 pub fn PointerFieldOptions(comptime T: type) type {
     const info = @typeInfo(T).pointer;
 
-    if (info.size == .slice and info.child == u8) {
+    if (info.size == .Slice and info.child == u8) {
         return TextFieldOptions;
-    } else if (info.size == .slice) {
+    } else if (info.size == .Slice) {
         return SliceFieldOptions(T);
-    } else if (info.size == .one) {
+    } else if (info.size == .One) {
         return SinglePointerFieldOptions(T);
     } else if (info.size == .c or info.size == .many) {
         @compileError("Many item pointers disallowed");
@@ -457,11 +457,11 @@ pub fn pointerFieldWidget(
 ) !void {
     const info = @typeInfo(T).pointer;
 
-    if (info.size == .slice and info.child == u8) {
+    if (info.size == .Slice and info.child == u8) {
         try textFieldWidget(name, T, result, opt, alloc, allocator, alignment);
-    } else if (info.size == .slice) {
+    } else if (info.size == .Slice) {
         try sliceFieldWidget(name, T, result, opt, alloc, allocator, alignment);
-    } else if (info.size == .one) {
+    } else if (info.size == .One) {
         try singlePointerFieldWidget(name, T, result, opt, alloc, allocator, alignment);
     } else if (info.size == .c or info.size == .many) {
         @compileError("structEntry does not support *C or Many pointers");
@@ -574,7 +574,7 @@ pub fn sliceFieldWidget(
     allocator: ?std.mem.Allocator,
     alignment: *dvui.Alignment,
 ) !void {
-    if (@typeInfo(T).pointer.size != .slice) @compileError("must be called with slice");
+    if (@typeInfo(T).pointer.size != .Slice) @compileError("must be called with slice");
 
     const Child = @typeInfo(T).pointer.child;
 
@@ -804,7 +804,7 @@ pub fn NamespaceFieldOptions(comptime T: type) type {
         const FieldType = FieldOptions(field.type);
         fields[i] = .{
             .alignment = 1,
-            .default_value_ptr = &(@as(FieldType, FieldType{})),
+            .default_value = &(@as(FieldType, FieldType{})),
             .is_comptime = false,
             .name = field.name,
             .type = FieldType,
