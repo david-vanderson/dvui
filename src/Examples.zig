@@ -616,6 +616,10 @@ pub fn demo() !void {
     if (IconBrowser.show) {
         try icon_browser();
     }
+
+    if (StrokeTest.show) {
+        try show_stroke_test_window();
+    }
 }
 
 pub fn structUI() !void {
@@ -846,7 +850,7 @@ pub fn basicWidgets(demo_win_id: u32) !void {
 
         try dvui.label(@src(), "Icons", .{}, .{ .gravity_y = 0.5 });
 
-        const icon_opts = dvui.Options{ .gravity_y = 0.5, .min_size_content = .{ .h = 12 + icon_image_size_extra }, .rotation = icon_image_rotation };
+        const icon_opts = dvui.Options{ .gravity_y = 0.5, .min_size_content = .{ .h = 16 + icon_image_size_extra }, .rotation = icon_image_rotation };
         try dvui.icon(@src(), "cycle", entypo.cycle, icon_opts);
         try dvui.icon(@src(), "aircraft", entypo.aircraft, icon_opts);
         try dvui.icon(@src(), "notes", entypo.beamed_note, icon_opts);
@@ -2894,7 +2898,7 @@ pub fn debuggingErrors() !void {
         try makeLabels(@src(), 1);
     }
 
-    if (try dvui.expander(@src(), "Duplicate id (expanding will log error)", .{}, .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Duplicate id (will log error)", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         for (0..2) |i| {
@@ -2998,10 +3002,6 @@ pub fn debuggingErrors() !void {
 
     if (try dvui.button(@src(), "Stroke Test", .{}, .{})) {
         StrokeTest.show = true;
-    }
-
-    if (StrokeTest.show) {
-        try show_stroke_test_window();
     }
 }
 
