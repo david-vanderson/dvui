@@ -73,7 +73,16 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
 
     var renderer: *c.SDL_Renderer = undefined;
     if (sdl3) {
-        renderer = c.SDL_CreateRenderer(window, null) orelse {
+        const props = c.SDL_CreateProperties();
+        defer c.SDL_DestroyProperties(props);
+
+        _ = c.SDL_SetPointerProperty(props, c.SDL_PROP_RENDERER_CREATE_WINDOW_POINTER, window);
+
+        if (options.vsync) {
+            _ = c.SDL_SetNumberProperty(props, c.SDL_PROP_RENDERER_CREATE_PRESENT_VSYNC_NUMBER, 1);
+        }
+
+        renderer = c.SDL_CreateRendererWithProperties(props) orelse {
             dvui.log.err("SDL: Failed to create renderer: {s}", .{c.SDL_GetError()});
             return error.BackendError;
         };
@@ -344,7 +353,13 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
 pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect) void {
     if (rect) |r| {
         if (sdl3) {
-            const cursor = 0; // TODO: review what it does
+            // This is the offset from r.x in window coords, supposed to be the
+            // location of the cursor I think so that the IME window can be put
+            // at the cursor location.  We will use 0 for now, might need to
+            // change it (or how we determine rect) if people are using huge
+            // text entries).
+            const cursor = 0;
+
             _ = c.SDL_SetTextInputArea(self.window, &c.SDL_Rect{ .x = @intFromFloat(r.x), .y = @intFromFloat(r.y), .w = @intFromFloat(r.w), .h = @intFromFloat(r.h) }, cursor);
         } else c.SDL_SetTextInputRect(&c.SDL_Rect{ .x = @intFromFloat(r.x), .y = @intFromFloat(r.y), .w = @intFromFloat(r.w), .h = @intFromFloat(r.h) });
         _ = if (sdl3) c.SDL_StartTextInput(self.window) else c.SDL_StartTextInput();
@@ -554,18 +569,36 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32, 
     }
 
     const texture = c.SDL_CreateTextureFromSurface(self.renderer, surface) orelse unreachable;
+
+    if (sdl3) {
+        switch (interpolation) {
+            .nearest => _ = c.SDL_SetTextureScaleMode(texture, c.SDL_SCALEMODE_NEAREST),
+            .linear => _ = c.SDL_SetTextureScaleMode(texture, c.SDL_SCALEMODE_LINEAR),
+        }
+    }
+
     const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
     _ = c.SDL_SetTextureBlendMode(texture, pma_blend);
     return texture;
 }
 
 pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
-    if (!sdl3) switch (interpolation) {
-        .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
-        .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
-    };
+    if (!sdl3) {
+        switch (interpolation) {
+            .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
+            .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
+        }
+    }
 
     const texture = c.SDL_CreateTexture(self.renderer, c.SDL_PIXELFORMAT_ABGR8888, c.SDL_TEXTUREACCESS_TARGET, @intCast(width), @intCast(height)) orelse unreachable;
+
+    if (sdl3) {
+        switch (interpolation) {
+            .nearest => _ = c.SDL_SetTextureScaleMode(texture, c.SDL_SCALEMODE_NEAREST),
+            .linear => _ = c.SDL_SetTextureScaleMode(texture, c.SDL_SCALEMODE_LINEAR),
+        }
+    }
+
     const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
     _ = c.SDL_SetTextureBlendMode(texture, pma_blend);
     //_ = c.SDL_SetTextureBlendMode(texture, c.SDL_BLENDMODE_BLEND);
@@ -587,7 +620,7 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
 }
 
 pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) error{TextureRead}!void {
-    if (SDLBackend.sdl3) {
+    if (sdl3) {
         const orig_target = c.SDL_GetRenderTarget(self.renderer);
         _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture)));
         defer _ = c.SDL_SetRenderTarget(self.renderer, orig_target);
@@ -597,13 +630,12 @@ pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, wi
         if (width * height != surface.*.w * surface.*.h) return error.TextureRead;
         // TODO: most common format is RGBA8888, doing conversion during copy to pixels_out should be faster
         if (surface.*.format != c.SDL_PIXELFORMAT_ABGR8888) {
-            const s = surface;
-            defer c.SDL_DestroySurface(s);
             surface = c.SDL_ConvertSurface(surface, c.SDL_PIXELFORMAT_ABGR8888) orelse return error.TextureRead;
         }
         @memcpy(pixels_out[0 .. width * height * 4], @as(?[*]u8, @ptrCast(surface.*.pixels)).?[0 .. width * height * 4]);
         return;
     }
+
     // If SDL picks directX11 as a rendering backend, it could not support
     // SDL_PIXELFORMAT_ABGR8888 so this works around that.  For some reason sdl
     // crashes if we ask it to do the conversion for us.
@@ -648,9 +680,13 @@ pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
 pub fn renderTarget(self: *SDLBackend, texture: ?*anyopaque) void {
     _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture)));
 
-    // by default sdl2 sets an empty clip, let's ensure it is the full texture/screen
-    //_ = if (sdl3) c.SDL_SetRenderClipRect(self.renderer, &c.SDL_Rect{ .x = 0, .y = 0, .w = std.math.maxInt(c_int), .h = std.math.maxInt(c_int) }) else
-    if (!sdl3) _ = c.SDL_RenderSetClipRect(self.renderer, &c.SDL_Rect{ .x = 0, .y = 0, .w = std.math.maxInt(c_int), .h = std.math.maxInt(c_int) });
+    // by default sdl sets an empty clip, let's ensure it is the full texture/screen
+    if (sdl3) {
+        // sdl3 crashes if w/h are too big, this seems to work
+        _ = c.SDL_SetRenderClipRect(self.renderer, &c.SDL_Rect{ .x = 0, .y = 0, .w = 65536, .h = 65536 });
+    } else {
+        _ = c.SDL_RenderSetClipRect(self.renderer, &c.SDL_Rect{ .x = 0, .y = 0, .w = std.math.maxInt(c_int), .h = std.math.maxInt(c_int) });
+    }
 }
 
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
