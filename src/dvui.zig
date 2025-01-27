@@ -2804,10 +2804,13 @@ pub const Window = struct {
         const winSize = self.backend.windowSize();
         const pxSize = self.backend.pixelSize();
         self.content_scale = self.backend.contentScale();
-        const total_scale = self.content_scale * pxSize.w / winSize.w;
-        if (total_scale >= 2.0) {
-            self.snap_to_pixels = false;
-        }
+
+        // Even on hidpi screens I see slight flattening of the sides of glyphs
+        // when snap_to_pixels is false, so we are going to default on for now.
+        //const total_scale = self.content_scale * pxSize.w / winSize.w;
+        //if (total_scale >= 2.0) {
+        //    self.snap_to_pixels = false;
+        //}
 
         log.info("window logical {} pixels {} natural scale {d} initial content scale {d} snap_to_pixels {}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels });
 
