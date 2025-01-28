@@ -3519,6 +3519,9 @@ pub const Window = struct {
         self.captured_last_frame = false;
 
         self.wd.parent = self.widget();
+
+        // Window's wd is kept frame to frame, so manually reset the cache.
+        self.wd.rect_scale_cache = null;
         try self.wd.register();
 
         self.next_widget_ypos = self.wd.rect.y;
