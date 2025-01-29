@@ -5594,8 +5594,8 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
     bw.processEvents();
     try bw.drawBackground();
 
-    // pass min_size_content through to the icon so that it will figure out the
-    // min width based on the height
+    // When someone passes min_size_content to buttonIcon, they want the icon
+    // to be that size, so we pass it through.
     try icon(@src(), name, tvg_bytes, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio }));
 
     const click = bw.clicked();
