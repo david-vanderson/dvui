@@ -3968,7 +3968,7 @@ pub const Window = struct {
                 var hbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i });
                 defer hbox.deinit();
 
-                if (try dvui.buttonIcon(@src(), "find", entypo.magnifying_glass, .{}, .{ .min_size_content = .{ .h = 12 } })) {
+                if (try dvui.buttonIcon(@src(), "find", entypo.magnifying_glass, .{}, .{})) {
                     self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(line, ' '), 16) catch 0;
                 }
 
@@ -5118,11 +5118,10 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     defer bcbox.deinit();
     try bcbox.install();
     try bcbox.drawBackground();
-    const size = options.fontGet().textHeight();
     if (expanded) {
-        try icon(@src(), "down_arrow", entypo.triangle_down, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
+        try icon(@src(), "down_arrow", entypo.triangle_down, .{ .gravity_y = 0.5 });
     } else {
-        try icon(@src(), "right_arrow", entypo.triangle_right, .{ .gravity_y = 0.5, .min_size_content = .{ .h = size } });
+        try icon(@src(), "right_arrow", entypo.triangle_right, .{ .gravity_y = 0.5 });
     }
     try labelNoFmt(@src(), label_str, options.strip());
 
@@ -5348,7 +5347,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
 
     // pass min_size_content through to the icon so that it will figure out the
     // min width based on the height
-    var iconopts = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content });
+    var iconopts = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio });
 
     var ret: ?Rect = null;
     if (mi.activeRect()) |r| {
