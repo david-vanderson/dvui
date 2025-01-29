@@ -1014,7 +1014,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
             "toggle",
             if (text_entry_password_buf_obf_enable) entypo.eye_with_line else entypo.eye,
             .{},
-            .{ .gravity_y = 0.5 },
+            .{ .expand = .ratio },
         )) {
             text_entry_password_buf_obf_enable = !text_entry_password_buf_obf_enable;
         }
@@ -1119,7 +1119,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
             var new_filename: ?[]const u8 = null;
 
-            if (try dvui.buttonIcon(@src(), "select font", entypo.folder, .{}, .{ .min_size_content = .{ .h = 20 }, .expand = .ratio, .gravity_x = 1.0 })) {
+            if (try dvui.buttonIcon(@src(), "select font", entypo.folder, .{}, .{ .expand = .ratio, .gravity_x = 1.0 })) {
                 new_filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "Pick Font File" });
             }
 
@@ -1561,10 +1561,10 @@ pub fn layoutText() !void {
         defer tl.deinit();
 
         var cbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .w = 6 }, .min_size_content = .{ .w = 40 } });
-        if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{}, .{ .min_size_content = .{ .h = 20 }, .expand = .ratio })) {
+        if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{}, .{ .expand = .ratio })) {
             try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
         }
-        if (try dvui.buttonIcon(@src(), "more", entypo.dots_three_vertical, .{}, .{ .min_size_content = .{ .h = 20 }, .expand = .ratio })) {
+        if (try dvui.buttonIcon(@src(), "more", entypo.dots_three_vertical, .{}, .{ .expand = .ratio })) {
             try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
         }
         cbox.deinit();
