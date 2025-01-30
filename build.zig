@@ -249,6 +249,10 @@ fn addDvuiModule(
                     // SDL2 from system
                     sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
                     backend_mod.linkSystemLibrary("SDL2", .{});
+                } else if (b.systemIntegrationOption("sdl3", .{})) {
+                    // SDL3 from system
+                    sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
+                    backend_mod.linkSystemLibrary("SDL3", .{});
                 } else if (b.option(bool, "sdl3", "Use SDL3 compiled from source") orelse false) {
                     // SDL3 compiled from source
                     sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
