@@ -13,4 +13,31 @@ extern void dvui_c_panic(char const *msg);
       dvui_c_panic("Assertion " #_Assertion " failed!"); \
   } while (0)
 
+extern double dvui_c_floor(double x);
+#define STBTT_ifloor(x)   ((int) dvui_c_floor(x))
+extern double dvui_c_ceil(double x);
+#define STBTT_iceil(x)    ((int) dvui_c_ceil(x))
 
+extern double dvui_c_sqrt(double x);
+#define STBTT_sqrt(x)      dvui_c_sqrt(x)
+extern double dvui_c_pow(double x, double y);
+#define STBTT_pow(x,y)     dvui_c_pow(x,y)
+
+extern double dvui_c_fmod(double x, double y);
+#define STBTT_fmod(x,y)    dvui_c_fmod(x,y)
+
+extern double dvui_c_cos(double x);
+#define STBTT_cos(x)       dvui_c_cos(x)
+extern double dvui_c_acos(double x);
+#define STBTT_acos(x)      dvui_c_acos(x)
+
+extern double dvui_c_fabs(double x);
+#define STBTT_fabs(x)      dvui_c_fabs(x)
+
+extern size_t dvui_c_strlen(const char * str); 
+#define STBTT_strlen(x)      dvui_c_strlen(x)
+
+extern void *dvui_c_memcpy(void *dest, const void * src, size_t n);
+#define STBTT_memcpy(dest, src, n)      dvui_c_memcpy(dest, src, n)
+extern void *dvui_c_memset(void *dest, int x, size_t n);
+#define STBTT_memset(dest, x, n)      dvui_c_memset(dest, x, n)

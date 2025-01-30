@@ -52,3 +52,12 @@ double ldexp(double x, int n) {
     return dvui_c_ldexp(x, n);
 }
 
+extern void *dvui_c_memset(void *dest, int x, size_t n);
+static void *memset(void * dest, int x, size_t n) {
+	return dvui_c_memset(dest, x, n);
+}
+
+extern void *dvui_c_memcpy(void *dest, const void * src, size_t n);
+static void *memcpy(void * dest, const void * src, size_t n) {
+	return dvui_c_memcpy(dest, src, n);
+}

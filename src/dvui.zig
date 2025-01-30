@@ -79,6 +79,10 @@ pub const c = @cImport({
         @cInclude("stb_truetype.h");
     }
 
+    if (wasm) {
+        @cDefine("STBI_NO_STDIO", "1");
+        @cDefine("STBI_NO_STDLIB", "1");
+    }
     @cInclude("stb_image.h");
 
     if (!wasm) {
