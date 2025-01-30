@@ -57,9 +57,6 @@ pub const wasm = struct {
     pub extern fn wasm_add_noto_font() void;
 };
 
-export const __stack_chk_guard: c_ulong = 0xBAAAAAAD;
-export fn __stack_chk_fail() void {}
-
 export fn dvui_c_alloc(size: usize) ?*anyopaque {
     //std.log.debug("dvui_c_alloc {d}", .{size});
     const buffer = gpa.alignedAlloc(u8, 16, size + 16) catch {
@@ -101,12 +98,54 @@ export fn dvui_c_panic(msg: [*c]const u8) noreturn {
     unreachable;
 }
 
+export fn dvui_c_sqrt(x: f64) f64 {
+    return @sqrt(x);
+}
+
 export fn dvui_c_pow(x: f64, y: f64) f64 {
     return @exp(@log(x) * y);
 }
 
 export fn dvui_c_ldexp(x: f64, n: c_int) f64 {
     return x * @exp2(@as(f64, @floatFromInt(n)));
+}
+
+export fn dvui_c_floor(x: f64) f64 {
+    return @floor(x);
+}
+
+export fn dvui_c_ceil(x: f64) f64 {
+    return @ceil(x);
+}
+
+export fn dvui_c_fmod(x: f64, y: f64) f64 {
+    return @mod(x, y);
+}
+
+export fn dvui_c_cos(x: f64) f64 {
+    return @cos(x);
+}
+
+export fn dvui_c_acos(x: f64) f64 {
+    return std.math.acos(x);
+}
+
+export fn dvui_c_fabs(x: f64) f64 {
+    return @abs(x);
+}
+
+export fn dvui_c_strlen(x: [*c]const u8) usize {
+    return std.mem.len(x);
+}
+
+export fn dvui_c_memcpy(dest: [*c]u8, src: [*c]const u8, n: usize) [*c]u8 {
+    @memcpy(dest[0..n], src[0..n]);
+    return dest;
+}
+
+export fn dvui_c_memset(dest: [*c]u8, x: u8, n: usize) [*c]u8 {
+    @memset(dest[0..n], x);
+    return dest;
 }
 
 export fn gpa_u8(len: usize) [*c]u8 {

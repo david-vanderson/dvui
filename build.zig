@@ -49,13 +49,11 @@ pub fn build(b: *std.Build) !void {
     {
         const webtarget_library = std.Target.Query{
             .cpu_arch = .wasm32,
-            .os_tag = .wasi,
-            .abi = .musl,
+            .os_tag = .freestanding,
         };
         const webtarget_exe = std.Target.Query{
             .cpu_arch = .wasm32,
-            .os_tag = .freestanding, //the initial build of this fails for me. => change to .wasi once, build fails, change back to .freestanding, build succeeds
-            .abi = .musl,
+            .os_tag = .freestanding,
         };
 
         const dvui_mod_web = b.addModule("dvui_web", .{
@@ -69,7 +67,7 @@ pub fn build(b: *std.Build) !void {
                 "src/stb/stb_image_impl.c",
                 "src/stb/stb_truetype_impl.c",
             },
-            .flags = &.{"-DINCLUDE_CUSTOM_LIBC_FUNCS=1"},
+            .flags = &.{ "-DINCLUDE_CUSTOM_LIBC_FUNCS=1", "-DSTBI_NO_STDLIB=1" },
         });
 
         dvui_mod_web.addIncludePath(b.path("src/stb"));
@@ -79,7 +77,7 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = b.path("examples/web-test.zig"),
             .target = b.resolveTargetQuery(webtarget_exe),
             .optimize = optimize,
-            .link_libc = true,
+            .link_libc = false,
             .strip = if (optimize == .ReleaseFast or optimize == .ReleaseSmall) true else false,
         });
 
