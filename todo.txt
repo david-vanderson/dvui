@@ -7,25 +7,21 @@ check zig std lib for bytesAsSlice alignment - should it always aligncast?
 
 
 doc comments and publish
+
 update web-test and publish
 
-redo screenshot
-
-
-need to copy back out pixels from render targets to normal textures
+Backend.initWindow should have a fullscreen option for podcast
 
 
 make simple plot with option to save the image
 - save to file on desktop, save to dataurl on web?
 
 
+switch stb_truetype for zig version
+
+
+
 tooltips
-
-
-need a way to get a string description of a keybind to display to user
-
-alignment widget adds margin, but maybe should add a spacer instead?
-- see if that makes the Text Entry example settle better
 
 
 overhaul path construction so we don't maintain an implicit path
