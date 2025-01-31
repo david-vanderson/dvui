@@ -2919,7 +2919,7 @@ pub fn debuggingErrors() !void {
         _ = try dvui.button(@src(), "Second Child", .{}, .{});
     }
 
-    if (try dvui.expander(@src(), "Debug key bindings", .{}, .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Key bindings", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
 
@@ -2974,24 +2974,7 @@ pub fn debuggingErrors() !void {
         try tl.addText("\nCurrent keybinds:\n", .{});
         outer = dvui.currentWindow().keybinds.iterator();
         while (outer.next()) |okv| {
-            try tl.format("\n{s}\n    ", .{okv.key_ptr.*}, .{});
-            if (okv.value_ptr.control) |ctrl| {
-                try tl.format("{s}ctrl ", .{if (ctrl) "" else "!"}, .{});
-            }
-            if (okv.value_ptr.command) |command| {
-                try tl.format("{s}cmd ", .{if (command) "" else "!"}, .{});
-            }
-            if (okv.value_ptr.alt) |alt| {
-                try tl.format("{s}alt ", .{if (alt) "" else "!"}, .{});
-            }
-            if (okv.value_ptr.shift) |shift| {
-                try tl.format("{s}shift ", .{if (shift) "" else "!"}, .{});
-            }
-            if (okv.value_ptr.key) |key| {
-                try tl.format("{s}\n", .{@tagName(key)}, .{});
-            } else {
-                try tl.addText("\n", .{});
-            }
+            try tl.format("\n{s}\n    {s}\n", .{ okv.key_ptr.*, try okv.value_ptr.format(dvui.currentWindow().arena()) }, .{});
         }
         tl.deinit();
     }
