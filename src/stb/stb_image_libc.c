@@ -57,6 +57,12 @@ static double pow(double x, double y)
     return dvui_c_pow(x, y);
 }
 
+extern double dvui_c_ldexp(double x, int n);
+/* this should be a static function in stb_image_libc.c like the rest, but then I get a linker error in ReleaseFast */
+static double ldexp(double x, int n) {
+    return dvui_c_ldexp(x, n);
+}
+
 extern void *dvui_c_memset(void *dest, int x, size_t n);
 static void *memset(void * dest, int x, size_t n) {
 	return dvui_c_memset(dest, x, n);
