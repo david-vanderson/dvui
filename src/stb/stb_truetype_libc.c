@@ -41,3 +41,4 @@ extern void *dvui_c_memcpy(void *dest, const void * src, size_t n);
 #define STBTT_memcpy(dest, src, n)      dvui_c_memcpy(dest, src, n)
 extern void *dvui_c_memset(void *dest, int x, size_t n);
 #define STBTT_memset(dest, x, n)      dvui_c_memset(dest, x, n)
+

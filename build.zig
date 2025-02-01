@@ -65,9 +65,10 @@ pub fn build(b: *std.Build) !void {
         dvui_mod_web.addCSourceFiles(.{
             .files = &.{
                 "src/stb/stb_image_impl.c",
+                "src/stb/stb_image_write_impl.c",
                 "src/stb/stb_truetype_impl.c",
             },
-            .flags = &.{ "-DINCLUDE_CUSTOM_LIBC_FUNCS=1", "-DSTBI_NO_STDLIB=1" },
+            .flags = &.{ "-DINCLUDE_CUSTOM_LIBC_FUNCS=1", "-DSTBI_NO_STDLIB=1", "-DSTBIW_NO_STDLIB=1" },
         });
 
         dvui_mod_web.addIncludePath(b.path("src/stb"));
@@ -241,6 +242,7 @@ fn addDvuiModule(
             .sdl => {
                 dvui_mod.addCSourceFiles(.{ .files = &.{
                     "src/stb/stb_image_impl.c",
+                    "src/stb/stb_image_write_impl.c",
                 } });
                 var sdl_options = b.addOptions();
                 if (b.systemIntegrationOption("sdl2", .{})) {
