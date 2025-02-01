@@ -12,9 +12,22 @@ update web-test and publish
 
 Backend.initWindow should have a fullscreen option for podcast
 
+podcast text selection is not showing the touch cut/copy/paste options
+
+
+
+clean up writing to the file, it should not use stdio
+
 
 make simple plot with option to save the image
 - save to file on desktop, save to dataurl on web?
+
+
+width/height need to be stored alongside each texture
+
+overhaul path construction so we don't maintain an implicit path
+- path should be a []Point that you pass to the fill/stroke functions, use your own ArrayList
+
 
 
 switch stb_truetype for zig version
@@ -24,46 +37,9 @@ switch stb_truetype for zig version
 tooltips
 
 
-overhaul path construction so we don't maintain an implicit path
-
-
 make textureCreate* properly return errors
 
 
-can we save rendering commands and render to a texture we can get back?
-- that would help plotting
-- could make the demoButton's contents be static (cached images)
-
-        if (try dvui.button(@src(), "Export Texture", .{}, .{})) {
-            // set that texture as the target
-            _ = Backend.c.SDL_SetRenderTarget(backend.renderer, @ptrCast(G.tex));
-            // target back to screen
-            defer _ = Backend.c.SDL_SetRenderTarget(backend.renderer, null);
-
-            const pixels = try gpa.alloc(u8, dim * dim * 4);
-            defer gpa.free(pixels);
-            _ = Backend.c.SDL_RenderReadPixels(backend.renderer, null, 0, pixels.ptr, dim * 4);
-
-            var out_len: c_int = undefined;
-            const png_data = dvui.c.stbi_write_png_to_mem(pixels.ptr, dim * 4, dim, dim, 4, &out_len);
-            defer dvui.c.free(png_data);
-            var png_slice: []u8 = undefined;
-            png_slice.ptr = png_data;
-            png_slice.len = @intCast(out_len);
-
-            // base64 encode
-            const b64_encoder = std.base64.standard.Encoder;
-            const prefix = "data:image/png;base64,";
-            const encoded_size = prefix.len + b64_encoder.calcSize(@intCast(out_len));
-            var encoded = try gpa.alloc(u8, encoded_size);
-            encoded[0..prefix.len].* = prefix.*;
-            defer gpa.free(encoded);
-
-            _ = b64_encoder.encode(encoded[prefix.len..], png_slice);
-
-            //std.debug.print("output {s}\n", .{encoded});
-            //try dvui.openURL(encoded);
-        }
 
 should do tabIndexSet if the element has size, so even if it's scrolled off the screen we still go to it
 - when we do tabIndexNext/Prev it should focus that element and then also send a scroll_to message from that widget - how?

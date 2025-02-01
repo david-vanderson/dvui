@@ -222,6 +222,8 @@ function dvui(canvasId, wasmFile) {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
+	    gl.bindTexture(gl.TEXTURE_2D, null);
+
             return id;
         },
         wasm_textureCreateTarget(width, height, interp) {
@@ -255,9 +257,12 @@ function dvui(canvasId, wasmFile) {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
+	    gl.bindTexture(gl.TEXTURE_2D, null);
+
 	    return id;
 	},
         wasm_textureRead(textureId, pixels_out, width, height) {
+	    //console.log("textureRead " + textureId);
             const texture = textures.get(textureId)[0];
 
 	    gl.bindFramebuffer(gl.FRAMEBUFFER, frame_buffer);
@@ -269,6 +274,7 @@ function dvui(canvasId, wasmFile) {
 	    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 	},
 	wasm_renderTarget(id) {
+	    //console.log("renderTarget " + id);
 	    if (id === 0) {
 		using_fb = false;
 	        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -387,11 +393,13 @@ function dvui(canvasId, wasmFile) {
                 gl.bindTexture(gl.TEXTURE_2D, textures.get(textureId)[0]);
                 gl.uniform1i(programInfo.uniformLocations.useTex, 1);
             } else {
+                gl.bindTexture(gl.TEXTURE_2D, null);
                 gl.uniform1i(programInfo.uniformLocations.useTex, 0);
             }
 
             gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
 
+            //console.log("drawElements " + textureId);
             gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
 
 	    if (clip === 1) {
@@ -411,8 +419,21 @@ function dvui(canvasId, wasmFile) {
             }
         },
         wasm_open_url: (ptr, len) => {
-            let msg = utf8decoder.decode(new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, len));
-            location.href = msg;
+            let url = utf8decoder.decode(new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, len));
+	    window.open(url);
+        },
+        wasm_download_data: (name_ptr, name_len, data_ptr, data_len) => {
+            const name = utf8decoder.decode(new Uint8Array(wasmResult.instance.exports.memory.buffer, name_ptr, name_len));
+	    const data = new Uint8Array(wasmResult.instance.exports.memory.buffer, data_ptr, data_len);
+	    const blob = new Blob([data], { type: "octet/stream" });
+	    const fileURL = URL.createObjectURL(blob);
+	    const dl = document.createElement('a');
+	    dl.href = fileURL;
+	    dl.download = name;
+	    document.body.appendChild(dl);
+	    dl.click();
+	    document.body.removeChild(dl);
+	    URL.revokeObjectURL(fileURL);
         },
         wasm_clipboardTextSet: (ptr, len) => {
             if (len == 0) {

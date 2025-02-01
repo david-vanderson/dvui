@@ -82,8 +82,10 @@ pub const c = @cImport({
     if (wasm) {
         @cDefine("STBI_NO_STDIO", "1");
         @cDefine("STBI_NO_STDLIB", "1");
+        @cDefine("STBIW_NO_STDLIB", "1");
     }
     @cInclude("stb_image.h");
+    @cInclude("stb_image_write.h");
 
     if (!wasm) {
         @cInclude("tinyfiledialogs.h");
@@ -4401,7 +4403,7 @@ pub const DialogNativeFileOptions = struct {
 /// Not thread safe, but can be used from any thread.
 ///
 /// Returned string is created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFileOpen(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) !?[]const u8 {
+pub fn dialogNativeFileOpen(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) !?[:0]const u8 {
     if (wasm) {
         return null;
     }
@@ -4415,7 +4417,7 @@ pub fn dialogNativeFileOpen(alloc: std.mem.Allocator, opts: DialogNativeFileOpti
 /// Not thread safe, but can be used from any thread.
 ///
 /// Returned slice and strings are created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFileOpenMultiple(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) !?[][]const u8 {
+pub fn dialogNativeFileOpenMultiple(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) !?[][:0]const u8 {
     if (wasm) {
         return null;
     }
@@ -4429,7 +4431,7 @@ pub fn dialogNativeFileOpenMultiple(alloc: std.mem.Allocator, opts: DialogNative
 /// Not thread safe, but can be used from any thread.
 ///
 /// Returned string is created by passed allocator.  Not implemented for web (returns null).
-pub fn dialogNativeFileSave(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) !?[]const u8 {
+pub fn dialogNativeFileSave(alloc: std.mem.Allocator, opts: DialogNativeFileOptions) !?[:0]const u8 {
     if (wasm) {
         return null;
     }
@@ -4437,7 +4439,7 @@ pub fn dialogNativeFileSave(alloc: std.mem.Allocator, opts: DialogNativeFileOpti
     return dialogNativeFileInternal(false, false, alloc, opts);
 }
 
-fn dialogNativeFileInternal(comptime open: bool, comptime multiple: bool, alloc: std.mem.Allocator, opts: DialogNativeFileOptions) if (multiple) error{OutOfMemory}!?[][]const u8 else error{OutOfMemory}!?[]const u8 {
+fn dialogNativeFileInternal(comptime open: bool, comptime multiple: bool, alloc: std.mem.Allocator, opts: DialogNativeFileOptions) if (multiple) error{OutOfMemory}!?[][:0]const u8 else error{OutOfMemory}!?[:0]const u8 {
     var backing: [500]u8 = undefined;
     var buf: []u8 = &backing;
 
@@ -4488,8 +4490,8 @@ fn dialogNativeFileInternal(comptime open: bool, comptime multiple: bool, alloc:
         }
     }
 
-    var result: if (multiple) ?[][]const u8 else ?[]const u8 = null;
-    const tfd_ret = blk: {
+    var result: if (multiple) ?[][:0]const u8 else ?[:0]const u8 = null;
+    const tfd_ret: [*c]const u8 = blk: {
         if (open) {
             break :blk dvui.c.tinyfd_openFileDialog(title, path, @intCast(filter_count), filters, filter_desc, if (multiple) 1 else 0);
         } else {
@@ -4499,17 +4501,17 @@ fn dialogNativeFileInternal(comptime open: bool, comptime multiple: bool, alloc:
 
     if (tfd_ret) |r| {
         if (multiple) {
-            const r_slice = std.mem.sliceTo(r, 0);
+            const r_slice = std.mem.span(r);
             const num = std.mem.count(u8, r_slice, "|") + 1;
-            result = try alloc.alloc([]const u8, num);
+            result = try alloc.alloc([:0]const u8, num);
             var it = std.mem.splitScalar(u8, r_slice, '|');
             var i: usize = 0;
             while (it.next()) |f| {
-                result.?[i] = try alloc.dupe(u8, f);
+                result.?[i] = try alloc.dupeZ(u8, f);
                 i += 1;
             }
         } else {
-            result = try alloc.dupe(u8, std.mem.sliceTo(r, 0));
+            result = try alloc.dupeZ(u8, std.mem.span(r));
         }
     }
 

@@ -295,6 +295,7 @@ pub const demoKind = enum {
     styling,
     layout,
     text_layout,
+    plots,
     reorderable,
     menus,
     focus,
@@ -313,6 +314,7 @@ pub const demoKind = enum {
             .styling => "Styling",
             .layout => "Layout",
             .text_layout => "Text Layout",
+            .plots => "Plots\n(Experimental)",
             .reorderable => "Reorderable",
             .menus => "Menus / Tabs",
             .focus => "Focus",
@@ -333,6 +335,7 @@ pub const demoKind = enum {
             .styling => .{ .scale = 0.45, .offset = .{} },
             .layout => .{ .scale = 0.45, .offset = .{ .x = -50 } },
             .text_layout => .{ .scale = 0.45, .offset = .{} },
+            .plots => .{ .scale = 0.45, .offset = .{} },
             .reorderable => .{ .scale = 0.45, .offset = .{ .y = -200 } },
             .menus => .{ .scale = 0.45, .offset = .{} },
             .focus => .{ .scale = 0.45, .offset = .{} },
@@ -458,6 +461,7 @@ pub fn demo() !void {
                     .styling => try styling(),
                     .layout => try layout(),
                     .text_layout => try layoutText(),
+                    .plots => try plots(),
                     .reorderable => try reorderLists(),
                     .menus => try menus(),
                     .focus => try focus(),
@@ -509,6 +513,7 @@ pub fn demo() !void {
             .styling => styling(),
             .layout => layout(),
             .text_layout => layoutText(),
+            .plots => plots(),
             .reorderable => reorderLists(),
             .menus => menus(),
             .focus => focus(),
@@ -1608,6 +1613,84 @@ pub fn layoutText() !void {
         try tl.addText("is some ", .{ .font_style = .title_2, .color_text = .{ .color = .{ .b = 100, .g = 100 } } });
         try tl.addText("ugly text ", .{ .font_style = .title_1, .color_text = .{ .color = .{ .r = 100, .g = 100 } } });
         try tl.addText("that shows styling.", .{ .font_style = .caption, .color_text = .{ .color = .{ .r = 100, .g = 50, .b = 50 } } });
+    }
+}
+
+pub fn plots() !void {
+    var save: bool = false;
+    if (try dvui.button(@src(), "Save Plot", .{}, .{})) {
+        save = true;
+    }
+
+    var hbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 300, .h = 100 }, .padding = dvui.Rect.all(4) });
+    defer hbox.deinit();
+
+    const rs = hbox.data().contentRectScale();
+
+    var tex: ?*anyopaque = null;
+    const width: u32 = @intFromFloat(rs.r.w);
+    const height: u32 = @intFromFloat(rs.r.h);
+    var old_target: dvui.RenderTarget = undefined;
+    if (save) {
+        tex = try dvui.textureCreateTarget(width, height, .linear);
+        old_target = dvui.renderTarget(.{ .texture = tex.?, .offset = rs.r.topLeft() });
+    }
+
+    // plotting
+
+    try dvui.pathAddRect(rs.r, .{});
+    try dvui.pathFillConvex(dvui.Color.white);
+
+    const points: usize = 1000;
+    const freq: f32 = 5;
+    for (0..points + 1) |i| {
+        const fval: f32 = 0.5 * rs.r.h * @sin(2.0 * std.math.pi * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(points)) * freq);
+        try dvui.pathAddPoint(.{ .x = rs.r.x + rs.r.w * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(points)), .y = rs.r.y + rs.r.h / 2 - fval });
+    }
+
+    try dvui.pathStroke(false, 1 * rs.s, .none, dvui.themeGet().color_accent);
+
+    // end plotting
+
+    if (tex) |t| {
+        _ = dvui.renderTarget(old_target);
+        try dvui.renderTexture(t, rs, .{});
+        dvui.textureDestroyLater(t);
+
+        const size: usize = width * height * 4;
+        const px = dvui.currentWindow().arena().alloc(u8, size) catch null;
+        if (px) |pixels| {
+            defer dvui.currentWindow().arena().free(pixels);
+            dvui.textureRead(t, pixels.ptr, width, height) catch unreachable;
+
+            var len: c_int = undefined;
+            const png_bytes = dvui.c.stbi_write_png_to_mem(pixels.ptr, @intCast(width * 4), @intCast(width), @intCast(height), 4, &len);
+            const png_slice = png_bytes[0..@intCast(len)];
+
+            if (dvui.wasm) {
+                defer dvui.backend.dvui_c_free(png_bytes);
+
+                //const b64_encoder = std.base64.standard.Encoder;
+                //const prefix = "data:image/png;base64,";
+                //const encoded_size = prefix.len + b64_encoder.calcSize(@intCast(len));
+                //var encoded = try dvui.currentWindow().arena().alloc(u8, encoded_size);
+                //encoded[0..prefix.len].* = prefix.*;
+                //defer dvui.currentWindow().arena().free(encoded);
+
+                //_ = b64_encoder.encode(encoded[prefix.len..], png_slice);
+
+                //std.debug.print("output {s}\n", .{encoded});
+                try dvui.backend.downloadData("plot.png", png_slice);
+            } else {
+                defer dvui.c.free(png_bytes);
+                const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{});
+                if (filename) |fname| {
+                    var file = try std.fs.createFileAbsoluteZ(fname, .{});
+                    defer file.close();
+                    try file.writeAll(png_slice);
+                }
+            }
+        }
     }
 }
 

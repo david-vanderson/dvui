@@ -52,45 +52,53 @@ pub const wasm = struct {
     pub extern fn wasm_cursor(name: [*]const u8, name_len: u32) void;
     pub extern fn wasm_text_input(x: f32, y: f32, w: f32, h: f32) void;
     pub extern fn wasm_open_url(ptr: [*]const u8, len: usize) void;
+    pub extern fn wasm_download_data(name_ptr: [*]const u8, name_len: usize, data_ptr: [*]const u8, data_len: usize) void;
     pub extern fn wasm_clipboardTextSet(ptr: [*]const u8, len: usize) void;
 
     pub extern fn wasm_add_noto_font() void;
 };
 
 export fn dvui_c_alloc(size: usize) ?*anyopaque {
-    //std.log.debug("dvui_c_alloc {d}", .{size});
-    const buffer = gpa.alignedAlloc(u8, 16, size + 16) catch {
+    const buffer = gpa.alignedAlloc(u8, 8, size + 8) catch {
         //std.log.debug("dvui_c_alloc {d} failed", .{size});
         return null;
     };
-    std.mem.writeInt(usize, buffer[0..@sizeOf(usize)], buffer.len, builtin.cpu.arch.endian());
-    return buffer.ptr + 16;
+    std.mem.writeInt(u64, buffer[0..@sizeOf(u64)], buffer.len, builtin.cpu.arch.endian());
+    //std.log.debug("dvui_c_alloc {*} {d}", .{ buffer.ptr + 8, size });
+    return buffer.ptr + 8;
 }
 
-export fn dvui_c_free(ptr: ?*anyopaque) void {
-    const buffer = @as([*]align(16) u8, @alignCast(@ptrCast(ptr orelse return))) - 16;
-    const len = std.mem.readInt(usize, buffer[0..@sizeOf(usize)], builtin.cpu.arch.endian());
-    //std.log.debug("dvui_c_free {d}", .{len - 16});
+pub export fn dvui_c_free(ptr: ?*anyopaque) void {
+    const buffer = @as([*]align(8) u8, @alignCast(@ptrCast(ptr orelse return))) - 8;
+    const len = std.mem.readInt(u64, buffer[0..@sizeOf(u64)], builtin.cpu.arch.endian());
+    //std.log.debug("dvui_c_free {?*} {d}", .{ ptr, len - 8 });
 
-    gpa.free(buffer[0..len]);
+    gpa.free(buffer[0..@intCast(len)]);
 }
 
 export fn dvui_c_realloc_sized(ptr: ?*anyopaque, oldsize: usize, newsize: usize) ?*anyopaque {
-    _ = oldsize;
+    //_ = oldsize;
     //std.log.debug("dvui_c_realloc_sized {d} {d}", .{ oldsize, newsize });
 
     if (ptr == null) {
         return dvui_c_alloc(newsize);
     }
 
-    const buffer = @as([*]u8, @ptrCast(ptr.?)) - 16;
-    const len = std.mem.readInt(usize, buffer[0..@sizeOf(usize)], builtin.cpu.arch.endian());
+    //const buffer = @as([*]u8, @ptrCast(ptr.?)) - 8;
+    //const len = std.mem.readInt(u64, buffer[0..@sizeOf(u64)], builtin.cpu.arch.endian());
 
-    var slice = buffer[0..len];
-    _ = gpa.resize(slice, newsize + 16);
+    //const slice = buffer[0..@intCast(len)];
+    //std.log.debug("dvui_c_realloc_sized buffer {*} {d}", .{ ptr, len });
 
-    std.mem.writeInt(usize, slice[0..@sizeOf(usize)], slice.len, builtin.cpu.arch.endian());
-    return slice.ptr + 16;
+    //_ = gpa.resize(slice, newsize + 16);
+    const newptr = dvui_c_alloc(newsize);
+    const newbuf = @as([*]u8, @ptrCast(newptr));
+    @memcpy(newbuf[0..oldsize], @as([*]u8, @ptrCast(ptr))[0..oldsize]);
+    dvui_c_free(ptr);
+    return newptr;
+
+    //std.mem.writeInt(usize, slice[0..@sizeOf(usize)], slice.len, builtin.cpu.arch.endian());
+    //return slice.ptr + 16;
 }
 
 export fn dvui_c_panic(msg: [*c]const u8) noreturn {
@@ -140,6 +148,14 @@ export fn dvui_c_strlen(x: [*c]const u8) usize {
 
 export fn dvui_c_memcpy(dest: [*c]u8, src: [*c]const u8, n: usize) [*c]u8 {
     @memcpy(dest[0..n], src[0..n]);
+    return dest;
+}
+
+export fn dvui_c_memmove(dest: [*c]u8, src: [*c]const u8, n: usize) [*c]u8 {
+    //std.log.debug("dvui_c_memmove dest {*} src {*} {d}", .{ dest, src, n });
+    const buf = dvui.currentWindow().arena().alloc(u8, n) catch unreachable;
+    @memcpy(buf, src[0..n]);
+    @memcpy(dest[0..n], buf);
     return dest;
 }
 
@@ -620,6 +636,10 @@ pub fn clipboardTextSet(self: *WebBackend, text: []const u8) !void {
 pub fn openURL(self: *WebBackend, url: []const u8) !void {
     wasm.wasm_open_url(url.ptr, url.len);
     _ = self;
+}
+
+pub fn downloadData(name: []const u8, data: []const u8) !void {
+    wasm.wasm_download_data(name.ptr, name.len, data.ptr, data.len);
 }
 
 pub fn refresh(self: *WebBackend) void {
