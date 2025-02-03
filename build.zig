@@ -300,7 +300,7 @@ fn addDvuiModule(
     }
 
     if (b.systemIntegrationOption("freetype", .{})) {
-        dvui_mod.linkSystemLibrary("freetype", .{});
+        dvui_mod.linkSystemLibrary("freetype2", .{});
     } else {
         const freetype_dep = b.lazyDependency("freetype", .{
             .target = target,
