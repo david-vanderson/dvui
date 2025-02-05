@@ -1663,7 +1663,7 @@ pub fn plots() !void {
         if (dvui.wasm) {
             try dvui.backend.downloadData("plot.png", png_slice);
         } else {
-            const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{});
+            const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{ .path = "plot.png" });
             if (filename) |fname| {
                 defer dvui.currentWindow().arena().free(fname);
 

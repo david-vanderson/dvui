@@ -7123,16 +7123,23 @@ pub const pngFromTextureOptions = struct {
     resolution: ?u32 = null,
 };
 
-pub fn pngFromTexture(arena: std.mem.Allocator, tex: *anyopaque, width: u32, height: u32, opts: pngFromTextureOptions) ![]u8 {
+/// Make a png encoded image from a texture.
+///
+/// Gives bytes of a png file (allocated by arena) with contents from texture.
+pub fn pngFromTexture(arena: std.mem.Allocator, texture: *anyopaque, width: u32, height: u32, opts: pngFromTextureOptions) ![]u8 {
     const size: usize = width * height * 4;
     const px = try arena.alloc(u8, size);
 
-    try textureRead(tex, px.ptr, width, height);
+    try textureRead(texture, px.ptr, width, height);
 
     var len: c_int = undefined;
     const png_bytes = c.stbi_write_png_to_mem(px.ptr, @intCast(width * 4), @intCast(width), @intCast(height), 4, &len);
     arena.free(px);
 
+    // 4 bytes: length of data
+    // 4 bytes: "pHYs"
+    // 9 bytes: data (2 4-byte numbers + 1 byte units)
+    // 4 bytes: crc
     const pHYs_size = 4 + 4 + 9 + 4;
     var extra: usize = pHYs_size;
     var p_buf: [pHYs_size]u8 = undefined;
@@ -7146,17 +7153,27 @@ pub fn pngFromTexture(arena: std.mem.Allocator, tex: *anyopaque, width: u32, hei
     if (res == 0) {
         extra = 0;
     } else {
-        std.mem.writeInt(u32, p_buf[0..][0..4], 9, .big);
+        std.mem.writeInt(u32, p_buf[0..][0..4], 9, .big); // length of data
         @memcpy(p_buf[4..][0..4], "pHYs");
-        std.mem.writeInt(u32, p_buf[8..][0..4], res, .big);
-        std.mem.writeInt(u32, p_buf[12..][0..4], res, .big);
-        p_buf[16] = 1;
+        std.mem.writeInt(u32, p_buf[8..][0..4], res, .big); // res horizontal
+        std.mem.writeInt(u32, p_buf[12..][0..4], res, .big); // res vertical
+        p_buf[16] = 1; // 1 => pixels/meter
+
+        // crc includes "pHYs" and data
         std.mem.writeInt(u32, p_buf[17..][0..4], png_crc32(p_buf[4..][0..13]), .big);
     }
 
     var ret = try arena.alloc(u8, @as(usize, @intCast(len)) + extra);
 
-    const split: u32 = std.mem.readInt(u32, png_bytes[8..][0..4], .big) + 8 + 8 + 4;
+    // find byte index of end of IDHR chunk
+    const idhr_data_len: u32 = std.mem.readInt(u32, png_bytes[8..][0..4], .big);
+
+    // 8 bytes PNG magic bytes
+    // 4 bytes length of IDHR data
+    // 4 bytes "IDHR"
+    // IDHR data
+    // 4 bytes IDHR crc
+    const split: u32 = 8 + 4 + 4 + idhr_data_len + 4;
 
     @memcpy(ret[0..split], png_bytes[0..split]);
     if (res != 0) {
@@ -7173,7 +7190,7 @@ pub fn pngFromTexture(arena: std.mem.Allocator, tex: *anyopaque, width: u32, hei
     return ret;
 }
 
-/// Calculate the PNG crc value.
+/// Calculate a PNG crc value.
 ///
 /// Code from stb_image_write.h
 pub fn png_crc32(buf: []u8) u32 {
