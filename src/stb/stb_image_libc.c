@@ -40,12 +40,6 @@ static int strncmp(const char *_l, const char *_r, size_t n)
 	return *l - *r;
 }
 
-static long strtol(const char *restrict s, char **restrict p, int base)
-{
-    dvui_c_panic("strtol called");
-    return 100;
-}
-
 static int abs(int a)
 {
 	return a>0 ? a : -a;
@@ -55,12 +49,6 @@ extern double dvui_c_pow(double x, double y);
 static double pow(double x, double y)
 {
     return dvui_c_pow(x, y);
-}
-
-extern double dvui_c_ldexp(double x, int n);
-/* this should be a static function in stb_image_libc.c like the rest, but then I get a linker error in ReleaseFast */
-static double ldexp(double x, int n) {
-    return dvui_c_ldexp(x, n);
 }
 
 extern void *dvui_c_memset(void *dest, int x, size_t n);
