@@ -91,7 +91,6 @@ The build.zig and build.zig.zon files there show how to reference dvui as a zig 
     - Drag to reorder/remove/add
 - Missing Widgets for now
   - Data Grid
-  - Flex Layout
   - Docking
 
 ## Design

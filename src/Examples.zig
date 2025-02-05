@@ -1657,38 +1657,20 @@ pub fn plots() !void {
         try dvui.renderTexture(t, rs, .{});
         dvui.textureDestroyLater(t);
 
-        const size: usize = width * height * 4;
-        const px = dvui.currentWindow().arena().alloc(u8, size) catch null;
-        if (px) |pixels| {
-            defer dvui.currentWindow().arena().free(pixels);
-            dvui.textureRead(t, pixels.ptr, width, height) catch unreachable;
+        const png_slice = try dvui.pngFromTexture(dvui.currentWindow().arena(), t, width, height, .{});
+        defer dvui.currentWindow().arena().free(png_slice);
 
-            var len: c_int = undefined;
-            const png_bytes = dvui.c.stbi_write_png_to_mem(pixels.ptr, @intCast(width * 4), @intCast(width), @intCast(height), 4, &len);
-            const png_slice = png_bytes[0..@intCast(len)];
+        if (dvui.wasm) {
+            try dvui.backend.downloadData("plot.png", png_slice);
+        } else {
+            const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{});
+            if (filename) |fname| {
+                defer dvui.currentWindow().arena().free(fname);
 
-            if (dvui.wasm) {
-                defer dvui.backend.dvui_c_free(png_bytes);
+                var file = try std.fs.createFileAbsoluteZ(fname, .{});
+                defer file.close();
 
-                //const b64_encoder = std.base64.standard.Encoder;
-                //const prefix = "data:image/png;base64,";
-                //const encoded_size = prefix.len + b64_encoder.calcSize(@intCast(len));
-                //var encoded = try dvui.currentWindow().arena().alloc(u8, encoded_size);
-                //encoded[0..prefix.len].* = prefix.*;
-                //defer dvui.currentWindow().arena().free(encoded);
-
-                //_ = b64_encoder.encode(encoded[prefix.len..], png_slice);
-
-                //std.debug.print("output {s}\n", .{encoded});
-                try dvui.backend.downloadData("plot.png", png_slice);
-            } else {
-                defer dvui.c.free(png_bytes);
-                const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{});
-                if (filename) |fname| {
-                    var file = try std.fs.createFileAbsoluteZ(fname, .{});
-                    defer file.close();
-                    try file.writeAll(png_slice);
-                }
+                try file.writeAll(png_slice);
             }
         }
     }
