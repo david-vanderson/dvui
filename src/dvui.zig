@@ -6916,9 +6916,17 @@ pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.Texture
 
 /// Read pixels from texture created with textureCreateTarget().
 ///
+/// Returns pixels allocated by arena.
+///
 /// Only valid between dvui.Window.begin() and end().
-pub fn textureRead(texture: Texture, pixels_out: [*]u8) !void {
-    try currentWindow().backend.textureRead(texture, pixels_out);
+pub fn textureRead(arena: std.mem.Allocator, texture: Texture) ![]u8 {
+    const size: usize = texture.width * texture.height * 4;
+    const pixels = try arena.alloc(u8, size);
+    errdefer arena.free(pixels);
+
+    try currentWindow().backend.textureRead(texture, pixels.ptr);
+
+    return pixels;
 }
 
 /// Destroy a texture created with textureCreate() or textureCreateTarget() at
@@ -7133,10 +7141,7 @@ pub const pngFromTextureOptions = struct {
 ///
 /// Gives bytes of a png file (allocated by arena) with contents from texture.
 pub fn pngFromTexture(arena: std.mem.Allocator, texture: Texture, opts: pngFromTextureOptions) ![]u8 {
-    const size: usize = texture.width * texture.height * 4;
-    const px = try arena.alloc(u8, size);
-
-    try textureRead(texture, px.ptr);
+    const px = try textureRead(arena, texture);
 
     var len: c_int = undefined;
     const png_bytes = c.stbi_write_png_to_mem(px.ptr, @intCast(texture.width * 4), @intCast(texture.width), @intCast(texture.height), 4, &len);

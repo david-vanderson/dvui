@@ -168,11 +168,9 @@ pub fn deinit(self: *CacheWidget) void {
         if (self.tce()) |t| {
             // successful cache, copy pixels to regular texture and draw
 
-            const size: usize = t.texture.width * t.texture.height * 4;
-            const px = dvui.currentWindow().arena().alloc(u8, size) catch null;
+            const px = dvui.textureRead(dvui.currentWindow().arena(), t.texture) catch null;
             if (px) |pixels| {
                 defer dvui.currentWindow().arena().free(pixels);
-                dvui.textureRead(t.texture, pixels.ptr) catch unreachable;
 
                 dvui.textureDestroyLater(t.texture);
                 t.texture = dvui.textureCreate(pixels.ptr, t.texture.width, t.texture.height, .linear);
