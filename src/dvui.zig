@@ -262,8 +262,7 @@ const FontCacheEntry = struct {
     height: f32,
     ascent: f32,
     glyph_info: std.AutoHashMap(u32, GlyphInfo),
-    texture_atlas: *anyopaque,
-    texture_atlas_size: Size,
+    texture_atlas: Texture,
     texture_atlas_regen: bool,
 
     pub fn deinit(self: *FontCacheEntry, win: *Window) void {
@@ -614,7 +613,6 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
                     .ascent = @floor(ascent),
                     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
                     .texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
-                    .texture_atlas_size = size,
                     .texture_atlas_regen = true,
                 };
 
@@ -642,7 +640,6 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
             .ascent = ascent,
             .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
             .texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
-            .texture_atlas_size = size,
             .texture_atlas_regen = true,
         };
     }
@@ -657,9 +654,14 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     return cw.font_cache.getPtr(fontHash).?;
 }
 
+pub const Texture = struct {
+    ptr: *anyopaque,
+    width: u32,
+    height: u32,
+};
+
 pub const TextureCacheEntry = struct {
-    texture: *anyopaque,
-    size: Size,
+    texture: Texture,
     used: bool = true,
 
     pub fn hash(bytes: []const u8, height: u32) u32 {
@@ -715,7 +717,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
 
     //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, render.width, render.height });
 
-    const entry = TextureCacheEntry{ .texture = texture, .size = .{ .w = @as(f32, @floatFromInt(render.width)), .h = @as(f32, @floatFromInt(render.height)) } };
+    const entry = TextureCacheEntry{ .texture = texture };
     try cw.texture_cache.put(icon_hash, entry);
 
     return entry;
@@ -731,7 +733,7 @@ pub const RenderCommand = struct {
             color: Color,
         },
         texture: struct {
-            tex: *anyopaque,
+            tex: Texture,
             rs: RectScale,
             opts: RenderTextureOptions,
         },
@@ -2619,7 +2621,7 @@ pub const Window = struct {
 
     gpa: std.mem.Allocator,
     _arena: std.heap.ArenaAllocator,
-    texture_trash: std.ArrayList(*anyopaque) = undefined,
+    texture_trash: std.ArrayList(Texture) = undefined,
     path: std.ArrayList(Point) = undefined,
     render_target: RenderTarget = .{ .texture = null, .offset = .{} },
 
@@ -3369,7 +3371,7 @@ pub const Window = struct {
             self.debug_under_mouse_info = "";
         }
 
-        self.texture_trash = std.ArrayList(*anyopaque).init(larena);
+        self.texture_trash = std.ArrayList(Texture).init(larena);
         self.path = std.ArrayList(Point).init(larena);
 
         {
@@ -5533,12 +5535,15 @@ pub fn image(src: std.builtin.SourceLocation, name: []const u8, image_bytes: []c
 pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
     const cw = currentWindow();
 
-    var size = Size{};
+    var width: u32 = 0;
+    var height: u32 = 0;
     var it = cw.font_cache.iterator();
     while (it.next()) |kv| {
-        size.w = @max(size.w, kv.value_ptr.texture_atlas_size.w);
-        size.h += kv.value_ptr.texture_atlas_size.h;
+        width = @max(width, kv.value_ptr.texture_atlas.width);
+        height += kv.value_ptr.texture_atlas.height;
     }
+
+    var size: Size = .{ .w = @floatFromInt(width), .h = @floatFromInt(height) };
 
     // this size is a pixel size, so inverse scale to get natural pixels
     const ss = parentGet().screenRectScale(Rect{}).s;
@@ -6689,7 +6694,6 @@ pub fn renderText(opts: renderTextOptions) !void {
         }
 
         fce.texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
-        fce.texture_atlas_size = size;
     }
 
     var vtx = std.ArrayList(Vertex).init(cw.arena());
@@ -6719,6 +6723,8 @@ pub fn renderText(opts: renderTextOptions) !void {
         // we will definitely have a selected region
         sel = true;
     }
+
+    const atlas_size: Size = .{ .w = @floatFromInt(fce.texture_atlas.width), .h = @floatFromInt(fce.texture_atlas.height) };
 
     var bytes_seen: usize = 0;
     var utf8 = (try std.unicode.Utf8View.init(opts.text)).iterator();
@@ -6767,12 +6773,12 @@ pub fn renderText(opts: renderTextOptions) !void {
 
         v.pos.x = x + (gi.leftBearing + gi.w) * target_fraction;
         max_x = v.pos.x;
-        v.uv[0] = gi.uv[0] + gi.w / fce.texture_atlas_size.w;
+        v.uv[0] = gi.uv[0] + gi.w / atlas_size.w;
         try vtx.append(v);
 
         v.pos.y = y + (gi.topBearing + gi.h) * target_fraction;
         sel_max_y = @max(sel_max_y, v.pos.y);
-        v.uv[1] = gi.uv[1] + gi.h / fce.texture_atlas_size.h;
+        v.uv[1] = gi.uv[1] + gi.h / atlas_size.h;
         try vtx.append(v);
 
         v.pos.x = x + gi.leftBearing * target_fraction;
@@ -6860,11 +6866,11 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
         v.uv = .{ 0, 0 };
         try vtx.append(v);
 
-        v.pos.x = x + kv.value_ptr.texture_atlas_size.w;
+        v.pos.x = x + @as(f32, @floatFromInt(kv.value_ptr.texture_atlas.width));
         v.uv[0] = 1;
         try vtx.append(v);
 
-        v.pos.y = y + offset + kv.value_ptr.texture_atlas_size.h;
+        v.pos.y = y + offset + @as(f32, @floatFromInt(kv.value_ptr.texture_atlas.height));
         v.uv[1] = 1;
         try vtx.append(v);
 
@@ -6885,7 +6891,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 
         cw.backend.drawClippedTriangles(kv.value_ptr.texture_atlas, vtx.items, idx.items, clipr);
 
-        offset += kv.value_ptr.texture_atlas_size.h;
+        offset += @as(f32, @floatFromInt(kv.value_ptr.texture_atlas.height));
     }
 }
 
@@ -6894,7 +6900,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 /// Remember to destroy the texture at some point, see textureDestroyLater().
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enums.TextureInterpolation) *anyopaque {
+pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enums.TextureInterpolation) Texture {
     return currentWindow().backend.textureCreate(pixels, width, height, interpolation);
 }
 
@@ -6904,15 +6910,15 @@ pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enum
 /// Remember to destroy the texture at some point, see textureDestroyLater().
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.TextureInterpolation) !*anyopaque {
+pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.TextureInterpolation) !Texture {
     return try currentWindow().backend.textureCreateTarget(width, height, interpolation);
 }
 
 /// Read pixels from texture created with textureCreateTarget().
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn textureRead(texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) !void {
-    try currentWindow().backend.textureRead(texture, pixels_out, width, height);
+pub fn textureRead(texture: Texture, pixels_out: [*]u8) !void {
+    try currentWindow().backend.textureRead(texture, pixels_out);
 }
 
 /// Destroy a texture created with textureCreate() or textureCreateTarget() at
@@ -6923,14 +6929,14 @@ pub fn textureRead(texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u
 /// to use even in a subwindow where rendering is deferred.
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn textureDestroyLater(texture: *anyopaque) void {
+pub fn textureDestroyLater(texture: Texture) void {
     currentWindow().texture_trash.append(texture) catch |err| {
         dvui.log.err("textureDestroyLater got {!}\n", .{err});
     };
 }
 
 pub const RenderTarget = struct {
-    texture: ?*anyopaque,
+    texture: ?Texture,
     offset: Point,
     rendering: bool = true,
 };
@@ -6959,7 +6965,7 @@ pub const RenderTextureOptions = struct {
     debug: bool = false,
 };
 
-pub fn renderTexture(tex: *anyopaque, rs: RectScale, opts: RenderTextureOptions) !void {
+pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
@@ -7102,7 +7108,7 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
     //    }
     //}
 
-    const entry = TextureCacheEntry{ .texture = texture, .size = .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) } };
+    const entry = TextureCacheEntry{ .texture = texture };
     try cw.texture_cache.put(hash, entry);
 
     return entry;
@@ -7126,14 +7132,14 @@ pub const pngFromTextureOptions = struct {
 /// Make a png encoded image from a texture.
 ///
 /// Gives bytes of a png file (allocated by arena) with contents from texture.
-pub fn pngFromTexture(arena: std.mem.Allocator, texture: *anyopaque, width: u32, height: u32, opts: pngFromTextureOptions) ![]u8 {
-    const size: usize = width * height * 4;
+pub fn pngFromTexture(arena: std.mem.Allocator, texture: Texture, opts: pngFromTextureOptions) ![]u8 {
+    const size: usize = texture.width * texture.height * 4;
     const px = try arena.alloc(u8, size);
 
-    try textureRead(texture, px.ptr, width, height);
+    try textureRead(texture, px.ptr);
 
     var len: c_int = undefined;
-    const png_bytes = c.stbi_write_png_to_mem(px.ptr, @intCast(width * 4), @intCast(width), @intCast(height), 4, &len);
+    const png_bytes = c.stbi_write_png_to_mem(px.ptr, @intCast(texture.width * 4), @intCast(texture.width), @intCast(texture.height), 4, &len);
     arena.free(px);
 
     // 4 bytes: length of data

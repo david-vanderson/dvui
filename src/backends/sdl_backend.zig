@@ -464,7 +464,7 @@ pub fn contentScale(self: *SDLBackend) f32 {
     return self.initial_scale;
 }
 
-pub fn drawClippedTriangles(self: *SDLBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect) void {
+pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect) void {
     //std.debug.print("drawClippedTriangles:\n", .{});
     //for (vtx) |v, i| {
     //  std.debug.print("  {d} vertex {}\n", .{i, v});
@@ -494,7 +494,10 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?*anyopaque, vtx: []cons
         }
     }
 
-    const tex = @as(?*c.SDL_Texture, @ptrCast(@alignCast(texture)));
+    var tex: ?*c.SDL_Texture = null;
+    if (texture) |t| {
+        tex = @ptrCast(@alignCast(t.ptr));
+    }
 
     if (sdl3) {
         // not great, but seems sdl3 strictly accepts color only in floats
@@ -548,7 +551,7 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?*anyopaque, vtx: []cons
     }
 }
 
-pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {
+pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) dvui.Texture {
     if (!sdl3) switch (interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
         .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
@@ -579,10 +582,10 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32, 
 
     const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
     _ = c.SDL_SetTextureBlendMode(texture, pma_blend);
-    return texture;
+    return dvui.Texture{ .ptr = texture, .width = width, .height = height };
 }
 
-pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
+pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
     if (!sdl3) {
         switch (interpolation) {
             .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
@@ -616,23 +619,23 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
     _ = c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0);
     _ = c.SDL_RenderFillRect(self.renderer, null);
 
-    return texture;
+    return dvui.Texture{ .ptr = texture, .width = width, .height = height };
 }
 
-pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) error{TextureRead}!void {
+pub fn textureRead(self: *SDLBackend, texture: dvui.Texture, pixels_out: [*]u8) error{TextureRead}!void {
     if (sdl3) {
         const orig_target = c.SDL_GetRenderTarget(self.renderer);
-        _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture)));
+        _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture.ptr)));
         defer _ = c.SDL_SetRenderTarget(self.renderer, orig_target);
 
         var surface: *c.SDL_Surface = c.SDL_RenderReadPixels(self.renderer, null) orelse return error.TextureRead;
         defer c.SDL_DestroySurface(surface);
-        if (width * height != surface.*.w * surface.*.h) return error.TextureRead;
+        if (texture.width * texture.height != surface.*.w * surface.*.h) return error.TextureRead;
         // TODO: most common format is RGBA8888, doing conversion during copy to pixels_out should be faster
         if (surface.*.format != c.SDL_PIXELFORMAT_ABGR8888) {
             surface = c.SDL_ConvertSurface(surface, c.SDL_PIXELFORMAT_ABGR8888) orelse return error.TextureRead;
         }
-        @memcpy(pixels_out[0 .. width * height * 4], @as(?[*]u8, @ptrCast(surface.*.pixels)).?[0 .. width * height * 4]);
+        @memcpy(pixels_out[0 .. texture.width * texture.height * 4], @as(?[*]u8, @ptrCast(surface.*.pixels)).?[0 .. texture.width * texture.height * 4]);
         return;
     }
 
@@ -658,13 +661,13 @@ pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, wi
     //std.debug.print("query texture: {s} {d} {d} {d} width {d}\n", .{c.SDL_GetPixelFormatName(format), access, w, h, width});
 
     const orig_target = c.SDL_GetRenderTarget(self.renderer);
-    _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(texture));
+    _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(texture.ptr));
     defer _ = c.SDL_SetRenderTarget(self.renderer, orig_target);
 
-    _ = c.SDL_RenderReadPixels(self.renderer, null, if (swap_rb) c.SDL_PIXELFORMAT_ARGB8888 else c.SDL_PIXELFORMAT_ABGR8888, pixels_out, @intCast(width * 4));
+    _ = c.SDL_RenderReadPixels(self.renderer, null, if (swap_rb) c.SDL_PIXELFORMAT_ARGB8888 else c.SDL_PIXELFORMAT_ABGR8888, pixels_out, @intCast(texture.width * 4));
 
     if (swap_rb) {
-        for (0..width * height) |i| {
+        for (0..texture.width * texture.height) |i| {
             const r = pixels_out[i * 4 + 0];
             const b = pixels_out[i * 4 + 2];
             pixels_out[i * 4 + 0] = b;
@@ -673,12 +676,13 @@ pub fn textureRead(self: *SDLBackend, texture: *anyopaque, pixels_out: [*]u8, wi
     }
 }
 
-pub fn textureDestroy(_: *SDLBackend, texture: *anyopaque) void {
-    c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture))));
+pub fn textureDestroy(_: *SDLBackend, texture: dvui.Texture) void {
+    c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture.ptr))));
 }
 
-pub fn renderTarget(self: *SDLBackend, texture: ?*anyopaque) void {
-    _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture)));
+pub fn renderTarget(self: *SDLBackend, texture: ?dvui.Texture) void {
+    const ptr: ?*anyopaque = if (texture) |tex| tex.ptr else null;
+    _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(ptr)));
 
     // by default sdl sets an empty clip, let's ensure it is the full texture/screen
     if (sdl3) {

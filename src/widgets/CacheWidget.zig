@@ -90,7 +90,7 @@ pub fn install(self: *CacheWidget) !void {
             const w: u32 = @intFromFloat(@ceil(rs.r.w));
             const h: u32 = @intFromFloat(@ceil(rs.r.h));
             self.tex_uv = .{ .w = rs.r.w / @ceil(rs.r.w), .h = rs.r.h / @ceil(rs.r.h) };
-            var tex: ?*anyopaque = null;
+            var tex: ?dvui.Texture = null;
 
             if (self.caching) {
                 tex = dvui.textureCreateTarget(w, h, .linear) catch blk: {
@@ -100,7 +100,7 @@ pub fn install(self: *CacheWidget) !void {
             }
 
             if (self.caching) {
-                const entry = dvui.TextureCacheEntry{ .texture = tex.?, .size = .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) } };
+                const entry = dvui.TextureCacheEntry{ .texture = tex.? };
                 try dvui.currentWindow().texture_cache.put(self.hash, entry);
 
                 var offset = rs.r.topLeft();
@@ -168,14 +168,14 @@ pub fn deinit(self: *CacheWidget) void {
         if (self.tce()) |t| {
             // successful cache, copy pixels to regular texture and draw
 
-            const size: usize = @intFromFloat(t.size.w * t.size.h * 4);
+            const size: usize = t.texture.width * t.texture.height * 4;
             const px = dvui.currentWindow().arena().alloc(u8, size) catch null;
             if (px) |pixels| {
                 defer dvui.currentWindow().arena().free(pixels);
-                dvui.textureRead(t.texture, pixels.ptr, @intFromFloat(t.size.w), @intFromFloat(t.size.h)) catch unreachable;
+                dvui.textureRead(t.texture, pixels.ptr) catch unreachable;
 
                 dvui.textureDestroyLater(t.texture);
-                t.texture = dvui.textureCreate(pixels.ptr, @intFromFloat(t.size.w), @intFromFloat(t.size.h), .linear);
+                t.texture = dvui.textureCreate(pixels.ptr, t.texture.width, t.texture.height, .linear);
             }
 
             dvui.dataSet(null, self.wd.id, "_tex_uv", self.tex_uv);
