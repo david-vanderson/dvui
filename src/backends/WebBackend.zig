@@ -519,7 +519,7 @@ pub fn contentScale(_: *WebBackend) f32 {
     return 1.0;
 }
 
-pub fn drawClippedTriangles(_: *WebBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect) void {
+pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect) void {
     var x: i32 = std.math.maxInt(i32);
     var w: i32 = std.math.maxInt(i32);
     var y: i32 = std.math.maxInt(i32);
@@ -547,7 +547,7 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?*anyopaque, vtx: []const d
     const vertex_slice = std.mem.sliceAsBytes(vtx);
 
     wasm.wasm_renderGeometry(
-        if (texture) |t| @as(u32, @intFromPtr(t)) else 0,
+        if (texture) |t| @as(u32, @intFromPtr(t.ptr)) else 0,
         index_slice.ptr,
         index_slice.len,
         vertex_slice.ptr,
@@ -564,7 +564,7 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?*anyopaque, vtx: []const d
     );
 }
 
-pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {
+pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) dvui.Texture {
     _ = self;
 
     const wasm_interp: u8 = switch (interpolation) {
@@ -573,10 +573,10 @@ pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32, 
     };
 
     const id = wasm.wasm_textureCreate(pixels, width, height, wasm_interp);
-    return @ptrFromInt(id);
+    return dvui.Texture{ .ptr = @ptrFromInt(id), .width = width, .height = height };
 }
 
-pub fn textureCreateTarget(self: *WebBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
+pub fn textureCreateTarget(self: *WebBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
     _ = self;
     const wasm_interp: u8 = switch (interpolation) {
         .nearest => 0,
@@ -584,24 +584,24 @@ pub fn textureCreateTarget(self: *WebBackend, width: u32, height: u32, interpola
     };
 
     const id = wasm.wasm_textureCreateTarget(width, height, wasm_interp);
-    return @ptrFromInt(id);
+    return dvui.Texture{ .ptr = @ptrFromInt(id), .width = width, .height = height };
 }
 
-pub fn renderTarget(self: *WebBackend, texture: ?*anyopaque) void {
+pub fn renderTarget(self: *WebBackend, texture: ?dvui.Texture) void {
     _ = self;
     if (texture) |tex| {
-        wasm.wasm_renderTarget(@as(u32, @intFromPtr(tex)));
+        wasm.wasm_renderTarget(@as(u32, @intFromPtr(tex.ptr)));
     } else {
         wasm.wasm_renderTarget(0);
     }
 }
 
-pub fn textureRead(_: *WebBackend, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) error{TextureRead}!void {
-    wasm.wasm_textureRead(@as(u32, @intFromPtr(texture)), pixels_out, width, height);
+pub fn textureRead(_: *WebBackend, texture: dvui.Texture, pixels_out: [*]u8) error{TextureRead}!void {
+    wasm.wasm_textureRead(@as(u32, @intFromPtr(texture.ptr)), pixels_out, texture.width, texture.height);
 }
 
-pub fn textureDestroy(_: *WebBackend, texture: *anyopaque) void {
-    wasm.wasm_textureDestroy(@as(u32, @intFromPtr(texture)));
+pub fn textureDestroy(_: *WebBackend, texture: dvui.Texture) void {
+    wasm.wasm_textureDestroy(@as(u32, @intFromPtr(texture.ptr)));
 }
 
 pub fn textInputRect(_: *WebBackend, rect: ?dvui.Rect) void {

@@ -25,7 +25,6 @@ touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
 dvui_consumed_events: bool = false,
 cursor_last: dvui.enums.Cursor = .arrow,
 frame_buffers: std.AutoArrayHashMap(u32, u32) = undefined,
-texture_sizes: std.AutoArrayHashMap(u32, dvui.Size) = undefined,
 fb_width: ?c_int = null,
 fb_height: ?c_int = null,
 
@@ -138,7 +137,6 @@ pub fn init(gpa: std.mem.Allocator) RaylibBackend {
     return RaylibBackend{
         .gpa = gpa,
         .frame_buffers = std.AutoArrayHashMap(u32, u32).init(gpa),
-        .texture_sizes = std.AutoArrayHashMap(u32, dvui.Size).init(gpa),
         .shader = c.LoadShaderFromMemory(vertexSource, fragSource),
         .VAO = @intCast(c.rlLoadVertexArray()),
     };
@@ -150,7 +148,6 @@ pub fn shouldBlockRaylibInput(self: *RaylibBackend) bool {
 
 pub fn deinit(self: *RaylibBackend) void {
     self.frame_buffers.deinit();
-    self.texture_sizes.deinit();
     c.UnloadShader(self.shader);
     c.rlUnloadVertexArray(@intCast(self.VAO));
 
@@ -188,7 +185,7 @@ pub fn contentScale(_: *RaylibBackend) f32 {
     return 1.0;
 }
 
-pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []const dvui.Vertex, idx: []const u16, clipr_in: ?dvui.Rect) void {
+pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr_in: ?dvui.Rect) void {
 
     //make sure all raylib draw calls are rendered
     //before rendering dvui elements
@@ -258,7 +255,7 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
 
     if (texture) |tex| {
         c.rlActiveTextureSlot(0);
-        const texid = @intFromPtr(tex);
+        const texid = @intFromPtr(tex.ptr);
         c.rlEnableTexture(@intCast(texid));
 
         const tex_loc = c.GetShaderLocation(shader, "texture0");
@@ -287,7 +284,7 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?*anyopaque, vtx: []c
     }
 }
 
-pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) *anyopaque {
+pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) dvui.Texture {
     const texid = c.rlLoadTexture(pixels, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
 
     switch (interpolation) {
@@ -304,10 +301,10 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, 
     c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_S, c.RL_TEXTURE_WRAP_CLAMP);
     c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_T, c.RL_TEXTURE_WRAP_CLAMP);
 
-    return @ptrFromInt(texid);
+    return dvui.Texture{ .ptr = @ptrFromInt(texid), .width = width, .height = height };
 }
 
-pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
+pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
     const id = c.rlLoadFramebuffer(); // Load an empty framebuffer
     if (id == 0) {
         dvui.log.debug("Raylib textureCreateTarget: rlLoadFramebuffer() failed\n", .{});
@@ -342,26 +339,26 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
     }
 
     try self.frame_buffers.put(texid, id);
-    try self.texture_sizes.put(texid, .{ .w = @floatFromInt(width), .h = @floatFromInt(height) });
 
-    self.renderTarget(@ptrFromInt(texid));
+    const ret = dvui.Texture{ .ptr = @ptrFromInt(texid), .width = width, .height = height };
+
+    self.renderTarget(ret);
     c.ClearBackground(c.BLANK);
     self.renderTarget(null);
 
-    return @ptrFromInt(texid);
+    return ret;
 }
 
 /// Render future drawClippedTriangles() to the passed texture (or screen
 /// if null).
-pub fn renderTarget(self: *RaylibBackend, texture: ?*anyopaque) void {
+pub fn renderTarget(self: *RaylibBackend, texture: ?dvui.Texture) void {
     if (texture) |tex| {
-        const texid = @intFromPtr(tex);
+        const texid = @intFromPtr(tex.ptr);
         var target: c.RenderTexture2D = undefined;
         target.id = self.frame_buffers.get(@intCast(texid)) orelse unreachable;
         target.texture.id = @intCast(texid);
-        const size = self.texture_sizes.get(@intCast(texid)) orelse unreachable;
-        target.texture.width = @intFromFloat(size.w);
-        target.texture.height = @intFromFloat(size.h);
+        target.texture.width = @intCast(tex.width);
+        target.texture.height = @intCast(tex.height);
         self.fb_width = target.texture.width;
         self.fb_height = target.texture.height;
 
@@ -381,11 +378,11 @@ pub fn renderTarget(self: *RaylibBackend, texture: ?*anyopaque) void {
     }
 }
 
-pub fn textureRead(_: *RaylibBackend, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) error{TextureRead}!void {
+pub fn textureRead(_: *RaylibBackend, texture: dvui.Texture, pixels_out: [*]u8) error{TextureRead}!void {
     var t: c.Texture2D = undefined;
-    t.id = @intCast(@intFromPtr(texture));
-    t.width = @intCast(width);
-    t.height = @intCast(height);
+    t.id = @intCast(@intFromPtr(texture.ptr));
+    t.width = @intCast(texture.width);
+    t.height = @intCast(texture.height);
     t.mipmaps = 1;
     t.format = c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
 
@@ -393,20 +390,18 @@ pub fn textureRead(_: *RaylibBackend, texture: *anyopaque, pixels_out: [*]u8, wi
     defer c.UnloadImage(img);
 
     const imgData: [*]u8 = @ptrCast(img.data.?);
-    for (0..width * height * 4) |i| {
+    for (0..@intCast(t.width * t.height * 4)) |i| {
         pixels_out[i] = imgData[i];
     }
 }
 
-pub fn textureDestroy(self: *RaylibBackend, texture: *anyopaque) void {
-    const texid = @intFromPtr(texture);
+pub fn textureDestroy(self: *RaylibBackend, texture: dvui.Texture) void {
+    const texid = @intFromPtr(texture.ptr);
     c.rlUnloadTexture(@intCast(texid));
 
     if (self.frame_buffers.fetchSwapRemove(@intCast(texid))) |kv| {
         c.rlUnloadFramebuffer(kv.value);
     }
-
-    _ = self.texture_sizes.swapRemove(@intCast(texid));
 }
 
 pub fn clipboardText(_: *RaylibBackend) ![]const u8 {

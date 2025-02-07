@@ -1627,7 +1627,7 @@ pub fn plots() !void {
 
     const rs = hbox.data().contentRectScale();
 
-    var tex: ?*anyopaque = null;
+    var tex: ?dvui.Texture = null;
     const width: u32 = @intFromFloat(rs.r.w);
     const height: u32 = @intFromFloat(rs.r.h);
     var old_target: dvui.RenderTarget = undefined;
@@ -1657,7 +1657,7 @@ pub fn plots() !void {
         try dvui.renderTexture(t, rs, .{});
         dvui.textureDestroyLater(t);
 
-        const png_slice = try dvui.pngFromTexture(dvui.currentWindow().arena(), t, width, height, .{});
+        const png_slice = try dvui.pngFromTexture(dvui.currentWindow().arena(), t, .{});
         defer dvui.currentWindow().arena().free(png_slice);
 
         if (dvui.wasm) {
