@@ -290,6 +290,7 @@ fn addDvuiModule(
             .dx11 => {
                 dvui_mod.addCSourceFiles(.{ .files = &.{
                     "src/stb/stb_image_impl.c",
+                    "src/stb/stb_image_write_impl.c",
                 } });
 
                 if (b.lazyDependency("zigwin32", .{})) |zigwin32| {

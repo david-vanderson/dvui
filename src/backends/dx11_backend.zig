@@ -605,7 +605,7 @@ fn createBuffer(self: *Dx11Backend, bind_type: anytype, comptime InitialType: ty
 }
 
 // ############ Satisfy DVUI interfaces ############
-pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32, ti: dvui.enums.TextureInterpolation) *anyopaque {
+pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32, ti: dvui.enums.TextureInterpolation) dvui.Texture {
     _ = ti; // autofix
 
     var texture: *dx.ID3D11Texture2D = undefined;
@@ -640,10 +640,10 @@ pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32,
         @panic("couldn't create texture");
     }
 
-    return texture;
+    return dvui.Texture{.ptr = texture, .width = width, .height = height};
 }
 
-pub fn textureCreateTarget(self: *Dx11Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !*anyopaque {
+pub fn textureCreateTarget(self: *Dx11Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
     _ = self;
     _ = width;
     _ = height;
@@ -652,23 +652,21 @@ pub fn textureCreateTarget(self: *Dx11Backend, width: u32, height: u32, interpol
     return error.TextureCreate;
 }
 
-pub fn textureRead(self: *Dx11Backend, texture: *anyopaque, pixels_out: [*]u8, width: u32, height: u32) error{TextureRead}!void {
+pub fn textureRead(self: *Dx11Backend, texture: dvui.Texture, pixels_out: [*]u8) error{TextureRead}!void {
     _ = self;
     _ = texture;
     _ = pixels_out;
-    _ = width;
-    _ = height;
     dvui.log.debug("dx11 textureRead unimplemented", .{});
     return error.TextureRead;
 }
 
-pub fn textureDestroy(self: *Dx11Backend, texture: *anyopaque) void {
+pub fn textureDestroy(self: *Dx11Backend, texture: dvui.Texture) void {
     _ = self;
-    const tex: *dx.ID3D11Texture2D = @ptrCast(@alignCast(texture));
+    const tex: *dx.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
     _ = tex.IUnknown.Release();
 }
 
-pub fn renderTarget(self: *Dx11Backend, texture: ?*anyopaque) void {
+pub fn renderTarget(self: *Dx11Backend, texture: ?dvui.Texture) void {
     _ = self;
     _ = texture;
     dvui.log.debug("dx11 renderTarget unimplemented", .{});
@@ -676,7 +674,7 @@ pub fn renderTarget(self: *Dx11Backend, texture: ?*anyopaque) void {
 
 pub fn drawClippedTriangles(
     self: *Dx11Backend,
-    texture: ?*anyopaque,
+    texture: ?dvui.Texture,
     vtx: []const dvui.Vertex,
     idx: []const u16,
     clipr: ?dvui.Rect,
@@ -744,7 +742,7 @@ pub fn drawClippedTriangles(
 
     self.setViewport();
 
-    if (texture) |tex| self.recreateShaderView(tex);
+    if (texture) |tex| self.recreateShaderView(tex.ptr);
 
     var scissor_rect: ?RECT = std.mem.zeroes(RECT);
     var nums: u32 = 1;
