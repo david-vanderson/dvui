@@ -155,16 +155,16 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
                 //Xft.dpi: 96
                 //Xft.antialias: 1
                 if (mdpi == null and builtin.os.tag == .linux) {
-                    var stdout = std.ArrayList(u8).init(options.allocator);
-                    defer stdout.deinit();
-                    var stderr = std.ArrayList(u8).init(options.allocator);
-                    defer stderr.deinit();
+                    var stdout: std.ArrayListUnmanaged(u8) = .empty;
+                    defer stdout.deinit(options.allocator);
+                    var stderr: std.ArrayListUnmanaged(u8) = .empty;
+                    defer stderr.deinit(options.allocator);
                     var child = std.process.Child.init(&.{ "xrdb", "-get", "Xft.dpi" }, options.allocator);
                     child.stdout_behavior = .Pipe;
                     child.stderr_behavior = .Pipe;
                     try child.spawn();
                     var ok = true;
-                    child.collectOutput(&stdout, &stderr, 100) catch {
+                    child.collectOutput(options.allocator, &stdout, &stderr, 100) catch {
                         ok = false;
                     };
                     _ = child.wait() catch {};
