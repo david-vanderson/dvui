@@ -10,23 +10,15 @@ doc comments and publish
 
 update web-test and publish
 
+
+
+
 Backend.initWindow should have a fullscreen option for podcast
-
 podcast text selection is not showing the touch cut/copy/paste options
-
-
-
-clean up writing to the file, it should not use stdio
-
 
 make simple plot with option to save the image
 - save to file on desktop, save to dataurl on web?
 
-
-width/height need to be stored alongside each texture
-
-overhaul path construction so we don't maintain an implicit path
-- path should be a []Point that you pass to the fill/stroke functions, use your own ArrayList
 
 
 

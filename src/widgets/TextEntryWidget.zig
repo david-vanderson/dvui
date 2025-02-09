@@ -299,8 +299,7 @@ pub fn drawCursor(self: *TextEntryWidget) !void {
 
         var crect = self.textLayout.cursor_rect.plus(.{ .x = -1 });
         crect.w = 2;
-        try dvui.pathAddRect(self.textLayout.screenRectScale(crect).r, Rect.all(0));
-        try dvui.pathFillConvex(self.wd.options.color(.accent));
+        try self.textLayout.screenRectScale(crect).r.fill(Rect.all(0), self.wd.options.color(.accent));
     }
 }
 

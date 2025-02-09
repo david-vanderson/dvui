@@ -11,6 +11,40 @@ y: f32 = 0,
 w: f32 = 0,
 h: f32 = 0,
 
+/// Stroke (outline) a rounded rect.
+///
+/// radius values:
+/// - x is top-left corner
+/// - y is top-right corner
+/// - w is bottom-right corner
+/// - h is bottom-left corner
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn stroke(self: Rect, radius: Rect, thickness: f32, color: dvui.Color, opts: dvui.PathStrokeOptions) !void {
+    var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
+    defer path.deinit();
+
+    try dvui.pathAddRect(&path, self, radius);
+    try dvui.pathStroke(path.items, thickness, color, opts);
+}
+
+/// Fill a rounded rect.
+///
+/// radius values:
+/// - x is top-left corner
+/// - y is top-right corner
+/// - w is bottom-right corner
+/// - h is bottom-left corner
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn fill(self: Rect, radius: Rect, color: dvui.Color) !void {
+    var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
+    defer path.deinit();
+
+    try dvui.pathAddRect(&path, self, radius);
+    try dvui.pathFillConvex(path.items, color);
+}
+
 pub fn equals(self: *const Rect, r: Rect) bool {
     return (self.x == r.x and self.y == r.y and self.w == r.w and self.h == r.h);
 }

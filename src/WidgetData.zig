@@ -110,9 +110,9 @@ pub fn register(self: *WidgetData) !void {
                 outline_rect.x = @ceil(outline_rect.x) - 0.5;
                 outline_rect.y = @ceil(outline_rect.y) - 0.5;
             }
-            try dvui.pathAddRect(outline_rect, .{});
-            const color = dvui.themeGet().color_err;
-            try dvui.pathStrokeAfter(true, true, 1 * rs.s, .none, color);
+
+            try outline_rect.stroke(.{}, 1 * rs.s, dvui.themeGet().color_err, .{ .after = true, .closed = true });
+
             dvui.clipSet(clipr);
 
             cw.debug_info_src_id_extra = std.fmt.allocPrint(cw.arena(), "{s}:{d}\nid_extra {d}", .{ self.src.file, self.src.line, self.options.idExtra() }) catch "ERROR allocPrint";
@@ -137,17 +137,14 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
         }
         const rs = self.borderRectScale();
         if (!rs.r.empty()) {
-            try dvui.pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-            const col = self.options.color(.border);
-            try dvui.pathFillConvex(col);
+            try rs.r.fill(self.options.corner_radiusGet().scale(rs.s), self.options.color(.border));
         }
     }
 
     if (bg) {
         const rs = self.backgroundRectScale();
         if (!rs.r.empty()) {
-            try dvui.pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-            try dvui.pathFillConvex(opts.fill_color orelse self.options.color(.fill));
+            try rs.r.fill(self.options.corner_radiusGet().scale(rs.s), opts.fill_color orelse self.options.color(.fill));
         }
     }
 }
@@ -156,9 +153,8 @@ pub fn focusBorder(self: *const WidgetData) !void {
     if (self.visible()) {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
-        try dvui.pathAddRect(rs.r, self.options.corner_radiusGet().scale(rs.s));
-        const color = self.options.color(.accent);
-        try dvui.pathStrokeAfter(true, true, thick, .none, color);
+
+        try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s), thick, self.options.color(.accent), .{ .after = true, .closed = true });
     }
 }
 

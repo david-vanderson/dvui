@@ -278,9 +278,9 @@ The drawing functions are:
 - `renderText()` - single line of text
 - `renderIcon()` - tvg icon
 - `renderImage()` - raster image via stb_image
+- `renderTexture()` - texture from `textureCreate()` or `textureCreateTarget()`
 - `pathFillConvex()` - fill convex path (see below)
 - `pathStroke()` - stroke path (see below)
-- `pathStrokeAfter()` - stroke path (see below) but done after everything else (used for the focus highlight so it can draw over other widgets)
-
-Currently there is a single implicit path.  `pathAddPoint()`, `pathAddRect()`, and `pathAddArc()` add to the path, and `pathFillConvex()` and `pathStroke()` clear the path.
+- `Rect.fill()` - convenience for making and filling a rounded rect
+- `Rect.stroke()` - convenience for making and stroking a rounded rect
 

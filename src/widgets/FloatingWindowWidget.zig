@@ -243,10 +243,9 @@ pub fn drawBackground(self: *FloatingWindowWidget) !void {
 
     if (self.init_options.modal) {
         // paint over everything below
-        try dvui.pathAddRect(dvui.windowRectPixels(), Rect.all(0));
         var col = self.options.color(.text);
         col.a = if (dvui.themeGet().dark) 60 else 80;
-        try dvui.pathFillConvex(col);
+        try dvui.windowRectPixels().fill(Rect.all(0), col);
     }
 
     // we are using BoxWidget to do border/background
