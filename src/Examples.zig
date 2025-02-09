@@ -1638,17 +1638,19 @@ pub fn plots() !void {
 
     // plotting
 
-    try dvui.pathAddRect(rs.r, .{});
-    try dvui.pathFillConvex(dvui.Color.white);
+    try rs.r.fill(.{}, dvui.Color.white);
+
+    var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
 
     const points: usize = 1000;
     const freq: f32 = 5;
     for (0..points + 1) |i| {
         const fval: f32 = 0.5 * rs.r.h * @sin(2.0 * std.math.pi * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(points)) * freq);
-        try dvui.pathAddPoint(.{ .x = rs.r.x + rs.r.w * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(points)), .y = rs.r.y + rs.r.h / 2 - fval });
+        try path.append(.{ .x = rs.r.x + rs.r.w * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(points)), .y = rs.r.y + rs.r.h / 2 - fval });
     }
 
-    try dvui.pathStroke(false, 1 * rs.s, .none, dvui.themeGet().color_accent);
+    try dvui.pathStroke(path.items, 1 * rs.s, dvui.themeGet().color_accent, .{});
+    path.deinit();
 
     // end plotting
 
@@ -1890,8 +1892,7 @@ pub fn reorderListsAdvanced() !void {
 
         if (reorderable.targetRectScale()) |rs| {
             // user is dragging a reorderable over this rect, could draw anything here
-            try dvui.pathAddRect(rs.r, .{});
-            try dvui.pathFillConvex(.{ .r = 0, .g = 255, .b = 0 });
+            try rs.r.fill(.{}, .{ .r = 0, .g = 255, .b = 0 });
 
             // reset to use next space, need a separator
             try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
@@ -1922,8 +1923,7 @@ pub fn reorderListsAdvanced() !void {
 
         if (reorderable.targetRectScale()) |rs| {
             // user is dragging a reorderable over this rect
-            try dvui.pathAddRect(rs.r, .{});
-            try dvui.pathFillConvex(.{ .r = 0, .g = 255, .b = 0 });
+            try rs.r.fill(.{}, .{ .r = 0, .g = 255, .b = 0 });
         }
     }
 
@@ -2280,13 +2280,15 @@ pub fn scrollCanvas() !void {
     // can use this to convert between data and screen coords
     const dataRectScale = scaler.screenRectScale(.{});
 
-    try dvui.pathAddPoint(dataRectScale.pointToScreen(.{ .x = -10 }));
-    try dvui.pathAddPoint(dataRectScale.pointToScreen(.{ .x = 10 }));
-    try dvui.pathStroke(false, 1, .none, dvui.Color.black);
+    try dvui.pathStroke(&.{
+        dataRectScale.pointToScreen(.{ .x = -10 }),
+        dataRectScale.pointToScreen(.{ .x = 10 }),
+    }, 1, dvui.Color.black, .{});
 
-    try dvui.pathAddPoint(dataRectScale.pointToScreen(.{ .y = -10 }));
-    try dvui.pathAddPoint(dataRectScale.pointToScreen(.{ .y = 10 }));
-    try dvui.pathStroke(false, 1, .none, dvui.Color.black);
+    try dvui.pathStroke(&.{
+        dataRectScale.pointToScreen(.{ .y = -10 }),
+        dataRectScale.pointToScreen(.{ .y = 10 }),
+    }, 1, dvui.Color.black, .{});
 
     // keep record of bounding box
     var mbbox: ?Rect = null;
@@ -3239,20 +3241,21 @@ pub const StrokeTest = struct {
         for (points, 0..) |p, i| {
             var rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
             const rsrect = rect.scale(rs.s).offset(rs.r);
-            try dvui.pathAddRect(rsrect, dvui.Rect.all(1));
-            try dvui.pathFillConvex(fill_color);
+            try rsrect.fill(dvui.Rect.all(1), fill_color);
 
             _ = i;
             //_ = try dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });
         }
 
+        var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
+        defer path.deinit();
+
         for (points) |p| {
-            const rsp = rs.pointToScreen(p);
-            try dvui.pathAddPoint(rsp);
+            try path.append(rs.pointToScreen(p));
         }
 
         const stroke_color = dvui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
-        try dvui.pathStroke(stroke_test_closed, rs.s * thickness, StrokeTest.endcap_style, stroke_color);
+        try dvui.pathStroke(path.items, rs.s * thickness, stroke_color, .{ .closed = stroke_test_closed, .endcap_style = StrokeTest.endcap_style });
     }
 
     pub fn widget(self: *Self) dvui.Widget {

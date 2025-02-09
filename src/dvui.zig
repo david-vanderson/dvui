@@ -738,11 +738,11 @@ pub const RenderCommand = struct {
             opts: RenderTextureOptions,
         },
         pathFillConvex: struct {
-            path: std.ArrayList(Point),
+            path: []const Point,
             color: Color,
         },
         pathStroke: struct {
-            path: std.ArrayList(Point),
+            path: []const Point,
             closed: bool,
             thickness: f32,
             endcap_style: EndCapStyle,
@@ -871,16 +871,8 @@ pub fn cursorSet(cursor: enums.Cursor) void {
     cw.cursor_requested = cursor;
 }
 
-/// Add point to the current path.
-///
-/// Only valid between dvui.Window.begin() and end().
-pub fn pathAddPoint(p: Point) !void {
-    const cw = currentWindow();
-    try cw.path.append(p);
-}
-
-/// Add rounded rect to current path.  Starts from top left, and ends at top
-/// right unclosed.
+/// Add rounded rect to path.  Starts from top left, and ends at top right
+/// unclosed.  See Rect.fill().
 ///
 /// radius values:
 /// - x is top-left corner
@@ -889,7 +881,7 @@ pub fn pathAddPoint(p: Point) !void {
 /// - h is bottom-left corner
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn pathAddRect(r: Rect, radius: Rect) !void {
+pub fn pathAddRect(path: *std.ArrayList(Point), r: Rect, radius: Rect) !void {
     var rad = radius;
     const maxrad = @min(r.w, r.h) / 2;
     rad.x = @min(rad.x, maxrad);
@@ -900,23 +892,23 @@ pub fn pathAddRect(r: Rect, radius: Rect) !void {
     const bl = Point{ .x = r.x + rad.h, .y = r.y + r.h - rad.h };
     const br = Point{ .x = r.x + r.w - rad.w, .y = r.y + r.h - rad.w };
     const tr = Point{ .x = r.x + r.w - rad.y, .y = r.y + rad.y };
-    try pathAddArc(tl, rad.x, math.pi * 1.5, math.pi, @abs(tl.y - bl.y) < 0.5);
-    try pathAddArc(bl, rad.h, math.pi, math.pi * 0.5, @abs(bl.x - br.x) < 0.5);
-    try pathAddArc(br, rad.w, math.pi * 0.5, 0, @abs(br.y - tr.y) < 0.5);
-    try pathAddArc(tr, rad.y, math.pi * 2.0, math.pi * 1.5, @abs(tr.x - tl.x) < 0.5);
+    try pathAddArc(path, tl, rad.x, math.pi * 1.5, math.pi, @abs(tl.y - bl.y) < 0.5);
+    try pathAddArc(path, bl, rad.h, math.pi, math.pi * 0.5, @abs(bl.x - br.x) < 0.5);
+    try pathAddArc(path, br, rad.w, math.pi * 0.5, 0, @abs(br.y - tr.y) < 0.5);
+    try pathAddArc(path, tr, rad.y, math.pi * 2.0, math.pi * 1.5, @abs(tr.x - tl.x) < 0.5);
 }
 
-/// Add line segments creating an arc to the current path.
+/// Add line segments creating an arc to path.
 ///
 /// start >= end, both are radians that go clockwise from the positive x axis.
 ///
 /// If skip_end, the final point will not be added.  Useful if the next
-/// addition to the path would duplicate the end of the arc.
+/// addition to path would duplicate the end of the arc.
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn pathAddArc(center: Point, radius: f32, start: f32, end: f32, skip_end: bool) !void {
+pub fn pathAddArc(path: *std.ArrayList(Point), center: Point, radius: f32, start: f32, end: f32, skip_end: bool) !void {
     if (radius == 0) {
-        try pathAddPoint(center);
+        try path.append(center);
         return;
     }
 
@@ -936,46 +928,42 @@ pub fn pathAddArc(center: Point, radius: f32, start: f32, end: f32, skip_end: bo
     var a: f32 = start;
     var i: u32 = 0;
     while (i < num) : (i += 1) {
-        try pathAddPoint(Point{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
+        try path.append(Point{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
         a -= step;
     }
 
     if (!skip_end) {
         a = end;
-        try pathAddPoint(Point{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
+        try path.append(Point{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
     }
 }
 
-/// Fill the current path (must be convex) with col and free the path.
+/// Fill path (must be convex) with color.  See Rect.fill().
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn pathFillConvex(color: Color) !void {
-    const cw = currentWindow();
-
-    if (cw.path.items.len < 3) {
-        cw.path.clearAndFree();
+pub fn pathFillConvex(path: []const Point, color: Color) !void {
+    if (path.len < 3) {
         return;
     }
 
     if (dvui.clipGet().empty()) {
-        cw.path.clearAndFree();
         return;
     }
 
+    const cw = currentWindow();
+
     if (!cw.render_target.rendering) {
-        var path_copy = std.ArrayList(Point).init(cw.arena());
-        try path_copy.appendSlice(cw.path.items);
+        const path_copy = try cw.arena().dupe(Point, path);
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = color } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
-        cw.path.clearAndFree();
         return;
     }
 
-    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), cw.path.items.len * 2);
+    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), path.len * 2);
     defer vtx.deinit();
-    const idx_count = (cw.path.items.len - 2) * 3 + cw.path.items.len * 6;
+    const idx_count = (path.len - 2) * 3 + path.len * 6;
     var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
     defer idx.deinit();
     const col = color.alphaMultiply();
@@ -988,13 +976,13 @@ pub fn pathFillConvex(color: Color) !void {
     bounds.h = -bounds.x;
 
     var i: usize = 0;
-    while (i < cw.path.items.len) : (i += 1) {
-        const ai = (i + cw.path.items.len - 1) % cw.path.items.len;
-        const bi = i % cw.path.items.len;
-        const ci = (i + 1) % cw.path.items.len;
-        const aa = cw.path.items[ai].diff(cw.render_target.offset);
-        const bb = cw.path.items[bi].diff(cw.render_target.offset);
-        const cc = cw.path.items[ci].diff(cw.render_target.offset);
+    while (i < path.len) : (i += 1) {
+        const ai = (i + path.len - 1) % path.len;
+        const bi = i % path.len;
+        const ci = (i + 1) % path.len;
+        const aa = path[ai].diff(cw.render_target.offset);
+        const bb = path[bi].diff(cw.render_target.offset);
+        const cc = path[ci].diff(cw.render_target.offset);
 
         const diffab = Point.diff(aa, bb).normalize();
         const diffbc = Point.diff(bb, cc).normalize();
@@ -1048,8 +1036,6 @@ pub fn pathFillConvex(color: Color) !void {
     const clipr: ?Rect = if (bounds.clippedBy(clip_offset)) clip_offset else null;
 
     cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
-
-    cw.path.clearAndFree();
 }
 
 pub const EndCapStyle = enum {
@@ -1057,82 +1043,77 @@ pub const EndCapStyle = enum {
     square,
 };
 
-/// Stroke the current path and free the path.
-///
-/// * if closed_in, stroke includes from path end to path start.
+pub const PathStrokeOptions = struct {
+    /// true => Render this after normal drawing on that subwindow.  Useful for
+    /// debugging on cross-gui drawing.
+    after: bool = false,
+
+    /// true => Stroke includes from path end to path start.
+    closed: bool = false,
+
+    endcap_style: EndCapStyle = .none,
+};
+
+/// Stroke path as a series of line segments.  See Rect.stroke().
 ///
 /// Only valid between dvui.Window.begin() and end().
-///
-/// If you want to stroke a path on top of normal drawing, see pathStrokeAfter().
-pub fn pathStroke(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) !void {
-    try pathStrokeAfter(false, closed_in, thickness, endcap_style, col);
-}
-
-/// Stroke the current path and free the path, but render it after normal
-/// drawing on that subwindow (when after is true).  This is useful for
-/// debugging or cross-gui drawing (like an arrow pointing to a widget).
-///
-/// Only valid between dvui.Window.begin() and end().
-pub fn pathStrokeAfter(after: bool, closed_in: bool, thickness: f32, endcap_style: EndCapStyle, col: Color) !void {
-    const cw = currentWindow();
-
-    if (cw.path.items.len == 0) {
+pub fn pathStroke(path: []const Point, thickness: f32, color: Color, opts: PathStrokeOptions) !void {
+    if (path.len == 0) {
         return;
     }
 
-    if (after or !cw.render_target.rendering) {
-        var path_copy = std.ArrayList(Point).init(cw.arena());
-        try path_copy.appendSlice(cw.path.items);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = closed_in, .thickness = thickness, .endcap_style = endcap_style, .color = col } } };
+    const cw = currentWindow();
+
+    if (opts.after or !cw.render_target.rendering) {
+        const path_copy = try cw.arena().dupe(Point, path);
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = opts.closed, .thickness = thickness, .endcap_style = opts.endcap_style, .color = color } } };
 
         var sw = cw.subwindowCurrent();
-        if (after) {
+        if (opts.after) {
             try sw.render_cmds_after.append(cmd);
         } else {
             try sw.render_cmds.append(cmd);
         }
 
-        cw.path.clearAndFree();
         return;
     }
 
-    try pathStrokeRaw(closed_in, thickness, endcap_style, col);
+    try pathStrokeRaw(path, thickness, color, opts.closed, opts.endcap_style);
 }
 
-pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle, color: Color) !void {
-    const cw = currentWindow();
-
+pub fn pathStrokeRaw(path: []const Point, thickness: f32, color: Color, closed_in: bool, endcap_style: EndCapStyle) !void {
     if (dvui.clipGet().empty()) {
-        cw.path.clearAndFree();
         return;
     }
 
-    if (cw.path.items.len == 1) {
+    const cw = currentWindow();
+
+    if (path.len == 1) {
         // draw a circle with radius thickness at that point
-        const center = cw.path.items[0].diff(cw.render_target.offset);
+        const center = path[0].diff(cw.render_target.offset);
 
-        // remove old path so we don't have a center point
-        cw.path.clearAndFree();
+        var tempPath: std.ArrayList(Point) = .init(cw.arena());
+        defer tempPath.deinit();
 
-        try pathAddArc(center, thickness, math.pi * 2.0, 0, true);
-        try pathFillConvex(color);
-        cw.path.clearAndFree();
+        try pathAddArc(&tempPath, center, thickness, math.pi * 2.0, 0, true);
+        try pathFillConvex(tempPath.items, color);
+
         return;
     }
 
     var closed: bool = closed_in;
-    if (cw.path.items.len == 2) {
+    if (path.len == 2) {
         // a single segment can't be closed
         closed = false;
     }
 
-    var vtx_count = cw.path.items.len * 4;
+    var vtx_count = path.len * 4;
     if (!closed) {
         vtx_count += 4;
     }
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), vtx_count);
     defer vtx.deinit();
-    var idx_count = (cw.path.items.len - 1) * 18;
+    var idx_count = (path.len - 1) * 18;
     if (closed) {
         idx_count += 18;
     } else {
@@ -1152,13 +1133,13 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     const aa_size = 1.0;
     var vtx_start: usize = 0;
     var i: usize = 0;
-    while (i < cw.path.items.len) : (i += 1) {
-        const ai = (i + cw.path.items.len - 1) % cw.path.items.len;
-        const bi = i % cw.path.items.len;
-        const ci = (i + 1) % cw.path.items.len;
-        const aa = cw.path.items[ai].diff(cw.render_target.offset);
-        var bb = cw.path.items[bi].diff(cw.render_target.offset);
-        const cc = cw.path.items[ci].diff(cw.render_target.offset);
+    while (i < path.len) : (i += 1) {
+        const ai = (i + path.len - 1) % path.len;
+        const bi = i % path.len;
+        const ci = (i + 1) % path.len;
+        const aa = path[ai].diff(cw.render_target.offset);
+        var bb = path[bi].diff(cw.render_target.offset);
+        const cc = path[ci].diff(cw.render_target.offset);
 
         // the amount to move from bb to the edge of the line
         var halfnorm: Point = undefined;
@@ -1166,7 +1147,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         var v: Vertex = undefined;
         var diffab: Point = undefined;
 
-        if (!closed and ((i == 0) or ((i + 1) == cw.path.items.len))) {
+        if (!closed and ((i == 0) or ((i + 1) == path.len))) {
             if (i == 0) {
                 const diffbc = Point.diff(bb, cc).normalize();
                 // rotate by 90 to get normal
@@ -1215,7 +1196,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
                 try idx.append(@as(u16, @intCast(1)));
                 try idx.append(@as(u16, @intCast(vtx_start + 2 + 1)));
                 try idx.append(@as(u16, @intCast(vtx_start + 2)));
-            } else if ((i + 1) == cw.path.items.len) {
+            } else if ((i + 1) == path.len) {
                 diffab = Point.diff(aa, bb).normalize();
                 // rotate by 90 to get normal
                 halfnorm = Point{ .x = diffab.y / 2, .y = (-diffab.x) / 2 };
@@ -1288,7 +1269,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
         bounds.h = @max(bounds.h, v.pos.y);
 
         // triangles must be counter-clockwise (y going down) to avoid backface culling
-        if (closed or ((i + 1) != cw.path.items.len)) {
+        if (closed or ((i + 1) != path.len)) {
             // indexes for fill
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
@@ -1315,7 +1296,7 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
             try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
             try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 3)));
             try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 2)));
-        } else if (!closed and (i + 1) == cw.path.items.len) {
+        } else if (!closed and (i + 1) == path.len) {
             // add 2 extra vertexes for endcap fringe
             v.pos.x = bb.x - halfnorm.x * (thickness + aa_size) - diffab.x * aa_size;
             v.pos.y = bb.y - halfnorm.y * (thickness + aa_size) - diffab.y * aa_size;
@@ -1362,8 +1343,6 @@ pub fn pathStrokeRaw(closed_in: bool, thickness: f32, endcap_style: EndCapStyle,
     const clipr: ?Rect = if (bounds.clippedBy(clip_offset)) clip_offset else null;
 
     cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
-
-    cw.path.clearAndFree();
 }
 
 pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_above_parent_window: ?u32) !void {
@@ -2622,7 +2601,6 @@ pub const Window = struct {
     gpa: std.mem.Allocator,
     _arena: std.heap.ArenaAllocator,
     texture_trash: std.ArrayList(Texture) = undefined,
-    path: std.ArrayList(Point) = undefined,
     render_target: RenderTarget = .{ .texture = null, .offset = .{} },
 
     debug_window_show: bool = false,
@@ -3372,7 +3350,6 @@ pub const Window = struct {
         }
 
         self.texture_trash = std.ArrayList(Texture).init(larena);
-        self.path = std.ArrayList(Point).init(larena);
 
         {
             var i: usize = 0;
@@ -3648,14 +3625,12 @@ pub const Window = struct {
                     try renderTexture(t.tex, t.rs, t.opts);
                 },
                 .pathFillConvex => |pf| {
-                    try self.path.appendSlice(pf.path.items);
-                    try pathFillConvex(pf.color);
-                    pf.path.deinit();
+                    try pathFillConvex(pf.path, pf.color);
+                    self.arena().free(pf.path);
                 },
                 .pathStroke => |ps| {
-                    try self.path.appendSlice(ps.path.items);
-                    try pathStrokeRaw(ps.closed, ps.thickness, ps.endcap_style, ps.color);
-                    ps.path.deinit();
+                    try pathStrokeRaw(ps.path, ps.thickness, ps.color, ps.closed, ps.endcap_style);
+                    self.arena().free(ps.path);
                 },
             }
         }
@@ -4983,9 +4958,7 @@ pub const TabsWidget = struct {
                     r.w -= 1.0;
                     r.y = @floor(r.y) - 0.5;
                 }
-                try dvui.pathAddPoint(r.bottomLeft());
-                try dvui.pathAddPoint(r.bottomRight());
-                try dvui.pathStroke(false, 1, .none, dvui.themeGet().color_border);
+                try dvui.pathStroke(&.{ r.bottomLeft(), r.bottomRight() }, 1, dvui.themeGet().color_border, .{});
             },
             .vertical => {
                 if (dvui.currentWindow().snap_to_pixels) {
@@ -4993,9 +4966,7 @@ pub const TabsWidget = struct {
                     r.h -= 1.0;
                     r.x = @floor(r.x) - 0.5;
                 }
-                try dvui.pathAddPoint(r.topRight());
-                try dvui.pathAddPoint(r.bottomRight());
-                try dvui.pathStroke(false, 1, .none, dvui.themeGet().color_border);
+                try dvui.pathStroke(&.{ r.topRight(), r.bottomRight() }, 1, dvui.themeGet().color_border, .{});
             },
         }
     }
@@ -5055,30 +5026,36 @@ pub const TabsWidget = struct {
 
             switch (self.init_options.dir) {
                 .horizontal => {
-                    try dvui.pathAddPoint(rs.r.bottomRight());
+                    var path: std.ArrayList(Point) = .init(currentWindow().arena());
+                    defer path.deinit();
+
+                    try path.append(rs.r.bottomRight());
 
                     const tr = Point{ .x = rs.r.x + rs.r.w - cr.y, .y = rs.r.y + cr.y };
-                    try dvui.pathAddArc(tr, cr.y, math.pi * 2.0, math.pi * 1.5, false);
+                    try dvui.pathAddArc(&path, tr, cr.y, math.pi * 2.0, math.pi * 1.5, false);
 
                     const tl = Point{ .x = rs.r.x + cr.x, .y = rs.r.y + cr.x };
-                    try dvui.pathAddArc(tl, cr.x, math.pi * 1.5, math.pi, false);
+                    try dvui.pathAddArc(&path, tl, cr.x, math.pi * 1.5, math.pi, false);
 
-                    try dvui.pathAddPoint(rs.r.bottomLeft());
+                    try path.append(rs.r.bottomLeft());
 
-                    try dvui.pathStrokeAfter(true, false, 2 * rs.s, .none, self.options.color(.accent));
+                    try dvui.pathStroke(path.items, 2 * rs.s, self.options.color(.accent), .{ .after = true });
                 },
                 .vertical => {
-                    try dvui.pathAddPoint(rs.r.topRight());
+                    var path: std.ArrayList(Point) = .init(currentWindow().arena());
+                    defer path.deinit();
+
+                    try path.append(rs.r.topRight());
 
                     const tl = Point{ .x = rs.r.x + cr.x, .y = rs.r.y + cr.x };
-                    try dvui.pathAddArc(tl, cr.x, math.pi * 1.5, math.pi, false);
+                    try dvui.pathAddArc(&path, tl, cr.x, math.pi * 1.5, math.pi, false);
 
                     const bl = Point{ .x = rs.r.x + cr.h, .y = rs.r.y + rs.r.h - cr.h };
-                    try dvui.pathAddArc(bl, cr.h, math.pi, math.pi * 0.5, false);
+                    try dvui.pathAddArc(&path, bl, cr.h, math.pi, math.pi * 0.5, false);
 
-                    try dvui.pathAddPoint(rs.r.bottomRight());
+                    try path.append(rs.r.bottomRight());
 
-                    try dvui.pathStrokeAfter(true, false, 2 * rs.s, .none, self.options.color(.accent));
+                    try dvui.pathStroke(path.items, 2 * rs.s, self.options.color(.accent), .{ .after = true });
                 },
             }
         }
@@ -5310,9 +5287,12 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
         animation(wd.id, "_angle", anim);
     }
 
+    var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
+    defer path.deinit();
+
     const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
-    try pathAddArc(center, @min(r.w, r.h) / 3, angle, 0, false);
-    try pathStroke(false, 3.0 * rs.s, .none, options.color(.text));
+    try pathAddArc(&path, center, @min(r.w, r.h) / 3, angle, 0, false);
+    try pathStroke(path.items, 3.0 * rs.s, options.color(.text), .{});
 }
 
 pub fn scale(src: std.builtin.SourceLocation, scale_in: f32, opts: Options) !*ScaleWidget {
@@ -5732,8 +5712,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        try pathAddRect(part, options.corner_radiusGet().scale(trackrs.s));
-        try pathFillConvex(options.color(.accent));
+        try part.fill(options.corner_radiusGet().scale(trackrs.s), options.color(.accent));
     }
 
     switch (dir) {
@@ -5747,8 +5726,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        try pathAddRect(part, options.corner_radiusGet().scale(trackrs.s));
-        try pathFillConvex(options.color(.fill));
+        try part.fill(options.corner_radiusGet().scale(trackrs.s), options.color(.fill));
     }
 
     const knobRect = switch (dir) {
@@ -6067,8 +6045,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
 
-            try pathAddRect(knobrs.r, options.corner_radiusGet().scale(knobrs.s));
-            try pathFillConvex(options.color(.fill_press));
+            try knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s), options.color(.fill_press));
         }
 
         try label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
@@ -6180,8 +6157,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 
     const rs = b.data().contentRectScale();
 
-    try pathAddRect(rs.r, options.corner_radiusGet().scale(rs.s));
-    try pathFillConvex(options.color(.fill));
+    try rs.r.fill(options.corner_radiusGet().scale(rs.s), options.color(.fill));
 
     const perc = @max(0, @min(1, init_opts.percent));
     if (perc == 0) return;
@@ -6197,8 +6173,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    try pathAddRect(part, options.corner_radiusGet().scale(rs.s));
-    try pathFillConvex(options.color(.accent));
+    try part.fill(options.corner_radiusGet().scale(rs.s), options.color(.accent));
 }
 
 pub var checkbox_defaults: Options = .{
@@ -6245,28 +6220,25 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 }
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
-    try pathAddRect(rs.r, opts.corner_radiusGet().scale(rs.s));
-    try pathFillConvex(opts.color(.border));
+    try rs.r.fill(opts.corner_radiusGet().scale(rs.s), opts.color(.border));
 
     if (focused) {
-        try pathAddRect(rs.r, opts.corner_radiusGet().scale(rs.s));
-        try pathStroke(true, 2 * rs.s, .none, opts.color(.accent));
+        try rs.r.stroke(opts.corner_radiusGet().scale(rs.s), 2 * rs.s, opts.color(.accent), .{ .closed = true });
+    }
+
+    var fill: Options.ColorAsk = .fill;
+    if (pressed) {
+        fill = .fill_press;
+    } else if (hovered) {
+        fill = .fill_hover;
     }
 
     var options = opts;
     if (checked) {
         options = opts.override(themeGet().style_accent);
-        try pathAddRect(rs.r.insetAll(0.5 * rs.s), opts.corner_radiusGet().scale(rs.s));
+        try rs.r.insetAll(0.5 * rs.s).fill(opts.corner_radiusGet().scale(rs.s), options.color(fill));
     } else {
-        try pathAddRect(rs.r.insetAll(rs.s), opts.corner_radiusGet().scale(rs.s));
-    }
-
-    if (pressed) {
-        try pathFillConvex(options.color(.fill_press));
-    } else if (hovered) {
-        try pathFillConvex(options.color(.fill_hover));
-    } else {
-        try pathFillConvex(options.color(.fill));
+        try rs.r.insetAll(rs.s).fill(opts.corner_radiusGet().scale(rs.s), options.color(fill));
     }
 
     if (checked) {
@@ -6281,10 +6253,12 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
         thick /= 1.5;
 
-        try pathAddPoint(Point{ .x = x - third, .y = y - third });
-        try pathAddPoint(Point{ .x = x, .y = y });
-        try pathAddPoint(Point{ .x = x + third * 2, .y = y - third * 2 });
-        try pathStroke(false, thick, .square, options.color(.text));
+        const path: []const Point = &.{
+            .{ .x = x - third, .y = y - third },
+            .{ .x = x, .y = y },
+            .{ .x = x + third * 2, .y = y - third * 2 },
+        };
+        try pathStroke(path, thick, options.color(.text), .{ .endcap_style = .square });
     }
 }
 
@@ -6331,35 +6305,32 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 }
 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
-    try pathAddRect(rs.r, Rect.all(1000));
-    try pathFillConvex(opts.color(.border));
+    try rs.r.fill(Rect.all(1000), opts.color(.border));
 
     if (focused) {
-        try pathAddRect(rs.r, Rect.all(1000));
-        try pathStroke(true, 2 * rs.s, .none, opts.color(.accent));
+        try rs.r.stroke(Rect.all(1000), 2 * rs.s, opts.color(.accent), .{ .closed = true });
+    }
+
+    var fill: Options.ColorAsk = .fill;
+    if (pressed) {
+        fill = .fill_press;
+    } else if (hovered) {
+        fill = .fill_hover;
     }
 
     var options = opts;
     if (active) {
         options = opts.override(themeGet().style_accent);
-        try pathAddRect(rs.r.insetAll(0.5 * rs.s), Rect.all(1000));
+        try rs.r.insetAll(0.5 * rs.s).fill(Rect.all(1000), options.color(fill));
     } else {
-        try pathAddRect(rs.r.insetAll(rs.s), Rect.all(1000));
-    }
-
-    if (pressed) {
-        try pathFillConvex(options.color(.fill_press));
-    } else if (hovered) {
-        try pathFillConvex(options.color(.fill_hover));
-    } else {
-        try pathFillConvex(options.color(.fill));
+        try rs.r.insetAll(rs.s).fill(Rect.all(1000), options.color(fill));
     }
 
     if (active) {
         const thick = @max(1.0, rs.r.w / 6);
 
-        try pathAddPoint(Point{ .x = rs.r.x + rs.r.w / 2, .y = rs.r.y + rs.r.h / 2 });
-        try pathStroke(false, thick, .square, options.color(.text));
+        const p = Point{ .x = rs.r.x + rs.r.w / 2, .y = rs.r.y + rs.r.h / 2 };
+        try pathStroke(&.{p}, thick, options.color(.text), .{});
     }
 }
 
@@ -6490,9 +6461,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        try dvui.pathAddRect(rs.r.outsetAll(1), te.data().options.corner_radiusGet());
-        const color = dvui.themeGet().color_err;
-        try dvui.pathStrokeAfter(true, true, 3 * rs.s, .none, color);
+        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet(), 3 * rs.s, dvui.themeGet().color_err, .{ .after = true, .closed = true });
     }
 
     // display min/max

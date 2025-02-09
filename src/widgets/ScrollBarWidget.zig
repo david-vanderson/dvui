@@ -178,8 +178,7 @@ pub fn deinit(self: *ScrollBarWidget) void {
     }
     self.grabRect = self.grabRect.insetAll(2);
     const grabrs = self.wd.parent.screenRectScale(self.grabRect);
-    dvui.pathAddRect(grabrs.r, Rect.all(100)) catch {};
-    dvui.pathFillConvex(fill) catch {};
+    grabrs.r.fill(Rect.all(100), fill) catch {};
 
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();

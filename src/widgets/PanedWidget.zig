@@ -139,8 +139,7 @@ pub fn draw(self: *PanedWidget) !void {
                     r.w = width;
                 },
             }
-            try dvui.pathAddRect(r, Rect.all(thick));
-            try dvui.pathFillConvex(self.wd.options.color(.text).transparent(0.5));
+            try r.fill(Rect.all(thick), self.wd.options.color(.text).transparent(0.5));
         }
     }
 }
