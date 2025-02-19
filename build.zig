@@ -245,6 +245,7 @@ fn addDvuiModule(
                     "src/stb/stb_image_write_impl.c",
                 } });
                 var sdl_options = b.addOptions();
+                const compile_sdl3 = b.option(bool, "sdl3", "Use SDL3 compiled from source") orelse false;
                 if (b.systemIntegrationOption("sdl2", .{})) {
                     // SDL2 from system
                     sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
@@ -253,7 +254,7 @@ fn addDvuiModule(
                     // SDL3 from system
                     sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
                     backend_mod.linkSystemLibrary("SDL3", .{});
-                } else if (b.option(bool, "sdl3", "Use SDL3 compiled from source") orelse false) {
+                } else if (compile_sdl3) {
                     // SDL3 compiled from source
                     sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
                     if (b.lazyDependency("sdl3", .{
