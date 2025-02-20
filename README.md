@@ -33,6 +33,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 * [Graphical Janet REPL](https://codeberg.org/iacore/janet-graphical-repl)
 * [FIDO2/ Passkey compatible authenticator implementation for Linux](https://github.com/r4gus/keypass)
 * [QEMU frontend](https://github.com/AnErrupTion/ZigEmu)
+* [Static site generator GUI](https://github.com/nhanb/webmaker2000)
 
 ## Features
 
