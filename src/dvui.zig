@@ -2506,7 +2506,11 @@ pub const Window = struct {
 
         pub fn free(self: *const SavedData, allocator: std.mem.Allocator) void {
             if (self.data.len != 0) {
-                allocator.rawFree(self.data, @ctz(self.alignment), @returnAddress());
+                allocator.rawFree(
+                    self.data,
+                    std.mem.Alignment.fromByteUnits(self.alignment),
+                    @returnAddress(),
+                );
             }
         }
     };
@@ -3524,9 +3528,10 @@ pub const Window = struct {
     }
 
     fn positionMouseEventRemove(self: *Self) void {
-        const e = self.events.pop();
-        if (e.evt != .mouse or e.evt.mouse.action != .position) {
-            log.err("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
+        if (self.events.pop()) |e| {
+            if (e.evt != .mouse or e.evt.mouse.action != .position) {
+                log.err("positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
+            }
         }
     }
 
