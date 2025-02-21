@@ -4,8 +4,8 @@
     .paths = .{""},
     .dependencies = .{
         .sdl = .{
-            .url = "git+https://github.com/david-vanderson/SDL#7f42eeed823b0f6bf1fc1640288975d59b058c36",
-            .hash = "122028b73239eb9d2791541f5d6d1cfc5bc6e8d4603a45a26669a77b59c5566ae999",
+            .url = "git+https://github.com/david-vanderson/SDL#a0d66c2bfb70ce0119eedf8ff5b523fd36e0925f",
+            .hash = "1220d2fd0149dbba85e5f5f0f6ecf2a7ce9a2f81d66280efb9389924bb547a51a557",
             .lazy = true,
         },
         .sdl3 = .{
