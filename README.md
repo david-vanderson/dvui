@@ -1,6 +1,6 @@
 # DVUI - Immediate Zig GUI for Apps and Games
 
-A Zig GUI toolkit for whole applications or extra debugging windows in an existing application.
+[Homepage](https://david-vanderson.github.io) A Zig GUI toolkit for whole applications or extra debugging windows in an existing application.
 
 Tested with [Zig](https://ziglang.org/) 0.14 (use tag v0.2.0 for zig 0.13)
 
@@ -12,7 +12,7 @@ How to run the built-in examples:
 - ```zig build raylib-ontop```
 - ```zig build web-test```
   - then load `zig-out/bin/index.html`
-  - [online demo](https://david-vanderson.github.io)
+  - [online demo](https://david-vanderson.github.io/demo)
 - SDL3:
   - ```zig build sdl-standalone -Dsdl3```
   - ```zig build sdl-ontop -Dsdl3```
@@ -42,7 +42,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 - Use for whole UI or for debugging on top of existing application
 - Existing backends
   - [SDL](https://libsdl.org/)
-  - [Web](https://david-vanderson.github.io)
+  - [Web](https://david-vanderson.github.io/demo)
   - [Raylib](https://www.raylib.com/)
   - [Mach](https://machengine.org/)
     - note: Mach backend is currently out of date
