@@ -763,8 +763,8 @@ pub fn basicWidgets(demo_win_id: u32) !void {
 
         try dvui.label(@src(), "Link:", .{}, .{ .gravity_y = 0.5 });
 
-        if (try dvui.labelClick(@src(), "https://github.com/david-vanderson/dvui", .{}, .{ .gravity_y = 0.5, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
-            try dvui.openURL("https://github.com/david-vanderson/dvui");
+        if (try dvui.labelClick(@src(), "https://david-vanderson.github.io/", .{}, .{ .gravity_y = 0.5, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
+            try dvui.openURL("https://david-vanderson.github.io/");
         }
 
         if (try dvui.labelClick(@src(), "docs", .{}, .{ .gravity_y = 0.5, .margin = .{ .x = 10 }, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
@@ -1594,7 +1594,7 @@ pub fn layoutText() !void {
         try tl.addText(lorem, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
 
         if (try tl.addTextClick("This text is a link that is part of the text layout and goes to the dvui home page.", .{ .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } }, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) })) {
-            try dvui.openURL("https://github.com/david-vanderson/dvui");
+            try dvui.openURL("https://david-vanderson.github.io/");
         }
 
         try tl.addText(lorem2, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
