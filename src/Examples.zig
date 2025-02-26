@@ -191,10 +191,10 @@ pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_fl
     return fwin;
 }
 
-var calculation: f32 = 0;
-var calculand: f32 = 0;
+var calculation: f64 = 0;
+var calculand: ?f64 = null;
 var active_op: ?u8 = null;
-var digits_after_dot: f32 = 0;
+var digits_after_dot: f64 = 0;
 pub fn calculator() !void {
     var vbox = try dvui.box(@src(), .vertical, .{});
     defer vbox.deinit();
@@ -202,7 +202,7 @@ pub fn calculator() !void {
     const loop_labels = [_]u8{ 'C', 'N', '%', '/', '7', '8', '9', 'x', '4', '5', '6', '-', '1', '2', '3', '+', '0', '.', '=' };
     const loop_count = @sizeOf(@TypeOf(loop_labels)) / @sizeOf(@TypeOf(loop_labels[0]));
 
-    try dvui.label(@src(), "{d}", .{calculation}, .{ .gravity_x = 1.0 });
+    try dvui.label(@src(), "{d}", .{if (calculand) |val| val else calculation}, .{ .gravity_x = 1.0 });
 
     for (0..5) |row_i| {
         var b = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 110 }, .id_extra = row_i });
@@ -221,7 +221,7 @@ pub fn calculator() !void {
             if (try dvui.button(@src(), &[_]u8{letter}, .{}, opts.override(.{ .id_extra = letter }))) {
                 if (letter == 'C') {
                     calculation = 0;
-                    calculand = 0;
+                    calculand = null;
                     active_op = null;
                     digits_after_dot = 0;
                 }
@@ -264,22 +264,25 @@ pub fn calculator() !void {
 
                 if (active_op != null) {
                     if (letter >= '0' and letter <= '9') {
-                        const letterDigit: f32 = @floatFromInt(letter - '0');
+                        if (calculand == null) calculand = 0.0;
+                        const letterDigit: f64 = @floatFromInt(letter - '0');
                         if (digits_after_dot > 0) {
-                            calculand += letterDigit / @exp(@log(10.0) * digits_after_dot);
+                            calculand.? += letterDigit / @exp(@log(10.0) * digits_after_dot);
                             digits_after_dot += 1;
                         } else {
-                            calculand *= 10;
-                            calculand += letterDigit;
+                            calculand.? *= 10;
+                            calculand.? += letterDigit;
                         }
                     }
                     if (letter == '=') {
-                        if (active_op == '/') calculation /= calculand;
-                        if (active_op == '-') calculation -= calculand;
-                        if (active_op == '+') calculation += calculand;
-                        if (active_op == 'x') calculation *= calculand;
+                        if (calculand) |val| {
+                            if (active_op == '/') calculation /= val;
+                            if (active_op == '-') calculation -= val;
+                            if (active_op == '+') calculation += val;
+                            if (active_op == 'x') calculation *= val;
+                        }
                         active_op = null;
-                        calculand = 0;
+                        calculand = null;
                         digits_after_dot = 0;
                     }
                 }
