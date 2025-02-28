@@ -6491,6 +6491,8 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 pub const renderTextOptions = struct {
     font: Font,
     text: []const u8,
+    /// Displays extra whitespace at the end of the line if selected.
+    has_newline: bool = false,
     rs: RectScale,
     color: Color,
     sel_start: ?usize = null,
@@ -6503,7 +6505,8 @@ pub const renderTextOptions = struct {
 // only renders a single line of text
 pub fn renderText(opts: renderTextOptions) !void {
     if (opts.rs.s == 0) return;
-    if (opts.text.len == 0) return;
+    var should_render_newline = opts.has_newline and opts.sel_start != null and opts.sel_start.? <= opts.text.len and opts.sel_end != null and opts.sel_end.? > opts.text.len;
+    if (opts.text.len == 0 and !should_render_newline) return;
     if (clipGet().intersect(opts.rs.r).empty()) return;
 
     if (!std.unicode.utf8ValidateSlice(opts.text)) {
@@ -6537,7 +6540,10 @@ pub fn renderText(opts: renderTextOptions) !void {
     // make sure the cache has all the glyphs we need
     var utf8it = (try std.unicode.Utf8View.init(opts.text)).iterator();
     while (utf8it.nextCodepoint()) |codepoint| {
-        _ = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), opts.font.name);
+        _ = try fce.glyphInfoGet(codepoint, opts.font.name);
+    }
+    if (should_render_newline) {
+        _ = try fce.glyphInfoGet(' ', opts.font.name);
     }
 
     // number of extra pixels to add on each side of each glyph
@@ -6667,7 +6673,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             }
         }
 
-        fce.texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
+        fce.texture_atlas = textureCreate(pixels.ptr, @intFromFloat(size.w), @intFromFloat(size.h), .linear);
     }
 
     var vtx = std.ArrayList(Vertex).init(cw.arena());
@@ -6690,9 +6696,9 @@ pub fn renderText(opts: renderTextOptions) !void {
     var sel_end_x: f32 = x;
     var sel_max_y: f32 = y;
     var sel_start: usize = opts.sel_start orelse 0;
-    sel_start = @min(sel_start, opts.text.len);
+    sel_start = @min(sel_start, opts.text.len + @intFromBool(opts.has_newline));
     var sel_end: usize = opts.sel_end orelse 0;
-    sel_end = @min(sel_end, opts.text.len);
+    sel_end = @min(sel_end, opts.text.len + @intFromBool(opts.has_newline));
     if (sel_start < sel_end) {
         // we will definitely have a selected region
         sel = true;
@@ -6702,8 +6708,12 @@ pub fn renderText(opts: renderTextOptions) !void {
 
     var bytes_seen: usize = 0;
     var utf8 = (try std.unicode.Utf8View.init(opts.text)).iterator();
-    while (utf8.nextCodepoint()) |codepoint| {
-        const gi = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), opts.font.name);
+    while (true) {
+        const codepoint = utf8.nextCodepoint() orelse if (should_render_newline) blk: {
+            should_render_newline = false;
+            break :blk ' ';
+        } else break;
+        const gi = try fce.glyphInfoGet(codepoint, opts.font.name);
 
         // TODO: kerning
 
