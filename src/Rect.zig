@@ -25,7 +25,9 @@ pub fn stroke(self: Rect, radius: Rect, thickness: f32, color: dvui.Color, opts:
     defer path.deinit();
 
     try dvui.pathAddRect(&path, self, radius);
-    try dvui.pathStroke(path.items, thickness, color, opts);
+    var options = opts;
+    options.closed = true;
+    try dvui.pathStroke(path.items, thickness, color, options);
 }
 
 /// Fill a rounded rect.
