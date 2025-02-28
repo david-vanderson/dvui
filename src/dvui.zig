@@ -5251,6 +5251,7 @@ pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) !Widge
     const defaults: Options = .{ .name = "Spacer" };
     var wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .min_size_content = size }));
     try wd.register();
+    try wd.borderAndBackground(.{});
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
     return wd;
