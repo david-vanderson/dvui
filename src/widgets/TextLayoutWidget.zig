@@ -1151,7 +1151,18 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
 
         const rs = self.screenRectScale(Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = width, .h = @max(0, self.wd.contentRect().h - self.insert_pt.y) });
         //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
-        const rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
+        var rtxt = if (newline) txt[0 .. end - 1] else txt[0..end];
+
+        // If the newline is part of the selection, then render it as a
+        // selected space.  This matches Chrome's behavior, although this is
+        // not a universal - Firefox doesn't do this.
+        if (newline and
+            (self.selection.start -| self.bytes_seen -| rtxt.len) == 0 and
+            (self.selection.end -| self.bytes_seen -| rtxt.len) > 0)
+        {
+            rtxt = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{s} ", .{rtxt});
+        }
+
         try dvui.renderText(.{
             .font = options.fontGet(),
             .text = rtxt,
