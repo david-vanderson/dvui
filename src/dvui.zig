@@ -6930,7 +6930,8 @@ pub const RenderTarget = struct {
 /// offset will be subtracted from all dvui rendering, useful as the point on
 /// the screen the texture will map to.
 ///
-/// Useful for caching expensive renders or to save a render for export.
+/// Useful for caching expensive renders or to save a render for export.  See
+/// Picture.
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn renderTarget(args: RenderTarget) RenderTarget {
@@ -7104,6 +7105,49 @@ pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, rot
     const tce = imageTexture(name, image_bytes) catch return;
     try renderTexture(tce.texture, rs, .{ .rotation = rotation, .colormod = colormod });
 }
+
+/// Captures dvui drawing to part of the screen in a texture.
+pub const Picture = struct {
+    r: Rect, // physical pixels captured
+    texture: dvui.Texture = undefined,
+    target: dvui.RenderTarget = undefined,
+
+    /// Begin recording drawing to the physical pixels in rect (enlarged to pixel boundaries).
+    ///
+    /// Returns null if backend does not support texture targets.
+    ///
+    /// Only valid between dvui.Window.begin() and end().
+    pub fn start(rect: Rect) ?Picture {
+        var ret: Picture = .{ .r = rect };
+
+        // enlarge texture to pixels boundaries
+        const x_start = @floor(ret.r.x);
+        const x_end = @ceil(ret.r.x + ret.r.w);
+        ret.r.x = x_start;
+        ret.r.w = @round(x_end - x_start);
+
+        const y_start = @floor(ret.r.y);
+        const y_end = @ceil(ret.r.y + ret.r.h);
+        ret.r.y = y_start;
+        ret.r.h = @round(y_end - y_start);
+
+        ret.texture = dvui.textureCreateTarget(@intFromFloat(ret.r.w), @intFromFloat(ret.r.h), .linear) catch return null;
+        ret.target = dvui.renderTarget(.{ .texture = ret.texture, .offset = ret.r.topLeft() });
+
+        return ret;
+    }
+
+    /// Stop recording and return texture (only valid this frame).
+    pub fn stop(self: *const Picture) dvui.Texture {
+        _ = dvui.renderTarget(self.target);
+
+        // render the texture so you see the picture this frame
+        dvui.renderTexture(self.texture, .{ .r = self.r }, .{}) catch {};
+
+        dvui.textureDestroyLater(self.texture);
+        return self.texture;
+    }
+};
 
 pub const pngFromTextureOptions = struct {
     /// Physical size of image, pixels per meter added to png pHYs chunk.
