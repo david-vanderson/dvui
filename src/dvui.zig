@@ -7467,13 +7467,12 @@ pub const PlotWidget = struct {
         dvui.clipSet(self.old_clip);
 
         if (self.hover_data) |hd| {
-            const screen_p = self.pointToScreen(hd);
-            var p = self.box.data().contentRectScale().pointFromScreen(screen_p);
+            var p = self.box.data().contentRectScale().pointFromScreen(self.mouse_point.?);
             const str = std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}, {d}", .{ hd.x, hd.y }) catch "";
             const size: Size = (dvui.Options{}).fontGet().textSize(str) catch .{ .w = 10, .h = 10 };
             p.x -= size.w / 2;
             const padding = dvui.LabelWidget.defaults.paddingGet();
-            p.y -= size.h + padding.y + padding.h + 4;
+            p.y -= size.h + padding.y + padding.h + 8;
             dvui.label(@src(), "{d}, {d}", .{ hd.x, hd.y }, .{ .rect = Rect.fromPoint(p), .background = true, .border = Rect.all(1), .margin = .{} }) catch {};
         }
 
