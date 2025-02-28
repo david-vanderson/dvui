@@ -111,7 +111,7 @@ pub fn register(self: *WidgetData) !void {
                 outline_rect.y = @ceil(outline_rect.y) - 0.5;
             }
 
-            try outline_rect.stroke(.{}, 1 * rs.s, dvui.themeGet().color_err, .{ .after = true, .closed = true });
+            try outline_rect.stroke(.{}, 1 * rs.s, dvui.themeGet().color_err, .{ .after = true });
 
             dvui.clipSet(clipr);
 
@@ -154,7 +154,7 @@ pub fn focusBorder(self: *const WidgetData) !void {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
 
-        try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s), thick, self.options.color(.accent), .{ .after = true, .closed = true });
+        try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s), thick, self.options.color(.accent), .{ .after = true });
     }
 }
 

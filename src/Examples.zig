@@ -1625,10 +1625,10 @@ pub fn plots() !void {
         save = true;
     }
 
-    var hbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 300, .h = 100 }, .padding = dvui.Rect.all(4) });
-    defer hbox.deinit();
+    var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 300, .h = 100 }, .expand = .ratio });
+    defer vbox.deinit();
 
-    const rs = hbox.data().contentRectScale();
+    const rs = vbox.data().contentRectScale();
 
     var tex: ?dvui.Texture = null;
     const width: u32 = @intFromFloat(rs.r.w);
@@ -1641,19 +1641,18 @@ pub fn plots() !void {
 
     // plotting
 
-    try rs.r.fill(.{}, dvui.Color.white);
-
-    var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
+    var plot = try dvui.plot(@src(), .{ .title = "Plot Title", .x_axis = "X Axis", .x_min = 0.05, .x_max = 0.95, .y_axis = "Y Axis", .y_min = -0.8, .y_max = 0.8 }, .{ .expand = .both });
+    var s1 = plot.line();
 
     const points: usize = 1000;
     const freq: f32 = 5;
     for (0..points + 1) |i| {
-        const fval: f32 = 0.5 * rs.r.h * @sin(2.0 * std.math.pi * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(points)) * freq);
-        try path.append(.{ .x = rs.r.x + rs.r.w * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(points)), .y = rs.r.y + rs.r.h / 2 - fval });
+        const fval: f32 = @sin(2.0 * std.math.pi * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(points)) * freq);
+        try s1.point(.{ .x = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(points)), .y = fval });
     }
-
-    try dvui.pathStroke(path.items, 1 * rs.s, dvui.themeGet().color_accent, .{});
-    path.deinit();
+    try s1.stroke(1, dvui.themeGet().color_accent);
+    s1.deinit();
+    plot.deinit();
 
     // end plotting
 

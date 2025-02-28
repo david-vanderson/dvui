@@ -6228,7 +6228,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     try rs.r.fill(opts.corner_radiusGet().scale(rs.s), opts.color(.border));
 
     if (focused) {
-        try rs.r.stroke(opts.corner_radiusGet().scale(rs.s), 2 * rs.s, opts.color(.accent), .{ .closed = true });
+        try rs.r.stroke(opts.corner_radiusGet().scale(rs.s), 2 * rs.s, opts.color(.accent), .{});
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -6313,7 +6313,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     try rs.r.fill(Rect.all(1000), opts.color(.border));
 
     if (focused) {
-        try rs.r.stroke(Rect.all(1000), 2 * rs.s, opts.color(.accent), .{ .closed = true });
+        try rs.r.stroke(Rect.all(1000), 2 * rs.s, opts.color(.accent), .{});
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -6466,7 +6466,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet(), 3 * rs.s, dvui.themeGet().color_err, .{ .after = true, .closed = true });
+        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet(), 3 * rs.s, dvui.themeGet().color_err, .{ .after = true });
     }
 
     // display min/max
@@ -7221,4 +7221,191 @@ pub fn png_crc32(buf: []u8) u32 {
         crc = (crc >> 8) ^ crc_table[ch ^ (crc & 0xff)];
     }
     return ~crc;
+}
+
+pub const PlotWidget = struct {
+    pub var defaults: Options = .{
+        .name = "Plot",
+        .padding = Rect.all(6),
+        .background = true,
+    };
+
+    pub const InitOptions = struct {
+        title: ?[]const u8 = null,
+        x_axis: ?[]const u8 = null,
+        x_min: f32,
+        x_max: f32,
+        y_axis: ?[]const u8 = null,
+        y_min: f32,
+        y_max: f32,
+    };
+
+    pub const Axis = struct {
+        min: f32,
+        max: f32,
+
+        pub fn fraction(self: *Axis, val: f32) f32 {
+            return (val - self.min) / (self.max - self.min);
+        }
+    };
+
+    pub const Line = struct {
+        plot: *PlotWidget,
+        path: std.ArrayList(dvui.Point),
+
+        pub fn point(self: *Line, p: dvui.Point) !void {
+            try self.path.append(self.plot.pointToScreen(p));
+        }
+
+        pub fn stroke(self: *Line, thick: f32, color: dvui.Color) !void {
+            try dvui.pathStroke(self.path.items, thick * self.plot.data_rs.s, color, .{});
+        }
+
+        pub fn deinit(self: *Line) void {
+            self.path.deinit();
+        }
+    };
+
+    box: BoxWidget = undefined,
+    data_rs: RectScale = undefined,
+    old_clip: Rect = undefined,
+    init_options: InitOptions = undefined,
+    x_axis: Axis = undefined,
+    y_axis: Axis = undefined,
+
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) PlotWidget {
+        var self = PlotWidget{};
+        self.init_options = init_opts;
+        self.x_axis = Axis{ .min = self.init_options.x_min, .max = self.init_options.x_max };
+        self.y_axis = Axis{ .min = self.init_options.y_min, .max = self.init_options.y_max };
+        self.box = BoxWidget.init(src, .vertical, false, defaults.override(opts));
+        return self;
+    }
+
+    pub fn pointToScreen(self: *PlotWidget, p: dvui.Point) dvui.Point {
+        const xfrac = self.x_axis.fraction(p.x);
+        const yfrac = self.y_axis.fraction(p.y);
+        return .{
+            .x = self.data_rs.r.x + xfrac * self.data_rs.r.w,
+            .y = self.data_rs.r.y + (1.0 - yfrac) * self.data_rs.r.h,
+        };
+    }
+
+    pub fn install(self: *PlotWidget) !void {
+        try self.box.install();
+        try self.box.drawBackground();
+
+        if (self.init_options.title) |title| {
+            try dvui.label(@src(), "{s}", .{title}, .{ .gravity_x = 0.5, .font_style = .title_4 });
+        }
+
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both });
+
+        //const str = "000";
+        const tick_font = (dvui.Options{ .font_style = .caption }).fontGet();
+        //const tick_size = tick_font.sizeM(str.len, 1);
+
+        const yticks = [_]f32{ self.y_axis.min, self.y_axis.max };
+        var tick_width: f32 = 0;
+        for (yticks) |ytick| {
+            const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{ytick});
+            tick_width = @max(tick_width, (try tick_font.textSize(tick_str)).w);
+        }
+
+        // y axis
+        var yaxis = try dvui.box(@src(), .horizontal, .{ .expand = .vertical, .min_size_content = .{ .w = tick_width } });
+        var yaxis_rect = yaxis.data().rect;
+        if (self.init_options.y_axis) |yname| {
+            // this will leave room while not actually drawing it
+            const temp_clip = dvui.clip(.{});
+            try dvui.label(@src(), "{s}", .{yname}, .{});
+            dvui.clipSet(temp_clip);
+        }
+        yaxis.deinit();
+
+        // right padding
+        //var xaxis_padding = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0, .expand = .vertical, .min_size_content = .{ .w = tick_size.w / 2 } });
+        //xaxis_padding.deinit();
+
+        var vbox2 = try dvui.box(@src(), .vertical, .{ .expand = .both });
+
+        // x axis
+        var xaxis = try dvui.box(@src(), .vertical, .{ .gravity_y = 1.0, .expand = .horizontal, .min_size_content = .{ .h = tick_font.sizeM(1, 1).h } });
+        if (self.init_options.x_axis) |xname| {
+            try dvui.label(@src(), "{s}", .{xname}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+        }
+        xaxis.deinit();
+
+        // data area
+        var data_box = try dvui.box(@src(), .horizontal, .{ .expand = .both });
+        yaxis_rect.h = data_box.data().rect.h;
+        self.data_rs = data_box.data().contentRectScale();
+        try self.data_rs.r.stroke(.{}, 1 * self.data_rs.s, self.box.data().options.color(.text), .{});
+
+        const pad = 2 * self.data_rs.s;
+
+        // y axis ticks
+        for (yticks) |ytick| {
+            const tick = dvui.Point{ .x = self.x_axis.min, .y = ytick };
+            const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{ytick});
+            const tick_str_size = (try tick_font.textSize(tick_str)).scale(self.data_rs.s);
+            var tick_p = self.pointToScreen(tick);
+            tick_p.x -= tick_str_size.w + pad;
+            tick_p.y = @max(tick_p.y, self.data_rs.r.y);
+            tick_p.y = @min(tick_p.y, self.data_rs.r.y + self.data_rs.r.h - tick_str_size.h);
+            //tick_p.y -= tick_str_size.h / 2;
+            const tick_rs: RectScale = .{ .r = Rect.fromPoint(tick_p).toSize(tick_str_size), .s = self.data_rs.s };
+
+            try dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) });
+        }
+
+        // x axis ticks
+        const xticks = [_]f32{ self.x_axis.min, self.x_axis.max };
+        for (xticks) |xtick| {
+            const tick = dvui.Point{ .x = xtick, .y = self.y_axis.min };
+            const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{xtick});
+            const tick_str_size = (try tick_font.textSize(tick_str)).scale(self.data_rs.s);
+            var tick_p = self.pointToScreen(tick);
+            tick_p.x = @max(tick_p.x, self.data_rs.r.x);
+            tick_p.x = @min(tick_p.x, self.data_rs.r.x + self.data_rs.r.w - tick_str_size.w);
+            //tick_p.x -= tick_str_size.w / 2;
+            tick_p.y += pad;
+            const tick_rs: RectScale = .{ .r = Rect.fromPoint(tick_p).toSize(tick_str_size), .s = self.data_rs.s };
+
+            try dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) });
+        }
+
+        data_box.deinit();
+        vbox2.deinit();
+
+        // y axis name now that we can center it on data_box
+        if (self.init_options.y_axis) |yname| {
+            yaxis = try dvui.box(@src(), .horizontal, .{ .rect = yaxis_rect });
+            defer yaxis.deinit();
+            try dvui.label(@src(), "{s}", .{yname}, .{ .gravity_y = 0.5 });
+        }
+
+        hbox.deinit();
+
+        self.old_clip = dvui.clip(self.data_rs.r);
+    }
+
+    pub fn line(self: *PlotWidget) Line {
+        return .{
+            .plot = self,
+            .path = .init(dvui.currentWindow().arena()),
+        };
+    }
+
+    pub fn deinit(self: *PlotWidget) void {
+        dvui.clipSet(self.old_clip);
+        self.box.deinit();
+    }
+};
+
+pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, opts: Options) !*PlotWidget {
+    var ret = try currentWindow().arena().create(PlotWidget);
+    ret.* = PlotWidget.init(src, plot_opts, opts);
+    try ret.install();
+    return ret;
 }
