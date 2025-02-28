@@ -7300,8 +7300,6 @@ pub const PlotWidget = struct {
             try dvui.label(@src(), "{s}", .{title}, .{ .gravity_x = 0.5, .font_style = .title_4 });
         }
 
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both });
-
         //const str = "000";
         const tick_font = (dvui.Options{ .font_style = .caption }).fontGet();
         //const tick_size = tick_font.sizeM(str.len, 1);
@@ -7313,22 +7311,35 @@ pub const PlotWidget = struct {
             tick_width = @max(tick_width, (try tick_font.textSize(tick_str)).w);
         }
 
+        var hbox1 = try dvui.box(@src(), .horizontal, .{ .expand = .both });
+
         // y axis
         var yaxis = try dvui.box(@src(), .horizontal, .{ .expand = .vertical, .min_size_content = .{ .w = tick_width } });
         var yaxis_rect = yaxis.data().rect;
         if (self.init_options.y_axis) |yname| {
-            // this will leave room while not actually drawing it
-            const temp_clip = dvui.clip(.{});
-            try dvui.label(@src(), "{s}", .{yname}, .{});
-            dvui.clipSet(temp_clip);
+            try dvui.label(@src(), "{s}", .{yname}, .{ .gravity_y = 0.5 });
         }
         yaxis.deinit();
 
-        // right padding
+        // right padding (if adding, need to add a spacer to the right of xaxis as well)
         //var xaxis_padding = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0, .expand = .vertical, .min_size_content = .{ .w = tick_size.w / 2 } });
         //xaxis_padding.deinit();
 
-        var vbox2 = try dvui.box(@src(), .vertical, .{ .expand = .both });
+        // data area
+        var data_box = try dvui.box(@src(), .horizontal, .{ .expand = .both });
+        yaxis_rect.h = data_box.data().rect.h;
+        self.data_rs = data_box.data().contentRectScale();
+        data_box.deinit();
+        try self.data_rs.r.stroke(.{}, 1 * self.data_rs.s, self.box.data().options.color(.text), .{});
+
+        const pad = 2 * self.data_rs.s;
+
+        hbox1.deinit();
+
+        var hbox2 = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+
+        // bottom left corner under y axis
+        _ = try dvui.spacer(@src(), .{ .w = yaxis_rect.w }, .{ .expand = .vertical });
 
         // x axis
         var xaxis = try dvui.box(@src(), .vertical, .{ .gravity_y = 1.0, .expand = .horizontal, .min_size_content = .{ .h = tick_font.sizeM(1, 1).h } });
@@ -7337,13 +7348,7 @@ pub const PlotWidget = struct {
         }
         xaxis.deinit();
 
-        // data area
-        var data_box = try dvui.box(@src(), .horizontal, .{ .expand = .both });
-        yaxis_rect.h = data_box.data().rect.h;
-        self.data_rs = data_box.data().contentRectScale();
-        try self.data_rs.r.stroke(.{}, 1 * self.data_rs.s, self.box.data().options.color(.text), .{});
-
-        const pad = 2 * self.data_rs.s;
+        hbox2.deinit();
 
         // y axis ticks
         for (yticks) |ytick| {
@@ -7375,18 +7380,6 @@ pub const PlotWidget = struct {
 
             try dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) });
         }
-
-        data_box.deinit();
-        vbox2.deinit();
-
-        // y axis name now that we can center it on data_box
-        if (self.init_options.y_axis) |yname| {
-            yaxis = try dvui.box(@src(), .horizontal, .{ .rect = yaxis_rect });
-            defer yaxis.deinit();
-            try dvui.label(@src(), "{s}", .{yname}, .{ .gravity_y = 0.5 });
-        }
-
-        hbox.deinit();
 
         self.old_clip = dvui.clip(self.data_rs.r);
     }
