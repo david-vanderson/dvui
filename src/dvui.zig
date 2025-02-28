@@ -7299,7 +7299,15 @@ pub const PlotWidget = struct {
         path: std.ArrayList(dvui.Point),
 
         pub fn point(self: *Line, p: dvui.Point) !void {
-            try self.path.append(self.plot.pointToScreen(p));
+            const screen_p = self.plot.pointToScreen(p);
+            if (self.plot.mouse_point) |mp| {
+                const dp = Point.diff(mp, screen_p);
+                const dps = dp.scale(1 / windowNaturalScale());
+                if (@abs(dps.x) <= 3 and @abs(dps.y) <= 3) {
+                    self.plot.hover_data = p;
+                }
+            }
+            try self.path.append(screen_p);
         }
 
         pub fn stroke(self: *Line, thick: f32, color: dvui.Color) !void {
@@ -7317,6 +7325,8 @@ pub const PlotWidget = struct {
     init_options: InitOptions = undefined,
     x_axis: Axis = undefined,
     y_axis: Axis = undefined,
+    mouse_point: ?Point = null,
+    hover_data: ?Point = null,
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) PlotWidget {
         var self = PlotWidget{};
@@ -7371,6 +7381,24 @@ pub const PlotWidget = struct {
 
         // data area
         var data_box = try dvui.box(@src(), .horizontal, .{ .expand = .both });
+
+        // mouse hover
+        const evts = dvui.events();
+        for (evts) |*e| {
+            if (!dvui.eventMatchSimple(e, data_box.data()))
+                continue;
+
+            switch (e.evt) {
+                .mouse => |me| {
+                    if (me.action == .position) {
+                        e.handled = true;
+                        self.mouse_point = me.p;
+                    }
+                },
+                else => {},
+            }
+        }
+
         yaxis_rect.h = data_box.data().rect.h;
         self.data_rs = data_box.data().contentRectScale();
         data_box.deinit();
@@ -7437,6 +7465,18 @@ pub const PlotWidget = struct {
 
     pub fn deinit(self: *PlotWidget) void {
         dvui.clipSet(self.old_clip);
+
+        if (self.hover_data) |hd| {
+            const screen_p = self.pointToScreen(hd);
+            var p = self.box.data().contentRectScale().pointFromScreen(screen_p);
+            const str = std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}, {d}", .{ hd.x, hd.y }) catch "";
+            const size: Size = (dvui.Options{}).fontGet().textSize(str) catch .{ .w = 10, .h = 10 };
+            p.x -= size.w / 2;
+            const padding = dvui.LabelWidget.defaults.paddingGet();
+            p.y -= size.h + padding.y + padding.h + 4;
+            dvui.label(@src(), "{d}, {d}", .{ hd.x, hd.y }, .{ .rect = Rect.fromPoint(p), .background = true, .border = Rect.all(1), .margin = .{} }) catch {};
+        }
+
         self.box.deinit();
     }
 };
