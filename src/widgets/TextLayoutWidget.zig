@@ -1155,7 +1155,6 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
         try dvui.renderText(.{
             .font = options.fontGet(),
             .text = rtxt,
-            .has_newline = newline,
             .rs = rs,
             .color = options.color(.text),
             .sel_start = self.selection.start -| self.bytes_seen,
