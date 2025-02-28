@@ -6,7 +6,7 @@ const Rect = dvui.Rect;
 const RectScale = @This();
 
 r: Rect = Rect{},
-s: f32 = 0.0,
+s: f32 = 1.0,
 
 pub fn rectToRectScale(rs: *const RectScale, r: Rect) RectScale {
     return .{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };

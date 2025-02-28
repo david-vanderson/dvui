@@ -1628,18 +1628,10 @@ pub fn plots() !void {
     var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 300, .h = 100 }, .expand = .ratio });
     defer vbox.deinit();
 
-    const rs = vbox.data().contentRectScale();
-
-    var tex: ?dvui.Texture = null;
-    const width: u32 = @intFromFloat(rs.r.w);
-    const height: u32 = @intFromFloat(rs.r.h);
-    var old_target: dvui.RenderTarget = undefined;
+    var pic: ?dvui.Picture = null;
     if (save) {
-        tex = try dvui.textureCreateTarget(width, height, .linear);
-        old_target = dvui.renderTarget(.{ .texture = tex.?, .offset = rs.r.topLeft() });
+        pic = dvui.Picture.start(vbox.data().contentRectScale().r);
     }
-
-    // plotting
 
     var plot = try dvui.plot(@src(), .{ .title = "Plot Title", .x_axis = "X Axis", .x_min = 0.05, .x_max = 0.95, .y_axis = "Y Axis", .y_min = -0.8, .y_max = 0.8 }, .{ .expand = .both });
     var s1 = plot.line();
@@ -1654,14 +1646,9 @@ pub fn plots() !void {
     s1.deinit();
     plot.deinit();
 
-    // end plotting
-
-    if (tex) |t| {
-        _ = dvui.renderTarget(old_target);
-        try dvui.renderTexture(t, rs, .{});
-        dvui.textureDestroyLater(t);
-
-        const png_slice = try dvui.pngFromTexture(dvui.currentWindow().arena(), t, .{});
+    if (pic) |p| {
+        const texture = p.stop();
+        const png_slice = try dvui.pngFromTexture(dvui.currentWindow().arena(), texture, .{});
         defer dvui.currentWindow().arena().free(png_slice);
 
         if (dvui.wasm) {
