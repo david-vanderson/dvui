@@ -157,17 +157,45 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                 e.handled = true;
                 dvui.focusWidget(self.wd.id, null, e.num);
             } else if (me.action == .press and me.button.pointer()) {
-                // this is how dropdowns are triggered
+                // This works differently than normal (like buttons) where we
+                // captureMouse on press, to support the mouse
+                // click-open-drag-select-release-activate pattern for menus
+                // and dropdowns.  However, we still need to do the capture
+                // pattern for touch.
+                //
+                // This is how dropdowns are triggered.
                 e.handled = true;
                 if (self.init_opts.submenu) {
                     dvui.MenuWidget.current().?.submenus_activated = true;
                     dvui.MenuWidget.current().?.submenus_in_child = true;
+                }
+
+                if (me.button.touch()) {
+                    // with touch we have to capture otherwise any motion will
+                    // cause scroll to capture
+                    dvui.captureMouse(self.wd.id);
+                    dvui.dragPreStart(me.p, .{});
                 }
             } else if (me.action == .release) {
                 e.handled = true;
                 if (!self.init_opts.submenu and (self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow())) {
                     self.activated = true;
                     dvui.refresh(null, @src(), self.wd.id);
+                }
+                if (dvui.captured(self.wd.id)) {
+                    // should only happen with touch
+                    dvui.captureMouse(null);
+                    dvui.dragEnd();
+                }
+            } else if (me.action == .motion and me.button.touch()) {
+                if (dvui.captured(self.wd.id)) {
+                    if (dvui.dragging(me.p)) |_| {
+                        // if we overcame the drag threshold, then that
+                        // means the person probably didn't want to touch
+                        // this, maybe they were trying to scroll
+                        dvui.captureMouse(null);
+                        dvui.dragEnd();
+                    }
                 }
             } else if (me.action == .position) {
                 e.handled = true;
