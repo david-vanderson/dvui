@@ -1,13 +1,13 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const WebBackend = @import("WebBackend");
-usingnamespace WebBackend.wasm;
+const DefaultBackend = dvui.DefaultBackend;
+usingnamespace DefaultBackend.wasm;
 
 const WriteError = error{};
 const LogWriter = std.io.Writer(void, WriteError, writeLog);
 
 fn writeLog(_: void, msg: []const u8) WriteError!usize {
-    WebBackend.wasm.wasm_log_write(msg.ptr, msg.len);
+    DefaultBackend.wasm.wasm_log_write(msg.ptr, msg.len);
     return msg.len;
 }
 
@@ -27,7 +27,7 @@ pub fn logFn(
     const msg = level_txt ++ prefix2 ++ format ++ "\n";
 
     (LogWriter{ .context = {} }).print(msg, args) catch return;
-    WebBackend.wasm.wasm_log_flush();
+    DefaultBackend.wasm.wasm_log_flush();
 }
 
 pub const std_options: std.Options = .{
@@ -39,7 +39,7 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 var win: dvui.Window = undefined;
-var backend: WebBackend = undefined;
+var backend: DefaultBackend = undefined;
 var touchPoints: [2]?dvui.Point = [_]?dvui.Point{null} ** 2;
 var orig_content_scale: f32 = 1.0;
 
@@ -50,14 +50,14 @@ export fn app_init(platform_ptr: [*]const u8, platform_len: usize) i32 {
     dvui.log.debug("platform: {s}", .{platform});
     const mac = if (std.mem.indexOf(u8, platform, "Mac") != null) true else false;
 
-    backend = WebBackend.init() catch {
+    backend = DefaultBackend.init() catch {
         return 1;
     };
     win = dvui.Window.init(@src(), gpa, backend.backend(), .{ .keybinds = if (mac) .mac else .windows }) catch {
         return 2;
     };
 
-    WebBackend.win = &win;
+    DefaultBackend.win = &win;
 
     orig_content_scale = win.content_scale;
 
@@ -75,7 +75,7 @@ export fn app_update() i32 {
     return update() catch |err| {
         std.log.err("{!}", .{err});
         const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
-        WebBackend.wasm.wasm_panic(msg.ptr, msg.len);
+        DefaultBackend.wasm.wasm_panic(msg.ptr, msg.len);
         return -1;
     };
 }

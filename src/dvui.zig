@@ -1,13 +1,13 @@
 const builtin = @import("builtin");
 const std = @import("std");
-pub const backend_kind = @import("build_options").backend;
-pub const backend = @import("backend");
 const tvg = @import("tinyvg/tinyvg.zig");
 
 pub const math = std.math;
 pub const fnv = std.hash.Fnv1a_32;
 
 pub const Backend = @import("Backend.zig");
+pub const DefaultBackend = @import("dvui_default_backend");
+
 pub const Color = @import("Color.zig");
 pub const Examples = @import("Examples.zig");
 pub const Event = @import("Event.zig");
@@ -7212,7 +7212,7 @@ pub fn pngFromTexture(arena: std.mem.Allocator, texture: Texture, opts: pngFromT
     @memcpy(ret[split + extra ..], png_bytes[split..@as(usize, @intCast(len))]);
 
     if (wasm) {
-        backend.dvui_c_free(png_bytes);
+        dvui.DefaultBackend.dvui_c_free(png_bytes);
     } else {
         c.free(png_bytes);
     }

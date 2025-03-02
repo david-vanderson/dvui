@@ -1111,7 +1111,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
         if (dvui.wasm) {
             if (try dvui.button(@src(), "Add Noto Font", .{}, .{})) {
-                dvui.backend.wasm.wasm_add_noto_font();
+                dvui.DefaultBackend.wasm.wasm_add_noto_font();
             }
         } else {
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
@@ -1652,7 +1652,7 @@ pub fn plots() !void {
         defer dvui.currentWindow().arena().free(png_slice);
 
         if (dvui.wasm) {
-            try dvui.backend.downloadData("plot.png", png_slice);
+            try dvui.DefaultBackend.downloadData("plot.png", png_slice);
         } else {
             const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{ .path = "plot.png" });
             if (filename) |fname| {

@@ -1,9 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui");
-comptime {
-    std.debug.assert(dvui.backend_kind == .raylib);
-}
-const RaylibBackend = dvui.backend;
+const DefaultBackend = dvui.DefaultBackend;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
@@ -15,7 +12,7 @@ var scale_val: f32 = 1.0;
 
 var show_dialog_outside_frame: bool = false;
 
-pub const c = RaylibBackend.c;
+pub const c = DefaultBackend.c;
 
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application
@@ -25,7 +22,7 @@ pub fn main() !void {
 
     // init Raylib backend (creates OS window)
     // initWindow() means the backend calls CloseWindow for you in deinit()
-    var backend = try RaylibBackend.initWindow(.{
+    var backend = try DefaultBackend.initWindow(.{
         .gpa = gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .vsync = vsync,
@@ -171,7 +168,7 @@ fn dvui_frame() !void {
         // hidpi screens or display scaling)
         // raylib multiplies everything internally by the monitor scale, so we
         // have to divide by that
-        const r = RaylibBackend.dvuiRectToRaylib(rs.r);
+        const r = DefaultBackend.dvuiRectToRaylib(rs.r);
         const s = rs.s / dvui.windowNaturalScale();
         c.DrawText("Congrats! You created your first window!", @intFromFloat(r.x + 10 * s), @intFromFloat(r.y + 10 * s), @intFromFloat(20 * s), c.LIGHTGRAY);
     }

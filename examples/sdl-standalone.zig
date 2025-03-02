@@ -1,10 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
-comptime {
-    std.debug.assert(dvui.backend_kind == .sdl);
-}
-const Backend = dvui.backend;
+const DefaultBackend = dvui.DefaultBackend;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
@@ -16,7 +13,7 @@ const show_demo = true;
 var scale_val: f32 = 1.0;
 
 var show_dialog_outside_frame: bool = false;
-var g_backend: ?Backend = null;
+var g_backend: ?DefaultBackend = null;
 var g_win: ?*dvui.Window = null;
 
 /// This example shows how to use the dvui for a normal application:
@@ -28,14 +25,14 @@ pub fn main() !void {
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         _ = winapi.AttachConsole(0xFFFFFFFF);
     }
-    std.log.info("SDL version: {}", .{Backend.getSDLVersion()});
+    std.log.info("SDL version: {}", .{DefaultBackend.getSDLVersion()});
 
     dvui.Examples.show_demo_window = show_demo;
 
     defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
 
     // init SDL backend (creates and owns OS window)
-    var backend = try Backend.initWindow(.{
+    var backend = try DefaultBackend.initWindow(.{
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
@@ -64,8 +61,8 @@ pub fn main() !void {
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
-        _ = Backend.c.SDL_RenderClear(backend.renderer);
+        _ = DefaultBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
+        _ = DefaultBackend.c.SDL_RenderClear(backend.renderer);
 
         // The demos we pass in here show up under "Platform-specific demos"
         try gui_frame();
@@ -190,8 +187,8 @@ fn gui_frame() !void {
 
         // rs.r is the pixel rectangle, rs.s is the scale factor (like for
         // hidpi screens or display scaling)
-        var rect: if (Backend.sdl3) Backend.c.SDL_FRect else Backend.c.SDL_Rect = undefined;
-        if (Backend.sdl3) rect = .{
+        var rect: if (DefaultBackend.sdl3) DefaultBackend.c.SDL_FRect else DefaultBackend.c.SDL_Rect = undefined;
+        if (DefaultBackend.sdl3) rect = .{
             .x = (rs.r.x + 4 * rs.s),
             .y = (rs.r.y + 4 * rs.s),
             .w = (20 * rs.s),
@@ -202,23 +199,23 @@ fn gui_frame() !void {
             .w = @intFromFloat(20 * rs.s),
             .h = @intFromFloat(20 * rs.s),
         };
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
-        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
+        _ = DefaultBackend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
+        _ = DefaultBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
 
-        rect.x += if (Backend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 255, 0, 255);
-        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
+        rect.x += if (DefaultBackend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
+        _ = DefaultBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 255, 0, 255);
+        _ = DefaultBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
 
-        rect.x += if (Backend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 255, 255);
-        _ = Backend.c.SDL_RenderFillRect(backend.renderer, &rect);
+        rect.x += if (DefaultBackend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
+        _ = DefaultBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 255, 255);
+        _ = DefaultBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
 
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 255, 255);
+        _ = DefaultBackend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 255, 255);
 
-        if (Backend.sdl3)
-            _ = Backend.c.SDL_RenderLine(backend.renderer, (rs.r.x + 4 * rs.s), (rs.r.y + 30 * rs.s), (rs.r.x + rs.r.w - 8 * rs.s), (rs.r.y + 30 * rs.s))
+        if (DefaultBackend.sdl3)
+            _ = DefaultBackend.c.SDL_RenderLine(backend.renderer, (rs.r.x + 4 * rs.s), (rs.r.y + 30 * rs.s), (rs.r.x + rs.r.w - 8 * rs.s), (rs.r.y + 30 * rs.s))
         else
-            _ = Backend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s));
+            _ = DefaultBackend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s));
     }
 
     if (try dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {

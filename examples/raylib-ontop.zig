@@ -1,10 +1,7 @@
 const std = @import("std");
 const dvui = @import("dvui");
-comptime {
-    std.debug.assert(dvui.backend_kind == .raylib);
-}
-const RaylibBackend = dvui.backend;
-const ray = RaylibBackend.c;
+const DefaultBackend = dvui.DefaultBackend;
+const ray = DefaultBackend.c;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
@@ -25,7 +22,7 @@ pub fn main() !void {
 
     // init Raylib backend
     // init() means the app owns the window (and must call CloseWindow itself)
-    var backend = RaylibBackend.init(gpa);
+    var backend = DefaultBackend.init(gpa);
     defer backend.deinit();
     backend.log_events = true;
 
@@ -54,7 +51,7 @@ pub fn main() !void {
         }
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        ray.ClearBackground(RaylibBackend.dvuiColorToRaylib(dvui.themeGet().color_fill_window));
+        ray.ClearBackground(DefaultBackend.dvuiColorToRaylib(dvui.themeGet().color_fill_window));
 
         {
             var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
@@ -98,10 +95,10 @@ fn colorPicker(result: *dvui.Color) !void {
         var overlay = try dvui.overlay(@src(), .{ .min_size_content = .{ .w = 100, .h = 100 } });
         defer overlay.deinit();
 
-        const bounds = RaylibBackend.dvuiRectToRaylib(overlay.data().contentRectScale().r);
-        var c_color: ray.Color = RaylibBackend.dvuiColorToRaylib(result.*);
+        const bounds = DefaultBackend.dvuiRectToRaylib(overlay.data().contentRectScale().r);
+        var c_color: ray.Color = DefaultBackend.dvuiColorToRaylib(result.*);
         _ = ray.GuiColorPicker(bounds, "Pick Color", &c_color);
-        result.* = RaylibBackend.raylibColorToDvui(c_color);
+        result.* = DefaultBackend.raylibColorToDvui(c_color);
     }
 
     const color_hex = try result.toHexString();

@@ -1,9 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui");
-comptime {
-    std.debug.assert(dvui.backend_kind == .dx11);
-}
-const Backend = dvui.backend;
+const DefaultBackend = dvui.DefaultBackend;
 
 const w = std.os.windows;
 const HINSTANCE = w.HINSTANCE;
@@ -31,7 +28,7 @@ pub export fn main(
     defer _ = gpa_instance.deinit();
 
     // init dx11 backend (creates and owns OS window)
-    var backend = Backend.initWindow(instance, cmd_show, .{
+    var backend = DefaultBackend.initWindow(instance, cmd_show, .{
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
@@ -41,17 +38,17 @@ pub export fn main(
     }) catch return;
     defer backend.deinit();
 
-    Backend.setBackend(&backend);
+    DefaultBackend.setBackend(&backend);
 
     // init dvui Window (maps onto a single OS window)
     var win = dvui.Window.init(@src(), gpa, backend.backend(), .{}) catch return;
     defer win.deinit();
 
-    Backend.setWindow(&win);
+    DefaultBackend.setWindow(&win);
 
     main_loop: while (true) {
         // This handles the main windows events
-        if (Backend.isExitRequested()) {
+        if (DefaultBackend.isExitRequested()) {
             break :main_loop;
         }
 

@@ -1,14 +1,11 @@
 const std = @import("std");
 const dvui = @import("dvui");
-comptime {
-    std.debug.assert(dvui.backend_kind == .sdl);
-}
-const SDLBackend = dvui.backend;
+const DefaultBackend = dvui.DefaultBackend;
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
-pub const c = SDLBackend.c;
+pub const c = DefaultBackend.c;
 
 const vsync = false;
 const show_demo = false;
@@ -26,7 +23,7 @@ pub fn main() !void {
     try app_init();
 
     // create SDL backend using existing window and renderer, app still owns the window/renderer
-    var backend = SDLBackend.init(window, renderer);
+    var backend = DefaultBackend.init(window, renderer);
     defer backend.deinit();
 
     // init dvui Window (maps onto a single OS window)
@@ -40,19 +37,19 @@ pub fn main() !void {
 
         // send events to dvui if they belong to floating windows
         var event: c.SDL_Event = undefined;
-        while (c.SDL_PollEvent(&event) == if (SDLBackend.sdl3) true else 1) {
+        while (c.SDL_PollEvent(&event) == if (DefaultBackend.sdl3) true else 1) {
             // some global quitting shortcuts
             switch (event.type) {
-                if (SDLBackend.sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
-                    const key = if (SDLBackend.sdl3) event.key.key else event.key.keysym.sym;
-                    const mod = if (SDLBackend.sdl3) event.key.mod else event.key.keysym.mod;
-                    const key_q = if (SDLBackend.sdl3) c.SDLK_Q else c.SDLK_q;
-                    const kmod_ctrl = if (SDLBackend.sdl3) c.SDL_KMOD_CTRL else c.KMOD_CTRL;
+                if (DefaultBackend.sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
+                    const key = if (DefaultBackend.sdl3) event.key.key else event.key.keysym.sym;
+                    const mod = if (DefaultBackend.sdl3) event.key.mod else event.key.keysym.mod;
+                    const key_q = if (DefaultBackend.sdl3) c.SDLK_Q else c.SDLK_q;
+                    const kmod_ctrl = if (DefaultBackend.sdl3) c.SDL_KMOD_CTRL else c.KMOD_CTRL;
                     if (((mod & kmod_ctrl) > 0) and key == key_q) {
                         break :main_loop;
                     }
                 },
-                if (SDLBackend.sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT => {
+                if (DefaultBackend.sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT => {
                     break :main_loop;
                 },
                 else => {},
@@ -70,7 +67,7 @@ pub fn main() !void {
         _ = c.SDL_RenderClear(renderer);
 
         // draw some SDL stuff with dvui floating stuff in the middle
-        const rect: if (SDLBackend.sdl3) c.SDL_FRect else c.SDL_Rect = .{ .x = 10, .y = 10, .w = 20, .h = 20 };
+        const rect: if (DefaultBackend.sdl3) c.SDL_FRect else c.SDL_Rect = .{ .x = 10, .y = 10, .w = 20, .h = 20 };
         var rect2 = rect;
         _ = c.SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         _ = c.SDL_RenderFillRect(renderer, &rect2);
@@ -87,7 +84,7 @@ pub fn main() !void {
 
         _ = c.SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
 
-        if (SDLBackend.sdl3) _ = c.SDL_RenderLine(renderer, rect.x, rect.y + 30, rect.x + 100, rect.y + 30) else _ = c.SDL_RenderDrawLine(renderer, rect.x, rect.y + 30, rect.x + 100, rect.y + 30);
+        if (DefaultBackend.sdl3) _ = c.SDL_RenderLine(renderer, rect.x, rect.y + 30, rect.x + 100, rect.y + 30) else _ = c.SDL_RenderDrawLine(renderer, rect.x, rect.y + 30, rect.x + 100, rect.y + 30);
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
@@ -155,12 +152,12 @@ fn dvui_floating_stuff() !void {
 }
 
 fn app_init() !void {
-    if (c.SDL_Init(c.SDL_INIT_VIDEO) != if (SDLBackend.sdl3) true else 0) {
+    if (c.SDL_Init(c.SDL_INIT_VIDEO) != if (DefaultBackend.sdl3) true else 0) {
         std.debug.print("Couldn't initialize SDL: {s}\n", .{c.SDL_GetError()});
         return error.BackendError;
     }
 
-    if (SDLBackend.sdl3) {
+    if (DefaultBackend.sdl3) {
         window = c.SDL_CreateWindow("DVUI SDL Ontop Example", @as(c_int, @intCast(640)), @as(c_int, @intCast(480)), c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE) orelse {
             std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
             return error.BackendError;

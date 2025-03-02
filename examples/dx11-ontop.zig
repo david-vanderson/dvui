@@ -1,9 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui");
-comptime {
-    std.debug.assert(dvui.backend_kind == .dx11);
-}
-const Backend = dvui.backend;
+const DefaultBackend = dvui.DefaultBackend;
 
 const zwin = @import("zigwin32");
 const ui = zwin.ui.windows_and_messaging;
@@ -57,7 +54,7 @@ pub export fn main(
     defer _ = UnregisterClassW(wnd_title, instance);
     defer _ = DestroyWindow(wnd);
 
-    const init_options = Backend.InitOptions{
+    const init_options = DefaultBackend.InitOptions{
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
@@ -68,11 +65,11 @@ pub export fn main(
 
     if (createDeviceD3D(wnd)) |options| {
         log.info("Successfully created device.", .{});
-        var backend = Backend.init(init_options, options, wnd) catch return 1;
+        var backend = DefaultBackend.init(init_options, options, wnd) catch return 1;
         defer backend.deinit();
 
         // IMPORTANT! We need to have the instance of the backend available statically.
-        Backend.setBackend(&backend);
+        DefaultBackend.setBackend(&backend);
 
         log.info("Dx11 backend also init.", .{});
 
@@ -83,13 +80,13 @@ pub export fn main(
         defer win.deinit();
 
         // IMPORTANT! The backend unfortunately also needs an instance of the dvui window ^^
-        Backend.setWindow(&win);
+        DefaultBackend.setWindow(&win);
 
         log.info("dvui window also init.", .{});
 
         main_loop: while (true) {
             // This handles the main windows events
-            if (Backend.isExitRequested()) {
+            if (DefaultBackend.isExitRequested()) {
                 break :main_loop;
             }
 
@@ -136,7 +133,7 @@ fn windowProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callco
     }
 
     // Call the wndProc from the Dx11 Backend directly, it handles all sorts of mouse events!
-    return Backend.wndProc(hwnd, umsg, wparam, lparam);
+    return DefaultBackend.wndProc(hwnd, umsg, wparam, lparam);
 }
 
 // boilerplate, no need to look at this ugly mess...
@@ -175,7 +172,7 @@ fn createWindow(hInstance: HINSTANCE) void {
     _ = ui.SetWindowPos(wnd, null, wnd_size.left, wnd_size.top, wnd_size.right, wnd_size.bottom, ui.SWP_NOCOPYBITS);
 }
 
-fn createDeviceD3D(hWnd: HWND) ?Backend.Directx11Options {
+fn createDeviceD3D(hWnd: HWND) ?DefaultBackend.Directx11Options {
     var rc: RECT = undefined;
     _ = GetClientRect(hWnd, &rc);
 
@@ -241,7 +238,7 @@ fn createDeviceD3D(hWnd: HWND) ?Backend.Directx11Options {
     if (res != zwin.foundation.S_OK)
         return null;
 
-    return Backend.Directx11Options{
+    return DefaultBackend.Directx11Options{
         .device = device,
         .device_context = device_context,
         .swap_chain = swap_chain,
