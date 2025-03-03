@@ -1,6 +1,5 @@
 const builtin = @import("builtin");
 const std = @import("std");
-pub const backend_kind = @import("build_options").backend;
 pub const backend = @import("backend");
 const tvg = @import("tinyvg/tinyvg.zig");
 

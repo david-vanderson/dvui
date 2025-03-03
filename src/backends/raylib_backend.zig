@@ -9,7 +9,7 @@ pub const c = @cImport({
     @cInclude("raygui.h");
 });
 
-const RaylibBackend = @This();
+pub const RaylibBackend = @This();
 pub const Context = *RaylibBackend;
 
 gpa: std.mem.Allocator = undefined,

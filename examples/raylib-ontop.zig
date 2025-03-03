@@ -1,9 +1,9 @@
 const std = @import("std");
 const dvui = @import("dvui");
-comptime {
-    std.debug.assert(dvui.backend_kind == .raylib);
-}
 const RaylibBackend = dvui.backend;
+comptime {
+    std.debug.assert(@hasDecl(RaylibBackend, "RaylibBackend"));
+}
 const ray = RaylibBackend.c;
 
 const window_icon_png = @embedFile("zig-favicon.png");
