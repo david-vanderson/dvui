@@ -90,52 +90,49 @@ pub fn build(b: *std.Build) !void {
         break :blk .Both;
     };
 
-    if (target.result.os.tag != .macos) {
-        // raylib isn't quite ready for zig 0.14 on macos
-        const raylib_mod = b.addModule("raylib", .{
-            .root_source_file = b.path("src/backends/raylib.zig"),
+    const raylib_mod = b.addModule("raylib", .{
+        .root_source_file = b.path("src/backends/raylib.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+
+    const maybe_ray = b.lazyDependency(
+        "raylib",
+        .{
             .target = target,
             .optimize = optimize,
-            .link_libc = true,
-        });
+            .linux_display_backend = linux_display_backend,
+        },
+    );
+    if (maybe_ray) |ray| {
+        raylib_mod.linkLibrary(ray.artifact("raylib"));
+        // This seems wonky to me, but is copied from raylib's src/build.zig
+        if (b.lazyDependency("raygui", .{})) |raygui_dep| {
+            if (b.lazyImport(@This(), "raylib")) |_| {
+                // we want to write this:
+                //raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
+                // but that causes a second invocation of the raylib dependency but without our linux_display_backend
+                // so it defaults to .Both which causes an error if there is no wayland-scanner
 
-        const maybe_ray = b.lazyDependency(
-            "raylib",
-            .{
-                .target = target,
-                .optimize = optimize,
-                .linux_display_backend = linux_display_backend,
-            },
-        );
-        if (maybe_ray) |ray| {
-            raylib_mod.linkLibrary(ray.artifact("raylib"));
-            // This seems wonky to me, but is copied from raylib's src/build.zig
-            if (b.lazyDependency("raygui", .{})) |raygui_dep| {
-                if (b.lazyImport(@This(), "raylib")) |_| {
-                    // we want to write this:
-                    //raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
-                    // but that causes a second invocation of the raylib dependency but without our linux_display_backend
-                    // so it defaults to .Both which causes an error if there is no wayland-scanner
+                const raylib = ray.artifact("raylib");
+                var gen_step = b.addWriteFiles();
+                raylib.step.dependOn(&gen_step.step);
 
-                    const raylib = ray.artifact("raylib");
-                    var gen_step = b.addWriteFiles();
-                    raylib.step.dependOn(&gen_step.step);
+                const raygui_c_path = gen_step.add("raygui.c", "#define RAYGUI_IMPLEMENTATION\n#include \"raygui.h\"\n");
+                raylib.addCSourceFile(.{ .file = raygui_c_path });
+                raylib.addIncludePath(raygui_dep.path("src"));
+                raylib.addIncludePath(ray.path("src"));
 
-                    const raygui_c_path = gen_step.add("raygui.c", "#define RAYGUI_IMPLEMENTATION\n#include \"raygui.h\"\n");
-                    raylib.addCSourceFile(.{ .file = raygui_c_path });
-                    raylib.addIncludePath(raygui_dep.path("src"));
-                    raylib.addIncludePath(ray.path("src"));
-
-                    raylib.installHeader(raygui_dep.path("src/raygui.h"), "raygui.h");
-                }
+                raylib.installHeader(raygui_dep.path("src/raygui.h"), "raygui.h");
             }
         }
-
-        const dvui_raylib = addDvuiModule(b, target, optimize, "dvui_raylib", false);
-        linkBackend(dvui_raylib, raylib_mod);
-        addExample(b, target, optimize, "raylib-standalone", dvui_raylib);
-        addExample(b, target, optimize, "raylib-ontop", dvui_raylib);
     }
+
+    const dvui_raylib = addDvuiModule(b, target, optimize, "dvui_raylib", false);
+    linkBackend(dvui_raylib, raylib_mod);
+    addExample(b, target, optimize, "raylib-standalone", dvui_raylib);
+    addExample(b, target, optimize, "raylib-ontop", dvui_raylib);
 
     // Dx11
     if (target.result.os.tag == .windows) {
