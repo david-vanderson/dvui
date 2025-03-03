@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) !void {
 
     // SDL
     const sdl_mod = b.addModule("sdl", .{
-        .root_source_file = b.path("src/backends/sdl_backend.zig"),
+        .root_source_file = b.path("src/backends/sdl.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
@@ -93,7 +93,7 @@ pub fn build(b: *std.Build) !void {
     if (target.result.os.tag != .macos) {
         // raylib isn't quite ready for zig 0.14 on macos
         const raylib_mod = b.addModule("raylib", .{
-            .root_source_file = b.path("src/backends/raylib_backend.zig"),
+            .root_source_file = b.path("src/backends/raylib.zig"),
             .target = target,
             .optimize = optimize,
             .link_libc = true,
@@ -140,7 +140,7 @@ pub fn build(b: *std.Build) !void {
     // Dx11
     if (target.result.os.tag == .windows) {
         const dx11_mod = b.addModule("dx11", .{
-            .root_source_file = b.path("src/backends/dx11_backend.zig"),
+            .root_source_file = b.path("src/backends/dx11.zig"),
             .target = target,
             .optimize = optimize,
             .link_libc = true,
@@ -163,7 +163,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const web_mod = b.addModule("WebBackend", .{
-        .root_source_file = b.path("src/backends/WebBackend.zig"),
+        .root_source_file = b.path("src/backends/web.zig"),
     });
 
     web_mod.export_symbol_names = &[_][]const u8{
@@ -203,7 +203,7 @@ pub fn build(b: *std.Build) !void {
     });
     const cb_run = b.addRunArtifact(cb);
     cb_run.addFileArg(b.path("src/backends/index.html"));
-    cb_run.addFileArg(b.path("src/backends/WebBackend.js"));
+    cb_run.addFileArg(b.path("src/backends/web.js"));
     cb_run.addFileArg(web_test.getEmittedBin());
     const output = cb_run.captureStdOut();
 
@@ -211,7 +211,7 @@ pub fn build(b: *std.Build) !void {
 
     const compile_step = b.step("web-test", "Compile the Web test");
     compile_step.dependOn(&b.addInstallFileWithDir(output, .prefix, "bin/index.html").step);
-    compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/WebBackend.js"), .prefix, "bin/WebBackend.js").step);
+    compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/web.js"), .prefix, "bin/web.js").step);
     compile_step.dependOn(&install_wasm.step);
     compile_step.dependOn(&install_noto.step);
 
