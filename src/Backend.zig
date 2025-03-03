@@ -130,7 +130,7 @@ pub fn init(
         const DeclType = @field(I, decl.name);
         compile_assert(hasField, "Backend type " ++ @typeName(implementation) ++ " has no declaration '" ++ decl.name ++ ": " ++ @typeName(DeclType) ++ "'");
         const f: DeclType = &@field(implementation, decl.name);
-        @field(vtable, decl.name) = @ptrCast(f);
+        @field(vtable, decl.name) = f;
     }
 
     return .{

@@ -1,6 +1,9 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const WebBackend = @import("WebBackend");
+const WebBackend = dvui.backend;
+comptime {
+    std.debug.assert(@hasDecl(WebBackend, "WebBackend"));
+}
 usingnamespace WebBackend.wasm;
 
 const WriteError = error{};

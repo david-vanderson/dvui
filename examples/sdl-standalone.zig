@@ -1,10 +1,10 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
-comptime {
-    std.debug.assert(dvui.backend_kind == .sdl);
-}
 const Backend = dvui.backend;
+comptime {
+    std.debug.assert(@hasDecl(Backend, "SDLBackend"));
+}
 
 const window_icon_png = @embedFile("zig-favicon.png");
 

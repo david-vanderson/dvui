@@ -28,7 +28,7 @@ const gdi = graphics.gdi;
 
 const HDC = gdi.HDC;
 
-const Dx11Backend = @This();
+pub const Dx11Backend = @This();
 pub const Context = *Dx11Backend;
 
 var inst: ?*Dx11Backend = null;
@@ -640,7 +640,7 @@ pub fn textureCreate(self: *Dx11Backend, pixels: [*]u8, width: u32, height: u32,
         @panic("couldn't create texture");
     }
 
-    return dvui.Texture{.ptr = texture, .width = width, .height = height};
+    return dvui.Texture{ .ptr = texture, .width = width, .height = height };
 }
 
 pub fn textureCreateTarget(self: *Dx11Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {

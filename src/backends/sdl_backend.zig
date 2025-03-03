@@ -16,7 +16,7 @@ pub const c = blk: {
     });
 };
 
-const SDLBackend = @This();
+pub const SDLBackend = @This();
 pub const Context = *SDLBackend;
 
 window: *c.SDL_Window,
