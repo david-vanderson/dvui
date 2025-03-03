@@ -1,9 +1,9 @@
 const std = @import("std");
 const dvui = @import("dvui");
-comptime {
-    std.debug.assert(dvui.backend_kind == .dx11);
-}
 const Backend = dvui.backend;
+comptime {
+    std.debug.assert(@hasDecl(Backend, "Dx11Backend"));
+}
 
 const w = std.os.windows;
 const HINSTANCE = w.HINSTANCE;
