@@ -44,8 +44,6 @@ Below is a screenshot of the demo window, whose source code can be found at `src
   - [SDL](https://libsdl.org/)
   - [Web](https://david-vanderson.github.io/demo)
   - [Raylib](https://www.raylib.com/)
-  - [Mach](https://machengine.org/)
-    - note: Mach backend is currently out of date
 - Icon support via [TinyVG](https://tinyvg.tech/)
 - Raster image support via [stb_image](https://github.com/nothings/stb)
 - Font support
