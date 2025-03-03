@@ -1,5 +1,6 @@
 .{
-    .name = "dvui",
+    .name = .dvui,
+    .fingerprint = 0xa35affe599490101,
     .version = "0.2.0",
     .paths = .{""},
     .dependencies = .{
