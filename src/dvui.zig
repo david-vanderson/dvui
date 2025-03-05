@@ -1845,17 +1845,21 @@ pub fn minSize(id: u32, min_size: Size) Size {
     return size;
 }
 
-/// Make a unique id from src and id_extra, without a parent widget.  This is
-/// how the initial parent widget id is created, and also toasts and dialogs
-/// from other threads.
+/// Make a unique id from src and id_extra, possibly starting with start
+/// (usually a parent widget id).  This is how the initial parent widget id is
+/// created, and also toasts and dialogs from other threads.
 ///
-/// See Widget.extendId() which does similar but on top of a parent id.
+/// See Widget.extendId() which calls this with the widget id as start.
 ///
 /// dvui.parentGet().extendId(@src(), id_extra) is how new widgets get their
 /// id, and can be used to make a unique id without making a widget.
-pub fn hashSrc(src: std.builtin.SourceLocation, id_extra: usize) u32 {
+pub fn hashSrc(start: ?u32, src: std.builtin.SourceLocation, id_extra: usize) u32 {
     var hash = fnv.init();
-    hash.update(src.file);
+    if (start) |s| {
+        hash.value = s;
+    }
+    hash.update(std.mem.asBytes(&src.module.ptr));
+    hash.update(std.mem.asBytes(&src.file.ptr));
     hash.update(std.mem.asBytes(&src.line));
     hash.update(std.mem.asBytes(&src.column));
     hash.update(std.mem.asBytes(&id_extra));
@@ -2639,7 +2643,7 @@ pub const Window = struct {
         backend_ctx: Backend,
         init_opts: InitOptions,
     ) !Self {
-        const hashval = hashSrc(src, init_opts.id_extra);
+        const hashval = hashSrc(null, src, init_opts.id_extra);
 
         var self = Self{
             .gpa = gpa,
@@ -4225,7 +4229,7 @@ pub const IdMutex = struct {
 pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplayFn) !IdMutex {
     if (win) |w| {
         // we are being called from non gui thread
-        const id = hashSrc(src, id_extra);
+        const id = hashSrc(null, src, id_extra);
         const mutex = try w.dialogAdd(id, display);
         refresh(win, @src(), id); // will wake up gui thread
         return .{ .id = id, .mutex = mutex };
@@ -4575,7 +4579,7 @@ pub const Toast = struct {
 pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, display: DialogDisplayFn, timeout: ?i32) !IdMutex {
     if (win) |w| {
         // we are being called from non gui thread
-        const id = hashSrc(src, id_extra);
+        const id = hashSrc(null, src, id_extra);
         const mutex = try w.toastAdd(id, subwindow_id, display, timeout);
         refresh(win, @src(), id);
         return .{ .id = id, .mutex = mutex };
