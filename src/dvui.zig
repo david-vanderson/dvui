@@ -455,7 +455,7 @@ const FontCacheEntry = struct {
             const x1: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(ix1));
             const y1: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(iy1));
 
-            //std.debug.print("codepoint {d} stbtt x0 {d} x1 {d} y0 {d} y1 {d}\n", .{ codepoint, x0, x1, y0, y1 });
+            //std.debug.print("{d} codepoint {d} stbtt x0 {d} {d} x1 {d} {d} y0 {d} {d} y1 {d} {d}\n", .{ self.ascent, codepoint, ix0, x0, ix1, x1, iy0, y0, iy1, y1 });
 
             gi = GlyphInfo{
                 .advance = self.scaleFactor * @as(f32, @floatFromInt(advanceWidth)),
@@ -635,8 +635,8 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
         entry = FontCacheEntry{
             .face = face,
             .scaleFactor = SF,
-            .height = height,
-            .ascent = ascent,
+            .height = @ceil(height),
+            .ascent = @floor(ascent),
             .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
             .texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
             .texture_atlas_regen = true,
