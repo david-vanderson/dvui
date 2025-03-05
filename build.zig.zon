@@ -6,34 +6,34 @@
     .dependencies = .{
         .sdl = .{
             .url = "git+https://github.com/david-vanderson/SDL#a0d66c2bfb70ce0119eedf8ff5b523fd36e0925f",
-            .hash = "1220d2fd0149dbba85e5f5f0f6ecf2a7ce9a2f81d66280efb9389924bb547a51a557",
+            .hash = "SDL-2.32.0-AAAAAPF_EgHS_QFJ27qF5fXw9uzyp86aL4HWYoDvuTiZ",
             .lazy = true,
         },
         .sdl3 = .{
             .url = "git+https://github.com/castholm/SDL.git?ref=HEAD#bbc8dfb78c2a71f10b21548b58dfe5ac46cc3fef",
-            .hash = "122046c6dcdcf941e6e5b1e8fa273185d04420e56436d47b906308eaf70208222f59",
+            .hash = "sdl-0.1.3+SDL-3.2.0-AAAAAHQVdwFGxtzc-UHm5bHo-icxhdBEIOVkNtR7kGMI",
             .lazy = true,
         },
         .freetype = .{
             .url = "git+https://github.com/rohlem/freetype-update-zig#a50182dc5787a8d49dd1ad922699a1c8771aa34a",
-            .hash = "12203811b00197ba9f939a8114941bdb18d421c3fa498ec4045bc9ce0c91a5a20b9f",
+            .hash = "freetype-2.13.0-AAAAAI6NqAA4EbABl7qfk5qBFJQb2xjUIcP6SY7EBFvJ",
             .lazy = true,
         },
         .raylib = .{
             .url = "git+https://github.com/raysan5/raylib#cb3168a0486edd0b1b6a2595ac73719ee0a4b596",
-            .hash = "12207101b24667d27e1f6596204a3d9d8695177d554b76ad4480d2086e5d80784e5c",
+            .hash = "raylib-5.5.0-AAAAALVFzQBxAbJGZ9J-H2WWIEo9nYaVF31VS3atRIDS",
             .lazy = true,
         },
         //used in the raylib-ontop example
         .raygui = .{
             .url = "https://github.com/raysan5/raygui/archive/33f1659.tar.gz",
-            .hash = "12205f060d3476715771890d6e30bc052ca2d420dcae7875db2a4bd876ac506008a9",
+            .hash = "N-V-__8AAAHFTwBfBg00dnFXcYkNbjC8BSyi1CDcrnh12ypL",
             .lazy = true,
         },
         // required for the directx11 backend
         .zigwin32 = .{
             .url = "git+https://github.com/rohlem/zigwin32-update-zig#5d6055e7c8cea4c508f33c0d8641fdf1fe30f9ea",
-            .hash = "122073b611033d3660fca78fb588d2fd97bbdad96be8c688c5a00f8b85c4a5e3d871",
+            .hash = "zigwin32-25.0.28-preview-AAAAAHnw-wNzthEDPTZg_KePtYjS_Ze72tlr6MaIxaAP",
             .lazy = true,
         },
     },
