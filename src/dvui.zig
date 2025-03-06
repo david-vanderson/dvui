@@ -493,8 +493,34 @@ const FontCacheEntry = struct {
         var nearest_break: bool = false;
 
         var utf8 = (try std.unicode.Utf8View.init(text)).iterator();
+        var last_codepoint: u32 = 0;
+        var last_glyph_index: u32 = 0;
         while (utf8.nextCodepoint()) |codepoint| {
             const gi = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), font_name);
+
+            // kerning
+            if (last_codepoint != 0) {
+                if (useFreeType) {
+                    if (last_glyph_index == 0) last_glyph_index = c.FT_Get_Char_Index(fce.face, last_codepoint);
+                    const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
+                    var kern: c.FT_Vector = undefined;
+                    FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
+                        log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, font_name, last_codepoint, codepoint });
+                        return error.freetypeError;
+                    };
+                    last_glyph_index = glyph_index;
+
+                    const kern_x: f32 = @as(f32, @floatFromInt(kern.x)) / 64.0;
+
+                    x += kern_x;
+                } else {
+                    const kern_adv: c_int = c.stbtt_GetCodepointKernAdvance(&fce.face, @as(c_int, @intCast(last_codepoint)), @as(c_int, @intCast(codepoint)));
+                    const kern_x = fce.scaleFactor * @as(f32, @floatFromInt(kern_adv));
+
+                    x += kern_x;
+                }
+            }
+            last_codepoint = codepoint;
 
             minx = @min(minx, x + gi.leftBearing);
             maxx = @max(maxx, x + gi.leftBearing + gi.w);
@@ -502,8 +528,6 @@ const FontCacheEntry = struct {
 
             miny = @min(miny, gi.topBearing);
             maxy = @max(maxy, gi.topBearing + gi.h);
-
-            // TODO: kerning
 
             if (codepoint == '\n') {
                 // newlines always terminate, and don't use any space
@@ -6706,10 +6730,34 @@ pub fn renderText(opts: renderTextOptions) !void {
 
     var bytes_seen: usize = 0;
     var utf8 = (try std.unicode.Utf8View.init(opts.text)).iterator();
+    var last_codepoint: u32 = 0;
+    var last_glyph_index: u32 = 0;
     while (utf8.nextCodepoint()) |codepoint| {
         const gi = try fce.glyphInfoGet(@as(u32, @intCast(codepoint)), opts.font.name);
 
-        // TODO: kerning
+        // kerning
+        if (last_codepoint != 0) {
+            if (useFreeType) {
+                if (last_glyph_index == 0) last_glyph_index = c.FT_Get_Char_Index(fce.face, last_codepoint);
+                const glyph_index: u32 = c.FT_Get_Char_Index(fce.face, codepoint);
+                var kern: c.FT_Vector = undefined;
+                FontCacheEntry.intToError(c.FT_Get_Kerning(fce.face, last_glyph_index, glyph_index, c.FT_KERNING_DEFAULT, &kern)) catch |err| {
+                    log.warn("renderText freetype error {!} trying to FT_Get_Kerning font {s} codepoints {d} {d}\n", .{ err, opts.font.name, last_codepoint, codepoint });
+                    return error.freetypeError;
+                };
+                last_glyph_index = glyph_index;
+
+                const kern_x: f32 = @as(f32, @floatFromInt(kern.x)) / 64.0;
+
+                x += kern_x;
+            } else {
+                const kern_adv: c_int = c.stbtt_GetCodepointKernAdvance(&fce.face, @as(c_int, @intCast(last_codepoint)), @as(c_int, @intCast(codepoint)));
+                const kern_x = fce.scaleFactor * @as(f32, @floatFromInt(kern_adv));
+
+                x += kern_x;
+            }
+        }
+        last_codepoint = codepoint;
 
         const nextx = x + gi.advance * target_fraction;
 
