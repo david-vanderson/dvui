@@ -476,7 +476,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     dvui.focusWidget(self.wd.id, null, e.num);
                 } else if (me.action == .wheel_x) {
                     if (self.si.scrollMax(.horizontal) > 0) {
-                        if ((me.data.wheel_x > 0 and self.si.viewport.x <= 0) or (me.data.wheel_x < 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
+                        if ((me.data.wheel_x < 0 and self.si.viewport.x <= 0) or (me.data.wheel_x > 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
                             // propagate the scroll event because we are already maxxed out
                         } else {
                             e.handled = true;
