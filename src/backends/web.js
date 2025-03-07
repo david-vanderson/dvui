@@ -650,7 +650,12 @@ function dvui(canvasId, wasmFile) {
         });
         canvas.addEventListener("wheel", (ev) => {
 	    ev.preventDefault();
-            wasmResult.instance.exports.add_event(4, 0, 0, ev.deltaY, 0);
+            if (ev.deltaX != 0) {
+                wasmResult.instance.exports.add_event(4, 0, 0, -ev.deltaX, 0);
+            }
+            if (ev.deltaY != 0) {
+                wasmResult.instance.exports.add_event(4, 1, 0, ev.deltaY, 0);
+            }
             requestRender();
         });
 
