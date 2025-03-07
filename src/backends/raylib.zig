@@ -570,7 +570,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //scroll wheel movement
     const scroll_wheel = c.GetMouseWheelMove();
     if (scroll_wheel != 0) {
-        if (try win.addEventMouseWheel(scroll_wheel * 25)) disable_raylib_input = true;
+        if (try win.addEventMouseWheel(scroll_wheel * 25, .vertical)) disable_raylib_input = true;
 
         if (self.log_events) {
             std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});
