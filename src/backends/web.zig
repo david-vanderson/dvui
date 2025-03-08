@@ -208,7 +208,7 @@ fn add_event_raw(w: *dvui.Window, kind: u8, int1: u32, int2: u32, float1: f32, f
         1 => _ = try w.addEventMouseMotion(float1, float2),
         2 => _ = try w.addEventMouseButton(buttonFromJS(int1), .press),
         3 => _ = try w.addEventMouseButton(buttonFromJS(int1), .release),
-        4 => _ = try w.addEventMouseWheel(if (float1 > 0) -20 else 20),
+        4 => _ = try w.addEventMouseWheel(if (float1 > 0) -20 else 20, if (int1 > 0) .vertical else .horizontal),
         5 => {
             const str = @as([*]u8, @ptrFromInt(int1))[0..int2];
             _ = try w.addEventKey(.{
@@ -415,7 +415,7 @@ fn web_mod_code_to_dvui(wmod: u8) dvui.enums.Mod {
 //            1 => _ = try win.addEventMouseMotion(e.float1, e.float2),
 //            2 => _ = try win.addEventMouseButton(buttonFromJS(e.int1), .press),
 //            3 => _ = try win.addEventMouseButton(buttonFromJS(e.int1), .release),
-//            4 => _ = try win.addEventMouseWheel(if (e.float1 > 0) -20 else 20),
+//            4 => _ = try win.addEventMouseWheel(if (e.float1 > 0) -20 else 20, .vertical),
 //            5 => {
 //                const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
 //                _ = try win.addEventKey(.{

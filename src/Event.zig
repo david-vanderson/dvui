@@ -84,6 +84,7 @@ pub const Mouse = struct {
         press,
         release,
 
+        wheel_x,
         wheel_y,
 
         // motion Point is the change in position
@@ -111,6 +112,7 @@ pub const Mouse = struct {
     data: union {
         none: void,
         motion: Point,
+        wheel_x: f32,
         wheel_y: f32,
     } = .{ .none = {} },
 };

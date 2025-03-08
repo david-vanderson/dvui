@@ -155,7 +155,16 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect) void {
                         e.handled = true;
                         self.highlight = true;
                     },
+                    .wheel_x => {
+                        if (self.dir == .horizontal) {
+                            e.handled = true;
+                            self.si.scrollByOffset(self.dir, me.data.wheel_x);
+                            dvui.refresh(null, @src(), self.wd.id);
+                        }
+                    },
                     .wheel_y => {
+                        // Don't care about the direction, because "normal" wheel on
+                        // horizontal scrollBar seems still natural to be scrolled
                         e.handled = true;
                         self.si.scrollByOffset(self.dir, -me.data.wheel_y);
                         dvui.refresh(null, @src(), self.wd.id);
