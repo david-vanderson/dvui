@@ -3136,12 +3136,12 @@ pub const Window = struct {
         return ret;
     }
 
-    /// Add a mouse wheel event.  Positive ticks means scrolling up.
+    /// Add a mouse wheel event.  Positive ticks means scrolling up / scrolling left.
     ///
     /// This can be called outside begin/end.  You should add all the events
     /// for a frame either before begin() or just after begin() and before
     /// calling normal dvui widgets.  end() clears the event list.
-    pub fn addEventMouseWheel(self: *Self, ticks: f32) !bool {
+    pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: enums.Direction) !bool {
         self.positionMouseEventRemove();
 
         const winId = self.windowFor(self.mouse_pt);
@@ -3151,11 +3151,11 @@ pub const Window = struct {
         self.event_num += 1;
         try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
             .mouse = .{
-                .action = .wheel_y,
+                .action = if (dir == .vertical) .wheel_y else .wheel_x,
                 .button = .none,
                 .p = self.mouse_pt,
                 .floating_win = winId,
-                .data = .{ .wheel_y = ticks },
+                .data = if (dir == .vertical) .{ .wheel_y = ticks } else .{ .wheel_x = ticks },
             },
         } });
 

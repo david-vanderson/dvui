@@ -910,7 +910,7 @@ pub fn addEvent(self: *Dx11Backend, window: *dvui.Window, key_event: KeyEvent) !
             return window.addEventMouseMotion(@floatFromInt(ev.x), @floatFromInt(ev.y));
         },
         .wheel_event => |ev| {
-            return window.addEventMouseWheel(@floatFromInt(ev));
+            return window.addEventMouseWheel(@floatFromInt(ev), .vertical);
         },
         .none => return false,
     }
