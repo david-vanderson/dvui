@@ -5,13 +5,13 @@
     .paths = .{""},
     .dependencies = .{
         .sdl = .{
-            .url = "git+https://github.com/david-vanderson/SDL#a0d66c2bfb70ce0119eedf8ff5b523fd36e0925f",
-            .hash = "SDL-2.32.0-AAAAAPF_EgHS_QFJ27qF5fXw9uzyp86aL4HWYoDvuTiZ",
+            .url = "git+https://github.com/allyourcodebase/SDL#6f426d8f1bfbc796ff41e6fda2890790ed34f2c7",
+            .hash = "SDL-2.32.2-JToi31GUEgGOf7m8tPCktmPE1Z0cO8bfst98IDm6xJw4",
             .lazy = true,
         },
         .sdl3 = .{
-            .url = "git+https://github.com/castholm/SDL.git?ref=HEAD#bbc8dfb78c2a71f10b21548b58dfe5ac46cc3fef",
-            .hash = "sdl-0.1.3+SDL-3.2.0-AAAAAHQVdwFGxtzc-UHm5bHo-icxhdBEIOVkNtR7kGMI",
+            .url = "git+https://github.com/castholm/SDL#dbb1b96360658f5845ff6fac380c4f13d7276dc2",
+            .hash = "sdl-0.2.0+3.2.8-7uIn9FxHfQE325TK7b0qpgt10G3x1xl-3ZMOfTzxUg3C",
             .lazy = true,
         },
         .freetype = .{
