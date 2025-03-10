@@ -1553,11 +1553,8 @@ pub fn mouseTotalMotion() Point {
     return Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
 }
 
-/// Pass a widget ID for that widget to receive all mouse events (wheel events
-/// still filtered normally).
-///
-/// To keep mouse capture, must call captureMouseMaintain() each frame, and can
-/// call it every frame regardless of capture.
+/// Pass a widget ID for that widget to receive all mouse events (meaning
+/// eventMatch() returns true).  Wheel events still filtered normally.
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn captureMouse(id: ?u32) void {
@@ -1569,7 +1566,7 @@ pub fn captureMouse(id: ?u32) void {
 }
 
 /// If the widget ID passed has mouse capture, this maintains that capture for
-/// the next frame.
+/// the next frame.  This is usually called for you in WidgetData.init().
 ///
 /// This can be called every frame regardless of capture.
 ///
