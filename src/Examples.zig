@@ -2365,8 +2365,6 @@ pub fn scrollCanvas() !void {
                 var dbox = try dvui.box(@src(), .vertical, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = .{ .color = col } });
                 defer dbox.deinit();
 
-                dvui.captureMouseMaintain(dbox.data().id);
-
                 for (evts) |*e| {
                     if (!dvui.eventMatchSimple(e, dbox.data())) {
                         continue;
