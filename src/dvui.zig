@@ -3367,6 +3367,12 @@ pub const Window = struct {
         self.previous_window = current_window;
         current_window = self;
 
+        if (self.previous_window) |pw| {
+            if (pw == self) {
+                log.err("Window.begin() window is already the current_window - ensure Window.end() is called for each Window.begin()\n", .{});
+            }
+        }
+
         self.cursor_requested = .arrow;
         self.text_input_rect = null;
         self.debug_info_name_rect = "";
