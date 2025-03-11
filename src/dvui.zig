@@ -1554,7 +1554,8 @@ pub fn mouseTotalMotion() Point {
 }
 
 /// Pass a widget ID for that widget to receive all mouse events (meaning
-/// eventMatch() returns true).  Wheel events still filtered normally.
+/// eventMatch() returns true for this id and false for all others).  Wheel
+/// events still filtered normally.
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn captureMouse(id: ?u32) void {
