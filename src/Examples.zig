@@ -1620,8 +1620,30 @@ pub fn layoutText() !void {
 }
 
 pub fn plots() !void {
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Simple", .{}, .{});
+
+        const xs: []const f64 = &.{ 0, 1, 2, 3, 4, 5 };
+        const ys: []const f64 = &.{ 0, 4, 2, 6, 5, 9 };
+        try dvui.plotXY(@src(), .{}, 1, xs, ys, .{});
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Color and Thick", .{}, .{});
+
+        const xs: []const f64 = &.{ 0, 1, 2, 3, 4, 5 };
+        const ys: []const f64 = &.{ 9, 5, 6, 2, 4, 0 };
+        try dvui.plotXY(@src(), .{}, 2, xs, ys, .{ .color_accent = .{ .color = dvui.themeGet().color_err } });
+    }
+
     var save: bool = false;
-    if (try dvui.button(@src(), "Save Plot", .{}, .{})) {
+    if (try dvui.button(@src(), "Save Plot", .{}, .{ .gravity_x = 1.0 })) {
         save = true;
     }
 
@@ -1633,14 +1655,34 @@ pub fn plots() !void {
         pic = dvui.Picture.start(vbox.data().contentRectScale().r);
     }
 
-    var plot = try dvui.plot(@src(), .{ .title = "Plot Title", .x_axis = "X Axis", .x_min = 0.05, .x_max = 0.95, .y_axis = "Y Axis", .y_min = -0.8, .y_max = 0.8 }, .{ .expand = .both });
+    const Static = struct {
+        var xaxis: dvui.PlotWidget.Axis = .{
+            .name = "X Axis",
+            .min = 0.05,
+            .max = 0.95,
+        };
+
+        var yaxis: dvui.PlotWidget.Axis = .{
+            .name = "Y Axis",
+            // let plot figure out min
+            .max = 0.8,
+        };
+    };
+
+    var plot = try dvui.plot(@src(), .{
+        .title = "Plot Title",
+        .x_axis = &Static.xaxis,
+        .y_axis = &Static.yaxis,
+        .border_thick = 1.0,
+        .mouse_hover = true,
+    }, .{ .expand = .both });
     var s1 = plot.line();
 
     const points: usize = 1000;
     const freq: f32 = 5;
     for (0..points + 1) |i| {
-        const fval: f32 = @sin(2.0 * std.math.pi * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(points)) * freq);
-        try s1.point(.{ .x = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(points)), .y = fval });
+        const fval: f64 = @sin(2.0 * std.math.pi * @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(points)) * freq);
+        try s1.point(@as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(points)), fval);
     }
     try s1.stroke(1, dvui.themeGet().color_accent);
     s1.deinit();
