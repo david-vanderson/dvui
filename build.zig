@@ -12,10 +12,20 @@ pub const LinuxDisplayBackend = enum {
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const disable_backends = b.option(
+        bool,
+        "disable_backends",
+        "disable all backends - bring your own",
+    ) orelse false;
 
     // For export to users who are bringing their own backend.  Use in your build.zig:
+    // const dvui_dep = b.dependency("dvui", .{
+    //     .target = target,
+    //     .optimize = optimize,
+    //     .disable_backends = true,
+    // });
     // const dvui_mod = dvui_dep.module("dvui");
-    // @import("dvui").linkBackend(dvui_mod, your backend module);
+    // @import("dvui").linkBackend(dvui_mod, your_backend_module);
     _ = addDvuiModule(b, target, optimize, "dvui", true);
 
     // SDL
@@ -28,7 +38,7 @@ pub fn build(b: *std.Build) !void {
 
     var sdl_options = b.addOptions();
     const compile_sdl3 = b.option(bool, "sdl3", "SDL3 instead of SDL2") orelse false;
-    if (b.systemIntegrationOption("sdl2", .{})) {
+    if (disable_backends) {} else if (b.systemIntegrationOption("sdl2", .{})) {
         // SDL2 from system
         sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
         sdl_mod.linkSystemLibrary("SDL2", .{});
@@ -97,7 +107,7 @@ pub fn build(b: *std.Build) !void {
         .link_libc = true,
     });
 
-    const maybe_ray = b.lazyDependency(
+    const maybe_ray = if (disable_backends) null else b.lazyDependency(
         "raylib",
         .{
             .target = target,
