@@ -130,14 +130,25 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
     }
 
     var bg = self.options.backgroundGet();
-    if (self.options.borderGet().nonZero()) {
-        if (!bg) {
-            dvui.log.debug("borderAndBackground {x} forcing background on to support border\n", .{self.id});
-            bg = true;
-        }
-        const rs = self.borderRectScale();
-        if (!rs.r.empty()) {
-            try rs.r.fill(self.options.corner_radiusGet().scale(rs.s), self.options.color(.border));
+    const b = self.options.borderGet();
+    if (b.nonZero()) {
+        const uniform: bool = (b.x == b.y and b.x == b.w and b.x == b.h);
+        if (!bg and uniform) {
+            // draw border as stroked path
+            const r = self.borderRect().inset(b.scale(0.5));
+            const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
+            try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s), b.x * rs.s, self.options.color(.border), .{});
+        } else {
+            // draw border as large rect with background on top
+            if (!bg) {
+                dvui.log.debug("borderAndBackground {x} forcing background on to support non-uniform border\n", .{self.id});
+                bg = true;
+            }
+
+            const rs = self.borderRectScale();
+            if (!rs.r.empty()) {
+                try rs.r.fill(self.options.corner_radiusGet().scale(rs.s), self.options.color(.border));
+            }
         }
     }
 
