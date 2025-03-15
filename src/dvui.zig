@@ -7469,7 +7469,7 @@ pub const PlotWidget = struct {
 
         const yticks = [_]?f64{ self.y_axis.min, self.y_axis.max };
         var tick_width: f32 = 0;
-        if (self.init_options.y_axis) |_| {
+        if (self.y_axis.name) |_| {
             for (yticks) |m_ytick| {
                 if (m_ytick) |ytick| {
                     const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{ytick});
@@ -7484,7 +7484,9 @@ pub const PlotWidget = struct {
         var yaxis = try dvui.box(@src(), .horizontal, .{ .expand = .vertical, .min_size_content = .{ .w = tick_width } });
         var yaxis_rect = yaxis.data().rect;
         if (self.y_axis.name) |yname| {
-            try dvui.label(@src(), "{s}", .{yname}, .{ .gravity_y = 0.5 });
+            if (yname.len > 0) {
+                try dvui.label(@src(), "{s}", .{yname}, .{ .gravity_y = 0.5 });
+            }
         }
         yaxis.deinit();
 
@@ -7533,7 +7535,7 @@ pub const PlotWidget = struct {
         _ = try dvui.spacer(@src(), .{ .w = yaxis_rect.w }, .{ .expand = .vertical });
 
         var x_tick_height: f32 = 0;
-        if (self.init_options.x_axis) |_| {
+        if (self.x_axis.name) |_| {
             if (self.x_axis.min != null or self.x_axis.max != null) {
                 x_tick_height = tick_font.sizeM(1, 1).h;
             }
@@ -7542,14 +7544,16 @@ pub const PlotWidget = struct {
         // x axis
         var xaxis = try dvui.box(@src(), .vertical, .{ .gravity_y = 1.0, .expand = .horizontal, .min_size_content = .{ .h = x_tick_height } });
         if (self.x_axis.name) |xname| {
-            try dvui.label(@src(), "{s}", .{xname}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+            if (xname.len > 0) {
+                try dvui.label(@src(), "{s}", .{xname}, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
+            }
         }
         xaxis.deinit();
 
         hbox2.deinit();
 
         // y axis ticks
-        if (self.init_options.y_axis) |_| {
+        if (self.y_axis.name) |_| {
             for (yticks) |m_ytick| {
                 if (m_ytick) |ytick| {
                     const tick: Data = .{ .x = self.x_axis.min orelse 0, .y = ytick };
@@ -7568,7 +7572,7 @@ pub const PlotWidget = struct {
         }
 
         // x axis ticks
-        if (self.init_options.x_axis) |_| {
+        if (self.x_axis.name) |_| {
             const xticks = [_]?f64{ self.x_axis.min, self.x_axis.max };
             for (xticks) |m_xtick| {
                 if (m_xtick) |xtick| {
