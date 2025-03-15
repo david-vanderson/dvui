@@ -1164,18 +1164,17 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
                         }
                     }
 
-                    if (bytes) |b| {
-                        try dvui.currentWindow().font_bytes.put(name, dvui.FontBytesEntry{ .ttf_bytes = b, .allocator = dvui.currentWindow().gpa });
-
-                        _ = dvui.fontCacheGet(.{ .name = name, .size = 14 }) catch {
-                            _ = dvui.currentWindow().font_bytes.remove(name);
-                            dvui.currentWindow().gpa.free(b);
-                            try dvui.dialog(@src(), .{ .title = "Bad Font", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "\"{s}\" is not a valid font", .{filename}) });
+                    if (bytes) |b| blk: {
+                        dvui.addFont(name, b, dvui.currentWindow().gpa) catch |err| switch (err) {
+                            error.OutOfMemory => @panic("OOM"),
+                            error.freetypeError => {
+                                dvui.currentWindow().gpa.free(b);
+                                try dvui.dialog(@src(), .{ .title = "Bad Font", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "\"{s}\" is not a valid font", .{filename}) });
+                                break :blk;
+                            },
                         };
 
-                        if (dvui.currentWindow().font_bytes.contains(name)) {
-                            try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Added font named \"{s}\"", .{name}) });
-                        }
+                        try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Added font named \"{s}\"", .{name}) });
                     }
                 }
             }
