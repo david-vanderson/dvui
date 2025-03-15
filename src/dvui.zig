@@ -245,6 +245,24 @@ pub const FontBytesEntry = struct {
     allocator: ?std.mem.Allocator,
 };
 
+/// Add font to be referenced later by name.
+///
+/// ttf_bytes are the bytes of the ttf file
+///
+/// If ttf_bytes_allocator is not null, it will be used to free ttf_bytes in
+/// Window.deinit().
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) !void {
+    var cw = currentWindow();
+    try cw.font_bytes.put(name, FontBytesEntry{ .ttf_bytes = ttf_bytes, .allocator = ttf_bytes_allocator });
+
+    errdefer _ = cw.font_bytes.remove(name);
+
+    // Test if we can successfully open this font
+    _ = try dvui.fontCacheGet(.{ .name = name, .size = 14 });
+}
+
 const GlyphInfo = struct {
     advance: f32, // horizontal distance to move the pen
     leftBearing: f32, // horizontal distance from pen to bounding box left edge
@@ -597,6 +615,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     const size = Size{ .w = 10, .h = 10 };
     const pixels = try cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
     @memset(pixels, 255);
+    defer cw.arena().free(pixels);
 
     const min_pixel_size = 1;
 
@@ -669,7 +688,6 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     //log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
 
     errdefer {
-        std.debug.assert(false);
         textureDestroyLater(entry.texture_atlas);
     }
     try cw.font_cache.putNoClobber(fontHash, entry);
