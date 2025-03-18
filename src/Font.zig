@@ -27,16 +27,12 @@ pub fn lineHeight(self: *const Font) f32 {
 }
 
 pub fn sizeM(self: *const Font, wide: f32, tall: f32) Size {
-    const msize: Size = self.textSize("M") catch |err| blk: {
-        dvui.log.err("font \"{s}\" sizeM() got {!}", .{ self.name, err });
-        break :blk .{ .w = 10, .h = 10 };
-    };
-
+    const msize: Size = self.textSize("M");
     return .{ .w = msize.w * wide, .h = msize.h * tall };
 }
 
 // handles multiple lines
-pub fn textSize(self: *const Font, text: []const u8) !Size {
+pub fn textSize(self: *const Font, text: []const u8) Size {
     if (text.len == 0) {
         // just want the normal text height
         return .{ .w = 0, .h = self.textHeight() };
@@ -52,7 +48,7 @@ pub fn textSize(self: *const Font, text: []const u8) !Size {
         }
 
         var end_idx: usize = undefined;
-        const s = try self.textSizeEx(text[end..], null, &end_idx, .before);
+        const s = self.textSizeEx(text[end..], null, &end_idx, .before);
         line_height_adj = s.h * (self.line_height_factor - 1.0);
         ret.h += s.h;
         ret.w = @max(ret.w, s.w);
@@ -69,7 +65,7 @@ pub const EndMetric = enum {
 };
 
 /// textSizeEx always stops at a newline, use textSize to get multiline sizes
-pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: EndMetric) !Size {
+pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: EndMetric) Size {
     // ask for a font that matches the natural display pixels so we get a more
     // accurate size
 
@@ -78,7 +74,10 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
     const sized_font = self.resize(ask_size);
 
     // might give us a slightly smaller font
-    const fce = try dvui.fontCacheGet(sized_font);
+    const fce = dvui.fontCacheGet(sized_font) catch |err| {
+        dvui.log.err("fontCacheGet got {!} for font \"{s}\"", .{ err, self.name });
+        return .{ .w = 10, .h = 10 };
+    };
 
     // this must be synced with dvui.renderText()
     const target_fraction = if (dvui.currentWindow().snap_to_pixels) 1.0 / ss else self.size / fce.height;
@@ -89,7 +88,10 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
         max_width_sized = mwidth / target_fraction;
     }
 
-    var s = try fce.textSizeRaw(self.name, text, max_width_sized, end_idx, end_metric);
+    var s = fce.textSizeRaw(self.name, text, max_width_sized, end_idx, end_metric) catch |err| {
+        dvui.log.err("textSizeRaw got {!} for font \"{s}\" text \"{s}\"", .{ err, self.name, text });
+        return .{ .w = 10, .h = 10 };
+    };
 
     // do this check after calling textSizeRaw so that end_idx is set
     if (ask_size == 0.0) return Size{};

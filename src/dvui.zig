@@ -613,7 +613,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
 
     // make debug texture atlas so we can see if something later goes wrong
     const size = Size{ .w = 10, .h = 10 };
-    const pixels = try cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4);
+    const pixels = cw.arena().alloc(u8, @as(usize, @intFromFloat(size.w * size.h)) * 4) catch @panic("OOM");
     @memset(pixels, 255);
     defer cw.arena().free(pixels);
 
@@ -4794,7 +4794,7 @@ pub const DropdownWidget = struct {
         if (self.init_options.label) |ll| {
             var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both });
 
-            var lw = try LabelWidget.initNoFmt(@src(), ll, self.options.strip().override(.{ .gravity_y = 0.5 }));
+            var lw = LabelWidget.initNoFmt(@src(), ll, self.options.strip().override(.{ .gravity_y = 0.5 }));
             try lw.install();
             try lw.draw();
             lw.deinit();
@@ -5422,7 +5422,7 @@ pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitO
 pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) !bool {
     var ret = false;
 
-    var lw = try LabelWidget.init(src, fmt, args, opts.override(.{ .name = "LabelClick" }));
+    var lw = LabelWidget.init(src, fmt, args, opts.override(.{ .name = "LabelClick" }));
     // now lw has a Rect from its parent but hasn't processed events or drawn
 
     const lwid = lw.data().id;
@@ -5525,7 +5525,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
 }
 
 pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) !void {
-    var lw = try LabelWidget.init(src, fmt, args, opts);
+    var lw = LabelWidget.init(src, fmt, args, opts);
     try lw.install();
     lw.processEvents();
     try lw.draw();
@@ -5533,7 +5533,7 @@ pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: an
 }
 
 pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, opts: Options) !void {
-    var lw = try LabelWidget.initNoFmt(src, str, opts);
+    var lw = LabelWidget.initNoFmt(src, str, opts);
     try lw.install();
     lw.processEvents();
     try lw.draw();
@@ -7473,7 +7473,7 @@ pub const PlotWidget = struct {
             for (yticks) |m_ytick| {
                 if (m_ytick) |ytick| {
                     const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{ytick});
-                    tick_width = @max(tick_width, (try tick_font.textSize(tick_str)).w);
+                    tick_width = @max(tick_width, tick_font.textSize(tick_str).w);
                 }
             }
         }
@@ -7558,7 +7558,7 @@ pub const PlotWidget = struct {
                 if (m_ytick) |ytick| {
                     const tick: Data = .{ .x = self.x_axis.min orelse 0, .y = ytick };
                     const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{ytick});
-                    const tick_str_size = (try tick_font.textSize(tick_str)).scale(self.data_rs.s);
+                    const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s);
                     var tick_p = self.dataToScreen(tick);
                     tick_p.x -= tick_str_size.w + pad;
                     tick_p.y = @max(tick_p.y, self.data_rs.r.y);
@@ -7578,7 +7578,7 @@ pub const PlotWidget = struct {
                 if (m_xtick) |xtick| {
                     const tick: Data = .{ .x = xtick, .y = self.y_axis.min orelse 0 };
                     const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{xtick});
-                    const tick_str_size = (try tick_font.textSize(tick_str)).scale(self.data_rs.s);
+                    const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s);
                     var tick_p = self.dataToScreen(tick);
                     tick_p.x = @max(tick_p.x, self.data_rs.r.x);
                     tick_p.x = @min(tick_p.x, self.data_rs.r.x + self.data_rs.r.w - tick_str_size.w);
@@ -7628,7 +7628,7 @@ pub const PlotWidget = struct {
         if (self.hover_data) |hd| {
             var p = self.box.data().contentRectScale().pointFromScreen(self.mouse_point.?);
             const str = std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}, {d}", .{ hd.x, hd.y }) catch "";
-            const size: Size = (dvui.Options{}).fontGet().textSize(str) catch .{ .w = 10, .h = 10 };
+            const size: Size = (dvui.Options{}).fontGet().textSize(str);
             p.x -= size.w / 2;
             const padding = dvui.LabelWidget.defaults.paddingGet();
             p.y -= size.h + padding.y + padding.h + 8;
