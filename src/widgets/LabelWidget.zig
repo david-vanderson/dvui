@@ -17,17 +17,23 @@ pub var defaults: Options = .{
 wd: WidgetData = undefined,
 label_str: []const u8 = undefined,
 
-pub fn init(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) !LabelWidget {
-    const l = try std.fmt.allocPrint(dvui.currentWindow().arena(), fmt, args);
-    return try LabelWidget.initNoFmt(src, l, opts);
+pub fn init(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) LabelWidget {
+    const l = std.fmt.allocPrint(dvui.currentWindow().arena(), fmt, args) catch |err| blk: {
+        const newid = dvui.parentGet().extendId(src, opts.idExtra());
+        dvui.currentWindow().debug_widget_id = newid;
+        dvui.log.err("{s}:{d} LabelWidget id {x} (highlighted in red) init() got {!}", .{ src.file, src.line, newid, err });
+        break :blk "<Error OutOfMemory>";
+    };
+
+    return LabelWidget.initNoFmt(src, l, opts);
 }
 
-pub fn initNoFmt(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) !LabelWidget {
+pub fn initNoFmt(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) LabelWidget {
     var self = LabelWidget{};
     const options = defaults.override(opts);
     self.label_str = label_str;
 
-    var size = try options.fontGet().textSize(self.label_str);
+    var size = options.fontGet().textSize(self.label_str);
     size = Size.max(size, options.min_size_contentGet());
 
     self.wd = WidgetData.init(src, .{}, options.override(.{ .min_size_content = size }));
@@ -59,7 +65,7 @@ pub fn draw(self: *LabelWidget) !void {
             rs.r.y += rs.s * line_height_adj;
         }
 
-        const tsize = try self.wd.options.fontGet().textSize(line);
+        const tsize = self.wd.options.fontGet().textSize(line);
         const lineRect = dvui.placeIn(self.wd.contentRect(), tsize, .none, self.wd.options.gravityGet());
         const liners = self.wd.parent.screenRectScale(lineRect);
 

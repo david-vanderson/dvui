@@ -447,7 +447,7 @@ fn findPoint(p: Point, r: Rect, bytes_seen: usize, txt: []const u8, options: Opt
         // found it - p is in this rect
         const how_far = p.x - r.x;
         var pt_end: usize = undefined;
-        _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
+        _ = options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
         return .{ .byte = bytes_seen + pt_end, .affinity = if (pt_end == txt.len) .before else .after };
     }
 
@@ -995,12 +995,12 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
         var end: usize = undefined;
 
         // get slice of text that fits within width or ends with newline
-        var s = try options.fontGet().textSizeEx(txt, if (self.break_lines) width else null, &end, .before);
+        var s = options.fontGet().textSizeEx(txt, if (self.break_lines) width else null, &end, .before);
 
         // ensure we always get at least 1 codepoint so we make progress
         if (end == 0) {
             end = std.unicode.utf8ByteSequenceLength(txt[0]) catch 1;
-            s = try options.fontGet().textSize(txt[0..end]);
+            s = options.fontGet().textSize(txt[0..end]);
         }
 
         const newline = (txt[end - 1] == '\n');
@@ -1018,7 +1018,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                 const spaceIdx = std.mem.lastIndexOfLinear(u8, txt[0 .. end + 1], " ");
                 if (spaceIdx) |si| {
                     end = si + 1;
-                    s = try options.fontGet().textSize(txt[0..end]);
+                    s = options.fontGet().textSize(txt[0..end]);
                     break :blk; // this part will fit
                 }
 
@@ -1092,7 +1092,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
                         // point is in this text
                         const how_far = p.x - rs.x;
                         var pt_end: usize = undefined;
-                        _ = try options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
+                        _ = options.fontGet().textSizeEx(txt, how_far, &pt_end, .nearest);
                         sel_bytes[i] = self.bytes_seen + pt_end;
                         self.sel_pts[i] = null;
                     } else {
@@ -1126,12 +1126,12 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
         // record screen position of selection for touch editing (use s for
         // height in case we are calling textSize with an empty slice)
         if (self.selection.start >= self.bytes_seen and self.selection.start <= self.bytes_seen + end) {
-            const start_off = try options.fontGet().textSize(txt[0..self.selection.start -| self.bytes_seen]);
+            const start_off = options.fontGet().textSize(txt[0..self.selection.start -| self.bytes_seen]);
             self.sel_start_r_new = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
         if (self.selection.end >= self.bytes_seen and self.selection.end <= self.bytes_seen + end) {
-            const end_off = try options.fontGet().textSize(txt[0..self.selection.end -| self.bytes_seen]);
+            const end_off = options.fontGet().textSize(txt[0..self.selection.end -| self.bytes_seen]);
             self.sel_end_r_new = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
@@ -1139,7 +1139,7 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             std.debug.assert(self.selection.cursor >= self.bytes_seen);
             const cursor_offset = self.selection.cursor - self.bytes_seen;
             const text_to_cursor = txt[0..cursor_offset];
-            const size = try options.fontGet().textSize(text_to_cursor);
+            const size = options.fontGet().textSize(text_to_cursor);
             self.cursor_rect = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
 
             self.selMoveText(text_to_cursor, self.bytes_seen);
