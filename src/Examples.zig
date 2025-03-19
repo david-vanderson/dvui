@@ -2111,13 +2111,13 @@ pub fn submenus() !void {
 }
 
 pub fn focus() !void {
-    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .color_fill = .{ .name = .fill_window } });
-    try tl.addText("Each time this section is expanded, the first text entry will be focused", .{});
-    tl.deinit();
-
-    if (try dvui.expander(@src(), "Focus", .{}, .{ .expand = .horizontal })) {
+    if (try dvui.expander(@src(), "Changing Focus", .{}, .{ .expand = .horizontal })) {
         var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
+
+        var tl = try dvui.textLayout(@src(), .{}, .{ .background = false });
+        try tl.addText("Each time this section is expanded, the first text entry will be focused", .{});
+        tl.deinit();
 
         var te = try dvui.textEntry(@src(), .{}, .{});
 
@@ -2153,6 +2153,38 @@ pub fn focus() !void {
         dvui.dataSet(null, uniqueId, "next_text_entry_id", te2.data().id);
 
         te2.deinit();
+    }
+
+    if (try dvui.expander(@src(), "Detecting Focus", .{}, .{ .expand = .horizontal })) {
+        var b = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10, .y = 2 }, .border = dvui.Rect.all(1) });
+        defer b.deinit();
+
+        const last_focus_id = dvui.lastFocusedIdInFrame();
+
+        var tl = try dvui.textLayout(@src(), .{}, .{ .background = false });
+        try tl.addText("This shows how to detect if any widgets in a dynamic extent have focus.", .{});
+        tl.deinit();
+
+        {
+            var hbox = try dvui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
+
+            for (0..6) |i| {
+                const str = switch (i) {
+                    0 => "0",
+                    1 => "1",
+                    2 => "2",
+                    3 => "3",
+                    4 => "4",
+                    5 => "5",
+                    else => unreachable,
+                };
+                _ = try dvui.button(@src(), str, .{}, .{ .id_extra = i });
+            }
+        }
+
+        const have_focus = (last_focus_id != dvui.lastFocusedIdInFrame());
+        try dvui.label(@src(), "Anything here with focus: {s}", .{if (have_focus) "Yes" else "No"}, .{});
     }
 }
 
