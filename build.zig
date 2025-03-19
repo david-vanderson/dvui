@@ -226,7 +226,9 @@ pub fn build(b: *std.Build) !void {
 
         const compile_step = b.step("web-test", "Compile the Web test");
         compile_step.dependOn(&b.addInstallFileWithDir(output, .prefix, "bin/index.html").step);
-        compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/web.js"), .prefix, "bin/web.js").step);
+        const web_js = b.path("src/backends/web.js");
+        compile_step.dependOn(&b.addInstallFileWithDir(web_js, .prefix, "bin/web.js").step);
+        b.addNamedLazyPath("web.js", web_js);
         compile_step.dependOn(&install_wasm.step);
         compile_step.dependOn(&install_noto.step);
 
