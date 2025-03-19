@@ -904,6 +904,17 @@ pub fn focusedWidgetIdInCurrentSubwindow() ?u32 {
     return sw.focused_widgetId;
 }
 
+/// Last widget id we saw this frame that was the focused widget when it called
+/// WidgetData.register().
+///
+/// If two calls to this function return different values, then some widget
+/// that ran between them had focus.
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn lastFocusedIdInFrame() u32 {
+    return currentWindow().last_focused_id_this_frame;
+}
+
 /// Set cursor the app should use.
 ///
 /// Only valid between dvui.Window.begin() and end().
@@ -2577,6 +2588,8 @@ pub const Window = struct {
     // id of the subwindow that has focus
     focused_subwindowId: u32 = 0,
 
+    last_focused_id_this_frame: u32 = 0,
+
     // rect on screen (in natural pixels) telling the backend where our text input box is:
     // * when non-null, we want an on screen keyboard if needed (phones)
     // * when showing the IME input window, position it near this
@@ -3393,6 +3406,7 @@ pub const Window = struct {
 
         self.cursor_requested = .arrow;
         self.text_input_rect = null;
+        self.last_focused_id_this_frame = 0;
         self.debug_info_name_rect = "";
         self.debug_info_src_id_extra = "";
         if (self.debug_under_mouse) {

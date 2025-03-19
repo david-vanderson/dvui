@@ -70,7 +70,12 @@ pub fn register(self: *WidgetData) !void {
     var cw = dvui.currentWindow();
     const name: []const u8 = self.options.name orelse "???";
 
-    if (cw.debug_under_focus and self.id == dvui.focusedWidgetId()) {
+    const focused_widget_id = dvui.focusedWidgetId();
+    if (self.id == focused_widget_id) {
+        cw.last_focused_id_this_frame = self.id;
+    }
+
+    if (cw.debug_under_focus and self.id == focused_widget_id) {
         cw.debug_widget_id = self.id;
     }
 
