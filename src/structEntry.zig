@@ -532,7 +532,7 @@ pub fn singlePointerFieldWidget(
 
 pub fn ArrayFieldOptions(comptime T: type) type {
     return struct {
-        child: FieldOptions(@typeInfo(T).Array.child) = .{},
+        child: FieldOptions(@typeInfo(T).array.child) = .{},
         label_override: ?[]const u8 = null,
         disabled: bool = false,
     };
@@ -545,15 +545,16 @@ pub fn arrayFieldWidget(
     opt: ArrayFieldOptions(T),
     comptime alloc: bool,
     allocator: ?std.mem.Allocator,
+    alignment: *dvui.Alignment,
 ) !void {
-    const SliceType = []@typeInfo(T).Array.child;
+    const SliceType = []@typeInfo(T).array.child;
     var slice_result: SliceType = &(result.*);
     const slice_opts = SliceFieldOptions(SliceType){
         .child = opt.child,
         .label_override = opt.label_override,
         .disabled = opt.disabled,
     };
-    try sliceFieldWidget(name, SliceType, &slice_result, slice_opts, alloc, allocator);
+    try sliceFieldWidget(name, SliceType, &slice_result, slice_opts, alloc, allocator, alignment);
 }
 
 //=======Single Item pointer and options=======
@@ -836,7 +837,7 @@ pub fn fieldWidget(
         .optional => try optionalFieldWidget(name, T, result, options, alloc, allocator, alignment),
         .@"union" => try unionFieldWidget(name, T, result, options, alloc, allocator, alignment),
         .@"struct" => try structFieldWidget(name, T, result, options, alloc, allocator),
-        .array => try arrayFieldWidget(name, T, result, options, alloc, allocator),
+        .array => try arrayFieldWidget(name, T, result, options, alloc, allocator, alignment),
         else => @compileError("Invalid type: " ++ @typeName(T)),
     }
 }
