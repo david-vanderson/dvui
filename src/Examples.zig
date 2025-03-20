@@ -652,6 +652,7 @@ pub fn structUI() !void {
         a_struct: TopChild = .{ .a_dir = .vertical },
         a_str: []const u8 = &[_]u8{0} ** 20,
         a_slice: []TopChild = undefined,
+        an_array: [4]u8 = .{ 1, 2, 3, 4 },
 
         var instance: @This() = .{ .a_slice = &mut_array, .a_ptr = &ptr };
     };
