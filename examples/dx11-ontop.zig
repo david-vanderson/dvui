@@ -5,7 +5,7 @@ comptime {
     std.debug.assert(@hasDecl(Backend, "Dx11Backend"));
 }
 
-const zwin = @import("zigwin32");
+const zwin = @import("win32");
 const ui = zwin.ui.windows_and_messaging;
 
 const dxgi = zwin.graphics.dxgi;
