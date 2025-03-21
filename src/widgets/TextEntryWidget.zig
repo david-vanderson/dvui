@@ -660,7 +660,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             // delete from sel.cursor to oldcur
                             std.mem.copyForwards(u8, self.text[sel.cursor..], self.text[oldcur..self.len]);
                             self.len -= (oldcur - sel.cursor);
-                            if (self.len > 0) {
+                            if (self.len >= 0) {
                                 self.text[self.len] = 0;
                             }
                             sel.end = sel.cursor;
@@ -719,14 +719,14 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             // delete from oldcur to sel.cursor
                             std.mem.copyForwards(u8, self.text[oldcur..], self.text[sel.cursor..self.len]);
                             self.len -= (sel.cursor - oldcur);
-                            if (self.len > 0) {
+                            if (self.len >= 0) {
                                 self.text[self.len] = 0;
                             }
+                            self.text_changed = (sel.cursor != oldcur);
                             sel.cursor = oldcur;
                             sel.end = sel.cursor;
                             sel.start = sel.cursor;
                             self.textLayout.scroll_to_cursor = true;
-                            self.text_changed = (sel.cursor != oldcur);
                         } else if (sel.cursor < self.len) {
                             // delete the character just after the cursor
                             //
