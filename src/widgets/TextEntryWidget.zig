@@ -722,11 +722,11 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             if (self.len > 0) {
                                 self.text[self.len] = 0;
                             }
+                            self.text_changed = (sel.cursor != oldcur);
                             sel.cursor = oldcur;
                             sel.end = sel.cursor;
                             sel.start = sel.cursor;
                             self.textLayout.scroll_to_cursor = true;
-                            self.text_changed = (sel.cursor != oldcur);
                         } else if (sel.cursor < self.len) {
                             // delete the character just after the cursor
                             //
