@@ -34,9 +34,9 @@
             .lazy = true,
         },
         // required for the directx11 backend
-        .zigwin32 = .{
-            .url = "git+https://github.com/rohlem/zigwin32-update-zig#5d6055e7c8cea4c508f33c0d8641fdf1fe30f9ea",
-            .hash = "zigwin32-25.0.28-preview-AAAAAHnw-wNzthEDPTZg_KePtYjS_Ze72tlr6MaIxaAP",
+        .win32 = .{
+            .url = "git+https://github.com/marlersoft/zigwin32#be58d3816810c1e4c20781cc7223a60906467d3c",
+            .hash = "zigwin32-25.0.28-preview-AAAAAHsJ-wPA4nREAzT_OOkF6gLrornNuHqREfHDADoS",
             .lazy = true,
         },
     },

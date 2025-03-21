@@ -159,8 +159,8 @@ pub fn build(b: *std.Build) !void {
                 .link_libc = true,
             });
 
-            if (b.lazyDependency("zigwin32", .{})) |zigwin32| {
-                dx11_mod.addImport("zigwin32", zigwin32.module("zigwin32"));
+            if (b.lazyDependency("win32", .{})) |zigwin32| {
+                dx11_mod.addImport("win32", zigwin32.module("win32"));
             }
 
             const dvui_dx11 = addDvuiModule(b, target, optimize, "dvui_dx11", true);
@@ -337,8 +337,8 @@ fn addExample(
         exe.win32_manifest = b.path("./src/main.manifest");
         exe.subsystem = .Windows;
         // TODO: This may just be only used for directx
-        if (b.lazyDependency("zigwin32", .{})) |zigwin32| {
-            exe.root_module.addImport("zigwin32", zigwin32.module("zigwin32"));
+        if (b.lazyDependency("win32", .{})) |zigwin32| {
+            exe.root_module.addImport("win32", zigwin32.module("win32"));
         }
     }
 
