@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
-const win = @import("zigwin32");
+const win = @import("win32");
 
 const w = std.os.windows;
 const UINT = w.UINT;
