@@ -2634,6 +2634,7 @@ pub const Window = struct {
     min_sizes: std.AutoHashMap(u32, SavedSize),
     data_mutex: std.Thread.Mutex,
     datas: std.AutoHashMap(u32, SavedData),
+    datas_trash: std.ArrayList(SavedData) = undefined,
     animations: std.AutoHashMap(u32, Animation),
     tab_index_prev: std.ArrayList(TabIndex),
     tab_index: std.ArrayList(TabIndex),
@@ -3416,6 +3417,7 @@ pub const Window = struct {
             self.debug_under_mouse_info = "";
         }
 
+        self.datas_trash = std.ArrayList(SavedData).init(larena);
         self.texture_trash = std.ArrayList(Texture).init(larena);
 
         {
@@ -3749,7 +3751,10 @@ pub const Window = struct {
                 return;
             } else {
                 //std.debug.print("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, key });
-                sd.free(self.gpa);
+                self.datas_trash.append(sd.*) catch |err| {
+                    log.err("Previous data could not be added to the trash, got {!} for id {x} key {s}\n", .{ err, id, key });
+                    return;
+                };
             }
         }
 
@@ -4053,6 +4058,10 @@ pub const Window = struct {
 
             try self.renderCommands(sw.render_cmds_after);
             sw.render_cmds_after.clearAndFree();
+        }
+
+        for (self.datas_trash.items) |sd| {
+            sd.free(self.gpa);
         }
 
         for (self.texture_trash.items) |tex| {
