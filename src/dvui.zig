@@ -3733,31 +3733,6 @@ pub const Window = struct {
         self.data_mutex.lock();
         defer self.data_mutex.unlock();
 
-        if (self.datas.getPtr(hash)) |sd| {
-            if (sd.data.len == (bytes.len * num_copies)) {
-                sd.used = true;
-                if (builtin.mode == .Debug) {
-                    sd.type_str = dt_type_str;
-                    sd.copy_slice = copy_slice;
-                }
-
-                // Someone might do dataSetSlice on the slice they got from
-                // dataGetSlice, and @memcpy would complain about aliasing
-                if (sd.data.ptr != bytes.ptr) {
-                    for (0..num_copies) |i| {
-                        @memcpy(sd.data[i * bytes.len ..][0..bytes.len], bytes);
-                    }
-                }
-                return;
-            } else {
-                //std.debug.print("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, key });
-                self.datas_trash.append(sd.*) catch |err| {
-                    log.err("Previous data could not be added to the trash, got {!} for id {x} key {s}\n", .{ err, id, key });
-                    return;
-                };
-            }
-        }
-
         var sd = SavedData{ .alignment = alignment, .data = self.gpa.allocWithOptions(u8, bytes.len * num_copies, alignment, null) catch |err| switch (err) {
             error.OutOfMemory => {
                 log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
@@ -3774,13 +3749,21 @@ pub const Window = struct {
             sd.copy_slice = copy_slice;
         }
 
-        self.datas.put(hash, sd) catch |err| switch (err) {
+        const previous_kv = self.datas.fetchPut(hash, sd) catch |err| switch (err) {
             error.OutOfMemory => {
                 log.err("dataSet got {!} for id {x} key {s}\n", .{ err, id, key });
                 sd.free(self.gpa);
                 return;
             },
         };
+
+        if (previous_kv) |kv| {
+            //std.debug.print("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, kv.key });
+            self.datas_trash.append(kv.value) catch |err| {
+                log.err("Previous data could not be added to the trash, got {!} for id {x} key {s}\n", .{ err, id, key });
+                return;
+            };
+        }
     }
 
     // returns the backing byte slice if we have one
