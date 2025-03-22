@@ -401,9 +401,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
 
     // update our len and maintain 0 termination if possible
     self.len += new_len;
-    if (self.len < self.text.len) {
-        self.text[self.len] = 0;
-    }
+    self.addNullTerminator();
 
     // insert
     std.mem.copyForwards(u8, self.text[sel.cursor..], new[0..new_len]);
@@ -484,6 +482,13 @@ pub fn filterOut(self: *TextEntryWidget, needle: []const u8) void {
 
     if (j < self.text.len)
         self.text[j] = 0;
+}
+
+/// Sets the null terminator at index self.len if there is space in the backing slice
+pub fn addNullTerminator(self: *TextEntryWidget) void {
+    if (self.len < self.text.len) {
+        self.text[self.len] = 0;
+    }
 }
 
 pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
@@ -636,7 +641,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             // just delete selection
                             std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
                             self.len -= (sel.end - sel.start);
-                            self.text[self.len] = 0;
+                            self.addNullTerminator();
                             sel.end = sel.start;
                             sel.cursor = sel.start;
                             self.textLayout.scroll_to_cursor = true;
@@ -660,9 +665,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             // delete from sel.cursor to oldcur
                             std.mem.copyForwards(u8, self.text[sel.cursor..], self.text[oldcur..self.len]);
                             self.len -= (oldcur - sel.cursor);
-                            if (self.len >= 0) {
-                                self.text[self.len] = 0;
-                            }
+                            self.addNullTerminator();
                             sel.end = sel.cursor;
                             sel.start = sel.cursor;
                             self.textLayout.scroll_to_cursor = true;
@@ -678,7 +681,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             while (sel.cursor - i > 0 and self.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
                             std.mem.copyForwards(u8, self.text[sel.cursor - i ..], self.text[sel.cursor..self.len]);
                             self.len -= i;
-                            self.text[self.len] = 0;
+                            self.addNullTerminator();
                             sel.cursor -= i;
                             sel.start = sel.cursor;
                             sel.end = sel.cursor;
@@ -695,7 +698,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             // just delete selection
                             std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
                             self.len -= (sel.end - sel.start);
-                            self.text[self.len] = 0;
+                            self.addNullTerminator();
                             sel.end = sel.start;
                             sel.cursor = sel.start;
                             self.textLayout.scroll_to_cursor = true;
@@ -719,9 +722,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
                             // delete from oldcur to sel.cursor
                             std.mem.copyForwards(u8, self.text[oldcur..], self.text[sel.cursor..self.len]);
                             self.len -= (sel.cursor - oldcur);
-                            if (self.len >= 0) {
-                                self.text[self.len] = 0;
-                            }
+                            self.addNullTerminator();
                             self.text_changed = (sel.cursor != oldcur);
                             sel.cursor = oldcur;
                             sel.end = sel.cursor;
@@ -736,7 +737,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
 
                             std.mem.copyForwards(u8, self.text[sel.cursor..], self.text[sel.cursor + i .. self.len]);
                             self.len -= i;
-                            self.text[self.len] = 0;
+                            self.addNullTerminator();
                             self.textLayout.scroll_to_cursor = true;
                             self.text_changed = true;
                         }
@@ -825,7 +826,7 @@ pub fn cut(self: *TextEntryWidget) void {
         // delete selection
         std.mem.copyForwards(u8, self.text[sel.start..], self.text[sel.end..self.len]);
         self.len -= (sel.end - sel.start);
-        self.text[self.len] = 0;
+        self.addNullTerminator();
         sel.end = sel.start;
         sel.cursor = sel.start;
         self.textLayout.scroll_to_cursor = true;
