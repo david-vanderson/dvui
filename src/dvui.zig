@@ -5041,57 +5041,13 @@ pub const SuggestionsWidget = struct {
         // move the mouse, the entries are highlighted but not focused
         drop.menu.submenus_activated = true;
 
-        // only want a mouse-up to choose something if the mouse has moved in the dropup
-        var eat_mouse_up = dataGet(null, drop.wd.id, "_eat_mouse_up", bool) orelse true;
-        var drag_scroll = dataGet(null, drop.wd.id, "_drag_scroll", bool) orelse false;
-
-        const drop_rs = drop.data().rectScale();
-        const scroll_rs = drop.scroll.data().contentRectScale();
         const evts = events();
         for (evts) |*e| {
-            if (drag_scroll and e.evt == .mouse and !e.evt.mouse.button.touch() and (e.evt.mouse.action == .motion or e.evt.mouse.action == .position)) {
-                if (e.evt.mouse.p.x >= scroll_rs.r.x and e.evt.mouse.p.x <= scroll_rs.r.x + scroll_rs.r.w and (e.evt.mouse.p.y <= scroll_rs.r.y or e.evt.mouse.p.y >= scroll_rs.r.y + scroll_rs.r.h)) {
-                    if (e.evt.mouse.action == .motion) {
-                        var scrolldrag = Event{ .evt = .{ .scroll_drag = .{
-                            .mouse_pt = e.evt.mouse.p,
-                            .screen_rect = drop.menu.data().rectScale().r,
-                            .capture_id = drop.wd.id,
-                        } } };
-                        drop.scroll.scroll.processEvent(&scrolldrag, true);
-                    } else if (e.evt.mouse.action == .position) {
-                        dvui.currentWindow().inject_motion_event = true;
-                    }
-                }
-            }
-
             if (e.evt == .key and self.text_entry.matchEvent(e)) {
                 if (e.evt.key.action == .down and e.evt.key.matchBind("char_down")) {
                     focusWidget(drop.menu.wd.id, null, null);
                     // Focus next tab item to select the first item in the menu immediately
                     tabIndexNext(e.num);
-                }
-            }
-
-            if (!eventMatch(e, .{ .id = drop.data().id, .r = drop_rs.r }))
-                continue;
-
-            if (e.evt == .mouse) {
-                if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
-                    if (eat_mouse_up) {
-                        e.handled = true;
-                        eat_mouse_up = false;
-                        dataSet(null, drop.wd.id, "_eat_mouse_up", eat_mouse_up);
-                    }
-                } else if (e.evt.mouse.action == .motion or (e.evt.mouse.action == .press and e.evt.mouse.button.pointer())) {
-                    if (eat_mouse_up) {
-                        eat_mouse_up = false;
-                        dataSet(null, drop.wd.id, "_eat_mouse_up", eat_mouse_up);
-                    }
-
-                    if (!drag_scroll) {
-                        drag_scroll = true;
-                        dataSet(null, drop.wd.id, "_drag_scroll", drag_scroll);
-                    }
                 }
             }
         }
