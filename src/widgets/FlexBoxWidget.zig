@@ -10,7 +10,10 @@ const WidgetData = dvui.WidgetData;
 
 const FlexBoxWidget = @This();
 
-pub const InitOptions = struct {};
+pub const InitOptions = struct {
+    /// Imitates `justify-content` in CSS Flexbox
+    justify_content: enum { start, center } = .center,
+};
 
 wd: WidgetData = undefined,
 init_options: InitOptions = undefined,
@@ -80,7 +83,10 @@ pub fn rectFor(self: *FlexBoxWidget, id: u32, min_size: Size, e: Options.Expand,
     }
 
     var ret = Rect.fromPoint(self.insert_pt).toSize(min_size);
-    ret.x += (self.wd.contentRect().w - self.max_row_width_prev) / 2;
+    switch (self.init_options.justify_content) {
+        .start => {},
+        .center => ret.x += (self.wd.contentRect().w - self.max_row_width_prev) / 2,
+    }
 
     self.insert_pt.x += min_size.w;
 
