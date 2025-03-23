@@ -4980,6 +4980,7 @@ pub fn textEntrySuggestions(src: std.builtin.SourceLocation, suggested_values: [
     if (suggested_values.len > 0 and try suggestions_widget.dropped()) {
         for (suggested_values) |value| {
             if (try suggestions_widget.addSuggestionLabel(value)) {
+                suggestions_widget.close();
                 suggestions_widget.chooseText(value);
             }
         }
@@ -4987,6 +4988,11 @@ pub fn textEntrySuggestions(src: std.builtin.SourceLocation, suggested_values: [
     suggestions_widget.deinit();
 
     text_entry.processEvents();
+
+    if (text_entry.text_changed) {
+        suggestions_widget.open();
+    }
+
     try text_entry.draw();
     return text_entry;
 }

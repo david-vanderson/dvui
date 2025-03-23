@@ -22,10 +22,12 @@ child_rect_union: ?Rect = null,
 
 options: Options = undefined,
 text_entry: *dvui.TextEntryWidget = undefined,
+closed: bool = false,
 drop: ?dvui.FloatingMenuWidget = null,
 drop_first_frame: bool = false,
 drop_mi: ?dvui.MenuItemWidget = null,
 drop_mi_index: usize = 0,
+drop_first_mi_id: ?u32 = null,
 
 pub fn init(src: std.builtin.SourceLocation, text_entry: *dvui.TextEntryWidget, opts: Options) SuggestionsWidget {
     var self = SuggestionsWidget{};
@@ -39,6 +41,7 @@ pub fn init(src: std.builtin.SourceLocation, text_entry: *dvui.TextEntryWidget, 
     self.wd = WidgetData.init(src, .{}, parent_defaults.override(opts));
     self.text_entry = text_entry;
     self.options = defaults.override(opts);
+    self.closed = dvui.dataGet(null, self.wd.id, "_closed", bool) orelse false;
     return self;
 }
 
@@ -48,6 +51,9 @@ pub fn install(self: *SuggestionsWidget) !void {
 }
 
 pub fn dropped(self: *SuggestionsWidget) !bool {
+    if (self.closed) {
+        return false;
+    }
     if (self.drop != null) {
         // protect against calling this multiple times
         return true;
@@ -123,13 +129,23 @@ pub fn addSuggestion(self: *SuggestionsWidget) !*dvui.MenuItemWidget {
     self.drop_mi.?.processEvents();
     try self.drop_mi.?.drawBackground(.{});
 
+    if (self.drop_mi_index == 0) {
+        self.drop_first_mi_id = self.drop_mi.?.wd.id;
+    }
     self.drop_mi_index += 1;
 
     return &self.drop_mi.?;
 }
 
-// TODO: Add close function to call once a suggestion has been choosen.
-//       Should remain closed until text_entry changes again
+pub fn close(self: *SuggestionsWidget) void {
+    self.closed = true;
+    dvui.dataSet(null, self.wd.id, "_closed", self.closed);
+}
+
+pub fn open(self: *SuggestionsWidget) void {
+    self.closed = false;
+    dvui.dataSet(null, self.wd.id, "_closed", self.closed);
+}
 
 pub fn chooseText(self: *SuggestionsWidget, text: []const u8) void {
     if (text.len == 0) {
@@ -173,31 +189,48 @@ pub fn minSizeForChild(self: *SuggestionsWidget, s: Size) void {
 }
 
 pub fn processEvent(self: *SuggestionsWidget, e: *Event, bubbling: bool) void {
-    _ = bubbling;
     if (e.evt == .close_popup) {
         e.handled = true;
+        self.close();
         dvui.focusWidget(self.text_entry.wd.id, null, e.num);
     }
-    if (self.text_entry.matchEvent(e)) {
-        if (e.evt == .key and e.evt.key.action == .down and e.evt.key.matchBind("char_down")) {
+    if (e.evt == .key and self.text_entry.matchEvent(e)) {
+        if ((e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.matchBind("char_down")) {
             e.handled = true;
-            if (self.drop) |*drop| {
-                dvui.focusWidget(drop.menu.wd.id, null, null);
-                // Focus next tab item to select the first item in the menu immediately
-                dvui.tabIndexNext(e.num);
+            self.open();
+            if (self.drop_first_mi_id != null) {
+                dvui.focusWidget(self.drop_first_mi_id, null, null);
+            } else {
+                // The window may not be shown currently, needs one more frame
+                dvui.dataSet(null, self.wd.id, "_start_focused", true);
+                dvui.refresh(null, @src(), self.wd.id);
             }
         }
+        if (e.evt.key.action == .down and e.evt.key.code == .escape) {
+            e.handled = true;
+            self.close();
+            dvui.refresh(null, @src(), self.wd.id);
+        }
     }
-    if (e.bubbleable()) {
+    if (bubbling and e.bubbleable()) {
         self.wd.parent.processEvent(e, true);
     }
 }
 
 pub fn deinit(self: *SuggestionsWidget) void {
+    const start_focused = dvui.dataGet(null, self.wd.id, "_start_focused", bool) orelse false;
+    if (start_focused and self.drop != null) {
+        dvui.dataRemove(null, self.wd.id, "_start_focused");
+        if (self.drop_first_mi_id) |first_mi_id| {
+            // If there is a menu item, focus it
+            dvui.focusWidget(first_mi_id, null, null);
+        }
+    }
     const evts = dvui.events();
     for (evts) |*e| {
-        self.processEvent(e, true);
+        self.processEvent(e, false);
     }
+
     if (self.drop != null) {
         self.drop.?.deinit();
         self.drop = null;
