@@ -55,7 +55,7 @@ pub fn dropped(self: *SuggestionsWidget) !bool {
 
     const entry_rect = self.text_entry.data().contentRectScale();
     const start = entry_rect.rectToRectScale(entry_rect.r.justSize()).r.offset(.{ .y = entry_rect.r.h + self.options.marginGet().y });
-    self.drop = .init(@src(), start, self.options.override(.{
+    self.drop = dvui.FloatingMenuWidget.init(@src(), start, self.options.override(.{
         .min_size_content = .{
             .w = entry_rect.r
                 .inset(self.options.paddingGet())
@@ -91,17 +91,6 @@ pub fn dropped(self: *SuggestionsWidget) !bool {
     // without this, if you trigger the dropdown with the keyboard and then
     // move the mouse, the entries are highlighted but not focused
     drop.menu.submenus_activated = true;
-
-    const evts = dvui.events();
-    for (evts) |*e| {
-        if (e.evt == .key and self.text_entry.matchEvent(e)) {
-            if (e.evt.key.action == .down and e.evt.key.matchBind("char_down")) {
-                dvui.focusWidget(drop.menu.wd.id, null, null);
-                // Focus next tab item to select the first item in the menu immediately
-                dvui.tabIndexNext(e.num);
-            }
-        }
-    }
 
     if (self.drop != null) {
         return true;
@@ -185,12 +174,30 @@ pub fn minSizeForChild(self: *SuggestionsWidget, s: Size) void {
 
 pub fn processEvent(self: *SuggestionsWidget, e: *Event, bubbling: bool) void {
     _ = bubbling;
+    if (e.evt == .close_popup) {
+        e.handled = true;
+        dvui.focusWidget(self.text_entry.wd.id, null, e.num);
+    }
+    if (self.text_entry.matchEvent(e)) {
+        if (e.evt == .key and e.evt.key.action == .down and e.evt.key.matchBind("char_down")) {
+            e.handled = true;
+            if (self.drop) |*drop| {
+                dvui.focusWidget(drop.menu.wd.id, null, null);
+                // Focus next tab item to select the first item in the menu immediately
+                dvui.tabIndexNext(e.num);
+            }
+        }
+    }
     if (e.bubbleable()) {
         self.wd.parent.processEvent(e, true);
     }
 }
 
 pub fn deinit(self: *SuggestionsWidget) void {
+    const evts = dvui.events();
+    for (evts) |*e| {
+        self.processEvent(e, true);
+    }
     if (self.drop != null) {
         self.drop.?.deinit();
         self.drop = null;
