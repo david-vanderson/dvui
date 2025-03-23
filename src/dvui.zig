@@ -44,6 +44,7 @@ pub const ScaleWidget = @import("widgets/ScaleWidget.zig");
 pub const ScrollAreaWidget = @import("widgets/ScrollAreaWidget.zig");
 pub const ScrollBarWidget = @import("widgets/ScrollBarWidget.zig");
 pub const ScrollContainerWidget = @import("widgets/ScrollContainerWidget.zig");
+pub const SuggestionsWidget = @import("widgets/SuggestionsWidget.zig");
 pub const TextEntryWidget = @import("widgets/TextEntryWidget.zig");
 pub const TextLayoutWidget = @import("widgets/TextLayoutWidget.zig");
 pub const VirtualParentWidget = @import("widgets/VirtualParentWidget.zig");
@@ -4969,157 +4970,13 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
     return ret;
 }
 
-pub const SuggestionsWidget = struct {
-    pub var defaults: Options = .{
-        .corner_radius = Rect.all(5),
-        .padding = Rect.all(6),
-        .name = "Suggestions",
-    };
-
-    id: u32 = undefined,
-    options: Options = undefined,
-    text_entry: *TextEntryWidget = undefined,
-    drop: ?FloatingMenuWidget = null,
-    drop_first_frame: bool = false,
-    drop_mi: ?MenuItemWidget = null,
-    drop_mi_index: usize = 0,
-
-    pub fn init(src: std.builtin.SourceLocation, text_entry: *TextEntryWidget, opts: Options) SuggestionsWidget {
-        var self = SuggestionsWidget{};
-        if (text_entry.init_opts.break_lines or text_entry.init_opts.multiline) {
-            log.err("SuggestionsWidget does not support multiline TextEntryWidgets, initialized at [{s}:{d}:{d}]", .{ src.file, src.line, src.column });
-        }
-
-        self.id = dvui.hashSrc(0, src, opts.idExtra());
-        self.text_entry = text_entry;
-        self.options = defaults.override(opts);
-        return self;
-    }
-
-    pub fn dropped(self: *SuggestionsWidget) !bool {
-        if (self.drop != null) {
-            // protect against calling this multiple times
-            return true;
-        }
-
-        const entry_rect = self.text_entry.data().contentRectScale();
-        const start = entry_rect.rectToRectScale(entry_rect.r.justSize()).r.offset(.{ .y = entry_rect.r.h + self.options.marginGet().y });
-        self.drop = .init(@src(), start, self.options.override(.{
-            .min_size_content = .{
-                .w = entry_rect.r
-                    .inset(self.options.paddingGet())
-                    .inset(self.options.borderGet())
-                    .inset(self.options.marginGet()).w,
-            },
-        }));
-        var drop = &self.drop.?;
-        self.drop_first_frame = firstFrame(drop.wd.id);
-
-        const cw = currentWindow();
-        if (cw.focused_subwindowId != drop.wd.id and focusedWidgetId() != self.text_entry.wd.id) {
-            // Hide the suggestions when the textfield and suggestions window doesn't have focus
-            self.drop = null;
-            return false;
-        }
-
-        try drop.install();
-        if (self.drop_first_frame) {
-            // don't take focus away from text_entry when showing the suggestions
-            focusWidget(self.text_entry.wd.id, null, null);
-        } else {
-            const sw = cw.subwindowCurrent();
-            if (cw.focused_subwindowId != sw.id) {
-                // reset focus of suggestions to always start at the first item
-                sw.focused_widgetId = null;
-            } else if (sw.focused_widgetId == null or sw.focused_widgetId == drop.menu.wd.id) {
-                // Focus text_entry if we have no suggestion focused
-                focusWidget(self.text_entry.wd.id, null, null);
-            }
-        }
-
-        // without this, if you trigger the dropdown with the keyboard and then
-        // move the mouse, the entries are highlighted but not focused
-        drop.menu.submenus_activated = true;
-
-        const evts = events();
-        for (evts) |*e| {
-            if (e.evt == .key and self.text_entry.matchEvent(e)) {
-                if (e.evt.key.action == .down and e.evt.key.matchBind("char_down")) {
-                    focusWidget(drop.menu.wd.id, null, null);
-                    // Focus next tab item to select the first item in the menu immediately
-                    tabIndexNext(e.num);
-                }
-            }
-        }
-
-        if (self.drop != null) {
-            return true;
-        }
-
-        return false;
-    }
-
-    pub fn addSuggestionLabel(self: *SuggestionsWidget, label_text: []const u8) !bool {
-        var mi = try self.addSuggestion();
-        defer mi.deinit();
-
-        var opts = self.options.strip();
-        if (mi.show_active) {
-            opts = opts.override(dvui.themeGet().style_accent);
-        }
-
-        try labelNoFmt(@src(), label_text, opts);
-
-        if (mi.activeRect()) |_| {
-            return true;
-        }
-
-        return false;
-    }
-
-    pub fn addSuggestion(self: *SuggestionsWidget) !*MenuItemWidget {
-        self.drop_mi = MenuItemWidget.init(@src(), .{}, .{ .id_extra = self.drop_mi_index, .expand = .horizontal });
-        try self.drop_mi.?.install();
-        self.drop_mi.?.processEvents();
-        try self.drop_mi.?.drawBackground(.{});
-
-        self.drop_mi_index += 1;
-
-        return &self.drop_mi.?;
-    }
-
-    // TODO: Add close function to call once a suggestion has been choosen.
-    //       Should remain closed until text_entry changes again
-
-    pub fn chooseText(self: *SuggestionsWidget, text: []const u8) void {
-        if (text.len == 0) {
-            self.text_entry.len = 0;
-            self.text_entry.addNullTerminator();
-            return;
-        }
-        // Set the TextEntryWidgets text data assuming an internal buffer
-        dataSetSlice(null, self.text_entry.wd.id, "_buffer", text);
-        self.text_entry.text = dataGetSlice(null, self.text_entry.wd.id, "_buffer", []u8).?;
-        self.text_entry.len = text.len;
-        const sel = self.text_entry.textLayout.selectionGet(text.len);
-        sel.cursor = text.len;
-        focusWidget(self.text_entry.wd.id, null, null);
-    }
-
-    pub fn deinit(self: *SuggestionsWidget) void {
-        if (self.drop != null) {
-            self.drop.?.deinit();
-            self.drop = null;
-        }
-    }
-};
-
 pub fn textEntrySuggestions(src: std.builtin.SourceLocation, suggested_values: []const []const u8, opts: Options) !*TextEntryWidget {
     var text_entry = try currentWindow().arena().create(TextEntryWidget);
     text_entry.* = dvui.TextEntryWidget.init(src, .{}, opts);
     try text_entry.install();
 
     var suggestions_widget = dvui.SuggestionsWidget.init(src, text_entry, .{});
+    try suggestions_widget.install();
     if (suggested_values.len > 0 and try suggestions_widget.dropped()) {
         for (suggested_values) |value| {
             if (try suggestions_widget.addSuggestionLabel(value)) {
