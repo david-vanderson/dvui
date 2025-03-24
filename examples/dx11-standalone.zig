@@ -21,12 +21,20 @@ pub export fn main(
     _: ?[*:0]const u16,
     _: win32.SHOW_WINDOW_CMD,
 ) void {
+    return main2() catch |e| {
+        if (@errorReturnTrace()) |trace| {
+            std.debug.dumpStackTrace(trace.*);
+        }
+        std.debug.panic("{s}", .{@errorName(e)});
+    };
+}
+fn main2() !void {
     defer _ = gpa_instance.deinit();
 
     var window_state: Backend.WindowState = undefined;
 
     // init dx11 backend (creates and owns OS window)
-    var backend = Backend.initWindow(&window_state, .{
+    const backend = try Backend.initWindow(&window_state, .{
         .dvui_gpa = gpa,
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
@@ -34,10 +42,27 @@ pub export fn main(
         .vsync = vsync,
         .title = "DVUI DX11 Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
-    }) catch return;
+    });
     defer backend.deinit();
 
     const win = backend.getWindow();
+
+    // set this to true to test a second window.  The window gets created/shown
+    // however DVUI currently can't render to it and the cleanup also needs some work.
+    const test_second_window = false;
+    const backend2 = if (test_second_window) try Backend.initWindow(&window_state, .{
+        // must set to false because the first call to initWindow will have
+        // registered the same class
+        .register_window_class = false,
+        .dvui_gpa = gpa,
+        .allocator = gpa,
+        .size = .{ .w = 800.0, .h = 600.0 },
+        .min_size = .{ .w = 250.0, .h = 350.0 },
+        .vsync = vsync,
+        .title = "DVUI DX11 Standalone Example",
+        .icon = window_icon_png, // can also call setIconFromFileContent()
+    }) else void;
+    defer if (test_second_window) backend2.deinit();
 
     main_loop: while (true) {
         // This handles the main windows events
@@ -49,14 +74,20 @@ pub export fn main(
         const nstime = win.beginWait(backend.hasEvent());
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        win.begin(nstime) catch {};
+        try win.begin(nstime);
 
         // both dvui and dx11 drawing
-        gui_frame() catch {};
+        try gui_frame();
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
-        _ = win.end(.{}) catch continue;
+        _ = try win.end(.{});
+
+        if (test_second_window) {
+            try backend2.getWindow().begin(nstime);
+            try gui_frame();
+            _ = try backend2.getWindow().end(.{});
+        }
 
         // cursor management
         backend.setCursor(win.cursorRequested());
@@ -64,7 +95,7 @@ pub export fn main(
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
         if (show_dialog_outside_frame) {
             show_dialog_outside_frame = false;
-            dvui.dialog(@src(), .{ .window = win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." }) catch {};
+            try dvui.dialog(@src(), .{ .window = win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
         }
     }
 }

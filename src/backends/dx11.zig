@@ -124,8 +124,12 @@ pub const InitOptions = struct {
     /// Set the maximum size of the window
     max_size: ?dvui.Size = null,
     vsync: bool,
+    /// Set to false if the window class has already been registered, either directly
+    /// via RegisterClass or indirectly via a previous call to initWindow.
+    register_window_class: bool = true,
 
-    window_class: [*:0]const u16 = win32.L("DvuiWindow"),
+    window_class: [*:0]const u16 = default_window_class,
+
     /// The application title to display
     title: [:0]const u8,
     /// content of a PNG image (or any other format stb_image can load)
@@ -195,27 +199,65 @@ pub fn getWindow(context: Context) *dvui.Window {
     return &stateFromHwnd(hwndFromContext(context)).dvui_window;
 }
 
+pub const default_window_class = win32.L("DvuiWindow");
+
+pub const RegisterClassOptions = struct {
+    /// styles in addition to DBLCLICKS
+    style: win32.WNDCLASS_STYLES = .{},
+    // NOTE: we could allow the user to provide their own wndproc which we could
+    //       call before or after ours
+    //wndproc: ...,
+    class_extra: c_int = 0,
+    // NOTE: the dx11 backend uses the first @sizeOf(*anyopaque) bytes, any length
+    //       added here will be offset by that many bytes
+    window_extra_after_sizeof_ptr: c_int = 0,
+    instance: union(enum) { this_module, custom: ?win32.HINSTANCE } = .this_module,
+    cursor: union(enum) { arrow, custom: ?win32.HICON } = .arrow,
+    icon: ?win32.HICON = null,
+    icon_small: ?win32.HICON = null,
+    bg_brush: ?win32.HBRUSH = null,
+    menu_name: ?[*:0]const u16 = null,
+};
+
+/// A wrapper for win32.RegisterClass that registers a window class compatible
+/// with initWindow. Returns error.Win32 on failure, call win32.GetLastError()
+/// for the error code.
+///
+/// RegisterClass can only be called once for a given name (unless it's been unregistered
+/// via UnregisterClass). Typically there's no reason to unregister a window class.
+pub fn RegisterClass(name: [*:0]const u16, opt: RegisterClassOptions) error{Win32}!void {
+    const wc: win32.WNDCLASSEXW = .{
+        .cbSize = @sizeOf(win32.WNDCLASSEXW),
+        .style = @bitCast(@as(u32, @bitCast(win32.WNDCLASS_STYLES{ .DBLCLKS = 1 })) | @as(u32, @bitCast(opt.style))),
+        .lpfnWndProc = wndProc,
+        .cbClsExtra = opt.class_extra,
+        .cbWndExtra = @sizeOf(usize) + opt.window_extra_after_sizeof_ptr,
+        .hInstance = switch (opt.instance) {
+            .this_module => win32.GetModuleHandleW(null),
+            .custom => |i| i,
+        },
+        .hIcon = opt.icon,
+        .hIconSm = opt.icon_small,
+        .hCursor = switch (opt.cursor) {
+            .arrow => win32.LoadCursorW(null, win32.IDC_ARROW),
+            .custom => |c| c,
+        },
+        .hbrBackground = opt.bg_brush,
+        .lpszMenuName = opt.menu_name,
+        .lpszClassName = name,
+    };
+    if (0 == win32.RegisterClassExW(&wc)) return error.Win32;
+}
+
 /// Creates a new DirectX window for you, as well as initializes all the
 /// DirectX options for you
 /// The caller just needs to clean up everything by calling `deinit` on the Dx11Backend
 pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
-    {
-        const wnd_class: win32.WNDCLASSEXW = .{
-            .cbSize = @sizeOf(win32.WNDCLASSEXW),
-            .style = .{ .DBLCLKS = 1, .OWNDC = 1 },
-            .lpfnWndProc = wndProc,
-            .cbClsExtra = 0,
-            .cbWndExtra = @sizeOf(usize),
-            .hInstance = win32.GetModuleHandleW(null),
-            .hIcon = null,
-            .hCursor = win32.LoadCursorW(null, win32.IDC_ARROW),
-            .hbrBackground = null,
-            .lpszMenuName = null,
-            .lpszClassName = options.window_class,
-            .hIconSm = null,
-        };
-        if (0 == win32.RegisterClassExW(&wnd_class)) win32.panicWin32("RegisterClass", win32.GetLastError());
-    }
+    if (options.register_window_class) RegisterClass(
+        options.window_class,
+        .{},
+    ) catch win32.panicWin32("RegisterClass", win32.GetLastError());
+
     const style = win32.WS_OVERLAPPEDWINDOW;
     const style_ex: win32.WINDOW_EX_STYLE = .{ .APPWINDOW = 1, .WINDOWEDGE = 1 };
 
