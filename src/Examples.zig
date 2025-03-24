@@ -21,6 +21,7 @@ const enums = dvui.enums;
 const zig_favicon = @embedFile("zig-favicon.png");
 
 pub var show_demo_window: bool = false;
+var frame_counter: u64 = 0;
 var checkbox_gray: bool = true;
 var checkbox_bool: bool = false;
 const RadioChoice = enum(u8) {
@@ -365,7 +366,8 @@ pub fn demo() !void {
     // pad the fps label so that it doesn't trigger refresh when the number
     // changes widths
     var buf: [100]u8 = undefined;
-    const fps_str = std.fmt.bufPrint(&buf, "{d:0>3.0} fps", .{dvui.FPS()}) catch unreachable;
+    const fps_str = std.fmt.bufPrint(&buf, "{d:0>3.0} fps | frame no {d}", .{ dvui.FPS(), frame_counter }) catch unreachable;
+    frame_counter += 1;
     try dvui.windowHeader("DVUI Demo", fps_str, &show_demo_window);
 
     var ti = dvui.toastsFor(float.data().id);
