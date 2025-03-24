@@ -1,14 +1,7 @@
 const std = @import("std");
 const dvui = @import("dvui");
 const Backend = dvui.backend;
-comptime {
-    std.debug.assert(@hasDecl(Backend, "Dx11Backend"));
-}
-
-const w = std.os.windows;
-const HINSTANCE = w.HINSTANCE;
-const LPWSTR = w.LPWSTR;
-const INT = w.INT;
+const win32 = Backend.win32;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
@@ -23,15 +16,18 @@ var show_dialog_outside_frame: bool = false;
 /// - dvui renders the whole application
 /// - render frames only when needed
 pub export fn main(
-    instance: HINSTANCE,
-    _: ?HINSTANCE,
-    _: ?LPWSTR,
-    cmd_show: INT,
+    _: win32.HINSTANCE,
+    _: ?win32.HINSTANCE,
+    _: ?[*:0]const u16,
+    _: win32.SHOW_WINDOW_CMD,
 ) void {
     defer _ = gpa_instance.deinit();
 
+    var window_state: Backend.WindowState = undefined;
+
     // init dx11 backend (creates and owns OS window)
-    var backend = Backend.initWindow(instance, cmd_show, .{
+    var backend = Backend.initWindow(&window_state, .{
+        .dvui_gpa = gpa,
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
@@ -41,13 +37,7 @@ pub export fn main(
     }) catch return;
     defer backend.deinit();
 
-    Backend.setBackend(&backend);
-
-    // init dvui Window (maps onto a single OS window)
-    var win = dvui.Window.init(@src(), gpa, backend.backend(), .{}) catch return;
-    defer win.deinit();
-
-    Backend.setWindow(&win);
+    const win = backend.getWindow();
 
     main_loop: while (true) {
         // This handles the main windows events
@@ -74,7 +64,7 @@ pub export fn main(
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
         if (show_dialog_outside_frame) {
             show_dialog_outside_frame = false;
-            dvui.dialog(@src(), .{ .window = &win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." }) catch {};
+            dvui.dialog(@src(), .{ .window = win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." }) catch {};
         }
     }
 }
