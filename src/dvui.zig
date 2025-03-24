@@ -3794,7 +3794,10 @@ pub const Window = struct {
         defer self.data_mutex.unlock();
 
         if (self.datas.fetchRemove(hash)) |dd| {
-            dd.value.free(self.gpa);
+            self.datas_trash.append(dd.value) catch |err| {
+                log.err("Previous data could not be added to the trash, got {!} for id {x} key {s}\n", .{ err, id, key });
+                return;
+            };
         }
     }
 
