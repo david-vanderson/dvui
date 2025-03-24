@@ -51,6 +51,7 @@ var layout_border: Rect = Rect.all(0);
 var layout_padding: Rect = Rect.all(4);
 var layout_gravity_x: f32 = 0.5;
 var layout_gravity_y: f32 = 0.5;
+var layout_flex_content_justify: dvui.FlexBoxWidget.ContentPosition = .center;
 var layout_expand_horizontal: bool = false;
 var layout_expand_vertical: bool = false;
 var show_dialog: bool = false;
@@ -1512,23 +1513,33 @@ pub fn layout() !void {
         }
     }
 
-    try dvui.label(@src(), "FlexBox", .{}, .{});
     {
-        var fbox = try dvui.flexbox(@src(), .{}, .{ .border = dvui.Rect.all(1), .background = true, .padding = .{ .w = 4, .h = 4 } });
-        defer fbox.deinit();
+        {
+            var hbox2 = try dvui.box(@src(), .horizontal, .{});
+            defer hbox2.deinit();
+            try dvui.label(@src(), "FlexBox", .{}, .{});
+            inline for (std.meta.tags(dvui.FlexBoxWidget.ContentPosition)) |opt| {
+                if (try dvui.radio(@src(), layout_flex_content_justify == opt, @tagName(opt), .{ .id_extra = @intFromEnum(opt) })) {
+                    layout_flex_content_justify = opt;
+                }
+            }
+        }
+        {
+            var fbox = try dvui.flexbox(@src(), .{ .justify_content = layout_flex_content_justify }, .{ .border = dvui.Rect.all(1), .background = true, .padding = .{ .w = 4, .h = 4 } });
+            defer fbox.deinit();
 
-        for (0..10) |i| {
-            var labelbox = try dvui.box(@src(), .vertical, .{ .id_extra = i, .margin = .{ .x = 4, .y = 4 }, .border = dvui.Rect.all(1), .background = true });
-            defer labelbox.deinit();
+            for (0..10) |i| {
+                var labelbox = try dvui.box(@src(), .vertical, .{ .id_extra = i, .margin = .{ .x = 4, .y = 4 }, .border = dvui.Rect.all(1), .background = true });
+                defer labelbox.deinit();
 
-            if (i % 2 == 0) {
-                try dvui.label(@src(), "Box {d}", .{i}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
-            } else {
-                try dvui.label(@src(), "Large\nBox {d}", .{i}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
+                if (i % 2 == 0) {
+                    try dvui.label(@src(), "Box {d}", .{i}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
+                } else {
+                    try dvui.label(@src(), "Large\nBox {d}", .{i}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
+                }
             }
         }
     }
-
     try dvui.label(@src(), "Collapsible Pane with Draggable Sash", .{}, .{});
     {
         var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = paned_collapsed_width }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 100 } });
