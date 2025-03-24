@@ -12,8 +12,10 @@ const FlexBoxWidget = @This();
 
 pub const InitOptions = struct {
     /// Imitates `justify-content` in CSS Flexbox
-    justify_content: enum { start, center } = .center,
+    justify_content: ContentPosition = .center,
 };
+
+pub const ContentPosition = enum { start, center };
 
 wd: WidgetData = undefined,
 init_options: InitOptions = undefined,
