@@ -124,11 +124,9 @@ pub const InitOptions = struct {
     /// Set the maximum size of the window
     max_size: ?dvui.Size = null,
     vsync: bool,
-    /// Set to false if the window class has already been registered, either directly
-    /// via RegisterClass or indirectly via a previous call to initWindow.
-    register_window_class: bool = true,
 
-    window_class: [*:0]const u16 = default_window_class,
+    /// A windows class that has previously been registered via RegisterClass.
+    registered_class: [*:0]const u16,
 
     /// The application title to display
     title: [:0]const u8,
@@ -199,8 +197,6 @@ pub fn getWindow(context: Context) *dvui.Window {
     return &stateFromHwnd(hwndFromContext(context)).dvui_window;
 }
 
-pub const default_window_class = win32.L("DvuiWindow");
-
 pub const RegisterClassOptions = struct {
     /// styles in addition to DBLCLICKS
     style: win32.WNDCLASS_STYLES = .{},
@@ -253,11 +249,6 @@ pub fn RegisterClass(name: [*:0]const u16, opt: RegisterClassOptions) error{Win3
 /// DirectX options for you
 /// The caller just needs to clean up everything by calling `deinit` on the Dx11Backend
 pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
-    if (options.register_window_class) RegisterClass(
-        options.window_class,
-        .{},
-    ) catch win32.panicWin32("RegisterClass", win32.GetLastError());
-
     const style = win32.WS_OVERLAPPEDWINDOW;
     const style_ex: win32.WINDOW_EX_STYLE = .{ .APPWINDOW = 1, .WINDOWEDGE = 1 };
 
@@ -271,7 +262,7 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
         defer options.allocator.free(wnd_title);
         break :blk win32.CreateWindowExW(
             style_ex,
-            options.window_class,
+            options.registered_class,
             wnd_title,
             style,
             win32.CW_USEDEFAULT,
@@ -282,9 +273,18 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
             null,
             win32.GetModuleHandleW(null),
             @constCast(@ptrCast(&create_args)),
-        ) orelse {
-            if (create_args.err) |err| return err;
-            win32.panicWin32("CreateWindow", win32.GetLastError());
+        ) orelse switch (win32.GetLastError()) {
+            win32.ERROR_CANNOT_FIND_WND_CLASS => switch (builtin.mode) {
+                .Debug => std.debug.panic(
+                    "did you forget to call RegisterClass? (class_name='{}')",
+                    .{std.unicode.fmtUtf16Le(std.mem.span(options.registered_class))},
+                ),
+                else => unreachable,
+            },
+            else => {
+                if (create_args.err) |err| return err;
+                win32.panicWin32("CreateWindow", win32.GetLastError());
+            },
         };
     };
 
