@@ -1,90 +1,38 @@
 const std = @import("std");
 const dvui = @import("dvui");
 const Backend = dvui.backend;
-comptime {
-    std.debug.assert(@hasDecl(Backend, "Dx11Backend"));
-}
 
-const zwin = @import("win32");
-const ui = zwin.ui.windows_and_messaging;
-
-const dxgi = zwin.graphics.dxgi;
-const dx = zwin.graphics.direct3d11;
-const d3d = zwin.graphics.direct3d;
-
-const L = zwin.zig.L;
-
-const w = std.os.windows;
-const HINSTANCE = w.HINSTANCE;
-const LPWSTR = w.LPWSTR;
-const INT = w.INT;
-const UINT = w.UINT;
-const WNDCLASSEX = ui.WNDCLASSEXW;
-const RECT = w.RECT;
-const BOOL = w.BOOL;
-const HDC = w.HDC;
-const HWND = zwin.foundation.HWND;
-
-const dxgic = dxgi.common;
-
-const WINAPI = w.WINAPI;
+const win32 = @import("win32").everything;
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 const log = std.log.scoped(.Dx11Ontop);
 
-var wnd: HWND = undefined;
-const wnd_title = L("DVUI Dx11 Test");
-var width: INT = 1280;
-var height: INT = 720;
-var resize_width: UINT = 0;
-var resize_height: UINT = 0;
-var wnd_size: RECT = .{ .left = 0, .top = 0, .right = 1280, .bottom = 720 };
-var wnd_dc: HDC = undefined;
-var wnd_dpi: w.UINT = 0;
-var wnd_hRC: w.HGLRC = undefined;
+pub const panic = win32.messageBoxThenPanic(.{ .title = "Dx11 Ontop Panic!" });
+
+var backend_attached = false;
 
 pub export fn main(
-    instance: HINSTANCE,
-    _: ?HINSTANCE,
-    _: ?LPWSTR,
-    cmd_show: INT,
-) callconv(WINAPI) INT {
+    _: win32.HINSTANCE,
+    _: ?win32.HINSTANCE,
+    _: ?[*:0]const u16,
+    _: win32.SHOW_WINDOW_CMD,
+) callconv(std.os.windows.WINAPI) i32 {
     defer _ = gpa_instance.deinit();
-    createWindow(instance);
-    defer _ = ReleaseDC(wnd, wnd_dc);
-    defer _ = UnregisterClassW(wnd_title, instance);
-    defer _ = DestroyWindow(wnd);
-
-    const init_options = Backend.InitOptions{
-        .allocator = gpa,
-        .size = .{ .w = 800.0, .h = 600.0 },
-        .min_size = .{ .w = 250.0, .h = 350.0 },
-        .vsync = false,
-        .title = "DX11 Test",
-        .icon = null,
-    };
+    const wnd = createWindow();
 
     if (createDeviceD3D(wnd)) |options| {
         log.info("Successfully created device.", .{});
-        var backend = Backend.init(init_options, options, wnd) catch return 1;
+        var window_state: Backend.WindowState = undefined;
+        const backend = Backend.attach(wnd, &window_state, gpa, options, .{ .vsync = false }) catch |e| @panic(@errorName(e));
         defer backend.deinit();
+        backend_attached = true;
 
-        // IMPORTANT! We need to have the instance of the backend available statically.
-        Backend.setBackend(&backend);
+        _ = win32.ShowWindow(wnd, .{ .SHOWNORMAL = 1 });
+        _ = win32.UpdateWindow(wnd);
 
-        log.info("Dx11 backend also init.", .{});
-
-        _ = ShowWindow(wnd, cmd_show);
-        _ = UpdateWindow(wnd);
-
-        var win = dvui.Window.init(@src(), gpa, backend.backend(), .{}) catch return 1;
-        defer win.deinit();
-
-        // IMPORTANT! The backend unfortunately also needs an instance of the dvui window ^^
-        Backend.setWindow(&win);
-
+        const win = backend.getWindow();
         log.info("dvui window also init.", .{});
 
         main_loop: while (true) {
@@ -119,13 +67,18 @@ pub export fn main(
     return 0;
 }
 
-fn windowProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callconv(WINAPI) w.LRESULT {
+fn windowProc(
+    hwnd: win32.HWND,
+    umsg: u32,
+    wparam: win32.WPARAM,
+    lparam: win32.LPARAM,
+) callconv(std.os.windows.WINAPI) win32.LRESULT {
     switch (umsg) {
-        ui.WM_KEYDOWN, ui.WM_SYSKEYDOWN => {
+        win32.WM_KEYDOWN, win32.WM_SYSKEYDOWN => {
             switch (wparam) {
-                @intFromEnum(zwin.ui.input.keyboard_and_mouse.VK_ESCAPE) => { //SHIFT+ESC = EXIT
-                    if (GetAsyncKeyState(@intFromEnum(zwin.ui.input.keyboard_and_mouse.VK_LSHIFT)) & 0x01 == 1) {
-                        ui.PostQuitMessage(0);
+                @intFromEnum(win32.VK_ESCAPE) => { //SHIFT+ESC = EXIT
+                    if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_LSHIFT)) & 0x01 == 1) {
+                        win32.PostQuitMessage(0);
                         return 0;
                     }
                 },
@@ -135,86 +88,115 @@ fn windowProc(hwnd: HWND, umsg: UINT, wparam: w.WPARAM, lparam: w.LPARAM) callco
         else => {},
     }
 
-    // Call the wndProc from the Dx11 Backend directly, it handles all sorts of mouse events!
-    return Backend.wndProc(hwnd, umsg, wparam, lparam);
+    if (backend_attached)
+        // Call the wndProc from the Dx11 Backend directly, it handles all sorts of mouse events!
+        return Backend.wndProc(hwnd, umsg, wparam, lparam);
+    return win32.DefWindowProcW(hwnd, umsg, wparam, lparam);
 }
 
 // boilerplate, no need to look at this ugly mess...
-fn createWindow(hInstance: HINSTANCE) void {
-    const wnd_class: WNDCLASSEX = .{
-        .cbSize = @sizeOf(WNDCLASSEX),
-        .style = .{ .DBLCLKS = 1, .OWNDC = 1 },
-        .lpfnWndProc = windowProc,
-        .cbClsExtra = 0,
-        .cbWndExtra = 0,
-        .hInstance = hInstance,
-        .hIcon = null,
-        .hCursor = ui.LoadCursorW(null, ui.IDC_ARROW),
-        .hbrBackground = null,
-        .lpszMenuName = null,
-        .lpszClassName = @ptrCast(wnd_title),
-        .hIconSm = null,
-    };
-    _ = ui.RegisterClassExW(&wnd_class);
-    var overlap = ui.WS_OVERLAPPEDWINDOW;
-    _ = ui.AdjustWindowRectEx(@ptrCast(&wnd_size), overlap, w.FALSE, .{ .APPWINDOW = 1, .WINDOWEDGE = 1 });
-    overlap.VISIBLE = 1;
-    wnd = ui.CreateWindowExW(.{ .APPWINDOW = 1, .WINDOWEDGE = 1 }, wnd_title, wnd_title, overlap, ui.CW_USEDEFAULT, ui.CW_USEDEFAULT, 0, 0, null, null, hInstance, null) orelse {
-        std.debug.print("This didn't do anything\n", .{});
-        std.process.exit(1);
-    };
+fn createWindow() win32.HWND {
+    const class_name = win32.L("Dx11OntopMain");
 
-    wnd_dc = GetDC(wnd).?;
-    const dpi = GetDpiForWindow(wnd);
-    const xcenter = @divFloor(GetSystemMetricsForDpi(@intFromEnum(ui.SM_CXSCREEN), dpi), 2);
-    const ycenter = @divFloor(GetSystemMetricsForDpi(@intFromEnum(ui.SM_CYSCREEN), dpi), 2);
-    wnd_size.left = xcenter - @divFloor(width, 2);
-    wnd_size.top = ycenter - @divFloor(height, 2);
-    wnd_size.right = wnd_size.left + @divFloor(width, 2);
-    wnd_size.bottom = wnd_size.top + @divFloor(height, 2);
-    _ = ui.SetWindowPos(wnd, null, wnd_size.left, wnd_size.top, wnd_size.right, wnd_size.bottom, ui.SWP_NOCOPYBITS);
+    {
+        const opt: win32.WNDCLASSEXW = .{
+            .cbSize = @sizeOf(win32.WNDCLASSEXW),
+            .style = .{ .DBLCLKS = 1, .OWNDC = 1 },
+            .lpfnWndProc = windowProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = @sizeOf(usize),
+            .hInstance = win32.GetModuleHandleW(null),
+            .hIcon = null,
+            .hCursor = win32.LoadCursorW(null, win32.IDC_ARROW),
+            .hbrBackground = null,
+            .lpszMenuName = null,
+            .lpszClassName = class_name,
+            .hIconSm = null,
+        };
+        if (0 == win32.RegisterClassExW(&opt)) win32.panicWin32("RegisterClass", win32.GetLastError());
+    }
+    const style = win32.WS_OVERLAPPEDWINDOW;
+    const style_ex: win32.WINDOW_EX_STYLE = .{ .APPWINDOW = 1, .WINDOWEDGE = 1 };
+    const wnd = win32.CreateWindowExW(
+        style_ex,
+        class_name,
+        win32.L("DVUI Dx11 Test"),
+        style,
+        win32.CW_USEDEFAULT,
+        win32.CW_USEDEFAULT,
+        0,
+        0,
+        null,
+        null,
+        win32.GetModuleHandleW(null),
+        null,
+    ) orelse win32.panicWin32("CreateWindow", win32.GetLastError());
+
+    const dpi = win32.dpiFromHwnd(wnd);
+
+    const screen_width = win32.GetSystemMetricsForDpi(@intFromEnum(win32.SM_CXSCREEN), dpi);
+    const screen_height = win32.GetSystemMetricsForDpi(@intFromEnum(win32.SM_CYSCREEN), dpi);
+    var wnd_size: win32.RECT = .{
+        .left = 0,
+        .top = 0,
+        .right = @min(screen_width, win32.scaleDpi(i32, 1280, dpi)),
+        .bottom = @min(screen_height, win32.scaleDpi(i32, 720, dpi)),
+    };
+    _ = win32.AdjustWindowRectEx(&wnd_size, style, 0, style_ex);
+
+    const wnd_width = wnd_size.right - wnd_size.left;
+    const wnd_height = wnd_size.bottom - wnd_size.top;
+    _ = win32.SetWindowPos(
+        wnd,
+        null,
+        @divFloor(screen_width - wnd_width, 2),
+        @divFloor(screen_height - wnd_height, 2),
+        wnd_width,
+        wnd_height,
+        win32.SWP_NOCOPYBITS,
+    );
+    return wnd;
 }
 
-fn createDeviceD3D(hWnd: HWND) ?Backend.Directx11Options {
-    var rc: RECT = undefined;
-    _ = GetClientRect(hWnd, &rc);
+fn createDeviceD3D(hwnd: win32.HWND) ?Backend.Directx11Options {
+    const client_size = win32.getClientSize(hwnd);
 
-    var sd = std.mem.zeroes(dxgi.DXGI_SWAP_CHAIN_DESC);
+    var sd = std.mem.zeroes(win32.DXGI_SWAP_CHAIN_DESC);
     sd.BufferCount = 6;
-    sd.BufferDesc.Width = @intCast(width);
-    sd.BufferDesc.Height = @intCast(height);
-    sd.BufferDesc.Format = dxgic.DXGI_FORMAT_R8G8B8A8_UNORM;
+    sd.BufferDesc.Width = @intCast(client_size.cx);
+    sd.BufferDesc.Height = @intCast(client_size.cy);
+    sd.BufferDesc.Format = win32.DXGI_FORMAT_R8G8B8A8_UNORM;
     sd.BufferDesc.RefreshRate.Numerator = 60;
     sd.BufferDesc.RefreshRate.Denominator = 1;
-    sd.Flags = @intFromEnum(dxgi.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
-    sd.BufferUsage = dxgi.DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    sd.Flags = @intFromEnum(win32.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
+    sd.BufferUsage = win32.DXGI_USAGE_RENDER_TARGET_OUTPUT;
     @setRuntimeSafety(false);
-    sd.OutputWindow = @as(HWND, @alignCast(@ptrCast(hWnd)));
+    sd.OutputWindow = hwnd;
     @setRuntimeSafety(true);
     sd.SampleDesc.Count = 1;
     sd.SampleDesc.Quality = 0;
-    sd.Windowed = w.TRUE;
-    sd.SwapEffect = dxgi.DXGI_SWAP_EFFECT_DISCARD;
+    sd.Windowed = 1;
+    sd.SwapEffect = win32.DXGI_SWAP_EFFECT_DISCARD;
 
-    const createDeviceFlags: dx.D3D11_CREATE_DEVICE_FLAG = .{
+    const createDeviceFlags: win32.D3D11_CREATE_DEVICE_FLAG = .{
         .DEBUG = 0,
     };
     //createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
-    var featureLevel: d3d.D3D_FEATURE_LEVEL = undefined;
-    const featureLevelArray = &[_]d3d.D3D_FEATURE_LEVEL{ d3d.D3D_FEATURE_LEVEL_11_0, d3d.D3D_FEATURE_LEVEL_10_0 };
+    var featureLevel: win32.D3D_FEATURE_LEVEL = undefined;
+    const featureLevelArray = &[_]win32.D3D_FEATURE_LEVEL{ win32.D3D_FEATURE_LEVEL_11_0, win32.D3D_FEATURE_LEVEL_10_0 };
 
-    var device: *dx.ID3D11Device = undefined;
-    var device_context: *dx.ID3D11DeviceContext = undefined;
-    var swap_chain: *dxgi.IDXGISwapChain = undefined;
+    var device: *win32.ID3D11Device = undefined;
+    var device_context: *win32.ID3D11DeviceContext = undefined;
+    var swap_chain: *win32.IDXGISwapChain = undefined;
 
-    var res: zwin.foundation.HRESULT = dx.D3D11CreateDeviceAndSwapChain(
+    var res: win32.HRESULT = win32.D3D11CreateDeviceAndSwapChain(
         null,
-        d3d.D3D_DRIVER_TYPE_HARDWARE,
+        win32.D3D_DRIVER_TYPE_HARDWARE,
         null,
         createDeviceFlags,
         featureLevelArray,
         2,
-        dx.D3D11_SDK_VERSION,
+        win32.D3D11_SDK_VERSION,
         &sd,
         &swap_chain,
         &device,
@@ -222,15 +204,15 @@ fn createDeviceD3D(hWnd: HWND) ?Backend.Directx11Options {
         &device_context,
     );
 
-    if (res == dxgi.DXGI_ERROR_UNSUPPORTED) {
-        res = dx.D3D11CreateDeviceAndSwapChain(
+    if (res == win32.DXGI_ERROR_UNSUPPORTED) {
+        res = win32.D3D11CreateDeviceAndSwapChain(
             null,
-            d3d.D3D_DRIVER_TYPE_WARP,
+            win32.D3D_DRIVER_TYPE_WARP,
             null,
             createDeviceFlags,
             featureLevelArray,
             2,
-            dx.D3D11_SDK_VERSION,
+            win32.D3D11_SDK_VERSION,
             &sd,
             &swap_chain,
             &device,
@@ -238,7 +220,7 @@ fn createDeviceD3D(hWnd: HWND) ?Backend.Directx11Options {
             &device_context,
         );
     }
-    if (res != zwin.foundation.S_OK)
+    if (res != win32.S_OK)
         return null;
 
     return Backend.Directx11Options{
@@ -284,28 +266,3 @@ fn dvui_floating_stuff() !void {
     // look at demo() for examples of dvui widgets, shows in a floating window
     try dvui.Examples.demo();
 }
-
-fn loword(l: w.LONG_PTR) UINT {
-    return @as(u32, @intCast(l)) & 0xFFFF;
-}
-fn hiword(l: w.LONG_PTR) UINT {
-    return (@as(u32, @intCast(l)) >> 16) & 0xFFFF;
-}
-
-// externs
-pub extern "user32" fn BeginPaint(hWnd: ?HWND, lpPaint: ?*zwin.graphics.gdi.PAINTSTRUCT) callconv(WINAPI) ?HDC;
-pub extern "user32" fn FillRect(hDC: ?HDC, lprc: ?*const RECT, hbr: ?zwin.graphics.gdi.HBRUSH) callconv(WINAPI) INT;
-pub extern "user32" fn EndPaint(hWnd: HWND, lpPaint: *const zwin.graphics.gdi.PAINTSTRUCT) callconv(WINAPI) BOOL;
-pub extern "user32" fn GetDC(hWnd: ?HWND) callconv(WINAPI) ?w.HDC;
-pub extern "user32" fn GetAsyncKeyState(nKey: c_int) callconv(WINAPI) w.INT;
-pub extern "user32" fn GetDpiForWindow(hWnd: HWND) callconv(WINAPI) w.UINT;
-pub extern "user32" fn GetSystemMetricsForDpi(nIndex: w.INT, dpi: w.UINT) callconv(WINAPI) w.INT;
-pub extern "user32" fn DestroyWindow(hWnd: HWND) callconv(WINAPI) BOOL;
-pub extern "user32" fn UnregisterClassW(lpClassName: [*:0]const u16, hInstance: w.HINSTANCE) callconv(WINAPI) BOOL;
-pub extern "user32" fn ReleaseDC(hWnd: ?HWND, hDC: w.HDC) callconv(WINAPI) i32;
-pub extern "user32" fn GetClientRect(hWnd: HWND, lpRect: *RECT) callconv(WINAPI) w.UINT;
-pub extern "user32" fn PeekMessageA(lpMsg: *ui.MSG, hWnd: ?HWND, wMsgFilterMin: w.UINT, wMsgFilterMax: w.UINT, wRemoveMsg: w.UINT) callconv(WINAPI) BOOL;
-pub extern "user32" fn TranslateMessage(lpMsg: *const ui.MSG) callconv(WINAPI) BOOL;
-pub extern "user32" fn DispatchMessageW(lpMsg: *const ui.MSG) callconv(WINAPI) w.LRESULT;
-pub extern "user32" fn ShowWindow(hWnd: HWND, nCmdShow: i32) callconv(WINAPI) BOOL;
-pub extern "user32" fn UpdateWindow(hWnd: HWND) callconv(WINAPI) BOOL;
