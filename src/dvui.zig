@@ -1933,6 +1933,8 @@ pub fn hashIdKey(id: u32, key: []const u8) u32 {
 /// If called from non-GUI thread or outside window.begin()/end(), you must
 /// pass a pointer to the Window you want to add the data to.
 ///
+/// Stored data with the same id/key will be freed at next win.end().
+///
 /// If you want to store the contents of a slice, use dataSetSlice().
 pub fn dataSet(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
     dataSetAdvanced(win, id, key, data, false, 1);
@@ -1942,6 +1944,8 @@ pub fn dataSet(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
 /// a slice or pointer to an array.
 ///
 /// Can be called from any thread.
+///
+/// Stored data with the same id/key will be freed at next win.end().
 ///
 /// If called from non-GUI thread or outside window.begin()/end(), you must
 /// pass a pointer to the Window you want to add the data to.
@@ -1978,6 +1982,8 @@ pub fn dataSetSliceCopies(win: ?*Window, id: u32, key: []const u8, data: anytype
 ///
 /// If called from non-GUI thread or outside window.begin()/end(), you must
 /// pass a pointer to the Window you want to add the data to.
+///
+/// Stored data with the same id/key will be freed at next win.end().
 ///
 /// If copy_slice is true, data must be a slice or pointer to array, and the
 /// contents are copied into internal storage. If false, only the slice itself
@@ -2139,7 +2145,8 @@ pub fn dataGetInternal(win: ?*Window, id: u32, key: []const u8, comptime T: type
     }
 }
 
-/// Remove key (and associated value if any) for given id.
+/// Remove key (and data if any) for given id.  The data will be freed at next
+/// win.end().
 ///
 /// Can be called from any thread.
 ///
