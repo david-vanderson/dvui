@@ -33,8 +33,15 @@ fn main2() !void {
 
     var window_state: Backend.WindowState = undefined;
 
+    const window_class = win32.L("DvuiStandaloneWindow");
+    Backend.RegisterClass(window_class, .{}) catch win32.panicWin32(
+        "RegisterClass",
+        win32.GetLastError(),
+    );
+
     // init dx11 backend (creates and owns OS window)
     const backend = try Backend.initWindow(&window_state, .{
+        .registered_class = window_class,
         .dvui_gpa = gpa,
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
@@ -51,9 +58,7 @@ fn main2() !void {
     // however DVUI currently can't render to it and the cleanup also needs some work.
     const test_second_window = false;
     const backend2 = if (test_second_window) try Backend.initWindow(&window_state, .{
-        // must set to false because the first call to initWindow will have
-        // registered the same class
-        .register_window_class = false,
+        .registered_class = window_class,
         .dvui_gpa = gpa,
         .allocator = gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
