@@ -475,7 +475,6 @@ function dvui(canvasId, wasmFile) {
                 let data = [];
                 for (let i = 0; i < filelist.length; i++) {
                     const file = filelist.item(i);
-                    if (!file) console.error("FILE", i, "NOT FOUND", file)
                     files.push(file);
                     data.push(file.arrayBuffer());
                 }
@@ -506,6 +505,11 @@ function dvui(canvasId, wasmFile) {
             if (!cached || cached.files.length <= file_index) return;
 		    var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, data_ptr);
             dest.set(new Uint8Array(cached.data[file_index]));
+        },
+        wasm_get_number_of_files_available(id) {
+            const cached = filesCache.get(id);
+            if (!cached) return 0;
+            return cached.files.length;
         },
         wasm_clipboardTextSet: (ptr, len) => {
             if (len == 0) {
