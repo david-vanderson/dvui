@@ -35,30 +35,28 @@ pub export fn main(
         const win = backend.getWindow();
         log.info("dvui window also init.", .{});
 
-        main_loop: while (true) {
-            // This handles the main windows events
-            if (Backend.isExitRequested()) {
-                break :main_loop;
-            }
+        while (true) switch (Backend.serviceMessageQueue()) {
+            .queue_empty => {
+                // beginWait coordinates with waitTime below to run frames only when needed
+                const nstime = win.beginWait(backend.hasEvent());
 
-            // beginWait coordinates with waitTime below to run frames only when needed
-            const nstime = win.beginWait(backend.hasEvent());
+                // marks the beginning of a frame for dvui, can call dvui functions after this
+                win.begin(nstime) catch {
+                    log.err("win.begin() failed.", .{});
+                    return 1;
+                };
 
-            // marks the beginning of a frame for dvui, can call dvui functions after this
-            win.begin(nstime) catch {
-                log.err("win.begin() failed.", .{});
-                return 1;
-            };
+                // draw some fancy dvui stuff
+                dvui_floating_stuff() catch {
+                    log.err("Oh no something went horribly wrong!", .{});
+                };
 
-            // draw some fancy dvui stuff
-            dvui_floating_stuff() catch {
-                log.err("Oh no something went horribly wrong!", .{});
-            };
-
-            // marks end of dvui frame, don't call dvui functions after this
-            // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
-            _ = win.end(.{}) catch continue;
-        }
+                // marks end of dvui frame, don't call dvui functions after this
+                // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
+                _ = win.end(.{}) catch continue;
+            },
+            .quit, .close_windows => break,
+        };
     } else {
         log.err("createDevice was not successful", .{});
         return 1;
