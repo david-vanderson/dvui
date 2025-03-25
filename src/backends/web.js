@@ -501,6 +501,12 @@ function dvui(canvasId, wasmFile) {
             dest.set([0], name.length);
             return ptr;
         },
+        wasm_read_file_data(id, file_index, data_ptr) {
+            const cached = filesCache.get(id);
+            if (!cached || cached.files.length <= file_index) return;
+		    var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, data_ptr);
+            dest.set(new Uint8Array(cached.data[file_index]));
+        },
         wasm_clipboardTextSet: (ptr, len) => {
             if (len == 0) {
                 return;

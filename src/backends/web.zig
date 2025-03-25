@@ -59,6 +59,7 @@ pub const wasm = struct {
     pub extern fn wasm_open_file_picker(id: u32, accept_ptr: [*]const u8, accept_len: usize, multiple: bool) void;
     pub extern fn wasm_get_file_name(id: u32, file_index: usize) [*:0]u8;
     pub extern fn wasm_get_file_size(id: u32, file_index: usize) isize;
+    pub extern fn wasm_read_file_data(id: u32, file_index: usize, data: [*]u8) void;
 
     pub extern fn wasm_add_noto_font() void;
 };
@@ -687,4 +688,8 @@ pub fn getFileSize(id: u32, file_index: usize) ?usize {
     const size: isize = wasm.wasm_get_file_size(id, file_index);
     if (size <= 0) return null;
     return @intCast(size);
+}
+
+pub fn readFileData(id: u32, file_index: usize, data: [*]u8) void {
+    wasm.wasm_read_file_data(id, file_index, data);
 }
