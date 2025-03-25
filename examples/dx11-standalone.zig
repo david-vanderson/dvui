@@ -8,6 +8,16 @@ const window_icon_png = @embedFile("zig-favicon.png");
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
+const ExtraWindow = struct {
+    state: *Backend.WindowState,
+    backend: Backend.Context,
+    fn deinit(self: ExtraWindow) void {
+        self.backend.deinit();
+        gpa.destroy(self.state);
+    }
+};
+var extra_windows: std.ArrayListUnmanaged(ExtraWindow) = .{};
+
 const vsync = true;
 
 var show_dialog_outside_frame: bool = false;
@@ -28,16 +38,18 @@ pub export fn main(
         std.debug.panic("{s}", .{@errorName(e)});
     };
 }
+
+const window_class = win32.L("DvuiStandaloneWindow");
+
 fn main2() !void {
     defer _ = gpa_instance.deinit();
 
-    var window_state: Backend.WindowState = undefined;
-
-    const window_class = win32.L("DvuiStandaloneWindow");
     Backend.RegisterClass(window_class, .{}) catch win32.panicWin32(
         "RegisterClass",
         win32.GetLastError(),
     );
+
+    var window_state: Backend.WindowState = undefined;
 
     // init dx11 backend (creates and owns OS window)
     const backend = try Backend.initWindow(&window_state, .{
@@ -54,20 +66,12 @@ fn main2() !void {
 
     const win = backend.getWindow();
 
-    // set this to true to test a second window.  The window gets created/shown
-    // however DVUI currently can't render to it and the cleanup also needs some work.
-    const test_second_window = false;
-    const backend2 = if (test_second_window) try Backend.initWindow(&window_state, .{
-        .registered_class = window_class,
-        .dvui_gpa = gpa,
-        .allocator = gpa,
-        .size = .{ .w = 800.0, .h = 600.0 },
-        .min_size = .{ .w = 250.0, .h = 350.0 },
-        .vsync = vsync,
-        .title = "DVUI DX11 Standalone Example",
-        .icon = window_icon_png, // can also call setIconFromFileContent()
-    }) else void;
-    defer if (test_second_window) backend2.deinit();
+    defer {
+        for (extra_windows.items) |window| {
+            window.deinit();
+        }
+        extra_windows.deinit(gpa);
+    }
 
     main_loop: while (true) {
         // This handles the main windows events
@@ -88,10 +92,10 @@ fn main2() !void {
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
         _ = try win.end(.{});
 
-        if (test_second_window) {
-            try backend2.getWindow().begin(nstime);
+        for (extra_windows.items) |window| {
+            try window.backend.getWindow().begin(nstime);
             try gui_frame();
-            _ = try backend2.getWindow().end(.{});
+            _ = try window.backend.getWindow().end(.{});
         }
 
         // cursor management
@@ -183,6 +187,38 @@ fn gui_frame() !void {
         show_dialog_outside_frame = true;
     }
 
+    if (try dvui.button(@src(), "Spawn Another OS window", .{}, .{})) {
+        try extra_windows.ensureUnusedCapacity(gpa, 1);
+        const state = try gpa.create(Backend.WindowState);
+        errdefer gpa.destroy(state);
+        const backend = try Backend.initWindow(state, .{
+            .registered_class = window_class,
+            .dvui_gpa = gpa,
+            .allocator = gpa,
+            .size = .{ .w = 800.0, .h = 600.0 },
+            .min_size = .{ .w = 250.0, .h = 350.0 },
+            .close_handler = onExtraWindowClose,
+            .vsync = vsync,
+            .title = "DVUI DX11 Standalone Example",
+            .icon = window_icon_png, // can also call setIconFromFileContent()
+        });
+        extra_windows.appendAssumeCapacity(.{
+            .state = state,
+            .backend = backend,
+        });
+    }
+
     // look at demo() for examples of dvui widgets, shows in a floating window
     try dvui.Examples.demo();
+}
+
+fn onExtraWindowClose(context: Backend.Context) void {
+    const index = blk: {
+        for (extra_windows.items, 0..) |window, i| {
+            if (window.backend == context) break :blk i;
+        }
+        @panic("received close for unkown window");
+    };
+    const window = extra_windows.swapRemove(index);
+    window.deinit();
 }
