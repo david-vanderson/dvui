@@ -10,6 +10,31 @@ async function dvui_fetch(url) {
     return new Uint8Array(await blob.arrayBuffer());
 }
 
+async function dvui_open_file_picker(accept, multiple) {
+    const file_input = document.createElement("input");
+    file_input.setAttribute("type", "file");
+    file_input.setAttribute("accept", accept);
+    if (multiple) {
+        file_input.toggleAttribute("multiple", true);
+    }
+    file_input.oncancel = () => {
+        console.trace("File picking cancelled");
+    };
+    file_input.onchange = () => {
+        if (file_input.files.length === 0) {
+            console.error("File picker picked no files");
+            file_input.oncancel();
+        }
+        if (!multiple && file_input.files.length > 1) {
+            console.error("Picked multiple files in single file picker");
+            return;
+        }
+        
+        console.log("File picked", file_input.files);
+    };
+    file_input.click();
+}
+
 function dvui(canvasId, wasmFile) {
 
     const vertexShaderSource_webgl = `
@@ -434,6 +459,11 @@ function dvui(canvasId, wasmFile) {
 	    dl.click();
 	    document.body.removeChild(dl);
 	    URL.revokeObjectURL(fileURL);
+        },
+        wasm_open_file_picker(accept_ptr, accept_len, multiple) {
+            let accept = utf8decoder.decode(new Uint8Array(wasmResult.instance.exports.memory.buffer, accept_ptr, accept_len));
+            // console.log("Open picker", accept_ptr, accept_len, accept, multiple);
+            dvui_open_file_picker(accept, multiple);
         },
         wasm_clipboardTextSet: (ptr, len) => {
             if (len == 0) {
