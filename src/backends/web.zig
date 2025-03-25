@@ -56,7 +56,8 @@ pub const wasm = struct {
     pub extern fn wasm_clipboardTextSet(ptr: [*]const u8, len: usize) void;
 
     // NOTE: bool in extern becomes 0 and 1 in js, which is falsy and truthy spectively
-    pub extern fn wasm_open_file_picker(accept_ptr: [*]const u8, accept_len: usize, multiple: bool) void;
+    pub extern fn wasm_open_file_picker(id: u32, accept_ptr: [*]const u8, accept_len: usize, multiple: bool) void;
+    pub extern fn wasm_get_file_name(id: u32, file_index: usize) [*:0]u8;
 
     pub extern fn wasm_add_noto_font() void;
 };
@@ -671,6 +672,12 @@ pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
     }
 }
 
-pub fn openFilePicker(accept: []const u8, multiple: bool) !void {
-    wasm.wasm_open_file_picker(accept.ptr, accept.len, multiple);
+pub fn openFilePicker(id: u32, accept: []const u8, multiple: bool) !void {
+    wasm.wasm_open_file_picker(id, accept.ptr, accept.len, multiple);
+}
+
+pub fn getFileName(id: u32, file_index: usize) !?[:0]const u8 {
+    const ptr = wasm.wasm_get_file_name(id, file_index);
+    if (@intFromPtr(ptr) <= 0) return null;
+    return std.mem.sliceTo(ptr, 0);
 }
