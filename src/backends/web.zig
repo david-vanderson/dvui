@@ -55,8 +55,9 @@ pub const wasm = struct {
     pub extern fn wasm_download_data(name_ptr: [*]const u8, name_len: usize, data_ptr: [*]const u8, data_len: usize) void;
     pub extern fn wasm_clipboardTextSet(ptr: [*]const u8, len: usize) void;
 
-    // NOTE: bool in extern becomes 0 and 1 in js, which is falsy and truthy spectively
+    // NOTE: bool in extern becomes 0 and 1 in js, which is falsy and truthy respectively
     pub extern fn wasm_open_file_picker(id: u32, accept_ptr: [*]const u8, accept_len: usize, multiple: bool) void;
+    pub extern fn wasm_get_number_of_files_available(id: u32) usize;
     pub extern fn wasm_get_file_name(id: u32, file_index: usize) [*:0]u8;
     pub extern fn wasm_get_file_size(id: u32, file_index: usize) isize;
     pub extern fn wasm_read_file_data(id: u32, file_index: usize, data: [*]u8) void;
@@ -693,4 +694,8 @@ pub fn getFileSize(id: u32, file_index: usize) ?usize {
 
 pub fn readFileData(id: u32, file_index: usize, data: [*]u8) void {
     wasm.wasm_read_file_data(id, file_index, data);
+}
+
+pub fn getNumberOfFilesAvailable(id: u32) usize {
+    return wasm.wasm_get_number_of_files_available(id);
 }
