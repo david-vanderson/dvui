@@ -52,7 +52,7 @@ fn main2() !void {
     var window_state: Backend.WindowState = undefined;
 
     // init dx11 backend (creates and owns OS window)
-    const backend = try Backend.initWindow(&window_state, .{
+    const first_backend = try Backend.initWindow(&window_state, .{
         .registered_class = window_class,
         .dvui_gpa = gpa,
         .allocator = gpa,
@@ -62,9 +62,7 @@ fn main2() !void {
         .title = "DVUI DX11 Standalone Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
     });
-    defer backend.deinit();
-
-    const win = backend.getWindow();
+    defer first_backend.deinit();
 
     defer {
         for (extra_windows.items) |window| {
@@ -73,40 +71,53 @@ fn main2() !void {
         extra_windows.deinit(gpa);
     }
 
-    main_loop: while (true) {
-        // This handles the main windows events
-        if (Backend.isExitRequested()) {
-            break :main_loop;
-        }
+    const win = first_backend.getWindow();
+    while (true) switch (Backend.serviceMessageQueue()) {
+        .queue_empty => {
+            // beginWait coordinates with waitTime below to run frames only when needed
+            const nstime = win.beginWait(first_backend.hasEvent());
 
-        // beginWait coordinates with waitTime below to run frames only when needed
-        const nstime = win.beginWait(backend.hasEvent());
+            // marks the beginning of a frame for dvui, can call dvui functions after this
+            try win.begin(nstime);
 
-        // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(nstime);
-
-        // both dvui and dx11 drawing
-        try gui_frame();
-
-        // marks end of dvui frame, don't call dvui functions after this
-        // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
-        _ = try win.end(.{});
-
-        for (extra_windows.items) |window| {
-            try window.backend.getWindow().begin(nstime);
+            // both dvui and dx11 drawing
             try gui_frame();
-            _ = try window.backend.getWindow().end(.{});
-        }
 
-        // cursor management
-        backend.setCursor(win.cursorRequested());
+            // marks end of dvui frame, don't call dvui functions after this
+            // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
+            _ = try win.end(.{});
 
-        // Example of how to show a dialog from another thread (outside of win.begin/win.end)
-        if (show_dialog_outside_frame) {
-            show_dialog_outside_frame = false;
-            try dvui.dialog(@src(), .{ .window = win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
-        }
-    }
+            for (extra_windows.items) |window| {
+                try window.backend.getWindow().begin(nstime);
+                try gui_frame();
+                _ = try window.backend.getWindow().end(.{});
+            }
+
+            // cursor management
+            first_backend.setCursor(win.cursorRequested());
+
+            // Example of how to show a dialog from another thread (outside of win.begin/win.end)
+            if (show_dialog_outside_frame) {
+                show_dialog_outside_frame = false;
+                try dvui.dialog(@src(), .{ .window = win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
+            }
+        },
+        .quit => break,
+        .close_windows => {
+            if (first_backend.receivedClose())
+                break;
+            extras: while (true) {
+                const index: usize = blk: {
+                    for (extra_windows.items, 0..) |window, i| {
+                        if (window.backend.receivedClose()) break :blk i;
+                    }
+                    break :extras;
+                };
+                const window = extra_windows.swapRemove(index);
+                window.deinit();
+            }
+        },
+    };
 }
 
 fn gui_frame() !void {
@@ -197,7 +208,6 @@ fn gui_frame() !void {
             .allocator = gpa,
             .size = .{ .w = 800.0, .h = 600.0 },
             .min_size = .{ .w = 250.0, .h = 350.0 },
-            .close_handler = onExtraWindowClose,
             .vsync = vsync,
             .title = "DVUI DX11 Standalone Example",
             .icon = window_icon_png, // can also call setIconFromFileContent()
@@ -210,15 +220,4 @@ fn gui_frame() !void {
 
     // look at demo() for examples of dvui widgets, shows in a floating window
     try dvui.Examples.demo();
-}
-
-fn onExtraWindowClose(context: Backend.Context) void {
-    const index = blk: {
-        for (extra_windows.items, 0..) |window, i| {
-            if (window.backend == context) break :blk i;
-        }
-        @panic("received close for unkown window");
-    };
-    const window = extra_windows.swapRemove(index);
-    window.deinit();
 }
