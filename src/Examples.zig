@@ -2773,8 +2773,7 @@ pub fn dialogs(demo_win_id: u32) !void {
 
         if (try dvui.button(@src(), "Open File", .{}, .{})) {
             if (dvui.wasm) {
-                dvui.backend.openFilePicker(123, ".png, .jpg, .txt", false);
-                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
+                dvui.dialogWasmFileOpen(123, .{ .accept = ".png, .jpg" });
             } else {
                 const filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "dvui native file open", .filters = &.{ "*.png", "*.jpg" }, .filter_description = "images" });
                 if (filename) |f| {
@@ -2783,18 +2782,13 @@ pub fn dialogs(demo_win_id: u32) !void {
             }
         }
 
-        if (dvui.backend.getFileName(123, 0)) |name| {
-            dvui.log.debug("File name {s}", .{name});
-            if (dvui.backend.getFileSize(123, 0)) |size| {
-                const data = try dvui.currentWindow().arena().alloc(u8, size);
-                dvui.backend.readFileData(123, 0, data.ptr);
-            }
+        if (dvui.wasmFileUploaded(123)) |file| {
+            try dvui.dialog(@src(), .{ .modal = false, .title = "File Open Result", .ok_label = "Done", .message = file.name });
         }
 
         if (try dvui.button(@src(), "Open Multiple Files", .{}, .{})) {
             if (dvui.wasm) {
-                dvui.backend.openFilePicker(321, ".png, .jpg", true);
-                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
+                dvui.dialogWasmFileOpenMultiple(321, .{ .accept = ".png, .jpg" });
             } else {
                 const filenames = try dvui.dialogNativeFileOpenMultiple(dvui.currentWindow().arena(), .{ .title = "dvui native file open multiple", .filter_description = "images" });
                 if (filenames) |fs| {
@@ -2804,8 +2798,15 @@ pub fn dialogs(demo_win_id: u32) !void {
             }
         }
 
-        if (dvui.backend.getFileName(321, 0)) |name| {
-            dvui.log.debug("First file name {s}", .{name});
+        if (dvui.wasmFileUploadedMultiple(321)) |files| {
+            var msg = std.ArrayList(u8).init(dvui.currentWindow().arena());
+            var writer = msg.writer();
+            for (files) |file| {
+                try writer.writeAll(file.name);
+                try writer.writeByte('\n');
+            }
+            _ = msg.pop(); // remove the last newline character
+            try dvui.dialog(@src(), .{ .modal = false, .title = "File Open Multiple Result", .ok_label = "Done", .message = msg.items });
         }
     }
     {
