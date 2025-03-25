@@ -2773,7 +2773,7 @@ pub fn dialogs(demo_win_id: u32) !void {
 
         if (try dvui.button(@src(), "Open File", .{}, .{})) {
             if (dvui.wasm) {
-                try dvui.backend.openFilePicker(123, ".png, .jpg, .txt", false);
+                dvui.backend.openFilePicker(123, ".png, .jpg, .txt", false);
                 try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
             } else {
                 const filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "dvui native file open", .filters = &.{ "*.png", "*.jpg" }, .filter_description = "images" });
@@ -2783,7 +2783,7 @@ pub fn dialogs(demo_win_id: u32) !void {
             }
         }
 
-        if (try dvui.backend.getFileName(123, 0)) |name| {
+        if (dvui.backend.getFileName(123, 0)) |name| {
             dvui.log.debug("File name {s}", .{name});
             if (dvui.backend.getFileSize(123, 0)) |size| {
                 const data = try dvui.currentWindow().arena().alloc(u8, size);
@@ -2793,7 +2793,7 @@ pub fn dialogs(demo_win_id: u32) !void {
 
         if (try dvui.button(@src(), "Open Multiple Files", .{}, .{})) {
             if (dvui.wasm) {
-                try dvui.backend.openFilePicker(321, ".png, .jpg", true);
+                dvui.backend.openFilePicker(321, ".png, .jpg", true);
                 try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
             } else {
                 const filenames = try dvui.dialogNativeFileOpenMultiple(dvui.currentWindow().arena(), .{ .title = "dvui native file open multiple", .filter_description = "images" });
@@ -2804,7 +2804,7 @@ pub fn dialogs(demo_win_id: u32) !void {
             }
         }
 
-        if (try dvui.backend.getFileName(321, 0)) |name| {
+        if (dvui.backend.getFileName(321, 0)) |name| {
             dvui.log.debug("First file name {s}", .{name});
         }
     }

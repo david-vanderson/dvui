@@ -674,11 +674,11 @@ pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
     }
 }
 
-pub fn openFilePicker(id: u32, accept: []const u8, multiple: bool) !void {
+pub fn openFilePicker(id: u32, accept: []const u8, multiple: bool) void {
     wasm.wasm_open_file_picker(id, accept.ptr, accept.len, multiple);
 }
 
-pub fn getFileName(id: u32, file_index: usize) !?[:0]const u8 {
+pub fn getFileName(id: u32, file_index: usize) ?[:0]const u8 {
     const ptr = wasm.wasm_get_file_name(id, file_index);
     if (@intFromPtr(ptr) <= 0) return null;
     return std.mem.sliceTo(ptr, 0);
