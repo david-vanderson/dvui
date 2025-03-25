@@ -471,30 +471,35 @@ function dvui(canvasId, wasmFile) {
             let accept = utf8decoder.decode(new Uint8Array(wasmResult.instance.exports.memory.buffer, accept_ptr, accept_len));
             // console.log("Open picker", accept_ptr, accept_len, accept, multiple);
             dvui_open_file_picker(accept, multiple).then(filelist => {
-                let names = [];
+                let files = [];
                 let data = [];
                 for (let i = 0; i < filelist.length; i++) {
                     const file = filelist.item(i);
                     if (!file) console.error("FILE", i, "NOT FOUND", file)
-                    names.push(file.name);
+                    files.push(file);
                     data.push(file.arrayBuffer());
                 }
                 Promise.all(data).then(data => {
                     filesCacheModified = true;
-                    filesCache.set(id, { names, data })
+                    filesCache.set(id, { files, data })
                 });
             })
         },
+        wasm_get_file_size(id, file_index) {
+            const cached = filesCache.get(id);
+            if (!cached || cached.files.length <= file_index) return;
+            const size = cached.files[file_index].size;
+            return size;
+        },
         wasm_get_file_name(id, file_index) {
             const cached = filesCache.get(id);
-            if (!cached) return;
-            const name = utf8encoder.encode(cached.names[file_index]);
+            if (!cached || cached.files.length <= file_index) return;
+            const name = utf8encoder.encode(cached.files[file_index].name);
 		    const ptr = wasmResult.instance.exports.arena_u8(name.length + 1);
 		    var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, name.length + 1);
             dest.set(name);
             dest.set([0], name.length);
             return ptr;
-            // console.log("Open picker", accept_ptr, accept_len, accept, multiple);
         },
         wasm_clipboardTextSet: (ptr, len) => {
             if (len == 0) {
