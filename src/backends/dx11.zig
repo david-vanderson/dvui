@@ -7,7 +7,15 @@ pub const Context = *align(1) @This();
 
 const log = std.log.scoped(.Dx11Backend);
 
+/// A default close handler that just posts WM_QUIT when
+/// a windows requests to be closed.
+pub fn quitCloseHandler(context: Context) void {
+    _ = context;
+    _ = win32.PostQuitMessage(0);
+}
+
 pub const WindowState = struct {
+    close_handler: *const fn (context: Context) void,
     vsync: bool,
 
     dvui_window: dvui.Window,
@@ -123,6 +131,10 @@ pub const InitOptions = struct {
     min_size: ?dvui.Size = null,
     /// Set the maximum size of the window
     max_size: ?dvui.Size = null,
+
+    /// A callback method when the windows request to be closed (receives WM_CLOSE).
+    /// Defaults to `quitCloseHandler` which simply posts WM_QUIT.
+    close_handler: fn (Context) void = quitCloseHandler,
     vsync: bool,
 
     /// A windows class that has previously been registered via RegisterClass.
@@ -254,6 +266,7 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
 
     const create_args: CreateWindowArgs = .{
         .window_state = window_state,
+        .close_handler = options.close_handler,
         .vsync = options.vsync,
         .dvui_gpa = options.dvui_gpa,
     };
@@ -961,11 +974,15 @@ pub fn attach(
     window_state: *WindowState,
     gpa: std.mem.Allocator,
     dx_options: Directx11Options,
-    opt: struct { vsync: bool },
+    opt: struct {
+        close_handler: *const fn (Context) void = quitCloseHandler,
+        vsync: bool,
+    },
 ) !Context {
     var dvui_window = try dvui.Window.init(@src(), gpa, contextFromHwnd(hwnd).backend(), .{});
     errdefer dvui_window.deinit();
     window_state.* = .{
+        .close_handler = opt.close_handler,
         .vsync = opt.vsync,
         .dvui_window = dvui_window,
         .device = dx_options.device,
@@ -1005,7 +1022,10 @@ pub fn wndProc(
                 return -1;
             };
             errdefer dx_options.deinit();
-            _ = attach(hwnd, args.window_state, args.dvui_gpa, dx_options, .{ .vsync = args.vsync }) catch |e| {
+            _ = attach(hwnd, args.window_state, args.dvui_gpa, dx_options, .{
+                .close_handler = args.close_handler,
+                .vsync = args.vsync,
+            }) catch |e| {
                 args.err = e;
                 return -1;
             };
@@ -1017,8 +1037,9 @@ pub fn wndProc(
             return 0;
         },
         win32.WM_CLOSE => {
-            // TODO: this should go through DVUI instead of posting WM_QUIT to the message loop
-            win32.PostQuitMessage(0);
+            const state = stateFromHwnd(hwnd);
+            state.close_handler(contextFromHwnd(hwnd));
+            // don't use hwnd anymore, it could be destroyed
             return 0;
         },
         win32.WM_PAINT => {
@@ -1220,6 +1241,7 @@ fn convertVertices(
 
 const CreateWindowArgs = struct {
     window_state: *WindowState,
+    close_handler: *const fn (Context) void,
     vsync: bool,
     dvui_gpa: std.mem.Allocator,
     err: ?anyerror = null,
