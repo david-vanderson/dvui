@@ -324,6 +324,11 @@ pub fn minSizeForChild(self: *TextEntryWidget, s: Size) void {
     self.wd.minSizeMax(self.wd.options.padSize(s));
 }
 
+pub fn textSet(self: *TextEntryWidget, text: []const u8, selected: bool) void {
+    self.textLayout.selection.selectAll();
+    self.textTyped(text, selected);
+}
+
 pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
     if (new.len == 0) return;
 
