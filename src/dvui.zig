@@ -44,7 +44,6 @@ pub const ScaleWidget = @import("widgets/ScaleWidget.zig");
 pub const ScrollAreaWidget = @import("widgets/ScrollAreaWidget.zig");
 pub const ScrollBarWidget = @import("widgets/ScrollBarWidget.zig");
 pub const ScrollContainerWidget = @import("widgets/ScrollContainerWidget.zig");
-pub const SuggestionsWidget = @import("widgets/SuggestionsWidget.zig");
 pub const TextEntryWidget = @import("widgets/TextEntryWidget.zig");
 pub const TextLayoutWidget = @import("widgets/TextLayoutWidget.zig");
 pub const VirtualParentWidget = @import("widgets/VirtualParentWidget.zig");
@@ -5082,31 +5081,102 @@ pub const SuggestionWidget = struct {
     }
 };
 
-pub fn textEntrySuggestions(src: std.builtin.SourceLocation, suggested_values: []const []const u8, opts: Options) !*TextEntryWidget {
-    var text_entry = try currentWindow().arena().create(TextEntryWidget);
-    text_entry.* = dvui.TextEntryWidget.init(src, .{}, opts);
-    try text_entry.install();
+pub const SuggestionInitOptions = struct {
+    button: bool = false,
+    opened: bool = false,
+    open_on_text_change: bool = false,
+};
 
-    var suggestions_widget = dvui.SuggestionsWidget.init(src, text_entry, .{});
-    try suggestions_widget.install();
-    if (suggested_values.len > 0 and try suggestions_widget.dropped()) {
-        for (suggested_values) |value| {
-            if (try suggestions_widget.addSuggestionLabel(value)) {
-                suggestions_widget.close();
-                suggestions_widget.chooseText(value);
+pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*SuggestionWidget {
+    var open_sug = init_opts.opened;
+
+    if (init_opts.button) {
+        if (try dvui.buttonIcon(@src(), "combobox_triangle", entypo.chevron_small_down, .{}, .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0 })) {
+            open_sug = true;
+            dvui.focusWidget(te.data().id, null, null);
+        }
+    }
+
+    var rs = te.data().borderRectScale();
+    rs.r.y += rs.r.h; // position below textEntry
+
+    const min_width = te.textLayout.data().backgroundRect().w;
+
+    var sug = try currentWindow().arena().create(SuggestionWidget);
+    sug.* = dvui.SuggestionWidget.init(@src(), .{ .rs = rs, .text_entry_id = te.data().id }, .{ .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
+    try sug.install();
+    if (open_sug) {
+        sug.open();
+    }
+
+    // process events from textEntry
+    const evts = dvui.events();
+    for (evts) |*e| {
+        if (!te.matchEvent(e)) {
+            continue;
+        }
+
+        if (e.evt == .key and (e.evt.key.action == .down or e.evt.key.action == .repeat)) {
+            switch (e.evt.key.code) {
+                .up => {
+                    if (try sug.dropped()) {
+                        sug.selected_index -|= 1;
+                    }
+                },
+                .down => {
+                    e.handled = true;
+                    if (try sug.dropped()) {
+                        sug.selected_index += 1;
+                    } else {
+                        sug.open();
+                    }
+                },
+                .escape => {
+                    e.handled = true;
+                    sug.close();
+                },
+                .enter => {
+                    if (try sug.dropped()) {
+                        e.handled = true;
+                        sug.activate_selected = true;
+                    }
+                },
+                else => {},
+            }
+        }
+
+        if (!e.handled) {
+            te.processEvent(e, false);
+        }
+    }
+
+    if (init_opts.open_on_text_change and te.text_changed) {
+        sug.open();
+    }
+
+    return sug;
+}
+
+pub fn comboBox(src: std.builtin.SourceLocation, entries: []const []const u8, init_opts: TextEntryWidget.InitOptions, opts: Options) !*TextEntryWidget {
+    var te = try currentWindow().arena().create(TextEntryWidget);
+    te.* = dvui.TextEntryWidget.init(src, init_opts, opts);
+    try te.install();
+
+    var sug = try dvui.suggestion(te, .{ .button = true });
+
+    if (try sug.dropped()) {
+        for (entries) |entry| {
+            if (try sug.addChoiceLabel(entry)) {
+                te.textSet(entry, false);
             }
         }
     }
-    suggestions_widget.deinit();
 
-    text_entry.processEvents();
+    sug.deinit();
 
-    if (text_entry.text_changed) {
-        suggestions_widget.open();
-    }
-
-    try text_entry.draw();
-    return text_entry;
+    // suggestion forwards events to textEntry, so don't call te.processEvents()
+    try te.draw();
+    return te;
 }
 
 pub const TabsWidget = struct {
