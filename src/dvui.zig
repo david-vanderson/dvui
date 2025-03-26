@@ -4430,6 +4430,98 @@ pub fn dialogDisplay(id: u32) !void {
     scroll.deinit();
 }
 
+pub const DialogWasmFileOptions = struct {
+    /// Filter files shown by setting the [accept](https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/accept) attribute
+    ///
+    /// Example: ".pdf, image/*"
+    accept: ?[]const u8 = null,
+};
+
+const WasmFile = struct {
+    id: u32,
+    index: usize,
+    /// The size of the data in bytes
+    size: usize,
+    /// The filename of the uploaded file. Does not include the path of the file
+    name: [:0]const u8,
+
+    pub fn readData(self: *WasmFile, allocator: std.mem.Allocator) ![]u8 {
+        std.debug.assert(wasm); // WasmFile shouldn't be used outside wasm builds
+        const data = try allocator.alloc(u8, self.size);
+        dvui.backend.readFileData(self.id, self.index, data.ptr);
+        return data;
+    }
+};
+
+/// Opens a file picker WITHOUT blocking. The file can be accessed by calling wasmFileUploaded(id) with the same id
+///
+/// This function does nothing in non-wasm builds
+pub fn dialogWasmFileOpen(id: u32, opts: DialogWasmFileOptions) void {
+    if (!wasm) return;
+    dvui.backend.openFilePicker(id, opts.accept, false);
+}
+
+/// Will only return a non-null value for a single frame
+///
+/// This function does nothing in non-wasm builds
+pub fn wasmFileUploaded(id: u32) ?WasmFile {
+    if (!wasm) return null;
+    const num_files = dvui.backend.getNumberOfFilesAvailable(id);
+    if (num_files == 0) return null;
+    if (num_files > 1) {
+        log.err("Recived more than one file for id {d}. Did you mean to call wasmFileUploadedMultiple?", .{id});
+    }
+    const name = dvui.backend.getFileName(id, 0);
+    const size = dvui.backend.getFileSize(id, 0);
+    if (name == null or size == null) {
+        log.err("Could not get file metadata. Got size: {?d} and name: {?s}", .{ size, name });
+        return null;
+    }
+    return WasmFile{
+        .id = id,
+        .index = 0,
+        .size = size.?,
+        .name = name.?,
+    };
+}
+
+/// Opens a file picker WITHOUT blocking. The files can be accessed by calling wasmFileUploadedMultiple(id) with the same id
+///
+/// This function does nothing in non-wasm builds
+pub fn dialogWasmFileOpenMultiple(id: u32, opts: DialogWasmFileOptions) void {
+    if (!wasm) return;
+    dvui.backend.openFilePicker(id, opts.accept, true);
+}
+
+/// Will only return a non-null value for a single frame
+///
+/// This function does nothing in non-wasm builds
+pub fn wasmFileUploadedMultiple(id: u32) ?[]WasmFile {
+    if (!wasm) return null;
+    const num_files = dvui.backend.getNumberOfFilesAvailable(id);
+    if (num_files == 0) return null;
+
+    const files = dvui.currentWindow().arena().alloc(WasmFile, num_files) catch |err| {
+        log.err("File upload skipped, failed to allocate space for file handles: {!}", .{err});
+        return null;
+    };
+    for (0.., files) |i, *file| {
+        const name = dvui.backend.getFileName(id, i);
+        const size = dvui.backend.getFileSize(id, i);
+        if (name == null or size == null) {
+            log.err("Could not get file metadata for id {d} file number {d}. Got size: {?d} and name: {?s}", .{ id, i, size, name });
+            return null;
+        }
+        file.* = WasmFile{
+            .id = id,
+            .index = i,
+            .size = size.?,
+            .name = name.?,
+        };
+    }
+    return files;
+}
+
 pub const DialogNativeFileOptions = struct {
     /// Title of the dialog window
     title: ?[]const u8 = null,

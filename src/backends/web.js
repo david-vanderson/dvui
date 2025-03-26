@@ -10,6 +10,34 @@ async function dvui_fetch(url) {
     return new Uint8Array(await blob.arrayBuffer());
 }
 
+async function dvui_open_file_picker(accept, multiple) {
+    return new Promise((res, rej) => {
+        const file_input = document.createElement("input");
+        file_input.setAttribute("type", "file");
+        file_input.setAttribute("accept", accept);
+        if (multiple) {
+            file_input.toggleAttribute("multiple", true);
+        }
+        file_input.oncancel = () => {
+            console.trace("File picking cancelled");
+            rej("canceled");
+        };
+        file_input.onchange = () => {
+            if (file_input.files.length === 0) {
+                console.error("File picker picked no files");
+                file_input.oncancel();
+            }
+            if (!multiple && file_input.files.length > 1) {
+                console.error("Picked multiple files in single file picker");
+                rej("Too many files")
+                return;
+            }
+            res(file_input.files)
+        };
+        file_input.click();
+    });
+}
+
 function dvui(canvasId, wasmFile) {
 
     const vertexShaderSource_webgl = `
@@ -110,6 +138,10 @@ function dvui(canvasId, wasmFile) {
     let hidden_input;
     let touches = [];  // list of tuple (touch identifier, initial index)
     let textInputRect = [];  // x y w h of on screen keyboard editing position, or empty if none
+
+    // Used for file uploads. Only valid for one frame
+    let filesCacheModified = false;
+    let filesCache = new Map();
 
     //let par = document.createElement("p");
     //document.body.prepend(par);
@@ -435,6 +467,50 @@ function dvui(canvasId, wasmFile) {
 	    document.body.removeChild(dl);
 	    URL.revokeObjectURL(fileURL);
         },
+        wasm_open_file_picker(id, accept_ptr, accept_len, multiple) {
+            let accept = utf8decoder.decode(new Uint8Array(wasmResult.instance.exports.memory.buffer, accept_ptr, accept_len));
+            // console.log("Open picker", accept_ptr, accept_len, accept, multiple);
+            dvui_open_file_picker(accept, multiple).then(filelist => {
+                let files = [];
+                let data = [];
+                for (let i = 0; i < filelist.length; i++) {
+                    const file = filelist.item(i);
+                    files.push(file);
+                    data.push(file.arrayBuffer());
+                }
+                Promise.all(data).then(data => {
+                    filesCacheModified = true;
+                    filesCache.set(id, { files, data })
+                });
+            })
+        },
+        wasm_get_file_size(id, file_index) {
+            const cached = filesCache.get(id);
+            if (!cached || cached.files.length <= file_index) return;
+            const size = cached.files[file_index].size;
+            return size;
+        },
+        wasm_get_file_name(id, file_index) {
+            const cached = filesCache.get(id);
+            if (!cached || cached.files.length <= file_index) return;
+            const name = utf8encoder.encode(cached.files[file_index].name);
+		    const ptr = wasmResult.instance.exports.arena_u8(name.length + 1);
+		    var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, ptr, name.length + 1);
+            dest.set(name);
+            dest.set([0], name.length);
+            return ptr;
+        },
+        wasm_read_file_data(id, file_index, data_ptr) {
+            const cached = filesCache.get(id);
+            if (!cached || cached.files.length <= file_index) return;
+		    var dest = new Uint8Array(wasmResult.instance.exports.memory.buffer, data_ptr);
+            dest.set(new Uint8Array(cached.data[file_index]));
+        },
+        wasm_get_number_of_files_available(id) {
+            const cached = filesCache.get(id);
+            if (!cached) return 0;
+            return cached.files.length;
+        },
         wasm_clipboardTextSet: (ptr, len) => {
             if (len == 0) {
                 return;
@@ -471,6 +547,7 @@ function dvui(canvasId, wasmFile) {
 
         wasmResult = result;
 
+        /** @type {HTMLCanvasElement} */
         const canvas = document.querySelector(canvasId);
 
         hidden_input = document.createElement("input");
@@ -601,12 +678,20 @@ function dvui(canvasId, wasmFile) {
             }
 
             let millis_to_wait = wasmResult.instance.exports.app_update();
+            if (!filesCacheModified) {
+                // Only clear if we didn't add anything this frame. Async could add items after they were requested 
+                // in the frame, so keep if for two frames 
+                filesCache.clear();
+            }
+            filesCacheModified = false;
             if (millis_to_wait == 0) {
                 requestRender();
             } else if (millis_to_wait > 0) {
                 renderTimeoutId = setTimeout(function () { renderTimeoutId = 0; requestRender(); }, millis_to_wait);
             }
             // otherwise something went wrong, so stop
+
+            
         }
 
         function requestRender() {
