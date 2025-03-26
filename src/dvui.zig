@@ -4970,6 +4970,118 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
     return ret;
 }
 
+pub const SuggestionWidget = struct {
+    pub var defaults: Options = .{
+        .name = "Suggestions",
+    };
+
+    pub const InitOptions = struct {
+        rs: RectScale,
+        text_entry_id: u32,
+    };
+
+    id: u32 = undefined,
+    options: Options = undefined,
+    init_options: InitOptions = undefined,
+
+    // menu catches the close_popup from drop if you click off of it
+    menu: *MenuWidget = undefined,
+    drop: ?*FloatingMenuWidget = null,
+    drop_first_frame: bool = false,
+    drop_mi: ?MenuItemWidget = null,
+    drop_mi_index: usize = 0,
+    selected_index: usize = undefined, // 1 indexed, 0 means nothing selected
+    activate_selected: bool = false,
+
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) SuggestionWidget {
+        var self = SuggestionWidget{};
+        self.id = dvui.parentGet().extendId(src, opts.idExtra());
+        self.options = defaults.override(opts);
+        self.init_options = init_opts;
+        self.selected_index = dvui.dataGet(null, self.id, "_selected", usize) orelse 1;
+        return self;
+    }
+
+    pub fn install(self: *SuggestionWidget) !void {
+        self.menu = try dvui.menu(@src(), .horizontal, .{ .rect = .{}, .id_extra = self.options.idExtra() });
+    }
+
+    pub fn open(self: *SuggestionWidget) void {
+        self.menu.submenus_activated = true;
+    }
+
+    pub fn close(self: *SuggestionWidget) void {
+        self.menu.submenus_activated = false;
+    }
+
+    pub fn dropped(self: *SuggestionWidget) !bool {
+        if (self.drop != null) {
+            // protect against calling this multiple times
+            return true;
+        }
+
+        if (self.menu.submenus_activated) {
+            self.drop = try dvui.floatingMenu(@src(), self.init_options.rs.r, self.options);
+            self.drop_first_frame = dvui.firstFrame(self.drop.?.data().id);
+            if (self.drop_first_frame) {
+                // don't take focus away from text_entry when showing the suggestions
+                dvui.focusWidget(self.init_options.text_entry_id, null, null);
+            }
+        }
+
+        if (self.drop != null) {
+            return true;
+        }
+
+        return false;
+    }
+
+    pub fn addChoiceLabel(self: *SuggestionWidget, label_str: []const u8) !bool {
+        var mi = try self.addChoice();
+
+        try labelNoFmt(@src(), label_str, .{});
+
+        var ret: bool = false;
+        if (mi.activeRect()) |_| {
+            self.close();
+            ret = true;
+        }
+
+        mi.deinit();
+
+        return ret;
+    }
+
+    pub fn addChoice(self: *SuggestionWidget) !*MenuItemWidget {
+        self.drop_mi_index += 1;
+
+        self.drop_mi = MenuItemWidget.init(@src(), .{}, .{ .id_extra = self.drop_mi_index, .expand = .horizontal, .padding = .{} });
+        if (self.selected_index == self.drop_mi_index) {
+            if (self.activate_selected) {
+                self.drop_mi.?.activated = true;
+                self.drop_mi.?.show_active = true;
+            } else {
+                self.drop_mi.?.highlight = true;
+            }
+        }
+        try self.drop_mi.?.install();
+        self.drop_mi.?.processEvents();
+        try self.drop_mi.?.drawBackground(.{});
+
+        return &self.drop_mi.?;
+    }
+
+    pub fn deinit(self: *SuggestionWidget) void {
+        self.selected_index = @min(self.selected_index, self.drop_mi_index);
+        dvui.dataSet(null, self.id, "_selected", self.selected_index);
+        if (self.drop != null) {
+            self.drop.?.deinit();
+            self.drop = null;
+        }
+        self.menu.deinit();
+    }
+};
+
 pub fn textEntrySuggestions(src: std.builtin.SourceLocation, suggested_values: []const []const u8, opts: Options) !*TextEntryWidget {
     var text_entry = try currentWindow().arena().create(TextEntryWidget);
     text_entry.* = dvui.TextEntryWidget.init(src, .{}, opts);
