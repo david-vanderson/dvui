@@ -5126,7 +5126,10 @@ pub const SuggestionWidget = struct {
     }
 
     pub fn deinit(self: *SuggestionWidget) void {
-        self.selected_index = @min(self.selected_index, self.drop_mi_index);
+        if (self.selected_index > self.drop_mi_index) {
+            self.selected_index = self.drop_mi_index;
+            dvui.refresh(null, @src(), self.id);
+        }
         dvui.dataSet(null, self.id, "_selected", self.selected_index);
         if (self.drop != null) {
             self.drop.?.deinit();
