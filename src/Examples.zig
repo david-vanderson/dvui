@@ -2016,7 +2016,7 @@ pub fn menus() !void {
         defer ctext.deinit();
 
         if (ctext.activePoint()) |cp| {
-            var fw2 = try dvui.floatingMenu(@src(), Rect.fromPoint(cp), .{});
+            var fw2 = try dvui.floatingMenu(@src(), .{ .from = Rect.fromPoint(cp) }, .{});
             defer fw2.deinit();
 
             try submenus();
@@ -2033,7 +2033,7 @@ pub fn menus() !void {
         defer m.deinit();
 
         if (try dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
-            var fw = try dvui.floatingMenu(@src(), Rect.fromPoint(Point{ .x = r.x, .y = r.y + r.h }), .{});
+            var fw = try dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
 
             try submenus();
@@ -2051,7 +2051,7 @@ pub fn menus() !void {
         }
 
         if (try dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
-            var fw = try dvui.floatingMenu(@src(), Rect.fromPoint(Point{ .x = r.x, .y = r.y + r.h }), .{});
+            var fw = try dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
             _ = try dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
             _ = try dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
@@ -2139,9 +2139,7 @@ pub fn menus() !void {
 
 pub fn submenus() !void {
     if (try dvui.menuItemLabel(@src(), "Submenu...", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
-        var menu_rect = r;
-        menu_rect.x += menu_rect.w;
-        var fw2 = try dvui.floatingMenu(@src(), menu_rect, .{});
+        var fw2 = try dvui.floatingMenu(@src(), .{ .from = r }, .{ .debug = true });
         defer fw2.deinit();
 
         try submenus();

@@ -192,7 +192,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         screen.w += offleft + offleft;
         // okay if we are off the bottom but still see the top
         screen.h += self.wd.rect.h - 24;
-        self.wd.rect = dvui.placeOnScreen(screen, .{}, self.wd.rect);
+        self.wd.rect = dvui.placeOnScreen(screen, .{}, .none, self.wd.rect);
     }
 
     return self;
