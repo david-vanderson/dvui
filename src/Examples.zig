@@ -2874,7 +2874,7 @@ pub fn dialogs(demo_win_id: u32) !void {
 
         if (try dvui.button(@src(), "Save File", .{}, .{})) {
             if (dvui.wasm) {
-                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not available in web" });
+                try dvui.dialog(@src(), .{ .modal = false, .title = "Save File", .ok_label = "Ok", .message = "Not available on the web.  For file download, see \"Save Plot\" in the plots example." });
             } else {
                 const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{ .title = "dvui native file save" });
                 if (filename) |f| {
