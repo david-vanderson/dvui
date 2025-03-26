@@ -268,6 +268,10 @@ pub fn deinit(self: *FloatingMenuWidget) void {
         self.processEvent(&closeE, true);
     }
 
+    // in case no children ever show up, this will provide a visual indication
+    // that there is an empty floating menu
+    self.wd.minSizeMax(self.wd.options.padSize(.{ .w = 20, .h = 20 }));
+
     self.wd.minSizeSetAndRefresh();
 
     // outside normal layout, don't call minSizeForChild or self.wd.minSizeReportToParent();
