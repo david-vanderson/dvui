@@ -5147,7 +5147,7 @@ pub const SuggestionWidget = struct {
     drop: ?*FloatingMenuWidget = null,
     drop_mi: ?MenuItemWidget = null,
     drop_mi_index: usize = 0,
-    selected_index: usize = undefined, // 1 indexed, 0 means nothing selected
+    selected_index: usize = undefined, // 0 indexed
     activate_selected: bool = false,
 
     pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) SuggestionWidget {
@@ -5155,7 +5155,7 @@ pub const SuggestionWidget = struct {
         self.id = dvui.parentGet().extendId(src, opts.idExtra());
         self.options = defaults.override(opts);
         self.init_options = init_opts;
-        self.selected_index = dvui.dataGet(null, self.id, "_selected", usize) orelse 1;
+        self.selected_index = dvui.dataGet(null, self.id, "_selected", usize) orelse 0;
         return self;
     }
 
@@ -5209,8 +5209,6 @@ pub const SuggestionWidget = struct {
     }
 
     pub fn addChoice(self: *SuggestionWidget) !*MenuItemWidget {
-        self.drop_mi_index += 1;
-
         self.drop_mi = MenuItemWidget.init(@src(), .{}, .{ .id_extra = self.drop_mi_index, .expand = .horizontal, .padding = .{} });
         if (self.selected_index == self.drop_mi_index) {
             if (self.activate_selected) {
@@ -5224,12 +5222,14 @@ pub const SuggestionWidget = struct {
         self.drop_mi.?.processEvents();
         try self.drop_mi.?.drawBackground(.{});
 
+        self.drop_mi_index += 1;
+
         return &self.drop_mi.?;
     }
 
     pub fn deinit(self: *SuggestionWidget) void {
-        if (self.selected_index > self.drop_mi_index) {
-            self.selected_index = self.drop_mi_index;
+        if (self.selected_index > (self.drop_mi_index -| 1)) {
+            self.selected_index = self.drop_mi_index -| 1;
             dvui.refresh(null, @src(), self.id);
         }
         dvui.dataSet(null, self.id, "_selected", self.selected_index);
