@@ -24,6 +24,10 @@ pub fn pad(s: *const Size, padding: Rect) Size {
     return Size{ .w = s.w + padding.x + padding.w, .h = s.h + padding.y + padding.h };
 }
 
+pub fn padNeg(s: *const Size, padding: Rect) Size {
+    return Size{ .w = @max(0, s.w - padding.x - padding.w), .h = @max(0, s.h - padding.y - padding.h) };
+}
+
 pub fn max(a: Size, b: Size) Size {
     return Size{ .w = @max(a.w, b.w), .h = @max(a.h, b.h) };
 }

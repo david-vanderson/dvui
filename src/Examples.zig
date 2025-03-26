@@ -1185,7 +1185,53 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
         }
     }
 
-    _ = try dvui.spacer(@src(), .{ .h = 20 }, .{});
+    _ = try dvui.spacer(@src(), .{ .h = 10 }, .{});
+
+    // Combobox
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "ComboBox", .{}, .{ .gravity_y = 0.5 });
+
+        try left_alignment.spacer(@src(), 0);
+
+        const entries: []const []const u8 = &.{
+            "one", "two", "three", "four", "five", "six",
+        };
+
+        var te = try dvui.comboBox(@src(), entries, .{}, .{});
+        te.deinit();
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Suggest", .{}, .{ .gravity_y = 0.5 });
+
+        try left_alignment.spacer(@src(), 0);
+
+        var te = dvui.TextEntryWidget.init(@src(), .{}, .{ .max_size_content = dvui.Options.sizeM(20, 0) });
+        try te.install();
+
+        var sug = try dvui.suggestion(&te, .{ .open_on_text_change = true });
+
+        if (try sug.dropped()) {
+            if (try sug.addChoiceLabel("Set to \"hello\"")) {
+                te.textSet("hello", false);
+            }
+            _ = try sug.addChoiceLabel("close");
+        }
+
+        sug.deinit();
+
+        // suggestion forwards events to textEntry, so don't call te.processEvents()
+        try te.draw();
+        te.deinit();
+    }
+
+    _ = try dvui.spacer(@src(), .{ .h = 10 }, .{});
 
     const parse_types = [_]type{ u8, i8, u16, i16, u32, i32, f32, f64 };
     const parse_typenames: [parse_types.len][]const u8 = blk: {
@@ -1581,7 +1627,7 @@ pub fn layoutText() !void {
         try tl.install(.{});
         defer tl.deinit();
 
-        var cbox = try dvui.box(@src(), .vertical, .{ .margin = .{ .w = 6 }, .min_size_content = .{ .w = 40 } });
+        var cbox = try dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(6), .min_size_content = .{ .w = 40 } });
         if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{}, .{ .expand = .ratio })) {
             try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
         }
@@ -1983,7 +2029,7 @@ pub fn menus() !void {
         defer ctext.deinit();
 
         if (ctext.activePoint()) |cp| {
-            var fw2 = try dvui.floatingMenu(@src(), Rect.fromPoint(cp), .{});
+            var fw2 = try dvui.floatingMenu(@src(), .{ .from = Rect.fromPoint(cp) }, .{});
             defer fw2.deinit();
 
             try submenus();
@@ -2000,7 +2046,7 @@ pub fn menus() !void {
         defer m.deinit();
 
         if (try dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
-            var fw = try dvui.floatingMenu(@src(), Rect.fromPoint(Point{ .x = r.x, .y = r.y + r.h }), .{});
+            var fw = try dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
 
             try submenus();
@@ -2018,7 +2064,7 @@ pub fn menus() !void {
         }
 
         if (try dvui.menuItemLabel(@src(), "Edit", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
-            var fw = try dvui.floatingMenu(@src(), Rect.fromPoint(Point{ .x = r.x, .y = r.y + r.h }), .{});
+            var fw = try dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
             _ = try dvui.menuItemLabel(@src(), "Dummy", .{}, .{ .expand = .horizontal });
             _ = try dvui.menuItemLabel(@src(), "Dummy Long", .{}, .{ .expand = .horizontal });
@@ -2106,9 +2152,7 @@ pub fn menus() !void {
 
 pub fn submenus() !void {
     if (try dvui.menuItemLabel(@src(), "Submenu...", .{ .submenu = true }, .{ .expand = .horizontal })) |r| {
-        var menu_rect = r;
-        menu_rect.x += menu_rect.w;
-        var fw2 = try dvui.floatingMenu(@src(), menu_rect, .{});
+        var fw2 = try dvui.floatingMenu(@src(), .{ .from = r }, .{ .debug = true });
         defer fw2.deinit();
 
         try submenus();

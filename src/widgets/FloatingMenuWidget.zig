@@ -13,6 +13,16 @@ const ScrollAreaWidget = dvui.ScrollAreaWidget;
 
 const FloatingMenuWidget = @This();
 
+pub const FloatingMenuAvoid = enum {
+    none,
+    horizontal,
+    vertical,
+
+    /// Pick horizontal or vertical based on the direction of the current
+    /// parent menu (if any).
+    auto,
+};
+
 // this lets us maintain a chain of all the nested FloatingMenuWidgets without
 // forcing the user to manually do it
 var popup_current: ?*FloatingMenuWidget = null;
@@ -32,6 +42,11 @@ pub var defaults: Options = .{
     .color_fill = .{ .name = .fill_window },
 };
 
+pub const InitOptions = struct {
+    from: Rect,
+    avoid: FloatingMenuAvoid = .auto,
+};
+
 prev_rendering: bool = undefined,
 wd: WidgetData = undefined,
 options: Options = undefined,
@@ -39,13 +54,13 @@ prev_windowId: u32 = 0,
 parent_popup: ?*FloatingMenuWidget = null,
 have_popup_child: bool = false,
 menu: MenuWidget = undefined,
-initialRect: Rect = Rect{},
+init_options: InitOptions = undefined,
 prevClip: Rect = Rect{},
 scale_val: f32 = undefined,
 scaler: dvui.ScaleWidget = undefined,
 scroll: ScrollAreaWidget = undefined,
 
-pub fn init(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) FloatingMenuWidget {
+pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingMenuWidget {
     var self = FloatingMenuWidget{};
     self.prev_rendering = dvui.renderingSet(false);
 
@@ -63,7 +78,17 @@ pub fn init(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) F
     // get scale from parent
     self.scale_val = self.wd.parent.screenRectScale(Rect{}).s / dvui.windowNaturalScale();
 
-    self.initialRect = initialRect;
+    self.init_options = init_opts;
+    if (self.init_options.avoid == .auto) {
+        if (dvui.MenuWidget.current()) |pm| {
+            self.init_options.avoid = switch (pm.init_opts.dir) {
+                .horizontal => .vertical,
+                .vertical => .horizontal,
+            };
+        } else {
+            self.init_options.avoid = .none;
+        }
+    }
     return self;
 }
 
@@ -73,14 +98,21 @@ pub fn install(self: *FloatingMenuWidget) !void {
     self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id, null).id;
     self.parent_popup = popupSet(self);
 
+    const avoid: dvui.PlaceOnScreenAvoid = switch (self.init_options.avoid) {
+        .none => .none,
+        .horizontal => .horizontal,
+        .vertical => .vertical,
+        .auto => unreachable,
+    };
+
     if (dvui.minSizeGet(self.wd.id)) |_| {
-        self.wd.rect = Rect.fromPoint(self.initialRect.topLeft());
+        self.wd.rect = Rect.fromPoint(self.init_options.from.topLeft());
         const ms = dvui.minSize(self.wd.id, self.options.min_sizeGet());
         self.wd.rect.w = ms.w;
         self.wd.rect.h = ms.h;
-        self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), self.initialRect, self.wd.rect);
+        self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, self.wd.rect);
     } else {
-        self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), self.initialRect, Rect.fromPoint(self.initialRect.topLeft()));
+        self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, Rect.fromPoint(self.init_options.from.topLeft()));
         dvui.focusSubwindow(self.wd.id, null);
 
         // need a second frame to fit contents (FocusWindow calls refresh but
@@ -235,6 +267,10 @@ pub fn deinit(self: *FloatingMenuWidget) void {
         var closeE = Event{ .evt = .{ .close_popup = .{ .intentional = false } } };
         self.processEvent(&closeE, true);
     }
+
+    // in case no children ever show up, this will provide a visual indication
+    // that there is an empty floating menu
+    self.wd.minSizeMax(self.wd.options.padSize(.{ .w = 20, .h = 20 }));
 
     self.wd.minSizeSetAndRefresh();
 

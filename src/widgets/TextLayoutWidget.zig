@@ -1370,7 +1370,7 @@ pub fn touchEditing(self: *TextLayoutWidget) !?*FloatingWidget {
             self.te_floating.wd.rect.x = r.x + r.w - self.te_floating.wd.rect.w;
             self.te_floating.wd.rect.y = r.y - self.te_floating.wd.rect.h - self.wd.options.paddingGet().y;
 
-            self.te_floating.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.te_floating.wd.rect.x, .y = self.te_floating.wd.rect.y }, self.te_floating.wd.rect);
+            self.te_floating.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.te_floating.wd.rect.x, .y = self.te_floating.wd.rect.y }, .vertical, self.te_floating.wd.rect);
         } else {
             // need another frame to get our min size
             dvui.refresh(null, @src(), self.te_floating.wd.id);
@@ -1410,7 +1410,14 @@ pub fn data(self: *TextLayoutWidget) *WidgetData {
 
 pub fn rectFor(self: *TextLayoutWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
-    const ret = dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
+
+    // For corner widgets, they might want to be closer to the border than the
+    // text, so fit them without padding, but then need to adjust origin
+    // because screenRectScale assumes we placed in the contentRect
+    var ret = dvui.placeIn(self.wd.backgroundRect().justSize(), min_size, e, g);
+    ret.x -= self.wd.options.paddingGet().x;
+    ret.y -= self.wd.options.paddingGet().y;
+
     var i: usize = undefined;
     if (g.y < 0.5) {
         if (g.x < 0.5) {
@@ -1750,7 +1757,9 @@ pub fn deinit(self: *TextLayoutWidget) void {
     // check if the widgets are taller than the text
     const left_height = (self.corners_min_size[0] orelse Size{}).h + (self.corners_min_size[2] orelse Size{}).h;
     const right_height = (self.corners_min_size[1] orelse Size{}).h + (self.corners_min_size[3] orelse Size{}).h;
-    self.wd.min_size.h = @max(self.wd.min_size.h, self.wd.options.padSize(.{ .h = @max(left_height, right_height) }).h);
+    // adjust for corner widgets not being inside textLayout's padding
+    const padded = self.wd.options.padSize(.{ .h = @max(left_height, right_height) }).padNeg(self.wd.options.paddingGet());
+    self.wd.min_size.h = @max(self.wd.min_size.h, padded.h);
 
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
