@@ -4445,7 +4445,7 @@ const WasmFile = struct {
     /// The filename of the uploaded file. Does not include the path of the file
     name: [:0]const u8,
 
-    pub fn read_data(self: *WasmFile, allocator: std.mem.Allocator) ![]u8 {
+    pub fn readData(self: *WasmFile, allocator: std.mem.Allocator) ![]u8 {
         std.debug.assert(wasm); // WasmFile shouldn't be used outside wasm builds
         const data = try allocator.alloc(u8, self.size);
         dvui.backend.readFileData(self.id, self.index, data.ptr);
