@@ -2771,9 +2771,11 @@ pub fn dialogs(demo_win_id: u32) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
+        const single_file_id = hbox.widget().extendId(@src(), 0);
+
         if (try dvui.button(@src(), "Open File", .{}, .{})) {
             if (dvui.wasm) {
-                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
+                dvui.dialogWasmFileOpen(single_file_id, .{ .accept = ".png, .jpg" });
             } else {
                 const filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "dvui native file open", .filters = &.{ "*.png", "*.jpg" }, .filter_description = "images" });
                 if (filename) |f| {
@@ -2782,9 +2784,15 @@ pub fn dialogs(demo_win_id: u32) !void {
             }
         }
 
+        if (dvui.wasmFileUploaded(single_file_id)) |file| {
+            try dvui.dialog(@src(), .{ .modal = false, .title = "File Open Result", .ok_label = "Done", .message = file.name });
+        }
+
+        const multi_file_id = hbox.widget().extendId(@src(), 0);
+
         if (try dvui.button(@src(), "Open Multiple Files", .{}, .{})) {
             if (dvui.wasm) {
-                try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Not implemented for web" });
+                dvui.dialogWasmFileOpenMultiple(multi_file_id, .{ .accept = ".png, .jpg" });
             } else {
                 const filenames = try dvui.dialogNativeFileOpenMultiple(dvui.currentWindow().arena(), .{ .title = "dvui native file open multiple", .filter_description = "images" });
                 if (filenames) |fs| {
@@ -2792,6 +2800,17 @@ pub fn dialogs(demo_win_id: u32) !void {
                     try dvui.dialog(@src(), .{ .modal = false, .title = "File Open Multiple Result", .ok_label = "Done", .message = msg });
                 }
             }
+        }
+
+        if (dvui.wasmFileUploadedMultiple(multi_file_id)) |files| {
+            var msg = std.ArrayList(u8).init(dvui.currentWindow().arena());
+            var writer = msg.writer();
+            for (files) |file| {
+                try writer.writeAll(file.name);
+                try writer.writeByte('\n');
+            }
+            _ = msg.pop(); // remove the last newline character
+            try dvui.dialog(@src(), .{ .modal = false, .title = "File Open Multiple Result", .ok_label = "Done", .message = msg.items });
         }
     }
     {
