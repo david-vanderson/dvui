@@ -179,50 +179,107 @@ pub const Alignment = struct {
     }
 };
 
+pub const PlaceOnScreenAvoid = enum {
+    none,
+    horizontal,
+    vertical,
+};
+
 /// Adjust start rect based on screen and spawner (like a context menu).
 ///
 /// When adding a floating widget or window, often we want to guarantee that it
 /// is visible.  Additionally, if start is logically connected to a spawning
 /// rect (like a context menu spawning a submenu), then jump to the opposite
 /// side if needed.
-pub fn placeOnScreen(screen: Rect, spawner: Rect, start: Rect) Rect {
+pub fn placeOnScreen(screen: Rect, spawner: Rect, avoid: PlaceOnScreenAvoid, start: Rect) Rect {
     var r = start;
-    if ((r.x + r.w) > (screen.x + screen.w)) {
-        if (spawner.w == 0) {
-            // if we were given just point, we can slide just to be on the screen
-            r.x = (screen.x + screen.w) - r.w;
-        } else {
-            // if spawner has content, then we want to jump to the other side
-            r.x = spawner.x - spawner.w - r.w;
+
+    // first move to avoid spawner
+    if (!r.intersect(spawner).empty()) {
+        switch (avoid) {
+            .none => {},
+            .horizontal => r.x = spawner.x + spawner.w,
+            .vertical => r.y = spawner.y + spawner.h,
         }
     }
 
-    // if off left, move
-    if (r.x < screen.x) {
-        r.x = screen.x;
+    // fix up if we ran off right side of screen
+    switch (avoid) {
+        .none, .vertical => {
+            // if off right, move
+            if ((r.x + r.w) > (screen.x + screen.w)) {
+                r.x = (screen.x + screen.w) - r.w;
+            }
+
+            // if off left, move
+            if (r.x < screen.x) {
+                r.x = screen.x;
+            }
+
+            // if off right, shrink to fit (but not to zero)
+            // - if we went to zero, then a window could get into a state where you can
+            // no longer see it or interact with it (like if you resize the OS window
+            // to zero size and back)
+            if ((r.x + r.w) > (screen.x + screen.w)) {
+                r.w = @max(24, (screen.x + screen.w) - r.x);
+            }
+        },
+        .horizontal => {
+            // if off right, is there more room on left
+            if ((r.x + r.w) > (screen.x + screen.w)) {
+                if ((spawner.x - screen.x) > (screen.x + screen.w - (spawner.x + spawner.w))) {
+                    // more room on left, switch
+                    r.x = spawner.x - r.w;
+
+                    if (r.x < screen.x) {
+                        // off left, shrink
+                        r.x = screen.x;
+                        r.w = spawner.x - screen.x;
+                    }
+                } else {
+                    // more room on left, shrink
+                    r.w = @max(24, (screen.x + screen.w) - r.x);
+                }
+            }
+        },
     }
 
-    // if off right, shrink to fit (but not to zero)
-    // - if we went to zero, then a window could get into a state where you can
-    // no longer see it or interact with it (like if you resize the OS window
-    // to zero size and back)
-    if ((r.x + r.w) > (screen.x + screen.w)) {
-        r.w = @max(24, (screen.x + screen.w) - r.x);
-    }
+    // fix up if we ran off bottom of screen
+    switch (avoid) {
+        .none, .horizontal => {
+            // if off bottom, first try moving
+            if ((r.y + r.h) > (screen.y + screen.h)) {
+                r.y = (screen.y + screen.h) - r.h;
+            }
 
-    // if off bottom, first try moving
-    if ((r.y + r.h) > (screen.y + screen.h)) {
-        r.y = (screen.y + screen.h) - r.h;
-    }
+            // if off top, move
+            if (r.y < screen.y) {
+                r.y = screen.y;
+            }
 
-    // if off top, move
-    if (r.y < screen.y) {
-        r.y = screen.y;
-    }
+            // if still off bottom, shrink to fit (but not to zero)
+            if ((r.y + r.h) > (screen.y + screen.h)) {
+                r.h = @max(24, (screen.y + screen.h) - r.y);
+            }
+        },
+        .vertical => {
+            // if off bottom, is there more room on top?
+            if ((r.y + r.h) > (screen.y + screen.h)) {
+                if ((spawner.y - screen.y) > (screen.y + screen.h - (spawner.y + spawner.h))) {
+                    // more room on top, switch
+                    r.y = spawner.y - r.h;
 
-    // if still off bottom, shrink to fit (but not to zero)
-    if ((r.y + r.h) > (screen.y + screen.h)) {
-        r.h = @max(24, (screen.y + screen.h) - r.y);
+                    if (r.y < screen.y) {
+                        // off top, shrink
+                        r.y = screen.y;
+                        r.h = spawner.y - screen.y;
+                    }
+                } else {
+                    // more room on bottom, shrink
+                    r.h = @max(24, (screen.y + screen.h) - r.y);
+                }
+            }
+        },
     }
 
     return r;
@@ -4215,9 +4272,9 @@ pub const Window = struct {
 
 pub const popup = @compileError("popup renamed to floatingMenu");
 
-pub fn floatingMenu(src: std.builtin.SourceLocation, initialRect: Rect, opts: Options) !*FloatingMenuWidget {
+pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) !*FloatingMenuWidget {
     var ret = try currentWindow().arena().create(FloatingMenuWidget);
-    ret.* = FloatingMenuWidget.init(src, initialRect, opts);
+    ret.* = FloatingMenuWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
 }
@@ -4924,20 +4981,20 @@ pub const DropdownWidget = struct {
         }
 
         if (self.menuItem.activeRect()) |r| {
-            self.drop = FloatingMenuWidget.init(@src(), r, .{ .min_size_content = r.size() });
+            self.drop = FloatingMenuWidget.init(@src(), .{ .from = r, .avoid = .none }, .{ .min_size_content = r.size() });
             var drop = &self.drop.?;
             self.drop_first_frame = firstFrame(drop.wd.id);
 
             const s = drop.scale_val;
 
             // move drop up to align first item
-            drop.initialRect.x -= drop.options.borderGet().x * s;
-            drop.initialRect.x -= drop.options.paddingGet().x * s;
-            drop.initialRect.y -= drop.options.borderGet().y * s;
-            drop.initialRect.y -= drop.options.paddingGet().y * s;
+            drop.init_options.from.x -= drop.options.borderGet().x * s;
+            drop.init_options.from.x -= drop.options.paddingGet().x * s;
+            drop.init_options.from.y -= drop.options.borderGet().y * s;
+            drop.init_options.from.y -= drop.options.paddingGet().y * s;
 
             // move drop up so selected entry is aligned
-            drop.initialRect.y -= self.drop_adjust * s;
+            drop.init_options.from.y -= self.drop_adjust * s;
 
             try drop.install();
 
@@ -5069,6 +5126,214 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 
     dd.deinit();
     return ret;
+}
+
+pub const SuggestionWidget = struct {
+    pub var defaults: Options = .{
+        .name = "Suggestions",
+    };
+
+    pub const InitOptions = struct {
+        rs: RectScale,
+        text_entry_id: u32,
+    };
+
+    id: u32 = undefined,
+    options: Options = undefined,
+    init_options: InitOptions = undefined,
+
+    // menu catches the close_popup from drop if you click off of it
+    menu: *MenuWidget = undefined,
+    drop: ?*FloatingMenuWidget = null,
+    drop_mi: ?MenuItemWidget = null,
+    drop_mi_index: usize = 0,
+    selected_index: usize = undefined, // 1 indexed, 0 means nothing selected
+    activate_selected: bool = false,
+
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) SuggestionWidget {
+        var self = SuggestionWidget{};
+        self.id = dvui.parentGet().extendId(src, opts.idExtra());
+        self.options = defaults.override(opts);
+        self.init_options = init_opts;
+        self.selected_index = dvui.dataGet(null, self.id, "_selected", usize) orelse 1;
+        return self;
+    }
+
+    pub fn install(self: *SuggestionWidget) !void {
+        self.menu = try dvui.menu(@src(), .horizontal, .{ .rect = .{}, .id_extra = self.options.idExtra() });
+    }
+
+    pub fn open(self: *SuggestionWidget) void {
+        self.menu.submenus_activated = true;
+    }
+
+    pub fn close(self: *SuggestionWidget) void {
+        self.menu.submenus_activated = false;
+    }
+
+    pub fn dropped(self: *SuggestionWidget) !bool {
+        if (self.drop != null) {
+            // protect against calling this multiple times
+            return true;
+        }
+
+        if (self.menu.submenus_activated) {
+            self.drop = try dvui.floatingMenu(@src(), .{ .from = self.init_options.rs.r }, self.options.override(.{ .debug = true }));
+            if (dvui.firstFrame(self.drop.?.data().id)) {
+                // don't take focus away from text_entry when showing the suggestions
+                dvui.focusWidget(self.init_options.text_entry_id, null, null);
+            }
+        }
+
+        if (self.drop != null) {
+            return true;
+        }
+
+        return false;
+    }
+
+    pub fn addChoiceLabel(self: *SuggestionWidget, label_str: []const u8) !bool {
+        var mi = try self.addChoice();
+
+        try labelNoFmt(@src(), label_str, .{});
+
+        var ret: bool = false;
+        if (mi.activeRect()) |_| {
+            self.close();
+            ret = true;
+        }
+
+        mi.deinit();
+
+        return ret;
+    }
+
+    pub fn addChoice(self: *SuggestionWidget) !*MenuItemWidget {
+        self.drop_mi_index += 1;
+
+        self.drop_mi = MenuItemWidget.init(@src(), .{}, .{ .id_extra = self.drop_mi_index, .expand = .horizontal, .padding = .{} });
+        if (self.selected_index == self.drop_mi_index) {
+            if (self.activate_selected) {
+                self.drop_mi.?.activated = true;
+                self.drop_mi.?.show_active = true;
+            } else {
+                self.drop_mi.?.highlight = true;
+            }
+        }
+        try self.drop_mi.?.install();
+        self.drop_mi.?.processEvents();
+        try self.drop_mi.?.drawBackground(.{});
+
+        return &self.drop_mi.?;
+    }
+
+    pub fn deinit(self: *SuggestionWidget) void {
+        if (self.selected_index > self.drop_mi_index) {
+            self.selected_index = self.drop_mi_index;
+            dvui.refresh(null, @src(), self.id);
+        }
+        dvui.dataSet(null, self.id, "_selected", self.selected_index);
+        if (self.drop != null) {
+            self.drop.?.deinit();
+            self.drop = null;
+        }
+        self.menu.deinit();
+    }
+};
+
+pub const SuggestionInitOptions = struct {
+    button: bool = false,
+    opened: bool = false,
+    open_on_text_change: bool = false,
+};
+
+pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*SuggestionWidget {
+    var open_sug = init_opts.opened;
+
+    if (init_opts.button) {
+        if (try dvui.buttonIcon(@src(), "combobox_triangle", entypo.chevron_small_down, .{}, .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0 })) {
+            open_sug = true;
+            dvui.focusWidget(te.data().id, null, null);
+        }
+    }
+
+    const min_width = te.textLayout.data().backgroundRect().w;
+
+    var sug = try currentWindow().arena().create(SuggestionWidget);
+    sug.* = dvui.SuggestionWidget.init(@src(), .{ .rs = te.data().borderRectScale(), .text_entry_id = te.data().id }, .{ .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
+    try sug.install();
+    if (open_sug) {
+        sug.open();
+    }
+
+    // process events from textEntry
+    const evts = dvui.events();
+    for (evts) |*e| {
+        if (!te.matchEvent(e)) {
+            continue;
+        }
+
+        if (e.evt == .key and (e.evt.key.action == .down or e.evt.key.action == .repeat)) {
+            switch (e.evt.key.code) {
+                .up => {
+                    if (try sug.dropped()) {
+                        sug.selected_index -|= 1;
+                    }
+                },
+                .down => {
+                    e.handled = true;
+                    if (try sug.dropped()) {
+                        sug.selected_index += 1;
+                    } else {
+                        sug.open();
+                    }
+                },
+                .escape => {
+                    e.handled = true;
+                    sug.close();
+                },
+                .enter => {
+                    if (try sug.dropped()) {
+                        e.handled = true;
+                        sug.activate_selected = true;
+                    }
+                },
+                else => {},
+            }
+        }
+
+        if (!e.handled) {
+            te.processEvent(e, false);
+        }
+    }
+
+    if (init_opts.open_on_text_change and te.text_changed) {
+        sug.open();
+    }
+
+    return sug;
+}
+
+pub fn comboBox(src: std.builtin.SourceLocation, entries: []const []const u8, init_opts: TextEntryWidget.InitOptions, opts: Options) !*TextEntryWidget {
+    var te = try currentWindow().arena().create(TextEntryWidget);
+    te.* = dvui.TextEntryWidget.init(src, init_opts, opts);
+    try te.install();
+
+    var sug = try dvui.suggestion(te, .{ .button = true });
+
+    if (try sug.dropped()) {
+        for (entries) |entry| {
+            if (try sug.addChoiceLabel(entry)) {
+                te.textSet(entry, false);
+            }
+        }
+    }
+
+    sug.deinit();
+
+    // suggestion forwards events to textEntry, so don't call te.processEvents()
+    try te.draw();
+    return te;
 }
 
 pub const TabsWidget = struct {
