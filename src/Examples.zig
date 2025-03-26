@@ -1182,9 +1182,9 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
         }
     }
 
-    _ = try dvui.spacer(@src(), .{ .h = 20 }, .{});
+    _ = try dvui.spacer(@src(), .{ .h = 10 }, .{});
 
-    // Combobox with suggestions
+    // Combobox
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -1195,34 +1195,30 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
         const entries: []const []const u8 = &.{
             "one", "two", "three", "four", "five", "six",
-            "one", "two", "three", "four", "five", "six",
-            "one", "two", "three", "four", "five", "six",
-            "one", "two", "three", "four", "five", "six",
-            "one", "two", "three", "four", "five", "six",
-            "one", "two", "three", "four", "five", "six",
         };
 
-        {
-            var te = try dvui.comboBox(@src(), entries, .{}, .{});
-            te.deinit();
-        }
+        var te = try dvui.comboBox(@src(), entries, .{}, .{});
+        te.deinit();
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Suggest", .{}, .{ .gravity_y = 0.5 });
+
+        try left_alignment.spacer(@src(), 0);
 
         var te = dvui.TextEntryWidget.init(@src(), .{}, .{ .max_size_content = dvui.Options.sizeM(20, 0) });
         try te.install();
 
-        var sug = try dvui.suggestion(&te, .{ .button = true, .open_on_text_change = true });
+        var sug = try dvui.suggestion(&te, .{ .open_on_text_change = true });
 
         if (try sug.dropped()) {
-            for (entries) |entry| {
-                if (try sug.addChoiceLabel(entry)) {
-                    te.textSet(entry, false);
-                }
+            if (try sug.addChoiceLabel("Set to \"hello\"")) {
+                te.textSet("hello", false);
             }
-            //_ = try sug.addChoiceLabel("hello");
-            //if (try sug.addChoiceLabel("close")) {
-            //    te.textSet("close", false);
-            //}
-            //_ = try sug.addChoiceLabel("hello3");
+            _ = try sug.addChoiceLabel("close");
         }
 
         sug.deinit();
@@ -1232,7 +1228,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
         te.deinit();
     }
 
-    _ = try dvui.spacer(@src(), .{ .h = 20 }, .{});
+    _ = try dvui.spacer(@src(), .{ .h = 10 }, .{});
 
     const parse_types = [_]type{ u8, i8, u16, i16, u32, i32, f32, f64 };
     const parse_typenames: [parse_types.len][]const u8 = blk: {
