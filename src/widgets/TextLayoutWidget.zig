@@ -1370,7 +1370,7 @@ pub fn touchEditing(self: *TextLayoutWidget) !?*FloatingWidget {
             self.te_floating.wd.rect.x = r.x + r.w - self.te_floating.wd.rect.w;
             self.te_floating.wd.rect.y = r.y - self.te_floating.wd.rect.h - self.wd.options.paddingGet().y;
 
-            self.te_floating.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.te_floating.wd.rect.x, .y = self.te_floating.wd.rect.y }, self.te_floating.wd.rect);
+            self.te_floating.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.te_floating.wd.rect.x, .y = self.te_floating.wd.rect.y }, .vertical, self.te_floating.wd.rect);
         } else {
             // need another frame to get our min size
             dvui.refresh(null, @src(), self.te_floating.wd.id);
