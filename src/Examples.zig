@@ -1189,73 +1189,45 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        try dvui.label(@src(), "Combobox", .{}, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "ComboBox", .{}, .{ .gravity_y = 0.5 });
 
         try left_alignment.spacer(@src(), 0);
 
-        var open_sug = false;
+        const entries: []const []const u8 = &.{
+            "one", "two", "three", "four", "five", "six",
+            "one", "two", "three", "four", "five", "six",
+            "one", "two", "three", "four", "five", "six",
+            "one", "two", "three", "four", "five", "six",
+            "one", "two", "three", "four", "five", "six",
+            "one", "two", "three", "four", "five", "six",
+        };
+
+        {
+            var te = try dvui.comboBox(@src(), entries, .{}, .{});
+            te.deinit();
+        }
 
         var te = dvui.TextEntryWidget.init(@src(), .{}, .{ .max_size_content = dvui.Options.sizeM(20, 0) });
         try te.install();
-        if (try dvui.buttonIcon(@src(), "combobox_triangle", entypo.chevron_small_down, .{}, .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0 })) {
-            open_sug = true;
-            dvui.focusWidget(te.data().id, null, null);
-        }
 
-        var rs = te.data().borderRectScale();
-        rs.r.y += rs.r.h; // position below textEntry
-
-        const min_width = te.textLayout.data().backgroundRect().w;
-
-        var sug = dvui.SuggestionWidget.init(@src(), .{ .rs = rs, .text_entry_id = te.data().id }, .{ .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
-        try sug.install();
-        if (open_sug) {
-            sug.open();
-        }
-
-        // process events from textEntry
-        const evts = dvui.events();
-        for (evts) |*e| {
-            if (te.matchEvent(e) and e.evt == .key and (e.evt.key.action == .down or e.evt.key.action == .repeat)) {
-                switch (e.evt.key.code) {
-                    .up => {
-                        if (try sug.dropped()) {
-                            sug.selected_index -|= 1;
-                        }
-                    },
-                    .down => {
-                        e.handled = true;
-                        if (try sug.dropped()) {
-                            sug.selected_index += 1;
-                        } else {
-                            sug.open();
-                        }
-                    },
-                    .escape => {
-                        e.handled = true;
-                        sug.close();
-                    },
-                    .enter => {
-                        if (try sug.dropped()) {
-                            e.handled = true;
-                            sug.activate_selected = true;
-                        }
-                    },
-                    else => {},
-                }
-            }
-        }
+        var sug = try dvui.suggestion(&te, .{ .button = true, .open_on_text_change = true });
 
         if (try sug.dropped()) {
-            _ = try sug.addChoiceLabel("hello");
-            if (try sug.addChoiceLabel("close")) {
-                te.textSet("close", false);
+            for (entries) |entry| {
+                if (try sug.addChoiceLabel(entry)) {
+                    te.textSet(entry, false);
+                }
             }
-            _ = try sug.addChoiceLabel("hello3");
+            //_ = try sug.addChoiceLabel("hello");
+            //if (try sug.addChoiceLabel("close")) {
+            //    te.textSet("close", false);
+            //}
+            //_ = try sug.addChoiceLabel("hello3");
         }
+
         sug.deinit();
 
-        te.processEvents();
+        // suggestion forwards events to textEntry, so don't call te.processEvents()
         try te.draw();
         te.deinit();
     }
