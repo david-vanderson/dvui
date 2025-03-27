@@ -46,12 +46,12 @@ pub fn init(src: std.builtin.SourceLocation, opts_in: Options) FloatingWidget {
     // normal layout
     self.wd = WidgetData.init(src, .{ .subwindow = true }, defaults.override(opts).override(.{ .rect = opts.rect orelse .{} }));
 
-    self.prev_rendering = dvui.renderingSet(false);
-
     return self;
 }
 
 pub fn install(self: *FloatingWidget) !void {
+    self.prev_rendering = dvui.renderingSet(false);
+
     dvui.parentSet(self.widget());
 
     self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id, null).id;
