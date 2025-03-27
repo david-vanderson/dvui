@@ -5588,6 +5588,107 @@ pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOpt
     return ret;
 }
 
+pub const TooltipWidget = struct {
+    pub const InitOptions = struct {
+        /// The triggering rect in screen pixels
+        rect: Rect,
+        /// Animation duration in microseconds
+        animation_duration: i32 = 200_000,
+    };
+
+    pub var defaults: Options = .{
+        .corner_radius = Rect.all(4),
+        .background = true,
+    };
+
+    /// Used to check if a tooltip has already been opened this frame
+    /// to prevent opening tooltips beneath the current one
+    // TODO: Make tooltip-in-tooltip possible
+    var tooltip_opened_frame_time: i32 = 0;
+
+    id: u32 = undefined,
+    is_open: bool = false,
+    options: Options = undefined,
+    init_opts: InitOptions = undefined,
+    float: ?FloatingWidget = null,
+    animate: ?AnimateWidget = null,
+
+    pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) TooltipWidget {
+        var self = TooltipWidget{};
+
+        self.init_opts = init_opts;
+        self.options = opts;
+
+        self.id = parentGet().extendId(src, 1);
+
+        return self;
+    }
+
+    pub fn shown(self: *TooltipWidget) !bool {
+        const cw = currentWindow();
+        const mouse_pt = cw.mouse_pt;
+        const current_frame_time: i32 = @truncate(cw.frame_time_ns);
+
+        const is_open = dataGet(null, self.id, "_is_open", bool) orelse false;
+        const mouse_in_trigger_rect = if (tooltip_opened_frame_time == current_frame_time) false else self.init_opts.rect.contains(mouse_pt);
+
+        if (is_open or mouse_in_trigger_rect) blk: {
+            tooltip_opened_frame_time = current_frame_time;
+            const start_offset = dataGet(null, self.id, "_start_offset", f32);
+            if (start_offset == null) {
+                // wait for the mouse to stop to get the horizontal start offset
+                if (!mouseTotalMotion().nonZero()) {
+                    dataSet(null, self.id, "_start_offset", mouse_pt.x);
+                }
+                refresh(null, @src(), self.id);
+                break :blk;
+            }
+
+            self.float = FloatingWidget.init(@src(), .{
+                .name = "Tooltip",
+                .rect = Rect.fromPoint(self.init_opts.rect.bottomLeft()),
+                .id_extra = self.id,
+            });
+            var rs = self.float.?.wd.rectScale();
+            rs.r.x = start_offset.?;
+            self.float.?.wd.rect = placeOnScreen(windowRect(), self.init_opts.rect, .vertical, rs.r);
+            try self.float.?.install();
+
+            var opts = defaults.override(.{ .color_fill = .{ .color = themeGet().color_fill.transparent(0.8) } });
+
+            self.animate = AnimateWidget.init(@src(), .alpha, self.init_opts.animation_duration, opts.override(self.options));
+            try self.animate.?.install();
+
+            // TODO: handle tooltip in tooltips with another solution (similar to chainFocused in FloatingMenuWidget)
+            if (!mouse_in_trigger_rect and !self.float.?.wd.rect.contains(mouse_pt)) {
+                // don't store is_open if mouse is outside trigger and tooltip which will close it next frame
+                dataRemove(null, self.id, "_is_open");
+                refresh(null, @src(), self.id); // refresh with new hidden state
+            } else {
+                dataSet(null, self.id, "_is_open", true);
+            }
+
+            return true;
+        }
+        return false;
+    }
+
+    pub fn deinit(self: *TooltipWidget) void {
+        if (self.animate != null) {
+            self.animate.?.deinit();
+        }
+        if (self.float != null) {
+            self.float.?.deinit();
+        }
+    }
+};
+
+pub fn tooltip(src: std.builtin.SourceLocation, init_opts: TooltipWidget.InitOptions, opts: Options) !*TooltipWidget {
+    const self = try currentWindow().arena().create(TooltipWidget);
+    self.* = TooltipWidget.init(src, init_opts, opts);
+    return self;
+}
+
 pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) !*VirtualParentWidget {
     var ret = try currentWindow().arena().create(VirtualParentWidget);
     ret.* = VirtualParentWidget.init(src, opts);
