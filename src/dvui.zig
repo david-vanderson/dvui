@@ -2942,6 +2942,10 @@ pub const Window = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        for (self.datas_trash.items) |sd| {
+            sd.free(self.gpa);
+        }
+
         {
             var it = self.datas.iterator();
             while (it.next()) |item| item.value_ptr.free(self.gpa);
