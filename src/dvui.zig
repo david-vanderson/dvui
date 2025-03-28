@@ -131,6 +131,9 @@ pub fn toggleDebugWindow() void {
     cw.debug_window_show = !cw.debug_window_show;
 }
 
+/// Help left-align widgets by adding horizontal spacers.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub const Alignment = struct {
     id: u32 = undefined,
     scale: f32 = undefined,
@@ -147,12 +150,14 @@ pub const Alignment = struct {
         };
     }
 
+    /// Add spacer with margin.x so they all end at the same edge.
     pub fn spacer(self: *Alignment, src: std.builtin.SourceLocation, id: u32) !void {
         const uniqueId = dvui.parentGet().extendId(src, id);
         var wd = try dvui.spacer(src, .{}, .{ .margin = self.margin(uniqueId), .id_extra = id });
         self.record(uniqueId, &wd);
     }
 
+    /// Get the margin needed to align this id's left edge.
     pub fn margin(self: *Alignment, id: u32) Rect {
         if (self.max) |m| {
             if (dvui.dataGet(null, id, "_align", f32)) |a| {
@@ -163,6 +168,7 @@ pub const Alignment = struct {
         return .{};
     }
 
+    /// Record where this widget ended up so we can align it next frame.
     pub fn record(self: *Alignment, id: u32, wd: *WidgetData) void {
         const x = wd.rectScale().r.x;
         dvui.dataSet(null, id, "_align", x);
@@ -180,9 +186,13 @@ pub const Alignment = struct {
     }
 };
 
+/// Controls how placeOnScreen() will move start to avoid spawner.
 pub const PlaceOnScreenAvoid = enum {
+    /// Don't avoid spawner
     none,
+    /// Move to right of spawner, or jump to left
     horizontal,
+    /// Move to bottom of spawner, or jump to top
     vertical,
 };
 
@@ -753,12 +763,15 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     return cw.font_cache.getPtr(fontHash).?;
 }
 
+/// A texture held by the backend.  Can be drawn with renderTexture().
 pub const Texture = struct {
     ptr: *anyopaque,
     width: u32,
     height: u32,
 };
 
+/// A texture that will be held by dvui until a frame it is not used.  This is
+/// how dvui caches icon and image rasterizations.
 pub const TextureCacheEntry = struct {
     texture: Texture,
     used: bool = true,
@@ -786,6 +799,9 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
     return height * @as(f32, @floatFromInt(parser.header.width)) / @as(f32, @floatFromInt(parser.header.height));
 }
 
+/// Render tvg_bytes at height into a texture.  Name is for debugging.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !TextureCacheEntry {
     var cw = currentWindow();
     const icon_hash = TextureCacheEntry.hash(tvg_bytes, height);
@@ -822,6 +838,9 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
     return entry;
 }
 
+/// Represents a deferred call to one of the render functions.  This is how
+/// dvui defers rendering of floating windows so they render on top of widgets
+/// that run later in the frame.
 pub const RenderCommand = struct {
     clip: Rect,
     snap: bool,
@@ -870,6 +889,9 @@ pub fn focusSubwindow(subwindow_id: ?u32, event_num: ?u16) void {
     currentWindow().focusSubwindowInternal(subwindow_id, event_num);
 }
 
+/// Helper used by focusWidget.  Overwrites the focus information for events with num >
+/// event_num.  This is how a button can get a tab, move focus to a textEntry,
+/// and that textEntry get a keydown all in the same frame.
 pub fn focusRemainingEvents(event_num: u16, focusWindowId: u32, focusWidgetId: ?u32) void {
     currentWindow().focusRemainingEventsInternal(event_num, focusWindowId, focusWidgetId);
 }
@@ -1455,6 +1477,11 @@ pub fn pathStrokeRaw(path: []const Point, thickness: f32, color: Color, closed_i
     cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
 }
 
+/// Called by floating widgets to participate in subwindow stacking - the order
+/// in which multiple subwindows are drawn and which subwindow mouse events are
+/// tagged with.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_above_parent_window: ?u32) !void {
     const cw = currentWindow();
     const arena = cw.arena();
@@ -1509,6 +1536,10 @@ pub const subwindowCurrentSetReturn = struct {
     rect: Rect, // natural pixels
 };
 
+/// Used by floating windows (subwindows) to install themselves as the current
+/// subwindow (the subwindow that widgets run now will be in).
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn subwindowCurrentSet(id: u32, rect: ?Rect) subwindowCurrentSetReturn {
     const cw = currentWindow();
     const ret: subwindowCurrentSetReturn = .{ .id = cw.subwindow_currentId, .rect = cw.subwindow_currentRect };
@@ -1519,14 +1550,24 @@ pub fn subwindowCurrentSet(id: u32, rect: ?Rect) subwindowCurrentSetReturn {
     return ret;
 }
 
+/// Id of current subwindow (the one widgets run now will be in).
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn subwindowCurrentId() u32 {
     const cw = currentWindow();
     return cw.subwindow_currentId;
 }
 
+/// Optional features you might want when doing a mouse/touch drag.
 pub const DragStartOptions = struct {
+    /// Use this cursor from when a drag starts to when it ends.
     cursor: ?enums.Cursor = null,
+
+    /// Offset of point of interest from the mouse.  Useful during a drag to
+    /// locate where to move the point of interest.
     offset: Point = .{},
+
+    /// Used for cross-widget dragging.  See draggingName().
     name: []const u8 = "",
 };
 
@@ -1838,6 +1879,8 @@ pub fn parentSet(w: Widget) void {
 ///
 /// Pass the current parent's id.  This is used to detect a coding error where
 /// a widget's deinit() was accidentally not called.
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn parentReset(id: u32, w: Widget) void {
     const cw = currentWindow();
     const actual_current = cw.wd.parent.data().id;
@@ -1864,6 +1907,11 @@ pub fn parentReset(id: u32, w: Widget) void {
     cw.wd.parent = w;
 }
 
+/// Set if dvui should immediately render, and return the previous setting.
+///
+/// If false, the render functions defer until Window.end().
+///
+/// Only valid between dvui.Window.begin() and end().
 pub fn renderingSet(r: bool) bool {
     const cw = currentWindow();
     const ret = cw.render_target.rendering;
@@ -2281,9 +2329,17 @@ pub fn eventMatchSimple(e: *Event, wd: *WidgetData) bool {
     return eventMatch(e, .{ .id = wd.id, .r = wd.borderRectScale().r });
 }
 
+/// Data for matching events to widgets.  See eventMatch().
 pub const EventMatchOptions = struct {
+    /// Id of widget, used to route non pointer events based on focus.
     id: u32,
+
+    /// Physical pixel rect used to match pointer events.
     r: Rect,
+
+    /// true means match all focus-based events routed to the subwindow with
+    /// id.  This is how subwindows catch things like tab if no widget in that
+    /// subwindow has focus.
     cleanup: bool = false,
 };
 
