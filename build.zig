@@ -4,7 +4,7 @@ const Compile = std.Build.Step.Compile;
 
 pub const BackendToBuild = enum {
     all,
-    none,
+    custom,
     sdl,
     raylib,
     dx11,
@@ -24,10 +24,12 @@ pub fn build(b: *std.Build) !void {
 
     const back_to_build: BackendToBuild = b.option(BackendToBuild, "backend", "Backend to build") orelse .all;
 
-    // For export to users who are bringing their own backend.  Use in your build.zig:
-    // const dvui_mod = dvui_dep.module("dvui");
-    // @import("dvui").linkBackend(dvui_mod, your backend module);
-    _ = addDvuiModule(b, target, optimize, "dvui", true);
+    if (back_to_build == .custom) {
+        // For export to users who are bringing their own backend.  Use in your build.zig:
+        // const dvui_mod = dvui_dep.module("dvui");
+        // @import("dvui").linkBackend(dvui_mod, your backend module);
+        _ = addDvuiModule(b, target, optimize, "dvui", true);
+    }
 
     // SDL
     if (back_to_build == .all or back_to_build == .sdl) {
