@@ -1664,6 +1664,9 @@ pub fn layoutText() !void {
         const start = "\nNotice that the text in this box is wrapping around the stuff in the corners.\n\n";
         try tl.addText(start, .{ .font_style = .title_4 });
 
+        const col = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill);
+        try tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = .{ .color = col }, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
+
         try tl.addText("Title ", .{ .font_style = .title });
         try tl.addText("Title-1 ", .{ .font_style = .title_1 });
         try tl.addText("Title-2 ", .{ .font_style = .title_2 });
