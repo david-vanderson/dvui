@@ -2021,7 +2021,7 @@ pub fn reorderListsAdvanced() !void {
 }
 
 pub fn menus() !void {
-    var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both });
+    var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both, .margin = .{ .x = 4 } });
     defer vbox.deinit();
 
     {
@@ -2073,6 +2073,52 @@ pub fn menus() !void {
     }
 
     try dvui.labelNoFmt(@src(), "Right click for a context menu", .{});
+
+    _ = try dvui.spacer(@src(), .{ .h = 20 }, .{});
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .{ .w = 300 } });
+        defer hbox.deinit();
+
+        var tl = try dvui.textLayout(@src(), .{}, .{ .background = false });
+        try tl.addText("This box has a simple tooltip.", .{});
+        tl.deinit();
+
+        try dvui.tooltip(@src(), .{ .active_rect = hbox.data().rectScale().r }, "{s}", .{"Simple Tooltip"}, .{});
+    }
+
+    _ = try dvui.spacer(@src(), .{ .h = 10 }, .{});
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .{ .w = 300 } });
+        defer hbox.deinit();
+
+        var tl = try dvui.textLayout(@src(), .{}, .{ .background = false });
+        try tl.addText("This box has a complex tooltip with a nested tooltip.", .{});
+        tl.deinit();
+
+        var tt: dvui.FloatingTooltipWidget = .init(@src(), .{
+            .active_rect = hbox.data().rectScale().r,
+        }, .{});
+        if (try tt.shown()) {
+            var tl2 = try dvui.textLayout(@src(), .{}, .{ .background = false });
+            try tl2.addText("This is the tooltip text", .{});
+            tl2.deinit();
+
+            _ = try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
+
+            var tt2: dvui.FloatingTooltipWidget = .init(@src(), .{
+                .active_rect = tt.data().rectScale().r,
+            }, .{});
+            if (try tt2.shown()) {
+                var tl3 = try dvui.textLayout(@src(), .{}, .{ .background = false });
+                try tl3.addText("Text in a nested tooltip", .{});
+                tl3.deinit();
+            }
+            tt2.deinit();
+        }
+        tt.deinit();
+    }
 
     _ = try dvui.spacer(@src(), .{ .h = 20 }, .{});
 
