@@ -62,7 +62,6 @@ scroll: ScrollAreaWidget = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingMenuWidget {
     var self = FloatingMenuWidget{};
-    self.prev_rendering = dvui.renderingSet(false);
 
     // options is really for our embedded ScrollAreaWidget, so save them for the
     // end of install()
@@ -93,6 +92,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *FloatingMenuWidget) !void {
+    self.prev_rendering = dvui.renderingSet(false);
+
     dvui.parentSet(self.widget());
 
     self.prev_windowId = dvui.subwindowCurrentSet(self.wd.id, null).id;

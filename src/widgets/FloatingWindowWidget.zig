@@ -84,7 +84,6 @@ drag_part: ?DragPart = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) FloatingWindowWidget {
     var self = FloatingWindowWidget{};
-    self.prev_rendering = dvui.renderingSet(false);
 
     // options is really for our embedded BoxWidget, so save them for the
     // end of install()
@@ -199,6 +198,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *FloatingWindowWidget) !void {
+    self.prev_rendering = dvui.renderingSet(false);
+
     if (dvui.firstFrame(self.wd.id)) {
         dvui.focusSubwindow(self.wd.id, null);
 
