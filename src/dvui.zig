@@ -6368,6 +6368,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         e.handled = true;
                         if (ctrl_down) {
                             text_mode = true;
+                            refresh(null, @src(), b.data().id);
                         } else {
                             captureMouse(b.data().id);
                             p = me.p;
