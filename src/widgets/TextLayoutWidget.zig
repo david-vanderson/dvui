@@ -428,11 +428,34 @@ pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, 
 }
 
 pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) !void {
-    _ = try self.addTextEx(text, false, opts);
+    _ = try self.addTextEx(text, .none, opts);
 }
 
 pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: Options) !bool {
-    return try self.addTextEx(text, true, opts);
+    return try self.addTextEx(text, .click, opts);
+}
+
+pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) !bool {
+    return try self.addTextEx(text, .hover, opts);
+}
+
+pub fn addTextTooltip(self: *TextLayoutWidget, src: std.builtin.SourceLocation, text: []const u8, tooltip: []const u8, opts: Options) !void {
+    var tt: dvui.FloatingTooltipWidget = .init(src, .{
+        .active_rect = .{},
+        .position = .sticky,
+    }, .{ .id_extra = opts.idExtra() });
+
+    if (try self.addTextHover(text, opts)) {
+        tt.init_options.active_rect = dvui.windowRectPixels();
+    }
+
+    if (try tt.shown()) {
+        var tl = try dvui.textLayout(@src(), .{}, .{ .background = false });
+        try tl.addText(tooltip, .{});
+        tl.deinit();
+    }
+
+    tt.deinit();
 }
 
 // Helper to addTextEx
@@ -935,8 +958,14 @@ fn cursorSeen(self: *TextLayoutWidget) void {
     }
 }
 
-fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: Options) !bool {
-    var clicked = false;
+const AddTextExAction = enum {
+    none,
+    click,
+    hover,
+};
+
+fn addTextEx(self: *TextLayoutWidget, text: []const u8, action: AddTextExAction, opts: Options) !bool {
+    var ret = false;
 
     const options = self.wd.options.override(opts);
     const msize = options.fontGet().sizeM(1, 1);
@@ -1058,19 +1087,25 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
             self.selection.end += 1;
         }
 
-        if (clickable) {
+        if (action != .none) {
             if (self.cursor_pt) |p| {
                 const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
                 if (p.x > rs.x and p.x < (rs.x + rs.w) and p.y > rs.y and p.y < (rs.y + rs.h)) {
                     // point is in this text
-                    dvui.cursorSet(.hand);
+                    if (action == .click) {
+                        dvui.cursorSet(.hand);
+                    } else if (action == .hover) {
+                        ret = true;
+                    }
                 }
             }
 
             if (self.click_pt) |p| {
                 const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
                 if (p.x > rs.x and p.x < (rs.x + rs.w) and p.y > rs.y and p.y < (rs.y + rs.h)) {
-                    clicked = true;
+                    if (action == .click) {
+                        ret = true;
+                    }
                 }
             }
         }
@@ -1258,14 +1293,14 @@ fn addTextEx(self: *TextLayoutWidget, text: []const u8, clickable: bool, opts: O
         }
     }
 
-    if (clicked) {
+    if (action == .click and ret) {
         // we can only click when not in touch editing, so that click must have
         // transitioned us into touch editing, but we don't want to transition
         // if the click happened on clickable text
         self.touch_editing = false;
     }
 
-    return clicked;
+    return ret;
 }
 
 pub fn addTextDone(self: *TextLayoutWidget, opts: Options) !void {

@@ -32,6 +32,7 @@ pub const ButtonWidget = @import("widgets/ButtonWidget.zig");
 pub const ContextWidget = @import("widgets/ContextWidget.zig");
 pub const FloatingWindowWidget = @import("widgets/FloatingWindowWidget.zig");
 pub const FloatingWidget = @import("widgets/FloatingWidget.zig");
+pub const FloatingTooltipWidget = @import("widgets/FloatingTooltipWidget.zig");
 pub const FloatingMenuWidget = @import("widgets/FloatingMenuWidget.zig");
 pub const IconWidget = @import("widgets/IconWidget.zig");
 pub const ImageWidget = @import("widgets/ImageWidget.zig");
@@ -5586,6 +5587,16 @@ pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOpt
     try ret.install();
     ret.processEvents();
     return ret;
+}
+
+pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget.InitOptions, comptime fmt: []const u8, fmt_args: anytype, opts: Options) !void {
+    var tt: dvui.FloatingTooltipWidget = .init(src, init_opts, opts);
+    if (try tt.shown()) {
+        var tl2 = try dvui.textLayout(@src(), .{}, .{ .background = false });
+        try tl2.format(fmt, fmt_args, .{});
+        tl2.deinit();
+    }
+    tt.deinit();
 }
 
 pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) !*VirtualParentWidget {
