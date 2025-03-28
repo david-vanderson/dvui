@@ -377,40 +377,44 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
             e.handled = true;
             const rs = self.wd.contentRectScale();
 
-            const ypx = @max(0.0, rs.r.y - st.screen_rect.y);
-            if (ypx > 0) {
-                self.si.viewport.y = self.si.viewport.y - (ypx / rs.s);
-                if (!st.over_scroll) {
-                    self.si.scrollToOffset(.vertical, self.si.viewport.y);
+            if (self.si.vertical != .none) {
+                const ypx = @max(0.0, rs.r.y - st.screen_rect.y);
+                if (ypx > 0) {
+                    self.si.viewport.y = self.si.viewport.y - (ypx / rs.s);
+                    if (!st.over_scroll) {
+                        self.si.scrollToOffset(.vertical, self.si.viewport.y);
+                    }
+                    dvui.refresh(null, @src(), self.wd.id);
                 }
-                dvui.refresh(null, @src(), self.wd.id);
+
+                const ypx2 = @max(0.0, (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h));
+                if (ypx2 > 0) {
+                    self.si.viewport.y = self.si.viewport.y + (ypx2 / rs.s);
+                    if (!st.over_scroll) {
+                        self.si.scrollToOffset(.vertical, self.si.viewport.y);
+                    }
+                    dvui.refresh(null, @src(), self.wd.id);
+                }
             }
 
-            const ypx2 = @max(0.0, (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h));
-            if (ypx2 > 0) {
-                self.si.viewport.y = self.si.viewport.y + (ypx2 / rs.s);
-                if (!st.over_scroll) {
-                    self.si.scrollToOffset(.vertical, self.si.viewport.y);
+            if (self.si.horizontal != .none) {
+                const xpx = @max(0.0, rs.r.x - st.screen_rect.x);
+                if (xpx > 0) {
+                    self.si.viewport.x = self.si.viewport.x - (xpx / rs.s);
+                    if (!st.over_scroll) {
+                        self.si.scrollToOffset(.horizontal, self.si.viewport.x);
+                    }
+                    dvui.refresh(null, @src(), self.wd.id);
                 }
-                dvui.refresh(null, @src(), self.wd.id);
-            }
 
-            const xpx = @max(0.0, rs.r.x - st.screen_rect.x);
-            if (xpx > 0) {
-                self.si.viewport.x = self.si.viewport.x - (xpx / rs.s);
-                if (!st.over_scroll) {
-                    self.si.scrollToOffset(.horizontal, self.si.viewport.x);
+                const xpx2 = @max(0.0, (st.screen_rect.x + st.screen_rect.w) - (rs.r.x + rs.r.w));
+                if (xpx2 > 0) {
+                    self.si.viewport.x = self.si.viewport.x + (xpx2 / rs.s);
+                    if (!st.over_scroll) {
+                        self.si.scrollToOffset(.horizontal, self.si.viewport.x);
+                    }
+                    dvui.refresh(null, @src(), self.wd.id);
                 }
-                dvui.refresh(null, @src(), self.wd.id);
-            }
-
-            const xpx2 = @max(0.0, (st.screen_rect.x + st.screen_rect.w) - (rs.r.x + rs.r.w));
-            if (xpx2 > 0) {
-                self.si.viewport.x = self.si.viewport.x + (xpx2 / rs.s);
-                if (!st.over_scroll) {
-                    self.si.scrollToOffset(.horizontal, self.si.viewport.x);
-                }
-                dvui.refresh(null, @src(), self.wd.id);
             }
         },
         .scroll_propogate => |sp| {

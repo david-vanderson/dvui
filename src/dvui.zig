@@ -4060,7 +4060,7 @@ pub const Window = struct {
             self.debug_under_mouse_esc_needed = dum;
         }
 
-        if (try dvui.button(@src(), if (duf) "Stop" else "Debug Focus", .{}, .{})) {
+        if (try dvui.button(@src(), if (duf) "Stop Debugging Focus" else "Debug Focus", .{}, .{})) {
             duf = !duf;
         }
 

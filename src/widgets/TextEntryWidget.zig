@@ -424,7 +424,8 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
     }
 
     // we might have dropped to a new line, so make sure the cursor is visible
-    self.textLayout.scroll_to_cursor = true;
+    self.textLayout.scroll_to_cursor_next_frame = true;
+    dvui.refresh(null, @src(), self.wd.id);
 }
 
 /// Remove all characters that not present in filter_chars.
