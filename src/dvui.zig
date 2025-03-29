@@ -6837,19 +6837,17 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
         fill = .fill_hover;
     }
 
-    var options = opts;
     if (active) {
-        options = opts.override(themeGet().style_accent);
-        try rs.r.insetAll(0.5 * rs.s).fill(Rect.all(1000), options.color(fill));
+        try rs.r.insetAll(0.5 * rs.s).fill(Rect.all(1000), opts.color(.accent));
     } else {
-        try rs.r.insetAll(rs.s).fill(Rect.all(1000), options.color(fill));
+        try rs.r.insetAll(rs.s).fill(Rect.all(1000), opts.color(fill));
     }
 
     if (active) {
         const thick = @max(1.0, rs.r.w / 6);
 
         const p = Point{ .x = rs.r.x + rs.r.w / 2, .y = rs.r.y + rs.r.h / 2 };
-        try pathStroke(&.{p}, thick, options.color(.text), .{});
+        try pathStroke(&.{p}, thick, opts.color(fill), .{});
     }
 }
 
