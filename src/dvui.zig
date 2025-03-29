@@ -6424,13 +6424,27 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         e.handled = true;
                         if (ctrl_down) {
                             text_mode = true;
+                            refresh(null, @src(), b.data().id);
                         } else {
                             captureMouse(b.data().id);
-                            p = me.p;
                             dataSet(null, b.data().id, "_start_x", me.p.x);
                             dataSet(null, b.data().id, "_start_v", init_opts.value.*);
+
+                            if (me.button.touch()) {
+                                dvui.dragPreStart(me.p, .{});
+                            } else {
+                                // Only start tracking the position on press if this
+                                // is not a touch to prevent the value from
+                                // "jumping" when entering text mode on a
+                                // touch-tap event
+                                p = me.p;
+                            }
                         }
                     } else if (me.action == .release and me.button.pointer()) {
+                        if (me.button.touch() and dvui.dragging(me.p) == null) {
+                            text_mode = true;
+                            refresh(null, @src(), b.data().id);
+                        }
                         e.handled = true;
                         captureMouse(null);
                         dragEnd();
@@ -6438,7 +6452,13 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         dataRemove(null, b.data().id, "_start_v");
                     } else if (me.action == .motion and captured(b.data().id)) {
                         e.handled = true;
-                        p = me.p;
+                        // If this is a touch motion we need to make sure to
+                        // only update the value if we are exceeding the
+                        // drag threshold to prevent the value from jumping while
+                        // entering text mode via a non-drag touch-tap
+                        if (!me.button.touch() or dvui.dragging(me.p) != null) {
+                            p = me.p;
+                        }
                     } else if (me.action == .position) {
                         e.handled = true;
                         hover = true;
