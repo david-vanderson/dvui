@@ -100,7 +100,10 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
     if (!self.showing) {
         // check if we should show
         const cw = dvui.currentWindow();
-        if (cw.windowFor(cw.mouse_pt) == cw.subwindow_currentId and self.init_options.active_rect.contains(cw.mouse_pt)) {
+        if ((cw.captureID == null or cw.captureID == self.wd.id) and
+            cw.windowFor(cw.mouse_pt) == cw.subwindow_currentId and
+            self.init_options.active_rect.contains(cw.mouse_pt))
+        {
             self.showing = true;
         }
     }
