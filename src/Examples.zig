@@ -364,6 +364,8 @@ pub var demo_active: demoKind = .basic_widgets;
 pub const demo_window_tag = "dvui_example_window";
 
 pub fn demo() !void {
+    dvui.ztracy.FrameMarkStart("demo window");
+    defer dvui.ztracy.FrameMarkEnd("demo window");
     if (!show_demo_window) {
         return;
     }

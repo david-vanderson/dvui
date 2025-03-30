@@ -80,6 +80,10 @@ pub const TextEntryWidget = widgets.TextEntryWidget;
 pub const TextLayoutWidget = widgets.TextLayoutWidget;
 pub const VirtualParentWidget = widgets.VirtualParentWidget;
 
+// FIXME : not sure I should expose ztracy in dvui topmodule like this,
+// but for now it seems like the easiest way to access tracy utilities both everywhere in dvui and in the exemple demo.
+pub const ztracy = @import("ztracy");
+
 const se = @import("structEntry.zig");
 pub const structEntry = se.structEntry;
 pub const structEntryEx = se.structEntryEx;

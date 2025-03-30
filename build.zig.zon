@@ -37,5 +37,16 @@
             .hash = "zigwin32-25.0.28-preview-AAAAAHsJ-wPA4nREAzT_OOkF6gLrornNuHqREfHDADoS",
             .lazy = true,
         },
+
+        // Profiling the application
+        // TODO : Can we not download this at all if it's not required ? (or is it the case already)
+        .ztracy = .{
+            // .url = "https://github.com/zig-gamedev/ztracy/archive/be3d003f29d59d72e68e493ab531374ab474a795.zip",
+            // .hash = "ztracy-0.14.0-dev-zHJSq1oQFwCAq2LhbqsBUmZAipMzsD8UfKL5Etc_OJMb",
+            .url = "https://github.com/Yinameah/ztracy/archive/refs/tags/ZoneAllocSupport.tar.gz",
+            .hash = "ztracy-0.14.0-dev-zHJSq8ocFwBg8RAeMQH5Q1kmsidcWfFqXd6_GPMMJWvl",
+            .lazy = true,
+            // .path = "../ztracy/",
+        },
     },
 }

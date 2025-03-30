@@ -43,8 +43,14 @@ si: *ScrollInfo = undefined,
 si_store: ScrollInfo = .{},
 scroll: ScrollContainerWidget = undefined,
 
+tracy_ctx: dvui.ztracy.ZoneCtx = undefined,
+
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) ScrollAreaWidget {
+    const ctx = dvui.ztracy.ZoneAllocN(src, "ScrollAreaWidget");
+
     var self = ScrollAreaWidget{};
+    self.tracy_ctx = ctx;
+
     self.init_opts = init_opts;
     const options = defaults.override(opts);
 
@@ -160,6 +166,8 @@ pub fn deinit(self: *ScrollAreaWidget) void {
     dvui.dataSet(null, self.hbox.data().id, "_scroll_info", self.si.*);
 
     self.hbox.deinit();
+
+    self.tracy_ctx.End();
 }
 
 test {

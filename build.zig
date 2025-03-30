@@ -26,6 +26,8 @@ pub fn build(b: *std.Build) !void {
     const build_options = b.addOptions();
     build_options.addOption(?[]const u8, "doc_image_dir", b.option([]const u8, "doc-image-dir", "Directory for documentation images"));
 
+    const tracy_enabled = b.option(bool, "tracy-enable", "enable profiling with tracy") orelse false;
+
     const dvui_opts = DvuiModuleOptions{
         .b = b,
         .target = target,
@@ -35,6 +37,7 @@ pub fn build(b: *std.Build) !void {
         .check_step = check_step,
         .use_lld = use_lld,
         .build_options = build_options,
+        .tracy_enabled = tracy_enabled,
     };
 
     if (back_to_build == .custom) {
@@ -385,6 +388,7 @@ const DvuiModuleOptions = struct {
     add_stb_image: bool = true,
     use_lld: ?bool = null,
     build_options: *std.Build.Step.Options,
+    tracy_enabled: bool = false,
 
     fn addChecksAndTests(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
         if (self.check_step) |step| {
@@ -453,6 +457,19 @@ fn addDvuiModule(
                 dvui_mod.linkLibrary(fd.artifact("freetype"));
             }
         }
+    }
+
+    // FIXME : Should we expose more options of ztracy to final user ?
+    const ztracy_dep = b.lazyDependency("ztracy", .{
+        .enable_ztracy = opts.tracy_enabled,
+        .enable_fibers = false,
+        .on_demand = false,
+        // FIXME : No clue on tradeoffs here, maybe this is too much ? too little ?
+        .callstack = 20,
+    });
+    if (ztracy_dep) |ztracy| {
+        dvui_mod.addImport("ztracy", ztracy.module("root"));
+        if (opts.tracy_enabled) dvui_mod.linkLibrary(ztracy.artifact("tracy"));
     }
 
     return dvui_mod;
