@@ -13,21 +13,11 @@ const FloatingTooltipWidget = @This();
 
 // maintain a chain of all the nested FloatingTooltipWidgets
 var tooltip_current: ?*FloatingTooltipWidget = null;
-// the last frame time a chain was open, only one allowed per frame
-var last_tooltip_set: i32 = 0;
 
 fn tooltipSet(tt: ?*FloatingTooltipWidget) ?*FloatingTooltipWidget {
-    if (tooltip_current == null) {
-        // Set the time of the current frame
-        last_tooltip_set = @truncate(dvui.frameTimeNS());
-    }
     const ret = tooltip_current;
     tooltip_current = tt;
     return ret;
-}
-
-fn tooltipCanOpen() bool {
-    return tooltip_current != null or last_tooltip_set != @as(i32, @truncate(dvui.frameTimeNS()));
 }
 
 pub var defaults: Options = .{
@@ -107,13 +97,10 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
         return true;
     }
 
-    if (!tooltipCanOpen()) {
-        return false;
-    }
-
     if (!self.showing) {
         // check if we should show
-        if (self.init_options.active_rect.contains(dvui.currentWindow().mouse_pt)) {
+        const cw = dvui.currentWindow();
+        if (cw.windowFor(cw.mouse_pt) == cw.subwindow_currentId and self.init_options.active_rect.contains(cw.mouse_pt)) {
             self.showing = true;
         }
     }
