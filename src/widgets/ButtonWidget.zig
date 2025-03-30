@@ -32,8 +32,14 @@ hover: bool = false,
 focus: bool = false,
 click: bool = false,
 
+tracy_ctx: dvui.ztracy.ZoneCtx = undefined,
+
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ButtonWidget {
+    const ctx = dvui.ztracy.ZoneAllocN(src, "ButtonWidget");
+
     var self = ButtonWidget{};
+    self.tracy_ctx = ctx;
+
     self.init_options = init_opts;
     self.wd = WidgetData.init(src, .{}, defaults.override(opts));
     return self;
@@ -173,4 +179,6 @@ pub fn deinit(self: *ButtonWidget) void {
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);
+
+    self.tracy_ctx.End();
 }

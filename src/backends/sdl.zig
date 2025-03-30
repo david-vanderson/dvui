@@ -263,6 +263,9 @@ pub fn setIconFromABGR8888(self: *SDLBackend, data: [*]const u8, icon_w: c_int, 
 }
 
 pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) void {
+    const trac_waitEvent = dvui.ztracy.ZoneC(@src(), 0x00_00_AC_00);
+    defer trac_waitEvent.End();
+
     if (timeout_micros == std.math.maxInt(u32)) {
         // wait no timeout
         _ = c.SDL_WaitEvent(null);
@@ -387,11 +390,15 @@ pub fn deinit(self: *SDLBackend) void {
 }
 
 pub fn renderPresent(self: *SDLBackend) void {
+    const z_sdl_render = dvui.ztracy.ZoneNC(@src(), "sdl backend rendering", 0x00_22_44_AA);
+    defer z_sdl_render.End();
     if (sdl3) {
         _ = c.SDL_RenderPresent(self.renderer);
     } else {
         c.SDL_RenderPresent(self.renderer);
     }
+    // TODO : find a way to attache images
+    // dvui.ztracy.FrameImage(
 }
 
 pub fn hasEvent(_: *SDLBackend) bool {

@@ -48,6 +48,9 @@ pub const ScrollContainerWidget = @import("widgets/ScrollContainerWidget.zig");
 pub const TextEntryWidget = @import("widgets/TextEntryWidget.zig");
 pub const TextLayoutWidget = @import("widgets/TextLayoutWidget.zig");
 pub const VirtualParentWidget = @import("widgets/VirtualParentWidget.zig");
+// FIXME : not sure I should expose ztracy in dvui topmodule like this,
+// but for now it seems like the easiest way to access tracy utilities both everywhere in dvui and in the exemple demo.
+pub const ztracy = @import("ztracy");
 
 const se = @import("structEntry.zig");
 pub const structEntry = se.structEntry;
@@ -3552,6 +3555,10 @@ pub const Window = struct {
         self: *Self,
         time_ns: i128,
     ) !void {
+        ztracy.FrameMarkStart("win.begin()/end()");
+        const trac_win_begin = ztracy.ZoneNC(@src(), "win.begin()", 0x00_FE8019);
+        defer trac_win_begin.End();
+
         const larena = self._arena.allocator();
 
         var micros_since_last: u32 = 1;
@@ -4203,6 +4210,10 @@ pub const Window = struct {
     // meaning wait for event).  If wanted, pass return value to waitTime() to
     // get a useful time to wait between render loops.
     pub fn end(self: *Self, opts: endOptions) !?u32 {
+        defer ztracy.FrameMarkEnd("win.begin()/end()");
+        const trac_win_end = ztracy.ZoneNC(@src(), "win.end()", 0x00_FE8019);
+        defer trac_win_end.End();
+
         if (opts.show_toasts) {
             try self.toastsShow();
         }

@@ -24,11 +24,14 @@ pub fn build(b: *std.Build) !void {
 
     const back_to_build: BackendToBuild = b.option(BackendToBuild, "backend", "Backend to build") orelse .all;
 
+    const tracy_enabled = b.option(bool, "tracy-enable", "enable profiling with tracy") orelse false;
+    if (tracy_enabled and back_to_build != .sdl) std.log.warn("Tracy profiling is only tested with sdl backend", .{});
+
     if (back_to_build == .custom) {
         // For export to users who are bringing their own backend.  Use in your build.zig:
         // const dvui_mod = dvui_dep.module("dvui");
         // @import("dvui").linkBackend(dvui_mod, your backend module);
-        _ = addDvuiModule(b, target, optimize, "dvui", true);
+        _ = addDvuiModule(b, target, optimize, "dvui", true, false);
     }
 
     // SDL
@@ -84,7 +87,7 @@ pub fn build(b: *std.Build) !void {
         }
         sdl_mod.addOptions("sdl_options", sdl_options);
 
-        const dvui_sdl = addDvuiModule(b, target, optimize, "dvui_sdl", true);
+        const dvui_sdl = addDvuiModule(b, target, optimize, "dvui_sdl", true, tracy_enabled);
         linkBackend(dvui_sdl, sdl_mod);
         addExample(b, target, optimize, "sdl-standalone", dvui_sdl);
         addExample(b, target, optimize, "sdl-ontop", dvui_sdl);
@@ -145,7 +148,7 @@ pub fn build(b: *std.Build) !void {
             }
         }
 
-        const dvui_raylib = addDvuiModule(b, target, optimize, "dvui_raylib", false);
+        const dvui_raylib = addDvuiModule(b, target, optimize, "dvui_raylib", false, false);
         linkBackend(dvui_raylib, raylib_mod);
         addExample(b, target, optimize, "raylib-standalone", dvui_raylib);
         addExample(b, target, optimize, "raylib-ontop", dvui_raylib);
@@ -165,7 +168,7 @@ pub fn build(b: *std.Build) !void {
                 dx11_mod.addImport("win32", zigwin32.module("win32"));
             }
 
-            const dvui_dx11 = addDvuiModule(b, target, optimize, "dvui_dx11", true);
+            const dvui_dx11 = addDvuiModule(b, target, optimize, "dvui_dx11", true, false);
             linkBackend(dvui_dx11, dx11_mod);
             addExample(b, target, optimize, "dx11-standalone", dvui_dx11);
             addExample(b, target, optimize, "dx11-ontop", dvui_dx11);
@@ -194,7 +197,7 @@ pub fn build(b: *std.Build) !void {
             "new_font",
         };
 
-        const dvui_web = addDvuiModule(b, web_target, optimize, "dvui_web", true);
+        const dvui_web = addDvuiModule(b, web_target, optimize, "dvui_web", true, false);
         linkBackend(dvui_web, web_mod);
 
         const web_test = b.addExecutable(.{
@@ -262,12 +265,14 @@ pub fn linkBackend(dvui_mod: *std.Build.Module, backend_mod: *std.Build.Module) 
     dvui_mod.addImport("backend", backend_mod);
 }
 
+// TODO : this starts to be a lot of options. Too much ? Pass a struct instead ?
 fn addDvuiModule(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     comptime name: []const u8,
     add_stb_image: bool,
+    tracy_enabled: bool,
 ) *std.Build.Module {
     const dvui_mod = b.addModule(name, .{
         .root_source_file = b.path("src/dvui.zig"),
@@ -315,6 +320,19 @@ fn addDvuiModule(
                 dvui_mod.linkLibrary(fd.artifact("freetype"));
             }
         }
+    }
+
+    // FIXME : Should we expose more options of ztracy to final user ?
+    const ztracy_dep = b.lazyDependency("ztracy", .{
+        .enable_ztracy = tracy_enabled,
+        .enable_fibers = false,
+        .on_demand = false,
+        // FIXME : No clue on tradeoffs here, maybe this is too much ? too little ?
+        .callstack = 20,
+    });
+    if (ztracy_dep) |ztracy| {
+        dvui_mod.addImport("ztracy", ztracy.module("root"));
+        if (tracy_enabled) dvui_mod.linkLibrary(ztracy.artifact("tracy"));
     }
 
     return dvui_mod;

@@ -358,6 +358,8 @@ pub const demoKind = enum {
 pub var demo_active: demoKind = .basic_widgets;
 
 pub fn demo() !void {
+    dvui.ztracy.FrameMarkStart("demo window");
+    defer dvui.ztracy.FrameMarkEnd("demo window");
     if (!show_demo_window) {
         return;
     }

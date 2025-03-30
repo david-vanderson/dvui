@@ -51,6 +51,7 @@ pub fn main() !void {
     defer win.deinit();
 
     main_loop: while (true) {
+        dvui.ztracy.FrameMarkStart("main loop (client code)");
 
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(backend.hasEvent());
@@ -81,6 +82,10 @@ pub fn main() !void {
         // render frame to OS
         backend.renderPresent();
 
+        // End of main loop computation, we don't want tracy to belive
+        // frames are slow because we basically sleep
+        dvui.ztracy.FrameMarkEnd("main loop (client code)");
+
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros, null);
         backend.waitEventTimeout(wait_event_micros);
@@ -95,6 +100,9 @@ pub fn main() !void {
 
 // both dvui and SDL drawing
 fn gui_frame() !void {
+    dvui.ztracy.FrameMarkStart("gui_frame (client code)");
+    defer dvui.ztracy.FrameMarkEnd("gui_frame (client code)");
+
     const backend = g_backend orelse return;
 
     {
