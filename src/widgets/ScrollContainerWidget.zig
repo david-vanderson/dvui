@@ -480,11 +480,11 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     dvui.focusWidget(self.wd.id, null, e.num);
                 } else if (me.action == .wheel_x) {
                     if (self.si.scrollMax(.horizontal) > 0) {
-                        if ((me.data.wheel_x < 0 and self.si.viewport.x <= 0) or (me.data.wheel_x > 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
+                        if ((me.action.wheel_x < 0 and self.si.viewport.x <= 0) or (me.action.wheel_x > 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
                             // propagate the scroll event because we are already maxxed out
                         } else {
                             e.handled = true;
-                            self.si.scrollByOffset(.horizontal, me.data.wheel_x);
+                            self.si.scrollByOffset(.horizontal, me.action.wheel_x);
                             dvui.refresh(null, @src(), self.wd.id);
                         }
                     }
@@ -495,19 +495,19 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     // not enough content to show the scrollbar, we'll try
                     // horizontal
                     if (self.si.scrollMax(.vertical) > 0) {
-                        if ((me.data.wheel_y > 0 and self.si.viewport.y <= 0) or (me.data.wheel_y < 0 and self.si.viewport.y >= self.si.scrollMax(.vertical))) {
+                        if ((me.action.wheel_y > 0 and self.si.viewport.y <= 0) or (me.action.wheel_y < 0 and self.si.viewport.y >= self.si.scrollMax(.vertical))) {
                             // try horizontal or propogate the scroll event because we are already maxxed out
                         } else {
                             e.handled = true;
-                            self.si.scrollByOffset(.vertical, -me.data.wheel_y);
+                            self.si.scrollByOffset(.vertical, -me.action.wheel_y);
                             dvui.refresh(null, @src(), self.wd.id);
                         }
                     } else if (self.si.scrollMax(.horizontal) > 0) {
-                        if ((me.data.wheel_y > 0 and self.si.viewport.x <= 0) or (me.data.wheel_y < 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
+                        if ((me.action.wheel_y > 0 and self.si.viewport.x <= 0) or (me.action.wheel_y < 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
                             // propogate the scroll event because we are already maxxed out
                         } else {
                             e.handled = true;
-                            self.si.scrollByOffset(.horizontal, -me.data.wheel_y);
+                            self.si.scrollByOffset(.horizontal, -me.action.wheel_y);
                             dvui.refresh(null, @src(), self.wd.id);
                         }
                     }
@@ -528,7 +528,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     // never having seen the touch down.
                     dvui.captureMouse(self.wd.id);
 
-                    self.processMotionScrollEvent(e, me.data.motion);
+                    self.processMotionScrollEvent(e, me.action.motion);
                 }
             },
             else => {},

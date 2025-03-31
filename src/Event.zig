@@ -76,7 +76,7 @@ pub const Key = struct {
 };
 
 pub const Mouse = struct {
-    pub const Action = enum {
+    pub const Action = union(enum) {
         // Focus events come right before their associated pointer event, usually
         // leftdown/rightdown or motion. Separated to enable changing what
         // causes focus changes.
@@ -84,13 +84,13 @@ pub const Mouse = struct {
         press,
         release,
 
-        wheel_x,
-        wheel_y,
+        wheel_x: f32,
+        wheel_y: f32,
 
         // motion Point is the change in position
         // if you just want to react to the current mouse position if it got
         // moved at all, use the .position event with mouseTotalMotion()
-        motion,
+        motion: Point,
 
         // only one position event per frame, and it's always after all other
         // mouse events, used to change mouse cursor and do widget highlighting
@@ -108,13 +108,6 @@ pub const Mouse = struct {
 
     p: Point,
     floating_win: u32,
-
-    data: union {
-        none: void,
-        motion: Point,
-        wheel_x: f32,
-        wheel_y: f32,
-    } = .{ .none = {} },
 };
 
 pub const ClosePopup = struct {
