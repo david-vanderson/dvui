@@ -1683,7 +1683,7 @@ pub fn mouseTotalMotion() Point {
     return Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
 }
 
-/// A widget id and rect for a widget with mouse capture.
+/// A widget id, rect, and subwindow id for a widget with mouse capture.
 pub const CaptureMouse = struct {
     /// widget ID
     id: u32,
@@ -1693,11 +1693,13 @@ pub const CaptureMouse = struct {
     subwindow_id: u32,
 };
 
-/// Pass a widget ID for that widget to receive all mouse events (meaning
-/// eventMatch() returns true for this id and false for all others).  Wheel
-/// events still filtered normally.
+/// Pass a CaptureMouse (widget id, rect, subwindow id).  eventMatch() given
+/// that widget id will return true for all mouse events (except wheel).
 ///
-/// See captureMouseWD().
+/// Use captureMouseWD() as an easy wrapper.
+///
+/// The rect and subwindow id are used so other widgets (parent hover,
+/// tooltips) can still receive mouse .position events.
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn captureMouse(cm: ?CaptureMouse) void {
@@ -1708,15 +1710,16 @@ pub fn captureMouse(cm: ?CaptureMouse) void {
     }
 }
 
-/// Helper to call captureMouse() with normal id/rect from a WidgetData.
+/// Helper to call captureMouse() with normal id/rect/subwindow id from a
+/// WidgetData.
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn captureMouseWD(wd: *WidgetData) void {
     captureMouse(.{ .id = wd.id, .rect = wd.borderRectScale().r, .subwindow_id = subwindowCurrentId() });
 }
 
-/// If the widget ID passed has mouse capture, this maintains that capture for
-/// the next frame.  This is usually called for you in WidgetData.init().
+/// If cm.id has mouse capture, this maintains that capture for the next
+/// frame.  This is usually called for you in WidgetData.init().
 ///
 /// This can be called every frame regardless of capture.
 ///
