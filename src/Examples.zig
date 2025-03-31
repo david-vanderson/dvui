@@ -2604,7 +2604,7 @@ pub fn scrollCanvas() !void {
                         .mouse => |me| {
                             if (me.action == .press and me.button.pointer()) {
                                 e.handled = true;
-                                dvui.captureMouseWD(dbox.data());
+                                dvui.captureMouse(dbox.data());
                                 dvui.dragPreStart(me.p, .{ .name = "box_transfer" });
                             } else if (me.action == .motion) {
                                 if (dvui.captured(dbox.data().id)) {
@@ -2638,7 +2638,7 @@ pub fn scrollCanvas() !void {
                 .mouse => |me| {
                     if (me.action == .press and me.button.pointer()) {
                         e.handled = true;
-                        dvui.captureMouseWD(dragBox.data());
+                        dvui.captureMouse(dragBox.data());
                         const offset = me.p.diff(dragBox.data().rectScale().r.topLeft()); // pixel offset from dragBox corner
                         dvui.dragPreStart(me.p, .{ .offset = offset });
                     } else if (me.action == .release and me.button.pointer()) {
@@ -2689,7 +2689,7 @@ pub fn scrollCanvas() !void {
             .mouse => |me| {
                 if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
-                    dvui.captureMouseWD(scroll.scroll.data());
+                    dvui.captureMouse(scroll.scroll.data());
                     dvui.dragPreStart(me.p, .{});
                 } else if (me.action == .release and me.button.pointer()) {
                     if (dvui.captured(scroll.scroll.data().id)) {
@@ -3542,7 +3542,7 @@ pub const StrokeTest = struct {
                             }
 
                             if (dragi != null) {
-                                dvui.captureMouseWD(self.data());
+                                dvui.captureMouse(self.data());
                                 dvui.dragPreStart(me.p, .{ .cursor = .crosshair });
                             }
                         }
