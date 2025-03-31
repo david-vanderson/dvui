@@ -2665,7 +2665,7 @@ pub fn scrollCanvas() !void {
                 } else if (me.action == .wheel_y and ctrl_down) {
                     e.handled = true;
                     const base: f32 = 1.01;
-                    const zs = @exp(@log(base) * me.data.wheel_y);
+                    const zs = @exp(@log(base) * me.action.wheel_y);
                     if (zs != 1.0) {
                         zoom *= zs;
                         zoomP = me.p;
@@ -3514,10 +3514,10 @@ pub const StrokeTest = struct {
                             dvui.refresh(null, @src(), self.wd.id);
                         }
                     },
-                    .wheel_y => {
+                    .wheel_y => |ticks| {
                         e.handled = true;
                         const base: f32 = 1.02;
-                        const zs = @exp(@log(base) * me.data.wheel_y);
+                        const zs = @exp(@log(base) * ticks);
                         if (zs != 1.0) {
                             thickness *= zs;
                             dvui.refresh(null, @src(), self.wd.id);

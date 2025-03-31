@@ -3198,11 +3198,10 @@ pub const Window = struct {
         self.event_num += 1;
         try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
             .mouse = .{
-                .action = .motion,
+                .action = .{ .motion = dp },
                 .button = if (self.debug_touch_simulate_events and self.debug_touch_simulate_down) .touch0 else .none,
                 .p = self.mouse_pt,
                 .floating_win = winId,
-                .data = .{ .motion = dp },
             },
         } });
 
@@ -3306,11 +3305,10 @@ pub const Window = struct {
         self.event_num += 1;
         try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
             .mouse = .{
-                .action = if (dir == .vertical) .wheel_y else .wheel_x,
+                .action = if (dir == .vertical) .{ .wheel_y = ticks } else .{ .wheel_x = ticks },
                 .button = .none,
                 .p = self.mouse_pt,
                 .floating_win = winId,
-                .data = if (dir == .vertical) .{ .wheel_y = ticks } else .{ .wheel_x = ticks },
             },
         } });
 
@@ -3338,11 +3336,10 @@ pub const Window = struct {
         self.event_num += 1;
         try self.events.append(self.arena(), Event{ .num = self.event_num, .evt = .{
             .mouse = .{
-                .action = .motion,
+                .action = .{ .motion = dp },
                 .button = finger,
                 .p = self.mouse_pt,
                 .floating_win = winId,
-                .data = .{ .motion = dp },
             },
         } });
 
