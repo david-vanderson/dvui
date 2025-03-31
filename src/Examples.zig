@@ -46,6 +46,7 @@ var text_entry_multiline_allocator_buf: [1000]u8 = undefined;
 var text_entry_multiline_fba = std.heap.FixedBufferAllocator.init(&text_entry_multiline_allocator_buf);
 var text_entry_multiline_buf: []u8 = &.{};
 var text_entry_multiline_initialized = false;
+var text_entry_multiline_break = false;
 var dropdown_val: usize = 1;
 var layout_margin: Rect = Rect.all(4);
 var layout_border: Rect = Rect.all(0);
@@ -1061,7 +1062,14 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        try dvui.label(@src(), "Multiline", .{}, .{ .gravity_y = 0.5 });
+        {
+            var vbox = try dvui.box(@src(), .vertical, .{ .gravity_y = 0.5 });
+            defer vbox.deinit();
+
+            try dvui.label(@src(), "Multiline", .{}, .{});
+
+            _ = try dvui.checkbox(@src(), &text_entry_multiline_break, "Break Lines", .{});
+        }
 
         try left_alignment.spacer(@src(), 0);
 
@@ -1070,11 +1078,18 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
             font.name = font_entries[Sfont.dropdown];
         }
 
+        var te_opts: dvui.TextEntryWidget.InitOptions = .{ .multiline = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf, .allocator = text_entry_multiline_fba.allocator() } } };
+        if (text_entry_multiline_break) {
+            te_opts.break_lines = true;
+            te_opts.scroll_horizontal = false;
+        }
+
         var te = try dvui.textEntry(
             @src(),
-            .{ .multiline = true, .text = .{ .buffer_dynamic = .{ .backing = &text_entry_multiline_buf, .allocator = text_entry_multiline_fba.allocator() } } },
+            te_opts,
             .{
-                .min_size_content = .{ .w = 150, .h = 80 },
+                .min_size_content = .{ .w = 160, .h = 80 },
+                .max_size_content = .{ .w = 160, .h = 80 },
                 .font = font,
             },
         );
@@ -1087,7 +1102,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
         const bytes = te.len;
         te.deinit();
 
-        try dvui.label(@src(), "bytes {d}\nallocated {d}\nlimit {d}", .{ bytes, text_entry_multiline_buf.len, text_entry_multiline_allocator_buf.len }, .{ .gravity_y = 0.5 });
+        try dvui.label(@src(), "bytes {d}\nallocated {d}\nlimit {d}\nscroll horizontal: {s}", .{ bytes, text_entry_multiline_buf.len, text_entry_multiline_allocator_buf.len, if (text_entry_multiline_break) "no" else "yes" }, .{ .gravity_y = 0.5 });
     }
 
     {
