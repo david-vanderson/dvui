@@ -248,7 +248,7 @@ pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {
             if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
                 e.handled = true;
                 // capture and start drag
-                dvui.captureMouseWD(self.data());
+                dvui.captureMouse(self.data());
                 dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = cursor });
             } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                 e.handled = true;

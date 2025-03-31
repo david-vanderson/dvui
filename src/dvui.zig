@@ -1683,43 +1683,45 @@ pub fn mouseTotalMotion() Point {
     return Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
 }
 
-/// A widget id, rect, and subwindow id for a widget with mouse capture.
+/// Used to track which widget holds mouse capture.
 pub const CaptureMouse = struct {
     /// widget ID
     id: u32,
-    /// physical pixels
+    /// physical pixels (aka capture zone)
     rect: Rect,
     /// subwindow id the widget with capture is in
     subwindow_id: u32,
 };
-
-/// Pass a CaptureMouse (widget id, rect, subwindow id).  eventMatch() given
-/// that widget id will return true for all mouse events (except wheel).
+/// Capture the mouse for this widget's data.
+/// (i.e. eventMatch() return true for this widget and false for all others)
+/// and capture is explicitly released when passing `null`.
 ///
-/// Use captureMouseWD() as an easy wrapper.
-///
-/// The rect and subwindow id are used so other widgets (parent hover,
-/// tooltips) can still receive mouse .position events.
+/// Tracks the widget's id / subwindow / rect, so that `.position` mouse events can still
+/// be presented to widgets who's rect overlap with the widget holding the capture.
+/// (which is what you would expect for e.g. background highlight)
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn captureMouse(cm: ?CaptureMouse) void {
+pub fn captureMouse(wd: ?*WidgetData) void {
+    const cm = if (wd) |data| CaptureMouse{
+        .id = data.id,
+        .rect = data.borderRectScale().r,
+        .subwindow_id = subwindowCurrentId(),
+    } else null;
+    captureMouseCustom(cm);
+}
+/// In most cases, use captureMouse() but if you want to customize the
+/// "capture zone" you can use this function instead.
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn captureMouseCustom(cm: ?CaptureMouse) void {
     const cw = currentWindow();
     cw.capture = cm;
     if (cm != null) {
         cw.captured_last_frame = true;
     }
 }
-
-/// Helper to call captureMouse() with normal id/rect/subwindow id from a
-/// WidgetData.
-///
-/// Only valid between dvui.Window.begin() and end().
-pub fn captureMouseWD(wd: *WidgetData) void {
-    captureMouse(.{ .id = wd.id, .rect = wd.borderRectScale().r, .subwindow_id = subwindowCurrentId() });
-}
-
-/// If cm.id has mouse capture, this maintains that capture for the next
-/// frame.  This is usually called for you in WidgetData.init().
+/// If the widget ID passed has mouse capture, this maintains that capture for
+/// the next frame.  This is usually called for you in WidgetData.init().
 ///
 /// This can be called every frame regardless of capture.
 ///
@@ -5942,7 +5944,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
                     dvui.focusWidget(lwid, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
-                    dvui.captureMouseWD(lw.data());
+                    dvui.captureMouse(lw.data());
 
                     // for touch events, we want to cancel our click if a drag is started
                     dvui.dragPreStart(me.p, .{});
@@ -6184,7 +6186,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
                     focusWidget(b.data().id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     // capture
-                    captureMouseWD(b.data());
+                    captureMouse(b.data());
                     e.handled = true;
                     p = me.p;
                 } else if (me.action == .release and me.button.pointer()) {
@@ -6471,7 +6473,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             text_mode = true;
                             refresh(null, @src(), b.data().id);
                         } else {
-                            captureMouseWD(b.data());
+                            captureMouse(b.data());
                             dataSet(null, b.data().id, "_start_x", me.p.x);
                             dataSet(null, b.data().id, "_start_v", init_opts.value.*);
 
