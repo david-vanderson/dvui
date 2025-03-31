@@ -41,6 +41,9 @@ pub const InitOptions = struct {
     active_rect: Rect,
 
     position: Position = .horizontal,
+
+    /// Is true if the user should be able to hover the tooltips content without it disappearing
+    interactive: bool = false,
 };
 
 parent_tooltip: ?*FloatingTooltipWidget = null,
@@ -137,14 +140,16 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
 
         try self.install();
 
-        // check for mouse position in tooltip window rect
-        for (evts) |*e| {
-            if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.wd.borderRectScale().r })) {
-                continue;
-            }
+        if (self.init_options.interactive) {
+            // check for mouse position in tooltip window rect
+            for (evts) |*e| {
+                if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.wd.borderRectScale().r })) {
+                    continue;
+                }
 
-            if (e.evt == .mouse and e.evt.mouse.action == .position) {
-                self.mouse_good_this_frame = true;
+                if (e.evt == .mouse and e.evt.mouse.action == .position) {
+                    self.mouse_good_this_frame = true;
+                }
             }
         }
 
