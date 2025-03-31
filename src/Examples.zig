@@ -2117,6 +2117,7 @@ pub fn menus() !void {
 
         var tt: dvui.FloatingTooltipWidget = .init(@src(), .{
             .active_rect = hbox.data().borderRectScale().r,
+            .interactive = true,
         }, .{});
         if (try tt.shown()) {
             var tl2 = try dvui.textLayout(@src(), .{}, .{ .background = false });
