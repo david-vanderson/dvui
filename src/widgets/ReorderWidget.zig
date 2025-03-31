@@ -146,7 +146,7 @@ pub fn dragStart(self: *ReorderWidget, reorder_id: usize, p: dvui.Point) void {
     self.id_reorderable = reorder_id;
     self.drag_point = p;
     self.found_slot = true;
-    dvui.captureMouse(self.wd.id);
+    dvui.captureMouseWD(self.data());
 }
 
 pub const draggableInitOptions = struct {
@@ -167,7 +167,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
             .mouse => |me| {
                 if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
-                    dvui.captureMouse(iw.wd.id);
+                    dvui.captureMouseWD(iw.data());
                     const reo_top_left: ?dvui.Point = if (init_opts.reorderable) |reo| reo.wd.rectScale().r.topLeft() else null;
                     const top_left: ?dvui.Point = init_opts.top_left orelse reo_top_left;
                     dvui.dragPreStart(me.p, .{ .offset = (top_left orelse iw.wd.rectScale().r.topLeft()).diff(me.p) });

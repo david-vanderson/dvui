@@ -239,7 +239,7 @@ pub fn install(self: *FloatingWindowWidget) !void {
 pub fn drawBackground(self: *FloatingWindowWidget) !void {
     const rs = self.wd.rectScale();
     try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, self.init_options.modal, if (self.init_options.stay_above_parent_window) self.prev_windowInfo.id else null);
-    dvui.captureMouseMaintain(self.wd.id);
+    dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
     try self.wd.register();
 
     if (self.init_options.modal) {
@@ -377,7 +377,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
             if (me.action == .press and me.button.pointer()) {
                 if (dragPart(me, rs) == .bottom_right) {
                     // capture and start drag
-                    dvui.captureMouse(self.wd.id);
+                    dvui.captureMouseWD(self.data());
                     self.drag_part = .bottom_right;
                     dvui.dragStart(me.p, .{ .cursor = .arrow_nw_se, .offset = Point.diff(rs.r.bottomRight(), me.p) });
                     e.handled = true;
@@ -420,7 +420,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                         if (me.button.pointer()) {
                             e.handled = true;
                             // capture and start drag
-                            dvui.captureMouse(self.wd.id);
+                            dvui.captureMouseWD(self.data());
                             self.drag_part = dragPart(me, rs);
                             dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = self.drag_part.?.cursor() });
                         }

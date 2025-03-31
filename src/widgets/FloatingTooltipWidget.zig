@@ -53,6 +53,7 @@ scaler: dvui.ScaleWidget = undefined,
 options: Options = undefined,
 init_options: InitOptions = undefined,
 showing: bool = false,
+mouse_good_this_frame: bool = false,
 installed: bool = false,
 tt_child_shown: bool = false,
 
@@ -97,10 +98,18 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
         return true;
     }
 
-    if (!self.showing) {
-        // check if we should show
-        if (self.init_options.active_rect.contains(dvui.currentWindow().mouse_pt)) {
-            self.showing = true;
+    // check for mouse position in active_rect
+    const evts = dvui.events();
+    for (evts) |*e| {
+        if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.init_options.active_rect })) {
+            continue;
+        }
+
+        if (e.evt == .mouse and e.evt.mouse.action == .position) {
+            self.mouse_good_this_frame = true;
+            if (!self.showing) {
+                self.showing = true;
+            }
         }
     }
 
@@ -128,6 +137,17 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
 
         try self.install();
 
+        // check for mouse position in tooltip window rect
+        for (evts) |*e| {
+            if (!dvui.eventMatch(e, .{ .id = self.wd.id, .r = self.wd.borderRectScale().r })) {
+                continue;
+            }
+
+            if (e.evt == .mouse and e.evt.mouse.action == .position) {
+                self.mouse_good_this_frame = true;
+            }
+        }
+
         return true;
     }
 
@@ -146,7 +166,7 @@ pub fn install(self: *FloatingTooltipWidget) !void {
     const rs = self.wd.rectScale();
 
     try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, self.prev_windowId);
-    dvui.captureMouseMaintain(self.wd.id);
+    dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
     try self.wd.register();
 
     // clip to just our window (using clipSet since we are not inside our parent)
@@ -191,8 +211,7 @@ pub fn deinit(self: *FloatingTooltipWidget) void {
     }
 
     // check if we should still be shown
-    const mp = dvui.currentWindow().mouse_pt;
-    if (self.tt_child_shown or self.init_options.active_rect.contains(mp) or self.wd.rectScale().r.contains(mp)) {
+    if (self.mouse_good_this_frame or self.tt_child_shown) {
         dvui.dataSet(null, self.wd.id, "_showing", true);
         var parent: ?*FloatingTooltipWidget = self.parent_tooltip;
         while (parent) |p| {

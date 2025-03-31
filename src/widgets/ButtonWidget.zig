@@ -125,7 +125,7 @@ pub fn processEvent(self: *ButtonWidget, e: *Event, bubbling: bool) void {
                 dvui.focusWidget(self.wd.id, null, e.num);
             } else if (me.action == .press and me.button.pointer()) {
                 e.handled = true;
-                dvui.captureMouse(self.wd.id);
+                dvui.captureMouseWD(self.data());
 
                 // drag prestart is just for touch events
                 dvui.dragPreStart(me.p, .{});

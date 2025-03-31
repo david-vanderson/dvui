@@ -173,7 +173,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                 if (me.button.touch()) {
                     // with touch we have to capture otherwise any motion will
                     // cause scroll to capture
-                    dvui.captureMouse(self.wd.id);
+                    dvui.captureMouseWD(self.data());
                     dvui.dragPreStart(me.p, .{});
                 }
             } else if (me.action == .release) {

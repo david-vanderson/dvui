@@ -38,6 +38,10 @@ pub fn install(self: *IconWidget) !void {
     try self.wd.borderAndBackground(.{});
 }
 
+pub fn data(self: *IconWidget) *WidgetData {
+    return &self.wd;
+}
+
 pub fn matchEvent(self: *IconWidget, e: *dvui.Event) bool {
     return dvui.eventMatchSimple(e, &self.wd);
 }

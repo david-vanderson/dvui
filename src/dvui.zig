@@ -1683,17 +1683,36 @@ pub fn mouseTotalMotion() Point {
     return Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
 }
 
+/// A widget id and rect for a widget with mouse capture.
+pub const CaptureMouse = struct {
+    /// widget ID
+    id: u32,
+    /// physical pixels
+    rect: Rect,
+    /// subwindow id the widget with capture is in
+    subwindow_id: u32,
+};
+
 /// Pass a widget ID for that widget to receive all mouse events (meaning
 /// eventMatch() returns true for this id and false for all others).  Wheel
 /// events still filtered normally.
 ///
+/// See captureMouseWD().
+///
 /// Only valid between dvui.Window.begin() and end().
-pub fn captureMouse(id: ?u32) void {
+pub fn captureMouse(cm: ?CaptureMouse) void {
     const cw = currentWindow();
-    cw.captureID = id;
-    if (id != null) {
+    cw.capture = cm;
+    if (cm != null) {
         cw.captured_last_frame = true;
     }
+}
+
+/// Helper to call captureMouse() with normal id/rect from a WidgetData.
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn captureMouseWD(wd: *WidgetData) void {
+    captureMouse(.{ .id = wd.id, .rect = wd.borderRectScale().r, .subwindow_id = subwindowCurrentId() });
 }
 
 /// If the widget ID passed has mouse capture, this maintains that capture for
@@ -1702,9 +1721,9 @@ pub fn captureMouse(id: ?u32) void {
 /// This can be called every frame regardless of capture.
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn captureMouseMaintain(id: u32) void {
+pub fn captureMouseMaintain(cm: CaptureMouse) void {
     const cw = currentWindow();
-    if (cw.captureID == id) {
+    if (cw.capture != null and cw.capture.?.id == cm.id) {
         // to maintain capture, we must be on or above the
         // top modal window
         var i = cw.subwindows.items.len;
@@ -1714,6 +1733,7 @@ pub fn captureMouseMaintain(id: u32) void {
                 // maintaining capture
                 // either our floating window is above the top modal
                 // or there are no floating modal windows
+                cw.capture.?.rect = cm.rect;
                 cw.captured_last_frame = true;
                 return;
             } else if (sw.modal) {
@@ -1732,14 +1752,17 @@ pub fn captureMouseMaintain(id: u32) void {
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn captured(id: u32) bool {
-    return id == captureMouseId();
+    if (captureMouseGet()) |cm| {
+        return id == cm.id;
+    }
+    return false;
 }
 
 /// Get the widget ID that currently has mouse capture or null if none.
 ///
 /// Only valid between dvui.Window.begin() and end().
-pub fn captureMouseId() ?u32 {
-    return currentWindow().captureID;
+pub fn captureMouseGet() ?CaptureMouse {
+    return currentWindow().capture;
 }
 
 /// Get current screen rectangle in pixels that drawing is being clipped to.
@@ -2380,30 +2403,52 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
         .key => {},
         .text => {},
         .mouse => |me| {
-            const capture_id = captureMouseId();
-            if (capture_id != null and me.action != .wheel_y) {
-                if (capture_id.? != opts.id) {
-                    // mouse is captured by a different widget
-                    return false;
-                }
-            } else {
-                if (me.floating_win != subwindowCurrentId()) {
-                    // floating window is above us
-                    return false;
+            const capture = captureMouseGet();
+            var other_capture = false;
+            if (capture) |cm| blk: {
+                if (me.action == .wheel_x or me.action == .wheel_y) {
+                    // wheel is not affected by mouse capture
+                    break :blk;
                 }
 
-                if (!opts.r.contains(me.p)) {
-                    // mouse not in our rect
-                    return false;
+                if (cm.id == opts.id) {
+                    // we have capture, we get all mouse events
+                    return true;
+                } else {
+                    // someone else has capture
+                    other_capture = true;
+                }
+            }
+
+            if (me.floating_win != subwindowCurrentId()) {
+                // floating window is above us
+                return false;
+            }
+
+            if (!opts.r.contains(me.p)) {
+                // mouse not in our rect
+                return false;
+            }
+
+            if (!clipGet().contains(me.p)) {
+                // mouse not in clip region
+
+                // prevents widgets that are scrolled off a
+                // scroll area from processing events
+                return false;
+            }
+
+            if (other_capture) {
+                // someone else has capture, but otherwise we would have gotten
+                // this mouse event
+                if (me.action == .position and capture.?.subwindow_id == subwindowCurrentId() and !capture.?.rect.intersect(opts.r).empty()) {
+                    // we might be trying to highlight a background around the widget with capture:
+                    // * we are in the same subwindow
+                    // * our rect overlaps with the capture rect
+                    return true;
                 }
 
-                if (!clipGet().contains(me.p)) {
-                    // mouse not in clip region
-
-                    // prevents widgets that are scrolled off a
-                    // scroll area from processing events
-                    return false;
-                }
+                return false;
             }
         },
 
@@ -2779,7 +2824,7 @@ pub const Window = struct {
     content_scale: f32 = 1.0, // can set seperately but gets folded into natural_scale
     next_widget_ypos: f32 = 0,
 
-    captureID: ?u32 = null,
+    capture: ?CaptureMouse = null,
     captured_last_frame: bool = false,
 
     gpa: std.mem.Allocator,
@@ -3692,7 +3737,7 @@ pub const Window = struct {
 
         if (!self.captured_last_frame) {
             // widget that had capture went away
-            self.captureID = null;
+            self.capture = null;
         }
         self.captured_last_frame = false;
 
@@ -3776,7 +3821,7 @@ pub const Window = struct {
     // Client code should cache this if switching the platform's cursor is
     // expensive.
     pub fn cursorRequestedFloating(self: *const Self) ?enums.Cursor {
-        if (self.captureID != null or self.windowFor(self.mouse_pt) != self.wd.id) {
+        if (self.capture != null or self.windowFor(self.mouse_pt) != self.wd.id) {
             // gui owns the cursor if we have mouse capture or if the mouse is above
             // a floating window
             return self.cursorRequested();
@@ -5894,7 +5939,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
                     dvui.focusWidget(lwid, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
-                    dvui.captureMouse(lwid);
+                    dvui.captureMouseWD(lw.data());
 
                     // for touch events, we want to cancel our click if a drag is started
                     dvui.dragPreStart(me.p, .{});
@@ -6136,7 +6181,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
                     focusWidget(b.data().id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     // capture
-                    captureMouse(b.data().id);
+                    captureMouseWD(b.data());
                     e.handled = true;
                     p = me.p;
                 } else if (me.action == .release and me.button.pointer()) {
@@ -6423,7 +6468,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             text_mode = true;
                             refresh(null, @src(), b.data().id);
                         } else {
-                            captureMouse(b.data().id);
+                            captureMouseWD(b.data());
                             dataSet(null, b.data().id, "_start_x", me.p.x);
                             dataSet(null, b.data().id, "_start_v", init_opts.value.*);
 
