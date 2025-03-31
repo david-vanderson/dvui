@@ -150,7 +150,7 @@ pub fn processEvent(self: *ButtonWidget, e: *Event, bubbling: bool) void {
                     }
                 }
             } else if (me.action == .position) {
-                e.handled = true;
+                dvui.cursorSet(.arrow);
                 self.hover = true;
             }
         },
