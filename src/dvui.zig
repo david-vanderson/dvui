@@ -995,12 +995,14 @@ pub fn lastFocusedIdInFrame() u32 {
     return currentWindow().last_focused_id_this_frame;
 }
 
-/// Set cursor the app should use.
+/// Set cursor the app should use if not already set this frame.
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn cursorSet(cursor: enums.Cursor) void {
     const cw = currentWindow();
-    cw.cursor_requested = cursor;
+    if (cw.cursor_requested == null) {
+        cw.cursor_requested = cursor;
+    }
 }
 
 /// Add rounded rect to path.  Starts from top left, and ends at top right
@@ -2768,7 +2770,7 @@ pub const Window = struct {
     keybinds: std.StringHashMap(enums.Keybind),
     themes: std.StringArrayHashMap(Theme),
 
-    cursor_requested: enums.Cursor = .arrow,
+    cursor_requested: ?enums.Cursor = null,
     cursor_dragging: ?enums.Cursor = null,
 
     wd: WidgetData = undefined,
@@ -3527,7 +3529,7 @@ pub const Window = struct {
             }
         }
 
-        self.cursor_requested = .arrow;
+        self.cursor_requested = null;
         self.text_input_rect = null;
         self.last_focused_id_this_frame = 0;
         self.debug_info_name_rect = "";
@@ -3766,7 +3768,7 @@ pub const Window = struct {
         if (self.drag_state == .dragging and self.cursor_dragging != null) {
             return self.cursor_dragging.?;
         } else {
-            return self.cursor_requested;
+            return self.cursor_requested orelse .arrow;
         }
     }
 
@@ -5927,8 +5929,6 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
                         }
                     }
                 } else if (me.action == .position) {
-                    e.handled = true;
-
                     // a single .position mouse event is at the end of each
                     // frame, so this means the mouse ended above us
                     dvui.cursorSet(.hand);
@@ -6149,7 +6149,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
                     e.handled = true;
                     p = me.p;
                 } else if (me.action == .position) {
-                    e.handled = true;
+                    dvui.cursorSet(.arrow);
                     hovered = true;
                 }
 
@@ -6457,7 +6457,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             p = me.p;
                         }
                     } else if (me.action == .position) {
-                        e.handled = true;
+                        dvui.cursorSet(.arrow);
                         hover = true;
                     }
 
@@ -7966,7 +7966,7 @@ pub const PlotWidget = struct {
                 switch (e.evt) {
                     .mouse => |me| {
                         if (me.action == .position) {
-                            e.handled = true;
+                            dvui.cursorSet(.arrow);
                             self.mouse_point = me.p;
                         }
                     },

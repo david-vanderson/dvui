@@ -387,7 +387,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
 
             if (me.action == .position) {
                 if (dragPart(me, rs) == .bottom_right) {
-                    e.handled = true;
+                    e.handled = true; // don't want any widgets under this to see a hover
                     dvui.cursorSet(.arrow_nw_se);
                     continue;
                 }
@@ -445,7 +445,6 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                         }
                     },
                     .position => {
-                        e.handled = true;
                         dvui.cursorSet(dragPart(me, rs).cursor());
                     },
                     else => {},

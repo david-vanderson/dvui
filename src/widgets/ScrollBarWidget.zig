@@ -152,7 +152,7 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect) void {
                         }
                     },
                     .position => {
-                        e.handled = true;
+                        dvui.cursorSet(.arrow);
                         self.highlight = true;
                     },
                     .wheel_x => |ticks| {

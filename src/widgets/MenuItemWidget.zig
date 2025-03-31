@@ -198,7 +198,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                     }
                 }
             } else if (me.action == .position) {
-                e.handled = true;
+                dvui.cursorSet(.arrow);
                 self.highlight = true;
 
                 // We get a .position mouse event every frame.  If we

@@ -2504,7 +2504,6 @@ pub fn scrollCanvas() !void {
                                 Data.box_contents[1 - Data.drag_box_window] += 1;
                             }
                         } else if (me.action == .position) {
-                            e.handled = true;
                             dvui.cursorSet(.crosshair);
                         }
                     },
@@ -2569,7 +2568,6 @@ pub fn scrollCanvas() !void {
                                 }
                             } else if (me.action == .position) {
                                 if (!dragging_box) {
-                                    e.handled = true;
                                     dvui.cursorSet(.hand);
                                 }
                             }

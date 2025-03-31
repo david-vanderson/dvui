@@ -1627,7 +1627,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             } else if (me.action == .motion) {
                 self.click_num = 0;
             } else if (me.action == .position) {
-                e.handled = true;
+                dvui.cursorSet(.ibeam);
                 self.cursor_pt = self.wd.contentRectScale().pointFromScreen(me.p);
             }
         },

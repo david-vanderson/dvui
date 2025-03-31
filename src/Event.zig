@@ -92,10 +92,14 @@ pub const Mouse = struct {
         // moved at all, use the .position event with mouseTotalMotion()
         motion: Point,
 
-        // only one position event per frame, and it's always after all other
-        // mouse events, used to change mouse cursor and do widget highlighting
+        // always a single position event per frame, and it's always after all
+        // other events, used to change mouse cursor and do widget highlighting
         // - also useful with mouseTotalMotion() to respond to mouse motion but
         // only at the final location
+        // - generally you don't want to mark this as handled, the exception is
+        // if you are covering up child widgets and don't want them to react to
+        // the mouse hovering over them
+        // - instead, call dvui.cursorSet()
         position,
     };
 
