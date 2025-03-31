@@ -216,7 +216,7 @@ pub fn deinit(self: *FloatingTooltipWidget) void {
     }
 
     // check if we should still be shown
-    if (self.mouse_good_this_frame or self.tt_child_shown) {
+    if (self.mouse_good_this_frame or (self.init_options.interactive and self.tt_child_shown)) {
         dvui.dataSet(null, self.wd.id, "_showing", true);
         var parent: ?*FloatingTooltipWidget = self.parent_tooltip;
         while (parent) |p| {
