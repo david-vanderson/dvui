@@ -307,7 +307,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 if (e.evt == .mouse) {
                     const me = e.evt.mouse;
                     if (me.action == .press and me.button.touch()) {
-                        dvui.captureMouse(fc.wd.id);
+                        dvui.captureMouseWD(fc.data());
                         self.te_show_context_menu = false;
                         offset = fcrs.r.topRight().diff(me.p);
 
@@ -378,7 +378,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 if (e.evt == .mouse) {
                     const me = e.evt.mouse;
                     if (me.action == .press and me.button.touch()) {
-                        dvui.captureMouse(fc.wd.id);
+                        dvui.captureMouseWD(fc.data());
                         self.te_show_context_menu = false;
                         offset = fcrs.r.topLeft().diff(me.p);
 
@@ -1528,7 +1528,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             } else if (me.action == .press and me.button.pointer()) {
                 e.handled = true;
                 // capture and start drag
-                dvui.captureMouse(self.wd.id);
+                dvui.captureMouseWD(self.data());
                 dvui.dragPreStart(me.p, .{ .cursor = .ibeam });
 
                 if (me.button.touch()) {

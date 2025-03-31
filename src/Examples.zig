@@ -2087,7 +2087,7 @@ pub fn menus() !void {
         try tl.addText("This box has a simple tooltip.", .{});
         tl.deinit();
 
-        try dvui.tooltip(@src(), .{ .active_rect = hbox.data().rectScale().r }, "{s}", .{"Simple Tooltip"}, .{});
+        try dvui.tooltip(@src(), .{ .active_rect = hbox.data().borderRectScale().r }, "{s}", .{"Simple Tooltip"}, .{});
     }
 
     _ = try dvui.spacer(@src(), .{ .h = 10 }, .{});
@@ -2101,7 +2101,7 @@ pub fn menus() !void {
         tl.deinit();
 
         var tt: dvui.FloatingTooltipWidget = .init(@src(), .{
-            .active_rect = hbox.data().rectScale().r,
+            .active_rect = hbox.data().borderRectScale().r,
         }, .{});
         if (try tt.shown()) {
             var tl2 = try dvui.textLayout(@src(), .{}, .{ .background = false });
@@ -2111,7 +2111,7 @@ pub fn menus() !void {
             _ = try dvui.checkbox(@src(), &checkbox_bool, "Checkbox", .{});
 
             var tt2: dvui.FloatingTooltipWidget = .init(@src(), .{
-                .active_rect = tt.data().rectScale().r,
+                .active_rect = tt.data().borderRectScale().r,
             }, .{});
             if (try tt2.shown()) {
                 var tl3 = try dvui.textLayout(@src(), .{}, .{ .background = false });
@@ -2262,7 +2262,9 @@ pub fn focus() !void {
         te2.deinit();
     }
 
-    if (try dvui.expander(@src(), "Detecting Focus", .{}, .{ .expand = .horizontal })) {
+    _ = try dvui.spacer(@src(), .{ .h = 10 }, .{});
+
+    {
         var b = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10, .y = 2 }, .border = dvui.Rect.all(1) });
         defer b.deinit();
 
@@ -2292,6 +2294,40 @@ pub fn focus() !void {
 
         const have_focus = (last_focus_id != dvui.lastFocusedIdInFrame());
         try dvui.label(@src(), "Anything here with focus: {s}", .{if (have_focus) "Yes" else "No"}, .{});
+    }
+
+    _ = try dvui.spacer(@src(), .{ .h = 10 }, .{});
+
+    {
+        var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
+        defer b.deinit();
+
+        var tl = try dvui.textLayout(@src(), .{}, .{ .background = false });
+        try tl.addText("Hover highlighting a box around widgets:", .{});
+        tl.deinit();
+
+        var hbox = dvui.BoxWidget.init(@src(), .horizontal, false, .{ .expand = .horizontal, .padding = dvui.Rect.all(4) });
+        try hbox.install();
+        const evts = dvui.events();
+        for (evts) |*e| {
+            if (!dvui.eventMatchSimple(e, hbox.data())) {
+                continue;
+            }
+
+            if (e.evt == .mouse and e.evt.mouse.action == .position) {
+                hbox.data().options.background = true;
+                hbox.data().options.color_fill = .{ .name = .fill_hover };
+            }
+        }
+
+        try hbox.drawBackground();
+        defer hbox.deinit();
+
+        inline for (@typeInfo(RadioChoice).@"enum".fields, 0..) |field, i| {
+            if (try dvui.radio(@src(), radio_choice == @as(RadioChoice, @enumFromInt(field.value)), "Radio " ++ field.name, .{ .id_extra = i })) {
+                radio_choice = @enumFromInt(field.value);
+            }
+        }
     }
 }
 
@@ -2553,7 +2589,7 @@ pub fn scrollCanvas() !void {
                         .mouse => |me| {
                             if (me.action == .press and me.button.pointer()) {
                                 e.handled = true;
-                                dvui.captureMouse(dbox.data().id);
+                                dvui.captureMouseWD(dbox.data());
                                 dvui.dragPreStart(me.p, .{ .name = "box_transfer" });
                             } else if (me.action == .motion) {
                                 if (dvui.captured(dbox.data().id)) {
@@ -2587,7 +2623,7 @@ pub fn scrollCanvas() !void {
                 .mouse => |me| {
                     if (me.action == .press and me.button.pointer()) {
                         e.handled = true;
-                        dvui.captureMouse(dragBox.data().id);
+                        dvui.captureMouseWD(dragBox.data());
                         const offset = me.p.diff(dragBox.data().rectScale().r.topLeft()); // pixel offset from dragBox corner
                         dvui.dragPreStart(me.p, .{ .offset = offset });
                     } else if (me.action == .release and me.button.pointer()) {
@@ -2638,7 +2674,7 @@ pub fn scrollCanvas() !void {
             .mouse => |me| {
                 if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
-                    dvui.captureMouse(scroll.scroll.data().id);
+                    dvui.captureMouseWD(scroll.scroll.data());
                     dvui.dragPreStart(me.p, .{});
                 } else if (me.action == .release and me.button.pointer()) {
                     if (dvui.captured(scroll.scroll.data().id)) {
@@ -3491,7 +3527,7 @@ pub const StrokeTest = struct {
                             }
 
                             if (dragi != null) {
-                                dvui.captureMouse(self.wd.id);
+                                dvui.captureMouseWD(self.data());
                                 dvui.dragPreStart(me.p, .{ .cursor = .crosshair });
                             }
                         }

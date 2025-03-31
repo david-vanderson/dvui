@@ -32,12 +32,6 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     self.parent = dvui.parentGet();
     self.id = self.parent.extendId(src, opts.idExtra());
 
-    // for normal widgets this is fine, but subwindows have to take care to
-    // call captureMouseMaintain after subwindowCurrentSet and subwindowAdd
-    if (!init_options.subwindow) {
-        dvui.captureMouseMaintain(self.id);
-    }
-
     self.min_size = self.options.min_sizeGet();
     const ms = dvui.minSize(self.id, self.min_size);
 
@@ -66,6 +60,12 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
 
 pub fn register(self: *WidgetData) !void {
     self.rect_scale_cache = self.rectScale();
+
+    // for normal widgets this is fine, but subwindows have to take care to
+    // call captureMouseMaintain after subwindowCurrentSet and subwindowAdd
+    if (!self.init_options.subwindow) {
+        dvui.captureMouseMaintain(.{ .id = self.id, .rect = self.borderRectScale().r, .subwindow_id = dvui.subwindowCurrentId() });
+    }
 
     var cw = dvui.currentWindow();
     const name: []const u8 = self.options.name orelse "???";

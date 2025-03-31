@@ -124,7 +124,7 @@ pub fn install(self: *FloatingMenuWidget) !void {
     const rs = self.wd.rectScale();
 
     try dvui.subwindowAdd(self.wd.id, self.wd.rect, rs.r, false, null);
-    dvui.captureMouseMaintain(self.wd.id);
+    dvui.captureMouseMaintain(.{ .id = self.wd.id, .rect = rs.r, .subwindow_id = self.wd.id });
     try self.wd.register();
 
     // clip to just our window (using clipSet since we are not inside our parent)
