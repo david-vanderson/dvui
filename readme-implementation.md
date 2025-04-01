@@ -217,7 +217,7 @@ Special Events
   * represents the final mouse position for this frame
   * used to set cursor and sometimes hover state
 
-Sometimes a widget will just want to observe events but not mark them as processed.  An example is how to differentiate ctrl-click from normal click.  In a low framerate situation, we can't rely on checking the current keyboard state when the click happens. This way the widget can watch all keyboard events and keep track of the ctrl state properly interleaved with mouse events.
+Sometimes a widget will just want to observe events but not mark them as processed.  An example is how to differentiate a click while holding a non-modifier key (like "a") from normal click.  In a low framerate situation, we can't rely on checking the current keyboard state when the click happens. This way the widget can watch all keyboard events and keep track of the key state properly interleaved with mouse events.
 
 
 ## Min Size and Layout
