@@ -5288,7 +5288,7 @@ pub const SuggestionWidget = struct {
         }
 
         if (self.menu.submenus_activated) {
-            self.drop = try dvui.floatingMenu(@src(), .{ .from = self.init_options.rs.r }, self.options.override(.{ .debug = true }));
+            self.drop = try dvui.floatingMenu(@src(), .{ .from = self.init_options.rs.r }, self.options);
             if (dvui.firstFrame(self.drop.?.data().id)) {
                 // don't take focus away from text_entry when showing the suggestions
                 dvui.focusWidget(self.init_options.text_entry_id, null, null);
@@ -5319,7 +5319,7 @@ pub const SuggestionWidget = struct {
     }
 
     pub fn addChoice(self: *SuggestionWidget) !*MenuItemWidget {
-        self.drop_mi = MenuItemWidget.init(@src(), .{}, .{ .id_extra = self.drop_mi_index, .expand = .horizontal, .padding = .{} });
+        self.drop_mi = MenuItemWidget.init(@src(), .{ .highlight_only = true }, .{ .id_extra = self.drop_mi_index, .expand = .horizontal, .padding = .{} });
         if (self.selected_index == self.drop_mi_index) {
             if (self.activate_selected) {
                 self.drop_mi.?.activated = true;
@@ -5330,6 +5330,9 @@ pub const SuggestionWidget = struct {
         }
         try self.drop_mi.?.install();
         self.drop_mi.?.processEvents();
+        if (self.drop_mi.?.data().id == dvui.focusedWidgetId()) {
+            self.selected_index = self.drop_mi_index;
+        }
         try self.drop_mi.?.drawBackground(.{});
 
         self.drop_mi_index += 1;

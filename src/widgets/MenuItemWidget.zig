@@ -19,6 +19,7 @@ pub var defaults: Options = .{
 
 pub const InitOptions = struct {
     submenu: bool = false,
+    highlight_only: bool = false,
 };
 
 wd: WidgetData = undefined,
@@ -66,7 +67,9 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
 
     if (focused or ((self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow()) and self.highlight)) {
         if (!self.init_opts.submenu or !dvui.MenuWidget.current().?.submenus_activated) {
-            self.show_active = true;
+            if (!self.init_opts.highlight_only) {
+                self.show_active = true;
+            }
 
             if (!self.focused_last_frame) {
                 // in case we are in a scrollable dropdown, scroll
