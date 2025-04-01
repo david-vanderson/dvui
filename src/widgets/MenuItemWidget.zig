@@ -206,15 +206,13 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                 // moving then it breaks keyboard navigation.
                 if (dvui.mouseTotalMotion().nonZero()) {
                     self.mouse_over = true;
-                    if (dvui.MenuWidget.current().?.submenus_activated) {
-                        // we shouldn't have gotten this event if the motion
-                        // was towards a submenu (caught in MenuWidget)
-                        dvui.focusSubwindow(null, null); // focuses the window we are in
-                        dvui.focusWidget(self.wd.id, null, null);
+                    // we shouldn't have gotten this event if the motion
+                    // was towards a submenu (caught in MenuWidget)
+                    dvui.focusSubwindow(null, null); // focuses the window we are in
+                    dvui.focusWidget(self.wd.id, null, null);
 
-                        if (self.init_opts.submenu) {
-                            dvui.MenuWidget.current().?.submenus_in_child = true;
-                        }
+                    if (self.init_opts.submenu) {
+                        dvui.MenuWidget.current().?.submenus_in_child = true;
                     }
                 }
             }

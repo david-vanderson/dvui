@@ -143,7 +143,7 @@ pub fn install(self: *FloatingMenuWidget) !void {
         pm.child_popup_rect = rs.r;
     }
 
-    self.menu = MenuWidget.init(@src(), .{ .dir = .vertical, .submenus_activated_by_default = true }, self.options.strip().override(.{ .expand = .horizontal }));
+    self.menu = MenuWidget.init(@src(), .{ .dir = .vertical }, self.options.strip().override(.{ .expand = .horizontal }));
     self.menu.parentSubwindowId = self.prev_windowId;
     try self.menu.install();
 

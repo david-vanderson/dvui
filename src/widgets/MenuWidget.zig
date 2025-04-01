@@ -34,7 +34,6 @@ pub var defaults: Options = .{
 
 pub const InitOptions = struct {
     dir: enums.Direction = undefined,
-    submenus_activated_by_default: bool = false,
 };
 
 wd: WidgetData = undefined,
@@ -67,8 +66,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         self.submenus_activated = a;
     } else if (current()) |pm| {
         self.submenus_activated = pm.submenus_in_child;
-    } else {
-        self.submenus_activated = init_opts.submenus_activated_by_default;
     }
 
     return self;
@@ -175,25 +172,18 @@ pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
                             e.handled = true;
                             if (self.parentMenu) |pm| {
                                 pm.submenus_activated = false;
-                            }
-                            if (self.parentSubwindowId) |sid| {
-                                dvui.focusSubwindow(sid, null);
+                                if (self.parentSubwindowId) |sid| {
+                                    dvui.focusSubwindow(sid, null);
+                                }
                             }
                         } else {
+                            e.handled = true;
                             // TODO: don't do this if focus would move outside the menu
                             dvui.tabIndexPrev(e.num);
                         }
                     },
                     .right => {
-                        if (self.init_opts.dir == .vertical) {
-                            e.handled = true;
-                            if (self.parentMenu) |pm| {
-                                pm.submenus_activated = false;
-                            }
-                            if (self.parentSubwindowId) |sid| {
-                                dvui.focusSubwindow(sid, null);
-                            }
-                        } else {
+                        if (self.init_opts.dir == .horizontal) {
                             e.handled = true;
                             // TODO: don't do this if focus would move outside the menu
                             dvui.tabIndexNext(e.num);
