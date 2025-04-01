@@ -149,7 +149,6 @@ const utf8decoder = new TextDecoder();
 const utf8encoder = new TextEncoder();
 
 class Dvui {
-    webgl2 = true;
     /** @type {WebGL2RenderingContext | WebGLRenderingContext} */
     gl;
     /** @type {WebGLBuffer} */
@@ -201,6 +200,10 @@ class Dvui {
     //let par = document.createElement("p");
     //document.body.prepend(par);
 
+    get webgl2() {
+        return this.gl instanceof WebGL2RenderingContext;
+    }
+
     oskCheck() {
         if (this.textInputRect.length == 0) {
             this.gl.canvas.focus();
@@ -229,6 +232,14 @@ class Dvui {
     }
 
     constructor() {
+        this.hidden_input = document.createElement("input");
+        this.hidden_input.style.position = "absolute";
+        this.hidden_input.style.left = 0;
+        this.hidden_input.style.top = 0;
+        this.hidden_input.style.opacity = 0;
+        this.hidden_input.style.zIndex = -1;
+        document.body.prepend(this.hidden_input);
+
         this.imports = {
             wasm_about_webgl2: () => {
                 if (this.webgl2) {
@@ -843,13 +854,20 @@ class Dvui {
         this.instance = instance;
     }
 
-    setCanvas(canvasId) {
-        /** @type {HTMLCanvasElement} */
-        const canvas = document.querySelector(canvasId);
+    setCanvas(canvasSelectorOrCanvasElement) {
+        /** @type {HTMLCanvasElement | null} */
+        const canvas =
+            canvasSelectorOrCanvasElement instanceof HTMLCanvasElement
+                ? canvasSelectorOrCanvasElement
+                : document.querySelector(canvasSelectorOrCanvasElement);
+
+        if (!canvas) {
+            alert("Could find canvas element.");
+            return;
+        }
 
         this.gl = canvas.getContext("webgl2", { alpha: true });
         if (this.gl === null) {
-            this.webgl2 = false;
             this.gl = canvas.getContext("webgl", { alpha: true });
         }
 
@@ -865,17 +883,6 @@ class Dvui {
                 return;
             }
         }
-    }
-
-    run() {
-        this.hidden_input = document.createElement("input");
-        this.hidden_input.style.position = "absolute";
-        this.hidden_input.style.left = 0;
-        this.hidden_input.style.top = 0;
-        this.hidden_input.style.opacity = 0;
-        this.hidden_input.style.zIndex = -1;
-        document.body.prepend(this.hidden_input);
-
         this.frame_buffer = this.gl.createFramebuffer();
 
         const vertexShader = this.gl.createShader(this.gl.VERTEX_SHADER);
@@ -976,7 +983,9 @@ class Dvui {
             this.gl.canvas.clientWidth,
             this.gl.canvas.clientHeight,
         );
+    }
 
+    run() {
         let renderRequested = false;
         let renderTimeoutId = 0;
         let app_initialized = false;
