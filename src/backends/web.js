@@ -135,9 +135,7 @@ const fragmentShaderSource_webgl2 = `# version 300 es
  */
 function dvui(canvasId, wasmFile) {
     const dvui = new Dvui();
-    fetch(wasmFile)
-        .then((response) => response.arrayBuffer())
-        .then((bytes) => WebAssembly.instantiate(bytes, { dvui: dvui.imports }))
+    WebAssembly.instantiateStreaming(fetch(wasmFile), { dvui: dvui.imports })
         .then((result) => {
             dvui.setInstance(result.instance);
             dvui.setCanvas(canvasId);
