@@ -5273,6 +5273,12 @@ pub const SuggestionWidget = struct {
         self.menu = try dvui.menu(@src(), .horizontal, .{ .rect = .{}, .id_extra = self.options.idExtra() });
     }
 
+    // Use this to see if dropped will return true without installing the
+    // floatingMenu which changes the current subwindow
+    pub fn willOpen(self: *SuggestionWidget) bool {
+        return self.menu.submenus_activated;
+    }
+
     pub fn open(self: *SuggestionWidget) void {
         self.menu.submenus_activated = true;
     }
@@ -5389,13 +5395,16 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
         if (e.evt == .key and (e.evt.key.action == .down or e.evt.key.action == .repeat)) {
             switch (e.evt.key.code) {
                 .up => {
-                    if (try sug.dropped()) {
+                    e.handled = true;
+                    if (sug.willOpen()) {
                         sug.selected_index -|= 1;
+                    } else {
+                        sug.open();
                     }
                 },
                 .down => {
                     e.handled = true;
-                    if (try sug.dropped()) {
+                    if (sug.willOpen()) {
                         sug.selected_index += 1;
                     } else {
                         sug.open();
@@ -5406,7 +5415,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
                     sug.close();
                 },
                 .enter => {
-                    if (try sug.dropped()) {
+                    if (sug.willOpen()) {
                         e.handled = true;
                         sug.activate_selected = true;
                     }
