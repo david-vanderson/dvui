@@ -1,7 +1,14 @@
+/**
+ * @param {number} ms Number of milliseconds to sleep
+ */
 async function dvui_sleep(ms) {
     await new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * @param {string} url
+ * @returns {Uint8Array}
+ */
 async function dvui_fetch(url) {
     let x = await fetch(url);
     let blob = await x.blob();
@@ -9,6 +16,11 @@ async function dvui_fetch(url) {
     return new Uint8Array(await blob.arrayBuffer());
 }
 
+/**
+ * @param {string} accept Maps to the accept attribute of the file input element
+ * @param {boolean} multiple
+ * @returns {Promise<FileList>}
+ */
 async function dvui_open_file_picker(accept, multiple) {
     return new Promise((res, rej) => {
         const file_input = document.createElement("input");
@@ -117,6 +129,10 @@ const fragmentShaderSource_webgl2 = `# version 300 es
     }
 `;
 
+/**
+ * @param {string} canvasId
+ * @param {string} wasmFile The url to the wasm file, to be used in `fetch`
+ */
 function dvui(canvasId, wasmFile) {
     const dvui = new Dvui();
     fetch(wasmFile)
@@ -134,25 +150,52 @@ const utf8encoder = new TextEncoder();
 
 class Dvui {
     webgl2 = true;
+    /** @type {WebGL2RenderingContext | WebGLRenderingContext} */
     gl;
+    /** @type {WebGLBuffer} */
     indexBuffer;
+    /** @type {WebGLBuffer} */
     vertexBuffer;
+    /** @type {WebGLProgram} */
     shaderProgram;
+    /** @type {{ attribLocations: { vertexPosition: number;
+            vertexColor: number;
+            textureCoord: number;
+        };
+        uniformLocations: {
+            matrix: WebGLUniformLocation | null;
+            uSampler: WebGLUniformLocation | null;
+            useTex: WebGLUniformLocation | null;
+        };
+    }} */
     programInfo;
+    /** @type {Map<number, [WebGLTexture, number, number]>} */
     textures = new Map();
     newTextureId = 1;
     using_fb = false;
+    /** @type {WebGLFramebuffer | null} */
     frame_buffer = null;
+    /** @type {[number, number]} */
     renderTargetSize = [0, 0];
 
+    /** @type {WebAssembly.Instance} */
     instance;
     log_string = "";
+    /** @type {HTMLInputElement} */
     hidden_input;
-    touches = []; // list of tuple (touch identifier, initial index)
-    textInputRect = []; // x y w h of on screen keyboard editing position, or empty if none
+    /**
+     * list of tuple (touch identifier, initial index)
+     * @type {[number, number][]} */
+    touches = [];
+    /**
+     * x y w h of on screen keyboard editing position, or empty if none
+     *
+     * @type {[number, number, number, number] | []} */
+    textInputRect = [];
 
     // Used for file uploads. Only valid for one frame
     filesCacheModified = false;
+    /** @type {Map<number, FileList>} */
     filesCache = new Map();
 
     //let par = document.createElement("p");
