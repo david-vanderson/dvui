@@ -27,42 +27,42 @@ const EventTemp = struct {
 pub var event_temps = std.ArrayList(EventTemp).init(gpa);
 
 pub const wasm = struct {
-    pub extern fn wasm_about_webgl2() u8;
+    pub extern "dvui" fn wasm_about_webgl2() u8;
 
-    pub extern fn wasm_panic(ptr: [*]const u8, len: usize) void;
-    pub extern fn wasm_log_write(ptr: [*]const u8, len: usize) void;
-    pub extern fn wasm_log_flush() void;
+    pub extern "dvui" fn wasm_panic(ptr: [*]const u8, len: usize) void;
+    pub extern "dvui" fn wasm_log_write(ptr: [*]const u8, len: usize) void;
+    pub extern "dvui" fn wasm_log_flush() void;
 
-    pub extern fn wasm_now() f64;
-    pub extern fn wasm_sleep(ms: u32) void;
+    pub extern "dvui" fn wasm_now() f64;
+    pub extern "dvui" fn wasm_sleep(ms: u32) void;
 
-    pub extern fn wasm_pixel_width() f32;
-    pub extern fn wasm_pixel_height() f32;
-    pub extern fn wasm_canvas_width() f32;
-    pub extern fn wasm_canvas_height() f32;
+    pub extern "dvui" fn wasm_pixel_width() f32;
+    pub extern "dvui" fn wasm_pixel_height() f32;
+    pub extern "dvui" fn wasm_canvas_width() f32;
+    pub extern "dvui" fn wasm_canvas_height() f32;
 
-    pub extern fn wasm_frame_buffer() u8;
-    pub extern fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32, interp: u8) u32;
-    pub extern fn wasm_textureCreateTarget(width: u32, height: u32, interp: u8) u32;
-    pub extern fn wasm_textureRead(texture: u32, pixels_out: [*]u8, width: u32, height: u32) void;
-    pub extern fn wasm_renderTarget(u32) void;
-    pub extern fn wasm_textureDestroy(u32) void;
-    pub extern fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, clip: u8, x: i32, y: i32, w: i32, h: i32) void;
+    pub extern "dvui" fn wasm_frame_buffer() u8;
+    pub extern "dvui" fn wasm_textureCreate(pixels: [*]u8, width: u32, height: u32, interp: u8) u32;
+    pub extern "dvui" fn wasm_textureCreateTarget(width: u32, height: u32, interp: u8) u32;
+    pub extern "dvui" fn wasm_textureRead(texture: u32, pixels_out: [*]u8, width: u32, height: u32) void;
+    pub extern "dvui" fn wasm_renderTarget(u32) void;
+    pub extern "dvui" fn wasm_textureDestroy(u32) void;
+    pub extern "dvui" fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, clip: u8, x: i32, y: i32, w: i32, h: i32) void;
 
-    pub extern fn wasm_cursor(name: [*]const u8, name_len: u32) void;
-    pub extern fn wasm_text_input(x: f32, y: f32, w: f32, h: f32) void;
-    pub extern fn wasm_open_url(ptr: [*]const u8, len: usize) void;
-    pub extern fn wasm_download_data(name_ptr: [*]const u8, name_len: usize, data_ptr: [*]const u8, data_len: usize) void;
-    pub extern fn wasm_clipboardTextSet(ptr: [*]const u8, len: usize) void;
+    pub extern "dvui" fn wasm_cursor(name: [*]const u8, name_len: u32) void;
+    pub extern "dvui" fn wasm_text_input(x: f32, y: f32, w: f32, h: f32) void;
+    pub extern "dvui" fn wasm_open_url(ptr: [*]const u8, len: usize) void;
+    pub extern "dvui" fn wasm_download_data(name_ptr: [*]const u8, name_len: usize, data_ptr: [*]const u8, data_len: usize) void;
+    pub extern "dvui" fn wasm_clipboardTextSet(ptr: [*]const u8, len: usize) void;
 
     // NOTE: bool in extern becomes 0 and 1 in js, which is falsy and truthy respectively
-    pub extern fn wasm_open_file_picker(id: u32, accept_ptr: [*]const u8, accept_len: usize, multiple: bool) void;
-    pub extern fn wasm_get_number_of_files_available(id: u32) usize;
-    pub extern fn wasm_get_file_name(id: u32, file_index: usize) [*:0]u8;
-    pub extern fn wasm_get_file_size(id: u32, file_index: usize) isize;
-    pub extern fn wasm_read_file_data(id: u32, file_index: usize, data: [*]u8) void;
+    pub extern "dvui" fn wasm_open_file_picker(id: u32, accept_ptr: [*]const u8, accept_len: usize, multiple: bool) void;
+    pub extern "dvui" fn wasm_get_number_of_files_available(id: u32) usize;
+    pub extern "dvui" fn wasm_get_file_name(id: u32, file_index: usize) [*:0]u8;
+    pub extern "dvui" fn wasm_get_file_size(id: u32, file_index: usize) isize;
+    pub extern "dvui" fn wasm_read_file_data(id: u32, file_index: usize, data: [*]u8) void;
 
-    pub extern fn wasm_add_noto_font() void;
+    pub extern "dvui" fn wasm_add_noto_font() void;
 };
 
 export fn dvui_c_alloc(size: usize) ?*anyopaque {
