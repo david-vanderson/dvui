@@ -2301,8 +2301,8 @@ pub fn dataRemove(win: ?*Window, id: u32, key: []const u8) void {
     }
 }
 
-/// Make the Rect a widget will get given the available space, the min size
-/// wanted, expand, and gravity.
+/// Return a rect that fits inside avail given the options. avail wins over
+/// min_size.
 pub fn placeIn(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     var size = min_size;
 
@@ -2322,17 +2322,33 @@ pub fn placeIn(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravit
             size = avail.size();
         },
         .ratio => {
-            if (min_size.w != 0 and min_size.h != 0) {
+            if (min_size.w > 0 and min_size.h > 0 and avail.w > 0 and avail.h > 0) {
                 const ratio = min_size.w / min_size.h;
-                const aratio = (avail.w - size.w) / (avail.h - size.h);
-                if (aratio > ratio) {
-                    // height is constraint
-                    size.w = avail.h * ratio;
-                    size.h = avail.h;
+                if (min_size.w > avail.w or min_size.h > avail.h) {
+                    // contracting
+                    const wratio = avail.w / min_size.w;
+                    const hratio = avail.h / min_size.h;
+                    if (wratio < hratio) {
+                        // width is constraint
+                        size.w = avail.w;
+                        size.h = @min(avail.h, wratio * min_size.h);
+                    } else {
+                        // height is constraint
+                        size.h = avail.h;
+                        size.w = @min(avail.w, hratio * min_size.w);
+                    }
                 } else {
-                    // width is constraint
-                    size.w = avail.w;
-                    size.h = avail.w / ratio;
+                    // expanding
+                    const aratio = (avail.w - size.w) / (avail.h - size.h);
+                    if (aratio > ratio) {
+                        // height is constraint
+                        size.w = @min(avail.w, avail.h * ratio);
+                        size.h = avail.h;
+                    } else {
+                        // width is constraint
+                        size.w = avail.w;
+                        size.h = @min(avail.h, avail.w / ratio);
+                    }
                 }
             }
         },
