@@ -59,6 +59,8 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
 }
 
 pub fn register(self: *WidgetData) !void {
+    const ctx = dvui.ztrac.widget(@src());
+    defer ctx.End();
     self.rect_scale_cache = self.rectScale();
 
     // for normal widgets this is fine, but subwindows have to take care to
@@ -143,6 +145,8 @@ pub fn visible(self: *const WidgetData) bool {
 }
 
 pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?Color = null }) !void {
+    const ctx = dvui.ztrac.compute(@src());
+    defer ctx.End();
     if (!self.visible()) {
         return;
     }
@@ -188,8 +192,8 @@ pub fn focusBorder(self: *const WidgetData) !void {
 }
 
 pub fn rectScale(self: *const WidgetData) RectScale {
-    const trac = dvui.ztracy.Zone(@src());
-    defer trac.End();
+    const ctx = dvui.ztrac.compute(@src());
+    defer ctx.End();
     if (self.rect_scale_cache) |rsc| {
         return rsc;
     }
@@ -204,40 +208,40 @@ pub fn rectScale(self: *const WidgetData) RectScale {
 }
 
 pub fn borderRect(self: *const WidgetData) Rect {
-    const trac = dvui.ztracy.Zone(@src());
-    defer trac.End();
+    const ctx = dvui.ztrac.compute(@src());
+    defer ctx.End();
     return self.rect.inset(self.options.marginGet());
 }
 
 pub fn borderRectScale(self: *const WidgetData) RectScale {
-    const trac = dvui.ztracy.Zone(@src());
-    defer trac.End();
+    const ctx = dvui.ztrac.compute(@src());
+    defer ctx.End();
     const r = self.borderRect().offsetNeg(self.rect);
     return self.rectScale().rectToRectScale(r);
 }
 
 pub fn backgroundRect(self: *const WidgetData) Rect {
-    const trac = dvui.ztracy.Zone(@src());
-    defer trac.End();
+    const ctx = dvui.ztrac.compute(@src());
+    defer ctx.End();
     return self.rect.inset(self.options.marginGet()).inset(self.options.borderGet());
 }
 
 pub fn backgroundRectScale(self: *const WidgetData) RectScale {
-    const trac = dvui.ztracy.Zone(@src());
-    defer trac.End();
+    const ctx = dvui.ztrac.compute(@src());
+    defer ctx.End();
     const r = self.backgroundRect().offsetNeg(self.rect);
     return self.rectScale().rectToRectScale(r);
 }
 
 pub fn contentRect(self: *const WidgetData) Rect {
-    const trac = dvui.ztracy.Zone(@src());
-    defer trac.End();
+    const ctx = dvui.ztrac.compute(@src());
+    defer ctx.End();
     return self.rect.inset(self.options.marginGet()).inset(self.options.borderGet()).inset(self.options.paddingGet());
 }
 
 pub fn contentRectScale(self: *const WidgetData) RectScale {
-    const trac = dvui.ztracy.Zone(@src());
-    defer trac.End();
+    const ctx = dvui.ztrac.compute(@src());
+    defer ctx.End();
     const r = self.contentRect().offsetNeg(self.rect);
     return self.rectScale().rectToRectScale(r);
 }

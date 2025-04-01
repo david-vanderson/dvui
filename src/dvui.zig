@@ -83,6 +83,67 @@ pub const VirtualParentWidget = widgets.VirtualParentWidget;
 // FIXME : not sure I should expose ztracy in dvui topmodule like this,
 // but for now it seems like the easiest way to access tracy utilities both everywhere in dvui and in the exemple demo.
 pub const ztracy = @import("ztracy");
+// Shortcuts for systematic coloring
+// This would push in favor of a custom tracy integration, or at least a wrapper
+pub const ztrac = struct {
+    // My idea here is to assign standard colors to zone "types",
+    // see if it helps organizing the stuff.
+    // I think the idea is nice, and could lead to comptime toggling of "classes" of Zones
+    // while the client lib could make use of it's own stuff. But the naming / categorization
+    // definitely need some extra thoughts
+    const colors = enum(u32) {
+        red = 0x00_fb4934,
+        green = 0x00_b8bb26,
+        yellow = 0x00_fabd2f,
+        blue = 0x00_83a598,
+        purple = 0x00_d3869b,
+        dark_purple = 0x00_8f3f71,
+        aqua = 0x00_8ec07c,
+        orange = 0x00_fe8019,
+    };
+    /// Create Tracy zone for a container widget. (allocated zone)
+    /// What is a container is subjective in this context. Container would be box & areas that contains a lot of stuff.
+    /// Returned context is meant to be `.End()` in widget deinit
+    pub inline fn widgetContainer(src: std.builtin.SourceLocation, name: []const u8) ztracy.ZoneCtx {
+        return dvui.ztracy.ZoneAllocNC(src, name, @intFromEnum(colors.dark_purple));
+    }
+    /// Create Tracy zone for a widget. (allocated zone)
+    /// What is simple is subjective in this context. Button would be a simple widget
+    /// Returned context is meant to be `.End()` in widget deinit
+    pub inline fn widgetSimple(src: std.builtin.SourceLocation, name: []const u8) ztracy.ZoneCtx {
+        return dvui.ztracy.ZoneAllocNC(src, name, @intFromEnum(colors.purple));
+    }
+    /// Create a scope zone for computation
+    /// Returned context is meant to be `defer ctx.End()` immediately
+    pub inline fn compute(comptime src: std.builtin.SourceLocation) ztracy.ZoneCtx {
+        return dvui.ztracy.ZoneC(src, @intFromEnum(colors.aqua));
+    }
+    /// Create a scope zone for text processing
+    /// Returned context is meant to be `defer ctx.End()` immediately
+    pub inline fn text(comptime src: std.builtin.SourceLocation) ztracy.ZoneCtx {
+        return dvui.ztracy.ZoneC(src, @intFromEnum(colors.yellow));
+    }
+    /// Create a scope zone for event processing
+    /// Returned context is meant to be `defer ctx.End()` immediately
+    pub inline fn event(comptime src: std.builtin.SourceLocation) ztracy.ZoneCtx {
+        return dvui.ztracy.ZoneC(src, @intFromEnum(colors.red));
+    }
+    /// Create a scope zone for event rendering
+    /// Returned context is meant to be `defer ctx.End()` immediately
+    pub inline fn render(comptime src: std.builtin.SourceLocation) ztracy.ZoneCtx {
+        return dvui.ztracy.ZoneC(src, @intFromEnum(colors.blue));
+    }
+    /// Create a scope zone for data management between frames
+    /// Returned context is meant to be `defer ctx.End()` immediately
+    pub inline fn data(comptime src: std.builtin.SourceLocation) ztracy.ZoneCtx {
+        return dvui.ztracy.ZoneC(src, @intFromEnum(colors.green));
+    }
+    /// Create a scope zone for widget generic stuff
+    /// Returned context is meant to be `defer ctx.End()` immediately
+    pub inline fn widget(comptime src: std.builtin.SourceLocation) ztracy.ZoneCtx {
+        return dvui.ztracy.ZoneC(src, @intFromEnum(colors.orange));
+    }
+};
 
 const se = @import("structEntry.zig");
 pub const structEntry = se.structEntry;
@@ -2209,7 +2270,7 @@ pub fn dataSetSliceCopies(win: ?*Window, id: u32, key: []const u8, data: anytype
 /// contents are copied into internal storage. If false, only the slice itself
 /// (ptr and len) and stored.
 pub fn dataSetAdvanced(win: ?*Window, id: u32, key: []const u8, data: anytype, comptime copy_slice: bool, num_copies: usize) void {
-    const trac = dvui.ztracy.Zone(@src());
+    const trac = ztrac.data(@src());
     defer trac.End();
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
@@ -2355,7 +2416,7 @@ pub fn dataGetSliceDefault(win: ?*Window, id: u32, key: []const u8, comptime T: 
 
 // returns the backing slice of bytes if we have it
 pub fn dataGetInternal(win: ?*Window, id: u32, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
-    const trac = dvui.ztracy.Zone(@src());
+    const trac = ztrac.data(@src());
     defer trac.End();
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
@@ -2377,7 +2438,7 @@ pub fn dataGetInternal(win: ?*Window, id: u32, key: []const u8, comptime T: type
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the dialog to.
 pub fn dataRemove(win: ?*Window, id: u32, key: []const u8) void {
-    const trac = dvui.ztracy.Zone(@src());
+    const trac = ztrac.data(@src());
     defer trac.End();
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
@@ -2462,6 +2523,8 @@ pub fn events() []Event {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn eventMatchSimple(e: *Event, wd: *WidgetData) bool {
+    const ctx = ztrac.event(@src());
+    defer ctx.End();
     return eventMatch(e, .{ .id = wd.id, .r = wd.borderRectScale().r });
 }
 
@@ -2491,6 +2554,8 @@ pub const EventMatchOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
+    const ctx = ztrac.event(@src());
+    defer ctx.End();
     if (e.handled) return false;
 
     if (e.focus_windowId) |wid| {
@@ -5122,6 +5187,8 @@ pub const renderTextOptions = struct {
 
 // only renders a single line of text
 pub fn renderText(opts: renderTextOptions) !void {
+    const ctx = ztrac.text(@src());
+    defer ctx.End();
     if (opts.rs.s == 0) return;
     if (opts.text.len == 0) return;
     if (clipGet().intersect(opts.rs.r).empty()) return;
@@ -5599,6 +5666,8 @@ pub const RenderTextureOptions = struct {
 };
 
 pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !void {
+    const ctx = ztrac.render(@src());
+    defer ctx.End();
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
@@ -5687,6 +5756,8 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
 }
 
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotation: f32, colormod: Color) !void {
+    const ctx = ztrac.render(@src());
+    defer ctx.End();
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
@@ -5700,6 +5771,8 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotati
 }
 
 pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntry {
+    const ctx = ztrac.render(@src());
+    defer ctx.End();
     var cw = currentWindow();
     const hash = TextureCacheEntry.hash(image_bytes, 0);
 
@@ -5748,6 +5821,8 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
 }
 
 pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, rotation: f32, colormod: Color) !void {
+    const ctx = ztrac.render(@src());
+    defer ctx.End();
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
