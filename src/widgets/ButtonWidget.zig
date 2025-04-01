@@ -35,7 +35,7 @@ click: bool = false,
 tracy_ctx: dvui.ztracy.ZoneCtx = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ButtonWidget {
-    const ctx = dvui.ztracy.ZoneAllocN(src, "ButtonWidget");
+    const ctx = dvui.ztrac.widgetSimple(src, "Button");
 
     var self = ButtonWidget{};
     self.tracy_ctx = ctx;
@@ -59,6 +59,8 @@ pub fn matchEvent(self: *ButtonWidget, e: *Event) bool {
 }
 
 pub fn processEvents(self: *ButtonWidget) void {
+    const ctx = dvui.ztrac.event(@src());
+    defer ctx.End();
     const evts = dvui.events();
     for (evts) |*e| {
         if (!self.matchEvent(e))

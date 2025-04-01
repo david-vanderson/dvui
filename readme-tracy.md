@@ -12,6 +12,12 @@ This is a working document / notes about my exploration of [tracy](https://githu
 - Build with `zig build sdl-standalone -Dtracy-enable`
 - Play a bit with the dvui demo, then close, and the admire the traces ;-)
 
+Note : 
+- Running the binary with admin rights gives interesting extra data about CPU usage and thread interruption
+- Source location doesn't work out of the box. (i.e. the button that shows source extract when you click on a zone)
+    An easy fix is to `cwd` into the `dvui/src` folder and launch the app with `../zig-out/bin/sdl-standalone`
+    (but even without doing so, you will have the filename and line number displayed and search in your editor)
+
 # Implementation notes
 
 ## Zig bindings

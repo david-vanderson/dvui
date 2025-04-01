@@ -46,7 +46,7 @@ scroll: ScrollContainerWidget = undefined,
 tracy_ctx: dvui.ztracy.ZoneCtx = undefined,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) ScrollAreaWidget {
-    const ctx = dvui.ztracy.ZoneAllocN(src, "ScrollAreaWidget");
+    const ctx = dvui.ztrac.widgetContainer(src, "ScrollAreaWidget");
 
     var self = ScrollAreaWidget{};
     self.tracy_ctx = ctx;

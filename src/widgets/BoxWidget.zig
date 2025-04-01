@@ -29,15 +29,10 @@ childRect: Rect = Rect{}, //TODO rename this to child_rect for naming consistenc
 extra_pixels: f32 = 0,
 ratio_extra: f32 = 0,
 
-// FIXME : Does this take space when ztracy is disabled ?
 tracy_ctx: dvui.ztracy.ZoneCtx = undefined,
-// If it does, I could do :
-// tracy_ctx: if (dvui.ztracy.enabled) dvui.ztracy.ZoneCtx else void = undefined,
-// but then I need to wrap assignement and End() call below as well
-// Or come up with some more comptime stuff up-front
 
 pub fn init(src: std.builtin.SourceLocation, dir: enums.Direction, equal_space: bool, opts: Options) BoxWidget {
-    const ctx = dvui.ztracy.ZoneAllocN(src, "BoxWidget");
+    const ctx = dvui.ztrac.widgetContainer(src, "BoxWidget");
 
     var self = BoxWidget{};
     self.tracy_ctx = ctx;
