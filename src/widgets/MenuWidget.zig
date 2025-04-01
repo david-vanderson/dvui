@@ -55,6 +55,10 @@ mouse_over: bool = false,
 // supports mouse skipping over menu items if towards the submenu
 child_popup_rect: ?Rect = null,
 
+// false means the last interaction we got was keyboard, so don't highlight the
+// entry that happens to be under the mouse
+mouse_mode: bool = false,
+
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuWidget {
     var self = MenuWidget{};
     const options = defaults.override(opts);
@@ -67,6 +71,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     } else if (current()) |pm| {
         self.submenus_activated = pm.submenus_in_child;
     }
+
+    self.mouse_mode = dvui.dataGet(null, self.wd.id, "_mouse_mode", bool) orelse false;
 
     return self;
 }
@@ -124,6 +130,7 @@ pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
         .mouse => |me| {
             if (me.action == .position) {
                 if (dvui.mouseTotalMotion().nonZero()) {
+                    self.mouse_mode = true;
                     if (dvui.dataGet(null, self.wd.id, "_child_popup", Rect)) |r| {
                         const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
                         const cw = dvui.currentWindow();
@@ -149,11 +156,13 @@ pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
             if (ke.action == .down or ke.action == .repeat) {
                 switch (ke.code) {
                     .escape => {
+                        self.mouse_mode = false;
                         e.handled = true;
                         var closeE = Event{ .evt = .{ .close_popup = .{} } };
                         self.processEvent(&closeE, true);
                     },
                     .up => {
+                        self.mouse_mode = false;
                         if (self.init_opts.dir == .vertical) {
                             e.handled = true;
                             // TODO: don't do this if focus would move outside the menu
@@ -161,6 +170,7 @@ pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
                         }
                     },
                     .down => {
+                        self.mouse_mode = false;
                         if (self.init_opts.dir == .vertical) {
                             e.handled = true;
                             // TODO: don't do this if focus would move outside the menu
@@ -168,6 +178,7 @@ pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
                         }
                     },
                     .left => {
+                        self.mouse_mode = false;
                         if (self.init_opts.dir == .vertical) {
                             e.handled = true;
                             if (self.parentMenu) |pm| {
@@ -183,6 +194,7 @@ pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
                         }
                     },
                     .right => {
+                        self.mouse_mode = false;
                         if (self.init_opts.dir == .horizontal) {
                             e.handled = true;
                             // TODO: don't do this if focus would move outside the menu
@@ -206,6 +218,7 @@ pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
 
 pub fn deinit(self: *MenuWidget) void {
     self.box.deinit();
+    dvui.dataSet(null, self.wd.id, "_mouse_mode", self.mouse_mode);
     dvui.dataSet(null, self.wd.id, "_sub_act", self.submenus_activated);
     if (self.child_popup_rect) |r| {
         dvui.dataSet(null, self.wd.id, "_child_popup", r);

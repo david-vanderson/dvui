@@ -157,6 +157,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .focus) {
+                dvui.MenuWidget.current().?.mouse_mode = true;
                 e.handled = true;
                 dvui.focusWidget(self.wd.id, null, e.num);
             } else if (me.action == .press and me.button.pointer()) {
@@ -180,6 +181,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                     dvui.dragPreStart(me.p, .{});
                 }
             } else if (me.action == .release) {
+                dvui.MenuWidget.current().?.mouse_mode = true;
                 e.handled = true;
                 if (!self.init_opts.submenu and (self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow())) {
                     self.activated = true;
@@ -201,13 +203,16 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                     }
                 }
             } else if (me.action == .position) {
-                dvui.cursorSet(.arrow);
-                self.highlight = true;
+                if (dvui.MenuWidget.current().?.mouse_mode) {
+                    dvui.cursorSet(.arrow);
+                    self.highlight = true;
+                }
 
                 // We get a .position mouse event every frame.  If we
                 // focus the menu item under the mouse even if it's not
                 // moving then it breaks keyboard navigation.
                 if (dvui.mouseTotalMotion().nonZero()) {
+                    dvui.MenuWidget.current().?.mouse_mode = true;
                     self.mouse_over = true;
                     // we shouldn't have gotten this event if the motion
                     // was towards a submenu (caught in MenuWidget)
@@ -222,6 +227,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
         },
         .key => |ke| {
             if (ke.action == .down and ke.matchBind("activate")) {
+                dvui.MenuWidget.current().?.mouse_mode = false;
                 e.handled = true;
                 if (self.init_opts.submenu) {
                     dvui.MenuWidget.current().?.submenus_activated = true;
@@ -231,11 +237,13 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                 }
             } else if (ke.code == .right and ke.action == .down) {
                 if (self.init_opts.submenu and dvui.MenuWidget.current().?.init_opts.dir == .vertical) {
+                    dvui.MenuWidget.current().?.mouse_mode = false;
                     e.handled = true;
                     dvui.MenuWidget.current().?.submenus_activated = true;
                 }
             } else if (ke.code == .down and ke.action == .down) {
                 if (self.init_opts.submenu and dvui.MenuWidget.current().?.init_opts.dir == .horizontal) {
+                    dvui.MenuWidget.current().?.mouse_mode = false;
                     e.handled = true;
                     dvui.MenuWidget.current().?.submenus_activated = true;
                 }
