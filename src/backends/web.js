@@ -37,146 +37,158 @@ async function dvui_open_file_picker(accept, multiple) {
     });
 }
 
+const vertexShaderSource_webgl = `
+    precision mediump float;
+
+    attribute vec4 aVertexPosition;
+    attribute vec4 aVertexColor;
+    attribute vec2 aTextureCoord;
+
+    uniform mat4 uMatrix;
+
+    varying vec4 vColor;
+    varying vec2 vTextureCoord;
+
+    void main() {
+      gl_Position = uMatrix * aVertexPosition;
+      vColor = aVertexColor / 255.0;  // normalize u8 colors to 0-1
+      vTextureCoord = aTextureCoord;
+    }
+`;
+
+const vertexShaderSource_webgl2 = `# version 300 es
+
+    precision mediump float;
+
+    in vec4 aVertexPosition;
+    in vec4 aVertexColor;
+    in vec2 aTextureCoord;
+
+    uniform mat4 uMatrix;
+
+    out vec4 vColor;
+    out vec2 vTextureCoord;
+
+    void main() {
+      gl_Position = uMatrix * aVertexPosition;
+      vColor = aVertexColor / 255.0;  // normalize u8 colors to 0-1
+      vTextureCoord = aTextureCoord;
+    }
+`;
+
+const fragmentShaderSource_webgl = `
+    precision mediump float;
+
+    varying vec4 vColor;
+    varying vec2 vTextureCoord;
+
+    uniform sampler2D uSampler;
+    uniform bool useTex;
+
+    void main() {
+        if (useTex) {
+            gl_FragColor = texture2D(uSampler, vTextureCoord) * vColor;
+        }
+        else {
+            gl_FragColor = vColor;
+        }
+    }
+`;
+
+const fragmentShaderSource_webgl2 = `# version 300 es
+
+    precision mediump float;
+
+    in vec4 vColor;
+    in vec2 vTextureCoord;
+
+    uniform sampler2D uSampler;
+    uniform bool useTex;
+
+    out vec4 fragColor;
+
+    void main() {
+        if (useTex) {
+            fragColor = texture(uSampler, vTextureCoord) * vColor;
+        }
+        else {
+            fragColor = vColor;
+        }
+    }
+`;
+
 function dvui(canvasId, wasmFile) {
-    const vertexShaderSource_webgl = `
-        precision mediump float;
+    const dvui = new Dvui();
+    fetch(wasmFile)
+        .then((response) => response.arrayBuffer())
+        .then((bytes) => WebAssembly.instantiate(bytes, { env: dvui.imports }))
+        .then((result) => {
+            dvui.setInstance(result.instance);
+            dvui.setCanvas(canvasId);
+            dvui.run();
+        });
+}
 
-        attribute vec4 aVertexPosition;
-        attribute vec4 aVertexColor;
-        attribute vec2 aTextureCoord;
+const utf8decoder = new TextDecoder();
+const utf8encoder = new TextEncoder();
 
-        uniform mat4 uMatrix;
+class Dvui {
+    webgl2 = true;
+    gl;
+    indexBuffer;
+    vertexBuffer;
+    shaderProgram;
+    programInfo;
+    textures = new Map();
+    newTextureId = 1;
+    using_fb = false;
+    frame_buffer = null;
+    renderTargetSize = [0, 0];
 
-        varying vec4 vColor;
-        varying vec2 vTextureCoord;
-
-        void main() {
-          gl_Position = uMatrix * aVertexPosition;
-          vColor = aVertexColor / 255.0;  // normalize u8 colors to 0-1
-          vTextureCoord = aTextureCoord;
-        }
-    `;
-
-    const vertexShaderSource_webgl2 = `# version 300 es
-
-        precision mediump float;
-
-        in vec4 aVertexPosition;
-        in vec4 aVertexColor;
-        in vec2 aTextureCoord;
-
-        uniform mat4 uMatrix;
-
-        out vec4 vColor;
-        out vec2 vTextureCoord;
-
-        void main() {
-          gl_Position = uMatrix * aVertexPosition;
-          vColor = aVertexColor / 255.0;  // normalize u8 colors to 0-1
-          vTextureCoord = aTextureCoord;
-        }
-    `;
-
-    const fragmentShaderSource_webgl = `
-        precision mediump float;
-
-        varying vec4 vColor;
-        varying vec2 vTextureCoord;
-
-        uniform sampler2D uSampler;
-        uniform bool useTex;
-
-        void main() {
-            if (useTex) {
-                gl_FragColor = texture2D(uSampler, vTextureCoord) * vColor;
-            }
-            else {
-                gl_FragColor = vColor;
-            }
-        }
-    `;
-
-    const fragmentShaderSource_webgl2 = `# version 300 es
-
-        precision mediump float;
-
-        in vec4 vColor;
-        in vec2 vTextureCoord;
-
-        uniform sampler2D uSampler;
-        uniform bool useTex;
-
-        out vec4 fragColor;
-
-        void main() {
-            if (useTex) {
-                fragColor = texture(uSampler, vTextureCoord) * vColor;
-            }
-            else {
-                fragColor = vColor;
-            }
-        }
-    `;
-
-    let webgl2 = true;
-    let gl;
-    let indexBuffer;
-    let vertexBuffer;
-    let shaderProgram;
-    let programInfo;
-    const textures = new Map();
-    let newTextureId = 1;
-    let using_fb = false;
-    let frame_buffer = null;
-    let renderTargetSize = [0, 0];
-
-    let wasmResult;
-    let log_string = "";
-    let hidden_input;
-    let touches = []; // list of tuple (touch identifier, initial index)
-    let textInputRect = []; // x y w h of on screen keyboard editing position, or empty if none
+    instance;
+    log_string = "";
+    hidden_input;
+    touches = []; // list of tuple (touch identifier, initial index)
+    textInputRect = []; // x y w h of on screen keyboard editing position, or empty if none
 
     // Used for file uploads. Only valid for one frame
-    let filesCacheModified = false;
-    let filesCache = new Map();
+    filesCacheModified = false;
+    filesCache = new Map();
 
     //let par = document.createElement("p");
     //document.body.prepend(par);
 
-    function oskCheck() {
-        if (textInputRect.length == 0) {
-            gl.canvas.focus();
+    oskCheck() {
+        if (this.textInputRect.length == 0) {
+            this.gl.canvas.focus();
         } else {
-            hidden_input.style.left =
-                (window.scrollX + gl.canvas.getBoundingClientRect().left +
-                    textInputRect[0]) + "px";
-            hidden_input.style.top =
-                (window.scrollY + gl.canvas.getBoundingClientRect().top +
-                    textInputRect[1]) + "px";
-            hidden_input.style.width = textInputRect[2] + "px";
-            hidden_input.style.height = textInputRect[3] + "px";
-            hidden_input.focus();
+            this.hidden_input.style.left =
+                (window.scrollX + this.gl.canvas.getBoundingClientRect().left +
+                    this.textInputRect[0]) + "px";
+            this.hidden_input.style.top =
+                (window.scrollY + this.gl.canvas.getBoundingClientRect().top +
+                    this.textInputRect[1]) + "px";
+            this.hidden_input.style.width = this.textInputRect[2] + "px";
+            this.hidden_input.style.height = this.textInputRect[3] + "px";
+            this.hidden_input.focus();
             //par.textContent = hidden_input.style.left + " " + hidden_input.style.top + " " + hidden_input.style.width + " " + hidden_input.style.height;
         }
     }
 
-    function touchIndex(pointerId) {
-        let idx = touches.findIndex((e) => e[0] === pointerId);
+    touchIndex(pointerId) {
+        let idx = this.touches.findIndex((e) => e[0] === pointerId);
         if (idx < 0) {
-            idx = touches.length;
-            touches.push([pointerId, idx]);
+            idx = this.touches.length;
+            this.touches.push([pointerId, idx]);
         }
 
         return idx;
     }
 
-    const utf8decoder = new TextDecoder();
-    const utf8encoder = new TextEncoder();
-
-    const imports = {
-        env: {
+    constructor() {
+        this.imports = {
             wasm_about_webgl2: () => {
-                if (webgl2) {
+                if (this.webgl2) {
                     return 1;
                 } else {
                     return 0;
@@ -185,7 +197,7 @@ function dvui(canvasId, wasmFile) {
             wasm_panic: (ptr, len) => {
                 let msg = utf8decoder.decode(
                     new Uint8Array(
-                        wasmResult.instance.exports.memory.buffer,
+                        this.instance.exports.memory.buffer,
                         ptr,
                         len,
                     ),
@@ -194,240 +206,266 @@ function dvui(canvasId, wasmFile) {
                 throw Error(msg);
             },
             wasm_log_write: (ptr, len) => {
-                log_string += utf8decoder.decode(
+                this.log_string += utf8decoder.decode(
                     new Uint8Array(
-                        wasmResult.instance.exports.memory.buffer,
+                        this.instance.exports.memory.buffer,
                         ptr,
                         len,
                     ),
                 );
             },
             wasm_log_flush: () => {
-                console.log(log_string);
-                log_string = "";
+                console.log(this.log_string);
+                this.log_string = "";
             },
-            wasm_now() {
+            wasm_now: () => {
                 return performance.now();
             },
-            wasm_sleep(ms) {
+            wasm_sleep: (ms) => {
                 dvui_sleep(ms);
             },
-            wasm_pixel_width() {
-                return gl.drawingBufferWidth;
+            wasm_pixel_width: () => {
+                return this.gl.drawingBufferWidth;
             },
-            wasm_pixel_height() {
-                return gl.drawingBufferHeight;
+            wasm_pixel_height: () => {
+                return this.gl.drawingBufferHeight;
             },
-            wasm_frame_buffer() {
-                if (using_fb) {
+            wasm_frame_buffer: () => {
+                if (this.using_fb) {
                     return 1;
                 } else {
                     return 0;
                 }
             },
-            wasm_canvas_width() {
-                return gl.canvas.clientWidth;
+            wasm_canvas_width: () => {
+                return this.gl.canvas.clientWidth;
             },
-            wasm_canvas_height() {
-                return gl.canvas.clientHeight;
+            wasm_canvas_height: () => {
+                return this.gl.canvas.clientHeight;
             },
-            wasm_textureCreate(pixels, width, height, interp) {
+            wasm_textureCreate: (pixels, width, height, interp) => {
                 const pixelData = new Uint8Array(
-                    wasmResult.instance.exports.memory.buffer,
+                    this.instance.exports.memory.buffer,
                     pixels,
                     width * height * 4,
                 );
 
-                const texture = gl.createTexture();
-                const id = newTextureId;
+                const texture = this.gl.createTexture();
+                const id = this.newTextureId;
                 //console.log("creating texture " + id);
-                newTextureId += 1;
-                textures.set(id, [texture, width, height]);
+                this.newTextureId += 1;
+                this.textures.set(id, [texture, width, height]);
 
-                gl.bindTexture(gl.TEXTURE_2D, texture);
+                this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
 
-                gl.texImage2D(
-                    gl.TEXTURE_2D,
+                this.gl.texImage2D(
+                    this.gl.TEXTURE_2D,
                     0,
-                    gl.RGBA,
+                    this.gl.RGBA,
                     width,
                     height,
                     0,
-                    gl.RGBA,
-                    gl.UNSIGNED_BYTE,
+                    this.gl.RGBA,
+                    this.gl.UNSIGNED_BYTE,
                     pixelData,
                 );
 
-                if (webgl2) {
-                    gl.generateMipmap(gl.TEXTURE_2D);
+                if (this.webgl2) {
+                    this.gl.generateMipmap(this.gl.TEXTURE_2D);
                 }
 
                 if (interp == 0) {
-                    gl.texParameteri(
-                        gl.TEXTURE_2D,
-                        gl.TEXTURE_MIN_FILTER,
-                        gl.NEAREST,
+                    this.gl.texParameteri(
+                        this.gl.TEXTURE_2D,
+                        this.gl.TEXTURE_MIN_FILTER,
+                        this.gl.NEAREST,
                     );
-                    gl.texParameteri(
-                        gl.TEXTURE_2D,
-                        gl.TEXTURE_MAG_FILTER,
-                        gl.NEAREST,
+                    this.gl.texParameteri(
+                        this.gl.TEXTURE_2D,
+                        this.gl.TEXTURE_MAG_FILTER,
+                        this.gl.NEAREST,
                     );
                 } else {
-                    gl.texParameteri(
-                        gl.TEXTURE_2D,
-                        gl.TEXTURE_MIN_FILTER,
-                        gl.LINEAR,
+                    this.gl.texParameteri(
+                        this.gl.TEXTURE_2D,
+                        this.gl.TEXTURE_MIN_FILTER,
+                        this.gl.LINEAR,
                     );
-                    gl.texParameteri(
-                        gl.TEXTURE_2D,
-                        gl.TEXTURE_MAG_FILTER,
-                        gl.LINEAR,
+                    this.gl.texParameteri(
+                        this.gl.TEXTURE_2D,
+                        this.gl.TEXTURE_MAG_FILTER,
+                        this.gl.LINEAR,
                     );
                 }
-                gl.texParameteri(
-                    gl.TEXTURE_2D,
-                    gl.TEXTURE_WRAP_S,
-                    gl.CLAMP_TO_EDGE,
+                this.gl.texParameteri(
+                    this.gl.TEXTURE_2D,
+                    this.gl.TEXTURE_WRAP_S,
+                    this.gl.CLAMP_TO_EDGE,
                 );
-                gl.texParameteri(
-                    gl.TEXTURE_2D,
-                    gl.TEXTURE_WRAP_T,
-                    gl.CLAMP_TO_EDGE,
+                this.gl.texParameteri(
+                    this.gl.TEXTURE_2D,
+                    this.gl.TEXTURE_WRAP_T,
+                    this.gl.CLAMP_TO_EDGE,
                 );
 
-                gl.bindTexture(gl.TEXTURE_2D, null);
+                this.gl.bindTexture(this.gl.TEXTURE_2D, null);
 
                 return id;
             },
-            wasm_textureCreateTarget(width, height, interp) {
-                const texture = gl.createTexture();
-                const id = newTextureId;
+            wasm_textureCreateTarget: (width, height, interp) => {
+                const texture = this.gl.createTexture();
+                const id = this.newTextureId;
                 //console.log("creating texture " + id);
-                newTextureId += 1;
-                textures.set(id, [texture, width, height]);
+                this.newTextureId += 1;
+                this.textures.set(id, [texture, width, height]);
 
-                gl.bindTexture(gl.TEXTURE_2D, texture);
+                this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
 
-                gl.texImage2D(
-                    gl.TEXTURE_2D,
+                this.gl.texImage2D(
+                    this.gl.TEXTURE_2D,
                     0,
-                    gl.RGBA,
+                    this.gl.RGBA,
                     width,
                     height,
                     0,
-                    gl.RGBA,
-                    gl.UNSIGNED_BYTE,
+                    this.gl.RGBA,
+                    this.gl.UNSIGNED_BYTE,
                     null,
                 );
 
                 if (interp == 0) {
-                    gl.texParameteri(
-                        gl.TEXTURE_2D,
-                        gl.TEXTURE_MIN_FILTER,
-                        gl.NEAREST,
+                    this.gl.texParameteri(
+                        this.gl.TEXTURE_2D,
+                        this.gl.TEXTURE_MIN_FILTER,
+                        this.gl.NEAREST,
                     );
-                    gl.texParameteri(
-                        gl.TEXTURE_2D,
-                        gl.TEXTURE_MAG_FILTER,
-                        gl.NEAREST,
+                    this.gl.texParameteri(
+                        this.gl.TEXTURE_2D,
+                        this.gl.TEXTURE_MAG_FILTER,
+                        this.gl.NEAREST,
                     );
                 } else {
-                    gl.texParameteri(
-                        gl.TEXTURE_2D,
-                        gl.TEXTURE_MIN_FILTER,
-                        gl.LINEAR,
+                    this.gl.texParameteri(
+                        this.gl.TEXTURE_2D,
+                        this.gl.TEXTURE_MIN_FILTER,
+                        this.gl.LINEAR,
                     );
-                    gl.texParameteri(
-                        gl.TEXTURE_2D,
-                        gl.TEXTURE_MAG_FILTER,
-                        gl.LINEAR,
+                    this.gl.texParameteri(
+                        this.gl.TEXTURE_2D,
+                        this.gl.TEXTURE_MAG_FILTER,
+                        this.gl.LINEAR,
                     );
                 }
-                gl.texParameteri(
-                    gl.TEXTURE_2D,
-                    gl.TEXTURE_WRAP_S,
-                    gl.CLAMP_TO_EDGE,
+                this.gl.texParameteri(
+                    this.gl.TEXTURE_2D,
+                    this.gl.TEXTURE_WRAP_S,
+                    this.gl.CLAMP_TO_EDGE,
                 );
-                gl.texParameteri(
-                    gl.TEXTURE_2D,
-                    gl.TEXTURE_WRAP_T,
-                    gl.CLAMP_TO_EDGE,
+                this.gl.texParameteri(
+                    this.gl.TEXTURE_2D,
+                    this.gl.TEXTURE_WRAP_T,
+                    this.gl.CLAMP_TO_EDGE,
                 );
 
-                gl.bindTexture(gl.TEXTURE_2D, null);
+                this.gl.bindTexture(this.gl.TEXTURE_2D, null);
 
                 return id;
             },
-            wasm_textureRead(textureId, pixels_out, width, height) {
+            wasm_textureRead: (textureId, pixels_out, width, height) => {
                 //console.log("textureRead " + textureId);
-                const texture = textures.get(textureId)[0];
+                const texture = this.textures.get(textureId)[0];
 
-                gl.bindFramebuffer(gl.FRAMEBUFFER, frame_buffer);
-                gl.framebufferTexture2D(
-                    gl.FRAMEBUFFER,
-                    gl.COLOR_ATTACHMENT0,
-                    gl.TEXTURE_2D,
+                this.gl.bindFramebuffer(
+                    this.gl.FRAMEBUFFER,
+                    this.frame_buffer,
+                );
+                this.gl.framebufferTexture2D(
+                    this.gl.FRAMEBUFFER,
+                    this.gl.COLOR_ATTACHMENT0,
+                    this.gl.TEXTURE_2D,
                     texture,
                     0,
                 );
 
                 var dest = new Uint8Array(
-                    wasmResult.instance.exports.memory.buffer,
+                    this.instance.exports.memory.buffer,
                     pixels_out,
                     width * height * 4,
                 );
-                gl.readPixels(
+                this.gl.readPixels(
                     0,
                     0,
                     width,
                     height,
-                    gl.RGBA,
-                    gl.UNSIGNED_BYTE,
+                    this.gl.RGBA,
+                    this.gl.UNSIGNED_BYTE,
                     dest,
                     0,
                 );
 
-                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
             },
-            wasm_renderTarget(id) {
+            wasm_renderTarget: (id) => {
                 //console.log("renderTarget " + id);
                 if (id === 0) {
-                    using_fb = false;
-                    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-                    renderTargetSize = [
-                        gl.drawingBufferWidth,
-                        gl.drawingBufferHeight,
+                    this.using_fb = false;
+                    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+                    this.renderTargetSize = [
+                        this.gl.drawingBufferWidth,
+                        this.gl.drawingBufferHeight,
                     ];
-                    gl.viewport(0, 0, renderTargetSize[0], renderTargetSize[1]);
-                    gl.scissor(0, 0, renderTargetSize[0], renderTargetSize[1]);
+                    this.gl.viewport(
+                        0,
+                        0,
+                        this.renderTargetSize[0],
+                        this.renderTargetSize[1],
+                    );
+                    this.gl.scissor(
+                        0,
+                        0,
+                        this.renderTargetSize[0],
+                        this.renderTargetSize[1],
+                    );
                 } else {
-                    using_fb = true;
-                    gl.bindFramebuffer(gl.FRAMEBUFFER, frame_buffer);
+                    this.using_fb = true;
+                    this.gl.bindFramebuffer(
+                        this.gl.FRAMEBUFFER,
+                        this.frame_buffer,
+                    );
 
-                    gl.framebufferTexture2D(
-                        gl.FRAMEBUFFER,
-                        gl.COLOR_ATTACHMENT0,
-                        gl.TEXTURE_2D,
-                        textures.get(id)[0],
+                    this.gl.framebufferTexture2D(
+                        this.gl.FRAMEBUFFER,
+                        this.gl.COLOR_ATTACHMENT0,
+                        this.gl.TEXTURE_2D,
+                        this.textures.get(id)[0],
                         0,
                     );
-                    renderTargetSize = [
-                        textures.get(id)[1],
-                        textures.get(id)[2],
+                    this.renderTargetSize = [
+                        this.textures.get(id)[1],
+                        this.textures.get(id)[2],
                     ];
-                    gl.viewport(0, 0, renderTargetSize[0], renderTargetSize[1]);
-                    gl.scissor(0, 0, renderTargetSize[0], renderTargetSize[1]);
+                    this.gl.viewport(
+                        0,
+                        0,
+                        this.renderTargetSize[0],
+                        this.renderTargetSize[1],
+                    );
+                    this.gl.scissor(
+                        0,
+                        0,
+                        this.renderTargetSize[0],
+                        this.renderTargetSize[1],
+                    );
                 }
             },
-            wasm_textureDestroy(id) {
+            wasm_textureDestroy: (id) => {
                 //console.log("deleting texture " + id);
-                const texture = textures.get(id)[0];
-                textures.delete(id);
+                const texture = this.textures.get(id)[0];
+                this.textures.delete(id);
 
-                gl.deleteTexture(texture);
+                this.gl.deleteTexture(texture);
             },
-            wasm_renderGeometry(
+            wasm_renderGeometry: (
                 textureId,
                 index_ptr,
                 index_len,
@@ -442,42 +480,53 @@ function dvui(canvasId, wasmFile) {
                 y,
                 w,
                 h,
-            ) {
+            ) => {
                 //console.log("drawClippedTriangles " + textureId + " sizeof " + sizeof_vertex + " pos " + offset_pos + " col " + offset_col + " uv " + offset_uv);
 
                 //let old_scissor;
                 if (clip === 1) {
                     // just calling getParameter here is quite slow (5-10 ms per frame according to chrome)
                     //old_scissor = gl.getParameter(gl.SCISSOR_BOX);
-                    gl.scissor(x, y, w, h);
+                    this.gl.scissor(x, y, w, h);
                 }
 
-                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+                this.gl.bindBuffer(
+                    this.gl.ELEMENT_ARRAY_BUFFER,
+                    this.indexBuffer,
+                );
                 const indices = new Uint16Array(
-                    wasmResult.instance.exports.memory.buffer,
+                    this.instance.exports.memory.buffer,
                     index_ptr,
                     index_len / 2,
                 );
-                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+                this.gl.bufferData(
+                    this.gl.ELEMENT_ARRAY_BUFFER,
+                    indices,
+                    this.gl.STATIC_DRAW,
+                );
 
-                gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
                 const vertexes = new Uint8Array(
-                    wasmResult.instance.exports.memory.buffer,
+                    this.instance.exports.memory.buffer,
                     vertex_ptr,
                     vertex_len,
                 );
-                gl.bufferData(gl.ARRAY_BUFFER, vertexes, gl.STATIC_DRAW);
+                this.gl.bufferData(
+                    this.gl.ARRAY_BUFFER,
+                    vertexes,
+                    this.gl.STATIC_DRAW,
+                );
 
                 let matrix = new Float32Array(16);
-                matrix[0] = 2.0 / renderTargetSize[0];
+                matrix[0] = 2.0 / this.renderTargetSize[0];
                 matrix[1] = 0.0;
                 matrix[2] = 0.0;
                 matrix[3] = 0.0;
                 matrix[4] = 0.0;
-                if (using_fb) {
-                    matrix[5] = 2.0 / renderTargetSize[1];
+                if (this.using_fb) {
+                    matrix[5] = 2.0 / this.renderTargetSize[1];
                 } else {
-                    matrix[5] = -2.0 / renderTargetSize[1];
+                    matrix[5] = -2.0 / this.renderTargetSize[1];
                 }
                 matrix[6] = 0.0;
                 matrix[7] = 0.0;
@@ -486,7 +535,7 @@ function dvui(canvasId, wasmFile) {
                 matrix[10] = 1.0;
                 matrix[11] = 0.0;
                 matrix[12] = -1.0;
-                if (using_fb) {
+                if (this.using_fb) {
                     matrix[13] = -1.0;
                 } else {
                     matrix[13] = 1.0;
@@ -495,118 +544,140 @@ function dvui(canvasId, wasmFile) {
                 matrix[15] = 1.0;
 
                 // vertex
-                gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-                gl.vertexAttribPointer(
-                    programInfo.attribLocations.vertexPosition,
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
+                this.gl.vertexAttribPointer(
+                    this.programInfo.attribLocations.vertexPosition,
                     2, // num components
-                    gl.FLOAT,
+                    this.gl.FLOAT,
                     false, // don't normalize
                     sizeof_vertex, // stride
                     offset_pos, // offset
                 );
-                gl.enableVertexAttribArray(
-                    programInfo.attribLocations.vertexPosition,
+                this.gl.enableVertexAttribArray(
+                    this.programInfo.attribLocations.vertexPosition,
                 );
 
                 // color
-                gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-                gl.vertexAttribPointer(
-                    programInfo.attribLocations.vertexColor,
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
+                this.gl.vertexAttribPointer(
+                    this.programInfo.attribLocations.vertexColor,
                     4, // num components
-                    gl.UNSIGNED_BYTE,
+                    this.gl.UNSIGNED_BYTE,
                     false, // don't normalize
                     sizeof_vertex, // stride
                     offset_col, // offset
                 );
-                gl.enableVertexAttribArray(
-                    programInfo.attribLocations.vertexColor,
+                this.gl.enableVertexAttribArray(
+                    this.programInfo.attribLocations.vertexColor,
                 );
 
                 // texture
-                gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-                gl.vertexAttribPointer(
-                    programInfo.attribLocations.textureCoord,
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
+                this.gl.vertexAttribPointer(
+                    this.programInfo.attribLocations.textureCoord,
                     2, // num components
-                    gl.FLOAT,
+                    this.gl.FLOAT,
                     false, // don't normalize
                     sizeof_vertex, // stride
                     offset_uv, // offset
                 );
-                gl.enableVertexAttribArray(
-                    programInfo.attribLocations.textureCoord,
+                this.gl.enableVertexAttribArray(
+                    this.programInfo.attribLocations.textureCoord,
                 );
 
                 // Tell WebGL to use our program when drawing
-                gl.useProgram(shaderProgram);
+                this.gl.useProgram(this.shaderProgram);
 
                 // Set the shader uniforms
-                gl.uniformMatrix4fv(
-                    programInfo.uniformLocations.matrix,
+                this.gl.uniformMatrix4fv(
+                    this.programInfo.uniformLocations.matrix,
                     false,
                     matrix,
                 );
 
                 if (textureId != 0) {
-                    gl.activeTexture(gl.TEXTURE0);
-                    gl.bindTexture(gl.TEXTURE_2D, textures.get(textureId)[0]);
-                    gl.uniform1i(programInfo.uniformLocations.useTex, 1);
+                    this.gl.activeTexture(this.gl.TEXTURE0);
+                    this.gl.bindTexture(
+                        this.gl.TEXTURE_2D,
+                        this.textures.get(textureId)[0],
+                    );
+                    this.gl.uniform1i(
+                        this.programInfo.uniformLocations.useTex,
+                        1,
+                    );
                 } else {
-                    gl.bindTexture(gl.TEXTURE_2D, null);
-                    gl.uniform1i(programInfo.uniformLocations.useTex, 0);
+                    this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+                    this.gl.uniform1i(
+                        this.programInfo.uniformLocations.useTex,
+                        0,
+                    );
                 }
 
-                gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
+                this.gl.uniform1i(
+                    this.programInfo.uniformLocations.uSampler,
+                    0,
+                );
 
                 //console.log("drawElements " + textureId);
-                gl.drawElements(
-                    gl.TRIANGLES,
+                this.gl.drawElements(
+                    this.gl.TRIANGLES,
                     indices.length,
-                    gl.UNSIGNED_SHORT,
+                    this.gl.UNSIGNED_SHORT,
                     0,
                 );
 
                 if (clip === 1) {
                     //gl.scissor(old_scissor[0], old_scissor[1], old_scissor[2], old_scissor[3]);
-                    gl.scissor(0, 0, renderTargetSize[0], renderTargetSize[1]);
+                    this.gl.scissor(
+                        0,
+                        0,
+                        this.renderTargetSize[0],
+                        this.renderTargetSize[1],
+                    );
                 }
             },
-            wasm_cursor(name_ptr, name_len) {
+            wasm_cursor: (name_ptr, name_len) => {
                 let cursor_name = utf8decoder.decode(
                     new Uint8Array(
-                        wasmResult.instance.exports.memory.buffer,
+                        this.instance.exports.memory.buffer,
                         name_ptr,
                         name_len,
                     ),
                 );
-                gl.canvas.style.cursor = cursor_name;
+                this.gl.canvas.style.cursor = cursor_name;
             },
-            wasm_text_input(x, y, w, h) {
+            wasm_text_input: (x, y, w, h) => {
                 if (w > 0 && h > 0) {
-                    textInputRect = [x, y, w, h];
+                    this.textInputRect = [x, y, w, h];
                 } else {
-                    textInputRect = [];
+                    this.textInputRect = [];
                 }
             },
             wasm_open_url: (ptr, len) => {
                 let url = utf8decoder.decode(
                     new Uint8Array(
-                        wasmResult.instance.exports.memory.buffer,
+                        this.instance.exports.memory.buffer,
                         ptr,
                         len,
                     ),
                 );
                 window.open(url);
             },
-            wasm_download_data: (name_ptr, name_len, data_ptr, data_len) => {
+            wasm_download_data: (
+                name_ptr,
+                name_len,
+                data_ptr,
+                data_len,
+            ) => {
                 const name = utf8decoder.decode(
                     new Uint8Array(
-                        wasmResult.instance.exports.memory.buffer,
+                        this.instance.exports.memory.buffer,
                         name_ptr,
                         name_len,
                     ),
                 );
                 const data = new Uint8Array(
-                    wasmResult.instance.exports.memory.buffer,
+                    this.instance.exports.memory.buffer,
                     data_ptr,
                     data_len,
                 );
@@ -620,10 +691,10 @@ function dvui(canvasId, wasmFile) {
                 document.body.removeChild(dl);
                 URL.revokeObjectURL(fileURL);
             },
-            wasm_open_file_picker(id, accept_ptr, accept_len, multiple) {
+            wasm_open_file_picker: (id, accept_ptr, accept_len, multiple) => {
                 let accept = utf8decoder.decode(
                     new Uint8Array(
-                        wasmResult.instance.exports.memory.buffer,
+                        this.instance.exports.memory.buffer,
                         accept_ptr,
                         accept_len,
                     ),
@@ -638,26 +709,28 @@ function dvui(canvasId, wasmFile) {
                         data.push(file.arrayBuffer());
                     }
                     Promise.all(data).then((data) => {
-                        filesCacheModified = true;
-                        filesCache.set(id, { files, data });
+                        this.filesCacheModified = true;
+                        this.filesCache.set(id, { files, data });
                     });
                 });
             },
-            wasm_get_file_size(id, file_index) {
-                const cached = filesCache.get(id);
+            wasm_get_file_size: (id, file_index) => {
+                const cached = this.filesCache.get(id);
                 if (!cached || cached.files.length <= file_index) return;
                 const size = cached.files[file_index].size;
                 return size;
             },
-            wasm_get_file_name(id, file_index) {
-                const cached = filesCache.get(id);
+            wasm_get_file_name: (id, file_index) => {
+                const cached = this.filesCache.get(id);
                 if (!cached || cached.files.length <= file_index) return;
-                const name = utf8encoder.encode(cached.files[file_index].name);
-                const ptr = wasmResult.instance.exports.arena_u8(
+                const name = utf8encoder.encode(
+                    cached.files[file_index].name,
+                );
+                const ptr = this.instance.exports.arena_u8(
                     name.length + 1,
                 );
                 var dest = new Uint8Array(
-                    wasmResult.instance.exports.memory.buffer,
+                    this.instance.exports.memory.buffer,
                     ptr,
                     name.length + 1,
                 );
@@ -665,17 +738,17 @@ function dvui(canvasId, wasmFile) {
                 dest.set([0], name.length);
                 return ptr;
             },
-            wasm_read_file_data(id, file_index, data_ptr) {
-                const cached = filesCache.get(id);
+            wasm_read_file_data: (id, file_index, data_ptr) => {
+                const cached = this.filesCache.get(id);
                 if (!cached || cached.files.length <= file_index) return;
                 var dest = new Uint8Array(
-                    wasmResult.instance.exports.memory.buffer,
+                    this.instance.exports.memory.buffer,
                     data_ptr,
                 );
                 dest.set(new Uint8Array(cached.data[file_index]));
             },
-            wasm_get_number_of_files_available(id) {
-                const cached = filesCache.get(id);
+            wasm_get_number_of_files_available: (id) => {
+                const cached = this.filesCache.get(id);
                 if (!cached) return 0;
                 return cached.files.length;
             },
@@ -686,7 +759,7 @@ function dvui(canvasId, wasmFile) {
 
                 let msg = utf8decoder.decode(
                     new Uint8Array(
-                        wasmResult.instance.exports.memory.buffer,
+                        this.instance.exports.memory.buffer,
                         ptr,
                         len,
                     ),
@@ -694,437 +767,467 @@ function dvui(canvasId, wasmFile) {
                 if (navigator.clipboard) {
                     navigator.clipboard.writeText(msg);
                 } else {
-                    hidden_input.value = msg;
-                    hidden_input.focus();
-                    hidden_input.select();
+                    this.hidden_input.value = msg;
+                    this.hidden_input.focus();
+                    this.hidden_input.select();
                     document.execCommand("copy");
-                    hidden_input.value = "";
+                    this.hidden_input.value = "";
                     oskCheck();
                 }
             },
             wasm_add_noto_font: () => {
                 dvui_fetch("NotoSansKR-Regular.ttf").then((bytes) => {
                     //console.log("bytes len " + bytes.length);
-                    const ptr = wasmResult.instance.exports.gpa_u8(
+                    const ptr = this.instance.exports.gpa_u8(
                         bytes.length,
                     );
                     var dest = new Uint8Array(
-                        wasmResult.instance.exports.memory.buffer,
+                        this.instance.exports.memory.buffer,
                         ptr,
                         bytes.length,
                     );
                     dest.set(bytes);
-                    wasmResult.instance.exports.new_font(ptr, bytes.length);
+                    this.instance.exports.new_font(
+                        ptr,
+                        bytes.length,
+                    );
                 });
             },
-        },
-    };
+        };
+    }
 
-    fetch(wasmFile)
-        .then((response) => response.arrayBuffer())
-        .then((bytes) => WebAssembly.instantiate(bytes, imports))
-        .then((result) => {
-            wasmResult = result;
+    setInstance(instance) {
+        this.instance = instance;
+    }
 
-            /** @type {HTMLCanvasElement} */
-            const canvas = document.querySelector(canvasId);
+    setCanvas(canvasId) {
+        /** @type {HTMLCanvasElement} */
+        const canvas = document.querySelector(canvasId);
 
-            hidden_input = document.createElement("input");
-            hidden_input.style.position = "absolute";
-            hidden_input.style.left = 0;
-            hidden_input.style.top = 0;
-            hidden_input.style.opacity = 0;
-            hidden_input.style.zIndex = -1;
-            document.body.prepend(hidden_input);
+        this.gl = canvas.getContext("webgl2", { alpha: true });
+        if (this.gl === null) {
+            this.webgl2 = false;
+            this.gl = canvas.getContext("webgl", { alpha: true });
+        }
 
-            gl = canvas.getContext("webgl2", { alpha: true });
-            if (gl === null) {
-                webgl2 = false;
-                gl = canvas.getContext("webgl", { alpha: true });
-            }
+        if (this.gl === null) {
+            alert("Unable to initialize WebGL.");
+            return;
+        }
 
-            if (gl === null) {
-                alert("Unable to initialize WebGL.");
+        if (!this.webgl2) {
+            const ext = this.gl.getExtension("OES_element_index_uint");
+            if (ext === null) {
+                alert("WebGL doesn't support OES_element_index_uint.");
                 return;
             }
+        }
+    }
 
-            if (!webgl2) {
-                const ext = gl.getExtension("OES_element_index_uint");
-                if (ext === null) {
-                    alert("WebGL doesn't support OES_element_index_uint.");
+    run() {
+        this.hidden_input = document.createElement("input");
+        this.hidden_input.style.position = "absolute";
+        this.hidden_input.style.left = 0;
+        this.hidden_input.style.top = 0;
+        this.hidden_input.style.opacity = 0;
+        this.hidden_input.style.zIndex = -1;
+        document.body.prepend(this.hidden_input);
+
+        this.frame_buffer = this.gl.createFramebuffer();
+
+        const vertexShader = this.gl.createShader(this.gl.VERTEX_SHADER);
+        if (this.webgl2) {
+            this.gl.shaderSource(vertexShader, vertexShaderSource_webgl2);
+        } else {
+            this.gl.shaderSource(vertexShader, vertexShaderSource_webgl);
+        }
+        this.gl.compileShader(vertexShader);
+        if (!this.gl.getShaderParameter(vertexShader, this.gl.COMPILE_STATUS)) {
+            alert(
+                `Error compiling vertex shader: ${
+                    this.gl.getShaderInfoLog(vertexShader)
+                }`,
+            );
+            this.gl.deleteShader(vertexShader);
+            return null;
+        }
+
+        const fragmentShader = this.gl.createShader(this.gl.FRAGMENT_SHADER);
+        if (this.webgl2) {
+            this.gl.shaderSource(fragmentShader, fragmentShaderSource_webgl2);
+        } else {
+            this.gl.shaderSource(fragmentShader, fragmentShaderSource_webgl);
+        }
+        this.gl.compileShader(fragmentShader);
+        if (
+            !this.gl.getShaderParameter(fragmentShader, this.gl.COMPILE_STATUS)
+        ) {
+            alert(
+                `Error compiling fragment shader: ${
+                    this.gl.getShaderInfoLog(fragmentShader)
+                }`,
+            );
+            this.gl.deleteShader(fragmentShader);
+            return null;
+        }
+
+        this.shaderProgram = this.gl.createProgram();
+        this.gl.attachShader(this.shaderProgram, vertexShader);
+        this.gl.attachShader(this.shaderProgram, fragmentShader);
+        this.gl.linkProgram(this.shaderProgram);
+
+        if (
+            !this.gl.getProgramParameter(
+                this.shaderProgram,
+                this.gl.LINK_STATUS,
+            )
+        ) {
+            alert(
+                `Error initializing shader program: ${
+                    this.gl.getProgramInfoLog(this.shaderProgram)
+                }`,
+            );
+            return null;
+        }
+
+        this.programInfo = {
+            attribLocations: {
+                vertexPosition: this.gl.getAttribLocation(
+                    this.shaderProgram,
+                    "aVertexPosition",
+                ),
+                vertexColor: this.gl.getAttribLocation(
+                    this.shaderProgram,
+                    "aVertexColor",
+                ),
+                textureCoord: this.gl.getAttribLocation(
+                    this.shaderProgram,
+                    "aTextureCoord",
+                ),
+            },
+            uniformLocations: {
+                matrix: this.gl.getUniformLocation(
+                    this.shaderProgram,
+                    "uMatrix",
+                ),
+                uSampler: this.gl.getUniformLocation(
+                    this.shaderProgram,
+                    "uSampler",
+                ),
+                useTex: this.gl.getUniformLocation(
+                    this.shaderProgram,
+                    "useTex",
+                ),
+            },
+        };
+
+        this.indexBuffer = this.gl.createBuffer();
+        this.vertexBuffer = this.gl.createBuffer();
+
+        this.gl.enable(this.gl.BLEND);
+        this.gl.blendFunc(this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
+        this.gl.enable(this.gl.SCISSOR_TEST);
+        this.gl.scissor(
+            0,
+            0,
+            this.gl.canvas.clientWidth,
+            this.gl.canvas.clientHeight,
+        );
+
+        let renderRequested = false;
+        let renderTimeoutId = 0;
+        let app_initialized = false;
+
+        const render = () => {
+            renderRequested = false;
+
+            // if the canvas changed size, adjust the backing buffer
+            const w = this.gl.canvas.clientWidth;
+            const h = this.gl.canvas.clientHeight;
+            const scale = window.devicePixelRatio;
+            //console.log("wxh " + w + "x" + h + " scale " + scale);
+            this.gl.canvas.width = Math.round(w * scale);
+            this.gl.canvas.height = Math.round(h * scale);
+            this.renderTargetSize = [
+                this.gl.drawingBufferWidth,
+                this.gl.drawingBufferHeight,
+            ];
+            this.gl.viewport(
+                0,
+                0,
+                this.gl.drawingBufferWidth,
+                this.gl.drawingBufferHeight,
+            );
+            this.gl.scissor(
+                0,
+                0,
+                this.gl.drawingBufferWidth,
+                this.gl.drawingBufferHeight,
+            );
+
+            this.gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
+            this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+
+            if (!app_initialized) {
+                app_initialized = true;
+                let app_init_return = 0;
+                let str = utf8encoder.encode(navigator.platform);
+                if (str.length > 0) {
+                    const ptr = this.instance.exports.gpa_u8(
+                        str.length,
+                    );
+                    var dest = new Uint8Array(
+                        this.instance.exports.memory.buffer,
+                        ptr,
+                        str.length,
+                    );
+                    dest.set(str);
+                    app_init_return = this.instance.exports.app_init(
+                        ptr,
+                        str.length,
+                    );
+                    this.instance.exports.gpa_free(ptr, str.length);
+                } else {
+                    app_init_return = this.instance.exports.app_init(
+                        0,
+                        0,
+                    );
+                }
+
+                if (app_init_return != 0) {
+                    console.log(
+                        "ERROR: app_init returned " + app_init_return,
+                    );
                     return;
                 }
             }
 
-            frame_buffer = gl.createFramebuffer();
-
-            const vertexShader = gl.createShader(gl.VERTEX_SHADER);
-            if (webgl2) {
-                gl.shaderSource(vertexShader, vertexShaderSource_webgl2);
-            } else {
-                gl.shaderSource(vertexShader, vertexShaderSource_webgl);
+            let millis_to_wait = this.instance.exports.app_update();
+            if (!this.filesCacheModified) {
+                // Only clear if we didn't add anything this frame. Async could add items after they were requested
+                // in the frame, so keep if for two frames
+                this.filesCache.clear();
             }
-            gl.compileShader(vertexShader);
-            if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
-                alert(
-                    `Error compiling vertex shader: ${
-                        gl.getShaderInfoLog(vertexShader)
-                    }`,
-                );
-                gl.deleteShader(vertexShader);
-                return null;
-            }
-
-            const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-            if (webgl2) {
-                gl.shaderSource(fragmentShader, fragmentShaderSource_webgl2);
-            } else {
-                gl.shaderSource(fragmentShader, fragmentShaderSource_webgl);
-            }
-            gl.compileShader(fragmentShader);
-            if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
-                alert(
-                    `Error compiling fragment shader: ${
-                        gl.getShaderInfoLog(fragmentShader)
-                    }`,
-                );
-                gl.deleteShader(fragmentShader);
-                return null;
-            }
-
-            shaderProgram = gl.createProgram();
-            gl.attachShader(shaderProgram, vertexShader);
-            gl.attachShader(shaderProgram, fragmentShader);
-            gl.linkProgram(shaderProgram);
-
-            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-                alert(
-                    `Error initializing shader program: ${
-                        gl.getProgramInfoLog(shaderProgram)
-                    }`,
-                );
-                return null;
-            }
-
-            programInfo = {
-                attribLocations: {
-                    vertexPosition: gl.getAttribLocation(
-                        shaderProgram,
-                        "aVertexPosition",
-                    ),
-                    vertexColor: gl.getAttribLocation(
-                        shaderProgram,
-                        "aVertexColor",
-                    ),
-                    textureCoord: gl.getAttribLocation(
-                        shaderProgram,
-                        "aTextureCoord",
-                    ),
-                },
-                uniformLocations: {
-                    matrix: gl.getUniformLocation(shaderProgram, "uMatrix"),
-                    uSampler: gl.getUniformLocation(shaderProgram, "uSampler"),
-                    useTex: gl.getUniformLocation(shaderProgram, "useTex"),
-                },
-            };
-
-            indexBuffer = gl.createBuffer();
-            vertexBuffer = gl.createBuffer();
-
-            gl.enable(gl.BLEND);
-            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-            gl.enable(gl.SCISSOR_TEST);
-            gl.scissor(0, 0, gl.canvas.clientWidth, gl.canvas.clientHeight);
-
-            let renderRequested = false;
-            let renderTimeoutId = 0;
-            let app_initialized = false;
-
-            function render() {
-                renderRequested = false;
-
-                // if the canvas changed size, adjust the backing buffer
-                const w = gl.canvas.clientWidth;
-                const h = gl.canvas.clientHeight;
-                const scale = window.devicePixelRatio;
-                //console.log("wxh " + w + "x" + h + " scale " + scale);
-                gl.canvas.width = Math.round(w * scale);
-                gl.canvas.height = Math.round(h * scale);
-                renderTargetSize = [
-                    gl.drawingBufferWidth,
-                    gl.drawingBufferHeight,
-                ];
-                gl.viewport(
-                    0,
-                    0,
-                    gl.drawingBufferWidth,
-                    gl.drawingBufferHeight,
-                );
-                gl.scissor(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-
-                gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
-                gl.clear(gl.COLOR_BUFFER_BIT);
-
-                if (!app_initialized) {
-                    app_initialized = true;
-                    let app_init_return = 0;
-                    let str = utf8encoder.encode(navigator.platform);
-                    if (str.length > 0) {
-                        const ptr = wasmResult.instance.exports.gpa_u8(
-                            str.length,
-                        );
-                        var dest = new Uint8Array(
-                            wasmResult.instance.exports.memory.buffer,
-                            ptr,
-                            str.length,
-                        );
-                        dest.set(str);
-                        app_init_return = wasmResult.instance.exports.app_init(
-                            ptr,
-                            str.length,
-                        );
-                        wasmResult.instance.exports.gpa_free(ptr, str.length);
-                    } else {
-                        app_init_return = wasmResult.instance.exports.app_init(
-                            0,
-                            0,
-                        );
-                    }
-
-                    if (app_init_return != 0) {
-                        console.log(
-                            "ERROR: app_init returned " + app_init_return,
-                        );
-                        return;
-                    }
-                }
-
-                let millis_to_wait = wasmResult.instance.exports.app_update();
-                if (!filesCacheModified) {
-                    // Only clear if we didn't add anything this frame. Async could add items after they were requested
-                    // in the frame, so keep if for two frames
-                    filesCache.clear();
-                }
-                filesCacheModified = false;
-                if (millis_to_wait == 0) {
-                    requestRender();
-                } else if (millis_to_wait > 0) {
-                    renderTimeoutId = setTimeout(function () {
-                        renderTimeoutId = 0;
-                        requestRender();
-                    }, millis_to_wait);
-                }
-                // otherwise something went wrong, so stop
-            }
-
-            function requestRender() {
-                if (renderTimeoutId > 0) {
-                    // we got called before the timeout happened
-                    clearTimeout(renderTimeoutId);
+            this.filesCacheModified = false;
+            if (millis_to_wait == 0) {
+                requestRender();
+            } else if (millis_to_wait > 0) {
+                renderTimeoutId = setTimeout(function () {
                     renderTimeoutId = 0;
-                }
+                    requestRender();
+                }, millis_to_wait);
+            }
+            // otherwise something went wrong, so stop
+        };
 
-                if (!renderRequested) {
-                    // multiple events could call requestRender multiple times, and
-                    // we only want a single requestAnimationFrame to happen before
-                    // each call to app_update
-                    renderRequested = true;
-                    requestAnimationFrame(render);
-                }
+        function requestRender() {
+            if (renderTimeoutId > 0) {
+                // we got called before the timeout happened
+                clearTimeout(renderTimeoutId);
+                renderTimeoutId = 0;
             }
 
-            // event listeners
-            canvas.addEventListener("contextmenu", (ev) => {
+            if (!renderRequested) {
+                // multiple events could call requestRender multiple times, and
+                // we only want a single requestAnimationFrame to happen before
+                // each call to app_update
+                renderRequested = true;
+                requestAnimationFrame(render);
+            }
+        }
+
+        // event listeners
+        this.gl.canvas.addEventListener("contextmenu", (ev) => {
+            ev.preventDefault();
+        });
+        window.addEventListener("resize", (ev) => {
+            requestRender();
+        });
+        this.gl.canvas.addEventListener("mousemove", (ev) => {
+            let rect = this.gl.canvas.getBoundingClientRect();
+            let x = (ev.clientX - rect.left) / (rect.right - rect.left) *
+                this.gl.canvas.clientWidth;
+            let y = (ev.clientY - rect.top) / (rect.bottom - rect.top) *
+                this.gl.canvas.clientHeight;
+            this.instance.exports.add_event(1, 0, 0, x, y);
+            requestRender();
+        });
+        this.gl.canvas.addEventListener("mousedown", (ev) => {
+            this.instance.exports.add_event(2, ev.button, 0, 0, 0);
+            requestRender();
+        });
+        this.gl.canvas.addEventListener("mouseup", (ev) => {
+            this.instance.exports.add_event(3, ev.button, 0, 0, 0);
+            requestRender();
+            oskCheck();
+        });
+        this.gl.canvas.addEventListener("wheel", (ev) => {
+            ev.preventDefault();
+            if (ev.deltaX != 0) {
+                this.instance.exports.add_event(
+                    4,
+                    0,
+                    0,
+                    -ev.deltaX,
+                    0,
+                );
+            }
+            if (ev.deltaY != 0) {
+                this.instance.exports.add_event(
+                    4,
+                    1,
+                    0,
+                    ev.deltaY,
+                    0,
+                );
+            }
+            requestRender();
+        });
+
+        let keydown = (ev) => {
+            if (ev.key == "Tab") {
+                // stop tab from tabbing away from the canvas
                 ev.preventDefault();
-            });
-            window.addEventListener("resize", (ev) => {
-                requestRender();
-            });
-            canvas.addEventListener("mousemove", (ev) => {
-                let rect = canvas.getBoundingClientRect();
-                let x = (ev.clientX - rect.left) / (rect.right - rect.left) *
-                    canvas.clientWidth;
-                let y = (ev.clientY - rect.top) / (rect.bottom - rect.top) *
-                    canvas.clientHeight;
-                wasmResult.instance.exports.add_event(1, 0, 0, x, y);
-                requestRender();
-            });
-            canvas.addEventListener("mousedown", (ev) => {
-                wasmResult.instance.exports.add_event(2, ev.button, 0, 0, 0);
-                requestRender();
-            });
-            canvas.addEventListener("mouseup", (ev) => {
-                wasmResult.instance.exports.add_event(3, ev.button, 0, 0, 0);
-                requestRender();
-                oskCheck();
-            });
-            canvas.addEventListener("wheel", (ev) => {
-                ev.preventDefault();
-                if (ev.deltaX != 0) {
-                    wasmResult.instance.exports.add_event(
-                        4,
-                        0,
-                        0,
-                        -ev.deltaX,
-                        0,
-                    );
-                }
-                if (ev.deltaY != 0) {
-                    wasmResult.instance.exports.add_event(
-                        4,
-                        1,
-                        0,
-                        ev.deltaY,
-                        0,
-                    );
-                }
-                requestRender();
-            });
+            }
 
-            let keydown = function (ev) {
-                if (ev.key == "Tab") {
-                    // stop tab from tabbing away from the canvas
-                    ev.preventDefault();
-                }
-
-                let str = utf8encoder.encode(ev.key);
-                if (str.length > 0) {
-                    const ptr = wasmResult.instance.exports.arena_u8(
-                        str.length,
-                    );
-                    var dest = new Uint8Array(
-                        wasmResult.instance.exports.memory.buffer,
-                        ptr,
-                        str.length,
-                    );
-                    dest.set(str);
-                    wasmResult.instance.exports.add_event(
-                        5,
-                        ptr,
-                        str.length,
-                        ev.repeat,
-                        (ev.metaKey << 3) + (ev.altKey << 2) +
-                            (ev.ctrlKey << 1) + (ev.shiftKey << 0),
-                    );
-                    requestRender();
-                }
-            };
-            canvas.addEventListener("keydown", keydown);
-            hidden_input.addEventListener("keydown", keydown);
-
-            let keyup = function (ev) {
-                const str = utf8encoder.encode(ev.key);
-                const ptr = wasmResult.instance.exports.arena_u8(str.length);
+            let str = utf8encoder.encode(ev.key);
+            if (str.length > 0) {
+                const ptr = this.instance.exports.arena_u8(
+                    str.length,
+                );
                 var dest = new Uint8Array(
-                    wasmResult.instance.exports.memory.buffer,
+                    this.instance.exports.memory.buffer,
                     ptr,
                     str.length,
                 );
                 dest.set(str);
-                wasmResult.instance.exports.add_event(
-                    6,
+                this.instance.exports.add_event(
+                    5,
+                    ptr,
+                    str.length,
+                    ev.repeat,
+                    (ev.metaKey << 3) + (ev.altKey << 2) +
+                        (ev.ctrlKey << 1) + (ev.shiftKey << 0),
+                );
+                requestRender();
+            }
+        };
+        this.gl.canvas.addEventListener("keydown", keydown);
+        this.hidden_input.addEventListener("keydown", keydown);
+
+        let keyup = (ev) => {
+            const str = utf8encoder.encode(ev.key);
+            const ptr = this.instance.exports.arena_u8(str.length);
+            var dest = new Uint8Array(
+                this.instance.exports.memory.buffer,
+                ptr,
+                str.length,
+            );
+            dest.set(str);
+            this.instance.exports.add_event(
+                6,
+                ptr,
+                str.length,
+                0,
+                (ev.metaKey << 3) + (ev.altKey << 2) + (ev.ctrlKey << 1) +
+                    (ev.shiftKey << 0),
+            );
+            requestRender();
+        };
+        this.gl.canvas.addEventListener("keyup", keyup);
+        this.hidden_input.addEventListener("keyup", keyup);
+
+        this.hidden_input.addEventListener("beforeinput", (ev) => {
+            ev.preventDefault();
+            if (ev.data) {
+                const str = utf8encoder.encode(ev.data);
+                const ptr = this.instance.exports.arena_u8(
+                    str.length,
+                );
+                var dest = new Uint8Array(
+                    this.instance.exports.memory.buffer,
+                    ptr,
+                    str.length,
+                );
+                dest.set(str);
+                this.instance.exports.add_event(
+                    7,
                     ptr,
                     str.length,
                     0,
-                    (ev.metaKey << 3) + (ev.altKey << 2) + (ev.ctrlKey << 1) +
-                        (ev.shiftKey << 0),
+                    0,
                 );
                 requestRender();
-            };
-            canvas.addEventListener("keyup", keyup);
-            hidden_input.addEventListener("keyup", keyup);
-
-            hidden_input.addEventListener("beforeinput", (ev) => {
-                ev.preventDefault();
-                if (ev.data) {
-                    const str = utf8encoder.encode(ev.data);
-                    const ptr = wasmResult.instance.exports.arena_u8(
-                        str.length,
-                    );
-                    var dest = new Uint8Array(
-                        wasmResult.instance.exports.memory.buffer,
-                        ptr,
-                        str.length,
-                    );
-                    dest.set(str);
-                    wasmResult.instance.exports.add_event(
-                        7,
-                        ptr,
-                        str.length,
-                        0,
-                        0,
-                    );
-                    requestRender();
-                }
-            });
-            canvas.addEventListener("touchstart", (ev) => {
-                ev.preventDefault();
-                let rect = canvas.getBoundingClientRect();
-                for (let i = 0; i < ev.changedTouches.length; i++) {
-                    let touch = ev.changedTouches[i];
-                    let x = (touch.clientX - rect.left) /
-                        (rect.right - rect.left);
-                    let y = (touch.clientY - rect.top) /
-                        (rect.bottom - rect.top);
-                    let tidx = touchIndex(touch.identifier);
-                    wasmResult.instance.exports.add_event(
-                        8,
-                        touches[tidx][1],
-                        0,
-                        x,
-                        y,
-                    );
-                }
-                requestRender();
-            });
-            canvas.addEventListener("touchend", (ev) => {
-                ev.preventDefault();
-                let rect = canvas.getBoundingClientRect();
-                for (let i = 0; i < ev.changedTouches.length; i++) {
-                    let touch = ev.changedTouches[i];
-                    let x = (touch.clientX - rect.left) /
-                        (rect.right - rect.left);
-                    let y = (touch.clientY - rect.top) /
-                        (rect.bottom - rect.top);
-                    let tidx = touchIndex(touch.identifier);
-                    wasmResult.instance.exports.add_event(
-                        9,
-                        touches[tidx][1],
-                        0,
-                        x,
-                        y,
-                    );
-                    touches.splice(tidx, 1);
-                }
-                requestRender();
-                oskCheck();
-            });
-            canvas.addEventListener("touchmove", (ev) => {
-                ev.preventDefault();
-                let rect = canvas.getBoundingClientRect();
-                for (let i = 0; i < ev.changedTouches.length; i++) {
-                    let touch = ev.changedTouches[i];
-                    let x = (touch.clientX - rect.left) /
-                        (rect.right - rect.left);
-                    let y = (touch.clientY - rect.top) /
-                        (rect.bottom - rect.top);
-                    let tidx = touchIndex(touch.identifier);
-                    wasmResult.instance.exports.add_event(
-                        10,
-                        touches[tidx][1],
-                        0,
-                        x,
-                        y,
-                    );
-                }
-                requestRender();
-            });
-            //canvas.addEventListener("touchcancel", (ev) => {
-            //    console.log(ev);
-            //    requestRender();
-            //});
-
-            // start the first update
+            }
+        });
+        this.gl.canvas.addEventListener("touchstart", (ev) => {
+            ev.preventDefault();
+            let rect = this.gl.canvas.getBoundingClientRect();
+            for (let i = 0; i < ev.changedTouches.length; i++) {
+                let touch = ev.changedTouches[i];
+                let x = (touch.clientX - rect.left) /
+                    (rect.right - rect.left);
+                let y = (touch.clientY - rect.top) /
+                    (rect.bottom - rect.top);
+                let tidx = touchIndex(touch.identifier);
+                this.instance.exports.add_event(
+                    8,
+                    this.touches[tidx][1],
+                    0,
+                    x,
+                    y,
+                );
+            }
             requestRender();
         });
+        this.gl.canvas.addEventListener("touchend", (ev) => {
+            ev.preventDefault();
+            let rect = this.gl.canvas.getBoundingClientRect();
+            for (let i = 0; i < ev.changedTouches.length; i++) {
+                let touch = ev.changedTouches[i];
+                let x = (touch.clientX - rect.left) /
+                    (rect.right - rect.left);
+                let y = (touch.clientY - rect.top) /
+                    (rect.bottom - rect.top);
+                let tidx = touchIndex(touch.identifier);
+                this.instance.exports.add_event(
+                    9,
+                    this.touches[tidx][1],
+                    0,
+                    x,
+                    y,
+                );
+                this.touches.splice(tidx, 1);
+            }
+            requestRender();
+            oskCheck();
+        });
+        this.gl.canvas.addEventListener("touchmove", (ev) => {
+            ev.preventDefault();
+            let rect = this.gl.canvas.getBoundingClientRect();
+            for (let i = 0; i < ev.changedTouches.length; i++) {
+                let touch = ev.changedTouches[i];
+                let x = (touch.clientX - rect.left) /
+                    (rect.right - rect.left);
+                let y = (touch.clientY - rect.top) /
+                    (rect.bottom - rect.top);
+                let tidx = touchIndex(touch.identifier);
+                this.instance.exports.add_event(
+                    10,
+                    this.touches[tidx][1],
+                    0,
+                    x,
+                    y,
+                );
+            }
+            requestRender();
+        });
+        //canvas.addEventListener("touchcancel", (ev) => {
+        //    console.log(ev);
+        //    requestRender();
+        //});
+
+        // start the first update
+        requestRender();
+    }
 }
