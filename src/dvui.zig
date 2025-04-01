@@ -2209,6 +2209,8 @@ pub fn dataSetSliceCopies(win: ?*Window, id: u32, key: []const u8, data: anytype
 /// contents are copied into internal storage. If false, only the slice itself
 /// (ptr and len) and stored.
 pub fn dataSetAdvanced(win: ?*Window, id: u32, key: []const u8, data: anytype, comptime copy_slice: bool, num_copies: usize) void {
+    const trac = dvui.ztracy.Zone(@src());
+    defer trac.End();
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
         w.dataSetAdvanced(id, key, data, copy_slice, num_copies);
@@ -2353,6 +2355,8 @@ pub fn dataGetSliceDefault(win: ?*Window, id: u32, key: []const u8, comptime T: 
 
 // returns the backing slice of bytes if we have it
 pub fn dataGetInternal(win: ?*Window, id: u32, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
+    const trac = dvui.ztracy.Zone(@src());
+    defer trac.End();
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
         return w.dataGetInternal(id, key, T, slice);
@@ -2373,6 +2377,8 @@ pub fn dataGetInternal(win: ?*Window, id: u32, key: []const u8, comptime T: type
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the dialog to.
 pub fn dataRemove(win: ?*Window, id: u32, key: []const u8) void {
+    const trac = dvui.ztracy.Zone(@src());
+    defer trac.End();
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
         return w.dataRemove(id, key);

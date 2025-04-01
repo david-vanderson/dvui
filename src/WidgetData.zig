@@ -188,6 +188,8 @@ pub fn focusBorder(self: *const WidgetData) !void {
 }
 
 pub fn rectScale(self: *const WidgetData) RectScale {
+    const trac = dvui.ztracy.Zone(@src());
+    defer trac.End();
     if (self.rect_scale_cache) |rsc| {
         return rsc;
     }
@@ -202,28 +204,40 @@ pub fn rectScale(self: *const WidgetData) RectScale {
 }
 
 pub fn borderRect(self: *const WidgetData) Rect {
+    const trac = dvui.ztracy.Zone(@src());
+    defer trac.End();
     return self.rect.inset(self.options.marginGet());
 }
 
 pub fn borderRectScale(self: *const WidgetData) RectScale {
+    const trac = dvui.ztracy.Zone(@src());
+    defer trac.End();
     const r = self.borderRect().offsetNeg(self.rect);
     return self.rectScale().rectToRectScale(r);
 }
 
 pub fn backgroundRect(self: *const WidgetData) Rect {
+    const trac = dvui.ztracy.Zone(@src());
+    defer trac.End();
     return self.rect.inset(self.options.marginGet()).inset(self.options.borderGet());
 }
 
 pub fn backgroundRectScale(self: *const WidgetData) RectScale {
+    const trac = dvui.ztracy.Zone(@src());
+    defer trac.End();
     const r = self.backgroundRect().offsetNeg(self.rect);
     return self.rectScale().rectToRectScale(r);
 }
 
 pub fn contentRect(self: *const WidgetData) Rect {
+    const trac = dvui.ztracy.Zone(@src());
+    defer trac.End();
     return self.rect.inset(self.options.marginGet()).inset(self.options.borderGet()).inset(self.options.paddingGet());
 }
 
 pub fn contentRectScale(self: *const WidgetData) RectScale {
+    const trac = dvui.ztracy.Zone(@src());
+    defer trac.End();
     const r = self.contentRect().offsetNeg(self.rect);
     return self.rectScale().rectToRectScale(r);
 }

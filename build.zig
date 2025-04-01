@@ -465,7 +465,7 @@ fn addDvuiModule(
         .enable_fibers = false,
         .on_demand = false,
         // FIXME : No clue on tradeoffs here, maybe this is too much ? too little ?
-        .callstack = 20,
+        .callstack = 12,
     });
     if (ztracy_dep) |ztracy| {
         dvui_mod.addImport("ztracy", ztracy.module("root"));
