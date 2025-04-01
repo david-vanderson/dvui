@@ -985,10 +985,44 @@ class Dvui {
         );
     }
 
+    init() {
+        let app_init_return = 0;
+        let str = utf8encoder.encode(navigator.platform);
+        if (str.length > 0) {
+            const ptr = this.instance.exports.gpa_u8(
+                str.length,
+            );
+            var dest = new Uint8Array(
+                this.instance.exports.memory.buffer,
+                ptr,
+                str.length,
+            );
+            dest.set(str);
+            app_init_return = this.instance.exports.app_init(
+                ptr,
+                str.length,
+            );
+            this.instance.exports.gpa_free(ptr, str.length);
+        } else {
+            app_init_return = this.instance.exports.app_init(
+                0,
+                0,
+            );
+        }
+
+        if (app_init_return != 0) {
+            console.log(
+                "ERROR: app_init returned " + app_init_return,
+            );
+            return;
+        }
+    }
+
     run() {
+        this.init();
+
         let renderRequested = false;
         let renderTimeoutId = 0;
-        let app_initialized = false;
 
         const render = () => {
             renderRequested = false;
@@ -1019,40 +1053,6 @@ class Dvui {
 
             this.gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
             this.gl.clear(this.gl.COLOR_BUFFER_BIT);
-
-            if (!app_initialized) {
-                app_initialized = true;
-                let app_init_return = 0;
-                let str = utf8encoder.encode(navigator.platform);
-                if (str.length > 0) {
-                    const ptr = this.instance.exports.gpa_u8(
-                        str.length,
-                    );
-                    var dest = new Uint8Array(
-                        this.instance.exports.memory.buffer,
-                        ptr,
-                        str.length,
-                    );
-                    dest.set(str);
-                    app_init_return = this.instance.exports.app_init(
-                        ptr,
-                        str.length,
-                    );
-                    this.instance.exports.gpa_free(ptr, str.length);
-                } else {
-                    app_init_return = this.instance.exports.app_init(
-                        0,
-                        0,
-                    );
-                }
-
-                if (app_init_return != 0) {
-                    console.log(
-                        "ERROR: app_init returned " + app_init_return,
-                    );
-                    return;
-                }
-            }
 
             let millis_to_wait = this.instance.exports.app_update();
             if (!this.filesCacheModified) {
