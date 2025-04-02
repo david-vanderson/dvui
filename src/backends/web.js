@@ -860,7 +860,7 @@ class Dvui {
                 : document.querySelector(canvasSelectorOrCanvasElement);
 
         if (!canvas) {
-            alert("Could find canvas element.");
+            alert("Could not find canvas element.");
             return;
         }
 
