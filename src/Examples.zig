@@ -849,7 +849,7 @@ pub fn basicWidgets(demo_win_id: u32) !void {
         try dvui.label(@src(), "Raster Images", .{}, .{ .gravity_y = 0.5 });
 
         const imgsize = try dvui.imageSize("zig favicon", zig_favicon);
-        try dvui.image(@src(), "zig favicon", zig_favicon, .{
+        _ = try dvui.image(@src(), .{ .name = "zig favicon", .bytes = zig_favicon }, .{
             .gravity_y = 0.5,
             .min_size_content = .{ .w = imgsize.w + icon_image_size_extra, .h = imgsize.h + icon_image_size_extra },
             .rotation = icon_image_rotation,
@@ -953,7 +953,7 @@ pub fn dropdownAdvanced() !void {
 
             var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
 
-            try dvui.image(@src(), "zig favicon", zig_favicon, opts.override(.{ .gravity_x = 0.5 }));
+            _ = try dvui.image(@src(), .{ .name = "zig favicon", .bytes = zig_favicon }, opts.override(.{ .gravity_x = 0.5 }));
             try dvui.labelNoFmt(@src(), "image above text", opts.override(.{ .gravity_x = 0.5, .padding = .{} }));
 
             if (mi.activeRect()) |_| {
@@ -1353,23 +1353,13 @@ pub fn styling() !void {
         _ = try dvui.button(@src(), "Control", .{}, .{});
     }
 
-    try dvui.label(@src(), "separators", .{}, .{});
     {
         var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal, .min_size_content = .{ .h = 9 } });
         defer hbox.deinit();
 
-        const opts: Options = .{ .margin = dvui.Rect.all(2), .gravity_y = 0.5 };
+        try dvui.label(@src(), "separators", .{}, .{ .gravity_y = 0.5 });
 
-        try dvui.separator(@src(), opts.override(.{ .expand = .vertical }));
-        try dvui.separator(@src(), opts.override(.{ .expand = .vertical, .min_size_content = .{ .w = 3 } }));
-        try dvui.separator(@src(), opts.override(.{ .expand = .vertical, .min_size_content = .{ .w = 5 } }));
-
-        var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
-        defer vbox.deinit();
-
-        try dvui.separator(@src(), opts.override(.{ .expand = .horizontal }));
-        try dvui.separator(@src(), opts.override(.{ .expand = .horizontal, .min_size_content = .{ .h = 3 } }));
-        try dvui.separator(@src(), opts.override(.{ .expand = .horizontal, .min_size_content = .{ .h = 5 } }));
+        try dvui.separator(@src(), .{ .expand = .horizontal, .gravity_y = 0.5 });
     }
 
     try dvui.label(@src(), "corner radius", .{}, .{});
@@ -1453,17 +1443,49 @@ pub fn layout() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
+        const Static = struct {
+            var img: bool = false;
+            var crop: bool = false;
+            var size: Size = .{ .w = 16, .h = 16 };
+        };
+
         {
             var vbox = try dvui.box(@src(), .vertical, .{});
             defer vbox.deinit();
 
-            try dvui.label(@src(), "gravity/expand", .{}, .{});
+            {
+                var hbox2 = try dvui.box(@src(), .horizontal, .{});
+                defer hbox2.deinit();
 
-            var o = try dvui.overlay(@src(), .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } });
-            var buf: [128]u8 = undefined;
-            const label = try std.fmt.bufPrint(&buf, "{d:0.2},{d:0.2}", .{ layout_gravity_x, layout_gravity_y });
+                try dvui.label(@src(), "Layout", .{}, .{});
+                _ = try dvui.checkbox(@src(), &Static.img, "Image", .{});
+            }
 
-            _ = try dvui.button(@src(), label, .{}, .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand });
+            if (Static.img) {
+                try dvui.label(@src(), "Min Size", .{}, .{});
+                _ = try dvui.sliderEntry(@src(), "W: {d:0.0}", .{ .value = &Static.size.w, .min = 1, .max = 400, .interval = 1 }, .{ .gravity_y = 0.5 });
+                _ = try dvui.sliderEntry(@src(), "H: {d:0.0}", .{ .value = &Static.size.h, .min = 1, .max = 280, .interval = 1 }, .{ .gravity_y = 0.5 });
+
+                _ = try dvui.checkbox(@src(), &Static.crop, "Crop", .{});
+            }
+
+            var opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
+            if (Static.crop) {
+                opts.max_size_content = opts.min_size_contentGet();
+            }
+
+            var o = try dvui.overlay(@src(), opts);
+
+            const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand };
+            if (Static.img) {
+                _ = try dvui.image(@src(), .{ .name = "zig favicon", .bytes = zig_favicon, .crop = Static.crop }, options.override(.{
+                    .min_size_content = Static.size,
+                }));
+            } else {
+                var buf: [128]u8 = undefined;
+                const label = try std.fmt.bufPrint(&buf, "{d:0.2},{d:0.2}", .{ layout_gravity_x, layout_gravity_y });
+                _ = try dvui.button(@src(), label, .{}, options);
+            }
             o.deinit();
         }
 
