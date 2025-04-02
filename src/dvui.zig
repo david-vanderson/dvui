@@ -35,7 +35,6 @@ pub const FloatingWidget = @import("widgets/FloatingWidget.zig");
 pub const FloatingTooltipWidget = @import("widgets/FloatingTooltipWidget.zig");
 pub const FloatingMenuWidget = @import("widgets/FloatingMenuWidget.zig");
 pub const IconWidget = @import("widgets/IconWidget.zig");
-pub const ImageWidget = @import("widgets/ImageWidget.zig");
 pub const LabelWidget = @import("widgets/LabelWidget.zig");
 pub const MenuWidget = @import("widgets/MenuWidget.zig");
 pub const MenuItemWidget = @import("widgets/MenuItemWidget.zig");
@@ -6079,11 +6078,79 @@ pub fn imageSize(name: []const u8, image_bytes: []const u8) !Size {
     }
 }
 
-pub fn image(src: std.builtin.SourceLocation, name: []const u8, image_bytes: []const u8, opts: Options) !void {
-    var iw = try ImageWidget.init(src, name, image_bytes, opts);
-    try iw.install();
-    try iw.draw();
-    iw.deinit();
+pub const ImageInitOptions = struct {
+    /// Used for debugging output.
+    name: []const u8 = "image",
+
+    /// Bytes of the image file (like png), decoded lazily and cached.
+    bytes: []const u8,
+
+    /// If true and min size is larger than the rect we got, crop/shrink
+    /// according to expand:
+    /// - none => crop
+    /// - horizontal => crop height, fit width
+    /// - vertical => crop width, fit height
+    /// - both => fit in rect ignoring aspect ratio
+    /// - ratio => fit in rect maintaining aspect ratio
+    crop: bool = false,
+};
+
+/// Show raster image.
+///
+/// Only valid between dvui.Window.begin() and end().
+pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts: Options) !WidgetData {
+    const options = (Options{ .name = init_opts.name }).override(opts);
+
+    var size = Size{};
+    if (options.min_size_content) |msc| {
+        // user gave us a min size, use it
+        size = msc;
+    } else {
+        // user didn't give us one, use natural size
+        size = dvui.imageSize(init_opts.name, init_opts.bytes) catch .{ .w = 10, .h = 10 };
+    }
+
+    var wd = WidgetData.init(src, .{}, options.override(.{ .min_size_content = size }));
+    try wd.register();
+    try wd.borderAndBackground(.{});
+
+    const cr = wd.contentRect();
+    const ms = wd.options.min_size_contentGet();
+    const e = wd.options.expandGet();
+    const g = wd.options.gravityGet();
+    var rect = dvui.placeIn(cr, ms, e, g);
+    var doclip = false;
+    var old_clip: Rect = undefined;
+
+    if (init_opts.crop and e != .ratio) {
+        if (ms.w > cr.w and !e.isHorizontal()) {
+            doclip = true;
+
+            rect.w = ms.w;
+            rect.x -= g.x * (ms.w - cr.w);
+        }
+
+        if (ms.h > cr.h and !e.isVertical()) {
+            doclip = true;
+
+            rect.h = ms.h;
+            rect.y -= g.y * (ms.h - cr.h);
+        }
+    }
+
+    const rs = wd.parent.screenRectScale(rect);
+    if (doclip) {
+        old_clip = dvui.clip(wd.contentRectScale().r);
+    }
+    try dvui.renderImage(init_opts.name, init_opts.bytes, rs, wd.options.rotationGet(), .{});
+    if (doclip) {
+        dvui.clipSet(old_clip);
+    }
+
+    wd.minSizeSetAndRefresh();
+    wd.minSizeReportToParent();
+
+    return wd;
 }
 
 pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
