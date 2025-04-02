@@ -824,7 +824,7 @@ class Dvui {
                     this.hidden_input.select();
                     document.execCommand("copy");
                     this.hidden_input.value = "";
-                    oskCheck();
+                    this.oskCheck();
                 }
             },
             wasm_add_noto_font: () => {
@@ -1106,7 +1106,7 @@ class Dvui {
         this.gl.canvas.addEventListener("mouseup", (ev) => {
             this.instance.exports.add_event(3, ev.button, 0, 0, 0);
             requestRender();
-            oskCheck();
+            this.oskCheck();
         });
         this.gl.canvas.addEventListener("wheel", (ev) => {
             ev.preventDefault();
@@ -1216,7 +1216,7 @@ class Dvui {
                     (rect.right - rect.left);
                 let y = (touch.clientY - rect.top) /
                     (rect.bottom - rect.top);
-                let tidx = touchIndex(touch.identifier);
+                let tidx = this.touchIndex(touch.identifier);
                 this.instance.exports.add_event(
                     8,
                     this.touches[tidx][1],
@@ -1236,7 +1236,7 @@ class Dvui {
                     (rect.right - rect.left);
                 let y = (touch.clientY - rect.top) /
                     (rect.bottom - rect.top);
-                let tidx = touchIndex(touch.identifier);
+                let tidx = this.touchIndex(touch.identifier);
                 this.instance.exports.add_event(
                     9,
                     this.touches[tidx][1],
@@ -1247,7 +1247,7 @@ class Dvui {
                 this.touches.splice(tidx, 1);
             }
             requestRender();
-            oskCheck();
+            this.oskCheck();
         });
         this.gl.canvas.addEventListener("touchmove", (ev) => {
             ev.preventDefault();
@@ -1258,7 +1258,7 @@ class Dvui {
                     (rect.right - rect.left);
                 let y = (touch.clientY - rect.top) /
                     (rect.bottom - rect.top);
-                let tidx = touchIndex(touch.identifier);
+                let tidx = this.touchIndex(touch.identifier);
                 this.instance.exports.add_event(
                     10,
                     this.touches[tidx][1],
