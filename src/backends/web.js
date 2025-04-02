@@ -1009,10 +1009,7 @@ class Dvui {
         }
 
         if (app_init_return != 0) {
-            console.log(
-                "ERROR: app_init returned " + app_init_return,
-            );
-            return;
+            throw new Error("ERROR: app_init returned " + app_init_return);
         }
     }
 
