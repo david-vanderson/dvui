@@ -6085,14 +6085,14 @@ pub const ImageInitOptions = struct {
     /// Bytes of the image file (like png), decoded lazily and cached.
     bytes: []const u8,
 
-    /// If true and min size is larger than the rect we got, crop/shrink
-    /// according to expand:
+    /// If min size is larger than the rect we got, how to shrink it:
+    /// - null => use expand setting
     /// - none => crop
     /// - horizontal => crop height, fit width
     /// - vertical => crop width, fit height
     /// - both => fit in rect ignoring aspect ratio
     /// - ratio => fit in rect maintaining aspect ratio
-    crop: bool = false,
+    shrink: ?Options.Expand = null,
 };
 
 /// Show raster image.
@@ -6116,13 +6116,22 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
 
     const cr = wd.contentRect();
     const ms = wd.options.min_size_contentGet();
-    const e = wd.options.expandGet();
+
+    var too_big = false;
+    if (ms.w > cr.w or ms.h > cr.h) {
+        too_big = true;
+    }
+
+    var e = wd.options.expandGet();
+    if (too_big) {
+        e = init_opts.shrink orelse e;
+    }
     const g = wd.options.gravityGet();
     var rect = dvui.placeIn(cr, ms, e, g);
     var doclip = false;
     var old_clip: Rect = undefined;
 
-    if (init_opts.crop and e != .ratio) {
+    if (too_big and e != .ratio) {
         if (ms.w > cr.w and !e.isHorizontal()) {
             doclip = true;
 

@@ -1445,7 +1445,8 @@ pub fn layout() !void {
 
         const Static = struct {
             var img: bool = false;
-            var crop: bool = false;
+            var shrink: bool = false;
+            var shrinkE: dvui.Options.Expand = .none;
             var size: Size = .{ .w = 16, .h = 16 };
         };
 
@@ -1466,11 +1467,11 @@ pub fn layout() !void {
                 _ = try dvui.sliderEntry(@src(), "W: {d:0.0}", .{ .value = &Static.size.w, .min = 1, .max = 400, .interval = 1 }, .{ .gravity_y = 0.5 });
                 _ = try dvui.sliderEntry(@src(), "H: {d:0.0}", .{ .value = &Static.size.h, .min = 1, .max = 280, .interval = 1 }, .{ .gravity_y = 0.5 });
 
-                _ = try dvui.checkbox(@src(), &Static.crop, "Crop", .{});
+                _ = try dvui.checkbox(@src(), &Static.shrink, "Shrink", .{});
             }
 
             var opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
-            if (Static.crop) {
+            if (Static.shrink) {
                 opts.max_size_content = opts.min_size_contentGet();
             }
 
@@ -1478,7 +1479,7 @@ pub fn layout() !void {
 
             const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand };
             if (Static.img) {
-                _ = try dvui.image(@src(), .{ .name = "zig favicon", .bytes = zig_favicon, .crop = Static.crop }, options.override(.{
+                _ = try dvui.image(@src(), .{ .name = "zig favicon", .bytes = zig_favicon, .shrink = if (Static.shrink) Static.shrinkE else null }, options.override(.{
                     .min_size_content = Static.size,
                 }));
             } else {
@@ -1504,6 +1505,17 @@ pub fn layout() !void {
             inline for (std.meta.tags(dvui.Options.Expand)) |opt| {
                 if (try dvui.radio(@src(), layout_expand == opt, @tagName(opt), .{ .id_extra = @intFromEnum(opt) })) {
                     layout_expand = opt;
+                }
+            }
+        }
+
+        if (Static.shrink) {
+            var vbox = try dvui.box(@src(), .vertical, .{});
+            defer vbox.deinit();
+            try dvui.label(@src(), "Shrink", .{}, .{});
+            inline for (std.meta.tags(dvui.Options.Expand)) |opt| {
+                if (try dvui.radio(@src(), Static.shrinkE == opt, @tagName(opt), .{ .id_extra = @intFromEnum(opt) })) {
+                    Static.shrinkE = opt;
                 }
             }
         }
