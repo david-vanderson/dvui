@@ -1014,6 +1014,16 @@ class Dvui {
     }
 
     run() {
+        if (!this.instance) {
+            throw new Error(
+                "Missing wasm instance, did you forget to call `setInstance`?",
+            );
+        }
+        if (!this.gl) {
+            throw new Error(
+                "Missing rendering context, did you forget to call `setCanvas`?",
+            );
+        }
         this.init();
 
         let renderRequested = false;
