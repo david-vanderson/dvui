@@ -19,6 +19,9 @@ var show_dialog_outside_frame: bool = false;
 var g_backend: ?Backend = null;
 var g_win: ?*dvui.Window = null;
 
+var perf_data = [_]f64{0} ** 100;
+var frame_count: u64 = 0;
+
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application
 /// - render frames only when needed
@@ -33,6 +36,8 @@ pub fn main() !void {
     dvui.Examples.show_demo_window = show_demo;
 
     defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
+
+    var timer = try std.time.Timer.start();
 
     // init SDL backend (creates and owns OS window)
     var backend = try Backend.initWindow(.{
@@ -54,6 +59,8 @@ pub fn main() !void {
 
     main_loop: while (true) {
         dvui.ztracy.FrameMarkStart("main loop (client code)");
+        timer.reset();
+        frame_count += 1;
 
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(backend.hasEvent());
@@ -76,6 +83,18 @@ pub fn main() !void {
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
         const end_micros = try win.end(.{});
+
+        perf_data[@mod(frame_count, 100)] = @floatFromInt(timer.read());
+
+        if (@mod(frame_count, 100) == 0) {
+            var res: f64 = 0;
+            for (0..100) |i| {
+                res += perf_data[i];
+            }
+            res /= 100;
+            res /= 1e6;
+            std.debug.print("average main_frame compute duration {d:.3} ms\n", .{res});
+        }
 
         // cursor management
         backend.setCursor(win.cursorRequested());
