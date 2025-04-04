@@ -249,6 +249,9 @@ pub fn build(b: *std.Build) !void {
         .source_dir = docs.getEmittedDocs(),
         .install_dir = .prefix,
         .install_subdir = "docs",
+        // Seems a bit drastic but by default only index.html is installed
+        // and I override it below. Maybe there is a cleaner way ?
+        .exclude_extensions = &.{".html"},
     });
 
     const docs_step = b.step("docs", "Build and install the documentation");
