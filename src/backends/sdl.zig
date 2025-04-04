@@ -1063,7 +1063,7 @@ pub fn main() !void {
         _ = c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 255);
         _ = c.SDL_RenderClear(back.renderer);
 
-        dvui_app.?.frameFn();
+        const res = dvui_app.?.frameFn();
 
         const end_micros = try win.end(.{});
 
@@ -1071,6 +1071,8 @@ pub fn main() !void {
         back.textInputRect(win.textInputRequested());
 
         back.renderPresent();
+
+        if (res != .ok) break :main_loop;
 
         const wait_event_micros = win.waitTime(end_micros, null);
         back.waitEventTimeout(wait_event_micros);

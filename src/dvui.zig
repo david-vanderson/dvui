@@ -80,7 +80,7 @@ pub const App = struct {
     /// Runs after initFn, allowing for configuring the Window
     configFn: ?fn (*Window) void = null,
     deinitFn: fn () void,
-    frameFn: fn () void,
+    frameFn: fn () Result,
 
     pub const InitOptions = struct {
         /// The initial size of the application window
@@ -95,6 +95,13 @@ pub const App = struct {
         /// content of a PNG image (or any other format stb_image can load)
         /// tip: use @embedFile
         icon: ?[:0]const u8 = null,
+    };
+
+    pub const Result = enum {
+        /// App should continue
+        ok,
+        /// App should close and exit
+        close,
     };
 };
 

@@ -34,9 +34,9 @@ pub fn AppInit() dvui.App.InitOptions {
 // Run as app is shutting down, need to know if cleanly?
 pub fn AppDeinit() void {}
 
-// Run on each frame, return micros to sleep, or something for the app to quit
-pub fn AppFrame() void {
-    frame() catch return;
+pub fn AppFrame() dvui.App.Result {
+    frame() catch return .close;
+    return .ok;
 }
 
 pub fn frame() !void {
