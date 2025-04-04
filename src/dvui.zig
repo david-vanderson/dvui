@@ -72,9 +72,24 @@ pub const useFreeType = !wasm;
 ///     .logFn = dvui.backend.logFn,
 /// };
 pub const App = struct {
-    initFn: fn () void,
+    initFn: fn () InitOptions,
     deinitFn: fn () void,
     frameFn: fn () void,
+
+    pub const InitOptions = struct {
+        /// The initial size of the application window
+        size: dvui.Size,
+        /// Set the minimum size of the window
+        min_size: ?dvui.Size = null,
+        /// Set the maximum size of the window
+        max_size: ?dvui.Size = null,
+        vsync: bool = true,
+        /// The application title to display
+        title: [:0]const u8,
+        /// content of a PNG image (or any other format stb_image can load)
+        /// tip: use @embedFile
+        icon: ?[:0]const u8 = null,
+    };
 };
 
 pub const c = @cImport({
