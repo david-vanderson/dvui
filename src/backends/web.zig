@@ -781,6 +781,8 @@ fn app_update() callconv(.c) i32 {
         std.log.err("{!}", .{err});
         const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
         WebBackend.wasm.wasm_panic(msg.ptr, msg.len);
+        // The main loop is stopping, so deinit should be called
+        dvui_app.?.deinitFn();
         return -1;
     };
 }
@@ -794,7 +796,13 @@ fn update() !i32 {
     // backend is directly sending the events to dvui
     //try backend.addAllEvents(&win);
 
-    dvui_app.?.frameFn();
+    const res = dvui_app.?.frameFn();
+
+    switch (res) {
+        .ok => {},
+        // TODO: Should web apps be allowed to close? What happens on a close?
+        .close => return error.close,
+    }
     //try dvui.label(@src(), "test", .{}, .{ .color_text = .{ .color = dvui.Color.white } });
 
     //var indices: []const u32 = &[_]u32{ 0, 1, 2, 0, 2, 3 };
