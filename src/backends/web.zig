@@ -8,7 +8,8 @@ pub const Context = *WebBackend;
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
-pub var win: ?*dvui.Window = null;
+pub var win: dvui.Window = undefined;
+pub var win_ok = false;
 var arena: std.mem.Allocator = undefined;
 var last_touch_enum: dvui.enums.Button = .none;
 var touchPoints: [10]?dvui.Point = [_]?dvui.Point{null} ** 10;
@@ -186,14 +187,14 @@ export fn arena_u8(len: usize) [*c]u8 {
 }
 
 export fn new_font(ptr: [*c]u8, len: usize) void {
-    if (win) |w| {
-        w.font_bytes.put("Noto", dvui.FontBytesEntry{ .ttf_bytes = ptr[0..len], .allocator = gpa }) catch unreachable;
+    if (win_ok) {
+        win.font_bytes.put("Noto", dvui.FontBytesEntry{ .ttf_bytes = ptr[0..len], .allocator = gpa }) catch unreachable;
     }
 }
 
 export fn add_event(kind: u8, int1: u32, int2: u32, float1: f32, float2: f32) void {
-    if (win) |w| {
-        add_event_raw(w, kind, int1, int2, float1, float2) catch |err| {
+    if (win_ok) {
+        add_event_raw(&win, kind, int1, int2, float1, float2) catch |err| {
             dvui.log.err("add_event_raw returned {!}", .{err});
         };
     }
@@ -475,8 +476,8 @@ fn web_mod_code_to_dvui(wmod: u8) dvui.enums.Mod {
 //}
 
 pub fn init() !WebBackend {
-    const back: WebBackend = .{};
-    return back;
+    const ret: WebBackend = .{};
+    return ret;
 }
 
 pub fn deinit(self: *WebBackend) void {
@@ -698,4 +699,112 @@ pub fn readFileData(id: u32, file_index: usize, data: [*]u8) void {
 
 pub fn getNumberOfFilesAvailable(id: u32) usize {
     return wasm.wasm_get_number_of_files_available(id);
+}
+
+// dvui_app stuff
+const root = @import("root");
+pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
+pub fn main() void {}
+comptime {
+    if (dvui_app != null) {
+        @export(&app_init, .{ .name = "app_init" });
+        @export(&app_deinit, .{ .name = "app_deinit" });
+        @export(&app_update, .{ .name = "app_update" });
+    }
+}
+
+const WriteError = error{};
+const LogWriter = std.io.Writer(void, WriteError, writeLog);
+
+fn writeLog(_: void, msg: []const u8) WriteError!usize {
+    WebBackend.wasm.wasm_log_write(msg.ptr, msg.len);
+    return msg.len;
+}
+
+pub fn logFn(
+    comptime message_level: std.log.Level,
+    comptime scope: @Type(.enum_literal),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    const level_txt = switch (message_level) {
+        .err => "error",
+        .warn => "warning",
+        .info => "info",
+        .debug => "debug",
+    };
+    const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
+    const msg = level_txt ++ prefix2 ++ format ++ "\n";
+
+    (LogWriter{ .context = {} }).print(msg, args) catch return;
+    WebBackend.wasm.wasm_log_flush();
+}
+
+pub var back: WebBackend = undefined;
+
+fn app_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
+    dvui_app.?.initFn();
+
+    const platform = platform_ptr[0..platform_len];
+    dvui.log.debug("platform: {s}", .{platform});
+    const mac = if (std.mem.indexOf(u8, platform, "Mac") != null) true else false;
+
+    back = WebBackend.init() catch {
+        return 1;
+    };
+    win = dvui.Window.init(@src(), gpa, back.backend(), .{ .keybinds = if (mac) .mac else .windows }) catch {
+        return 2;
+    };
+
+    win_ok = true;
+
+    return 0;
+}
+
+fn app_deinit() callconv(.c) void {
+    win.deinit();
+    back.deinit();
+
+    dvui_app.?.deinitFn();
+}
+
+// return number of micros to wait (interrupted by events) for next frame
+// return -1 to quit
+fn app_update() callconv(.c) i32 {
+    return update() catch |err| {
+        std.log.err("{!}", .{err});
+        const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
+        WebBackend.wasm.wasm_panic(msg.ptr, msg.len);
+        return -1;
+    };
+}
+
+fn update() !i32 {
+    const nstime = win.beginWait(back.hasEvent());
+
+    try win.begin(nstime);
+
+    // Instead of the backend saving the events and then calling this, the web
+    // backend is directly sending the events to dvui
+    //try backend.addAllEvents(&win);
+
+    dvui_app.?.frameFn();
+    //try dvui.label(@src(), "test", .{}, .{ .color_text = .{ .color = dvui.Color.white } });
+
+    //var indices: []const u32 = &[_]u32{ 0, 1, 2, 0, 2, 3 };
+    //var vtx: []const dvui.Vertex = &[_]dvui.Vertex{
+    //    .{ .pos = .{ .x = 100, .y = 150 }, .uv = .{ 0.0, 0.0 }, .col = .{} },
+    //    .{ .pos = .{ .x = 200, .y = 150 }, .uv = .{ 1.0, 0.0 }, .col = .{ .g = 0, .b = 0, .a = 200 } },
+    //    .{ .pos = .{ .x = 200, .y = 250 }, .uv = .{ 1.0, 1.0 }, .col = .{ .r = 0, .b = 0, .a = 100 } },
+    //    .{ .pos = .{ .x = 100, .y = 250 }, .uv = .{ 0.0, 1.0 }, .col = .{ .r = 0, .g = 0 } },
+    //};
+    //backend.drawClippedTriangles(null, vtx, indices);
+
+    const end_micros = try win.end(.{});
+
+    back.setCursor(win.cursorRequested());
+    back.textInputRect(win.textInputRequested());
+
+    const wait_event_micros = win.waitTime(end_micros, null);
+    return @intCast(@divTrunc(wait_event_micros, 1000));
 }

@@ -1002,3 +1002,76 @@ pub fn getSDLVersion() std.SemanticVersion {
         };
     }
 }
+
+// dvui_app stuff
+const root = @import("root");
+pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
+pub const logFn = std.log.defaultLog;
+
+// Optional: windows os only
+const winapi = if (builtin.os.tag == .windows) struct {
+    extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
+} else struct {};
+
+// This must be exposed in the app's root source file.
+pub fn main() !void {
+    if (@import("builtin").os.tag == .windows) { // optional
+        // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
+        _ = winapi.AttachConsole(0xFFFFFFFF);
+    }
+    std.log.info("SDL version: {}", .{getSDLVersion()});
+
+    dvui_app.?.initFn();
+
+    var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+    const gpa = gpa_instance.allocator();
+
+    defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
+
+    // init SDL backend (creates and owns OS window)
+    var back = try initWindow(.{
+        .allocator = gpa,
+        .size = .{ .w = 800.0, .h = 600.0 },
+        .min_size = .{ .w = 250.0, .h = 350.0 },
+        .vsync = true,
+        .title = "DVUI SDL Standalone Example",
+        //.icon = window_icon_png, // can also call setIconFromFileContent()
+    });
+    defer back.deinit();
+
+    //// init dvui Window (maps onto a single OS window)
+    var win = try dvui.Window.init(@src(), gpa, back.backend(), .{});
+    defer win.deinit();
+
+    main_loop: while (true) {
+
+        // beginWait coordinates with waitTime below to run frames only when needed
+        const nstime = win.beginWait(back.hasEvent());
+
+        // marks the beginning of a frame for dvui, can call dvui functions after this
+        try win.begin(nstime);
+
+        // send all SDL events to dvui for processing
+        const quit = try back.addAllEvents(&win);
+        if (quit) break :main_loop;
+
+        // if dvui widgets might not cover the whole window, then need to clear
+        // the previous frame's render
+        _ = c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 255);
+        _ = c.SDL_RenderClear(back.renderer);
+
+        dvui_app.?.frameFn();
+
+        const end_micros = try win.end(.{});
+
+        back.setCursor(win.cursorRequested());
+        back.textInputRect(win.textInputRequested());
+
+        back.renderPresent();
+
+        const wait_event_micros = win.waitTime(end_micros, null);
+        back.waitEventTimeout(wait_event_micros);
+    }
+
+    dvui_app.?.deinitFn();
+}

@@ -86,8 +86,9 @@ pub fn build(b: *std.Build) !void {
 
         const dvui_sdl = addDvuiModule(b, target, optimize, "dvui_sdl", true);
         linkBackend(dvui_sdl, sdl_mod);
-        addExample(b, target, optimize, "sdl-standalone", dvui_sdl);
-        addExample(b, target, optimize, "sdl-ontop", dvui_sdl);
+        addExample(b, target, optimize, "sdl-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
+        addExample(b, target, optimize, "sdl-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
+        addExample(b, target, optimize, "sdl-app", b.path("examples/app.zig"), dvui_sdl);
     }
 
     // Raylib
@@ -147,8 +148,8 @@ pub fn build(b: *std.Build) !void {
 
         const dvui_raylib = addDvuiModule(b, target, optimize, "dvui_raylib", false);
         linkBackend(dvui_raylib, raylib_mod);
-        addExample(b, target, optimize, "raylib-standalone", dvui_raylib);
-        addExample(b, target, optimize, "raylib-ontop", dvui_raylib);
+        addExample(b, target, optimize, "raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib);
+        addExample(b, target, optimize, "raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib);
     }
 
     // Dx11
@@ -167,8 +168,8 @@ pub fn build(b: *std.Build) !void {
 
             const dvui_dx11 = addDvuiModule(b, target, optimize, "dvui_dx11", true);
             linkBackend(dvui_dx11, dx11_mod);
-            addExample(b, target, optimize, "dx11-standalone", dvui_dx11);
-            addExample(b, target, optimize, "dx11-ontop", dvui_dx11);
+            addExample(b, target, optimize, "dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11);
+            addExample(b, target, optimize, "dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11);
         }
     }
 
@@ -341,11 +342,12 @@ fn addExample(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     comptime name: []const u8,
+    file: std.Build.LazyPath,
     dvui_mod: *std.Build.Module,
 ) void {
     const exe = b.addExecutable(.{
         .name = name,
-        .root_source_file = b.path("examples/" ++ name ++ ".zig"),
+        .root_source_file = file,
         .target = target,
         .optimize = optimize,
     });
