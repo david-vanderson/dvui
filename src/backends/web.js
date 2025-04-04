@@ -764,7 +764,11 @@ class Dvui {
                         this.filesCacheModified = true;
                         this.filesCache.set(id, { files, data });
                     });
-                });
+                }).catch(() =>
+                    console.debug(
+                        "Filepicker canceled: This is currently not detectable from within dvui",
+                    )
+                );
             },
             wasm_get_file_size: (id, file_index) => {
                 const cached = this.filesCache.get(id);
