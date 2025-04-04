@@ -743,7 +743,11 @@ pub fn logFn(
 pub var back: WebBackend = undefined;
 
 fn app_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
-    dvui_app.?.initFn();
+    const init_opts = dvui_app.?.initFn();
+    // TODO: Allow web backend to set title of browser tab via init_opts
+    // TODO: Respect min size (maybe max size?) via css on the canvas element
+    // TODO: Use the icon to set the browser tab icon (if possible considering size requirements)
+    _ = init_opts;
 
     const platform = platform_ptr[0..platform_len];
     dvui.log.debug("platform: {s}", .{platform});
