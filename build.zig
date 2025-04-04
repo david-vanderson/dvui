@@ -198,44 +198,8 @@ pub fn build(b: *std.Build) !void {
         const dvui_web = addDvuiModule(b, web_target, optimize, "dvui_web", true);
         linkBackend(dvui_web, web_mod);
 
-        const web_test = b.addExecutable(.{
-            .name = "web-test",
-            .root_source_file = b.path("examples/web-test.zig"),
-            .target = web_target,
-            .optimize = optimize,
-            .link_libc = false,
-            .strip = if (optimize == .ReleaseFast or optimize == .ReleaseSmall) true else false,
-        });
-
-        web_test.entry = .disabled;
-        web_test.root_module.addImport("dvui", dvui_web);
-
-        const install_wasm = b.addInstallArtifact(web_test, .{
-            .dest_dir = .{ .override = .{ .custom = "bin" } },
-        });
-
-        const cb = b.addExecutable(.{
-            .name = "cacheBuster",
-            .root_source_file = b.path("src/cacheBuster.zig"),
-            .target = b.graph.host,
-        });
-        const cb_run = b.addRunArtifact(cb);
-        cb_run.addFileArg(b.path("src/backends/index.html"));
-        cb_run.addFileArg(b.path("src/backends/web.js"));
-        cb_run.addFileArg(web_test.getEmittedBin());
-        const output = cb_run.captureStdOut();
-
-        const install_noto = b.addInstallBinFile(b.path("src/fonts/NotoSansKR-Regular.ttf"), "NotoSansKR-Regular.ttf");
-
-        const compile_step = b.step("web-test", "Compile the Web test");
-        compile_step.dependOn(&b.addInstallFileWithDir(output, .prefix, "bin/index.html").step);
-        const web_js = b.path("src/backends/web.js");
-        compile_step.dependOn(&b.addInstallFileWithDir(web_js, .prefix, "bin/web.js").step);
-        b.addNamedLazyPath("web.js", web_js);
-        compile_step.dependOn(&install_wasm.step);
-        compile_step.dependOn(&install_noto.step);
-
-        b.getInstallStep().dependOn(compile_step);
+        addWebExample(b, web_target, optimize, "web-test", b.path("examples/web-test.zig"), dvui_web);
+        addWebExample(b, web_target, optimize, "web-app", b.path("examples/app.zig"), dvui_web);
     }
 
     // Docs
@@ -371,4 +335,52 @@ fn addExample(
 
     const run_step = b.step(name, "Run " ++ name);
     run_step.dependOn(&run_cmd.step);
+}
+
+fn addWebExample(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    comptime name: []const u8,
+    file: std.Build.LazyPath,
+    dvui_mod: *std.Build.Module,
+) void {
+    const web_test = b.addExecutable(.{
+        .name = "web",
+        .root_source_file = file,
+        .target = target,
+        .optimize = optimize,
+        .link_libc = false,
+        .strip = if (optimize == .ReleaseFast or optimize == .ReleaseSmall) true else false,
+    });
+
+    web_test.entry = .disabled;
+    web_test.root_module.addImport("dvui", dvui_mod);
+
+    const install_wasm = b.addInstallArtifact(web_test, .{
+        .dest_dir = .{ .override = .{ .custom = "bin" } },
+    });
+
+    const cb = b.addExecutable(.{
+        .name = "cacheBuster",
+        .root_source_file = b.path("src/cacheBuster.zig"),
+        .target = b.graph.host,
+    });
+    const cb_run = b.addRunArtifact(cb);
+    cb_run.addFileArg(b.path("src/backends/index.html"));
+    cb_run.addFileArg(b.path("src/backends/web.js"));
+    cb_run.addFileArg(web_test.getEmittedBin());
+    const output = cb_run.captureStdOut();
+
+    const install_noto = b.addInstallBinFile(b.path("src/fonts/NotoSansKR-Regular.ttf"), "NotoSansKR-Regular.ttf");
+
+    const compile_step = b.step(name, "Compile " ++ name);
+    compile_step.dependOn(&b.addInstallFileWithDir(output, .prefix, "bin/index.html").step);
+    const web_js = b.path("src/backends/web.js");
+    compile_step.dependOn(&b.addInstallFileWithDir(web_js, .prefix, "bin/web.js").step);
+    b.addNamedLazyPath("web.js", web_js);
+    compile_step.dependOn(&install_wasm.step);
+    compile_step.dependOn(&install_noto.step);
+
+    b.getInstallStep().dependOn(compile_step);
 }
