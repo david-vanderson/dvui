@@ -41,8 +41,6 @@ pub const std_options: std.Options = .{
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
-var win: dvui.Window = undefined;
-var backend: WebBackend = undefined;
 var touchPoints: [2]?dvui.Point = [_]?dvui.Point{null} ** 2;
 var orig_content_scale: f32 = 1.0;
 
@@ -53,23 +51,23 @@ export fn app_init(platform_ptr: [*]const u8, platform_len: usize) i32 {
     dvui.log.debug("platform: {s}", .{platform});
     const mac = if (std.mem.indexOf(u8, platform, "Mac") != null) true else false;
 
-    backend = WebBackend.init() catch {
+    WebBackend.back = WebBackend.init() catch {
         return 1;
     };
-    win = dvui.Window.init(@src(), gpa, backend.backend(), .{ .keybinds = if (mac) .mac else .windows }) catch {
+    WebBackend.win = dvui.Window.init(@src(), gpa, WebBackend.back.backend(), .{ .keybinds = if (mac) .mac else .windows }) catch {
         return 2;
     };
 
-    WebBackend.win = &win;
+    WebBackend.win_ok = true;
 
-    orig_content_scale = win.content_scale;
+    orig_content_scale = WebBackend.win.content_scale;
 
     return 0;
 }
 
 export fn app_deinit() void {
-    win.deinit();
-    backend.deinit();
+    WebBackend.win.deinit();
+    WebBackend.back.deinit();
 }
 
 // return number of micros to wait (interrupted by events) for next frame
@@ -84,9 +82,9 @@ export fn app_update() i32 {
 }
 
 fn update() !i32 {
-    const nstime = win.beginWait(backend.hasEvent());
+    const nstime = WebBackend.win.beginWait(WebBackend.back.hasEvent());
 
-    try win.begin(nstime);
+    try WebBackend.win.begin(nstime);
 
     // Instead of the backend saving the events and then calling this, the web
     // backend is directly sending the events to dvui
@@ -104,12 +102,12 @@ fn update() !i32 {
     //};
     //backend.drawClippedTriangles(null, vtx, indices);
 
-    const end_micros = try win.end(.{});
+    const end_micros = try WebBackend.win.end(.{});
 
-    backend.setCursor(win.cursorRequested());
-    backend.textInputRect(win.textInputRequested());
+    WebBackend.back.setCursor(WebBackend.win.cursorRequested());
+    WebBackend.back.textInputRect(WebBackend.win.textInputRequested());
 
-    const wait_event_micros = win.waitTime(end_micros, null);
+    const wait_event_micros = WebBackend.win.waitTime(end_micros, null);
     return @intCast(@divTrunc(wait_event_micros, 1000));
 }
 
@@ -144,7 +142,7 @@ fn dvui_frame() !void {
                         dy = touchPoints[0].?.y - touchPoints[1].?.y;
                         const new_dist: f32 = @sqrt(dx * dx + dy * dy);
 
-                        new_content_scale = @max(0.1, win.content_scale * new_dist / old_dist.?);
+                        new_content_scale = @max(0.1, WebBackend.win.content_scale * new_dist / old_dist.?);
                     }
                 },
                 else => {},
@@ -191,7 +189,7 @@ fn dvui_frame() !void {
         \\- rest of the window is a scroll area
         \\
         \\backend: {s}
-    , .{backend.about()}, .{});
+    , .{WebBackend.back.about()}, .{});
     try tl2.addText("\n\n", .{});
     try tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
     try tl2.addText("\n\n", .{});
@@ -219,6 +217,6 @@ fn dvui_frame() !void {
     try dvui.Examples.demo();
 
     if (new_content_scale) |ns| {
-        win.content_scale = ns;
+        WebBackend.win.content_scale = ns;
     }
 }
