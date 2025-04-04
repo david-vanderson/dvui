@@ -1044,6 +1044,8 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), gpa, back.backend(), .{});
     defer win.deinit();
 
+    if (dvui_app.?.configFn) |configFn| configFn(&win);
+
     main_loop: while (true) {
 
         // beginWait coordinates with waitTime below to run frames only when needed

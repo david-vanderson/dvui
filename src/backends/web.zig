@@ -762,6 +762,8 @@ fn app_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 
     win_ok = true;
 
+    if (dvui_app.?.configFn) |configFn| configFn(&win);
+
     return 0;
 }
 

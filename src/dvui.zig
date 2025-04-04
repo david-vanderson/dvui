@@ -77,6 +77,8 @@ pub const useFreeType = !wasm;
 /// ```
 pub const App = struct {
     initFn: fn () InitOptions,
+    /// Runs after initFn, allowing for configuring the Window
+    configFn: ?fn (*Window) void = null,
     deinitFn: fn () void,
     frameFn: fn () void,
 
