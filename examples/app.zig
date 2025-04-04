@@ -23,7 +23,13 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 // This is run before dvui does anything else.
-pub fn AppInit() void {}
+pub fn AppInit() dvui.App.InitOptions {
+    return .{
+        .size = .{ .w = 800.0, .h = 600.0 },
+        .min_size = .{ .w = 250.0, .h = 350.0 },
+        .title = "DVUI App Example",
+    };
+}
 
 // Run as app is shutting down, need to know if cleanly?
 pub fn AppDeinit() void {}
