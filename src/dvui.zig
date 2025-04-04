@@ -64,13 +64,17 @@ pub const useFreeType = !wasm;
 /// For apps that want dvui to provide the mainloop which runs these callbacks.
 ///
 /// In your root file, have a declaration named "dvui_app" of this type:
-/// pub const dvui_app: dvui.App = .{ .init = AppInit, ...};
+/// ```
+/// pub const dvui_app: dvui.App = .{ .initFn = AppInit, ...};
+/// ```
 ///
 /// Also must use the backend's main and log functions:
+/// ```
 /// pub const main = dvui.backend.main;
 /// pub const std_options: std.Options = .{
 ///     .logFn = dvui.backend.logFn,
 /// };
+/// ```
 pub const App = struct {
     initFn: fn () InitOptions,
     deinitFn: fn () void,
