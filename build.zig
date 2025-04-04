@@ -255,6 +255,19 @@ pub fn build(b: *std.Build) !void {
     docs_step.dependOn(&install_docs.step);
 
     b.getInstallStep().dependOn(docs_step);
+
+    // Use customized index.html
+    const add_doc_logo = b.addExecutable(.{
+        .name = "addDocLogo",
+        .root_source_file = b.path("docs/add_doc_logo.zig"),
+        .target = b.graph.host,
+    });
+    const run_add_logo = b.addRunArtifact(add_doc_logo);
+    run_add_logo.addFileArg(b.path("docs/index.html"));
+    run_add_logo.addFileArg(b.path("docs/favicon.svg"));
+    run_add_logo.addFileArg(b.path("docs/logo.svg"));
+    const indexhtml_file = run_add_logo.captureStdOut();
+    docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
 }
 
 pub fn linkBackend(dvui_mod: *std.Build.Module, backend_mod: *std.Build.Module) void {
