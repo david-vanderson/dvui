@@ -1021,7 +1021,7 @@ pub fn main() !void {
     }
     std.log.info("SDL version: {}", .{getSDLVersion()});
 
-    dvui_app.?.initFn();
+    const init_opts = dvui_app.?.initFn();
 
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_instance.allocator();
@@ -1031,11 +1031,12 @@ pub fn main() !void {
     // init SDL backend (creates and owns OS window)
     var back = try initWindow(.{
         .allocator = gpa,
-        .size = .{ .w = 800.0, .h = 600.0 },
-        .min_size = .{ .w = 250.0, .h = 350.0 },
-        .vsync = true,
-        .title = "DVUI SDL Standalone Example",
-        //.icon = window_icon_png, // can also call setIconFromFileContent()
+        .size = init_opts.size,
+        .min_size = init_opts.min_size,
+        .max_size = init_opts.max_size,
+        .vsync = init_opts.vsync,
+        .title = init_opts.title,
+        .icon = init_opts.icon,
     });
     defer back.deinit();
 
