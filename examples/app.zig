@@ -35,7 +35,10 @@ pub fn AppInit() dvui.App.InitOptions {
 pub fn AppDeinit() void {}
 
 pub fn AppFrame() dvui.App.Result {
-    frame() catch return .close;
+    frame() catch |err| {
+        std.log.err("in frame: {!}", .{err});
+        return .close;
+    };
     return .ok;
 }
 
