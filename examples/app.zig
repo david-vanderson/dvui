@@ -14,23 +14,33 @@ pub const dvui_app: dvui.App = .{
     .frameFn = AppFrame,
     .deinitFn = AppDeinit,
 };
-pub const main = dvui.backend.main;
+pub const main = dvui.App.main;
 pub const std_options: std.Options = .{
-    .logFn = dvui.backend.logFn,
+    .logFn = dvui.App.logFn,
 };
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
 // This is run before dvui does anything else.
-pub fn AppInit() void {}
+pub fn AppInit() dvui.App.InitOptions {
+    return .{
+        .size = .{ .w = 800.0, .h = 600.0 },
+        .min_size = .{ .w = 250.0, .h = 350.0 },
+        .title = "DVUI App Example",
+        .icon = window_icon_png,
+    };
+}
 
 // Run as app is shutting down, need to know if cleanly?
 pub fn AppDeinit() void {}
 
-// Run on each frame, return micros to sleep, or something for the app to quit
-pub fn AppFrame() void {
-    frame() catch return;
+pub fn AppFrame() dvui.App.Result {
+    frame() catch |err| {
+        std.log.err("in frame: {!}", .{err});
+        return .close;
+    };
+    return .ok;
 }
 
 pub fn frame() !void {
