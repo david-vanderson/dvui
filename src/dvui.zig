@@ -2519,7 +2519,7 @@ pub const Animation = struct {
         if (a.done()) return a.end_val;
         const frac = @as(f32, @floatFromInt(-a.start_time)) / @as(f32, @floatFromInt(a.end_time - a.start_time));
         const t = a.easing(std.math.clamp(frac, 0, 1));
-        return (a.start_val * (1.0 - t)) + (a.end_val * t);
+        return std.math.lerp(a.start_val, a.end_val, t);
     }
 
     // return true on the last frame for this animation
