@@ -88,7 +88,7 @@ const AnimatingDialog = struct {
         var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id, .max_size_content = .{ .w = 300 } });
 
         if (dvui.firstFrame(win.data().id)) {
-            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 0, .end_val = 1.0, .end_time = 200_000 });
+            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 0.2, .end_val = 1.0, .end_time = 800_000, .easing = dvui.easing.outElastic });
         }
 
         const winHeight = win.data().rect.h;
