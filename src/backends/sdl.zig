@@ -1006,7 +1006,6 @@ pub fn getSDLVersion() std.SemanticVersion {
 // dvui_app stuff
 const root = @import("root");
 pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
-pub const logFn = std.log.defaultLog;
 
 // Optional: windows os only
 const winapi = if (builtin.os.tag == .windows) struct {

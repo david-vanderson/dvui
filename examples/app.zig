@@ -14,9 +14,9 @@ pub const dvui_app: dvui.App = .{
     .frameFn = AppFrame,
     .deinitFn = AppDeinit,
 };
-pub const main = dvui.backend.main;
+pub const main = dvui.App.main;
 pub const std_options: std.Options = .{
-    .logFn = dvui.backend.logFn,
+    .logFn = dvui.App.logFn,
 };
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
