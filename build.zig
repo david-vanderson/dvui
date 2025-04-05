@@ -2,8 +2,7 @@ const std = @import("std");
 const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 
-pub const BackendToBuild = enum {
-    all,
+pub const Backend = enum {
     custom,
     sdl,
     raylib,
@@ -22,17 +21,17 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const back_to_build: BackendToBuild = b.option(BackendToBuild, "backend", "Backend to build") orelse .all;
+    const back_to_build: ?Backend = b.option(Backend, "backend", "Backend to build");
 
     if (back_to_build == .custom) {
         // For export to users who are bringing their own backend.  Use in your build.zig:
         // const dvui_mod = dvui_dep.module("dvui");
-        // @import("dvui").linkBackend(dvui_mod, your backend module);
+        // @import("dvui").linkBackend(dvui_mod, your_backend_module, .custom);
         _ = addDvuiModule(b, target, optimize, "dvui", true);
     }
 
     // SDL
-    if (back_to_build == .all or back_to_build == .sdl) {
+    if (back_to_build == null or back_to_build == .sdl) {
         const sdl_mod = b.addModule("sdl", .{
             .root_source_file = b.path("src/backends/sdl.zig"),
             .target = target,
@@ -85,14 +84,14 @@ pub fn build(b: *std.Build) !void {
         sdl_mod.addOptions("sdl_options", sdl_options);
 
         const dvui_sdl = addDvuiModule(b, target, optimize, "dvui_sdl", true);
-        linkBackend(dvui_sdl, sdl_mod);
+        linkBackend(dvui_sdl, sdl_mod, .sdl);
         addExample(b, target, optimize, "sdl-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-app", b.path("examples/app.zig"), dvui_sdl);
     }
 
     // Raylib
-    if (back_to_build == .all or back_to_build == .raylib) {
+    if (back_to_build == null or back_to_build == .raylib) {
         const linux_display_backend: LinuxDisplayBackend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
             _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
                 error.EnvironmentVariableNotFound => break :blk .X11,
@@ -147,14 +146,14 @@ pub fn build(b: *std.Build) !void {
         }
 
         const dvui_raylib = addDvuiModule(b, target, optimize, "dvui_raylib", false);
-        linkBackend(dvui_raylib, raylib_mod);
+        linkBackend(dvui_raylib, raylib_mod, .raylib);
         addExample(b, target, optimize, "raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib);
         addExample(b, target, optimize, "raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib);
         addExample(b, target, optimize, "raylib-app", b.path("examples/app.zig"), dvui_raylib);
     }
 
     // Dx11
-    if (back_to_build == .all or back_to_build == .dx11) {
+    if (back_to_build == null or back_to_build == .dx11) {
         if (target.result.os.tag == .windows) {
             const dx11_mod = b.addModule("dx11", .{
                 .root_source_file = b.path("src/backends/dx11.zig"),
@@ -168,7 +167,7 @@ pub fn build(b: *std.Build) !void {
             }
 
             const dvui_dx11 = addDvuiModule(b, target, optimize, "dvui_dx11", true);
-            linkBackend(dvui_dx11, dx11_mod);
+            linkBackend(dvui_dx11, dx11_mod, .dx11);
             addExample(b, target, optimize, "dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11);
             addExample(b, target, optimize, "dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11);
             addExample(b, target, optimize, "dx11-app", b.path("examples/app.zig"), dvui_dx11);
@@ -176,7 +175,7 @@ pub fn build(b: *std.Build) !void {
     }
 
     // Web
-    if (back_to_build == .all or back_to_build == .web) {
+    if (back_to_build == null or back_to_build == .web) {
         const web_target = b.resolveTargetQuery(.{
             .cpu_arch = .wasm32,
             .os_tag = .freestanding,
@@ -198,7 +197,7 @@ pub fn build(b: *std.Build) !void {
         };
 
         const dvui_web = addDvuiModule(b, web_target, optimize, "dvui_web", true);
-        linkBackend(dvui_web, web_mod);
+        linkBackend(dvui_web, web_mod, .web);
 
         addWebExample(b, web_target, optimize, "web-test", b.path("examples/web-test.zig"), dvui_web);
         addWebExample(b, web_target, optimize, "web-app", b.path("examples/app.zig"), dvui_web);
@@ -240,9 +239,13 @@ pub fn build(b: *std.Build) !void {
     docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
 }
 
-pub fn linkBackend(dvui_mod: *std.Build.Module, backend_mod: *std.Build.Module) void {
+pub fn linkBackend(dvui_mod: *std.Build.Module, backend_mod: *std.Build.Module, backend: Backend) void {
     backend_mod.addImport("dvui", dvui_mod);
     dvui_mod.addImport("backend", backend_mod);
+
+    var opts = dvui_mod.owner.addOptions();
+    opts.addOption(Backend, "backend", backend);
+    dvui_mod.addOptions("backend_info", opts);
 }
 
 fn addDvuiModule(
