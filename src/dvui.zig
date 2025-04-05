@@ -2508,15 +2508,16 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 /// how to have a seemless continuous animation.
 pub const Animation = struct {
     used: bool = true,
+    easing: *const easing.EasingFn = easing.linear,
     start_val: f32 = 0,
     end_val: f32 = 1,
     start_time: i32 = 0,
     end_time: i32,
 
     pub fn lerp(a: *const Animation) f32 {
-        var frac = @as(f32, @floatFromInt(-a.start_time)) / @as(f32, @floatFromInt(a.end_time - a.start_time));
-        frac = @max(0, @min(1, frac));
-        return (a.start_val * (1.0 - frac)) + (a.end_val * frac);
+        const frac = @as(f32, @floatFromInt(-a.start_time)) / @as(f32, @floatFromInt(a.end_time - a.start_time));
+        const t = a.easing(std.math.clamp(frac, 0, 1));
+        return (a.start_val * (1.0 - t)) + (a.end_val * t);
     }
 
     // return true on the last frame for this animation
