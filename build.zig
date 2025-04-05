@@ -150,6 +150,7 @@ pub fn build(b: *std.Build) !void {
         linkBackend(dvui_raylib, raylib_mod);
         addExample(b, target, optimize, "raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib);
         addExample(b, target, optimize, "raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib);
+        addExample(b, target, optimize, "raylib-app", b.path("examples/app.zig"), dvui_raylib);
     }
 
     // Dx11
