@@ -68,11 +68,11 @@ pub const useFreeType = !wasm;
 /// pub const dvui_app: dvui.App = .{ .initFn = AppInit, ...};
 /// ```
 ///
-/// Also must use the backend's main and log functions:
+/// Also must use the App's main and log functions:
 /// ```
-/// pub const main = dvui.backend.main;
+/// pub const main = dvui.App.main;
 /// pub const std_options: std.Options = .{
-///     .logFn = dvui.backend.logFn,
+///     .logFn = dvui.App.logFn,
 /// };
 /// ```
 pub const App = struct {
@@ -81,6 +81,23 @@ pub const App = struct {
     configFn: ?fn (*Window) void = null,
     deinitFn: fn () void,
     frameFn: fn () Result,
+
+    fn nop_main() !void {}
+    /// The root file needs to expose the App main function:
+    /// ```
+    /// pub const main = dvui.App.main;
+    /// ```
+    pub const main: fn () anyerror!void = if (@hasDecl(backend, "main")) backend.main else nop_main;
+    /// Some backends, like web, cannot use stdout and has a custom logFn to be used.
+    /// Dvui apps should always prefer to use std.log over stdout to work across all backends.
+    ///
+    /// The root file needs to use the App logFn function:
+    /// ```
+    /// pub const std_options: std.Options = .{
+    ///     .logFn = dvui.App.logFn,
+    /// };
+    /// ```
+    pub const logFn: @FieldType(std.Options, "logFn") = if (@hasDecl(backend, "logFn")) backend.logFn else std.log.defaultLog;
 
     pub const InitOptions = struct {
         /// The initial size of the application window
