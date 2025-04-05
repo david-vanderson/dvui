@@ -5862,9 +5862,9 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     const rs = wd.contentRectScale();
     const r = rs.r;
 
-    var angle: f32 = 0;
-    const anim = Animation{ .start_val = 0, .end_val = 2 * math.pi, .end_time = 4_500_000 };
-    if (animationGet(wd.id, "_angle")) |a| {
+    var t: f32 = 0;
+    const anim = Animation{ .end_time = 3_000_000 };
+    if (animationGet(wd.id, "_t")) |a| {
         // existing animation
         var aa = a;
         if (aa.done()) {
@@ -5872,19 +5872,25 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
             aa = anim;
             aa.start_time = a.end_time;
             aa.end_time += a.end_time;
-            animation(wd.id, "_angle", aa);
+            animation(wd.id, "_t", aa);
         }
-        angle = aa.lerp();
+        t = aa.lerp();
     } else {
         // first frame we are seeing the spinner
-        animation(wd.id, "_angle", anim);
+        animation(wd.id, "_t", anim);
     }
 
     var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
     defer path.deinit();
 
+    const full_circle = 2 * std.math.pi;
+    // start begins fast, speeding away from end
+    const start = full_circle * easing.outSine(t);
+    // end begins slow, catching up to start
+    const end = full_circle * easing.inSine(t);
+
     const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
-    try pathAddArc(&path, center, @min(r.w, r.h) / 3, angle, 0, false);
+    try pathAddArc(&path, center, @min(r.w, r.h) / 3, start, end, false);
     try pathStroke(path.items, 3.0 * rs.s, options.color(.text), .{});
 }
 
