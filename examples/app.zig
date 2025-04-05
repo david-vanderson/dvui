@@ -51,7 +51,7 @@ pub fn frame() !void {
     const lorem = "This is a dvui.App example that can compile on multiple backends.";
     try tl.addText(lorem, .{});
     try tl.addText("\n\n", .{});
-    try tl.format("Current backend: {s}", .{"unknown"}, .{});
+    try tl.format("Current backend: {s}", .{@tagName(dvui.backend_info.backend)}, .{});
     tl.deinit();
 
     var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
