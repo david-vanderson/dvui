@@ -171,6 +171,7 @@ pub fn build(b: *std.Build) !void {
             linkBackend(dvui_dx11, dx11_mod);
             addExample(b, target, optimize, "dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11);
             addExample(b, target, optimize, "dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11);
+            addExample(b, target, optimize, "dx11-app", b.path("examples/app.zig"), dvui_dx11);
         }
     }
 
