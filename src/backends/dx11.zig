@@ -945,7 +945,6 @@ pub fn addAllEvents(self: Context, window: *dvui.Window) !bool {
 }
 
 pub fn setCursor(self: Context, new_cursor: dvui.enums.Cursor) void {
-    _ = self;
     const converted_cursor = switch (new_cursor) {
         .arrow => win32.IDC_ARROW,
         .ibeam => win32.IDC_IBEAM,
@@ -960,7 +959,15 @@ pub fn setCursor(self: Context, new_cursor: dvui.enums.Cursor) void {
         .hand => win32.IDC_HAND,
     };
 
-    _ = win32.LoadCursorW(null, converted_cursor);
+    if (win32.LoadCursorW(null, converted_cursor)) |cursor| {
+        // NOTE: We set the class cursor because using win32.setCursor requires handling win32.WN_SETCURSOR
+        // and messes with the default resize cursors of the window.
+        _ = win32.SetClassLongPtrW(
+            hwndFromContext(self),
+            win32.GCLP_HCURSOR, // change cursor
+            @intCast(@intFromPtr(cursor)),
+        );
+    }
 }
 
 fn hwndFromContext(ctx: Context) win32.HWND {
