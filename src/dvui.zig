@@ -2514,6 +2514,11 @@ pub const Animation = struct {
     start_time: i32 = 0,
     end_time: i32,
 
+    /// Get the interpolated value between `start_val` and `end_val`
+    ///
+    /// For some easing functions, this value can extend above or bellow
+    /// `start_val` and `end_val`. If this is an issue, you can choose
+    /// a different easing function or use `std.math.clamp`
     pub fn value(a: *const Animation) f32 {
         if (a.start_time >= 0) return a.start_val;
         if (a.done()) return a.end_val;

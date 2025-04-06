@@ -1,6 +1,9 @@
 //! Easing functions mainly used for animations. Controls the rate of change of a value,
 //! used to turn a linearly changing value into a smooth, styalized change.
 //!
+//! Note that some easing functions can return values outside 0 and 1 for values of t
+//! between 0 and 1.
+//!
 //! See [easings.net](https://easings.net/) for examples and visualizations
 
 // Adapted from https://gist.github.com/Kryzarel/bba64622057f21a1d6d44879f9cd7bd4
@@ -89,25 +92,31 @@ pub fn inOutCirc(t: f32) f32 {
     return 1 - inCirc((1 - t) * 2) / 2;
 }
 
+/// This function extents past 0 and 1 for values of t between 0 and 1
 pub fn inElastic(t: f32) f32 {
     return 1 - outElastic(1 - t);
 }
+/// This function extents past 0 and 1 for values of t between 0 and 1
 pub fn outElastic(t: f32) f32 {
     const p: f32 = 0.3;
     return std.math.pow(f32, 2, -10 * t) * std.math.sin((t - p / 4) * (2 * std.math.pi) / p) + 1;
 }
+/// This function extents past 0 and 1 for values of t between 0 and 1
 pub fn inOutElastic(t: f32) f32 {
     if (t < 0.5) return inElastic(t * 2) / 2;
     return 1 - inElastic((1 - t) * 2) / 2;
 }
 
+/// This function extents past 0 and 1 for values of t between 0 and 1
 pub fn inBack(t: f32) f32 {
     const s: f32 = 1.70158;
     return t * t * ((s + 1) * t - s);
 }
+/// This function extents past 0 and 1 for values of t between 0 and 1
 pub fn outBack(t: f32) f32 {
     return 1 - inBack(1 - t);
 }
+/// This function extents past 0 and 1 for values of t between 0 and 1
 pub fn inOutBack(t: f32) f32 {
     if (t < 0.5) return inBack(t * 2) / 2;
     return 1 - inBack((1 - t) * 2) / 2;
