@@ -2514,7 +2514,7 @@ pub const Animation = struct {
     start_time: i32 = 0,
     end_time: i32,
 
-    pub fn lerp(a: *const Animation) f32 {
+    pub fn value(a: *const Animation) f32 {
         if (a.start_time >= 0) return a.start_val;
         if (a.done()) return a.end_val;
         const frac = @as(f32, @floatFromInt(-a.start_time)) / @as(f32, @floatFromInt(a.end_time - a.start_time));
@@ -5876,7 +5876,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
             aa.end_time += a.end_time;
             animation(wd.id, "_t", aa);
         }
-        t = aa.lerp();
+        t = aa.value();
     } else {
         // first frame we are seeing the spinner
         animation(wd.id, "_t", anim);
