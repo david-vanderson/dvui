@@ -715,7 +715,11 @@ pub fn FPS(self: *const Self) f32 {
     return fps;
 }
 
-/// beginWait coordinates with waitTime() to run frames only when needed
+/// Coordinates with `Window.waitTime` to run frames only when needed.
+///
+/// Typically called right before `Window.begin`.
+///
+/// See usage in the example folder for the backend of you choice.
 pub fn beginWait(self: *Self, has_event: bool) i128 {
     var new_time = @max(self.frame_time_ns, self.backend.nanoTime());
 
@@ -763,11 +767,12 @@ pub fn beginWait(self: *Self, has_event: bool) i128 {
     return new_time;
 }
 
-// Takes output of end() and optionally a max fps.  Returns microseconds
-// the app should wait (with event interruption) before running the render
-// loop again.  Pass return value to backend.waitEventTimeout().
-// Cooperates with beginWait() to estimate how much time is being spent
-// outside the render loop and account for that.
+/// Takes output of `Window.end` and optionally a max fps.  Returns microseconds
+/// the app should wait (with event interruption) before running the render loop again.
+///
+/// Pass return value to backend.waitEventTimeout().
+/// Cooperates with `Window.beginWait` to estimate how much time is being spent
+/// outside the render loop and account for that.
 pub fn waitTime(self: *Self, end_micros: ?u32, maxFPS: ?f32) u32 {
     // end_micros is the naive value we want to be between last begin and next begin
 
@@ -852,6 +857,9 @@ pub fn waitTime(self: *Self, end_micros: ?u32, maxFPS: ?f32) u32 {
     }
 }
 
+/// Make this window the current window.
+///
+/// All widgets for this window should be declared between this call and `Window.end`.
 pub fn begin(
     self: *Self,
     time_ns: i128,
@@ -1279,11 +1287,15 @@ pub fn dataRemove(self: *Self, id: u32, key: []const u8) void {
     }
 }
 
-// Add a dialog to be displayed on the GUI thread during Window.end(). Can
-// be called from any thread. Returns a locked mutex that must be unlocked
-// by the caller.  If calling from a non-GUI thread, do any dataSet() calls
-// before unlocking the mutex to ensure that data is available before the
-// dialog is displayed.
+///  Add a dialog to be displayed on the GUI thread during `Window.end`.
+///
+///  See `dvui.dialogAdd` for higher level api.
+///
+///  Can be called from any thread. Returns a locked mutex that must be unlocked
+///  by the caller.
+///
+///  If calling from a non-GUI thread, do any dataSet() calls before unlocking the
+///  mutex to ensure that data is available before the dialog is displayed.
 pub fn dialogAdd(self: *Self, id: u32, display: dvui.DialogDisplayFn) !*std.Thread.Mutex {
     self.dialog_mutex.lock();
 
