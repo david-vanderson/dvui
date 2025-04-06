@@ -2826,16 +2826,16 @@ pub const IdMutex = struct {
     mutex: *std.Thread.Mutex,
 };
 
-/// Add a dialog to be displayed on the GUI thread during Window.end().
+/// Add a dialog to be displayed on the GUI thread during `Window.end`.
 ///
-/// Returns an id and locked mutex that must be unlocked by the caller. Caller
-/// does any Window.dataSet() calls before unlocking the mutex to ensure that
+/// Returns an id and locked mutex that **must** be unlocked by the caller. Caller
+/// does any `Window.dataSet` calls before unlocking the mutex to ensure that
 /// data is available before the dialog is displayed.
 ///
 /// Can be called from any thread.
 ///
-/// If called from non-GUI thread or outside window.begin()/end(), you must
-/// pass a pointer to the Window you want to add the dialog to.
+/// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you
+/// **must** pass a pointer to the Window you want to add the dialog to.
 pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, display: DialogDisplayFn) !IdMutex {
     if (win) |w| {
         // we are being called from non gui thread
