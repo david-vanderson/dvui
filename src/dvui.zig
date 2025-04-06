@@ -56,6 +56,7 @@ pub const structEntryExAlloc = se.structEntryExAlloc;
 pub const StructFieldOptions = se.StructFieldOptions;
 
 pub const enums = @import("enums.zig");
+pub const easing = @import("easing.zig");
 
 pub const wasm = (builtin.target.cpu.arch == .wasm32);
 pub const useFreeType = !wasm;
@@ -2507,15 +2508,23 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 /// how to have a seemless continuous animation.
 pub const Animation = struct {
     used: bool = true,
+    easing: *const easing.EasingFn = easing.linear,
     start_val: f32 = 0,
     end_val: f32 = 1,
     start_time: i32 = 0,
     end_time: i32,
 
-    pub fn lerp(a: *const Animation) f32 {
-        var frac = @as(f32, @floatFromInt(-a.start_time)) / @as(f32, @floatFromInt(a.end_time - a.start_time));
-        frac = @max(0, @min(1, frac));
-        return (a.start_val * (1.0 - frac)) + (a.end_val * frac);
+    /// Get the interpolated value between `start_val` and `end_val`
+    ///
+    /// For some easing functions, this value can extend above or bellow
+    /// `start_val` and `end_val`. If this is an issue, you can choose
+    /// a different easing function or use `std.math.clamp`
+    pub fn value(a: *const Animation) f32 {
+        if (a.start_time >= 0) return a.start_val;
+        if (a.done()) return a.end_val;
+        const frac = @as(f32, @floatFromInt(-a.start_time)) / @as(f32, @floatFromInt(a.end_time - a.start_time));
+        const t = a.easing(std.math.clamp(frac, 0, 1));
+        return std.math.lerp(a.start_val, a.end_val, t);
     }
 
     // return true on the last frame for this animation
@@ -5034,7 +5043,7 @@ pub fn toastDisplay(id: u32) !void {
         return;
     };
 
-    var animator = try dvui.animate(@src(), .alpha, 500_000, .{ .id_extra = id });
+    var animator = try dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{ .id_extra = id });
     defer animator.deinit();
     try dvui.labelNoFmt(@src(), message, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = Rect.all(8) });
 
@@ -5047,9 +5056,9 @@ pub fn toastDisplay(id: u32) !void {
     }
 }
 
-pub fn animate(src: std.builtin.SourceLocation, kind: AnimateWidget.Kind, duration_micros: i32, opts: Options) !*AnimateWidget {
+pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) !*AnimateWidget {
     var ret = try currentWindow().arena().create(AnimateWidget);
-    ret.* = AnimateWidget.init(src, kind, duration_micros, opts);
+    ret.* = AnimateWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
 }
@@ -5860,9 +5869,9 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     const rs = wd.contentRectScale();
     const r = rs.r;
 
-    var angle: f32 = 0;
-    const anim = Animation{ .start_val = 0, .end_val = 2 * math.pi, .end_time = 4_500_000 };
-    if (animationGet(wd.id, "_angle")) |a| {
+    var t: f32 = 0;
+    const anim = Animation{ .end_time = 3_000_000 };
+    if (animationGet(wd.id, "_t")) |a| {
         // existing animation
         var aa = a;
         if (aa.done()) {
@@ -5870,19 +5879,25 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
             aa = anim;
             aa.start_time = a.end_time;
             aa.end_time += a.end_time;
-            animation(wd.id, "_angle", aa);
+            animation(wd.id, "_t", aa);
         }
-        angle = aa.lerp();
+        t = aa.value();
     } else {
         // first frame we are seeing the spinner
-        animation(wd.id, "_angle", anim);
+        animation(wd.id, "_t", anim);
     }
 
     var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
     defer path.deinit();
 
+    const full_circle = 2 * std.math.pi;
+    // start begins fast, speeding away from end
+    const start = full_circle * easing.outSine(t);
+    // end begins slow, catching up to start
+    const end = full_circle * easing.inSine(t);
+
     const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
-    try pathAddArc(&path, center, @min(r.w, r.h) / 3, angle, 0, false);
+    try pathAddArc(&path, center, @min(r.w, r.h) / 3, start, end, false);
     try pathStroke(path.items, 3.0 * rs.s, options.color(.text), .{});
 }
 

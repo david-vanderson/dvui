@@ -88,13 +88,13 @@ const AnimatingDialog = struct {
         var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id, .max_size_content = .{ .w = 300 } });
 
         if (dvui.firstFrame(win.data().id)) {
-            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 0, .end_val = 1.0, .end_time = 200_000 });
+            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 0.2, .end_val = 1.0, .end_time = 800_000, .easing = dvui.easing.outElastic });
         }
 
         const winHeight = win.data().rect.h;
 
         if (dvui.animationGet(win.data().id, "rect_percent")) |a| {
-            win.data().rect.h *= a.lerp();
+            win.data().rect.h *= a.value();
 
             // mucking with the window size can screw up the windows auto sizing, so force it
             win.autoSize();
@@ -171,8 +171,8 @@ pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_fl
     if (dvui.animationGet(fwin_id, "rect_percent")) |a| {
         if (dvui.dataGet(null, fwin_id, "size", Size)) |ss| {
             var r = rect.*;
-            const dw = ss.w * a.lerp();
-            const dh = ss.h * a.lerp();
+            const dw = ss.w * a.value();
+            const dh = ss.h * a.value();
             r.x = r.x + (r.w / 2) - (dw / 2);
             r.w = dw;
             r.y = r.y + (r.h / 2) - (dh / 2);
@@ -1000,7 +1000,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
         if (dvui.animationGet(hbox.data().id, "enter_pressed")) |a| {
             const prev_alpha = dvui.themeGet().alpha;
-            dvui.themeGet().alpha *= a.lerp();
+            dvui.themeGet().alpha *= a.value();
             try dvui.label(@src(), "Enter!", .{}, .{ .gravity_y = 0.5 });
             dvui.themeGet().alpha = prev_alpha;
         }
@@ -1297,7 +1297,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
                 if (dvui.animationGet(hbox.data().id, "value_changed")) |a| {
                     const prev_alpha = dvui.themeGet().alpha;
-                    dvui.themeGet().alpha *= a.lerp();
+                    dvui.themeGet().alpha *= a.value();
                     try dvui.label(@src(), "Changed!", .{}, .{ .gravity_y = 0.5 });
                     dvui.themeGet().alpha = prev_alpha;
                 }
@@ -3026,6 +3026,31 @@ pub fn dialogs(demo_win_id: u32) !void {
 }
 
 pub fn animations() !void {
+    const global = struct {
+        var easing_choice: usize = 0;
+        var easing: *const dvui.easing.EasingFn = dvui.easing.linear;
+        var duration: i32 = 500_000;
+    };
+    const easing_fns, const easing_names = comptime blk: {
+        const decls = std.meta.declarations(dvui.easing);
+        var easing_names_arr = [_][]const u8{undefined} ** decls.len;
+        var easing_fns_arr = [_]*const dvui.easing.EasingFn{undefined} ** decls.len;
+        var i = 0;
+        for (decls) |decl| {
+            const decl_field = @field(dvui.easing, decl.name);
+            if (@TypeOf(decl_field) == dvui.easing.EasingFn) {
+                easing_names_arr[i] = decl.name;
+                easing_fns_arr[i] = decl_field;
+                i += 1;
+            }
+        }
+        var out_names = [_][]const u8{undefined} ** i;
+        var out_fns = [_]*const dvui.easing.EasingFn{undefined} ** i;
+        @memcpy(&out_names, easing_names_arr[0..i]);
+        @memcpy(&out_fns, easing_fns_arr[0..i]);
+        break :blk .{ out_fns, out_names };
+    };
+
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -3035,7 +3060,7 @@ pub fn animations() !void {
         defer button_wiggle.deinit();
 
         if (dvui.animationGet(button_wiggle.data().id, "xoffset")) |a| {
-            button_wiggle.data().rect.x += 20 * (1.0 - a.lerp()) * (1.0 - a.lerp()) * @sin(a.lerp() * std.math.pi * 50);
+            button_wiggle.data().rect.x += 20 * (1.0 - a.value()) * (1.0 - a.value()) * @sin(a.value() * std.math.pi * 50);
         }
 
         try button_wiggle.install();
@@ -3050,13 +3075,36 @@ pub fn animations() !void {
     }
 
     {
+        var duration_float: f32 = @floatFromInt(@divTrunc(global.duration, std.time.us_per_ms));
+        if (try dvui.sliderEntry(
+            @src(),
+            "Duration {d}ms",
+            .{ .value = &duration_float, .min = 50, .interval = 10, .max = 2_000 },
+            .{ .min_size_content = .{ .w = 200 } },
+        )) {
+            global.duration = @as(i32, @intFromFloat(duration_float)) * std.time.us_per_ms;
+        }
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.labelNoFmt(@src(), "Easing function", .{ .gravity_y = 0.5 });
+
+        if (try dvui.dropdown(@src(), &easing_names, &global.easing_choice, .{})) {
+            global.easing = easing_fns[global.easing_choice];
+        }
+    }
+
+    {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
         try dvui.labelNoFmt(@src(), "Alpha", .{ .gravity_y = 0.5 });
 
         {
-            var animator = try dvui.animate(@src(), .alpha, 500_000, .{});
+            var animator = try dvui.animate(@src(), .{ .kind = .alpha, .duration = global.duration, .easing = global.easing }, .{});
             defer animator.deinit();
 
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
@@ -3079,7 +3127,7 @@ pub fn animations() !void {
         try dvui.labelNoFmt(@src(), "Vertical", .{ .gravity_y = 0.5 });
 
         {
-            var animator = try dvui.animate(@src(), .vertical, 500_000, .{});
+            var animator = try dvui.animate(@src(), .{ .kind = .vertical, .duration = global.duration, .easing = global.easing }, .{});
             defer animator.deinit();
 
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
@@ -3102,7 +3150,7 @@ pub fn animations() !void {
         try dvui.labelNoFmt(@src(), "Horizontal", .{ .gravity_y = 0.5 });
 
         {
-            var animator = try dvui.animate(@src(), .horizontal, 500_000, .{});
+            var animator = try dvui.animate(@src(), .{ .kind = .horizontal, .duration = global.duration, .easing = global.easing }, .{});
             defer animator.deinit();
 
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
