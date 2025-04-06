@@ -4,6 +4,8 @@
 //!
 //! The corresponding function is usually indicated in the doc of each Widget.
 
+// Note : this "intermediate" file is mostly there for nice reference in the docs.
+
 pub const AnimateWidget = @import("widgets/AnimateWidget.zig");
 pub const BoxWidget = @import("widgets/BoxWidget.zig");
 pub const ButtonWidget = @import("widgets/ButtonWidget.zig");
