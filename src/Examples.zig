@@ -3026,6 +3026,31 @@ pub fn dialogs(demo_win_id: u32) !void {
 }
 
 pub fn animations() !void {
+    const global = struct {
+        var easing_choice: usize = 0;
+        var easing: *const dvui.easing.EasingFn = dvui.easing.linear;
+        var duration: i32 = 500_000;
+    };
+    const easing_fns, const easing_names = comptime blk: {
+        const decls = std.meta.declarations(dvui.easing);
+        var easing_names_arr = [_][]const u8{undefined} ** decls.len;
+        var easing_fns_arr = [_]*const dvui.easing.EasingFn{undefined} ** decls.len;
+        var i = 0;
+        for (decls) |decl| {
+            const decl_field = @field(dvui.easing, decl.name);
+            if (@TypeOf(decl_field) == dvui.easing.EasingFn) {
+                easing_names_arr[i] = decl.name;
+                easing_fns_arr[i] = decl_field;
+                i += 1;
+            }
+        }
+        var out_names = [_][]const u8{undefined} ** i;
+        var out_fns = [_]*const dvui.easing.EasingFn{undefined} ** i;
+        @memcpy(&out_names, easing_names_arr[0..i]);
+        @memcpy(&out_fns, easing_fns_arr[0..i]);
+        break :blk .{ out_fns, out_names };
+    };
+
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -3050,13 +3075,36 @@ pub fn animations() !void {
     }
 
     {
+        var duration_float: f32 = @floatFromInt(@divTrunc(global.duration, std.time.us_per_ms));
+        if (try dvui.sliderEntry(
+            @src(),
+            "Duration {d}ms",
+            .{ .value = &duration_float, .min = 50, .interval = 10, .max = 2_000 },
+            .{ .min_size_content = .{ .w = 200 } },
+        )) {
+            global.duration = @as(i32, @intFromFloat(duration_float)) * std.time.us_per_ms;
+        }
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.labelNoFmt(@src(), "Easing function", .{ .gravity_y = 0.5 });
+
+        if (try dvui.dropdown(@src(), &easing_names, &global.easing_choice, .{})) {
+            global.easing = easing_fns[global.easing_choice];
+        }
+    }
+
+    {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
         try dvui.labelNoFmt(@src(), "Alpha", .{ .gravity_y = 0.5 });
 
         {
-            var animator = try dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{});
+            var animator = try dvui.animate(@src(), .{ .kind = .alpha, .duration = global.duration, .easing = global.easing }, .{});
             defer animator.deinit();
 
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
@@ -3079,7 +3127,7 @@ pub fn animations() !void {
         try dvui.labelNoFmt(@src(), "Vertical", .{ .gravity_y = 0.5 });
 
         {
-            var animator = try dvui.animate(@src(), .{ .kind = .vertical, .duration = 500_000 }, .{});
+            var animator = try dvui.animate(@src(), .{ .kind = .vertical, .duration = global.duration, .easing = global.easing }, .{});
             defer animator.deinit();
 
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
@@ -3102,7 +3150,7 @@ pub fn animations() !void {
         try dvui.labelNoFmt(@src(), "Horizontal", .{ .gravity_y = 0.5 });
 
         {
-            var animator = try dvui.animate(@src(), .{ .kind = .horizontal, .duration = 500_000 }, .{});
+            var animator = try dvui.animate(@src(), .{ .kind = .horizontal, .duration = global.duration, .easing = global.easing }, .{});
             defer animator.deinit();
 
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
