@@ -3056,7 +3056,7 @@ pub fn animations() !void {
         try dvui.labelNoFmt(@src(), "Alpha", .{ .gravity_y = 0.5 });
 
         {
-            var animator = try dvui.animate(@src(), .alpha, 500_000, .{});
+            var animator = try dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{});
             defer animator.deinit();
 
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
@@ -3079,7 +3079,7 @@ pub fn animations() !void {
         try dvui.labelNoFmt(@src(), "Vertical", .{ .gravity_y = 0.5 });
 
         {
-            var animator = try dvui.animate(@src(), .vertical, 500_000, .{});
+            var animator = try dvui.animate(@src(), .{ .kind = .vertical, .duration = 500_000 }, .{});
             defer animator.deinit();
 
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
@@ -3102,7 +3102,7 @@ pub fn animations() !void {
         try dvui.labelNoFmt(@src(), "Horizontal", .{ .gravity_y = 0.5 });
 
         {
-            var animator = try dvui.animate(@src(), .horizontal, 500_000, .{});
+            var animator = try dvui.animate(@src(), .{ .kind = .horizontal, .duration = 500_000 }, .{});
             defer animator.deinit();
 
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
