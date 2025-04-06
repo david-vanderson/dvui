@@ -417,7 +417,7 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
                 }
             }
         },
-        .scroll_propogate => |sp| {
+        .scroll_propagate => |sp| {
             self.processMotionScrollEvent(e, sp.motion);
         },
         else => {},
@@ -433,22 +433,22 @@ pub fn processMotionScrollEvent(self: *ScrollContainerWidget, e: *dvui.Event, mo
 
     const rs = self.wd.borderRectScale();
 
-    // Whether to propogate out to any containing scroll
-    // containers. Propogate unless we did the whole scroll
+    // Whether to propagate out to any containing scroll
+    // containers. Propagate unless we did the whole scroll
     // in the main direction of movement.
     //
     // This helps prevent spurious propogation from a text
     // entry box where you are trying to scroll vertically
     // but the motion event has a small amount of
     // horizontal.
-    var propogate: bool = true;
+    var propagate: bool = true;
 
     if (self.si.vertical != .none) {
         self.si.viewport.y -= motion.y / rs.s;
         self.si.velocity.y = -motion.y / rs.s;
         dvui.refresh(null, @src(), self.wd.id);
         if (@abs(motion.y) > @abs(motion.x) and self.si.viewport.y >= 0 and self.si.viewport.y <= self.si.scrollMax(.vertical)) {
-            propogate = false;
+            propagate = false;
         }
     }
     if (self.si.horizontal != .none) {
@@ -456,12 +456,12 @@ pub fn processMotionScrollEvent(self: *ScrollContainerWidget, e: *dvui.Event, mo
         self.si.velocity.x = -motion.x / rs.s;
         dvui.refresh(null, @src(), self.wd.id);
         if (@abs(motion.x) > @abs(motion.y) and self.si.viewport.x >= 0 and self.si.viewport.x <= self.si.scrollMax(.horizontal)) {
-            propogate = false;
+            propagate = false;
         }
     }
 
-    if (propogate) {
-        var scrollprop = Event{ .evt = .{ .scroll_propogate = .{ .motion = motion } } };
+    if (propagate) {
+        var scrollprop = Event{ .evt = .{ .scroll_propagate = .{ .motion = motion } } };
         self.wd.parent.processEvent(&scrollprop, true);
     }
 }
@@ -496,7 +496,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     // horizontal
                     if (self.si.scrollMax(.vertical) > 0) {
                         if ((me.action.wheel_y > 0 and self.si.viewport.y <= 0) or (me.action.wheel_y < 0 and self.si.viewport.y >= self.si.scrollMax(.vertical))) {
-                            // try horizontal or propogate the scroll event because we are already maxxed out
+                            // try horizontal or propagate the scroll event because we are already maxxed out
                         } else {
                             e.handled = true;
                             self.si.scrollByOffset(.vertical, -me.action.wheel_y);
@@ -504,7 +504,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                         }
                     } else if (self.si.scrollMax(.horizontal) > 0) {
                         if ((me.action.wheel_y > 0 and self.si.viewport.x <= 0) or (me.action.wheel_y < 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
-                            // propogate the scroll event because we are already maxxed out
+                            // propagate the scroll event because we are already maxxed out
                         } else {
                             e.handled = true;
                             self.si.scrollByOffset(.horizontal, -me.action.wheel_y);
