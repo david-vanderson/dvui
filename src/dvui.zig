@@ -1,3 +1,13 @@
+//! [DVUI](https://david-vanderson.github.io/) is a general purpose Zig GUI toolkit.
+//!
+//! `dvui` module contains all the top level declarations provide all declarations required by client code. - i.e. `const dvui = @import("dvui");` is the only required import.
+//!
+//! Most UI element are expected to be created via high level function like `dvui.button`, which instantiate the corresponding lower level `dvui.ButtonWidget` for you.
+//!
+//! Custom widget can be done for simple cases my combining different high level function. For more advance usages, the user is expected to copy-paste the content of the high level functions as a starting point to combine the widgets on the lower level. More informations is available in the [project's readme](https://github.com/david-vanderson/dvui/blob/main/README.md).
+//!
+//! A complete list of available widgets can be found under `dvui.widgets`.
+//!
 const builtin = @import("builtin");
 const std = @import("std");
 pub const backend = @import("backend");
@@ -7,8 +17,9 @@ pub const math = std.math;
 pub const fnv = std.hash.Fnv1a_32;
 
 pub const Backend = @import("Backend.zig");
-pub const Color = @import("Color.zig");
 pub const Examples = @import("Examples.zig");
+
+pub const Color = @import("Color.zig");
 pub const Event = @import("Event.zig");
 pub const Font = @import("Font.zig");
 pub const Options = @import("Options.zig");
@@ -21,32 +32,34 @@ pub const Theme = @import("Theme.zig");
 pub const Vertex = @import("Vertex.zig");
 pub const Widget = @import("Widget.zig");
 pub const WidgetData = @import("WidgetData.zig");
+
 pub const entypo = @import("icons/entypo.zig");
-pub const AnimateWidget = @import("widgets/AnimateWidget.zig");
-pub const BoxWidget = @import("widgets/BoxWidget.zig");
-pub const CacheWidget = @import("widgets/CacheWidget.zig");
-pub const FlexBoxWidget = @import("widgets/FlexBoxWidget.zig");
-pub const ReorderWidget = @import("widgets/ReorderWidget.zig");
+
+pub const AnimateWidget = @import("widgets.zig").AnimateWidget;
+pub const BoxWidget = @import("widgets.zig").BoxWidget;
+pub const CacheWidget = @import("widgets.zig").CacheWidget;
+pub const FlexBoxWidget = @import("widgets.zig").FlexBoxWidget;
+pub const ReorderWidget = @import("widgets.zig").ReorderWidget;
 pub const Reorderable = ReorderWidget.Reorderable;
-pub const ButtonWidget = @import("widgets/ButtonWidget.zig");
-pub const ContextWidget = @import("widgets/ContextWidget.zig");
-pub const FloatingWindowWidget = @import("widgets/FloatingWindowWidget.zig");
-pub const FloatingWidget = @import("widgets/FloatingWidget.zig");
-pub const FloatingTooltipWidget = @import("widgets/FloatingTooltipWidget.zig");
-pub const FloatingMenuWidget = @import("widgets/FloatingMenuWidget.zig");
-pub const IconWidget = @import("widgets/IconWidget.zig");
-pub const LabelWidget = @import("widgets/LabelWidget.zig");
-pub const MenuWidget = @import("widgets/MenuWidget.zig");
-pub const MenuItemWidget = @import("widgets/MenuItemWidget.zig");
-pub const OverlayWidget = @import("widgets/OverlayWidget.zig");
-pub const PanedWidget = @import("widgets/PanedWidget.zig");
-pub const ScaleWidget = @import("widgets/ScaleWidget.zig");
-pub const ScrollAreaWidget = @import("widgets/ScrollAreaWidget.zig");
-pub const ScrollBarWidget = @import("widgets/ScrollBarWidget.zig");
-pub const ScrollContainerWidget = @import("widgets/ScrollContainerWidget.zig");
-pub const TextEntryWidget = @import("widgets/TextEntryWidget.zig");
-pub const TextLayoutWidget = @import("widgets/TextLayoutWidget.zig");
-pub const VirtualParentWidget = @import("widgets/VirtualParentWidget.zig");
+pub const ButtonWidget = @import("widgets.zig").ButtonWidget;
+pub const ContextWidget = @import("widgets.zig").ContextWidget;
+pub const FloatingWindowWidget = @import("widgets.zig").FloatingWindowWidget;
+pub const FloatingWidget = @import("widgets.zig").FloatingWidget;
+pub const FloatingTooltipWidget = @import("widgets.zig").FloatingTooltipWidget;
+pub const FloatingMenuWidget = @import("widgets.zig").FloatingMenuWidget;
+pub const IconWidget = @import("widgets.zig").IconWidget;
+pub const LabelWidget = @import("widgets.zig").LabelWidget;
+pub const MenuWidget = @import("widgets.zig").MenuWidget;
+pub const MenuItemWidget = @import("widgets.zig").MenuItemWidget;
+pub const OverlayWidget = @import("widgets.zig").OverlayWidget;
+pub const PanedWidget = @import("widgets.zig").PanedWidget;
+pub const ScaleWidget = @import("widgets.zig").ScaleWidget;
+pub const ScrollAreaWidget = @import("widgets.zig").ScrollAreaWidget;
+pub const ScrollBarWidget = @import("widgets.zig").ScrollBarWidget;
+pub const ScrollContainerWidget = @import("widgets.zig").ScrollContainerWidget;
+pub const TextEntryWidget = @import("widgets.zig").TextEntryWidget;
+pub const TextLayoutWidget = @import("widgets.zig").TextLayoutWidget;
+pub const VirtualParentWidget = @import("widgets.zig").VirtualParentWidget;
 
 const se = @import("structEntry.zig");
 pub const structEntry = se.structEntry;
