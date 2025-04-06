@@ -5038,7 +5038,7 @@ pub fn toastDisplay(id: u32) !void {
         return;
     };
 
-    var animator = try dvui.animate(@src(), .alpha, 500_000, .{ .id_extra = id });
+    var animator = try dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{ .id_extra = id });
     defer animator.deinit();
     try dvui.labelNoFmt(@src(), message, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = Rect.all(8) });
 
@@ -5051,9 +5051,9 @@ pub fn toastDisplay(id: u32) !void {
     }
 }
 
-pub fn animate(src: std.builtin.SourceLocation, kind: AnimateWidget.Kind, duration_micros: i32, opts: Options) !*AnimateWidget {
+pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) !*AnimateWidget {
     var ret = try currentWindow().arena().create(AnimateWidget);
-    ret.* = AnimateWidget.init(src, kind, duration_micros, opts);
+    ret.* = AnimateWidget.init(src, init_opts, opts);
     try ret.install();
     return ret;
 }
