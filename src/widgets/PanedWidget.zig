@@ -83,7 +83,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     }
 
     if (dvui.animationGet(self.wd.id, "_split_ratio")) |a| {
-        self.split_ratio = a.lerp();
+        self.split_ratio = a.value();
 
         if (self.collapsing and a.done()) {
             self.collapsing = false;

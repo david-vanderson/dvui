@@ -94,7 +94,7 @@ const AnimatingDialog = struct {
         const winHeight = win.data().rect.h;
 
         if (dvui.animationGet(win.data().id, "rect_percent")) |a| {
-            win.data().rect.h *= a.lerp();
+            win.data().rect.h *= a.value();
 
             // mucking with the window size can screw up the windows auto sizing, so force it
             win.autoSize();
@@ -171,8 +171,8 @@ pub fn animatingWindowRect(src: std.builtin.SourceLocation, rect: *Rect, show_fl
     if (dvui.animationGet(fwin_id, "rect_percent")) |a| {
         if (dvui.dataGet(null, fwin_id, "size", Size)) |ss| {
             var r = rect.*;
-            const dw = ss.w * a.lerp();
-            const dh = ss.h * a.lerp();
+            const dw = ss.w * a.value();
+            const dh = ss.h * a.value();
             r.x = r.x + (r.w / 2) - (dw / 2);
             r.w = dw;
             r.y = r.y + (r.h / 2) - (dh / 2);
@@ -1000,7 +1000,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
         if (dvui.animationGet(hbox.data().id, "enter_pressed")) |a| {
             const prev_alpha = dvui.themeGet().alpha;
-            dvui.themeGet().alpha *= a.lerp();
+            dvui.themeGet().alpha *= a.value();
             try dvui.label(@src(), "Enter!", .{}, .{ .gravity_y = 0.5 });
             dvui.themeGet().alpha = prev_alpha;
         }
@@ -1297,7 +1297,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
                 if (dvui.animationGet(hbox.data().id, "value_changed")) |a| {
                     const prev_alpha = dvui.themeGet().alpha;
-                    dvui.themeGet().alpha *= a.lerp();
+                    dvui.themeGet().alpha *= a.value();
                     try dvui.label(@src(), "Changed!", .{}, .{ .gravity_y = 0.5 });
                     dvui.themeGet().alpha = prev_alpha;
                 }
@@ -3060,7 +3060,7 @@ pub fn animations() !void {
         defer button_wiggle.deinit();
 
         if (dvui.animationGet(button_wiggle.data().id, "xoffset")) |a| {
-            button_wiggle.data().rect.x += 20 * (1.0 - a.lerp()) * (1.0 - a.lerp()) * @sin(a.lerp() * std.math.pi * 50);
+            button_wiggle.data().rect.x += 20 * (1.0 - a.value()) * (1.0 - a.value()) * @sin(a.value() * std.math.pi * 50);
         }
 
         try button_wiggle.install();

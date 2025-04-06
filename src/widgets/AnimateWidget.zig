@@ -45,9 +45,9 @@ pub fn install(self: *AnimateWidget) !void {
     }
 
     if (dvui.animationGet(self.wd.id, "_end")) |a| {
-        self.val = a.lerp();
+        self.val = a.value();
     } else if (dvui.animationGet(self.wd.id, "_start")) |a| {
-        self.val = a.lerp();
+        self.val = a.value();
     }
 
     if (self.val) |v| {
