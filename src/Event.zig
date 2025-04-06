@@ -10,7 +10,7 @@ const Event = @This();
 handled: bool = false,
 focus_windowId: ?u32 = null,
 focus_widgetId: ?u32 = null,
-// num increments withing a frame, used in focusRemainingEvents
+// num increments within a frame, used in focusRemainingEvents
 num: u16 = 0,
 evt: union(enum) {
     // non-bubbleable
