@@ -142,28 +142,28 @@ pub var current_window: ?*Window = null;
 /// Get the current `dvui.Window` which corresponds to the OS window we are
 /// currently adding widgets to.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn currentWindow() *Window {
     return current_window orelse unreachable;
 }
 
 /// Get a pointer to the active theme.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn themeGet() *Theme {
     return &currentWindow().theme;
 }
 
 /// Set the active theme (copies into internal storage).
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn themeSet(theme: *const Theme) void {
     currentWindow().theme = theme.*;
 }
 
 /// Toggle showing the debug window (run during Window.end()).
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn toggleDebugWindow() void {
     var cw = currentWindow();
     cw.debug_window_show = !cw.debug_window_show;
@@ -171,7 +171,7 @@ pub fn toggleDebugWindow() void {
 
 /// Help left-align widgets by adding horizontal spacers.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub const Alignment = struct {
     id: u32 = undefined,
     scale: f32 = undefined,
@@ -338,7 +338,7 @@ pub fn placeOnScreen(screen: Rect, spawner: Rect, avoid: PlaceOnScreenAvoid, sta
 ///
 /// Updated during Window.begin().  Will not go backwards.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn frameTimeNS() i128 {
     return currentWindow().frame_time_ns;
 }
@@ -358,7 +358,7 @@ pub const FontBytesEntry = struct {
 /// If ttf_bytes_allocator is not null, it will be used to free ttf_bytes in
 /// Window.deinit().
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) !void {
     var cw = currentWindow();
     try cw.font_bytes.put(name, FontBytesEntry{ .ttf_bytes = ttf_bytes, .allocator = ttf_bytes_allocator });
@@ -824,7 +824,7 @@ pub const TextureCacheEntry = struct {
 
 /// Get the width of an icon at a specified height.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
     if (height == 0) return 0.0;
     var stream = std.io.fixedBufferStream(tvg_bytes);
@@ -839,7 +839,7 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
 
 /// Render tvg_bytes at height into a texture.  Name is for debugging.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !TextureCacheEntry {
     var cw = currentWindow();
     const icon_hash = TextureCacheEntry.hash(tvg_bytes, height);
@@ -910,7 +910,7 @@ pub const RenderCommand = struct {
 /// Id of the currently focused subwindow.  Used by FloatingMenuWidget to
 /// detect when to stop showing.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn focusedSubwindowId() u32 {
     const cw = currentWindow();
     const sw = cw.subwindowFocused();
@@ -922,7 +922,7 @@ pub fn focusedSubwindowId() u32 {
 /// If you are doing this in response to an event, you can pass that event's
 /// "num" to change the focus of any further events in the list.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn focusSubwindow(subwindow_id: ?u32, event_num: ?u16) void {
     currentWindow().focusSubwindowInternal(subwindow_id, event_num);
 }
@@ -938,7 +938,7 @@ pub fn focusRemainingEvents(event_num: u16, focusWindowId: u32, focusWidgetId: ?
 ///
 /// Any subwindows directly above it with "stay_above_parent_window" set will also be moved to stay above it.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn raiseSubwindow(subwindow_id: u32) void {
     const cw = currentWindow();
     // don't check against subwindows[0] - that's that main window
@@ -981,7 +981,7 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
 /// If you are doing this in response to an event, you can pass that event's
 /// "num" to change the focus of any further events in the list.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn focusWidget(id: ?u32, subwindow_id: ?u32, event_num: ?u16) void {
     const cw = currentWindow();
     const swid = subwindow_id orelse subwindowCurrentId();
@@ -1001,7 +1001,7 @@ pub fn focusWidget(id: ?u32, subwindow_id: ?u32, event_num: ?u16) void {
 
 /// Id of the focused widget (if any) in the focused subwindow.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn focusedWidgetId() ?u32 {
     const cw = currentWindow();
     for (cw.subwindows.items) |*sw| {
@@ -1015,7 +1015,7 @@ pub fn focusedWidgetId() ?u32 {
 
 /// Id of the focused widget (if any) in the current subwindow.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn focusedWidgetIdInCurrentSubwindow() ?u32 {
     const cw = currentWindow();
     const sw = cw.subwindowCurrent();
@@ -1028,14 +1028,14 @@ pub fn focusedWidgetIdInCurrentSubwindow() ?u32 {
 /// If two calls to this function return different values, then some widget
 /// that ran between them had focus.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn lastFocusedIdInFrame() u32 {
     return currentWindow().last_focused_id_this_frame;
 }
 
 /// Set cursor the app should use if not already set this frame.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn cursorSet(cursor: enums.Cursor) void {
     const cw = currentWindow();
     if (cw.cursor_requested == null) {
@@ -1052,7 +1052,7 @@ pub fn cursorSet(cursor: enums.Cursor) void {
 /// - w is bottom-right corner
 /// - h is bottom-left corner
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn pathAddRect(path: *std.ArrayList(Point), r: Rect, radius: Rect) !void {
     var rad = radius;
     const maxrad = @min(r.w, r.h) / 2;
@@ -1077,7 +1077,7 @@ pub fn pathAddRect(path: *std.ArrayList(Point), r: Rect, radius: Rect) !void {
 /// If skip_end, the final point will not be added.  Useful if the next
 /// addition to path would duplicate the end of the arc.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn pathAddArc(path: *std.ArrayList(Point), center: Point, radius: f32, start: f32, end: f32, skip_end: bool) !void {
     if (radius == 0) {
         try path.append(center);
@@ -1112,7 +1112,7 @@ pub fn pathAddArc(path: *std.ArrayList(Point), center: Point, radius: f32, start
 
 /// Fill path (must be convex) with color.  See Rect.fill().
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn pathFillConvex(path: []const Point, color: Color) !void {
     if (path.len < 3) {
         return;
@@ -1228,7 +1228,7 @@ pub const PathStrokeOptions = struct {
 
 /// Stroke path as a series of line segments.  See Rect.stroke().
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn pathStroke(path: []const Point, thickness: f32, color: Color, opts: PathStrokeOptions) !void {
     if (path.len == 0) {
         return;
@@ -1521,7 +1521,7 @@ pub fn pathStrokeRaw(path: []const Point, thickness: f32, color: Color, closed_i
 /// in which multiple subwindows are drawn and which subwindow mouse events are
 /// tagged with.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_above_parent_window: ?u32) !void {
     const cw = currentWindow();
     const arena = cw.arena();
@@ -1579,7 +1579,7 @@ pub const subwindowCurrentSetReturn = struct {
 /// Used by floating windows (subwindows) to install themselves as the current
 /// subwindow (the subwindow that widgets run now will be in).
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowCurrentSet(id: u32, rect: ?Rect) subwindowCurrentSetReturn {
     const cw = currentWindow();
     const ret: subwindowCurrentSetReturn = .{ .id = cw.subwindow_currentId, .rect = cw.subwindow_currentRect };
@@ -1592,7 +1592,7 @@ pub fn subwindowCurrentSet(id: u32, rect: ?Rect) subwindowCurrentSetReturn {
 
 /// Id of current subwindow (the one widgets run now will be in).
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn subwindowCurrentId() u32 {
     const cw = currentWindow();
     return cw.subwindow_currentId;
@@ -1627,7 +1627,7 @@ pub const DragStartOptions = struct {
 ///
 /// See dragStart() to immediately start a drag.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn dragPreStart(p: Point, options: DragStartOptions) void {
     const cw = currentWindow();
     cw.drag_state = .prestart;
@@ -1648,7 +1648,7 @@ pub fn dragPreStart(p: Point, options: DragStartOptions) void {
 /// during the drag, the dragOffset() is added to the current mouse location to
 /// recover where to move the true corner.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn dragStart(p: Point, options: DragStartOptions) void {
     const cw = currentWindow();
     cw.drag_state = .dragging;
@@ -1660,7 +1660,7 @@ pub fn dragStart(p: Point, options: DragStartOptions) void {
 
 /// Get offset previously given to dragPreStart() or dragStart().  See those.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn dragOffset() Point {
     const cw = currentWindow();
     return cw.drag_offset;
@@ -1670,7 +1670,7 @@ pub fn dragOffset() Point {
 /// previous dragging call or the drag starting location (from dragPreStart()
 /// or dragStart()).  Otherwise return null, meaning a drag hasn't started yet.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn dragging(p: Point) ?Point {
     const cw = currentWindow();
     switch (cw.drag_state) {
@@ -1698,7 +1698,7 @@ pub fn dragging(p: Point) ?Point {
 ///
 /// Useful for cross-widget drags.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn draggingName(name: []const u8) bool {
     const cw = currentWindow();
     return cw.drag_state == .dragging and cw.drag_name.len > 0 and std.mem.eql(u8, name, cw.drag_name);
@@ -1706,7 +1706,7 @@ pub fn draggingName(name: []const u8) bool {
 
 /// Stop any mouse drag.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn dragEnd() void {
     const cw = currentWindow();
     cw.drag_state = .none;
@@ -1715,7 +1715,7 @@ pub fn dragEnd() void {
 /// The difference between the final mouse position this frame and last frame.
 /// Use mouseTotalMotion().nonZero() to detect if any mouse motion has occurred.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn mouseTotalMotion() Point {
     const cw = currentWindow();
     return Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
@@ -1738,7 +1738,7 @@ pub const CaptureMouse = struct {
 /// be presented to widgets who's rect overlap with the widget holding the capture.
 /// (which is what you would expect for e.g. background highlight)
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouse(wd: ?*WidgetData) void {
     const cm = if (wd) |data| CaptureMouse{
         .id = data.id,
@@ -1750,7 +1750,7 @@ pub fn captureMouse(wd: ?*WidgetData) void {
 /// In most cases, use captureMouse() but if you want to customize the
 /// "capture zone" you can use this function instead.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouseCustom(cm: ?CaptureMouse) void {
     const cw = currentWindow();
     cw.capture = cm;
@@ -1763,7 +1763,7 @@ pub fn captureMouseCustom(cm: ?CaptureMouse) void {
 ///
 /// This can be called every frame regardless of capture.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouseMaintain(cm: CaptureMouse) void {
     const cw = currentWindow();
     if (cw.capture != null and cw.capture.?.id == cm.id) {
@@ -1793,7 +1793,7 @@ pub fn captureMouseMaintain(cm: CaptureMouse) void {
 
 /// Test if the passed widget ID currently has mouse capture.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn captured(id: u32) bool {
     if (captureMouseGet()) |cm| {
         return id == cm.id;
@@ -1803,14 +1803,14 @@ pub fn captured(id: u32) bool {
 
 /// Get the widget ID that currently has mouse capture or null if none.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouseGet() ?CaptureMouse {
     return currentWindow().capture;
 }
 
 /// Get current screen rectangle in pixels that drawing is being clipped to.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn clipGet() Rect {
     return currentWindow().clipRect;
 }
@@ -1820,7 +1820,7 @@ pub fn clipGet() Rect {
 ///
 /// Returns the previous clipping rect, use clipSet to restore it.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn clip(new: Rect) Rect {
     const cw = currentWindow();
     const ret = cw.clipRect;
@@ -1830,7 +1830,7 @@ pub fn clip(new: Rect) Rect {
 
 /// Set the current clipping rect to the given rect (in pixels).
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn clipSet(r: Rect) void {
     currentWindow().clipRect = r;
 }
@@ -1841,7 +1841,7 @@ pub fn clipSet(r: Rect) void {
 ///
 /// Returns the previous setting.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn snapToPixelsSet(snap: bool) bool {
     const cw = currentWindow();
     const old = cw.snap_to_pixels;
@@ -1851,7 +1851,7 @@ pub fn snapToPixelsSet(snap: bool) bool {
 
 /// Get current snap_to_pixels setting.  See snapToPixelsSet().
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn snapToPixels() bool {
     const cw = currentWindow();
     return cw.snap_to_pixels;
@@ -1888,7 +1888,7 @@ pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?u32) void {
 
 /// Get the textual content of the system clipboard.  Caller must copy.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn clipboardText() error{OutOfMemory}![]const u8 {
     const cw = currentWindow();
     return cw.backend.clipboardText();
@@ -1896,7 +1896,7 @@ pub fn clipboardText() error{OutOfMemory}![]const u8 {
 
 /// Set the textual content of the system clipboard.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn clipboardTextSet(text: []const u8) error{OutOfMemory}!void {
     const cw = currentWindow();
     try cw.backend.clipboardTextSet(text);
@@ -1904,7 +1904,7 @@ pub fn clipboardTextSet(text: []const u8) error{OutOfMemory}!void {
 
 /// Ask the system to open the given url.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn openURL(url: []const u8) !void {
     const cw = currentWindow();
     try cw.backend.openURL(url);
@@ -1913,14 +1913,14 @@ pub fn openURL(url: []const u8) !void {
 /// Seconds elapsed between last frame and current.  This value can be quite
 /// high after a period with no user interaction.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn secondsSinceLastFrame() f32 {
     return currentWindow().secs_since_last_frame;
 }
 
 /// Average frames per second over the past 30 frames.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn FPS() f32 {
     return currentWindow().FPS();
 }
@@ -1930,14 +1930,14 @@ pub fn FPS() f32 {
 /// dvui.parentGet().extendId(@src(), id_extra) is how new widgets get their
 /// id, and can be used to make a unique id without making a widget.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn parentGet() Widget {
     return currentWindow().wd.parent;
 }
 
 /// Make w the new parent widget.  See parentGet().
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn parentSet(w: Widget) void {
     const cw = currentWindow();
     cw.wd.parent = w;
@@ -1948,7 +1948,7 @@ pub fn parentSet(w: Widget) void {
 /// Pass the current parent's id.  This is used to detect a coding error where
 /// a widget's deinit() was accidentally not called.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn parentReset(id: u32, w: Widget) void {
     const cw = currentWindow();
     const actual_current = cw.wd.parent.data().id;
@@ -1979,7 +1979,7 @@ pub fn parentReset(id: u32, w: Widget) void {
 ///
 /// If false, the render functions defer until Window.end().
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderingSet(r: bool) bool {
     const cw = currentWindow();
     const ret = cw.render_target.rendering;
@@ -1992,7 +1992,7 @@ pub fn renderingSet(r: bool) bool {
 ///
 /// Natural pixels is the unit for subwindow sizing and placement.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn windowRect() Rect {
     return currentWindow().wd.rect;
 }
@@ -2001,7 +2001,7 @@ pub fn windowRect() Rect {
 ///
 /// Pixels is the unit for rendering and user input.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn windowRectPixels() Rect {
     return currentWindow().rect_pixels;
 }
@@ -2010,7 +2010,7 @@ pub fn windowRectPixels() Rect {
 /// and the scale factor is how many pixels per natural pixel.  See
 /// windowRect().
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn windowRectScale() RectScale {
     return .{ .r = currentWindow().rect_pixels, .s = currentWindow().natural_scale };
 }
@@ -2019,7 +2019,7 @@ pub fn windowRectScale() RectScale {
 /// converting between user input and subwindow size/position.  See
 /// windowRect().
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn windowNaturalScale() f32 {
     return currentWindow().natural_scale;
 }
@@ -2030,7 +2030,7 @@ pub fn windowNaturalScale() f32 {
 /// If a widget is not seen for a frame, its min size will be forgotten and
 /// firstFrame will return true the next frame we see it.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn firstFrame(id: u32) bool {
     return minSizeGet(id) == null;
 }
@@ -2041,7 +2041,7 @@ pub fn firstFrame(id: u32) bool {
 /// Usually you want minSize() to combine min size from last frame with a min
 /// size provided by the user code.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn minSizeGet(id: u32) ?Size {
     var cw = currentWindow();
     const saved_size = cw.min_sizes.getPtr(id);
@@ -2056,7 +2056,7 @@ pub fn minSizeGet(id: u32) ?Size {
 ///
 /// See minSizeGet() to get only the min size from last frame.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn minSize(id: u32, min_size: Size) Size {
     var size = min_size;
 
@@ -2401,14 +2401,14 @@ pub fn placeIn(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravit
 
 /// Get the slice of Events for this frame.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn events() []Event {
     return currentWindow().events.items;
 }
 
 /// Wrapper around eventMatch for normal usage.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn eventMatchSimple(e: *Event, wd: *WidgetData) bool {
     return eventMatch(e, .{ .id = wd.id, .r = wd.borderRectScale().r });
 }
@@ -2437,7 +2437,7 @@ pub const EventMatchOptions = struct {
 /// internally but might extend the logic, or use that function to track state
 /// (like whether a modifier key is being pressed).
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     if (e.handled) return false;
 
@@ -2561,7 +2561,7 @@ pub const Animation = struct {
 
 /// Add animation a to key associated with id.  See Animation.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn animation(id: u32, key: []const u8, a: Animation) void {
     var cw = currentWindow();
     const h = hashIdKey(id, key);
@@ -2574,7 +2574,7 @@ pub fn animation(id: u32, key: []const u8, a: Animation) void {
 
 /// Retrieve an animation previously added with animation().  See Animation.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn animationGet(id: u32, key: []const u8) ?Animation {
     var cw = currentWindow();
     const h = hashIdKey(id, key);
@@ -2590,7 +2590,7 @@ pub fn animationGet(id: u32, key: []const u8) ?Animation {
 /// Add a timer for id that will be timerDone() on the first frame after micros
 /// has passed.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn timer(id: u32, micros: i32) !void {
     try currentWindow().timer(id, micros);
 }
@@ -2599,7 +2599,7 @@ pub fn timer(id: u32, micros: i32) !void {
 /// timerDone(), this value will be <= 0 and represents how many micros this
 /// frame is past the timer expiration.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn timerGet(id: u32) ?i32 {
     if (animationGet(id, "_timer")) |a| {
         return a.end_time;
@@ -2610,7 +2610,7 @@ pub fn timerGet(id: u32) ?i32 {
 
 /// Return true on the first frame after a timer has expired.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn timerDone(id: u32) bool {
     if (timerGet(id)) |end_time| {
         if (end_time <= 0) {
@@ -2624,7 +2624,7 @@ pub fn timerDone(id: u32) bool {
 /// Return true if timerDone() or if there is no timer.  Useful for periodic
 /// events (see Clock example).
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn timerDoneOrNone(id: u32) bool {
     return timerDone(id) or (timerGet(id) == null);
 }
@@ -2644,7 +2644,7 @@ pub const TabIndex = struct {
 /// A null tab_index means it will be visited after all normal values.  All
 /// null widgets are visited in order of calling tabIndexSet.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn tabIndexSet(widget_id: u32, tab_index: ?u16) !void {
     if (tab_index != null and tab_index.? == 0)
         return;
@@ -2659,7 +2659,7 @@ pub fn tabIndexSet(widget_id: u32, tab_index: ?u16) !void {
 /// If you are calling this due to processing an event, you can pass Event.num
 /// and any further events will have their focus adjusted.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn tabIndexNext(event_num: ?u16) void {
     const cw = currentWindow();
     const widgetId = focusedWidgetId();
@@ -2705,7 +2705,7 @@ pub fn tabIndexNext(event_num: ?u16) void {
 /// If you are calling this due to processing an event, you can pass Event.num
 /// and any further events will have their focus adjusted.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn tabIndexPrev(event_num: ?u16) void {
     const cw = currentWindow();
     const widgetId = focusedWidgetId();
@@ -2755,7 +2755,7 @@ pub fn tabIndexPrev(event_num: ?u16) void {
 /// * text input should happen (maybe shows an on screen keyboard)
 /// * rect on screen (position possible IME window)
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn wantTextInput(r: Rect) void {
     const cw = currentWindow();
     cw.text_input_rect = r.scale(1 / cw.natural_scale);
@@ -3603,7 +3603,7 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
 /// The menu code should happen before deinit(), but don't put regular widgets
 /// directly inside Context.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) !*ContextWidget {
     var ret = try currentWindow().arena().create(ContextWidget);
     ret.* = ContextWidget.init(src, init_opts, opts);
@@ -3990,7 +3990,7 @@ pub const ImageInitOptions = struct {
 
 /// Show raster image.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts: Options) !WidgetData {
     const options = (Options{ .name = init_opts.name }).override(opts);
 
@@ -5453,7 +5453,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 ///
 /// Remember to destroy the texture at some point, see textureDestroyLater().
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin` and `Window.end`.
 pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enums.TextureInterpolation) Texture {
     return currentWindow().backend.textureCreate(pixels, width, height, interpolation);
 }
@@ -5463,7 +5463,7 @@ pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enum
 ///
 /// Remember to destroy the texture at some point, see textureDestroyLater().
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.TextureInterpolation) !Texture {
     return try currentWindow().backend.textureCreateTarget(width, height, interpolation);
 }
@@ -5472,7 +5472,7 @@ pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.Texture
 ///
 /// Returns pixels allocated by arena.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn textureRead(arena: std.mem.Allocator, texture: Texture) ![]u8 {
     const size: usize = texture.width * texture.height * 4;
     const pixels = try arena.alloc(u8, size);
@@ -5490,7 +5490,7 @@ pub fn textureRead(arena: std.mem.Allocator, texture: Texture) ![]u8 {
 /// function deferres the destruction until the end of the frame, so it is safe
 /// to use even in a subwindow where rendering is deferred.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn textureDestroyLater(texture: Texture) void {
     currentWindow().texture_trash.append(texture) catch |err| {
         dvui.log.err("textureDestroyLater got {!}\n", .{err});
@@ -5512,7 +5512,7 @@ pub const RenderTarget = struct {
 /// Useful for caching expensive renders or to save a render for export.  See
 /// Picture.
 ///
-/// Only valid between dvui.Window.begin() and end().
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn renderTarget(args: RenderTarget) RenderTarget {
     var cw = currentWindow();
     const ret = cw.render_target;
@@ -5695,7 +5695,7 @@ pub const Picture = struct {
     ///
     /// Returns null if backend does not support texture targets.
     ///
-    /// Only valid between dvui.Window.begin() and end().
+    /// Only valid between `Window.begin`and `Window.end`.
     pub fn start(rect: Rect) ?Picture {
         var ret: Picture = .{ .r = rect };
 
