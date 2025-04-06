@@ -123,14 +123,14 @@ pub fn outBounce(t: f32) f32 {
     if (t < 1 / div) {
         return mult * t * t;
     } else if (t < 2 / div) {
-        t -= 1.5 / div;
-        return mult * t * t + 0.75;
+        const x = t - 1.5 / div;
+        return mult * x * x + 0.75;
     } else if (t < 2.5 / div) {
-        t -= 2.25 / div;
-        return mult * t * t + 0.9375;
+        const x = t - 2.25 / div;
+        return mult * x * x + 0.9375;
     } else {
-        t -= 2.625 / div;
-        return mult * t * t + 0.984375;
+        const x = t - 2.625 / div;
+        return mult * x * x + 0.984375;
     }
 }
 pub fn inOutBounce(t: f32) f32 {
