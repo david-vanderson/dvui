@@ -332,7 +332,7 @@ pub fn textSet(self: *TextEntryWidget, text: []const u8, selected: bool) void {
 pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
     if (new.len == 0) return;
 
-    // strip out carraige returns, which we get from copy/paste on windows
+    // strip out carriage returns, which we get from copy/paste on windows
     if (std.mem.indexOfScalar(u8, new, '\r')) |idx| {
         self.textTyped(new[0..idx], selected);
         self.textTyped(new[idx + 1 ..], selected);

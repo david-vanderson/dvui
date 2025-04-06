@@ -1691,7 +1691,7 @@ pub fn dragEnd() void {
 }
 
 /// The difference between the final mouse position this frame and last frame.
-/// Use mouseTotalMotion().nonZero() to detect if any mouse motion has occured.
+/// Use mouseTotalMotion().nonZero() to detect if any mouse motion has occurred.
 ///
 /// Only valid between dvui.Window.begin() and end().
 pub fn mouseTotalMotion() Point {
@@ -2505,7 +2505,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 ///
 /// An animation will be active thru a frame where its end_time is <= 0, and be
 /// deleted at the beginning of the next frame.  See Spinner for an example of
-/// how to have a seemless continuous animation.
+/// how to have a seamless continuous animation.
 pub const Animation = struct {
     used: bool = true,
     easing: *const easing.EasingFn = easing.linear,
@@ -2866,7 +2866,7 @@ pub const Window = struct {
     wd: WidgetData = undefined,
     rect_pixels: Rect = Rect{}, // pixels
     natural_scale: f32 = 1.0,
-    content_scale: f32 = 1.0, // can set seperately but gets folded into natural_scale
+    content_scale: f32 = 1.0, // can set separately but gets folded into natural_scale
     next_widget_ypos: f32 = 0,
 
     capture: ?CaptureMouse = null,
@@ -4676,7 +4676,7 @@ pub fn wasmFileUploaded(id: u32) ?WasmFile {
     const num_files = dvui.backend.getNumberOfFilesAvailable(id);
     if (num_files == 0) return null;
     if (num_files > 1) {
-        log.err("Recived more than one file for id {d}. Did you mean to call wasmFileUploadedMultiple?", .{id});
+        log.err("Received more than one file for id {d}. Did you mean to call wasmFileUploadedMultiple?", .{id});
     }
     const name = dvui.backend.getFileName(id, 0);
     const size = dvui.backend.getFileSize(id, 0);
@@ -5875,7 +5875,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
         // existing animation
         var aa = a;
         if (aa.done()) {
-            // this animation is expired, seemlessly transition to next animation
+            // this animation is expired, seamlessly transition to next animation
             aa = anim;
             aa.start_time = a.end_time;
             aa.end_time += a.end_time;
@@ -6444,7 +6444,7 @@ pub var slider_entry_defaults: Options = .{
     .padding = Rect.all(2),
     .color_fill = .{ .name = .fill_control },
     .background = true,
-    // min size calulated from font
+    // min size calculated from font
 };
 
 pub const SliderEntryInitOptions = struct {
