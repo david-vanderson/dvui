@@ -5680,10 +5680,14 @@ pub const Picture = struct {
 
     /// Begin recording drawing to the physical pixels in rect (enlarged to pixel boundaries).
     ///
-    /// Returns null if backend does not support texture targets.
+    /// Returns null in case of failure (e.g. if backend does not support texture targets, if the passed rect is empty ...).
     ///
     /// Only valid between `Window.begin`and `Window.end`.
     pub fn start(rect: Rect) ?Picture {
+        if (rect.empty()) {
+            log.err("Picture.start() was called with an empty rect", .{});
+            return null;
+        }
         var ret: Picture = .{ .r = rect };
 
         // enlarge texture to pixels boundaries
