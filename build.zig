@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) !void {
     if (back_to_build == .custom) {
         // For export to users who are bringing their own backend.  Use in your build.zig:
         // const dvui_mod = dvui_dep.module("dvui");
-        // @import("dvui").linkBackend(dvui_mod, your_backend_module, .custom);
+        // @import("dvui").linkBackend(dvui_mod, your_backend_module);
         _ = addDvuiModule(b, target, optimize, "dvui", true);
     }
 
@@ -84,7 +84,7 @@ pub fn build(b: *std.Build) !void {
         sdl_mod.addOptions("sdl_options", sdl_options);
 
         const dvui_sdl = addDvuiModule(b, target, optimize, "dvui_sdl", true);
-        linkBackend(dvui_sdl, sdl_mod, .sdl);
+        linkBackend(dvui_sdl, sdl_mod);
         addExample(b, target, optimize, "sdl-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-app", b.path("examples/app.zig"), dvui_sdl);
@@ -146,7 +146,7 @@ pub fn build(b: *std.Build) !void {
         }
 
         const dvui_raylib = addDvuiModule(b, target, optimize, "dvui_raylib", false);
-        linkBackend(dvui_raylib, raylib_mod, .raylib);
+        linkBackend(dvui_raylib, raylib_mod);
         addExample(b, target, optimize, "raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib);
         addExample(b, target, optimize, "raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib);
         addExample(b, target, optimize, "raylib-app", b.path("examples/app.zig"), dvui_raylib);
@@ -167,7 +167,7 @@ pub fn build(b: *std.Build) !void {
             }
 
             const dvui_dx11 = addDvuiModule(b, target, optimize, "dvui_dx11", true);
-            linkBackend(dvui_dx11, dx11_mod, .dx11);
+            linkBackend(dvui_dx11, dx11_mod);
             addExample(b, target, optimize, "dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11);
             addExample(b, target, optimize, "dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11);
             addExample(b, target, optimize, "dx11-app", b.path("examples/app.zig"), dvui_dx11);
@@ -197,7 +197,7 @@ pub fn build(b: *std.Build) !void {
         };
 
         const dvui_web = addDvuiModule(b, web_target, optimize, "dvui_web", true);
-        linkBackend(dvui_web, web_mod, .web);
+        linkBackend(dvui_web, web_mod);
 
         addWebExample(b, web_target, optimize, "web-test", b.path("examples/web-test.zig"), dvui_web);
         addWebExample(b, web_target, optimize, "web-app", b.path("examples/app.zig"), dvui_web);
@@ -239,13 +239,9 @@ pub fn build(b: *std.Build) !void {
     docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
 }
 
-pub fn linkBackend(dvui_mod: *std.Build.Module, backend_mod: *std.Build.Module, backend: Backend) void {
+pub fn linkBackend(dvui_mod: *std.Build.Module, backend_mod: *std.Build.Module) void {
     backend_mod.addImport("dvui", dvui_mod);
     dvui_mod.addImport("backend", backend_mod);
-
-    var opts = dvui_mod.owner.addOptions();
-    opts.addOption(Backend, "backend", backend);
-    dvui_mod.addOptions("backend_info", opts);
 }
 
 fn addDvuiModule(

@@ -3,7 +3,8 @@ const builtin = @import("builtin");
 const dvui = @import("dvui");
 pub const win32 = @import("win32").everything;
 
-pub const Context = *align(1) @This();
+pub const Dx11Backend = @This();
+pub const Context = *align(1) Dx11Backend;
 
 const log = std.log.scoped(.Dx11Backend);
 
