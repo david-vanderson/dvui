@@ -1024,7 +1024,7 @@ pub fn main() !void {
     }
     std.log.info("SDL version: {}", .{getSDLVersion()});
 
-    const init_opts = dvui_app.?.startFn();
+    const init_opts = dvui_app.?.config.get();
 
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_instance.allocator();

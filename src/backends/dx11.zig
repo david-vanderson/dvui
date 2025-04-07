@@ -1479,7 +1479,7 @@ pub fn main() !void {
         win32.GetLastError(),
     );
 
-    const init_opts = dvui_app.?.startFn();
+    const init_opts = dvui_app.?.config.get();
 
     var window_state: WindowState = undefined;
 

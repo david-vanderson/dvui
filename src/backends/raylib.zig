@@ -820,7 +820,7 @@ pub fn main() !void {
     const gpa = gpa_instance.allocator();
     defer _ = gpa_instance.deinit();
 
-    const init_opts = dvui_app.?.startFn();
+    const init_opts = dvui_app.?.config.get();
 
     // init Raylib backend (creates OS window)
     // initWindow() means the backend calls CloseWindow for you in deinit()

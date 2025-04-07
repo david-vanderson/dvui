@@ -10,7 +10,12 @@ const window_icon_png = @embedFile("zig-favicon.png");
 // * expose the backend's main function
 // * use the backend's log function
 pub const dvui_app: dvui.App = .{
-    .startFn = AppStart,
+    .config = .{ .options = .{
+        .size = .{ .w = 800.0, .h = 600.0 },
+        .min_size = .{ .w = 250.0, .h = 350.0 },
+        .title = "DVUI App Example",
+        .icon = window_icon_png,
+    } },
     .frameFn = AppFrame,
     .initFn = AppInit,
     .deinitFn = AppDeinit,
@@ -22,16 +27,6 @@ pub const std_options: std.Options = .{
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
-
-// This is run before dvui does anything else.
-pub fn AppStart() dvui.App.StartOptions {
-    return .{
-        .size = .{ .w = 800.0, .h = 600.0 },
-        .min_size = .{ .w = 250.0, .h = 350.0 },
-        .title = "DVUI App Example",
-        .icon = window_icon_png,
-    };
-}
 
 // Runs before the first frame, allowing for configuration of the window
 pub fn AppInit(win: *dvui.Window) void {
