@@ -358,8 +358,10 @@ fn addWebExample(
     web_test.entry = .disabled;
     web_test.root_module.addImport("dvui", dvui_mod);
 
+    const install_dir: std.Build.InstallDir = .{ .custom = "bin/" ++ name };
+
     const install_wasm = b.addInstallArtifact(web_test, .{
-        .dest_dir = .{ .override = .{ .custom = "bin" } },
+        .dest_dir = .{ .override = install_dir },
     });
 
     const cb = b.addExecutable(.{
@@ -376,9 +378,9 @@ fn addWebExample(
     const install_noto = b.addInstallBinFile(b.path("src/fonts/NotoSansKR-Regular.ttf"), "NotoSansKR-Regular.ttf");
 
     const compile_step = b.step(name, "Compile " ++ name);
-    compile_step.dependOn(&b.addInstallFileWithDir(output, .prefix, "bin/index.html").step);
+    compile_step.dependOn(&b.addInstallFileWithDir(output, install_dir, "index.html").step);
     const web_js = b.path("src/backends/web.js");
-    compile_step.dependOn(&b.addInstallFileWithDir(web_js, .prefix, "bin/web.js").step);
+    compile_step.dependOn(&b.addInstallFileWithDir(web_js, install_dir, "web.js").step);
     b.addNamedLazyPath("web.js", web_js);
     compile_step.dependOn(&install_wasm.step);
     compile_step.dependOn(&install_noto.step);
