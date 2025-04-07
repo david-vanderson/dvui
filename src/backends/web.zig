@@ -770,7 +770,7 @@ fn app_deinit() callconv(.c) void {
     win.deinit();
     back.deinit();
 
-    dvui_app.?.deinitFn();
+    if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
 }
 
 // return number of micros to wait (interrupted by events) for next frame
@@ -781,7 +781,7 @@ fn app_update() callconv(.c) i32 {
         const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
         WebBackend.wasm.wasm_panic(msg.ptr, msg.len);
         // The main loop is stopping, so deinit should be called
-        dvui_app.?.deinitFn();
+        defer if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
         return -1;
     };
 }

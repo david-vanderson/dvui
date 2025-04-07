@@ -1044,6 +1044,7 @@ pub fn main() !void {
     defer win.deinit();
 
     if (dvui_app.?.initFn) |initFn| initFn(&win);
+    defer if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
 
     main_loop: while (true) {
 
@@ -1076,6 +1077,4 @@ pub fn main() !void {
         const wait_event_micros = win.waitTime(end_micros, null);
         back.waitEventTimeout(wait_event_micros);
     }
-
-    dvui_app.?.deinitFn();
 }
