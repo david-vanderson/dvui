@@ -63,5 +63,17 @@ pub const Result = enum {
     close,
 };
 
+/// Used internally to confirm that the App main function is being used
+pub fn assertIsApp(comptime root: type) void {
+    if (!@hasDecl(root, "main") or @field(root, "main") != main) {
+        @compileError(
+            \\Using the App interface requires using the App main function
+            \\
+            \\Add the following line to your root file:
+            \\pub const main = dvui.App.main;
+        );
+    }
+}
+
 const std = @import("std");
 const dvui = @import("dvui.zig");
