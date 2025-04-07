@@ -375,7 +375,7 @@ fn addWebExample(
     cb_run.addFileArg(web_test.getEmittedBin());
     const output = cb_run.captureStdOut();
 
-    const install_noto = b.addInstallBinFile(b.path("src/fonts/NotoSansKR-Regular.ttf"), "NotoSansKR-Regular.ttf");
+    const install_noto = b.addInstallFileWithDir(b.path("src/fonts/NotoSansKR-Regular.ttf"), install_dir, "NotoSansKR-Regular.ttf");
 
     const compile_step = b.step(name, "Compile " ++ name);
     compile_step.dependOn(&b.addInstallFileWithDir(output, install_dir, "index.html").step);
