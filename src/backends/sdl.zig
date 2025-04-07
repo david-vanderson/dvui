@@ -1006,8 +1006,11 @@ pub fn getSDLVersion() std.SemanticVersion {
 // dvui_app stuff
 const root = @import("root");
 pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
-pub const logFn = std.log.defaultLog;
-
+comptime {
+    if (dvui_app != null) {
+        dvui.App.assertIsApp(root);
+    }
+}
 // Optional: windows os only
 const winapi = if (builtin.os.tag == .windows) struct {
     extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
@@ -1021,7 +1024,7 @@ pub fn main() !void {
     }
     std.log.info("SDL version: {}", .{getSDLVersion()});
 
-    dvui_app.?.initFn();
+    const init_opts = dvui_app.?.config.get();
 
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_instance.allocator();
@@ -1031,17 +1034,21 @@ pub fn main() !void {
     // init SDL backend (creates and owns OS window)
     var back = try initWindow(.{
         .allocator = gpa,
-        .size = .{ .w = 800.0, .h = 600.0 },
-        .min_size = .{ .w = 250.0, .h = 350.0 },
-        .vsync = true,
-        .title = "DVUI SDL Standalone Example",
-        //.icon = window_icon_png, // can also call setIconFromFileContent()
+        .size = init_opts.size,
+        .min_size = init_opts.min_size,
+        .max_size = init_opts.max_size,
+        .vsync = init_opts.vsync,
+        .title = init_opts.title,
+        .icon = init_opts.icon,
     });
     defer back.deinit();
 
     //// init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), gpa, back.backend(), .{});
     defer win.deinit();
+
+    if (dvui_app.?.initFn) |initFn| initFn(&win);
+    defer if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
 
     main_loop: while (true) {
 
@@ -1060,7 +1067,7 @@ pub fn main() !void {
         _ = c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 255);
         _ = c.SDL_RenderClear(back.renderer);
 
-        dvui_app.?.frameFn();
+        const res = dvui_app.?.frameFn();
 
         const end_micros = try win.end(.{});
 
@@ -1069,9 +1076,9 @@ pub fn main() !void {
 
         back.renderPresent();
 
+        if (res != .ok) break :main_loop;
+
         const wait_event_micros = win.waitTime(end_micros, null);
         back.waitEventTimeout(wait_event_micros);
     }
-
-    dvui_app.?.deinitFn();
 }

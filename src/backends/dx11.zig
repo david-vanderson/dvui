@@ -3,7 +3,8 @@ const builtin = @import("builtin");
 const dvui = @import("dvui");
 pub const win32 = @import("win32").everything;
 
-pub const Context = *align(1) @This();
+pub const Dx11Backend = @This();
+pub const Context = *align(1) Dx11Backend;
 
 const log = std.log.scoped(.Dx11Backend);
 
@@ -1436,5 +1437,92 @@ fn convertVKeyToDvuiKey(vkey: win32.VIRTUAL_KEY) dvui.enums.Key {
             log.warn("Key {s} not supported.", .{@tagName(e)});
             return K.unknown;
         },
+    };
+}
+
+// dvui_app stuff
+const root = @import("root");
+pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
+comptime {
+    if (dvui_app != null) {
+        dvui.App.assertIsApp(root);
+        @export(&wWinMain, .{ .name = "wWinMain" });
+    }
+}
+
+// win32 is Windows exclusive so this can be unconditionally defined
+extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
+
+fn wWinMain(
+    _: win32.HINSTANCE,
+    _: ?win32.HINSTANCE,
+    _: ?[*:0]const u16,
+    _: win32.SHOW_WINDOW_CMD,
+) callconv(std.os.windows.WINAPI) void {
+    _ = AttachConsole(0xFFFFFFFF);
+    return main() catch |e| {
+        if (@errorReturnTrace()) |trace| {
+            std.debug.dumpStackTrace(trace.*);
+        }
+        std.debug.panic("{s}", .{@errorName(e)});
+    };
+}
+
+pub fn main() !void {
+    const window_class = win32.L("DvuiWindow");
+
+    var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+    const gpa = gpa_instance.allocator();
+    defer _ = gpa_instance.deinit();
+
+    RegisterClass(window_class, .{}) catch win32.panicWin32(
+        "RegisterClass",
+        win32.GetLastError(),
+    );
+
+    const init_opts = dvui_app.?.config.get();
+
+    var window_state: WindowState = undefined;
+
+    // init dx11 backend (creates and owns OS window)
+    const b = try initWindow(&window_state, .{
+        .registered_class = window_class,
+        .dvui_gpa = gpa,
+        .allocator = gpa,
+        .size = init_opts.size,
+        .min_size = init_opts.min_size,
+        .max_size = init_opts.max_size,
+        .vsync = init_opts.vsync,
+        .title = init_opts.title,
+        .icon = init_opts.icon,
+    });
+    defer b.deinit();
+
+    const win = b.getWindow();
+
+    if (dvui_app.?.initFn) |initFn| initFn(win);
+    defer if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
+
+    while (true) switch (serviceMessageQueue()) {
+        .queue_empty => {
+            // beginWait coordinates with waitTime below to run frames only when needed
+            const nstime = win.beginWait(b.hasEvent());
+
+            // marks the beginning of a frame for dvui, can call dvui functions after this
+            try win.begin(nstime);
+
+            // both dvui and dx11 drawing
+            const res = dvui_app.?.frameFn();
+
+            // marks end of dvui frame, don't call dvui functions after this
+            // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
+            _ = try win.end(.{});
+
+            if (res != .ok) break;
+
+            // cursor management
+            b.setCursor(win.cursorRequested());
+        },
+        .quit, .close_windows => break,
     };
 }

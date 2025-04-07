@@ -16,6 +16,7 @@ const tvg = @import("tinyvg/tinyvg.zig");
 pub const math = std.math;
 pub const fnv = std.hash.Fnv1a_32;
 
+pub const App = @import("App.zig");
 pub const Backend = @import("Backend.zig");
 pub const Window = @import("Window.zig");
 pub const Examples = @import("Examples.zig");
@@ -82,22 +83,6 @@ pub const easing = @import("easing.zig");
 
 pub const wasm = (builtin.target.cpu.arch == .wasm32);
 pub const useFreeType = !wasm;
-
-/// For apps that want dvui to provide the mainloop which runs these callbacks.
-///
-/// In your root file, have a declaration named "dvui_app" of this type:
-/// pub const dvui_app: dvui.App = .{ .init = AppInit, ...};
-///
-/// Also must use the backend's main and log functions:
-/// pub const main = dvui.backend.main;
-/// pub const std_options: std.Options = .{
-///     .logFn = dvui.backend.logFn,
-/// };
-pub const App = struct {
-    initFn: fn () void,
-    deinitFn: fn () void,
-    frameFn: fn () void,
-};
 
 pub const c = @cImport({
     // musl fails to compile saying missing "bits/setjmp.h", and nobody should

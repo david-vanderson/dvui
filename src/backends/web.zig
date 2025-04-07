@@ -704,9 +704,9 @@ pub fn getNumberOfFilesAvailable(id: u32) usize {
 // dvui_app stuff
 const root = @import("root");
 pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
-pub fn main() void {}
 comptime {
     if (dvui_app != null) {
+        dvui.App.assertIsApp(root);
         @export(&app_init, .{ .name = "app_init" });
         @export(&app_deinit, .{ .name = "app_deinit" });
         @export(&app_update, .{ .name = "app_update" });
@@ -743,7 +743,11 @@ pub fn logFn(
 pub var back: WebBackend = undefined;
 
 fn app_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
-    dvui_app.?.initFn();
+    const init_opts = dvui_app.?.config.get();
+    // TODO: Allow web backend to set title of browser tab via init_opts
+    // TODO: Respect min size (maybe max size?) via css on the canvas element
+    // TODO: Use the icon to set the browser tab icon (if possible considering size requirements)
+    _ = init_opts;
 
     const platform = platform_ptr[0..platform_len];
     dvui.log.debug("platform: {s}", .{platform});
@@ -758,6 +762,8 @@ fn app_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 
     win_ok = true;
 
+    if (dvui_app.?.initFn) |initFn| initFn(&win);
+
     return 0;
 }
 
@@ -765,7 +771,7 @@ fn app_deinit() callconv(.c) void {
     win.deinit();
     back.deinit();
 
-    dvui_app.?.deinitFn();
+    if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
 }
 
 // return number of micros to wait (interrupted by events) for next frame
@@ -775,6 +781,8 @@ fn app_update() callconv(.c) i32 {
         std.log.err("{!}", .{err});
         const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
         WebBackend.wasm.wasm_panic(msg.ptr, msg.len);
+        // The main loop is stopping, so deinit should be called
+        defer if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
         return -1;
     };
 }
@@ -788,7 +796,13 @@ fn update() !i32 {
     // backend is directly sending the events to dvui
     //try backend.addAllEvents(&win);
 
-    dvui_app.?.frameFn();
+    const res = dvui_app.?.frameFn();
+
+    switch (res) {
+        .ok => {},
+        // TODO: Should web apps be allowed to close? What happens on a close?
+        .close => return error.close,
+    }
     //try dvui.label(@src(), "test", .{}, .{ .color_text = .{ .color = dvui.Color.white } });
 
     //var indices: []const u32 = &[_]u32{ 0, 1, 2, 0, 2, 3 };
