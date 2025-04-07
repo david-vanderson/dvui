@@ -742,7 +742,7 @@ pub fn logFn(
 pub var back: WebBackend = undefined;
 
 fn app_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
-    const init_opts = dvui_app.?.initFn();
+    const init_opts = dvui_app.?.startFn();
     // TODO: Allow web backend to set title of browser tab via init_opts
     // TODO: Respect min size (maybe max size?) via css on the canvas element
     // TODO: Use the icon to set the browser tab icon (if possible considering size requirements)
@@ -761,7 +761,7 @@ fn app_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 
     win_ok = true;
 
-    if (dvui_app.?.configFn) |configFn| configFn(&win);
+    if (dvui_app.?.initFn) |initFn| initFn(&win);
 
     return 0;
 }
