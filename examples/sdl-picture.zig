@@ -16,7 +16,6 @@ const show_demo = true;
 var scale_val: f32 = 1.0;
 
 var g_backend: ?Backend = null;
-var g_win: ?*dvui.Window = null;
 
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application
@@ -49,9 +48,7 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
     defer win.deinit();
 
-    var settled = false;
     main_loop: while (true) {
-
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(backend.hasEvent());
 
@@ -64,34 +61,78 @@ pub fn main() !void {
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        // _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
-        // _ = Backend.c.SDL_RenderClear(backend.renderer);
-
-        const pic = if (settled) dvui.Picture.start(win.clipRect) else null;
+        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
+        _ = Backend.c.SDL_RenderClear(backend.renderer);
 
         // The demos we pass in here show up under "Platform-specific demos"
         try gui_frame();
 
-        if (pic) |p| {
-            const texture = p.stop();
-            const png_slice = try dvui.pngFromTexture(dvui.currentWindow().arena(), texture, .{});
-            try std.fs.cwd().writeFile(.{
-                .sub_path = "pic.png",
-                .data = png_slice,
-            });
-            return;
-        }
-
         _ = try win.end(.{});
-
-        if (win.extra_frames_needed == 0) settled = true;
 
         // cursor management
         backend.setCursor(win.cursorRequested());
         backend.textInputRect(win.textInputRequested());
 
-        // Skip showing frame in window, likely saves time
         backend.renderPresent();
+
+        if (win.extra_frames_needed == 0) {
+            const width: usize = @intFromFloat(win.clipRect.w);
+            const height: usize = @intFromFloat(win.clipRect.h);
+            // For some reason currentWindow().arena() crashes on this allocation
+            const pixel_buf = try std.heap.page_allocator.alloc(u8, width * height * 4);
+
+            try readWindowPixels(&backend, width, height, pixel_buf.ptr);
+
+            var len: c_int = undefined;
+            const png_bytes = dvui.c.stbi_write_png_to_mem(pixel_buf.ptr, @intCast(width * 4), @intCast(width), @intCast(height), 4, &len);
+
+            try std.fs.cwd().writeFile(.{
+                .sub_path = "pic.png",
+                .data = png_bytes[0..@intCast(len)],
+            });
+            return;
+        }
+    }
+}
+
+fn readWindowPixels(self: *Backend, width: usize, height: usize, pixels_out: [*]u8) !void {
+    const c = Backend.c;
+
+    if (Backend.sdl3) {
+        var surface: *c.SDL_Surface = c.SDL_RenderReadPixels(self.renderer, null) orelse return error.TextureRead;
+        defer c.SDL_DestroySurface(surface);
+        if (width * height != surface.*.w * surface.*.h) return error.TextureRead;
+        // TODO: most common format is RGBA8888, doing conversion during copy to pixels_out should be faster
+        if (surface.*.format != c.SDL_PIXELFORMAT_ABGR8888) {
+            surface = c.SDL_ConvertSurface(surface, c.SDL_PIXELFORMAT_ABGR8888) orelse return error.TextureRead;
+        }
+        @memcpy(pixels_out[0 .. width * height * 4], @as(?[*]u8, @ptrCast(surface.*.pixels)).?[0 .. width * height * 4]);
+        return;
+    }
+
+    // If SDL picks directX11 as a rendering backend, it could not support
+    // SDL_PIXELFORMAT_ABGR8888 so this works around that.  For some reason sdl
+    // crashes if we ask it to do the conversion for us.
+    var swap_rb = true;
+    var info: c.SDL_RendererInfo = undefined;
+    _ = c.SDL_GetRendererInfo(self.renderer, &info);
+    //std.debug.print("renderer name {s} formats:\n", .{info.name});
+    for (0..info.num_texture_formats) |i| {
+        //std.debug.print("  {s}\n", .{c.SDL_GetPixelFormatName(info.texture_formats[i])});
+        if (info.texture_formats[i] == c.SDL_PIXELFORMAT_ABGR8888) {
+            swap_rb = false;
+        }
+    }
+
+    _ = c.SDL_RenderReadPixels(self.renderer, null, if (swap_rb) c.SDL_PIXELFORMAT_ARGB8888 else c.SDL_PIXELFORMAT_ABGR8888, pixels_out, @intCast(width * 4));
+
+    if (swap_rb) {
+        for (0..width * height) |i| {
+            const r = pixels_out[i * 4 + 0];
+            const b = pixels_out[i * 4 + 2];
+            pixels_out[i * 4 + 0] = b;
+            pixels_out[i * 4 + 2] = r;
+        }
     }
 }
 
