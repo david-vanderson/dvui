@@ -1478,7 +1478,7 @@ pub fn main() !void {
         win32.GetLastError(),
     );
 
-    const init_opts = dvui_app.?.initFn();
+    const init_opts = dvui_app.?.startFn();
 
     var window_state: WindowState = undefined;
 
@@ -1498,7 +1498,7 @@ pub fn main() !void {
 
     const win = b.getWindow();
 
-    if (dvui_app.?.configFn) |configFn| configFn(&win);
+    if (dvui_app.?.initFn) |initFn| initFn(win);
 
     while (true) switch (serviceMessageQueue()) {
         .queue_empty => {

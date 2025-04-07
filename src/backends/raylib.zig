@@ -815,7 +815,7 @@ pub fn main() !void {
     const gpa = gpa_instance.allocator();
     defer _ = gpa_instance.deinit();
 
-    const init_opts = dvui_app.?.initFn();
+    const init_opts = dvui_app.?.startFn();
 
     // init Raylib backend (creates OS window)
     // initWindow() means the backend calls CloseWindow for you in deinit()
@@ -835,7 +835,7 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), gpa, b.backend(), .{});
     defer win.deinit();
 
-    if (dvui_app.?.configFn) |configFn| configFn(&win);
+    if (dvui_app.?.initFn) |initFn| initFn(&win);
 
     main_loop: while (true) {
         c.BeginDrawing();

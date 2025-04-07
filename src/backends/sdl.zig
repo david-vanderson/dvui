@@ -1020,7 +1020,7 @@ pub fn main() !void {
     }
     std.log.info("SDL version: {}", .{getSDLVersion()});
 
-    const init_opts = dvui_app.?.initFn();
+    const init_opts = dvui_app.?.startFn();
 
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_instance.allocator();
@@ -1043,7 +1043,7 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), gpa, back.backend(), .{});
     defer win.deinit();
 
-    if (dvui_app.?.configFn) |configFn| configFn(&win);
+    if (dvui_app.?.initFn) |initFn| initFn(&win);
 
     main_loop: while (true) {
 

@@ -66,7 +66,7 @@ pub const useFreeType = !wasm;
 ///
 /// In your root file, have a declaration named "dvui_app" of this type:
 /// ```
-/// pub const dvui_app: dvui.App = .{ .initFn = AppInit, ...};
+/// pub const dvui_app: dvui.App = .{ .startFn = AppStart, .frameFn = AppFrame };
 /// ```
 ///
 /// Also must use the App's main and log functions:
@@ -77,10 +77,15 @@ pub const useFreeType = !wasm;
 /// };
 /// ```
 pub const App = struct {
-    initFn: fn () InitOptions,
-    /// Runs after initFn, allowing for configuring the Window
-    configFn: ?fn (*Window) void = null,
+    /// Runs before anything else, returning the configuration options for the app
+    startFn: fn () StartOptions,
+    /// Runs before the first frame, allowing for configuring the Window
+    initFn: ?fn (*Window) void = null,
+    /// Runs when the app is exiting
     deinitFn: fn () void,
+    /// Runs once every frame
+    ///
+    /// Always runs between `Window.begin` and `Window.end`
     frameFn: fn () Result,
 
     fn nop_main() !void {}
@@ -100,7 +105,7 @@ pub const App = struct {
     /// ```
     pub const logFn: @FieldType(std.Options, "logFn") = if (@hasDecl(backend, "logFn")) backend.logFn else std.log.defaultLog;
 
-    pub const InitOptions = struct {
+    pub const StartOptions = struct {
         /// The initial size of the application window
         size: dvui.Size,
         /// Set the minimum size of the window
