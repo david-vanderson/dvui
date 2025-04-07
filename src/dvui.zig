@@ -82,7 +82,7 @@ pub const App = struct {
     /// Runs before the first frame, allowing for configuring the Window
     initFn: ?fn (*Window) void = null,
     /// Runs when the app is exiting
-    deinitFn: fn () void,
+    deinitFn: ?fn () void = null,
     /// Runs once every frame
     ///
     /// Always runs between `Window.begin` and `Window.end`

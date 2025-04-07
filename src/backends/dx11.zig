@@ -1499,6 +1499,7 @@ pub fn main() !void {
     const win = b.getWindow();
 
     if (dvui_app.?.initFn) |initFn| initFn(win);
+    defer if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
 
     while (true) switch (serviceMessageQueue()) {
         .queue_empty => {
@@ -1522,6 +1523,4 @@ pub fn main() !void {
         },
         .quit, .close_windows => break,
     };
-
-    dvui_app.?.deinitFn();
 }

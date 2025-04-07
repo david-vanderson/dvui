@@ -836,6 +836,7 @@ pub fn main() !void {
     defer win.deinit();
 
     if (dvui_app.?.initFn) |initFn| initFn(&win);
+    defer if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
 
     main_loop: while (true) {
         c.BeginDrawing();
@@ -866,6 +867,4 @@ pub fn main() !void {
         c.EndDrawing();
         if (res != .ok) break :main_loop;
     }
-
-    dvui_app.?.deinitFn();
 }
