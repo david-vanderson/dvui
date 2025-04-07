@@ -1006,7 +1006,11 @@ pub fn getSDLVersion() std.SemanticVersion {
 // dvui_app stuff
 const root = @import("root");
 pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
-
+comptime {
+    if (dvui_app != null) {
+        dvui.App.assertIsApp(root);
+    }
+}
 // Optional: windows os only
 const winapi = if (builtin.os.tag == .windows) struct {
     extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;

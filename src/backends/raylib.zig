@@ -806,6 +806,11 @@ pub fn dvuiRectToRaylib(rect: dvui.Rect) c.Rectangle {
 // dvui_app stuff
 const root = @import("root");
 pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
+comptime {
+    if (dvui_app != null) {
+        dvui.App.assertIsApp(root);
+    }
+}
 
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application

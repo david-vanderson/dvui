@@ -706,6 +706,7 @@ const root = @import("root");
 pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
 comptime {
     if (dvui_app != null) {
+        dvui.App.assertIsApp(root);
         @export(&app_init, .{ .name = "app_init" });
         @export(&app_deinit, .{ .name = "app_deinit" });
         @export(&app_update, .{ .name = "app_update" });

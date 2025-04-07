@@ -1444,6 +1444,7 @@ const root = @import("root");
 pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
 comptime {
     if (dvui_app != null) {
+        dvui.App.assertIsApp(root);
         @export(&wWinMain, .{ .name = "wWinMain" });
     }
 }
