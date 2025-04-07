@@ -13,8 +13,8 @@
 //! };
 //! ```
 
-/// Runs before anything else, returning the configuration options for the app
-startFn: fn () StartOptions,
+/// The configuration options for the app
+config: AppConfig,
 /// Runs before the first frame, allowing for configuring the Window
 initFn: ?fn (*dvui.Window) void = null,
 /// Runs when the app is exiting
@@ -40,6 +40,19 @@ pub const main: fn () anyerror!void = if (@hasDecl(dvui.backend, "main")) dvui.b
 /// };
 /// ```
 pub const logFn: @FieldType(std.Options, "logFn") = if (@hasDecl(dvui.backend, "logFn")) dvui.backend.logFn else std.log.defaultLog;
+
+pub const AppConfig = union(enum) {
+    options: StartOptions,
+    /// Runs before anything else. Can be used to programmatically create the `StartOptions`
+    startFn: fn () StartOptions,
+
+    pub fn get(self: AppConfig) StartOptions {
+        switch (self) {
+            .options => |opts| return opts,
+            .startFn => |startFn| return startFn(),
+        }
+    }
+};
 
 pub const StartOptions = struct {
     /// The initial size of the application window
