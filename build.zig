@@ -2,8 +2,7 @@ const std = @import("std");
 const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 
-pub const BackendToBuild = enum {
-    all,
+pub const Backend = enum {
     custom,
     sdl,
     raylib,
@@ -22,17 +21,17 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const back_to_build: BackendToBuild = b.option(BackendToBuild, "backend", "Backend to build") orelse .all;
+    const back_to_build: ?Backend = b.option(Backend, "backend", "Backend to build");
 
     if (back_to_build == .custom) {
         // For export to users who are bringing their own backend.  Use in your build.zig:
         // const dvui_mod = dvui_dep.module("dvui");
-        // @import("dvui").linkBackend(dvui_mod, your backend module);
+        // @import("dvui").linkBackend(dvui_mod, your_backend_module);
         _ = addDvuiModule(b, target, optimize, "dvui", true);
     }
 
     // SDL
-    if (back_to_build == .all or back_to_build == .sdl) {
+    if (back_to_build == null or back_to_build == .sdl) {
         const sdl_mod = b.addModule("sdl", .{
             .root_source_file = b.path("src/backends/sdl.zig"),
             .target = target,
@@ -92,7 +91,7 @@ pub fn build(b: *std.Build) !void {
     }
 
     // Raylib
-    if (back_to_build == .all or back_to_build == .raylib) {
+    if (back_to_build == null or back_to_build == .raylib) {
         const linux_display_backend: LinuxDisplayBackend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
             _ = std.process.getEnvVarOwned(b.allocator, "WAYLAND_DISPLAY") catch |err| switch (err) {
                 error.EnvironmentVariableNotFound => break :blk .X11,
@@ -150,10 +149,11 @@ pub fn build(b: *std.Build) !void {
         linkBackend(dvui_raylib, raylib_mod);
         addExample(b, target, optimize, "raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib);
         addExample(b, target, optimize, "raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib);
+        addExample(b, target, optimize, "raylib-app", b.path("examples/app.zig"), dvui_raylib);
     }
 
     // Dx11
-    if (back_to_build == .all or back_to_build == .dx11) {
+    if (back_to_build == null or back_to_build == .dx11) {
         if (target.result.os.tag == .windows) {
             const dx11_mod = b.addModule("dx11", .{
                 .root_source_file = b.path("src/backends/dx11.zig"),
@@ -170,11 +170,12 @@ pub fn build(b: *std.Build) !void {
             linkBackend(dvui_dx11, dx11_mod);
             addExample(b, target, optimize, "dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11);
             addExample(b, target, optimize, "dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11);
+            addExample(b, target, optimize, "dx11-app", b.path("examples/app.zig"), dvui_dx11);
         }
     }
 
     // Web
-    if (back_to_build == .all or back_to_build == .web) {
+    if (back_to_build == null or back_to_build == .web) {
         const web_target = b.resolveTargetQuery(.{
             .cpu_arch = .wasm32,
             .os_tag = .freestanding,
@@ -198,44 +199,8 @@ pub fn build(b: *std.Build) !void {
         const dvui_web = addDvuiModule(b, web_target, optimize, "dvui_web", true);
         linkBackend(dvui_web, web_mod);
 
-        const web_test = b.addExecutable(.{
-            .name = "web-test",
-            .root_source_file = b.path("examples/web-test.zig"),
-            .target = web_target,
-            .optimize = optimize,
-            .link_libc = false,
-            .strip = if (optimize == .ReleaseFast or optimize == .ReleaseSmall) true else false,
-        });
-
-        web_test.entry = .disabled;
-        web_test.root_module.addImport("dvui", dvui_web);
-
-        const install_wasm = b.addInstallArtifact(web_test, .{
-            .dest_dir = .{ .override = .{ .custom = "bin" } },
-        });
-
-        const cb = b.addExecutable(.{
-            .name = "cacheBuster",
-            .root_source_file = b.path("src/cacheBuster.zig"),
-            .target = b.graph.host,
-        });
-        const cb_run = b.addRunArtifact(cb);
-        cb_run.addFileArg(b.path("src/backends/index.html"));
-        cb_run.addFileArg(b.path("src/backends/web.js"));
-        cb_run.addFileArg(web_test.getEmittedBin());
-        const output = cb_run.captureStdOut();
-
-        const install_noto = b.addInstallBinFile(b.path("src/fonts/NotoSansKR-Regular.ttf"), "NotoSansKR-Regular.ttf");
-
-        const compile_step = b.step("web-test", "Compile the Web test");
-        compile_step.dependOn(&b.addInstallFileWithDir(output, .prefix, "bin/index.html").step);
-        const web_js = b.path("src/backends/web.js");
-        compile_step.dependOn(&b.addInstallFileWithDir(web_js, .prefix, "bin/web.js").step);
-        b.addNamedLazyPath("web.js", web_js);
-        compile_step.dependOn(&install_wasm.step);
-        compile_step.dependOn(&install_noto.step);
-
-        b.getInstallStep().dependOn(compile_step);
+        addWebExample(b, web_target, optimize, "web-test", b.path("examples/web-test.zig"), dvui_web);
+        addWebExample(b, web_target, optimize, "web-app", b.path("examples/app.zig"), dvui_web);
     }
 
     // Docs
@@ -371,4 +336,54 @@ fn addExample(
 
     const run_step = b.step(name, "Run " ++ name);
     run_step.dependOn(&run_cmd.step);
+}
+
+fn addWebExample(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    comptime name: []const u8,
+    file: std.Build.LazyPath,
+    dvui_mod: *std.Build.Module,
+) void {
+    const web_test = b.addExecutable(.{
+        .name = "web",
+        .root_source_file = file,
+        .target = target,
+        .optimize = optimize,
+        .link_libc = false,
+        .strip = if (optimize == .ReleaseFast or optimize == .ReleaseSmall) true else false,
+    });
+
+    web_test.entry = .disabled;
+    web_test.root_module.addImport("dvui", dvui_mod);
+
+    const install_dir: std.Build.InstallDir = .{ .custom = "bin/" ++ name };
+
+    const install_wasm = b.addInstallArtifact(web_test, .{
+        .dest_dir = .{ .override = install_dir },
+    });
+
+    const cb = b.addExecutable(.{
+        .name = "cacheBuster",
+        .root_source_file = b.path("src/cacheBuster.zig"),
+        .target = b.graph.host,
+    });
+    const cb_run = b.addRunArtifact(cb);
+    cb_run.addFileArg(b.path("src/backends/index.html"));
+    cb_run.addFileArg(b.path("src/backends/web.js"));
+    cb_run.addFileArg(web_test.getEmittedBin());
+    const output = cb_run.captureStdOut();
+
+    const install_noto = b.addInstallBinFile(b.path("src/fonts/NotoSansKR-Regular.ttf"), "NotoSansKR-Regular.ttf");
+
+    const compile_step = b.step(name, "Compile " ++ name);
+    compile_step.dependOn(&b.addInstallFileWithDir(output, install_dir, "index.html").step);
+    const web_js = b.path("src/backends/web.js");
+    compile_step.dependOn(&b.addInstallFileWithDir(web_js, install_dir, "web.js").step);
+    b.addNamedLazyPath("web.js", web_js);
+    compile_step.dependOn(&install_wasm.step);
+    compile_step.dependOn(&install_noto.step);
+
+    b.getInstallStep().dependOn(compile_step);
 }

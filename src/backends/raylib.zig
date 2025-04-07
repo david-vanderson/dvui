@@ -802,3 +802,74 @@ pub fn dvuiRectToRaylib(rect: dvui.Rect) c.Rectangle {
     const r = rect.scale(1 / dvui.windowNaturalScale());
     return c.Rectangle{ .x = r.x, .y = r.y, .width = r.w, .height = r.h };
 }
+
+// dvui_app stuff
+const root = @import("root");
+pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
+comptime {
+    if (dvui_app != null) {
+        dvui.App.assertIsApp(root);
+    }
+}
+
+/// This example shows how to use the dvui for a normal application:
+/// - dvui renders the whole application
+/// - render frames only when needed
+pub fn main() !void {
+    var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+    const gpa = gpa_instance.allocator();
+    defer _ = gpa_instance.deinit();
+
+    const init_opts = dvui_app.?.config.get();
+
+    // init Raylib backend (creates OS window)
+    // initWindow() means the backend calls CloseWindow for you in deinit()
+    var b = try RaylibBackend.initWindow(.{
+        .gpa = gpa,
+        .size = init_opts.size,
+        .min_size = init_opts.min_size,
+        .max_size = init_opts.max_size,
+        .vsync = init_opts.vsync,
+        .title = init_opts.title,
+        .icon = init_opts.icon,
+    });
+    defer b.deinit();
+    b.log_events = true;
+
+    // init dvui Window (maps onto a single OS window)
+    var win = try dvui.Window.init(@src(), gpa, b.backend(), .{});
+    defer win.deinit();
+
+    if (dvui_app.?.initFn) |initFn| initFn(&win);
+    defer if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
+
+    main_loop: while (true) {
+        c.BeginDrawing();
+
+        // Raylib does not support waiting with event interruption, so dvui
+        // can't do variable framerate.  So can't call win.beginWait() or
+        // win.waitTime().
+        try win.begin(std.time.nanoTimestamp());
+
+        // send all events to dvui for processing
+        const quit = try b.addAllEvents(&win);
+        if (quit) break :main_loop;
+
+        // if dvui widgets might not cover the whole window, then need to clear
+        // the previous frame's render
+        b.clear();
+
+        const res = dvui_app.?.frameFn();
+
+        // marks end of dvui frame, don't call dvui functions after this
+        // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
+        _ = try win.end(.{});
+
+        // cursor management
+        b.setCursor(win.cursorRequested());
+
+        // render frame to OS
+        c.EndDrawing();
+        if (res != .ok) break :main_loop;
+    }
+}

@@ -5,32 +5,54 @@ const Backend = dvui.backend;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
+const backend_name = if (@hasDecl(dvui.backend, "SDLBackend"))
+    if (dvui.backend.sdl3) "SDL3" else "SDL"
+else if (@hasDecl(dvui.backend, "RaylibBackend"))
+    "Raylib"
+else if (@hasDecl(dvui.backend, "Dx11Backend"))
+    "Dx11"
+else if (@hasDecl(dvui.backend, "WebBackend"))
+    "Web"
+else
+    "Unknown";
+
 // To be a dvui App:
 // * declare "dvui_app"
 // * expose the backend's main function
 // * use the backend's log function
 pub const dvui_app: dvui.App = .{
-    .initFn = AppInit,
+    .config = .{ .options = .{
+        .size = .{ .w = 800.0, .h = 600.0 },
+        .min_size = .{ .w = 250.0, .h = 350.0 },
+        .title = "DVUI App Example",
+        .icon = window_icon_png,
+    } },
     .frameFn = AppFrame,
+    .initFn = AppInit,
     .deinitFn = AppDeinit,
 };
-pub const main = dvui.backend.main;
+pub const main = dvui.App.main;
 pub const std_options: std.Options = .{
-    .logFn = dvui.backend.logFn,
+    .logFn = dvui.App.logFn,
 };
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
-// This is run before dvui does anything else.
-pub fn AppInit() void {}
+// Runs before the first frame, allowing for configuration of the window
+pub fn AppInit(win: *dvui.Window) void {
+    _ = win;
+}
 
 // Run as app is shutting down, need to know if cleanly?
 pub fn AppDeinit() void {}
 
-// Run on each frame, return micros to sleep, or something for the app to quit
-pub fn AppFrame() void {
-    frame() catch return;
+pub fn AppFrame() dvui.App.Result {
+    frame() catch |err| {
+        std.log.err("in frame: {!}", .{err});
+        return .close;
+    };
+    return .ok;
 }
 
 pub fn frame() !void {
@@ -41,7 +63,7 @@ pub fn frame() !void {
     const lorem = "This is a dvui.App example that can compile on multiple backends.";
     try tl.addText(lorem, .{});
     try tl.addText("\n\n", .{});
-    try tl.format("Current backend: {s}", .{"unknown"}, .{});
+    try tl.format("Current backend: {s}", .{backend_name}, .{});
     tl.deinit();
 
     var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
