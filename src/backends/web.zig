@@ -708,9 +708,9 @@ pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app el
 comptime {
     if (dvui_app != null) {
         dvui.App.assertIsApp(root);
-        @export(&app_init, .{ .name = "app_init" });
-        @export(&app_deinit, .{ .name = "app_deinit" });
-        @export(&app_update, .{ .name = "app_update" });
+        @export(&dvui_init, .{ .name = "dvui_init" });
+        @export(&dvui_deinit, .{ .name = "dvui_deinit" });
+        @export(&dvui_update, .{ .name = "dvui_update" });
     }
 }
 
@@ -743,7 +743,7 @@ pub fn logFn(
 
 pub var back: WebBackend = undefined;
 
-fn app_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
+fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
     const init_opts = dvui_app.?.config.get();
     // TODO: Allow web backend to set title of browser tab via init_opts
     // TODO: Respect min size (maybe max size?) via css on the canvas element
@@ -768,22 +768,22 @@ fn app_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
     return 0;
 }
 
-fn app_deinit() callconv(.c) void {
+fn dvui_deinit() callconv(.c) void {
+    if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
+
     win.deinit();
     back.deinit();
-
-    if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
 }
 
 // return number of micros to wait (interrupted by events) for next frame
 // return -1 to quit
-fn app_update() callconv(.c) i32 {
+fn dvui_update() callconv(.c) i32 {
     return update() catch |err| {
         std.log.err("{!}", .{err});
         const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
         WebBackend.wasm.wasm_panic(msg.ptr, msg.len);
-        // The main loop is stopping, so deinit should be called
-        defer if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
+        // The main loop is stopping, this is our last chance to deinit stuff
+        dvui_deinit();
         return -1;
     };
 }

@@ -1,7 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
-const Backend = dvui.backend;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
@@ -28,14 +27,15 @@ pub const std_options: std.Options = .{
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 const gpa = gpa_instance.allocator();
 
-// Runs before the first frame, allowing for configuration of the window
+// Runs before the first frame, after backend and dvui.Window.init()
 pub fn AppInit(win: *dvui.Window) void {
     _ = win;
 }
 
-// Run as app is shutting down, need to know if cleanly?
+// Run as app is shutting down before dvui.Window.deinit()
 pub fn AppDeinit() void {}
 
+// Run each frame to do normal UI
 pub fn AppFrame() dvui.App.Result {
     frame() catch |err| {
         std.log.err("in frame: {!}", .{err});

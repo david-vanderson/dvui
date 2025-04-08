@@ -988,7 +988,7 @@ class Dvui {
     }
 
     init() {
-        let app_init_return = 0;
+        let dvui_init_return = 0;
         let str = utf8encoder.encode(navigator.platform);
         if (str.length > 0) {
             const ptr = this.instance.exports.gpa_u8(
@@ -1000,20 +1000,20 @@ class Dvui {
                 str.length,
             );
             dest.set(str);
-            app_init_return = this.instance.exports.app_init(
+            dvui_init_return = this.instance.exports.dvui_init(
                 ptr,
                 str.length,
             );
             this.instance.exports.gpa_free(ptr, str.length);
         } else {
-            app_init_return = this.instance.exports.app_init(
+            dvui_init_return = this.instance.exports.dvui_init(
                 0,
                 0,
             );
         }
 
-        if (app_init_return != 0) {
-            throw new Error("ERROR: app_init returned " + app_init_return);
+        if (dvui_init_return != 0) {
+            throw new Error("ERROR: dvui_init returned " + dvui_init_return);
         }
     }
 
@@ -1063,7 +1063,7 @@ class Dvui {
             this.gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
             this.gl.clear(this.gl.COLOR_BUFFER_BIT);
 
-            let millis_to_wait = this.instance.exports.app_update();
+            let millis_to_wait = this.instance.exports.dvui_update();
             if (!this.filesCacheModified) {
                 // Only clear if we didn't add anything this frame. Async could add items after they were requested
                 // in the frame, so keep if for two frames
@@ -1091,7 +1091,7 @@ class Dvui {
             if (!renderRequested) {
                 // multiple events could call requestRender multiple times, and
                 // we only want a single requestAnimationFrame to happen before
-                // each call to app_update
+                // each call to dvui_update
                 renderRequested = true;
                 requestAnimationFrame(render);
             }
