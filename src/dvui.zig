@@ -19,6 +19,7 @@ pub const fnv = std.hash.Fnv1a_32;
 pub const App = @import("App.zig");
 pub const Backend = @import("Backend.zig");
 pub const Window = @import("Window.zig");
+pub const Runner = @import("Runner.zig");
 pub const Examples = @import("Examples.zig");
 
 pub const Color = @import("Color.zig");
