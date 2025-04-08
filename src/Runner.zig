@@ -1,4 +1,4 @@
-pub const Self = @This();
+const Self = @This();
 
 window: *dvui.Window,
 backend: *Backend,
@@ -38,6 +38,11 @@ pub fn registerWidgetData(self: *Self, wd: *const dvui.WidgetData) !void {
             .visible = wd.visible(),
         });
     }
+}
+
+pub fn getWidgetInfo(self: *Self, test_id: []const u8, id_extra: ?u32) !*const WidgetInfo {
+    const hashed_id = dvui.hashIdKey(id_extra orelse 0, test_id);
+    return self.named_widgets.getPtr(hashed_id) orelse return error.NamedWidgetDidNotExist;
 }
 
 pub fn run(self: *Self) !void {
@@ -161,22 +166,43 @@ fn readWindowPixels(self: *Self, width: usize, height: usize, pixels_out: [*]u8)
 }
 
 // Adds a position event to move the mouse over the widget
-fn moveToWidget(self: *Self, info: *const WidgetInfo) !void {
+fn moveToWidgetInfo(self: *Self, info: *const WidgetInfo) !void {
     if (!info.visible) return error.WidgetNotVisible;
     const center = info.wd.rect.topLeft().plus(.{ .x = info.wd.rect.w / 2, .y = info.wd.rect.h / 2 });
-    const movement = center.diff(self.window.mouse_pt);
+    try self.moveMouseTo(center);
+}
+
+pub fn clickWidget(self: *Self, test_id: []const u8, id_extra: ?u32) !void {
+    try self.moveToWidgetInfo(try self.getWidgetInfo(test_id, id_extra));
+    try self.mouseClick(.left);
+}
+
+/// Moves the mouse pointer to the center of the widget
+pub fn moveToWidget(self: *Self, test_id: []const u8, id_extra: ?u32) !void {
+    try self.moveToWidgetInfo(try self.getWidgetInfo(test_id, id_extra));
+}
+
+/// Moves the mouse to the provided absolute position
+pub fn moveMouseTo(self: *Self, point: dvui.Point) !void {
+    const movement = point.diff(self.window.mouse_pt);
+    std.debug.print("Moving {}", .{movement});
     if (movement.nonZero()) {
         _ = try self.window.addEventMouseMotion(movement.x, movement.y);
     }
 }
 
-pub fn click(self: *Self, test_id: []const u8, id_extra: u32) !void {
-    const hashed_id = dvui.hashIdKey(id_extra, test_id);
-    const info = self.named_widgets.getPtr(hashed_id) orelse return error.NamedWidgetDidNotExist;
-    try self.moveToWidget(info);
+pub fn mouseClick(self: *Self, b: dvui.enums.Button) !void {
+    _ = try self.window.addEventMouseButton(b, .press);
+    _ = try self.window.addEventMouseButton(b, .release);
+}
 
-    _ = try self.window.addEventMouseButton(.left, .press);
-    _ = try self.window.addEventMouseButton(.left, .release);
+pub fn pressKey(self: *Self, code: dvui.enums.Key, mod: dvui.enums.Mod) !void {
+    _ = try self.window.addEventKey(.{ .code = code, .mod = mod, .action = .down });
+    _ = try self.window.addEventKey(.{ .code = code, .mod = mod, .action = .up });
+}
+
+pub fn writeText(self: *Self, text: []const u8) !void {
+    _ = try self.window.addEventText(text);
 }
 
 const std = @import("std");
