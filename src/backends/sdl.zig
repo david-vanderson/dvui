@@ -4,6 +4,7 @@ const dvui = @import("dvui");
 
 const sdl_options = @import("sdl_options");
 pub const sdl3 = sdl_options.version.major == 3;
+pub const headless = sdl_options.headless;
 pub const c = blk: {
     if (sdl3) {
         break :blk @cImport({
@@ -54,6 +55,9 @@ pub const InitOptions = struct {
 
 pub fn initWindow(options: InitOptions) !SDLBackend {
     if (!sdl3) _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+    // needed according to https://discourse.libsdl.org/t/possible-to-run-sdl2-headless/25665/2
+    // but getting error "offscreen not available"
+    // if (headless) _ = c.SDL_SetHint(c.SDL_HINT_VIDEODRIVER, "offscreen");
 
     // use the string version instead of the #define so we compile with SDL < 2.24
     _ = c.SDL_SetHint("SDL_HINT_WINDOWS_DPI_SCALING", "1");
@@ -63,14 +67,15 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         return error.BackendError;
     }
 
+    const headless_flag = if (headless) c.SDL_WINDOW_HIDDEN else 0;
     var window: *c.SDL_Window = undefined;
     if (sdl3) {
-        window = c.SDL_CreateWindow(options.title, @as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE) orelse {
+        window = c.SDL_CreateWindow(options.title, @as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | headless_flag) orelse {
             dvui.log.err("SDL: Failed to open window: {s}", .{c.SDL_GetError()});
             return error.BackendError;
         };
     } else {
-        window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
+        window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE | headless_flag) orelse {
             dvui.log.err("SDL: Failed to open window: {s}", .{c.SDL_GetError()});
             return error.BackendError;
         };
