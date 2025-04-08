@@ -11,14 +11,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
 pub const backend = @import("backend");
-comptime {
-    if (!@hasDecl(backend, "kind") or @TypeOf(@field(backend, "kind")) != enums.Backend) {
-        @compileError("backend requires pub const kind: enums.Backend");
-    }
-    if (!@hasDecl(backend, "description") or @TypeOf(@field(backend, "description")) != (fn () [:0]const u8)) {
-        @compileError("backend requires pub fn description() [:0]const u8");
-    }
-}
 const tvg = @import("tinyvg/tinyvg.zig");
 
 pub const math = std.math;
