@@ -46,7 +46,7 @@ var orig_content_scale: f32 = 1.0;
 
 const zig_favicon = @embedFile("src/zig-favicon.png");
 
-export fn app_init(platform_ptr: [*]const u8, platform_len: usize) i32 {
+export fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) i32 {
     const platform = platform_ptr[0..platform_len];
     dvui.log.debug("platform: {s}", .{platform});
     const mac = if (std.mem.indexOf(u8, platform, "Mac") != null) true else false;
@@ -65,14 +65,14 @@ export fn app_init(platform_ptr: [*]const u8, platform_len: usize) i32 {
     return 0;
 }
 
-export fn app_deinit() void {
+export fn dvui_deinit() void {
     WebBackend.win.deinit();
     WebBackend.back.deinit();
 }
 
 // return number of micros to wait (interrupted by events) for next frame
 // return -1 to quit
-export fn app_update() i32 {
+export fn dvui_update() i32 {
     return update() catch |err| {
         std.log.err("{!}", .{err});
         const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";

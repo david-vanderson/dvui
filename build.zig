@@ -179,9 +179,9 @@ pub fn build(b: *std.Build) !void {
         });
 
         web_mod.export_symbol_names = &[_][]const u8{
-            "app_init",
-            "app_deinit",
-            "app_update",
+            "dvui_init",
+            "dvui_deinit",
+            "dvui_update",
             "add_event",
             "arena_u8",
             "gpa_u8",
