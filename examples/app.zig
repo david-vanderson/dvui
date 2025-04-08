@@ -5,17 +5,6 @@ const Backend = dvui.backend;
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
-const backend_name = if (@hasDecl(dvui.backend, "SDLBackend"))
-    if (dvui.backend.sdl3) "SDL3" else "SDL"
-else if (@hasDecl(dvui.backend, "RaylibBackend"))
-    "Raylib"
-else if (@hasDecl(dvui.backend, "Dx11Backend"))
-    "Dx11"
-else if (@hasDecl(dvui.backend, "WebBackend"))
-    "Web"
-else
-    "Unknown";
-
 // To be a dvui App:
 // * declare "dvui_app"
 // * expose the backend's main function
@@ -63,7 +52,7 @@ pub fn frame() !void {
     const lorem = "This is a dvui.App example that can compile on multiple backends.";
     try tl.addText(lorem, .{});
     try tl.addText("\n\n", .{});
-    try tl.format("Current backend: {s}", .{backend_name}, .{});
+    try tl.format("Current backend {s} : {s}", .{ @tagName(dvui.backend.kind), dvui.backend.description() }, .{});
     tl.deinit();
 
     var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });

@@ -3,6 +3,11 @@ const builtin = @import("builtin");
 const dvui = @import("dvui");
 pub const win32 = @import("win32").everything;
 
+pub const kind: dvui.enums.Backend = .dx11;
+pub fn description() [:0]const u8 {
+    return "Dx11";
+}
+
 pub const Dx11Backend = @This();
 pub const Context = *align(1) Dx11Backend;
 

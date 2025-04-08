@@ -9,6 +9,11 @@ pub const c = @cImport({
     @cInclude("raygui.h");
 });
 
+pub const kind: dvui.enums.Backend = .raylib;
+pub fn description() [:0]const u8 {
+    return "Raylib";
+}
+
 pub const RaylibBackend = @This();
 pub const Context = *RaylibBackend;
 
