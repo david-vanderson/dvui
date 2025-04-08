@@ -52,6 +52,10 @@ pub fn main() !void {
     defer runner.deinit();
 
     try runner.run();
+    try runner.clickWidget("yeet", null);
+    try runner.run();
+    try runner.pressKey(.tab, .none);
+    try runner.writeText("asdfasdf");
 
     const png1 = try runner.capturePng();
     try std.fs.cwd().writeFile(.{
@@ -60,7 +64,10 @@ pub fn main() !void {
     });
     png1.deinit();
 
-    try runner.click("yeet", 0);
+    try runner.run();
+    try runner.moveMouseTo(.{ .x = 300, .y = 300 });
+    try runner.run();
+    try runner.mouseClick(.left);
     try runner.run();
 
     const png2 = try runner.capturePng();
