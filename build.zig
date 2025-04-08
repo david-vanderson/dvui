@@ -1,14 +1,7 @@
 const std = @import("std");
+const enums = @import("src/enums.zig");
 const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
-
-pub const Backend = enum {
-    custom,
-    sdl,
-    raylib,
-    dx11,
-    web,
-};
 
 // NOTE: Keep in-sync with raylib's definition
 pub const LinuxDisplayBackend = enum {
@@ -21,7 +14,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const back_to_build: ?Backend = b.option(Backend, "backend", "Backend to build");
+    const back_to_build: ?enums.Backend = b.option(enums.Backend, "backend", "Backend to build");
 
     if (back_to_build == .custom) {
         // For export to users who are bringing their own backend.  Use in your build.zig:
@@ -181,7 +174,7 @@ pub fn build(b: *std.Build) !void {
             .os_tag = .freestanding,
         });
 
-        const web_mod = b.addModule("WebBackend", .{
+        const web_mod = b.addModule("web", .{
             .root_source_file = b.path("src/backends/web.zig"),
         });
 

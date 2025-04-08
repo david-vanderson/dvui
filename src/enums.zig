@@ -1,6 +1,14 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
+pub const Backend = enum {
+    custom,
+    sdl,
+    raylib,
+    dx11,
+    web,
+};
+
 pub const TextureInterpolation = enum {
     nearest,
     linear,

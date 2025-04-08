@@ -189,7 +189,7 @@ fn dvui_frame() !void {
         \\- rest of the window is a scroll area
         \\
         \\backend: {s}
-    , .{WebBackend.back.about()}, .{});
+    , .{dvui.backend.description()}, .{});
     try tl2.addText("\n\n", .{});
     try tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
     try tl2.addText("\n\n", .{});

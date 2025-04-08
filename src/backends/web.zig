@@ -2,6 +2,15 @@ const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
 
+pub const kind: dvui.enums.Backend = .web;
+pub fn description() [:0]const u8 {
+    if (wasm.wasm_about_webgl2() == 1) {
+        return "webgl2";
+    } else {
+        return "webgl (no mipmaps)";
+    }
+}
+
 pub const WebBackend = @This();
 pub const Context = *WebBackend;
 
@@ -192,18 +201,18 @@ export fn new_font(ptr: [*c]u8, len: usize) void {
     }
 }
 
-export fn add_event(kind: u8, int1: u32, int2: u32, float1: f32, float2: f32) void {
+export fn add_event(which: u8, int1: u32, int2: u32, float1: f32, float2: f32) void {
     if (win_ok) {
-        add_event_raw(&win, kind, int1, int2, float1, float2) catch |err| {
+        add_event_raw(&win, which, int1, int2, float1, float2) catch |err| {
             dvui.log.err("add_event_raw returned {!}", .{err});
         };
     }
 }
 
-fn add_event_raw(w: *dvui.Window, kind: u8, int1: u32, int2: u32, float1: f32, float2: f32) !void {
+fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, float2: f32) !void {
     have_event = true;
     //event_temps.append(.{
-    //    .kind = kind,
+    //    .which = which,
     //    .int1 = int1,
     //    .int2 = int2,
     //    .float1 = float1,
@@ -212,7 +221,7 @@ fn add_event_raw(w: *dvui.Window, kind: u8, int1: u32, int2: u32, float1: f32, f
     //    const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
     //    wasm.wasm_panic(msg.ptr, msg.len);
     //};
-    switch (kind) {
+    switch (which) {
         1 => _ = try w.addEventMouseMotion(float1, float2),
         2 => _ = try w.addEventMouseButton(buttonFromJS(int1), .press),
         3 => _ = try w.addEventMouseButton(buttonFromJS(int1), .release),
@@ -261,7 +270,7 @@ fn add_event_raw(w: *dvui.Window, kind: u8, int1: u32, int2: u32, float1: f32, f
             _ = try w.addEventTouchMotion(touch, float1, float2, dx, dy);
             touchPoints[int1] = .{ .x = float1, .y = float2 };
         },
-        else => dvui.log.debug("addAllEvents unknown event kind {d}", .{kind}),
+        else => dvui.log.debug("addAllEvents unknown event {d}", .{which}),
     }
 }
 
@@ -482,14 +491,6 @@ pub fn init() !WebBackend {
 
 pub fn deinit(self: *WebBackend) void {
     _ = self;
-}
-
-pub fn about(_: *WebBackend) []const u8 {
-    if (wasm.wasm_about_webgl2() == 1) {
-        return "webgl2";
-    } else {
-        return "webgl (no mipmapping)";
-    }
 }
 
 pub fn backend(self: *WebBackend) dvui.Backend {

@@ -16,6 +16,11 @@ pub const c = blk: {
     });
 };
 
+pub const kind: dvui.enums.Backend = .sdl;
+pub fn description() [:0]const u8 {
+    return if (sdl3) "SDL3" else "SDL2";
+}
+
 pub const SDLBackend = @This();
 pub const Context = *SDLBackend;
 
