@@ -25,6 +25,8 @@ pub fn build(b: *std.Build) !void {
 
     // SDL
     if (back_to_build == null or back_to_build == .sdl) {
+        const headless = b.option(bool, "headless", "Enable headless operation") orelse false;
+
         const sdl_mod = b.addModule("sdl", .{
             .root_source_file = b.path("src/backends/sdl.zig"),
             .target = target,
@@ -33,6 +35,7 @@ pub fn build(b: *std.Build) !void {
         });
 
         var sdl_options = b.addOptions();
+        sdl_options.addOption(bool, "headless", headless);
         const compile_sdl3 = b.option(bool, "sdl3", "SDL3 instead of SDL2") orelse false;
         if (b.systemIntegrationOption("sdl2", .{})) {
             // SDL2 from system
