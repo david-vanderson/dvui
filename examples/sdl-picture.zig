@@ -48,92 +48,27 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
     defer win.deinit();
 
-    main_loop: while (true) {
-        // beginWait coordinates with waitTime below to run frames only when needed
-        const nstime = win.beginWait(backend.hasEvent());
+    var runner = dvui.Runner.init(&win, &backend, gui_frame);
+    defer runner.deinit();
 
-        // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(nstime);
+    try runner.run();
 
-        // send all SDL events to dvui for processing
-        const quit = try backend.addAllEvents(&win);
-        if (quit) break :main_loop;
+    const png1 = try runner.capturePng();
+    try std.fs.cwd().writeFile(.{
+        .sub_path = "pic1.png",
+        .data = png1.data,
+    });
+    png1.deinit();
 
-        // if dvui widgets might not cover the whole window, then need to clear
-        // the previous frame's render
-        _ = Backend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 255);
-        _ = Backend.c.SDL_RenderClear(backend.renderer);
+    try runner.click("yeet", 0);
+    try runner.run();
 
-        // The demos we pass in here show up under "Platform-specific demos"
-        try gui_frame();
-
-        _ = try win.end(.{});
-
-        // cursor management
-        backend.setCursor(win.cursorRequested());
-        backend.textInputRect(win.textInputRequested());
-
-        backend.renderPresent();
-
-        if (win.extra_frames_needed == 0) {
-            const width: usize = @intFromFloat(win.clipRect.w);
-            const height: usize = @intFromFloat(win.clipRect.h);
-            // For some reason currentWindow().arena() crashes on this allocation
-            const pixel_buf = try std.heap.page_allocator.alloc(u8, width * height * 4);
-
-            try readWindowPixels(&backend, width, height, pixel_buf.ptr);
-
-            var len: c_int = undefined;
-            const png_bytes = dvui.c.stbi_write_png_to_mem(pixel_buf.ptr, @intCast(width * 4), @intCast(width), @intCast(height), 4, &len);
-
-            try std.fs.cwd().writeFile(.{
-                .sub_path = "pic.png",
-                .data = png_bytes[0..@intCast(len)],
-            });
-            return;
-        }
-    }
-}
-
-fn readWindowPixels(self: *Backend, width: usize, height: usize, pixels_out: [*]u8) !void {
-    const c = Backend.c;
-
-    if (Backend.sdl3) {
-        var surface: *c.SDL_Surface = c.SDL_RenderReadPixels(self.renderer, null) orelse return error.TextureRead;
-        defer c.SDL_DestroySurface(surface);
-        if (width * height != surface.*.w * surface.*.h) return error.TextureRead;
-        // TODO: most common format is RGBA8888, doing conversion during copy to pixels_out should be faster
-        if (surface.*.format != c.SDL_PIXELFORMAT_ABGR8888) {
-            surface = c.SDL_ConvertSurface(surface, c.SDL_PIXELFORMAT_ABGR8888) orelse return error.TextureRead;
-        }
-        @memcpy(pixels_out[0 .. width * height * 4], @as(?[*]u8, @ptrCast(surface.*.pixels)).?[0 .. width * height * 4]);
-        return;
-    }
-
-    // If SDL picks directX11 as a rendering backend, it could not support
-    // SDL_PIXELFORMAT_ABGR8888 so this works around that.  For some reason sdl
-    // crashes if we ask it to do the conversion for us.
-    var swap_rb = true;
-    var info: c.SDL_RendererInfo = undefined;
-    _ = c.SDL_GetRendererInfo(self.renderer, &info);
-    //std.debug.print("renderer name {s} formats:\n", .{info.name});
-    for (0..info.num_texture_formats) |i| {
-        //std.debug.print("  {s}\n", .{c.SDL_GetPixelFormatName(info.texture_formats[i])});
-        if (info.texture_formats[i] == c.SDL_PIXELFORMAT_ABGR8888) {
-            swap_rb = false;
-        }
-    }
-
-    _ = c.SDL_RenderReadPixels(self.renderer, null, if (swap_rb) c.SDL_PIXELFORMAT_ARGB8888 else c.SDL_PIXELFORMAT_ABGR8888, pixels_out, @intCast(width * 4));
-
-    if (swap_rb) {
-        for (0..width * height) |i| {
-            const r = pixels_out[i * 4 + 0];
-            const b = pixels_out[i * 4 + 2];
-            pixels_out[i * 4 + 0] = b;
-            pixels_out[i * 4 + 2] = r;
-        }
-    }
+    const png2 = try runner.capturePng();
+    try std.fs.cwd().writeFile(.{
+        .sub_path = "pic2.png",
+        .data = png2.data,
+    });
+    png2.deinit();
 }
 
 // both dvui and SDL drawing
@@ -144,7 +79,7 @@ fn gui_frame() !void {
         var m = try dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();
 
-        if (try dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .none })) |r| {
+        if (try dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{ .expand = .none, .test_id = "yeet" })) |r| {
             var fw = try dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer fw.deinit();
 
