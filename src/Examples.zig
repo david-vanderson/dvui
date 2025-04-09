@@ -81,6 +81,8 @@ const AnimatingDialog = struct {
         const title = dvui.dataGetSlice(null, id, "_title", []u8) orelse unreachable;
         const message = dvui.dataGetSlice(null, id, "_message", []u8) orelse unreachable;
         const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
+        const duration = dvui.dataGet(null, id, "duration", i32) orelse unreachable;
+        const easing = dvui.dataGet(null, id, "easing", *const dvui.easing.EasingFn) orelse unreachable;
 
         // once we record a response, refresh it until we close
         _ = dvui.dataGet(null, id, "response", enums.DialogResponse);
@@ -88,7 +90,7 @@ const AnimatingDialog = struct {
         var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id, .max_size_content = .{ .w = 300 } });
 
         if (dvui.firstFrame(win.data().id)) {
-            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 0.2, .end_val = 1.0, .end_time = 800_000, .easing = dvui.easing.outElastic });
+            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 0.0, .end_val = 1.0, .end_time = duration, .easing = easing });
         }
 
         const winHeight = win.data().rect.h;
@@ -142,7 +144,7 @@ const AnimatingDialog = struct {
         win.deinit();
 
         if (closing) {
-            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 1.0, .end_val = 0, .end_time = 200_000 });
+            dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 1.0, .end_val = 0.0, .end_time = duration, .easing = easing });
         }
     }
 
@@ -1085,10 +1087,10 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
                     const filename = te_file.getText();
                     var bytes: ?[]u8 = null;
                     if (!std.fs.path.isAbsolute(filename)) {
-                        try dvui.dialog(@src(), .{ .title = "File Error", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename}) });
+                        try dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename}) });
                     } else {
                         const file = std.fs.openFileAbsolute(filename, .{}) catch blk: {
-                            try dvui.dialog(@src(), .{ .title = "File Error", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename}) });
+                            try dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename}) });
                             break :blk null;
                         };
                         if (file) |f| {
@@ -1101,7 +1103,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
                             error.OutOfMemory => @panic("OOM"),
                             error.freetypeError => {
                                 dvui.currentWindow().gpa.free(b);
-                                try dvui.dialog(@src(), .{ .title = "Bad Font", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "\"{s}\" is not a valid font", .{filename}) });
+                                try dvui.dialog(@src(), .{}, .{ .title = "Bad Font", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "\"{s}\" is not a valid font", .{filename}) });
                                 break :blk;
                             },
                         };
@@ -1599,10 +1601,10 @@ pub fn layoutText() !void {
 
         var cbox = try dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(6), .min_size_content = .{ .w = 40 } });
         if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{}, .{ .expand = .ratio })) {
-            try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
+            try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
         }
         if (try dvui.buttonIcon(@src(), "more", entypo.dots_three_vertical, .{}, .{ .expand = .ratio })) {
-            try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
+            try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
         }
         cbox.deinit();
 
@@ -2774,7 +2776,7 @@ pub fn dialogs(demo_win_id: u32) !void {
         }
 
         if (try dvui.button(@src(), "Giant", .{}, .{})) {
-            try dvui.dialog(@src(), .{ .modal = false, .title = "So Much Text", .ok_label = "Too Much", .max_size = .{ .w = 300, .h = 300 }, .message = "This is a non modal dialog with no callafter which happens to have just way too much text in it.\n\nLuckily there is a max_size on here and if the text is too big it will be scrolled.\n\nI mean come on there is just way too much text here.\n\nCan you imagine this much text being created for a dialog?\n\nMaybe like a giant error message with a stack trace or dumping the contents of a large struct?\n\nOr a dialog asking way too many questions, or dumping a whole log into the dialog, or just a very long rant.\n\nMore lines.\n\nAnd more lines.\n\nFinally the last line." });
+            try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "So Much Text", .ok_label = "Too Much", .max_size = .{ .w = 300, .h = 300 }, .message = "This is a non modal dialog with no callafter which happens to have just way too much text in it.\n\nLuckily there is a max_size on here and if the text is too big it will be scrolled.\n\nI mean come on there is just way too much text here.\n\nCan you imagine this much text being created for a dialog?\n\nMaybe like a giant error message with a stack trace or dumping the contents of a large struct?\n\nOr a dialog asking way too many questions, or dumping a whole log into the dialog, or just a very long rant.\n\nMore lines.\n\nAnd more lines.\n\nFinally the last line." });
         }
     }
 
@@ -2783,7 +2785,7 @@ pub fn dialogs(demo_win_id: u32) !void {
         defer hbox.deinit();
 
         if (try dvui.button(@src(), "Non modal", .{}, .{})) {
-            try dvui.dialog(@src(), .{ .modal = false, .title = "Ok Dialog", .ok_label = "Done", .message = "This is a non modal dialog with no callafter" });
+            try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Ok Dialog", .ok_label = "Done", .message = "This is a non modal dialog with no callafter" });
         }
 
         const dialogsFollowup = struct {
@@ -2791,12 +2793,12 @@ pub fn dialogs(demo_win_id: u32) !void {
                 _ = id;
                 var buf: [100]u8 = undefined;
                 const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\" in the previous dialog", .{@tagName(response)}) catch unreachable;
-                try dvui.dialog(@src(), .{ .title = "Ok Followup Response", .message = text });
+                try dvui.dialog(@src(), .{}, .{ .title = "Ok Followup Response", .message = text });
             }
         };
 
         if (try dvui.button(@src(), "Modal with followup", .{}, .{})) {
-            try dvui.dialog(@src(), .{ .title = "Followup", .message = "This is a modal dialog with modal followup", .callafterFn = dialogsFollowup.callafter, .cancel_label = "Cancel" });
+            try dvui.dialog(@src(), .{}, .{ .title = "Followup", .message = "This is a modal dialog with modal followup", .callafterFn = dialogsFollowup.callafter, .cancel_label = "Cancel" });
         }
     }
 
@@ -2877,13 +2879,13 @@ pub fn dialogs(demo_win_id: u32) !void {
             } else {
                 const filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "dvui native file open", .filters = &.{ "*.png", "*.jpg" }, .filter_description = "images" });
                 if (filename) |f| {
-                    try dvui.dialog(@src(), .{ .modal = false, .title = "File Open Result", .ok_label = "Done", .message = f });
+                    try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "File Open Result", .ok_label = "Done", .message = f });
                 }
             }
         }
 
         if (dvui.wasmFileUploaded(single_file_id)) |file| {
-            try dvui.dialog(@src(), .{ .modal = false, .title = "File Open Result", .ok_label = "Done", .message = file.name });
+            try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "File Open Result", .ok_label = "Done", .message = file.name });
         }
 
         const multi_file_id = hbox.widget().extendId(@src(), 0);
@@ -2895,7 +2897,7 @@ pub fn dialogs(demo_win_id: u32) !void {
                 const filenames = try dvui.dialogNativeFileOpenMultiple(dvui.currentWindow().arena(), .{ .title = "dvui native file open multiple", .filter_description = "images" });
                 if (filenames) |fs| {
                     const msg = try std.mem.join(dvui.currentWindow().arena(), "\n", fs);
-                    try dvui.dialog(@src(), .{ .modal = false, .title = "File Open Multiple Result", .ok_label = "Done", .message = msg });
+                    try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "File Open Multiple Result", .ok_label = "Done", .message = msg });
                 }
             }
         }
@@ -2908,7 +2910,7 @@ pub fn dialogs(demo_win_id: u32) !void {
                 try writer.writeByte('\n');
             }
             _ = msg.pop(); // remove the last newline character
-            try dvui.dialog(@src(), .{ .modal = false, .title = "File Open Multiple Result", .ok_label = "Done", .message = msg.items });
+            try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "File Open Multiple Result", .ok_label = "Done", .message = msg.items });
         }
     }
     {
@@ -2921,18 +2923,18 @@ pub fn dialogs(demo_win_id: u32) !void {
             } else {
                 const filename = try dvui.dialogNativeFolderSelect(dvui.currentWindow().arena(), .{ .title = "dvui native folder select" });
                 if (filename) |f| {
-                    try dvui.dialog(@src(), .{ .modal = false, .title = "Folder Select Result", .ok_label = "Done", .message = f });
+                    try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Folder Select Result", .ok_label = "Done", .message = f });
                 }
             }
         }
 
         if (try dvui.button(@src(), "Save File", .{}, .{})) {
             if (dvui.wasm) {
-                try dvui.dialog(@src(), .{ .modal = false, .title = "Save File", .ok_label = "Ok", .message = "Not available on the web.  For file download, see \"Save Plot\" in the plots example." });
+                try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Save File", .ok_label = "Ok", .message = "Not available on the web.  For file download, see \"Save Plot\" in the plots example." });
             } else {
                 const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{ .title = "dvui native file save" });
                 if (filename) |f| {
-                    try dvui.dialog(@src(), .{ .modal = false, .title = "File Save Result", .ok_label = "Done", .message = f });
+                    try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "File Save Result", .ok_label = "Done", .message = f });
                 }
             }
         }
@@ -3102,7 +3104,7 @@ pub fn animations() !void {
         }
 
         if (try dvui.button(@src(), "Animating Dialog (drop)", .{}, .{})) {
-            try dvui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog (drop)", .message = "This shows how to animate dialogs and other floating windows.", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
+            try dvui.dialog(@src(), .{ .duration = global.duration, .easing = global.easing }, .{ .modal = false, .title = "Animating Dialog (drop)", .message = "This shows how to animate dialogs and other floating windows.", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
         }
     }
 
@@ -3389,7 +3391,7 @@ pub fn icon_browser() !void {
 
 fn background_dialog(win: *dvui.Window, delay_ns: u64) !void {
     std.time.sleep(delay_ns);
-    try dvui.dialog(@src(), .{ .window = win, .modal = false, .title = "Background Dialog", .message = "This non modal dialog was added from a non-GUI thread." });
+    try dvui.dialog(@src(), .{}, .{ .window = win, .modal = false, .title = "Background Dialog", .message = "This non modal dialog was added from a non-GUI thread." });
 }
 
 fn background_toast(win: *dvui.Window, delay_ns: u64, subwindow_id: ?u32) !void {

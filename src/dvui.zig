@@ -2865,9 +2865,12 @@ pub const DialogOptions = struct {
 
 /// Add a dialog to be displayed on the GUI thread during Window.end().
 ///
+/// user_struct can be anytype, each field will be stored using
+/// dataSet/dataSetSlice for use in opts.displayFn
+///
 /// Can be called from any thread, but if calling from a non-GUI thread or
 /// outside window.begin()/end(), you must set opts.window.
-pub fn dialog(src: std.builtin.SourceLocation, opts: DialogOptions) !void {
+pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: DialogOptions) !void {
     const id_mutex = try dialogAdd(opts.window, src, opts.id_extra, opts.displayFn);
     const id = id_mutex.id;
     dataSet(opts.window, id, "_modal", opts.modal);
@@ -2884,6 +2887,17 @@ pub fn dialog(src: std.builtin.SourceLocation, opts: DialogOptions) !void {
     if (opts.callafterFn) |ca| {
         dataSet(opts.window, id, "_callafter", ca);
     }
+
+    // add all fields of user_struct
+    inline for (@typeInfo(@TypeOf(user_struct)).@"struct".fields) |f| {
+        const ft = @typeInfo(f.type);
+        if (ft == .pointer and (ft.pointer.size == .slice or (ft.pointer.size == .one and @typeInfo(ft.pointer.child) == .array))) {
+            dataSetSlice(opts.window, id, f.name, @field(user_struct, f.name));
+        } else {
+            dataSet(opts.window, id, f.name, @field(user_struct, f.name));
+        }
+    }
+
     id_mutex.mutex.unlock();
 }
 
