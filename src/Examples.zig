@@ -534,92 +534,6 @@ pub fn demo() !void {
 
     paned.deinit();
 
-    //if (try dvui.expander(@src(), "Basic Widgets", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try basicWidgets();
-    //}
-
-    //if (try dvui.expander(@src(), "Calculator", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try calculator();
-    //}
-
-    //if (try dvui.expander(@src(), "Text Entry", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try textEntryWidgets();
-    //}
-
-    //if (try dvui.expander(@src(), "Styling", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try styling();
-    //}
-
-    //if (try dvui.expander(@src(), "Layout", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try layout();
-    //}
-
-    //if (try dvui.expander(@src(), "Text Layout", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try layoutText();
-    //}
-
-    //if (try dvui.expander(@src(), "Reorderable Lists", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try reorderLists();
-    //}
-
-    //if (try dvui.expander(@src(), "Menus", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try menus();
-    //}
-
-    //if (try dvui.expander(@src(), "Focus", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try focus();
-    //}
-
-    //if (try dvui.expander(@src(), "Scrolling", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try scrolling();
-    //}
-
-    //if (try dvui.expander(@src(), "Dialogs and Toasts", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try dialogs(float.data().id);
-    //}
-
-    //if (try dvui.expander(@src(), "Animations", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try animations();
-    //}
-
-    //if (try dvui.expander(@src(), "Theme Parsing", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try themeSerialization();
-    //}
-
-    //if (try dvui.expander(@src(), "Struct UI Widget (Experimental)", .{}, .{ .expand = .horizontal })) {}
-
-    //if (try dvui.expander(@src(), "Debugging and Errors", .{}, .{ .expand = .horizontal })) {
-    //    var b = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-    //    defer b.deinit();
-    //    try debuggingErrors();
-    //}
-
     if (show_dialog) {
         try dialogDirect();
     }
@@ -3027,9 +2941,13 @@ pub fn dialogs(demo_win_id: u32) !void {
 
 pub fn animations() !void {
     const global = struct {
+        var animation_choice: usize = 0;
+        var center: bool = false;
         var easing_choice: usize = 0;
         var easing: *const dvui.easing.EasingFn = dvui.easing.linear;
         var duration: i32 = 500_000;
+        var xs: [100]f64 = @splat(0);
+        var ys: [100]f64 = @splat(0);
     };
     const easing_fns, const easing_names = comptime blk: {
         const decls = std.meta.declarations(dvui.easing);
@@ -3055,146 +2973,137 @@ pub fn animations() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        _ = try dvui.spacer(@src(), .{ .w = 20 }, .{});
-        var button_wiggle = ButtonWidget.init(@src(), .{}, .{ .tab_index = 10 });
-        defer button_wiggle.deinit();
-
-        if (dvui.animationGet(button_wiggle.data().id, "xoffset")) |a| {
-            button_wiggle.data().rect.x += 20 * (1.0 - a.value()) * (1.0 - a.value()) * @sin(a.value() * std.math.pi * 50);
-        }
-
-        try button_wiggle.install();
-        button_wiggle.processEvents();
-        try button_wiggle.drawBackground();
-        try dvui.labelNoFmt(@src(), "Wiggle", button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
-        try button_wiggle.drawFocus();
-
-        if (button_wiggle.clicked()) {
-            dvui.animation(button_wiggle.data().id, "xoffset", .{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 500_000 });
-        }
-    }
-
-    {
-        var duration_float: f32 = @floatFromInt(@divTrunc(global.duration, std.time.us_per_ms));
-        if (try dvui.sliderEntry(
-            @src(),
-            "Duration {d}ms",
-            .{ .value = &duration_float, .min = 50, .interval = 10, .max = 2_000 },
-            .{ .min_size_content = .{ .w = 200 } },
-        )) {
-            global.duration = @as(i32, @intFromFloat(duration_float)) * std.time.us_per_ms;
-        }
-    }
-
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        try dvui.labelNoFmt(@src(), "Easing function", .{ .gravity_y = 0.5 });
-
-        if (try dvui.dropdown(@src(), &easing_names, &global.easing_choice, .{})) {
-            global.easing = easing_fns[global.easing_choice];
-        }
-    }
-
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        try dvui.labelNoFmt(@src(), "Alpha", .{ .gravity_y = 0.5 });
-
         {
-            var animator = try dvui.animate(@src(), .{ .kind = .alpha, .duration = global.duration, .easing = global.easing }, .{});
-            defer animator.deinit();
-
-            var hbox2 = try dvui.box(@src(), .horizontal, .{});
+            var hbox2 = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200 } });
             defer hbox2.deinit();
 
-            if (try dvui.button(@src(), "starting", .{}, .{})) {
-                animator.start();
+            var button_wiggle = ButtonWidget.init(@src(), .{}, .{ .gravity_x = 0.5 });
+            defer button_wiggle.deinit();
+
+            if (dvui.animationGet(button_wiggle.data().id, "xoffset")) |a| {
+                button_wiggle.data().rect.x += 20 * (1.0 - a.value()) * (1.0 - a.value()) * @sin(a.value() * std.math.pi * 50);
             }
 
-            if (try dvui.button(@src(), "ending", .{}, .{})) {
-                animator.startEnd();
-            }
-        }
-    }
+            try button_wiggle.install();
+            button_wiggle.processEvents();
+            try button_wiggle.drawBackground();
+            try dvui.labelNoFmt(@src(), "Wiggle", button_wiggle.data().options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
+            try button_wiggle.drawFocus();
 
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        try dvui.labelNoFmt(@src(), "Vertical", .{ .gravity_y = 0.5 });
-
-        {
-            var animator = try dvui.animate(@src(), .{ .kind = .vertical, .duration = global.duration, .easing = global.easing }, .{});
-            defer animator.deinit();
-
-            var hbox2 = try dvui.box(@src(), .horizontal, .{});
-            defer hbox2.deinit();
-
-            if (try dvui.button(@src(), "starting", .{}, .{})) {
-                animator.start();
-            }
-
-            if (try dvui.button(@src(), "ending", .{}, .{})) {
-                animator.startEnd();
+            if (button_wiggle.clicked()) {
+                dvui.animation(button_wiggle.data().id, "xoffset", .{ .start_val = 0, .end_val = 1.0, .start_time = 0, .end_time = 500_000 });
             }
         }
-    }
 
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        try dvui.labelNoFmt(@src(), "Horizontal", .{ .gravity_y = 0.5 });
-
-        {
-            var animator = try dvui.animate(@src(), .{ .kind = .horizontal, .duration = global.duration, .easing = global.easing }, .{});
-            defer animator.deinit();
-
-            var hbox2 = try dvui.box(@src(), .horizontal, .{});
-            defer hbox2.deinit();
-
-            if (try dvui.button(@src(), "starting", .{}, .{})) {
-                animator.start();
-            }
-
-            if (try dvui.button(@src(), "ending", .{}, .{})) {
-                animator.startEnd();
+        if (try dvui.button(@src(), "Animating Window (Rect)", .{}, .{})) {
+            if (animating_window_show) {
+                animating_window_closing = true;
+            } else {
+                animating_window_show = true;
+                animating_window_closing = false;
             }
         }
-    }
 
-    if (try dvui.button(@src(), "Animating Dialog (drop)", .{}, .{})) {
-        try dvui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog (drop)", .message = "This shows how to animate dialogs and other floating windows.", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
-    }
-
-    if (try dvui.button(@src(), "Animating Window (Rect)", .{}, .{})) {
         if (animating_window_show) {
-            animating_window_closing = true;
-        } else {
-            animating_window_show = true;
-            animating_window_closing = false;
+            var win = animatingWindowRect(@src(), &animating_window_rect, &animating_window_show, &animating_window_closing, .{});
+            try win.install();
+            win.processEventsBefore();
+            try win.drawBackground();
+            defer win.deinit();
+
+            var keep_open = true;
+            try dvui.windowHeader("Animating Window (center)", "", &keep_open);
+            if (!keep_open) {
+                animating_window_closing = true;
+            }
+
+            var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+            try tl.addText("This shows how to animate dialogs and other floating windows by changing the rect.\n\nThis dialog also remembers its position on screen.", .{});
+            tl.deinit();
         }
     }
 
-    if (animating_window_show) {
-        var win = animatingWindowRect(@src(), &animating_window_rect, &animating_window_show, &animating_window_closing, .{});
-        try win.install();
-        win.processEventsBefore();
-        try win.drawBackground();
-        defer win.deinit();
+    if (try dvui.expander(@src(), "Easings", .{}, .{ .expand = .horizontal })) {
+        {
+            var hbox = try dvui.box(@src(), .horizontal, .{});
+            defer hbox.deinit();
 
-        var keep_open = true;
-        try dvui.windowHeader("Animating Window (center)", "", &keep_open);
-        if (!keep_open) {
-            animating_window_closing = true;
+            try dvui.labelNoFmt(@src(), "Animate", .{ .gravity_y = 0.5 });
+
+            _ = try dvui.dropdown(@src(), &.{ "alpha", "horizontal", "vertical" }, &global.animation_choice, .{});
+
+            try dvui.labelNoFmt(@src(), "easing", .{ .gravity_y = 0.5 });
+
+            var recalc = false;
+            if (dvui.firstFrame(hbox.data().id)) {
+                recalc = true;
+            }
+
+            if (try dvui.dropdown(@src(), &easing_names, &global.easing_choice, .{})) {
+                global.easing = easing_fns[global.easing_choice];
+                recalc = true;
+            }
+
+            var duration_float: f32 = @floatFromInt(@divTrunc(global.duration, std.time.us_per_ms));
+            if (try dvui.sliderEntry(
+                @src(),
+                "Duration {d}ms",
+                .{ .value = &duration_float, .min = 50, .interval = 10, .max = 2_000 },
+                .{ .min_size_content = .{ .w = 180 }, .gravity_y = 0.5 },
+            )) {
+                global.duration = @as(i32, @intFromFloat(duration_float)) * std.time.us_per_ms;
+            }
+
+            if (recalc) {
+                for (0..global.xs.len) |i| {
+                    global.xs[i] = @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(global.xs.len));
+                    global.ys[i] = global.easing(@floatCast(global.xs[i]));
+                }
+            }
         }
 
-        var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-        try tl.addText("This shows how to animate dialogs and other floating windows by changing the rect.\n\nThis dialog also remembers its position on screen.", .{});
-        tl.deinit();
+        {
+            var start = false;
+            var end = false;
+            {
+                var hbox = try dvui.box(@src(), .horizontal, .{});
+                defer hbox.deinit();
+
+                if (try dvui.button(@src(), "start", .{}, .{})) {
+                    start = true;
+                }
+
+                if (try dvui.button(@src(), "end", .{}, .{})) {
+                    end = true;
+                }
+
+                if (global.animation_choice > 0) {
+                    _ = try dvui.checkbox(@src(), &global.center, "Center", .{ .gravity_y = 0.5 });
+                }
+            }
+
+            // overlay is just here for padding and sizing
+            var o = try dvui.overlay(@src(), .{ .padding = dvui.Rect.all(6), .min_size_content = .{ .w = 100, .h = 80 } });
+            defer o.deinit();
+
+            const kind: dvui.AnimateWidget.Kind = switch (global.animation_choice) {
+                0 => .alpha,
+                1 => .horizontal,
+                2 => .vertical,
+                else => unreachable,
+            };
+            var animator = try dvui.animate(@src(), .{ .kind = kind, .duration = global.duration, .easing = global.easing }, .{ .expand = .both, .gravity_x = if (global.center) 0.5 else 0.0, .gravity_y = if (global.center) 0.5 else 0.0 });
+            defer animator.deinit();
+
+            if (start) animator.start();
+            if (end) animator.startEnd();
+
+            try dvui.plotXY(@src(), .{}, 1, &global.xs, &global.ys, .{ .expand = .both });
+        }
+
+        if (try dvui.button(@src(), "Animating Dialog (drop)", .{}, .{})) {
+            try dvui.dialog(@src(), .{ .modal = false, .title = "Animating Dialog (drop)", .message = "This shows how to animate dialogs and other floating windows.", .displayFn = AnimatingDialog.dialogDisplay, .callafterFn = AnimatingDialog.after });
+        }
     }
 
     if (try dvui.expander(@src(), "Spinner", .{}, .{ .expand = .horizontal })) {
