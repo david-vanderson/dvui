@@ -99,7 +99,7 @@ fn main2() !void {
             // Example of how to show a dialog from another thread (outside of win.begin/win.end)
             if (show_dialog_outside_frame) {
                 show_dialog_outside_frame = false;
-                try dvui.dialog(@src(), .{ .window = win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
+                try dvui.dialog(@src(), .{}, .{ .window = win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
             }
         },
         .quit => break,
