@@ -36,9 +36,6 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *AnimateWidget) !void {
-    dvui.parentSet(self.widget());
-    try self.wd.register();
-
     if (dvui.firstFrame(self.wd.id)) {
         // start begin animation
         self.start();
@@ -57,11 +54,31 @@ pub fn install(self: *AnimateWidget) !void {
                 // alpha crashed if v is not between 0 and 1, which some easing functions may output
                 dvui.themeGet().alpha *= std.math.clamp(v, 0, 1);
             },
-            .vertical => {},
-            .horizontal => {},
+            .vertical => {
+                if (dvui.minSizeGet(self.wd.id)) |ms| {
+                    if (self.wd.rect.h > ms.h + 0.001) {
+                        // we are bigger than our min size (maybe expanded) - account for floating point
+                        const h = self.wd.rect.h;
+                        self.wd.rect.h *= @max(v, 0);
+                        self.wd.rect.y += self.wd.options.gravityGet().y * (h - self.wd.rect.h);
+                    }
+                }
+            },
+            .horizontal => {
+                if (dvui.minSizeGet(self.wd.id)) |ms| {
+                    if (self.wd.rect.w > ms.w + 0.001) {
+                        // we are bigger than our min size (maybe expanded) - account for floating point
+                        const w = self.wd.rect.w;
+                        self.wd.rect.w *= @max(v, 0);
+                        self.wd.rect.x += self.wd.options.gravityGet().x * (w - self.wd.rect.w);
+                    }
+                }
+            },
         }
     }
 
+    dvui.parentSet(self.widget());
+    try self.wd.register();
     try self.wd.borderAndBackground(.{});
 }
 
