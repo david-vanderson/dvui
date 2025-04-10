@@ -177,7 +177,7 @@ class Dvui {
 
     /** @type {WebAssembly.Instance} */
     instance;
-    panicked = false;
+    stopped = false;
     log_string = "";
     /** @type {HTMLInputElement} */
     hidden_input;
@@ -248,7 +248,7 @@ class Dvui {
                 }
             },
             wasm_panic: (ptr, len) => {
-                this.panicked = true;
+                this.stopped = true;
                 let msg = utf8decoder.decode(
                     new Uint8Array(
                         this.instance.exports.memory.buffer,
@@ -1036,7 +1036,7 @@ class Dvui {
         let renderTimeoutId = 0;
 
         const render = () => {
-            if (this.panicked) return;
+            if (this.stopped) return;
             renderRequested = false;
 
             // if the canvas changed size, adjust the backing buffer
@@ -1067,13 +1067,17 @@ class Dvui {
             this.gl.clear(this.gl.COLOR_BUFFER_BIT);
 
             let millis_to_wait = this.instance.exports.dvui_update();
+
             if (!this.filesCacheModified) {
                 // Only clear if we didn't add anything this frame. Async could add items after they were requested
                 // in the frame, so keep if for two frames
                 this.filesCache.clear();
             }
             this.filesCacheModified = false;
-            if (millis_to_wait == 0) {
+
+            if (millis_to_wait < 0) {
+                this.stopped = true;
+            } else if (millis_to_wait == 0) {
                 requestRender();
             } else if (millis_to_wait > 0) {
                 renderTimeoutId = setTimeout(function () {
@@ -1081,7 +1085,6 @@ class Dvui {
                     requestRender();
                 }, millis_to_wait);
             }
-            // FIXME: negative numbers indicate to close, but we still render new frames when new events come in
         };
 
         function requestRender() {

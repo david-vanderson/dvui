@@ -80,10 +80,10 @@ pub fn frame() !dvui.App.Result {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
-    if (try dvui.button(@src(), "Panic", .{}, .{})) {
-        std.debug.panic("This is a panic message after {d}s", .{@divTrunc(dvui.currentWindow().frame_time_ns, std.time.ns_per_s)});
-    }
-    if (try dvui.button(@src(), "Close", .{}, .{})) {
+    //if (try dvui.button(@src(), "Panic", .{}, .{})) {
+    //std.debug.panic("This is a panic message after {d}s", .{@divTrunc(dvui.currentWindow().frame_time_ns, std.time.ns_per_s)});
+    //}
+    if (try dvui.button(@src(), if (dvui.wasm) "Stop" else "Close", .{}, .{})) {
         return .close;
     }
 
