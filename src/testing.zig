@@ -12,7 +12,8 @@ pub fn init(allocator: std.mem.Allocator, frameFn: *const fn () anyerror!void, w
 
     if (should_write_snapshots()) {
         // ensure snapshot directory exists
-        std.fs.makeDirAbsolute(testing_options.snapshot_dir) catch |err| switch (err) {
+        // NOTE: do fs operation through cwd to handle relative and absolute paths
+        std.fs.cwd().makeDir(testing_options.snapshot_dir) catch |err| switch (err) {
             error.PathAlreadyExists => {},
             else => return err,
         };
@@ -73,8 +74,9 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation) !void {
     defer self.snapshot_index += 1;
     const filename = try std.fmt.allocPrint(self.allocator, "{s}-{s}-{d}" ++ png_extension, .{ src.file, src.fn_name, self.snapshot_index });
     defer self.allocator.free(filename);
-    var dir = std.fs.openDirAbsolute(testing_options.snapshot_dir, .{}) catch |err| switch (err) {
-        std.fs.File.OpenError.FileNotFound => {
+    // NOTE: do fs operation through cwd to handle relative and absolute paths
+    var dir = std.fs.cwd().openDir(testing_options.snapshot_dir, .{}) catch |err| switch (err) {
+        error.FileNotFound => {
             std.debug.print("Snapshot directory did not exist! Run the test with -Dwrite-snapshots to create all snapshot files\n", .{});
             return SnapshotError.MissingSnapshotDirectory;
         },
