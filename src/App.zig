@@ -5,9 +5,10 @@
 //! pub const dvui_app: dvui.App = .{ .initFn = AppInit, ...};
 //! ```
 //!
-//! Also must use the App's main and log functions:
+//! Also must use the App's main, panic and log functions:
 //! ```
 //! pub const main = dvui.App.main;
+//! pub const panic = dvui.App.panic;
 //! pub const std_options: std.Options = .{
 //!     .logFn = dvui.App.logFn,
 //! };
@@ -32,6 +33,13 @@ fn nop_main() !void {}
 /// pub const main = dvui.App.main;
 /// ```
 pub const main: fn () anyerror!void = if (@hasDecl(dvui.backend, "main")) dvui.backend.main else nop_main;
+
+/// The root file needs to expose the App panic function:
+/// ```
+/// pub const panic = dvui.App.panic;
+/// ```
+pub const panic = if (@hasDecl(dvui.backend, "panic")) dvui.backend.panic else std.debug.FullPanic(std.debug.defaultPanic);
+
 /// Some backends, like web, cannot use stdout and has a custom logFn to be used.
 /// Dvui apps should always prefer to use std.log over stdout to work across all backends.
 ///
