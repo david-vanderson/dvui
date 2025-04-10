@@ -177,6 +177,7 @@ class Dvui {
 
     /** @type {WebAssembly.Instance} */
     instance;
+    panicked = false;
     log_string = "";
     /** @type {HTMLInputElement} */
     hidden_input;
@@ -247,6 +248,7 @@ class Dvui {
                 }
             },
             wasm_panic: (ptr, len) => {
+                this.panicked = true;
                 let msg = utf8decoder.decode(
                     new Uint8Array(
                         this.instance.exports.memory.buffer,
@@ -254,7 +256,8 @@ class Dvui {
                         len,
                     ),
                 );
-                alert(msg);
+                // NOTE: Delay alert so Error shows up in the console before
+                setTimeout(() => alert(msg));
                 throw Error(msg);
             },
             wasm_log_write: (ptr, len) => {
@@ -1034,6 +1037,7 @@ class Dvui {
         let renderTimeoutId = 0;
 
         const render = () => {
+            if (this.panicked) return;
             renderRequested = false;
 
             // if the canvas changed size, adjust the backing buffer
@@ -1078,7 +1082,7 @@ class Dvui {
                     requestRender();
                 }, millis_to_wait);
             }
-            // otherwise something went wrong, so stop
+            // FIXME: negative numbers indicate to close, but we still render new frames when new events come in
         };
 
         function requestRender() {
