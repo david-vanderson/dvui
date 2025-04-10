@@ -76,7 +76,7 @@ pub fn frame() !dvui.App.Result {
     tl2.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    if (try dvui.button(@src(), label, .{}, .{})) {
+    if (try dvui.button(@src(), label, .{}, .{ .test_id = "show-demo-btn" })) {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
@@ -91,4 +91,22 @@ pub fn frame() !dvui.App.Result {
     try dvui.Examples.demo();
 
     return .ok;
+}
+
+test "test tab order" {
+    var t = try dvui.testing.init(
+        std.testing.allocator,
+        struct {
+            fn frameFn() !void {
+                if (try frame() == .close) return error.closed;
+            }
+        }.frameFn,
+        .{ .w = 600, .h = 400 },
+    );
+    defer t.deinit();
+
+    try t.runner.run();
+    try t.runner.pressKey(.tab, .none);
+    try t.runner.run();
+    try t.expectFocused("show-demo-btn", null);
 }
