@@ -37,10 +37,10 @@ pub fn registerWidgetData(self: *Self, wd: *const dvui.WidgetData) !void {
             .wd = wd.*,
             .visible = wd.visible(),
         });
-        if (prev_entry) |entry| {
+        if (prev_entry != null) {
             dvui.log.err("Duplicate entry for test_id '{s}' ({?d})", .{
-                entry.value.wd.options.test_id,
-                entry.value.wd.options.id_extra,
+                test_id,
+                wd.options.id_extra,
             });
         }
     }
