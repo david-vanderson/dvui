@@ -46,6 +46,8 @@ pub fn main() !void {
     g_backend = backend;
     defer backend.deinit();
 
+    Backend.c.SDL_EnableScreenSaver();
+
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
     defer win.deinit();
