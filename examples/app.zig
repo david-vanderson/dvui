@@ -20,6 +20,7 @@ pub const dvui_app: dvui.App = .{
     .deinitFn = AppDeinit,
 };
 pub const main = dvui.App.main;
+pub const panic = dvui.App.panic;
 pub const std_options: std.Options = .{
     .logFn = dvui.App.logFn,
 };
@@ -37,14 +38,12 @@ pub fn AppDeinit() void {}
 
 // Run each frame to do normal UI
 pub fn AppFrame() dvui.App.Result {
-    frame() catch |err| {
-        std.log.err("in frame: {!}", .{err});
-        return .close;
+    return frame() catch |err| {
+        std.debug.panic("in frame: {!}", .{err});
     };
-    return .ok;
 }
 
-pub fn frame() !void {
+pub fn frame() !dvui.App.Result {
     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
     defer scroll.deinit();
 
@@ -81,6 +80,15 @@ pub fn frame() !void {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
+    //if (try dvui.button(@src(), "Panic", .{}, .{})) {
+    //std.debug.panic("This is a panic message after {d}s", .{@divTrunc(dvui.currentWindow().frame_time_ns, std.time.ns_per_s)});
+    //}
+    if (try dvui.button(@src(), if (dvui.wasm) "Stop" else "Close", .{}, .{})) {
+        return .close;
+    }
+
     // look at demo() for examples of dvui widgets, shows in a floating window
     try dvui.Examples.demo();
+
+    return .ok;
 }
