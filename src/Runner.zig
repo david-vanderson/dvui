@@ -33,10 +33,16 @@ pub fn deinit(self: *Self) void {
 pub fn registerWidgetData(self: *Self, wd: *const dvui.WidgetData) !void {
     if (wd.options.test_id) |test_id| {
         const hashed_id = dvui.hashIdKey(@intCast(wd.options.idExtra()), test_id);
-        try self.named_widgets.put(hashed_id, .{
+        const prev_entry = try self.named_widgets.fetchPut(hashed_id, .{
             .wd = wd.*,
             .visible = wd.visible(),
         });
+        if (prev_entry) |entry| {
+            dvui.log.err("Duplicate entry for test_id '{s}' ({?d})", .{
+                entry.value.wd.options.test_id,
+                entry.value.wd.options.id_extra,
+            });
+        }
     }
 }
 
