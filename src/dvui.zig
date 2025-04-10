@@ -81,6 +81,7 @@ pub const StructFieldOptions = se.StructFieldOptions;
 
 pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
+pub const testing = @import("testing.zig");
 
 pub const wasm = (builtin.target.cpu.arch == .wasm32);
 pub const useFreeType = !wasm;
