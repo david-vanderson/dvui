@@ -25,7 +25,11 @@ pub fn build(b: *std.Build) !void {
 
     // Testing module with headless rendeing
     const testing_mod = addSDLModule(b, target, optimize, "sdl_testing", .{ .headless = true });
+    const testing_opts = b.addOptions();
+    const snapshot_dir = b.option([]const u8, "snapshot_dir", "The directory where images for snapshot testing will be stored") orelse "snapshots";
+    testing_opts.addOptionPath("snapshot_dir", b.path(snapshot_dir));
     const dvui_testing = addDvuiModule(b, target, optimize, "dvui_testing", true);
+    dvui_testing.addOptions("testing_options", testing_opts);
     linkBackend(dvui_testing, testing_mod);
 
     // SDL

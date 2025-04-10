@@ -48,7 +48,7 @@ pub fn frame() !dvui.App.Result {
     defer scroll.deinit();
 
     var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
-    const lorem = "This is a dvui.App example that can compile on multiple backends.";
+    const lorem = "This is a a dvui.App example that can compile on multiple backends.";
     try tl.addText(lorem, .{});
     try tl.addText("\n\n", .{});
     try tl.format("Current backend {s} : {s}", .{ @tagName(dvui.backend.kind), dvui.backend.description() }, .{});
@@ -93,7 +93,7 @@ pub fn frame() !dvui.App.Result {
     return .ok;
 }
 
-test "test tab order" {
+test "tab order" {
     var t = try dvui.testing.init(
         std.testing.allocator,
         struct {
@@ -109,4 +109,5 @@ test "test tab order" {
     try t.runner.pressKey(.tab, .none);
     try t.runner.run();
     try t.expectFocused("show-demo-btn", null);
+    try t.snapshot(@src());
 }
