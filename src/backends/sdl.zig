@@ -1048,6 +1048,8 @@ pub fn main() !void {
     });
     defer back.deinit();
 
+    c.SDL_EnableScreenSaver();
+
     //// init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), gpa, back.backend(), .{});
     defer win.deinit();
