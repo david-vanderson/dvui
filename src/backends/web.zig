@@ -741,6 +741,15 @@ pub fn logFn(
     WebBackend.wasm.wasm_log_flush();
 }
 
+pub const panic = std.debug.FullPanic(struct {
+    fn call(msg: []const u8, ret_addr: ?usize) noreturn {
+        @branchHint(.cold);
+        _ = ret_addr;
+        wasm.wasm_panic(msg.ptr, msg.len);
+        @trap();
+    }
+}.call);
+
 pub var back: WebBackend = undefined;
 
 fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
@@ -779,12 +788,9 @@ fn dvui_deinit() callconv(.c) void {
 // return -1 to quit
 fn dvui_update() callconv(.c) i32 {
     return update() catch |err| {
-        std.log.err("{!}", .{err});
-        const msg = std.fmt.allocPrint(gpa, "{!}", .{err}) catch "allocPrint OOM";
-        WebBackend.wasm.wasm_panic(msg.ptr, msg.len);
         // The main loop is stopping, this is our last chance to deinit stuff
         dvui_deinit();
-        return -1;
+        std.debug.panic("{!}", .{err});
     };
 }
 
@@ -799,26 +805,16 @@ fn update() !i32 {
 
     const res = dvui_app.?.frameFn();
 
-    switch (res) {
-        .ok => {},
-        // TODO: Should web apps be allowed to close? What happens on a close?
-        .close => return error.close,
-    }
-    //try dvui.label(@src(), "test", .{}, .{ .color_text = .{ .color = dvui.Color.white } });
-
-    //var indices: []const u32 = &[_]u32{ 0, 1, 2, 0, 2, 3 };
-    //var vtx: []const dvui.Vertex = &[_]dvui.Vertex{
-    //    .{ .pos = .{ .x = 100, .y = 150 }, .uv = .{ 0.0, 0.0 }, .col = .{} },
-    //    .{ .pos = .{ .x = 200, .y = 150 }, .uv = .{ 1.0, 0.0 }, .col = .{ .g = 0, .b = 0, .a = 200 } },
-    //    .{ .pos = .{ .x = 200, .y = 250 }, .uv = .{ 1.0, 1.0 }, .col = .{ .r = 0, .b = 0, .a = 100 } },
-    //    .{ .pos = .{ .x = 100, .y = 250 }, .uv = .{ 0.0, 1.0 }, .col = .{ .r = 0, .g = 0 } },
-    //};
-    //backend.drawClippedTriangles(null, vtx, indices);
-
     const end_micros = try win.end(.{});
 
     back.setCursor(win.cursorRequested());
     back.textInputRect(win.textInputRequested());
+
+    switch (res) {
+        .ok => {},
+        // TODO: Should web apps be allowed to close? What happens on a close?
+        .close => return -1,
+    }
 
     const wait_event_micros = win.waitTime(end_micros, null);
     return @intCast(@divTrunc(wait_event_micros, 1000));
