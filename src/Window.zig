@@ -357,6 +357,12 @@ pub fn deinit(self: *Self) void {
     for (self.datas_trash.items) |sd| {
         sd.free(self.gpa);
     }
+    self.datas_trash.deinit();
+
+    for (self.texture_trash.items) |tex| {
+        self.backend.textureDestroy(tex);
+    }
+    self.texture_trash.deinit();
 
     {
         var it = self.datas.iterator();
@@ -1539,10 +1545,12 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     for (self.datas_trash.items) |sd| {
         sd.free(self.gpa);
     }
+    self.datas_trash.clearAndFree();
 
     for (self.texture_trash.items) |tex| {
         self.backend.textureDestroy(tex);
     }
+    self.texture_trash.clearAndFree();
 
     // events may have been tagged with a focus widget that never showed up, so
     // we wouldn't even get them bubbled
