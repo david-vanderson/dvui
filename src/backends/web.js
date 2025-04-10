@@ -256,9 +256,8 @@ class Dvui {
                         len,
                     ),
                 );
-                // NOTE: Delay alert so Error shows up in the console before
-                setTimeout(() => alert(msg));
-                throw Error(msg);
+                console.error("PANIC:", msg);
+                alert(msg);
             },
             wasm_log_write: (ptr, len) => {
                 this.log_string += utf8decoder.decode(
