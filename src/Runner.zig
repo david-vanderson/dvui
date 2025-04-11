@@ -5,6 +5,7 @@ backend: *Backend,
 frameFn: *const fn () anyerror!void,
 
 time_ns: i128 = 0,
+rendering_disabled: bool = true,
 
 named_widgets: std.AutoHashMap(u32, WidgetInfo),
 
@@ -108,6 +109,8 @@ pub fn captureFrame(self: *Self, allocator: std.mem.Allocator) !Frame {
     _ = Backend.c.SDL_SetRenderDrawColor(self.backend.renderer, 0, 0, 0, 255);
     _ = Backend.c.SDL_RenderClear(self.backend.renderer);
 
+    self.rendering_disabled = false;
+    defer self.rendering_disabled = true;
     // still install runner incase the window were to change during this frame
     self.window.runner = self;
     defer self.window.runner = null;
