@@ -1113,6 +1113,10 @@ pub fn pathFillConvex(path: []const Point, color: Color) !void {
 
     const cw = currentWindow();
 
+    if (cw.runner != null and cw.runner.?.rendering_disabled) {
+        return;
+    }
+
     if (!cw.render_target.rendering) {
         const path_copy = try cw.arena().dupe(Point, path);
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = color } } };
@@ -1248,6 +1252,10 @@ pub fn pathStrokeRaw(path: []const Point, thickness: f32, color: Color, closed_i
     }
 
     const cw = currentWindow();
+
+    if (cw.runner != null and cw.runner.?.rendering_disabled) {
+        return;
+    }
 
     if (path.len == 1) {
         // draw a circle with radius thickness at that point
@@ -5072,6 +5080,10 @@ pub fn renderText(opts: renderTextOptions) !void {
 
     var cw = currentWindow();
 
+    if (cw.runner != null and cw.runner.?.rendering_disabled) {
+        return;
+    }
+
     if (!cw.render_target.rendering) {
         var opts_copy = opts;
         opts_copy.text = try cw.arena().dupe(u8, opts.text);
@@ -5394,6 +5406,10 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 
     var cw = currentWindow();
 
+    if (cw.runner != null and cw.runner.?.rendering_disabled) {
+        return;
+    }
+
     const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .debug_font_atlases = .{ .rs = rs, .color = color } } };
     if (!cw.render_target.rendering) {
         var sw = cw.subwindowCurrent();
@@ -5536,6 +5552,10 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
     if (clipGet().intersect(rs.r).empty()) return;
 
     var cw = currentWindow();
+
+    if (cw.runner != null and cw.runner.?.rendering_disabled) {
+        return;
+    }
 
     if (!cw.render_target.rendering) {
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .opts = opts } } };
