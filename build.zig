@@ -24,7 +24,8 @@ pub fn build(b: *std.Build) !void {
     }
 
     // Testing module with headless rendeing
-    const testing_mod = addSDLModule(b, target, optimize, "sdl_testing", .{ .headless = true });
+    // NOTE: Use software renderer to get consistent results across platforms
+    const testing_mod = addSDLModule(b, target, optimize, "sdl_testing", .{ .headless = true, .software_renderer = true });
     const testing_opts = b.addOptions();
     const snapshot_dir = b.option(std.Build.LazyPath, "snapshot_dir", "The directory where images for snapshot testing will be stored") orelse std.Build.LazyPath{ .cwd_relative = "snapshots" };
     // NOTE: snapshot_dir path may be absolute or relative
