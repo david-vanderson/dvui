@@ -23,63 +23,34 @@ pub fn build(b: *std.Build) !void {
         _ = addDvuiModule(b, target, optimize, "dvui", true);
     }
 
+    // Testing module with headless rendeing
+    // NOTE: Use software renderer to get consistent results across platforms
+    const testing_mod = addSDLModule(b, target, optimize, "sdl_testing", .{ .headless = true, .software_renderer = true });
+    const testing_opts = b.addOptions();
+    const snapshot_dir = b.option(std.Build.LazyPath, "snapshot_dir", "The directory where images for snapshot testing will be stored") orelse std.Build.LazyPath{ .cwd_relative = "snapshots" };
+    // NOTE: snapshot_dir path may be absolute or relative
+    testing_opts.addOptionPath("snapshot_dir", snapshot_dir);
+    const dvui_testing = addDvuiModule(b, target, optimize, "dvui_testing", true);
+    dvui_testing.addOptions("testing_options", testing_opts);
+    linkBackend(dvui_testing, testing_mod);
+
     // SDL
     if (back_to_build == null or back_to_build == .sdl) {
-        const sdl_mod = b.addModule("sdl", .{
-            .root_source_file = b.path("src/backends/sdl.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        });
-
-        var sdl_options = b.addOptions();
+        const headless = b.option(bool, "headless", "Enable headless operation") orelse false;
+        const software_renderer = b.option(bool, "software_renderer", "Enable software rendering (no GPU or driver needed)") orelse false;
         const compile_sdl3 = b.option(bool, "sdl3", "SDL3 instead of SDL2") orelse false;
-        if (b.systemIntegrationOption("sdl2", .{})) {
-            // SDL2 from system
-            sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
-            sdl_mod.linkSystemLibrary("SDL2", .{});
-        } else if (b.systemIntegrationOption("sdl3", .{})) {
-            // SDL3 from system
-            sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
-            sdl_mod.linkSystemLibrary("SDL3", .{});
-        } else if (compile_sdl3) {
-            // SDL3 compiled from source
-            sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
-            if (b.lazyDependency("sdl3", .{
-                .target = target,
-                .optimize = optimize,
-            })) |sdl3| {
-                sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
-            }
-        } else {
-            // SDL2 compiled from source
-            sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
-            if (target.result.os.tag == .linux) {
-                const sdl_dep = b.lazyDependency("sdl", .{
-                    .target = target,
-                    .optimize = optimize,
-                    // trying to compile opengles (version 1) fails on
-                    // newer linux distros like arch, because they don't
-                    // have /usr/include/gles/gl.h
-                    // https://github.com/david-vanderson/dvui/issues/131
-                    .render_driver_ogl_es = false,
-                });
-                if (sdl_dep) |sd| {
-                    sdl_mod.linkLibrary(sd.artifact("SDL2"));
-                }
-            } else {
-                const sdl_dep = b.lazyDependency("sdl", .{ .target = target, .optimize = optimize });
-                if (sdl_dep) |sd| {
-                    sdl_mod.linkLibrary(sd.artifact("SDL2"));
-                }
-            }
-        }
-        sdl_mod.addOptions("sdl_options", sdl_options);
+
+        const sdl_mod = addSDLModule(b, target, optimize, "sdl", .{
+            .headless = headless,
+            .software_renderer = software_renderer,
+            .compile_sdl3 = compile_sdl3,
+        });
 
         const dvui_sdl = addDvuiModule(b, target, optimize, "dvui_sdl", true);
         linkBackend(dvui_sdl, sdl_mod);
         addExample(b, target, optimize, "sdl-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
+        addExample(b, target, optimize, "sdl-picture", b.path("examples/sdl-picture.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-app", b.path("examples/app.zig"), dvui_sdl);
     }
 
@@ -232,6 +203,71 @@ pub fn build(b: *std.Build) !void {
     docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
 }
 
+fn addSDLModule(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    comptime name: []const u8,
+    opts: struct {
+        headless: bool = false,
+        software_renderer: bool = false,
+        compile_sdl3: bool = false,
+    },
+) *std.Build.Module {
+    const sdl_mod = b.addModule(name, .{
+        .root_source_file = b.path("src/backends/sdl.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    var sdl_options = b.addOptions();
+    sdl_options.addOption(bool, "headless", opts.headless);
+    sdl_options.addOption(bool, "software_renderer", opts.software_renderer);
+
+    if (b.systemIntegrationOption("sdl2", .{})) {
+        // SDL2 from system
+        sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
+        sdl_mod.linkSystemLibrary("SDL2", .{});
+    } else if (b.systemIntegrationOption("sdl3", .{})) {
+        // SDL3 from system
+        sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
+        sdl_mod.linkSystemLibrary("SDL3", .{});
+    } else if (opts.compile_sdl3) {
+        // SDL3 compiled from source
+        sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
+        if (b.lazyDependency("sdl3", .{
+            .target = target,
+            .optimize = optimize,
+        })) |sdl3| {
+            sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
+        }
+    } else {
+        // SDL2 compiled from source
+        sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
+        if (target.result.os.tag == .linux) {
+            const sdl_dep = b.lazyDependency("sdl", .{
+                .target = target,
+                .optimize = optimize,
+                // trying to compile opengles (version 1) fails on
+                // newer linux distros like arch, because they don't
+                // have /usr/include/gles/gl.h
+                // https://github.com/david-vanderson/dvui/issues/131
+                .render_driver_ogl_es = false,
+            });
+            if (sdl_dep) |sd| {
+                sdl_mod.linkLibrary(sd.artifact("SDL2"));
+            }
+        } else {
+            const sdl_dep = b.lazyDependency("sdl", .{ .target = target, .optimize = optimize });
+            if (sdl_dep) |sd| {
+                sdl_mod.linkLibrary(sd.artifact("SDL2"));
+            }
+        }
+    }
+    sdl_mod.addOptions("sdl_options", sdl_options);
+    return sdl_mod;
+}
+
 pub fn linkBackend(dvui_mod: *std.Build.Module, backend_mod: *std.Build.Module) void {
     backend_mod.addImport("dvui", dvui_mod);
     dvui_mod.addImport("backend", backend_mod);
@@ -329,6 +365,18 @@ fn addExample(
 
     const run_step = b.step(name, "Run " ++ name);
     run_step.dependOn(&run_cmd.step);
+
+    if (b.modules.get("dvui_testing")) |dvui_testing| {
+        const test_mod = b.createModule(.{
+            .root_source_file = file,
+            .target = target,
+            .optimize = optimize,
+        });
+        test_mod.addImport("dvui", dvui_testing);
+        const test_cmd = b.addRunArtifact(b.addTest(.{ .root_module = test_mod }));
+        const test_step = b.step("test-" ++ name, "Test " ++ name);
+        test_step.dependOn(&test_cmd.step);
+    }
 }
 
 fn addWebExample(
