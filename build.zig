@@ -36,9 +36,14 @@ pub fn build(b: *std.Build) !void {
     // SDL
     if (back_to_build == null or back_to_build == .sdl) {
         const headless = b.option(bool, "headless", "Enable headless operation") orelse false;
+        const software_renderer = b.option(bool, "software_renderer", "Enable software rendering (no GPU or driver needed)") orelse false;
         const compile_sdl3 = b.option(bool, "sdl3", "SDL3 instead of SDL2") orelse false;
 
-        const sdl_mod = addSDLModule(b, target, optimize, "sdl", .{ .headless = headless, .compile_sdl3 = compile_sdl3 });
+        const sdl_mod = addSDLModule(b, target, optimize, "sdl", .{
+            .headless = headless,
+            .software_renderer = software_renderer,
+            .compile_sdl3 = compile_sdl3,
+        });
 
         const dvui_sdl = addDvuiModule(b, target, optimize, "dvui_sdl", true);
         linkBackend(dvui_sdl, sdl_mod);
@@ -204,6 +209,7 @@ fn addSDLModule(
     comptime name: []const u8,
     opts: struct {
         headless: bool = false,
+        software_renderer: bool = false,
         compile_sdl3: bool = false,
     },
 ) *std.Build.Module {
@@ -215,6 +221,7 @@ fn addSDLModule(
     });
     var sdl_options = b.addOptions();
     sdl_options.addOption(bool, "headless", opts.headless);
+    sdl_options.addOption(bool, "software_renderer", opts.software_renderer);
 
     if (b.systemIntegrationOption("sdl2", .{})) {
         // SDL2 from system
