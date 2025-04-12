@@ -53,6 +53,8 @@ var layout_border: Rect = Rect.all(0);
 var layout_padding: Rect = Rect.all(4);
 var layout_gravity_x: f32 = 0.5;
 var layout_gravity_y: f32 = 0.5;
+var layout_rotation: f32 = 0;
+var layout_corner_radius: Rect = Rect.all(5);
 var layout_flex_content_justify: dvui.FlexBoxWidget.ContentPosition = .center;
 var layout_expand: dvui.Options.Expand = .none;
 var show_dialog: bool = false;
@@ -1362,6 +1364,7 @@ pub fn layout() !void {
         const Static = struct {
             var img: bool = false;
             var shrink: bool = false;
+            var background: bool = false;
             var shrinkE: dvui.Options.Expand = .none;
             var size: Size = .{ .w = 16, .h = 16 };
         };
@@ -1384,6 +1387,7 @@ pub fn layout() !void {
                 _ = try dvui.sliderEntry(@src(), "H: {d:0.0}", .{ .value = &Static.size.h, .min = 1, .max = 280, .interval = 1 }, .{ .gravity_y = 0.5 });
 
                 _ = try dvui.checkbox(@src(), &Static.shrink, "Shrink", .{});
+                _ = try dvui.checkbox(@src(), &Static.background, "Background", .{});
             }
 
             var opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
@@ -1393,10 +1397,12 @@ pub fn layout() !void {
 
             var o = try dvui.overlay(@src(), opts);
 
-            const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand };
+            const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corner_radius = layout_corner_radius };
             if (Static.img) {
                 _ = try dvui.image(@src(), .{ .name = "zig favicon", .bytes = zig_favicon, .shrink = if (Static.shrink) Static.shrinkE else null }, options.override(.{
                     .min_size_content = Static.size,
+                    .background = Static.background,
+                    .color_fill = .{ .color = dvui.themeGet().color_text },
                 }));
             } else {
                 var buf: [128]u8 = undefined;
@@ -1412,6 +1418,12 @@ pub fn layout() !void {
             try dvui.label(@src(), "Gravity", .{}, .{});
             _ = try dvui.sliderEntry(@src(), "X: {d:0.2}", .{ .value = &layout_gravity_x, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
             _ = try dvui.sliderEntry(@src(), "Y: {d:0.2}", .{ .value = &layout_gravity_y, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
+            try dvui.label(@src(), "Rotation", .{}, .{});
+            _ = try dvui.sliderEntry(@src(), "{d:0.2} radians", .{ .value = &layout_rotation, .min = std.math.pi * -2, .max = std.math.pi * 2, .interval = 0.01 }, .{});
+            try dvui.label(@src(), "Corner Radius", .{}, .{});
+            inline for (0.., @typeInfo(dvui.Rect).@"struct".fields) |i, field| {
+                _ = try dvui.sliderEntry(@src(), field.name ++ ": {d:0}", .{ .min = 0, .max = 200, .interval = 1, .value = &@field(layout_corner_radius, field.name) }, .{ .id_extra = i });
+            }
         }
 
         {

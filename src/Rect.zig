@@ -95,6 +95,10 @@ pub fn bottomRight(self: *const Rect) Point {
     return Point{ .x = self.x + self.w, .y = self.y + self.h };
 }
 
+pub fn center(self: *const Rect) Point {
+    return Point{ .x = self.x + self.w / 2, .y = self.y + self.h / 2 };
+}
+
 pub fn size(self: *const Rect) Size {
     return Size{ .w = self.w, .h = self.h };
 }

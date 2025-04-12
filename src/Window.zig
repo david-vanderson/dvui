@@ -1163,7 +1163,7 @@ pub fn textInputRequested(self: *const Self) ?Rect {
     return self.text_input_rect;
 }
 
-pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !void {
+pub fn renderCommands(_: *Self, queue: std.ArrayList(dvui.RenderCommand)) !void {
     const oldsnap = dvui.snapToPixels();
     defer _ = dvui.snapToPixelsSet(oldsnap);
 
@@ -1183,16 +1183,8 @@ pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !vo
             .debug_font_atlases => |t| {
                 try dvui.debugRenderFontAtlases(t.rs, t.color);
             },
-            .texture => |t| {
-                try dvui.renderTexture(t.tex, t.rs, t.opts);
-            },
-            .pathFillConvex => |pf| {
-                try dvui.pathFillConvex(pf.path, pf.color);
-                self.arena().free(pf.path);
-            },
-            .pathStroke => |ps| {
-                try dvui.pathStrokeRaw(ps.path, ps.thickness, ps.color, ps.closed, ps.endcap_style);
-                self.arena().free(ps.path);
+            .render_triangles => |triangles| {
+                try dvui.renderTriangles(triangles);
             },
         }
     }

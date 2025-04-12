@@ -875,22 +875,7 @@ pub const RenderCommand = struct {
             rs: RectScale,
             color: Color,
         },
-        texture: struct {
-            tex: Texture,
-            rs: RectScale,
-            opts: RenderTextureOptions,
-        },
-        pathFillConvex: struct {
-            path: []const Point,
-            color: Color,
-        },
-        pathStroke: struct {
-            path: []const Point,
-            closed: bool,
-            thickness: f32,
-            endcap_style: EndCapStyle,
-            color: Color,
-        },
+        render_triangles: Triangles,
     },
 };
 
@@ -1101,24 +1086,36 @@ pub fn pathAddArc(path: *std.ArrayList(Point), center: Point, radius: f32, start
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn pathFillConvex(path: []const Point, color: Color) !void {
-    if (path.len < 3) {
-        return;
-    }
-
     if (dvui.clipGet().empty()) {
         return;
     }
 
     const cw = currentWindow();
 
+    const triangles = try pathFillConvexTriangles(path, color);
+
     if (!cw.render_target.rendering) {
-        const path_copy = try cw.arena().dupe(Point, path);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = color } } };
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .render_triangles = triangles } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
         return;
     }
+
+    try renderTriangles(triangles);
+}
+
+/// Generates triangles to fill path (must be convex).
+///
+/// Does not set the uv coordinates of the vertexes
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn pathFillConvexTriangles(path: []const Point, color: Color) !Triangles {
+    if (path.len < 3) {
+        return Triangles.empty;
+    }
+
+    const cw = currentWindow();
 
     var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), path.len * 2);
     defer vtx.deinit();
@@ -1191,10 +1188,7 @@ pub fn pathFillConvex(path: []const Point, color: Color) !void {
     bounds.w = bounds.w - bounds.x;
     bounds.h = bounds.h - bounds.y;
 
-    const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-    const clipr: ?Rect = if (bounds.clippedBy(clip_offset)) clip_offset else null;
-
-    cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
+    return .{ .vertexes = try vtx.toOwnedSlice(), .indices = try idx.toOwnedSlice(), .bounds = bounds };
 }
 
 pub const EndCapStyle = enum {
@@ -1223,9 +1217,10 @@ pub fn pathStroke(path: []const Point, thickness: f32, color: Color, opts: PathS
 
     const cw = currentWindow();
 
+    const triangles = try pathStrokeTriangles(path, thickness, color, opts.closed, opts.endcap_style);
+
     if (opts.after or !cw.render_target.rendering) {
-        const path_copy = try cw.arena().dupe(Point, path);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = opts.closed, .thickness = thickness, .endcap_style = opts.endcap_style, .color = color } } };
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .render_triangles = triangles } };
 
         var sw = cw.subwindowCurrent();
         if (opts.after) {
@@ -1237,12 +1232,19 @@ pub fn pathStroke(path: []const Point, thickness: f32, color: Color, opts: PathS
         return;
     }
 
-    try pathStrokeRaw(path, thickness, color, opts.closed, opts.endcap_style);
+    try renderTriangles(triangles);
 }
 
-pub fn pathStrokeRaw(path: []const Point, thickness: f32, color: Color, closed_in: bool, endcap_style: EndCapStyle) !void {
+/// Generates triangles to fill path (must be convex).
+///
+/// Does not set the uv coordinates of the vertexes
+pub fn pathStrokeTriangles(path: []const Point, thickness: f32, color: Color, closed_in: bool, endcap_style: EndCapStyle) !Triangles {
     if (dvui.clipGet().empty()) {
-        return;
+        return Triangles.empty;
+    }
+
+    if (path.len == 0) {
+        return Triangles.empty;
     }
 
     const cw = currentWindow();
@@ -1255,9 +1257,8 @@ pub fn pathStrokeRaw(path: []const Point, thickness: f32, color: Color, closed_i
         defer tempPath.deinit();
 
         try pathAddArc(&tempPath, center, thickness, math.pi * 2.0, 0, true);
-        try pathFillConvex(tempPath.items, color);
 
-        return;
+        return try pathFillConvexTriangles(tempPath.items, color);
     }
 
     var closed: bool = closed_in;
@@ -1498,10 +1499,149 @@ pub fn pathStrokeRaw(path: []const Point, thickness: f32, color: Color, closed_i
     bounds.w = bounds.w - bounds.x;
     bounds.h = bounds.h - bounds.y;
 
-    const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-    const clipr: ?Rect = if (bounds.clippedBy(clip_offset)) clip_offset else null;
+    return .{ .vertexes = try vtx.toOwnedSlice(), .indices = try idx.toOwnedSlice(), .bounds = bounds };
+}
 
-    cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
+pub const Triangles = struct {
+    // assumed to be arena allocated or handled separately
+    vertexes: []Vertex,
+    // assumed to be arena allocated or handled separately
+    indices: []u16,
+    bounds: Rect,
+    texture: ?Texture = null,
+
+    pub const empty = Triangles{
+        .vertexes = &.{},
+        .indices = &.{},
+        .bounds = .{},
+    };
+
+    pub fn fromRect(allocator: std.mem.Allocator, r: Rect, color: Color) !Triangles {
+        const vertexes = try allocator.alloc(Vertex, 4);
+        const indices = try allocator.alloc(u16, 6);
+        var vtx = std.ArrayListUnmanaged(Vertex).initBuffer(vertexes);
+        var idx = std.ArrayListUnmanaged(u16).initBuffer(indices);
+
+        var v: Vertex = undefined;
+        v.pos.x = r.x;
+        v.pos.y = r.y;
+        v.col = color;
+        v.uv[0] = 0;
+        v.uv[1] = 0;
+        vtx.appendAssumeCapacity(v);
+
+        v.pos.x += r.w;
+        v.uv[0] = 1;
+        vtx.appendAssumeCapacity(v);
+
+        v.pos.y += r.h;
+        v.uv[1] = 1;
+        vtx.appendAssumeCapacity(v);
+
+        v.pos.x = r.x;
+        v.uv[0] = 0;
+        vtx.appendAssumeCapacity(v);
+
+        // triangles must be counter-clockwise (y going down) to avoid backface culling
+        idx.appendAssumeCapacity(0);
+        idx.appendAssumeCapacity(2);
+        idx.appendAssumeCapacity(1);
+        idx.appendAssumeCapacity(0);
+        idx.appendAssumeCapacity(3);
+        idx.appendAssumeCapacity(2);
+
+        return .{ .vertexes = vertexes, .indices = indices, .bounds = r };
+    }
+
+    /// This will reset `Triangle.bounds` to the bounding rect of the `Triangle.vertexes` positions
+    ///
+    /// It should be preferred to calculate the bounds while creating the vertexes
+    pub fn resetBounds(self: *Triangles) void {
+        var max_pos = Point{ .x = std.math.floatMax(f32), .y = std.math.floatMax(f32) };
+        var min_pos = Point{ .x = 0, .y = 0 };
+        for (self.vertexes) |*v| {
+            max_pos = max_pos.max(v.pos);
+            min_pos = min_pos.max(v.pos);
+        }
+        self.bounds = Rect.fromPoint(min_pos).toPoint(max_pos);
+    }
+
+    /// This will reset the uv coordinates of the vertexes based on the bounds of the triangles
+    ///
+    /// It should be preferred to set the uv coordinates while creating the vertexes
+    pub fn resetUv(self: *Triangles) void {
+        for (self.vertexes) |*v| {
+            v.uv[0] = (v.pos.x - self.bounds.x) / self.bounds.w;
+            v.uv[1] = (v.pos.y - self.bounds.y) / self.bounds.h;
+        }
+    }
+
+    /// Rotates the `Triangle.vertexes` around the center of `Triangle.bounds`
+    pub fn applyRotation(self: *Triangles, rotations_radians: f32) void {
+        if (rotations_radians == 0) return;
+
+        const center = self.bounds.center();
+        const cos = @cos(rotations_radians);
+        const sin = @sin(rotations_radians);
+
+        for (self.vertexes) |*v| {
+            // translate point to origin (the center)
+            v.pos = v.pos.diff(center);
+            // rotate around origin
+            const rotated = Point{
+                .x = v.pos.x * cos - v.pos.y * sin,
+                .y = v.pos.x * sin + v.pos.y * cos,
+            };
+            // reset the translation
+            v.pos = rotated.plus(center);
+        }
+        self.resetBounds();
+    }
+
+    pub const ColorOptions = struct {
+        overwrite_transparent: bool = false,
+    };
+
+    /// It should be preferred to set the color while creating the vertexes
+    pub fn applyColor(self: *Triangles, color: Color, opts: ColorOptions) void {
+        for (self.vertexes) |*v| {
+            if (opts.overwrite_transparent or v.col.a != 0) {
+                v.col = color;
+            }
+        }
+    }
+
+    pub fn applyTexture(self: *Triangles, texture: Texture, uv: ?Rect) void {
+        if (uv != null) {
+            for (self.vertexes) |*v| {
+                v.uv[0] = std.math.lerp(uv.?.x, uv.?.w, v.uv[0]);
+                v.uv[1] = std.math.lerp(uv.?.y, uv.?.h, v.uv[1]);
+            }
+        }
+        self.texture = texture;
+    }
+};
+
+pub fn renderTriangles(triangles: Triangles) !void {
+    if (dvui.clipGet().empty()) {
+        return;
+    }
+
+    const cw = currentWindow();
+
+    if (!cw.render_target.rendering) {
+        // TODO: does triangles need to be duped on the arena to guarantee the slices don't get deallocated?
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .render_triangles = triangles } };
+
+        var sw = cw.subwindowCurrent();
+        try sw.render_cmds.append(cmd);
+        return;
+    }
+
+    const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
+    const clipr: ?Rect = if (triangles.bounds.clippedBy(clip_offset)) clip_offset else null;
+
+    cw.backend.drawClippedTriangles(triangles.texture, triangles.vertexes, triangles.indices, clipr);
 }
 
 /// Called by floating widgets to participate in subwindow stacking - the order
@@ -4045,7 +4185,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
     if (doclip) {
         old_clip = dvui.clip(wd.contentRectScale().r);
     }
-    try dvui.renderImage(init_opts.name, init_opts.bytes, rs, wd.options.rotationGet(), .{});
+    try dvui.renderImage(init_opts.name, init_opts.bytes, rs, .{ .rotation = wd.options.rotationGet(), .radius = wd.options.corner_radius });
     if (doclip) {
         dvui.clipSet(old_clip);
     }
@@ -5525,6 +5665,7 @@ pub fn renderTarget(args: RenderTarget) RenderTarget {
 pub const RenderTextureOptions = struct {
     rotation: f32 = 0,
     colormod: Color = .{},
+    radius: ?Rect = null,
     uv: ?Rect = null,
     debug: bool = false,
 };
@@ -5535,89 +5676,30 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
 
     var cw = currentWindow();
 
-    if (!cw.render_target.rendering) {
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .texture = .{ .tex = tex, .rs = rs, .opts = opts } } };
-
-        var sw = cw.subwindowCurrent();
-        try sw.render_cmds.append(cmd);
-        return;
+    var r = rs.r.offsetNegPoint(cw.render_target.offset);
+    if (cw.snap_to_pixels) {
+        r.x = @round(r.x);
+        r.y = @round(r.y);
     }
-
-    const uv: Rect = opts.uv orelse Rect{ .x = 0, .y = 0, .w = 1, .h = 1 };
-
-    const r = rs.r.offsetNegPoint(cw.render_target.offset);
-
-    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), 4);
-    defer vtx.deinit();
-    var idx = try std.ArrayList(u16).initCapacity(cw.arena(), 6);
-    defer idx.deinit();
-
-    const x: f32 = if (cw.snap_to_pixels) @round(r.x) else r.x;
-    const y: f32 = if (cw.snap_to_pixels) @round(r.y) else r.y;
 
     if (opts.debug) {
-        log.debug("renderTexture at {d} {d} {d}x{d} uv {}", .{ x, y, r.w, r.h, uv });
+        log.debug("renderTexture at {d} {d} {d}x{d} uv {?}", .{ r.x, r.y, r.w, r.h, opts.uv });
     }
 
-    const xw = x + r.w;
-    const yh = y + r.h;
+    var triangles = if (opts.radius) |radius| blk: {
+        var path = std.ArrayList(Point).init(cw.arena());
+        try pathAddRect(&path, r, radius);
+        var triangles = try pathFillConvexTriangles(path.items, opts.colormod);
+        triangles.resetUv();
+        break :blk triangles;
+    } else try Triangles.fromRect(cw.arena(), r, opts.colormod);
+    triangles.applyTexture(tex, opts.uv);
+    triangles.applyRotation(opts.rotation);
 
-    const midx = (x + xw) / 2;
-    const midy = (y + yh) / 2;
-
-    const rot = opts.rotation;
-
-    var v: Vertex = undefined;
-    v.pos.x = x;
-    v.pos.y = y;
-    v.col = opts.colormod.alphaMultiply();
-    v.uv[0] = uv.x;
-    v.uv[1] = uv.y;
-    if (rot != 0) {
-        v.pos.x = midx + (x - midx) * @cos(rot) - (y - midy) * @sin(rot);
-        v.pos.y = midy + (x - midx) * @sin(rot) + (y - midy) * @cos(rot);
-    }
-    try vtx.append(v);
-
-    v.pos.x = xw;
-    v.uv[0] = uv.w;
-    if (rot != 0) {
-        v.pos.x = midx + (xw - midx) * @cos(rot) - (y - midy) * @sin(rot);
-        v.pos.y = midy + (xw - midx) * @sin(rot) + (y - midy) * @cos(rot);
-    }
-    try vtx.append(v);
-
-    v.pos.y = yh;
-    v.uv[1] = uv.h;
-    if (rot != 0) {
-        v.pos.x = midx + (xw - midx) * @cos(rot) - (yh - midy) * @sin(rot);
-        v.pos.y = midy + (xw - midx) * @sin(rot) + (yh - midy) * @cos(rot);
-    }
-    try vtx.append(v);
-
-    v.pos.x = x;
-    v.uv[0] = uv.x;
-    if (rot != 0) {
-        v.pos.x = midx + (x - midx) * @cos(rot) - (yh - midy) * @sin(rot);
-        v.pos.y = midy + (x - midx) * @sin(rot) + (yh - midy) * @cos(rot);
-    }
-    try vtx.append(v);
-
-    // triangles must be counter-clockwise (y going down) to avoid backface culling
-    try idx.append(0);
-    try idx.append(2);
-    try idx.append(1);
-    try idx.append(0);
-    try idx.append(3);
-    try idx.append(2);
-
-    const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-    const clipr: ?Rect = if (r.clippedBy(clip_offset)) clip_offset else null;
-
-    cw.backend.drawClippedTriangles(tex, vtx.items, idx.items, clipr);
+    try renderTriangles(triangles);
 }
 
-pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotation: f32, colormod: Color) !void {
+pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions) !void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
@@ -5627,7 +5709,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, rotati
 
     const tce = iconTexture(name, tvg_bytes, @as(u32, @intFromFloat(ask_height))) catch return;
 
-    try renderTexture(tce.texture, rs, .{ .rotation = rotation, .colormod = colormod });
+    try renderTexture(tce.texture, rs, opts);
 }
 
 pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntry {
@@ -5678,12 +5760,12 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
     return entry;
 }
 
-pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, rotation: f32, colormod: Color) !void {
+pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions) !void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
     const tce = imageTexture(name, image_bytes) catch return;
-    try renderTexture(tce.texture, rs, .{ .rotation = rotation, .colormod = colormod });
+    try renderTexture(tce.texture, rs, opts);
 }
 
 /// Captures dvui drawing to part of the screen in a texture.
