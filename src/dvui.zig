@@ -4125,7 +4125,7 @@ pub const ImageInitOptions = struct {
     /// - horizontal => crop height, fit width
     /// - vertical => crop width, fit height
     /// - both => fit in rect ignoring aspect ratio
-    /// - ratio => fit in rect maintaining aspect ratio
+    /// - ratio => same as both (for ratio shrink, set `Option.expand` property to `Options.Expand.ratio`)
     shrink: ?Options.Expand = null,
 };
 
@@ -4151,44 +4151,42 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
     const cr = wd.contentRect();
     const ms = wd.options.min_size_contentGet();
 
-    var too_big = false;
-    if (ms.w > cr.w or ms.h > cr.h) {
-        too_big = true;
-    }
+    const too_big = ms.w > cr.w or ms.h > cr.h;
 
     var e = wd.options.expandGet();
     if (too_big) {
         e = init_opts.shrink orelse e;
+        if (e == .ratio) {
+            e = .both;
+        }
     }
+
     const g = wd.options.gravityGet();
     var rect = dvui.placeIn(cr, ms, e, g);
-    var doclip = false;
-    var old_clip: Rect = undefined;
 
-    if (too_big and e != .ratio) {
+    if (too_big) {
         if (ms.w > cr.w and !e.isHorizontal()) {
-            doclip = true;
-
             rect.w = ms.w;
             rect.x -= g.x * (ms.w - cr.w);
         }
 
         if (ms.h > cr.h and !e.isVertical()) {
-            doclip = true;
-
             rect.h = ms.h;
             rect.y -= g.y * (ms.h - cr.h);
         }
     }
 
-    const rs = wd.parent.screenRectScale(rect);
-    if (doclip) {
-        old_clip = dvui.clip(wd.contentRectScale().r);
-    }
-    try dvui.renderImage(init_opts.name, init_opts.bytes, rs, .{ .rotation = wd.options.rotationGet(), .radius = wd.options.corner_radius });
-    if (doclip) {
-        dvui.clipSet(old_clip);
-    }
+    const tl_diff = rect.topLeft().diff(wd.rect.topLeft());
+    const br_diff = rect.bottomRight().diff(wd.rect.bottomRight());
+
+    const uv = Rect{
+        .x = @abs(tl_diff.x / -rect.w),
+        .y = @abs(tl_diff.y / -rect.h),
+        .w = 1 - @abs(br_diff.x / rect.w),
+        .h = 1 - @abs(br_diff.y / rect.h),
+    };
+
+    try dvui.renderImage(init_opts.name, init_opts.bytes, wd.contentRectScale(), .{ .rotation = wd.options.rotationGet(), .radius = wd.options.corner_radius, .uv = uv });
 
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
