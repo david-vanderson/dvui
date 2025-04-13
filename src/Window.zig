@@ -122,8 +122,6 @@ debug_refresh: bool = false,
 debug_touch_simulate_events: bool = false, // when true, left mouse button works like a finger
 debug_touch_simulate_down: bool = false,
 
-runner: ?*dvui.Runner = null,
-
 pub const Subwindow = struct {
     id: u32 = 0,
     rect: Rect = Rect{},
