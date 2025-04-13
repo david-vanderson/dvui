@@ -10,6 +10,27 @@ pub fn pressKey(code: dvui.enums.Key, mod: dvui.enums.Mod) !void {
     _ = try cw.addEventKey(.{ .code = code, .mod = mod, .action = .up });
 }
 
+// Assumes we are just after Window.begin
+pub fn settle(frame: dvui.App.frameFunction) !void {
+    const cw = dvui.currentWindow();
+    if (try frame() == .close) return error.closed;
+
+    for (0..100) |_| {
+        const wait_time = try cw.end(.{});
+        try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms);
+
+        if (wait_time == 0) {
+            // need another frame, someone called refresh()
+            if (try frame() == .close) return error.closed;
+            continue;
+        }
+
+        return;
+    }
+
+    return error.unsettled;
+}
+
 pub fn init(allocator: std.mem.Allocator, window_size: dvui.Size) !Self {
     if (Backend.kind != .sdl) {
         @compileError("dvui.testing can only be used with the SDL backend");
