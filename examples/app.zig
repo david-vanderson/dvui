@@ -120,5 +120,17 @@ test "snapshot" {
     // snapshot tests are unstable
     var t = try dvui.testing.init(.{});
     defer t.deinit();
+
+    // FIXME: The global show_demo_window variable makes tests order dependent
+    dvui.Examples.show_demo_window = false;
+
+    try dvui.testing.settle(frame);
+
+    // Try swapping the names of ./snapshots/app.zig-test.snapshot-X.png
+    try t.snapshot(@src(), frame);
+
+    try dvui.testing.pressKey(.tab, .none);
+    try dvui.testing.settle(frame);
+
     try t.snapshot(@src(), frame);
 }
