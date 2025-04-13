@@ -73,6 +73,7 @@ clipRect: Rect = Rect{},
 theme: Theme = undefined,
 
 min_sizes: std.AutoHashMap(u32, SavedSize),
+tags: std.StringHashMap(SavedTagData),
 data_mutex: std.Thread.Mutex,
 datas: std.AutoHashMap(u32, SavedData),
 datas_trash: std.ArrayList(SavedData) = undefined,
@@ -140,6 +141,11 @@ const SavedSize = struct {
     used: bool = true,
 };
 
+const SavedTagData = struct {
+    data: dvui.TagData,
+    used: bool = true,
+};
+
 const SavedData = struct {
     used: bool = true,
     alignment: u8,
@@ -183,6 +189,7 @@ pub fn init(
         ._arena = init_opts.arena orelse std.heap.ArenaAllocator.init(gpa),
         .subwindows = std.ArrayList(Subwindow).init(gpa),
         .min_sizes = std.AutoHashMap(u32, SavedSize).init(gpa),
+        .tags = std.StringHashMap(SavedTagData).init(gpa),
         .data_mutex = std.Thread.Mutex{},
         .datas = std.AutoHashMap(u32, SavedData).init(gpa),
         .animations = std.AutoHashMap(u32, Animation).init(gpa),
@@ -379,6 +386,7 @@ pub fn deinit(self: *Self) void {
 
     self.subwindows.deinit();
     self.min_sizes.deinit();
+    self.tags.deinit();
     self.animations.deinit();
     self.tab_index_prev.deinit();
     self.tab_index.deinit();
@@ -952,6 +960,25 @@ pub fn begin(
         }
 
         //std.debug.print("min_sizes {d}\n", .{self.min_sizes.count()});
+    }
+
+    {
+        var deadTags = std.ArrayList([]const u8).init(larena);
+        defer deadTags.deinit();
+        var it = self.tags.iterator();
+        while (it.next()) |kv| {
+            if (kv.value_ptr.used) {
+                kv.value_ptr.used = false;
+            } else {
+                try deadTags.append(kv.key_ptr.*);
+            }
+        }
+
+        for (deadTags.items) |name| {
+            _ = self.tags.remove(name);
+        }
+
+        //std.debug.print("tags {d}\n", .{self.tags.count()});
     }
 
     {
