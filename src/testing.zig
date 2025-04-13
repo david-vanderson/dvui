@@ -154,7 +154,7 @@ pub const SnapshotError = error{
 /// 2. Delete the snapshot directory
 /// 3. Run all snapshot tests with `DVUI_SNAPSHOT_WRITE` set to recreate only the used files
 pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.frameFunction) !void {
-    if (std.process.hasEnvVarConstant("DVUI_SNAPSHOT_IGNORE")) return;
+    if (should_ignore_snapshots()) return;
 
     const png_extension = ".png";
     defer self.snapshot_index += 1;
@@ -226,8 +226,12 @@ fn hash_png(png_reader: std.io.AnyReader) !u32 {
     return hasher.final();
 }
 
+fn should_ignore_snapshots() bool {
+    return std.process.hasEnvVarConstant("DVUI_SNAPSHOT_IGNORE");
+}
+
 fn should_write_snapshots() bool {
-    return std.process.hasEnvVarConstant("DVUI_SNAPSHOT_WRITE");
+    return !should_ignore_snapshots() and std.process.hasEnvVarConstant("DVUI_SNAPSHOT_WRITE");
 }
 
 const Self = @This();
