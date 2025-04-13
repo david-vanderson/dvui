@@ -244,5 +244,4 @@ const std = @import("std");
 const dvui = @import("dvui.zig");
 
 const Backend = dvui.backend;
-const Runner = dvui.Runner;
 const Window = dvui.Window;
