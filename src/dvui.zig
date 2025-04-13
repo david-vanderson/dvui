@@ -158,6 +158,38 @@ pub fn toggleDebugWindow() void {
     cw.debug_window_show = !cw.debug_window_show;
 }
 
+pub const TagData = struct {
+    id: u32,
+    rect: Rect,
+    visible: bool,
+};
+
+pub fn tag(name: []const u8, data: TagData) void {
+    var cw = currentWindow();
+    const existing_tag = cw.tags.fetchPut(name, .{ .data = data }) catch |err| blk: {
+        dvui.log.err("tag() got {!} for it {x}\n", .{ err, data.id });
+
+        break :blk null;
+    };
+
+    if (existing_tag) |kv| {
+        if (kv.value.used) {
+            dvui.log.err("duplicate tag name \"{s}\" id {x} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ name, data.id });
+            cw.debug_widget_id = data.id;
+        }
+    }
+}
+
+pub fn tagGet(name: []const u8) ?TagData {
+    var cw = currentWindow();
+    const saved_tag = cw.tags.getPtr(name);
+    if (saved_tag) |st| {
+        return st.data;
+    } else {
+        return null;
+    }
+}
+
 /// Help left-align widgets by adding horizontal spacers.
 ///
 /// Only valid between `Window.begin`and `Window.end`.

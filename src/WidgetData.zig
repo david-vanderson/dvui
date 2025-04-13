@@ -70,8 +70,8 @@ pub fn register(self: *WidgetData) !void {
     var cw = dvui.currentWindow();
     const name: []const u8 = self.options.name orelse "???";
 
-    if (cw.runner) |runner| {
-        try runner.registerWidgetData(self);
+    if (self.options.tag) |t| {
+        dvui.tag(t, .{ .id = self.id, .rect = self.rectScale().r, .visible = self.visible() });
     }
 
     const focused_widget_id = dvui.focusedWidgetId();
