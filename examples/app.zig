@@ -101,8 +101,11 @@ test "tab order" {
     try dvui.testing.settle(frame);
 
     try dvui.testing.expectFocused("show-demo-btn");
+}
 
-    //try dvui.testing.snapshot(@src());
-
-    //try t.snapshot(@src());
+test "snapshot" {
+    // snapshot tests are unstable
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+    try t.snapshot(@src(), frame);
 }

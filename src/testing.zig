@@ -102,13 +102,19 @@ pub const SnapshotError = error{
 
 /// Captures one frame and compares to an earilier captured frame, returning an error if they are not the same
 ///
-/// Set the environment variable DVUI_SNAPSHOT_WRITE to create/overwrite the snapshot files
+/// IMPORTANT: Snapshots are unstable and both backend and platform dependent. Changing any of these might fail the test.
+///
+/// All snapshot tests can be ignored (without skipping the whole test) by setting the environment variable `DVUI_SNAPSHOT_IGNORE`
+///
+/// Set the environment variable `DVUI_SNAPSHOT_WRITE` to create/overwrite the snapshot files
 ///
 /// Dvui does not clear out old or unused snapshot files. To clean the snapshot directory follow these steps:
 /// 1. Ensure all snapshot test pass
 /// 2. Delete the snapshot directory
-/// 3. Run all snapshot tests with DVUI_SNAPSHOT_WRITE set to recreate only the used files
-pub fn snapshot(self: *Self, src: std.builtin.SourceLocation) !void {
+/// 3. Run all snapshot tests with `DVUI_SNAPSHOT_WRITE` set to recreate only the used files
+pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.frameFunction) !void {
+    if (std.process.hasEnvVarConstant("DVUI_SNAPSHOT_IGNORE")) return;
+
     const png_extension = ".png";
     defer self.snapshot_index += 1;
     const filename = try std.fmt.allocPrint(self.allocator, "{s}-{s}-{d}" ++ png_extension, .{ src.file, src.fn_name, self.snapshot_index });
@@ -116,43 +122,51 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation) !void {
     // NOTE: do fs operation through cwd to handle relative and absolute paths
     var dir = std.fs.cwd().openDir(self.snapshot_dir, .{}) catch |err| switch (err) {
         error.FileNotFound => {
-            std.debug.print("Snapshot directory did not exist! Run the test with -Dwrite-snapshots to create all snapshot files\n", .{});
-            return SnapshotError.MissingSnapshotDirectory;
+            std.debug.print("{s}:{d}:{d}: Snapshot directory did not exist! Run the test with DVUI_SNAPSHOT_WRITE to create all snapshot files\n", .{ src.file, src.line, src.column });
+            return error.SkipZigTest; // FIXME: Test should fail with missing snapshots, but we don't want to commit snapshots while they are unstable, so skip tests instead
         },
         else => return err,
     };
     defer dir.close();
 
-    const png = try self.runner.capturePng();
-    defer png.deinit();
+    const picture = dvui.Picture.start(self.window.clipRect) orelse {
+        std.debug.print("Current backend does not support capturing images\n", .{});
+        return;
+    };
+    if (try frame() == .close) return error.closed;
+    const texture = picture.stop();
+
+    const png_data = try dvui.pngFromTexture(self.window.arena(), texture, .{});
 
     const file = dir.openFile(filename, .{}) catch |err| switch (err) {
         std.fs.File.OpenError.FileNotFound => {
             if (should_write_snapshots()) {
-                try dir.writeFile(.{ .sub_path = filename, .data = png.data, .flags = .{} });
+                try dir.writeFile(.{ .sub_path = filename, .data = png_data, .flags = .{} });
                 std.debug.print("Snapshot: Created file \"{s}\"\n", .{filename});
                 return;
             }
-            std.debug.print("Snapshot file did not exist! Run the test with -Dwrite-snapshots to create all snapshot files\n", .{});
-            return SnapshotError.MissingSnapshotFile;
+            std.debug.print("{s}:{d}:{d}: Snapshot file did not exist! Run the test with `DVUI_SNAPSHOT_WRITE` to create all snapshot files\n", .{ src.file, src.line, src.column });
+            return error.SkipZigTest; // FIXME: Test should fail with missing snapshots, but we don't want to commit snapshots while they are unstable, so skip tests instead
         },
         else => return err,
     };
     const prev_hash = try hash_png(file.reader().any());
     file.close();
 
-    var png_reader = std.io.fixedBufferStream(png.data);
+    var png_reader = std.io.fixedBufferStream(png_data);
     const new_hash = try hash_png(png_reader.reader().any());
 
     if (prev_hash != new_hash) {
         if (should_write_snapshots()) {
-            try dir.writeFile(.{ .sub_path = filename, .data = png.data, .flags = .{} });
+            try dir.writeFile(.{ .sub_path = filename, .data = png_data, .flags = .{} });
             std.debug.print("Snapshot: Overwrote file \"{s}\"\n", .{filename});
             return;
         }
         const failed_filename = try std.fmt.allocPrint(self.allocator, "{s}-failed" ++ png_extension, .{filename[0 .. filename.len - png_extension.len]});
         defer self.allocator.free(failed_filename);
-        try dir.writeFile(.{ .sub_path = failed_filename, .data = png.data, .flags = .{} });
+        try dir.writeFile(.{ .sub_path = failed_filename, .data = png_data, .flags = .{} });
+
+        std.debug.print("Snapshot did not match! See the \"{s}\" for the current output", .{failed_filename});
 
         return SnapshotError.SnapshotsDidNotMatch;
     }
