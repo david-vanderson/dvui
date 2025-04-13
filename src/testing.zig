@@ -1,6 +1,7 @@
 allocator: std.mem.Allocator,
 backend: *Backend,
 window: *Window,
+snapshot_dir: []const u8,
 
 snapshot_index: u8 = 0,
 
@@ -31,7 +32,13 @@ pub fn settle(frame: dvui.App.frameFunction) !void {
     return error.unsettled;
 }
 
-pub fn init(allocator: std.mem.Allocator, window_size: dvui.Size) !Self {
+pub const InitOptions = struct {
+    allocator: std.mem.Allocator = std.testing.allocator,
+    window_size: dvui.Size = .{ .w = 600, .h = 400 },
+    snapshot_dir: []const u8 = "snapshots",
+};
+
+pub fn init(options: InitOptions) !Self {
     if (Backend.kind != .sdl) {
         @compileError("dvui.testing can only be used with the SDL backend");
     }
@@ -39,31 +46,32 @@ pub fn init(allocator: std.mem.Allocator, window_size: dvui.Size) !Self {
     if (should_write_snapshots()) {
         // ensure snapshot directory exists
         // NOTE: do fs operation through cwd to handle relative and absolute paths
-        std.fs.cwd().makeDir(testing_options.snapshot_dir) catch |err| switch (err) {
+        std.fs.cwd().makeDir(options.snapshot_dir) catch |err| switch (err) {
             error.PathAlreadyExists => {},
             else => return err,
         };
     }
 
     // init SDL backend (creates and owns OS window)
-    const backend = try allocator.create(Backend);
+    const backend = try options.allocator.create(Backend);
     backend.* = try Backend.initWindow(.{
-        .allocator = allocator,
-        .size = window_size,
+        .allocator = options.allocator,
+        .size = options.window_size,
         .vsync = false,
         .title = "",
         .hidden = true,
     });
 
-    const window = try allocator.create(Window);
-    window.* = try dvui.Window.init(@src(), allocator, backend.backend(), .{});
+    const window = try options.allocator.create(Window);
+    window.* = try dvui.Window.init(@src(), options.allocator, backend.backend(), .{});
 
     window.begin(0) catch unreachable;
 
     return .{
-        .allocator = allocator,
+        .allocator = options.allocator,
         .backend = backend,
         .window = window,
+        .snapshot_dir = options.snapshot_dir,
     };
 }
 
@@ -106,7 +114,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation) !void {
     const filename = try std.fmt.allocPrint(self.allocator, "{s}-{s}-{d}" ++ png_extension, .{ src.file, src.fn_name, self.snapshot_index });
     defer self.allocator.free(filename);
     // NOTE: do fs operation through cwd to handle relative and absolute paths
-    var dir = std.fs.cwd().openDir(testing_options.snapshot_dir, .{}) catch |err| switch (err) {
+    var dir = std.fs.cwd().openDir(self.snapshot_dir, .{}) catch |err| switch (err) {
         error.FileNotFound => {
             std.debug.print("Snapshot directory did not exist! Run the test with -Dwrite-snapshots to create all snapshot files\n", .{});
             return SnapshotError.MissingSnapshotDirectory;
@@ -171,8 +179,6 @@ const Self = @This();
 
 const std = @import("std");
 const dvui = @import("dvui.zig");
-
-const testing_options = @import("testing_options");
 
 const Backend = dvui.backend;
 const Runner = dvui.Runner;
