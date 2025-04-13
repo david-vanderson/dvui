@@ -103,6 +103,19 @@ test "tab order" {
     try dvui.testing.expectFocused("show-demo-btn");
 }
 
+test "open example window" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    try dvui.testing.settle(frame);
+
+    try dvui.testing.moveTo("show-demo-btn");
+    try dvui.testing.click(.left);
+    try dvui.testing.settle(frame);
+
+    try dvui.testing.expectVislible(dvui.Examples.demo_window_tag);
+}
+
 test "snapshot" {
     // snapshot tests are unstable
     var t = try dvui.testing.init(.{});
