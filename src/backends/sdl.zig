@@ -93,16 +93,12 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
             _ = c.SDL_SetNumberProperty(props, c.SDL_PROP_RENDERER_CREATE_PRESENT_VSYNC_NUMBER, 1);
         }
 
-        if (sdl_options.software_renderer) {
-            _ = c.SDL_SetPointerProperty(props, c.SDL_PROP_RENDERER_CREATE_NAME_STRING, "software");
-        }
-
         renderer = c.SDL_CreateRendererWithProperties(props) orelse {
             dvui.log.err("SDL: Failed to create renderer: {s}", .{c.SDL_GetError()});
             return error.BackendError;
         };
     } else {
-        renderer = c.SDL_CreateRenderer(window, -1, @intCast(c.SDL_RENDERER_TARGETTEXTURE | (if (options.vsync) c.SDL_RENDERER_PRESENTVSYNC else 0) | (if (sdl_options.software_renderer) c.SDL_RENDERER_SOFTWARE else 0))) orelse {
+        renderer = c.SDL_CreateRenderer(window, -1, @intCast(c.SDL_RENDERER_TARGETTEXTURE | (if (options.vsync) c.SDL_RENDERER_PRESENTVSYNC else 0))) orelse {
             dvui.log.err("SDL: Failed to create renderer: {s}", .{c.SDL_GetError()});
             return error.BackendError;
         };
