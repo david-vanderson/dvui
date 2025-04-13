@@ -177,6 +177,10 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     if (try frame() == .close) return error.closed;
     const texture = picture.stop();
 
+    const cw = dvui.currentWindow();
+    _ = try cw.end(.{});
+    try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms);
+
     const png_data = try dvui.pngFromTexture(self.window.arena(), texture, .{});
 
     const file = dir.openFile(filename, .{}) catch |err| switch (err) {
