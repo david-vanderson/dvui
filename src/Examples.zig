@@ -358,12 +358,14 @@ pub const demoKind = enum {
 
 pub var demo_active: demoKind = .basic_widgets;
 
+pub const demo_window_tag = "dvui-example-window";
+
 pub fn demo() !void {
     if (!show_demo_window) {
         return;
     }
 
-    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 600, .h = 400 }, .max_size_content = .{ .w = 600 } });
+    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 600, .h = 400 }, .max_size_content = .{ .w = 600 }, .tag = demo_window_tag });
     defer float.deinit();
 
     // pad the fps label so that it doesn't trigger refresh when the number

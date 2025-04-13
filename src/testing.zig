@@ -122,7 +122,16 @@ pub fn expectFocused(tag: []const u8) !void {
         try std.testing.expectEqual(data.id, dvui.focusedWidgetId());
     } else {
         std.debug.print("tag \"{s}\" not found\n", .{tag});
-        return error.TestExpectedEqual;
+        return error.TagNotFound;
+    }
+}
+
+pub fn expectVislible(tag: []const u8) !void {
+    if (dvui.tagGet(tag)) |data| {
+        try std.testing.expect(data.visible);
+    } else {
+        std.debug.print("tag \"{s}\" not found\n", .{tag});
+        return error.TagNotFound;
     }
 }
 
