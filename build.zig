@@ -48,6 +48,19 @@ pub fn build(b: *std.Build) !void {
         }
     }
 
+    // Dummy, does no rendeing and is intended for tests
+    if (back_to_build == null or back_to_build == .dummy) {
+        const dummy_mod = b.addModule("dummy", .{
+            .root_source_file = b.path("src/backends/dummy.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+        const dvui_dummy = addDvuiModule(dvui_opts, "dvui_dummy", true);
+        linkBackend(dvui_dummy, dummy_mod);
+        addExample(dvui_opts, "app", b.path("examples/app.zig"), dvui_dummy);
+    }
+
     // SDL2
     if (back_to_build == null or back_to_build == .sdl2) {
         const sdl_mod = b.addModule("sdl2", .{

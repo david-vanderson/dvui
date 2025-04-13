@@ -71,10 +71,26 @@ pub const InitOptions = struct {
 };
 
 pub fn init(options: InitOptions) !Self {
-    if (Backend.kind != .sdl2 and Backend.kind != .sdl3) {
-        std.debug.print("dvui.testing can currently only be used with the SDL backend\n", .{});
-        return error.SkipZigTest;
-    }
+    // init SDL backend (creates and owns OS window)
+    const backend = try options.allocator.create(Backend);
+    errdefer options.allocator.destroy(backend);
+    backend.* = switch (Backend.kind) {
+        .sdl2, .sdl3 => try Backend.initWindow(.{
+            .allocator = options.allocator,
+            .size = options.window_size,
+            .vsync = false,
+            .title = "",
+            .hidden = true,
+        }),
+        .dummy => Backend.init(.{
+            .allocator = options.allocator,
+            .size = options.window_size,
+        }),
+        inline else => |kind| {
+            std.debug.print("dvui.testing does not support the {s} backend\n", .{@tagName(kind)});
+            return error.SkipZigTest;
+        },
+    };
 
     if (should_write_snapshots()) {
         // ensure snapshot directory exists
@@ -84,16 +100,6 @@ pub fn init(options: InitOptions) !Self {
             else => return err,
         };
     }
-
-    // init SDL backend (creates and owns OS window)
-    const backend = try options.allocator.create(Backend);
-    backend.* = try Backend.initWindow(.{
-        .allocator = options.allocator,
-        .size = options.window_size,
-        .vsync = false,
-        .title = "",
-        .hidden = true,
-    });
 
     const window = try options.allocator.create(Window);
     window.* = try dvui.Window.init(@src(), options.allocator, backend.backend(), .{});
@@ -240,7 +246,7 @@ fn hash_png(png_reader: std.io.AnyReader) !u32 {
 }
 
 fn should_ignore_snapshots() bool {
-    return std.process.hasEnvVarConstant("DVUI_SNAPSHOT_IGNORE");
+    return Backend.kind == .dummy or std.process.hasEnvVarConstant("DVUI_SNAPSHOT_IGNORE");
 }
 
 fn should_write_snapshots() bool {

@@ -10,6 +10,8 @@ pub const Backend = enum {
     raylib,
     dx11,
     web,
+    /// Only intended for testing were no graphics are needed
+    dummy,
 };
 
 pub const TextureInterpolation = enum {
