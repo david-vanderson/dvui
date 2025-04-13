@@ -52,6 +52,7 @@ pub fn init(allocator: std.mem.Allocator, window_size: dvui.Size) !Self {
         .size = window_size,
         .vsync = false,
         .title = "",
+        .hidden = true,
     });
 
     const window = try allocator.create(Window);

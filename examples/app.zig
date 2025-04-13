@@ -105,5 +105,7 @@ test "tab order" {
 
     try dvui.testing.expectFocused("show-demo-btn");
 
+    //try dvui.testing.snapshot(@src());
+
     //try t.snapshot(@src());
 }
