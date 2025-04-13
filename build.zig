@@ -26,12 +26,7 @@ pub fn build(b: *std.Build) !void {
     // Testing module
     // NOTE: Use software renderer to get consistent results across platforms
     const testing_mod = addSDLModule(b, target, optimize, "sdl_testing", .{ .software_renderer = false });
-    const testing_opts = b.addOptions();
-    const snapshot_dir = b.option(std.Build.LazyPath, "snapshot_dir", "The directory where images for snapshot testing will be stored") orelse std.Build.LazyPath{ .cwd_relative = "snapshots" };
-    // NOTE: snapshot_dir path may be absolute or relative
-    testing_opts.addOptionPath("snapshot_dir", snapshot_dir);
     const dvui_testing = addDvuiModule(b, target, optimize, "dvui_testing", true);
-    dvui_testing.addOptions("testing_options", testing_opts);
     linkBackend(dvui_testing, testing_mod);
 
     // SDL
