@@ -5,6 +5,38 @@ snapshot_dir: []const u8,
 
 snapshot_index: u8 = 0,
 
+/// Moves the mouse to the center of the widget
+pub fn moveTo(tag: []const u8) !void {
+    const tag_data = dvui.tagGet(tag) orelse {
+        std.debug.print("tag \"{s}\" not found\n", .{tag});
+        return error.TagNotFound;
+    };
+    if (!tag_data.visible) return error.WidgetNotVisible;
+    try moveToPoint(tag_data.rect.center());
+}
+
+/// Moves the mouse to the provided absolute position
+pub fn moveToPoint(point: dvui.Point) !void {
+    const cw = dvui.currentWindow();
+    const movement = point.diff(cw.mouse_pt);
+    // std.debug.print("Moving {}", .{movement});
+    if (movement.nonZero()) {
+        _ = try cw.addEventMouseMotion(movement.x, movement.y);
+    }
+}
+
+/// Presses and releases the button at the current mouse position
+pub fn click(b: dvui.enums.Button) !void {
+    const cw = dvui.currentWindow();
+    _ = try cw.addEventMouseButton(b, .press);
+    _ = try cw.addEventMouseButton(b, .release);
+}
+
+pub fn writeText(text: []const u8) !void {
+    const cw = dvui.currentWindow();
+    _ = try cw.addEventText(text);
+}
+
 pub fn pressKey(code: dvui.enums.Key, mod: dvui.enums.Mod) !void {
     const cw = dvui.currentWindow();
     _ = try cw.addEventKey(.{ .code = code, .mod = mod, .action = .down });
