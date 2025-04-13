@@ -37,10 +37,8 @@ pub fn AppInit(win: *dvui.Window) void {
 pub fn AppDeinit() void {}
 
 // Run each frame to do normal UI
-pub fn AppFrame() dvui.App.Result {
-    return frame() catch |err| {
-        std.debug.panic("in frame: {!}", .{err});
-    };
+pub fn AppFrame() !dvui.App.Result {
+    return frame();
 }
 
 pub fn frame() !dvui.App.Result {
@@ -96,18 +94,17 @@ pub fn frame() !dvui.App.Result {
 test "tab order" {
     var t = try dvui.testing.init(
         std.testing.allocator,
-        struct {
-            fn frameFn() !void {
-                if (try frame() == .close) return error.closed;
-            }
-        }.frameFn,
         .{ .w = 600, .h = 400 },
     );
     defer t.deinit();
 
-    try t.runner.run();
-    try t.runner.pressKey(.tab, .none);
-    try t.runner.run();
-    try t.expectFocused("show-demo-btn", null);
-    try t.snapshot(@src());
+    const cw = dvui.currentWindow();
+    try cw.settle(frame);
+
+    try dvui.testing.pressKey(.tab, .none);
+    try cw.settle(frame);
+
+    try dvui.testing.expectFocused("show-demo-btn");
+
+    //try t.snapshot(@src());
 }

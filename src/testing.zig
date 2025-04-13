@@ -1,11 +1,16 @@
 allocator: std.mem.Allocator,
 backend: *Backend,
-runner: *Runner,
 window: *Window,
 
 snapshot_index: u8 = 0,
 
-pub fn init(allocator: std.mem.Allocator, frameFn: *const fn () anyerror!void, window_size: dvui.Size) !Self {
+pub fn pressKey(code: dvui.enums.Key, mod: dvui.enums.Mod) !void {
+    const cw = dvui.currentWindow();
+    _ = try cw.addEventKey(.{ .code = code, .mod = mod, .action = .down });
+    _ = try cw.addEventKey(.{ .code = code, .mod = mod, .action = .up });
+}
+
+pub fn init(allocator: std.mem.Allocator, window_size: dvui.Size) !Self {
     if (Backend.kind != .sdl) {
         @compileError("dvui.testing can only be used with the SDL backend");
     }
@@ -30,29 +35,33 @@ pub fn init(allocator: std.mem.Allocator, frameFn: *const fn () anyerror!void, w
 
     const window = try allocator.create(Window);
     window.* = try dvui.Window.init(@src(), allocator, backend.backend(), .{});
-    const runner = try allocator.create(Runner);
-    runner.* = dvui.Runner.init(window, backend, frameFn);
+
+    window.begin(0) catch unreachable;
 
     return .{
         .allocator = allocator,
         .backend = backend,
-        .runner = runner,
         .window = window,
     };
 }
 
 pub fn deinit(self: *Self) void {
-    self.runner.deinit();
+    _ = self.window.end(.{}) catch |err| {
+        std.debug.print("window.end() returned {!}\n", .{err});
+    };
     self.window.deinit();
     self.backend.deinit();
-    self.allocator.destroy(self.runner);
     self.allocator.destroy(self.window);
     self.allocator.destroy(self.backend);
 }
 
-pub fn expectFocused(self: *Self, test_id: []const u8, id_extra: ?u32) !void {
-    const info = try self.runner.getWidgetInfo(test_id, id_extra);
-    try std.testing.expectEqual(self.window.last_focused_id_this_frame, info.wd.id);
+pub fn expectFocused(tag: []const u8) !void {
+    if (dvui.tagGet(tag)) |data| {
+        try std.testing.expectEqual(data.id, dvui.focusedWidgetId());
+    } else {
+        std.debug.print("tag \"{s}\" not found\n", .{tag});
+        return error.TestExpectedEqual;
+    }
 }
 
 pub const SnapshotError = error{

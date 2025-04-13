@@ -1732,6 +1732,26 @@ pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
     _ = bubbling;
 }
 
+// Assumes we are just after Window.begin
+pub fn settle(self: *Window, frame: dvui.App.frameFunction) !void {
+    if (try frame() == .close) return error.closed;
+
+    for (0..100) |_| {
+        const wait_time = try self.end(.{});
+        try self.begin(self.frame_time_ns + 100 * std.time.ns_per_ms);
+
+        if (wait_time == 0) {
+            // need another frame, someone called refresh()
+            if (try frame() == .close) return error.closed;
+            continue;
+        }
+
+        return;
+    }
+
+    return error.unsettled;
+}
+
 const Options = dvui.Options;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;

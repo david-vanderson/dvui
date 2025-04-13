@@ -25,7 +25,9 @@ deinitFn: ?fn () void = null,
 /// Runs once every frame between `Window.begin` and `Window.end`
 ///
 /// Returns whether the app should continue running or close.
-frameFn: fn () Result,
+frameFn: frameFunction,
+
+pub const frameFunction = fn () anyerror!Result;
 
 fn nop_main() !void {}
 /// The root file needs to expose the App main function:
