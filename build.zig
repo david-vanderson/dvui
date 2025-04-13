@@ -50,6 +50,7 @@ pub fn build(b: *std.Build) !void {
         addExample(b, target, optimize, "sdl-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-picture", b.path("examples/sdl-picture.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-app", b.path("examples/app.zig"), dvui_sdl);
+        addExampleTests(b, target, optimize, "sdl-app", b.path("examples/app.zig"), dvui_sdl);
     }
 
     // Raylib
@@ -361,18 +362,25 @@ fn addExample(
 
     const run_step = b.step(name, "Run " ++ name);
     run_step.dependOn(&run_cmd.step);
+}
 
-    if (b.modules.get("dvui_testing")) |dvui_testing| {
-        const test_mod = b.createModule(.{
-            .root_source_file = file,
-            .target = target,
-            .optimize = optimize,
-        });
-        test_mod.addImport("dvui", dvui_testing);
-        const test_cmd = b.addRunArtifact(b.addTest(.{ .root_module = test_mod }));
-        const test_step = b.step("test-" ++ name, "Test " ++ name);
-        test_step.dependOn(&test_cmd.step);
-    }
+fn addExampleTests(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    comptime name: []const u8,
+    file: std.Build.LazyPath,
+    dvui_mod: *std.Build.Module,
+) void {
+    const test_mod = b.createModule(.{
+        .root_source_file = file,
+        .target = target,
+        .optimize = optimize,
+    });
+    test_mod.addImport("dvui", dvui_mod);
+    const test_cmd = b.addRunArtifact(b.addTest(.{ .root_module = test_mod }));
+    const test_step = b.step("test-" ++ name, "Test " ++ name);
+    test_step.dependOn(&test_cmd.step);
 }
 
 fn addWebExample(
