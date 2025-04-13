@@ -23,9 +23,9 @@ pub fn build(b: *std.Build) !void {
         _ = addDvuiModule(b, target, optimize, "dvui", true);
     }
 
-    // Testing module with headless rendeing
+    // Testing module
     // NOTE: Use software renderer to get consistent results across platforms
-    const testing_mod = addSDLModule(b, target, optimize, "sdl_testing", .{ .headless = true, .software_renderer = true });
+    const testing_mod = addSDLModule(b, target, optimize, "sdl_testing", .{ .software_renderer = false });
     const testing_opts = b.addOptions();
     const snapshot_dir = b.option(std.Build.LazyPath, "snapshot_dir", "The directory where images for snapshot testing will be stored") orelse std.Build.LazyPath{ .cwd_relative = "snapshots" };
     // NOTE: snapshot_dir path may be absolute or relative
@@ -36,12 +36,10 @@ pub fn build(b: *std.Build) !void {
 
     // SDL
     if (back_to_build == null or back_to_build == .sdl) {
-        const headless = b.option(bool, "headless", "Enable headless operation") orelse false;
         const software_renderer = b.option(bool, "software_renderer", "Enable software rendering (no GPU or driver needed)") orelse false;
         const compile_sdl3 = b.option(bool, "sdl3", "SDL3 instead of SDL2") orelse false;
 
         const sdl_mod = addSDLModule(b, target, optimize, "sdl", .{
-            .headless = headless,
             .software_renderer = software_renderer,
             .compile_sdl3 = compile_sdl3,
         });
@@ -209,7 +207,6 @@ fn addSDLModule(
     optimize: std.builtin.OptimizeMode,
     comptime name: []const u8,
     opts: struct {
-        headless: bool = false,
         software_renderer: bool = false,
         compile_sdl3: bool = false,
     },
@@ -221,7 +218,6 @@ fn addSDLModule(
         .link_libc = true,
     });
     var sdl_options = b.addOptions();
-    sdl_options.addOption(bool, "headless", opts.headless);
     sdl_options.addOption(bool, "software_renderer", opts.software_renderer);
 
     if (b.systemIntegrationOption("sdl2", .{})) {

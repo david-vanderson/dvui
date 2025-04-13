@@ -67,7 +67,7 @@ pub fn run(self: *Self) !void {
         try self.frameFn();
         wait_time = try self.window.end(.{});
     }
-    std.debug.print("Run exited with i {d}\n", .{i});
+    //std.debug.print("Run exited with i {d}\n", .{i});
 }
 
 pub const Frame = struct {
