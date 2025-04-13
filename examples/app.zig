@@ -46,7 +46,7 @@ pub fn frame() !dvui.App.Result {
     defer scroll.deinit();
 
     var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
-    const lorem = "This is a a dvui.App example that can compile on multiple backends.";
+    const lorem = "This is a dvui.App example that can compile on multiple backends.";
     try tl.addText(lorem, .{});
     try tl.addText("\n\n", .{});
     try tl.format("Current backend {s} : {s}", .{ @tagName(dvui.backend.kind), dvui.backend.description() }, .{});
@@ -98,11 +98,10 @@ test "tab order" {
     );
     defer t.deinit();
 
-    const cw = dvui.currentWindow();
-    try cw.settle(frame);
+    try dvui.testing.settle(frame);
 
     try dvui.testing.pressKey(.tab, .none);
-    try cw.settle(frame);
+    try dvui.testing.settle(frame);
 
     try dvui.testing.expectFocused("show-demo-btn");
 
