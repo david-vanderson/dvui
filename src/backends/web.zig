@@ -803,7 +803,7 @@ fn update() !i32 {
     // backend is directly sending the events to dvui
     //try backend.addAllEvents(&win);
 
-    const res = dvui_app.?.frameFn();
+    const res = try dvui_app.?.frameFn();
 
     const end_micros = try win.end(.{});
 

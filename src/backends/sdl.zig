@@ -1080,7 +1080,7 @@ pub fn main() !void {
         _ = c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 255);
         _ = c.SDL_RenderClear(back.renderer);
 
-        const res = dvui_app.?.frameFn();
+        const res = try dvui_app.?.frameFn();
 
         const end_micros = try win.end(.{});
 
