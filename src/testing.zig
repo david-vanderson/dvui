@@ -126,7 +126,7 @@ pub fn expectFocused(tag: []const u8) !void {
     }
 }
 
-pub fn expectVislible(tag: []const u8) !void {
+pub fn expectVisible(tag: []const u8) !void {
     if (dvui.tagGet(tag)) |data| {
         try std.testing.expect(data.visible);
     } else {

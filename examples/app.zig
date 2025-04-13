@@ -113,7 +113,7 @@ test "open example window" {
     try dvui.testing.click(.left);
     try dvui.testing.settle(frame);
 
-    try dvui.testing.expectVislible(dvui.Examples.demo_window_tag);
+    try dvui.testing.expectVisible(dvui.Examples.demo_window_tag);
 }
 
 test "snapshot" {
