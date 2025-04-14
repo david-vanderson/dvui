@@ -108,3 +108,7 @@ pub fn deinit(self: *LabelWidget) void {
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

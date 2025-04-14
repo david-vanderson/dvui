@@ -283,3 +283,7 @@ pub fn deinit(self: *FloatingMenuWidget) void {
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

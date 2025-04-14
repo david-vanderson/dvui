@@ -253,3 +253,7 @@ const dvui = @import("dvui.zig");
 
 const Backend = dvui.backend;
 const Window = dvui.Window;
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

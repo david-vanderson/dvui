@@ -819,3 +819,7 @@ fn update() !i32 {
     const wait_event_micros = win.waitTime(end_micros, null);
     return @intCast(@divTrunc(wait_event_micros, 1000));
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}

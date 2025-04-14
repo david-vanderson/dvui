@@ -399,3 +399,7 @@ pub fn reorderSlice(comptime T: type, slice: []T, removed_idx: ?usize, insert_be
 
     return false;
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

@@ -1531,3 +1531,7 @@ pub fn main() !void {
         .quit, .close_windows => break,
     };
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}

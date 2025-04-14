@@ -37,3 +37,7 @@ pub const VirtualParentWidget = @import("widgets/VirtualParentWidget.zig");
 
 // Needed for autodocs "backlink" to work
 const dvui = @import("dvui");
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

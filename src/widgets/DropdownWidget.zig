@@ -206,3 +206,7 @@ const LabelWidget = dvui.LabelWidget;
 
 const std = @import("std");
 const dvui = @import("../dvui.zig");
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

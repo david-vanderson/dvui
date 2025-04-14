@@ -359,3 +359,7 @@ pub fn padSize(self: *const Options, s: Size) Size {
 //pub fn format(self: *const Options, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
 //    try std.fmt.format(writer, "Options{{ .background = {?}, .color_style = {?} }}", .{ self.background, self.color_style });
 //}
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

@@ -251,3 +251,7 @@ pub const QuickTheme = struct {
         };
     }
 };
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

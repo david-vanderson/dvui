@@ -104,3 +104,7 @@ pub fn assertIsApp(comptime root: type) void {
 
 const std = @import("std");
 const dvui = @import("dvui.zig");
+
+test {
+    std.testing.refAllDecls(@This());
+}

@@ -563,3 +563,7 @@ pub fn deinit(self: *FloatingWindowWidget) void {
     dvui.clipSet(self.prevClip);
     _ = dvui.renderingSet(self.prev_rendering);
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

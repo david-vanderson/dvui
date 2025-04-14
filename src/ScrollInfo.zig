@@ -152,3 +152,7 @@ pub fn scrollPageUp(self: *ScrollInfo, dir: enums.Direction) void {
 pub fn scrollPageDown(self: *ScrollInfo, dir: enums.Direction) void {
     self.scrollPage(dir, false);
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

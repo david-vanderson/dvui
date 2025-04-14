@@ -143,3 +143,7 @@ pub fn initTTFBytesDatabase(allocator: std.mem.Allocator) !std.StringHashMap(dvu
 
     return result;
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

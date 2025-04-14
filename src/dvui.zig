@@ -5915,3 +5915,7 @@ pub fn plotXY(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions
     s1.deinit();
     p.deinit();
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}

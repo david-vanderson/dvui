@@ -98,3 +98,7 @@ pub fn minSizeForChild(self: Widget, s: Size) void {
 pub fn processEvent(self: Widget, e: *Event, bubbling: bool) void {
     self.vtable.processEvent(self.ptr, e, bubbling);
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
