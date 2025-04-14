@@ -25,7 +25,7 @@ pub fn build(b: *std.Build) !void {
 
     const test_step = b.step("test", "Test the dvui codebase");
 
-    // SDL
+    // SDL2
     if (back_to_build == null or back_to_build == .sdl) {
         const sdl_mod = b.addModule("sdl", .{
             .root_source_file = b.path("src/backends/sdl.zig"),
@@ -36,25 +36,11 @@ pub fn build(b: *std.Build) !void {
         addTests(b, test_step, sdl_mod);
 
         var sdl_options = b.addOptions();
-        const compile_sdl3 = b.option(bool, "sdl3", "SDL3 instead of SDL2") orelse false;
 
         if (b.systemIntegrationOption("sdl2", .{})) {
             // SDL2 from system
             sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
             sdl_mod.linkSystemLibrary("SDL2", .{});
-        } else if (b.systemIntegrationOption("sdl3", .{})) {
-            // SDL3 from system
-            sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
-            sdl_mod.linkSystemLibrary("SDL3", .{});
-        } else if (compile_sdl3) {
-            // SDL3 compiled from source
-            sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
-            if (b.lazyDependency("sdl3", .{
-                .target = target,
-                .optimize = optimize,
-            })) |sdl3| {
-                sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
-            }
         } else {
             // SDL2 compiled from source
             sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
@@ -87,6 +73,43 @@ pub fn build(b: *std.Build) !void {
         addExample(b, target, optimize, "sdl-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-app", b.path("examples/app.zig"), dvui_sdl);
         addExampleTests(b, target, optimize, "sdl-app", b.path("examples/app.zig"), dvui_sdl);
+    }
+
+    // SDL3
+    if (back_to_build == null or back_to_build == .sdl3) {
+        const sdl_mod = b.addModule("sdl3", .{
+            .root_source_file = b.path("src/backends/sdl.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+        addTests(b, test_step, sdl_mod);
+
+        var sdl_options = b.addOptions();
+
+        if (b.systemIntegrationOption("sdl3", .{})) {
+            // SDL3 from system
+            sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
+            sdl_mod.linkSystemLibrary("SDL3", .{});
+        } else {
+            // SDL3 compiled from source
+            sdl_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
+            if (b.lazyDependency("sdl3", .{
+                .target = target,
+                .optimize = optimize,
+            })) |sdl3| {
+                sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
+            }
+        }
+        sdl_mod.addOptions("sdl_options", sdl_options);
+
+        const dvui_sdl = addDvuiModule(b, target, optimize, "dvui_sdl3", true);
+        linkBackend(dvui_sdl, sdl_mod);
+        addTests(b, test_step, dvui_sdl);
+        addExample(b, target, optimize, "sdl3-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
+        addExample(b, target, optimize, "sdl3-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
+        addExample(b, target, optimize, "sdl3-app", b.path("examples/app.zig"), dvui_sdl);
+        addExampleTests(b, target, optimize, "sdl3-app", b.path("examples/app.zig"), dvui_sdl);
     }
 
     // Raylib

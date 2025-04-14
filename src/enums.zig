@@ -4,6 +4,7 @@ const std = @import("std");
 pub const Backend = enum {
     custom,
     sdl,
+    sdl3,
     raylib,
     dx11,
     web,
