@@ -2781,7 +2781,7 @@ pub fn wantTextInput(r: Rect) void {
     cw.text_input_rect = r.scale(1 / cw.natural_scale);
 }
 
-pub const popup = @compileError("popup renamed to floatingMenu");
+pub const popup = if (!builtin.is_test) @compileError("popup renamed to floatingMenu");
 
 pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) !*FloatingMenuWidget {
     var ret = try currentWindow().arena().create(FloatingMenuWidget);
