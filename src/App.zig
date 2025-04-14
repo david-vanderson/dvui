@@ -14,6 +14,8 @@
 //! };
 //! ```
 
+pub const App = @This();
+
 /// The configuration options for the app, either directly or a function that
 /// is run at startup that returns the options.
 config: AppConfig,
@@ -90,8 +92,12 @@ pub const Result = enum {
     close,
 };
 
-/// Used internally to confirm that the App main function is being used
-pub fn assertIsApp(comptime root: type) void {
+/// Used internally to get the dvui_app if it's defined
+pub fn get() ?App {
+    const root = @import("root");
+    // return error instead of failing compile to allow for reference in tests without dvui_app defined
+    if (!@hasDecl(root, "dvui_app")) return null;
+
     if (!@hasDecl(root, "main") or @field(root, "main") != main) {
         @compileError(
             \\Using the App interface requires using the App main function
@@ -100,6 +106,8 @@ pub fn assertIsApp(comptime root: type) void {
             \\pub const main = dvui.App.main;
         );
     }
+
+    return root.dvui_app;
 }
 
 const std = @import("std");
