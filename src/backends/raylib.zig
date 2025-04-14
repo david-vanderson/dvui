@@ -80,7 +80,7 @@ pub const InitOptions = struct {
     title: [:0]const u8,
     /// content of a PNG image (or any other format stb_image can load)
     /// tip: use @embedFile
-    icon: ?[:0]const u8 = null,
+    icon: ?[]const u8 = null,
 };
 
 //==========WINDOW MANAGEMENT FUNCTIONALITY==========

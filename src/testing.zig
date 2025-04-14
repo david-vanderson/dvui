@@ -72,7 +72,7 @@ pub const InitOptions = struct {
 
 pub fn init(options: InitOptions) !Self {
     if (Backend.kind != .sdl) {
-        @compileError("dvui.testing can only be used with the SDL backend");
+        @compileError("dvui.testing can currently only be used with the SDL backend");
     }
 
     if (should_write_snapshots()) {
@@ -170,18 +170,26 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     };
     defer dir.close();
 
-    const picture = dvui.Picture.start(self.window.clipRect) orelse {
+    // render the whole screen to a texture
+    var picture = dvui.Picture.start(dvui.windowRectPixels()) orelse {
         std.debug.print("Current backend does not support capturing images\n", .{});
         return;
     };
+
+    // run the gui code
     if (try frame() == .close) return error.closed;
-    const texture = picture.stop();
 
     const cw = dvui.currentWindow();
+    // render the retained dialogs and deferred renders
+    _ = try cw.endRendering(.{});
+
+    const texture = picture.stop();
+    // texture will be destroyed in Window.end() so grab pixels now
+    const png_data = try dvui.pngFromTexture(self.allocator, texture, .{});
+    defer self.allocator.free(png_data);
+
     _ = try cw.end(.{});
     try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms);
-
-    const png_data = try dvui.pngFromTexture(self.window.arena(), texture, .{});
 
     const file = dir.openFile(filename, .{}) catch |err| switch (err) {
         std.fs.File.OpenError.FileNotFound => {
