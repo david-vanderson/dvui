@@ -587,3 +587,7 @@ pub fn deinit(self: *ScrollContainerWidget) void {
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

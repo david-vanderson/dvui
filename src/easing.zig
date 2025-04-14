@@ -146,3 +146,7 @@ pub fn inOutBounce(t: f32) f32 {
     if (t < 0.5) return inBounce(t * 2) / 2;
     return 1 - inBounce((1 - t) * 2) / 2;
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

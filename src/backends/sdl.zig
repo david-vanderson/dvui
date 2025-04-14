@@ -1096,3 +1096,7 @@ pub fn main() !void {
         back.waitEventTimeout(wait_event_micros);
     }
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}

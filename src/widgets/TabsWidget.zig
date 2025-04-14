@@ -169,3 +169,7 @@ const ScrollAreaWidget = dvui.ScrollAreaWidget;
 const std = @import("std");
 const math = std.math;
 const dvui = @import("../dvui.zig");
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

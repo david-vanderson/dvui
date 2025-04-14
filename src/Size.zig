@@ -43,3 +43,7 @@ pub fn scale(self: *const Size, s: f32) Size {
 pub fn format(self: *const Size, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
     try std.fmt.format(writer, "Size{{ {d} {d} }}", .{ self.w, self.h });
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

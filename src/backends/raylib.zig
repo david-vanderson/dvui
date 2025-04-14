@@ -878,3 +878,7 @@ pub fn main() !void {
         if (res != .ok) break :main_loop;
     }
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}

@@ -27,3 +27,7 @@ pub fn pointToScreen(rs: *const RectScale, p: Point) Point {
 pub fn pointFromScreen(rs: *const RectScale, p: Point) Point {
     return Point.diff(p, rs.r.topLeft()).scale(1 / rs.s);
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
