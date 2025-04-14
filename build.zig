@@ -80,7 +80,6 @@ pub fn build(b: *std.Build) !void {
         linkBackend(dvui_sdl, sdl_mod);
         addExample(b, target, optimize, "sdl-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
-        addExample(b, target, optimize, "sdl-picture", b.path("examples/sdl-picture.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-app", b.path("examples/app.zig"), dvui_sdl);
         addExampleTests(b, target, optimize, "sdl-app", b.path("examples/app.zig"), dvui_sdl);
     }

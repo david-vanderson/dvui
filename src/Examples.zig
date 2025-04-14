@@ -1724,7 +1724,7 @@ pub fn plots() !void {
     s1.deinit();
     plot.deinit();
 
-    if (pic) |p| {
+    if (pic) |*p| {
         const texture = p.stop();
         const png_slice = try dvui.pngFromTexture(dvui.currentWindow().arena(), texture, .{});
         defer dvui.currentWindow().arena().free(png_slice);

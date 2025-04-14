@@ -5755,8 +5755,17 @@ pub const Picture = struct {
     }
 
     /// Stop recording and return texture (only valid this frame).
-    pub fn stop(self: *const Picture) dvui.Texture {
+    pub fn stop(self: *Picture) dvui.Texture {
         _ = dvui.renderTarget(self.target);
+
+        // copy pixels to regular texture
+        const px = dvui.textureRead(dvui.currentWindow().arena(), self.texture) catch null;
+        if (px) |pixels| {
+            defer dvui.currentWindow().arena().free(pixels);
+
+            dvui.textureDestroyLater(self.texture);
+            self.texture = dvui.textureCreate(pixels.ptr, self.texture.width, self.texture.height, .linear);
+        }
 
         // render the texture so you see the picture this frame
         dvui.renderTexture(self.texture, .{ .r = self.r }, .{}) catch {};

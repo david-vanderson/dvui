@@ -105,6 +105,7 @@ gpa: std.mem.Allocator,
 _arena: std.heap.ArenaAllocator,
 texture_trash: std.ArrayList(dvui.Texture) = undefined,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
+end_rendering_done: bool = false,
 
 debug_window_show: bool = false,
 debug_widget_id: u32 = 0, // 0 means no widget is selected
@@ -905,6 +906,7 @@ pub fn begin(
         }
     }
 
+    self.end_rendering_done = false;
     self.cursor_requested = null;
     self.text_input_rect = null;
     self.last_focused_id_this_frame = 0;
@@ -1546,12 +1548,9 @@ pub const endOptions = struct {
     show_toasts: bool = true,
 };
 
-// End of this window gui's rendering.  Renders retained dialogs and all
-// deferred rendering (subwindows, focus highlights).  Returns micros we
-// want between last call to begin() and next call to begin() (or null
-// meaning wait for event).  If wanted, pass return value to waitTime() to
-// get a useful time to wait between render loops.
-pub fn end(self: *Self, opts: endOptions) !?u32 {
+// Normally this is called for you in end(), but you can call it separately in
+// case you want to do something after everything has been rendered.
+pub fn endRendering(self: *Self, opts: endOptions) !void {
     if (opts.show_toasts) {
         try self.toastsShow();
     }
@@ -1567,6 +1566,19 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
         try self.renderCommands(sw.render_cmds_after);
         sw.render_cmds_after.clearAndFree();
+    }
+
+    self.end_rendering_done = true;
+}
+
+// End of this window gui's rendering.  Renders retained dialogs and all
+// deferred rendering (subwindows, focus highlights).  Returns micros we
+// want between last call to begin() and next call to begin() (or null
+// meaning wait for event).  If wanted, pass return value to waitTime() to
+// get a useful time to wait between render loops.
+pub fn end(self: *Self, opts: endOptions) !?u32 {
+    if (!self.end_rendering_done) {
+        try self.endRendering(opts);
     }
 
     for (self.datas_trash.items) |sd| {
