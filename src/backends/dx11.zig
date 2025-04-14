@@ -1517,7 +1517,7 @@ pub fn main() !void {
             try win.begin(nstime);
 
             // both dvui and dx11 drawing
-            const res = dvui_app.?.frameFn();
+            const res = try dvui_app.?.frameFn();
 
             // marks end of dvui frame, don't call dvui functions after this
             // - sends all dvui stuff to backend for rendering, must be called before renderPresent()

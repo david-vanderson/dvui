@@ -25,7 +25,9 @@ deinitFn: ?fn () void = null,
 /// Runs once every frame between `Window.begin` and `Window.end`
 ///
 /// Returns whether the app should continue running or close.
-frameFn: fn () Result,
+frameFn: frameFunction,
+
+pub const frameFunction = fn () anyerror!Result;
 
 fn nop_main() !void {}
 /// The root file needs to expose the App main function:
@@ -76,7 +78,9 @@ pub const StartOptions = struct {
     title: [:0]const u8,
     /// content of a PNG image (or any other format stb_image can load)
     /// tip: use @embedFile
-    icon: ?[:0]const u8 = null,
+    icon: ?[]const u8 = null,
+    /// use when running tests
+    hidden: bool = false,
 };
 
 pub const Result = enum {

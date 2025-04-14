@@ -48,6 +48,9 @@ pub const FontStyle = enum {
 // used to adjust widget id when @src() is not enough (like in a loop)
 id_extra: ?usize = null,
 
+// used to id widgets to programmatically interact with them
+tag: ?[]const u8 = null,
+
 // used in debugging to give widgets a name, especially in compound widgets
 name: ?[]const u8 = null,
 debug: ?bool = null,
@@ -275,6 +278,7 @@ pub fn strip(self: *const Options) Options {
     return Options{
         // reset to defaults of internal widgets
         .id_extra = null,
+        .tag = null,
         .name = null,
         .rect = null,
         .min_size_content = null,

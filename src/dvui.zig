@@ -80,6 +80,7 @@ pub const StructFieldOptions = se.StructFieldOptions;
 
 pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
+pub const testing = @import("testing.zig");
 
 pub const wasm = (builtin.target.cpu.arch == .wasm32);
 pub const useFreeType = !wasm;
@@ -154,6 +155,38 @@ pub fn themeSet(theme: *const Theme) void {
 pub fn toggleDebugWindow() void {
     var cw = currentWindow();
     cw.debug_window_show = !cw.debug_window_show;
+}
+
+pub const TagData = struct {
+    id: u32,
+    rect: Rect,
+    visible: bool,
+};
+
+pub fn tag(name: []const u8, data: TagData) void {
+    var cw = currentWindow();
+    const existing_tag = cw.tags.fetchPut(name, .{ .data = data }) catch |err| blk: {
+        dvui.log.err("tag() got {!} for it {x}\n", .{ err, data.id });
+
+        break :blk null;
+    };
+
+    if (existing_tag) |kv| {
+        if (kv.value.used) {
+            dvui.log.err("duplicate tag name \"{s}\" id {x} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ name, data.id });
+            cw.debug_widget_id = data.id;
+        }
+    }
+}
+
+pub fn tagGet(name: []const u8) ?TagData {
+    var cw = currentWindow();
+    const saved_tag = cw.tags.getPtr(name);
+    if (saved_tag) |st| {
+        return st.data;
+    } else {
+        return null;
+    }
 }
 
 /// Help left-align widgets by adding horizontal spacers.
@@ -5722,8 +5755,17 @@ pub const Picture = struct {
     }
 
     /// Stop recording and return texture (only valid this frame).
-    pub fn stop(self: *const Picture) dvui.Texture {
+    pub fn stop(self: *Picture) dvui.Texture {
         _ = dvui.renderTarget(self.target);
+
+        // copy pixels to regular texture
+        const px = dvui.textureRead(dvui.currentWindow().arena(), self.texture) catch null;
+        if (px) |pixels| {
+            defer dvui.currentWindow().arena().free(pixels);
+
+            dvui.textureDestroyLater(self.texture);
+            self.texture = dvui.textureCreate(pixels.ptr, self.texture.width, self.texture.height, .linear);
+        }
 
         // render the texture so you see the picture this frame
         dvui.renderTexture(self.texture, .{ .r = self.r }, .{}) catch {};

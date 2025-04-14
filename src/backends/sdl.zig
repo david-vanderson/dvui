@@ -50,10 +50,15 @@ pub const InitOptions = struct {
     /// content of a PNG image (or any other format stb_image can load)
     /// tip: use @embedFile
     icon: ?[]const u8 = null,
+    /// use when running tests
+    hidden: bool = false,
 };
 
 pub fn initWindow(options: InitOptions) !SDLBackend {
     if (!sdl3) _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+    // needed according to https://discourse.libsdl.org/t/possible-to-run-sdl2-headless/25665/2
+    // but getting error "offscreen not available"
+    // if (options.hidden) _ = c.SDL_SetHint(c.SDL_HINT_VIDEODRIVER, "offscreen");
 
     // use the string version instead of the #define so we compile with SDL < 2.24
     _ = c.SDL_SetHint("SDL_HINT_WINDOWS_DPI_SCALING", "1");
@@ -63,14 +68,15 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         return error.BackendError;
     }
 
+    const hidden_flag = if (options.hidden) c.SDL_WINDOW_HIDDEN else 0;
     var window: *c.SDL_Window = undefined;
     if (sdl3) {
-        window = c.SDL_CreateWindow(options.title, @as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE) orelse {
+        window = c.SDL_CreateWindow(options.title, @as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | hidden_flag)) orelse {
             dvui.log.err("SDL: Failed to open window: {s}", .{c.SDL_GetError()});
             return error.BackendError;
         };
     } else {
-        window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
+        window = c.SDL_CreateWindow(options.title, c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), @intCast(c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE | hidden_flag)) orelse {
             dvui.log.err("SDL: Failed to open window: {s}", .{c.SDL_GetError()});
             return error.BackendError;
         };
@@ -1045,6 +1051,7 @@ pub fn main() !void {
         .vsync = init_opts.vsync,
         .title = init_opts.title,
         .icon = init_opts.icon,
+        .hidden = init_opts.hidden,
     });
     defer back.deinit();
 
@@ -1074,7 +1081,7 @@ pub fn main() !void {
         _ = c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 255);
         _ = c.SDL_RenderClear(back.renderer);
 
-        const res = dvui_app.?.frameFn();
+        const res = try dvui_app.?.frameFn();
 
         const end_micros = try win.end(.{});
 
