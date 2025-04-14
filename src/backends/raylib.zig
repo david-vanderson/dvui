@@ -808,24 +808,14 @@ pub fn dvuiRectToRaylib(rect: dvui.Rect) c.Rectangle {
     return c.Rectangle{ .x = r.x, .y = r.y, .width = r.w, .height = r.h };
 }
 
-// dvui_app stuff
-const root = @import("root");
-pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
-comptime {
-    if (dvui_app != null) {
-        dvui.App.assertIsApp(root);
-    }
-}
-
-/// This example shows how to use the dvui for a normal application:
-/// - dvui renders the whole application
-/// - render frames only when needed
 pub fn main() !void {
+    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
+
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_instance.allocator();
     defer _ = gpa_instance.deinit();
 
-    const init_opts = dvui_app.?.config.get();
+    const init_opts = app.config.get();
 
     // init Raylib backend (creates OS window)
     // initWindow() means the backend calls CloseWindow for you in deinit()
@@ -845,8 +835,8 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), gpa, b.backend(), .{});
     defer win.deinit();
 
-    if (dvui_app.?.initFn) |initFn| initFn(&win);
-    defer if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
+    if (app.initFn) |initFn| initFn(&win);
+    defer if (app.deinitFn) |deinitFn| deinitFn();
 
     main_loop: while (true) {
         c.BeginDrawing();
@@ -864,7 +854,7 @@ pub fn main() !void {
         // the previous frame's render
         b.clear();
 
-        const res = try dvui_app.?.frameFn();
+        const res = try app.frameFn();
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
