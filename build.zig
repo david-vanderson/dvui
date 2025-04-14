@@ -24,6 +24,7 @@ pub fn build(b: *std.Build) !void {
     }
 
     const test_step = b.step("test", "Test the dvui codebase");
+    const check_step = b.step("check", "Check that the dvui codebase compiles");
 
     // SDL2
     if (back_to_build == null or back_to_build == .sdl) {
@@ -33,7 +34,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
             .link_libc = true,
         });
-        addTests(b, test_step, sdl_mod);
+        addTests(b, test_step, sdl_mod, "sdl");
 
         var sdl_options = b.addOptions();
 
@@ -66,8 +67,10 @@ pub fn build(b: *std.Build) !void {
         }
         sdl_mod.addOptions("sdl_options", sdl_options);
 
-        const dvui_sdl = addDvuiModule(b, target, optimize, "dvui_sdl", true);
-        addTests(b, test_step, dvui_sdl);
+        const name = "dvui_sdl";
+        const dvui_sdl = addDvuiModule(b, target, optimize, name, true);
+        addTests(b, test_step, dvui_sdl, name);
+        checkCompiles(b, target, optimize, check_step, dvui_sdl, name);
         linkBackend(dvui_sdl, sdl_mod);
         addExample(b, target, optimize, "sdl-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
@@ -83,7 +86,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
             .link_libc = true,
         });
-        addTests(b, test_step, sdl_mod);
+        addTests(b, test_step, sdl_mod, "sdl3");
 
         var sdl_options = b.addOptions();
 
@@ -103,9 +106,11 @@ pub fn build(b: *std.Build) !void {
         }
         sdl_mod.addOptions("sdl_options", sdl_options);
 
-        const dvui_sdl = addDvuiModule(b, target, optimize, "dvui_sdl3", true);
+        const name = "dvui_sdl3";
+        const dvui_sdl = addDvuiModule(b, target, optimize, name, true);
         linkBackend(dvui_sdl, sdl_mod);
-        addTests(b, test_step, dvui_sdl);
+        addTests(b, test_step, dvui_sdl, name);
+        checkCompiles(b, target, optimize, check_step, dvui_sdl, name);
         addExample(b, target, optimize, "sdl3-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl3-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl3-app", b.path("examples/app.zig"), dvui_sdl);
@@ -134,7 +139,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
             .link_libc = true,
         });
-        addTests(b, test_step, raylib_mod);
+        addTests(b, test_step, raylib_mod, "raylib");
 
         const maybe_ray = b.lazyDependency(
             "raylib",
@@ -168,9 +173,11 @@ pub fn build(b: *std.Build) !void {
             }
         }
 
-        const dvui_raylib = addDvuiModule(b, target, optimize, "dvui_raylib", false);
-        addTests(b, test_step, dvui_raylib);
+        const name = "dvui_raylib";
+        const dvui_raylib = addDvuiModule(b, target, optimize, name, false);
         linkBackend(dvui_raylib, raylib_mod);
+        addTests(b, test_step, dvui_raylib, name);
+        checkCompiles(b, target, optimize, check_step, dvui_raylib, name);
         addExample(b, target, optimize, "raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib);
         addExample(b, target, optimize, "raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib);
         addExample(b, target, optimize, "raylib-app", b.path("examples/app.zig"), dvui_raylib);
@@ -185,15 +192,17 @@ pub fn build(b: *std.Build) !void {
                 .optimize = optimize,
                 .link_libc = true,
             });
-            addTests(b, test_step, dx11_mod);
+            addTests(b, test_step, dx11_mod, "dx11");
 
             if (b.lazyDependency("win32", .{})) |zigwin32| {
                 dx11_mod.addImport("win32", zigwin32.module("win32"));
             }
 
-            const dvui_dx11 = addDvuiModule(b, target, optimize, "dvui_dx11", true);
+            const name = "dvui_dx11";
+            const dvui_dx11 = addDvuiModule(b, target, optimize, name, true);
             linkBackend(dvui_dx11, dx11_mod);
-            addTests(b, test_step, dvui_dx11);
+            addTests(b, test_step, dvui_dx11, name);
+            checkCompiles(b, target, optimize, check_step, dvui_dx11, name);
             addExample(b, target, optimize, "dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11);
             addExample(b, target, optimize, "dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11);
             addExample(b, target, optimize, "dx11-app", b.path("examples/app.zig"), dvui_dx11);
@@ -206,6 +215,30 @@ pub fn build(b: *std.Build) !void {
             .cpu_arch = .wasm32,
             .os_tag = .freestanding,
         });
+
+        {
+            // Build test for selected target, not wasm as the test runner doesn't work without stderr
+            const web_test = b.createModule(.{
+                .root_source_file = b.path("src/backends/web.zig"),
+                .target = target,
+                .optimize = optimize,
+                .single_threaded = true,
+            });
+            addTests(b, test_step, web_test, "dvui_web");
+
+            web_test.export_symbol_names = &[_][]const u8{
+                "dvui_init",
+                "dvui_deinit",
+                "dvui_update",
+                "add_event",
+                "arena_u8",
+                "gpa_u8",
+                "gpa_free",
+                "new_font",
+            };
+            const dvui_web_test = addDvuiModule(b, target, optimize, "dvui_web_test", true);
+            linkBackend(dvui_web_test, web_test);
+        }
 
         const web_mod = b.addModule("web", .{
             .root_source_file = b.path("src/backends/web.zig"),
@@ -224,6 +257,7 @@ pub fn build(b: *std.Build) !void {
 
         const dvui_web = addDvuiModule(b, web_target, optimize, "dvui_web", true);
         linkBackend(dvui_web, web_mod);
+        checkCompiles(b, web_target, optimize, check_step, dvui_web, "dvui_web");
 
         addWebExample(b, web_target, optimize, "web-test", b.path("examples/web-test.zig"), dvui_web);
         addWebExample(b, web_target, optimize, "web-app", b.path("examples/app.zig"), dvui_web);
@@ -270,8 +304,28 @@ pub fn linkBackend(dvui_mod: *std.Build.Module, backend_mod: *std.Build.Module) 
     dvui_mod.addImport("backend", backend_mod);
 }
 
-fn addTests(b: *std.Build, test_step: *std.Build.Step, mod: *std.Build.Module) void {
-    test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = mod })).step);
+fn addTests(b: *std.Build, test_step: *std.Build.Step, mod: *std.Build.Module, comptime name: []const u8) void {
+    test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = mod, .name = "test-" ++ name })).step);
+}
+
+fn checkCompiles(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    check_step: *std.Build.Step,
+    dvui_mod: *std.Build.Module,
+    comptime name: []const u8,
+) void {
+    check_step.dependOn(&b.addLibrary(.{ .root_module = dvui_mod, .name = name }).step);
+
+    // compile app example to verify all app related functions work as intended
+    const app_mod = b.createModule(.{
+        .root_source_file = b.path("examples/app.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    app_mod.addImport("dvui", dvui_mod);
+    check_step.dependOn(&b.addExecutable(.{ .root_module = app_mod, .name = name ++ "-app" }).step);
 }
 
 fn addDvuiModule(
@@ -403,7 +457,6 @@ fn addWebExample(
         .link_libc = false,
         .strip = if (optimize == .ReleaseFast or optimize == .ReleaseSmall) true else false,
     });
-
     web_test.entry = .disabled;
     web_test.root_module.addImport("dvui", dvui_mod);
 
