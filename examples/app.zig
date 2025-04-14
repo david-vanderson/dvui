@@ -37,10 +37,8 @@ pub fn AppInit(win: *dvui.Window) void {
 pub fn AppDeinit() void {}
 
 // Run each frame to do normal UI
-pub fn AppFrame() dvui.App.Result {
-    return frame() catch |err| {
-        std.debug.panic("in frame: {!}", .{err});
-    };
+pub fn AppFrame() !dvui.App.Result {
+    return frame();
 }
 
 pub fn frame() !dvui.App.Result {
@@ -76,7 +74,7 @@ pub fn frame() !dvui.App.Result {
     tl2.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
-    if (try dvui.button(@src(), label, .{}, .{})) {
+    if (try dvui.button(@src(), label, .{}, .{ .tag = "show-demo-btn" })) {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
@@ -91,4 +89,48 @@ pub fn frame() !dvui.App.Result {
     try dvui.Examples.demo();
 
     return .ok;
+}
+
+test "tab order" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    try dvui.testing.settle(frame);
+
+    try dvui.testing.pressKey(.tab, .none);
+    try dvui.testing.settle(frame);
+
+    try dvui.testing.expectFocused("show-demo-btn");
+}
+
+test "open example window" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    try dvui.testing.settle(frame);
+
+    try dvui.testing.moveTo("show-demo-btn");
+    try dvui.testing.click(.left);
+    try dvui.testing.settle(frame);
+
+    try dvui.testing.expectVisible(dvui.Examples.demo_window_tag);
+}
+
+test "snapshot" {
+    // snapshot tests are unstable
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    // FIXME: The global show_demo_window variable makes tests order dependent
+    dvui.Examples.show_demo_window = false;
+
+    try dvui.testing.settle(frame);
+
+    // Try swapping the names of ./snapshots/app.zig-test.snapshot-X.png
+    try t.snapshot(@src(), frame);
+
+    try dvui.testing.pressKey(.tab, .none);
+    try dvui.testing.settle(frame);
+
+    try t.snapshot(@src(), frame);
 }

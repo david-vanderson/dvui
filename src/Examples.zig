@@ -358,12 +358,14 @@ pub const demoKind = enum {
 
 pub var demo_active: demoKind = .basic_widgets;
 
+pub const demo_window_tag = "dvui-example-window";
+
 pub fn demo() !void {
     if (!show_demo_window) {
         return;
     }
 
-    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 600, .h = 400 }, .max_size_content = .{ .w = 600 } });
+    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 600, .h = 400 }, .max_size_content = .{ .w = 600 }, .tag = demo_window_tag });
     defer float.deinit();
 
     // pad the fps label so that it doesn't trigger refresh when the number
@@ -1722,7 +1724,7 @@ pub fn plots() !void {
     s1.deinit();
     plot.deinit();
 
-    if (pic) |p| {
+    if (pic) |*p| {
         const texture = p.stop();
         const png_slice = try dvui.pngFromTexture(dvui.currentWindow().arena(), texture, .{});
         defer dvui.currentWindow().arena().free(png_slice);

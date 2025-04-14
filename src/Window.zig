@@ -73,6 +73,7 @@ clipRect: Rect = Rect{},
 theme: Theme = undefined,
 
 min_sizes: std.AutoHashMap(u32, SavedSize),
+tags: std.StringHashMap(SavedTagData),
 data_mutex: std.Thread.Mutex,
 datas: std.AutoHashMap(u32, SavedData),
 datas_trash: std.ArrayList(SavedData) = undefined,
@@ -104,6 +105,7 @@ gpa: std.mem.Allocator,
 _arena: std.heap.ArenaAllocator,
 texture_trash: std.ArrayList(dvui.Texture) = undefined,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
+end_rendering_done: bool = false,
 
 debug_window_show: bool = false,
 debug_widget_id: u32 = 0, // 0 means no widget is selected
@@ -135,6 +137,11 @@ pub const Subwindow = struct {
 
 const SavedSize = struct {
     size: Size,
+    used: bool = true,
+};
+
+const SavedTagData = struct {
+    data: dvui.TagData,
     used: bool = true,
 };
 
@@ -181,6 +188,7 @@ pub fn init(
         ._arena = init_opts.arena orelse std.heap.ArenaAllocator.init(gpa),
         .subwindows = std.ArrayList(Subwindow).init(gpa),
         .min_sizes = std.AutoHashMap(u32, SavedSize).init(gpa),
+        .tags = std.StringHashMap(SavedTagData).init(gpa),
         .data_mutex = std.Thread.Mutex{},
         .datas = std.AutoHashMap(u32, SavedData).init(gpa),
         .animations = std.AutoHashMap(u32, Animation).init(gpa),
@@ -377,6 +385,7 @@ pub fn deinit(self: *Self) void {
 
     self.subwindows.deinit();
     self.min_sizes.deinit();
+    self.tags.deinit();
     self.animations.deinit();
     self.tab_index_prev.deinit();
     self.tab_index.deinit();
@@ -897,6 +906,7 @@ pub fn begin(
         }
     }
 
+    self.end_rendering_done = false;
     self.cursor_requested = null;
     self.text_input_rect = null;
     self.last_focused_id_this_frame = 0;
@@ -950,6 +960,25 @@ pub fn begin(
         }
 
         //std.debug.print("min_sizes {d}\n", .{self.min_sizes.count()});
+    }
+
+    {
+        var deadTags = std.ArrayList([]const u8).init(larena);
+        defer deadTags.deinit();
+        var it = self.tags.iterator();
+        while (it.next()) |kv| {
+            if (kv.value_ptr.used) {
+                kv.value_ptr.used = false;
+            } else {
+                try deadTags.append(kv.key_ptr.*);
+            }
+        }
+
+        for (deadTags.items) |name| {
+            _ = self.tags.remove(name);
+        }
+
+        //std.debug.print("tags {d}\n", .{self.tags.count()});
     }
 
     {
@@ -1519,12 +1548,9 @@ pub const endOptions = struct {
     show_toasts: bool = true,
 };
 
-// End of this window gui's rendering.  Renders retained dialogs and all
-// deferred rendering (subwindows, focus highlights).  Returns micros we
-// want between last call to begin() and next call to begin() (or null
-// meaning wait for event).  If wanted, pass return value to waitTime() to
-// get a useful time to wait between render loops.
-pub fn end(self: *Self, opts: endOptions) !?u32 {
+// Normally this is called for you in end(), but you can call it separately in
+// case you want to do something after everything has been rendered.
+pub fn endRendering(self: *Self, opts: endOptions) !void {
     if (opts.show_toasts) {
         try self.toastsShow();
     }
@@ -1540,6 +1566,19 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
         try self.renderCommands(sw.render_cmds_after);
         sw.render_cmds_after.clearAndFree();
+    }
+
+    self.end_rendering_done = true;
+}
+
+// End of this window gui's rendering.  Renders retained dialogs and all
+// deferred rendering (subwindows, focus highlights).  Returns micros we
+// want between last call to begin() and next call to begin() (or null
+// meaning wait for event).  If wanted, pass return value to waitTime() to
+// get a useful time to wait between render loops.
+pub fn end(self: *Self, opts: endOptions) !?u32 {
+    if (!self.end_rendering_done) {
+        try self.endRendering(opts);
     }
 
     for (self.datas_trash.items) |sd| {

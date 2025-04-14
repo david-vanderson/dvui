@@ -50,7 +50,7 @@ fn drawTce(self: *CacheWidget, t: *dvui.TextureCacheEntry) !void {
 
     try dvui.renderTexture(t.texture, rs, .{ .uv = (Rect{}).toSize(self.tex_uv), .debug = self.wd.options.debugGet() });
     //if (self.wd.options.debugGet()) {
-    //    dvui.log.debug("drawing {d} {d} {d}x{d} {d}x{d} {d} {d}", .{ rs.r.x, rs.r.y, rs.r.w, rs.r.h, t.size.w, t.size.h, self.tex_uv.w, self.tex_uv.h });
+    //    dvui.log.debug("drawing {d} {d} {d}x{d} {d}x{d} {d} {d}", .{ rs.r.x, rs.r.y, rs.r.w, rs.r.h, t.texture.width, t.texture.height, self.tex_uv.w, self.tex_uv.h });
     //}
 }
 
@@ -155,6 +155,7 @@ pub fn deinit(self: *CacheWidget) void {
     if (self.uncached()) {
         if (dvui.currentWindow().extra_frames_needed == 0) {
             dvui.dataSet(null, self.wd.id, "_cache_now", true);
+            dvui.refresh(null, @src(), self.wd.id);
         }
     }
     dvui.currentWindow().extra_frames_needed = @max(dvui.currentWindow().extra_frames_needed, self.refresh_prev_value);
