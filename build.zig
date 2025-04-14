@@ -23,6 +23,8 @@ pub fn build(b: *std.Build) !void {
         _ = addDvuiModule(b, target, optimize, "dvui", true);
     }
 
+    const test_step = b.step("test", "Test the dvui codebase");
+
     // SDL
     if (back_to_build == null or back_to_build == .sdl) {
         const sdl_mod = b.addModule("sdl", .{
@@ -31,6 +33,8 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
             .link_libc = true,
         });
+        addTests(b, test_step, sdl_mod);
+
         var sdl_options = b.addOptions();
         const compile_sdl3 = b.option(bool, "sdl3", "SDL3 instead of SDL2") orelse false;
 
@@ -77,6 +81,7 @@ pub fn build(b: *std.Build) !void {
         sdl_mod.addOptions("sdl_options", sdl_options);
 
         const dvui_sdl = addDvuiModule(b, target, optimize, "dvui_sdl", true);
+        addTests(b, test_step, dvui_sdl);
         linkBackend(dvui_sdl, sdl_mod);
         addExample(b, target, optimize, "sdl-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
@@ -106,6 +111,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
             .link_libc = true,
         });
+        addTests(b, test_step, raylib_mod);
 
         const maybe_ray = b.lazyDependency(
             "raylib",
@@ -140,6 +146,7 @@ pub fn build(b: *std.Build) !void {
         }
 
         const dvui_raylib = addDvuiModule(b, target, optimize, "dvui_raylib", false);
+        addTests(b, test_step, dvui_raylib);
         linkBackend(dvui_raylib, raylib_mod);
         addExample(b, target, optimize, "raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib);
         addExample(b, target, optimize, "raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib);
@@ -155,6 +162,7 @@ pub fn build(b: *std.Build) !void {
                 .optimize = optimize,
                 .link_libc = true,
             });
+            addTests(b, test_step, dx11_mod);
 
             if (b.lazyDependency("win32", .{})) |zigwin32| {
                 dx11_mod.addImport("win32", zigwin32.module("win32"));
@@ -162,6 +170,7 @@ pub fn build(b: *std.Build) !void {
 
             const dvui_dx11 = addDvuiModule(b, target, optimize, "dvui_dx11", true);
             linkBackend(dvui_dx11, dx11_mod);
+            addTests(b, test_step, dvui_dx11);
             addExample(b, target, optimize, "dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11);
             addExample(b, target, optimize, "dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11);
             addExample(b, target, optimize, "dx11-app", b.path("examples/app.zig"), dvui_dx11);
@@ -236,6 +245,10 @@ pub fn build(b: *std.Build) !void {
 pub fn linkBackend(dvui_mod: *std.Build.Module, backend_mod: *std.Build.Module) void {
     backend_mod.addImport("dvui", dvui_mod);
     dvui_mod.addImport("backend", backend_mod);
+}
+
+fn addTests(b: *std.Build, test_step: *std.Build.Step, mod: *std.Build.Module) void {
+    test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = mod })).step);
 }
 
 fn addDvuiModule(
