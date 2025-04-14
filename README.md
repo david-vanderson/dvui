@@ -34,6 +34,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 * [FIDO2/ Passkey compatible authenticator implementation for Linux](https://github.com/r4gus/keypass)
 * [QEMU frontend](https://github.com/AnErrupTion/ZigEmu)
 * [Static site generator GUI](https://github.com/nhanb/webmaker2000)
+* [File explorer for Altair 8800 disk images](https://github.com/phatchman/altair_tools) - use the experimental branch.
 
 ## Features
 
