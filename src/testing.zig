@@ -72,7 +72,8 @@ pub const InitOptions = struct {
 
 pub fn init(options: InitOptions) !Self {
     if (Backend.kind != .sdl) {
-        @compileError("dvui.testing can currently only be used with the SDL backend");
+        std.debug.print("dvui.testing can currently only be used with the SDL backend\n", .{});
+        return error.SkipZigTest;
     }
 
     if (should_write_snapshots()) {
