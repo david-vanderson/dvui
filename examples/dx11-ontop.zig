@@ -13,56 +13,41 @@ pub const panic = win32.messageBoxThenPanic(.{ .title = "Dx11 Ontop Panic!" });
 
 var backend_attached = false;
 
-pub export fn main(
-    _: win32.HINSTANCE,
-    _: ?win32.HINSTANCE,
-    _: ?[*:0]const u16,
-    _: win32.SHOW_WINDOW_CMD,
-) callconv(std.os.windows.WINAPI) i32 {
+pub fn main() !void {
     defer _ = gpa_instance.deinit();
     const wnd = createWindow();
 
-    if (createDeviceD3D(wnd)) |options| {
-        log.info("Successfully created device.", .{});
-        var window_state: Backend.WindowState = undefined;
-        const backend = Backend.attach(wnd, &window_state, gpa, options, .{ .vsync = false }) catch |e| @panic(@errorName(e));
-        defer backend.deinit();
-        backend_attached = true;
+    const options = createDeviceD3D(wnd) orelse return error.CreateDeviceFailed;
 
-        _ = win32.ShowWindow(wnd, .{ .SHOWNORMAL = 1 });
-        _ = win32.UpdateWindow(wnd);
+    log.info("Successfully created device.", .{});
+    var window_state: Backend.WindowState = undefined;
+    const backend = Backend.attach(wnd, &window_state, gpa, options, .{ .vsync = false }) catch |e| @panic(@errorName(e));
+    defer backend.deinit();
+    backend_attached = true;
 
-        const win = backend.getWindow();
-        log.info("dvui window also init.", .{});
+    _ = win32.ShowWindow(wnd, .{ .SHOWNORMAL = 1 });
+    _ = win32.UpdateWindow(wnd);
 
-        while (true) switch (Backend.serviceMessageQueue()) {
-            .queue_empty => {
-                // beginWait coordinates with waitTime below to run frames only when needed
-                const nstime = win.beginWait(backend.hasEvent());
+    const win: *dvui.Window = backend.getWindow();
+    log.info("dvui window also init.", .{});
 
-                // marks the beginning of a frame for dvui, can call dvui functions after this
-                win.begin(nstime) catch {
-                    log.err("win.begin() failed.", .{});
-                    return 1;
-                };
+    while (true) switch (Backend.serviceMessageQueue()) {
+        .queue_empty => {
+            // beginWait coordinates with waitTime below to run frames only when needed
+            const nstime = win.beginWait(backend.hasEvent());
 
-                // draw some fancy dvui stuff
-                dvui_floating_stuff() catch {
-                    log.err("Oh no something went horribly wrong!", .{});
-                };
+            // marks the beginning of a frame for dvui, can call dvui functions after this
+            try win.begin(nstime);
 
-                // marks end of dvui frame, don't call dvui functions after this
-                // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
-                _ = win.end(.{}) catch continue;
-            },
-            .quit, .close_windows => break,
-        };
-    } else {
-        log.err("createDevice was not successful", .{});
-        return 1;
-    }
+            // draw some fancy dvui stuff
+            try dvui_floating_stuff();
 
-    return 0;
+            // marks end of dvui frame, don't call dvui functions after this
+            // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
+            _ = try win.end(.{});
+        },
+        .quit, .close_windows => break,
+    };
 }
 
 fn windowProc(
