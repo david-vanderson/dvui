@@ -22,26 +22,12 @@ const vsync = true;
 
 var show_dialog_outside_frame: bool = false;
 
+const window_class = win32.L("DvuiStandaloneWindow");
+
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application
 /// - render frames only when needed
-pub export fn main(
-    _: win32.HINSTANCE,
-    _: ?win32.HINSTANCE,
-    _: ?[*:0]const u16,
-    _: win32.SHOW_WINDOW_CMD,
-) void {
-    return main2() catch |e| {
-        if (@errorReturnTrace()) |trace| {
-            std.debug.dumpStackTrace(trace.*);
-        }
-        std.debug.panic("{s}", .{@errorName(e)});
-    };
-}
-
-const window_class = win32.L("DvuiStandaloneWindow");
-
-fn main2() !void {
+pub fn main() !void {
     defer _ = gpa_instance.deinit();
 
     Backend.RegisterClass(window_class, .{}) catch win32.panicWin32(
