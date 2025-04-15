@@ -35,14 +35,14 @@ pub fn build(b: *std.Build) !void {
     }
 
     // SDL2
-    if (back_to_build == null or back_to_build == .sdl) {
-        const sdl_mod = b.addModule("sdl", .{
+    if (back_to_build == null or back_to_build == .sdl2) {
+        const sdl_mod = b.addModule("sdl2", .{
             .root_source_file = b.path("src/backends/sdl.zig"),
             .target = target,
             .optimize = optimize,
             .link_libc = true,
         });
-        test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = sdl_mod, .name = "sdl-backend" })).step);
+        test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = sdl_mod, .name = "sdl2-backend" })).step);
 
         var sdl_options = b.addOptions();
 
@@ -75,12 +75,11 @@ pub fn build(b: *std.Build) !void {
         }
         sdl_mod.addOptions("sdl_options", sdl_options);
 
-        const name = "dvui_sdl";
-        const dvui_sdl = addDvuiModule(dvui_opts, name, true);
+        const dvui_sdl = addDvuiModule(dvui_opts, "dvui_sdl2", true);
         linkBackend(dvui_sdl, sdl_mod);
-        addExample(dvui_opts, "sdl-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
-        addExample(dvui_opts, "sdl-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
-        addExample(dvui_opts, "sdl-app", b.path("examples/app.zig"), dvui_sdl);
+        addExample(dvui_opts, "sdl2-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
+        addExample(dvui_opts, "sdl2-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
+        addExample(dvui_opts, "sdl2-app", b.path("examples/app.zig"), dvui_sdl);
     }
 
     // SDL3
@@ -111,8 +110,7 @@ pub fn build(b: *std.Build) !void {
         }
         sdl_mod.addOptions("sdl_options", sdl_options);
 
-        const name = "dvui_sdl3";
-        const dvui_sdl = addDvuiModule(dvui_opts, name, true);
+        const dvui_sdl = addDvuiModule(dvui_opts, "dvui_sdl3", true);
         linkBackend(dvui_sdl, sdl_mod);
         addExample(dvui_opts, "sdl3-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
         addExample(dvui_opts, "sdl3-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
@@ -175,8 +173,7 @@ pub fn build(b: *std.Build) !void {
             }
         }
 
-        const name = "dvui_raylib";
-        const dvui_raylib = addDvuiModule(dvui_opts, name, false);
+        const dvui_raylib = addDvuiModule(dvui_opts, "dvui_raylib", false);
         linkBackend(dvui_raylib, raylib_mod);
         addExample(dvui_opts, "raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib);
         addExample(dvui_opts, "raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib);
@@ -198,8 +195,7 @@ pub fn build(b: *std.Build) !void {
                 dx11_mod.addImport("win32", zigwin32.module("win32"));
             }
 
-            const name = "dvui_dx11";
-            const dvui_dx11 = addDvuiModule(dvui_opts, name, true);
+            const dvui_dx11 = addDvuiModule(dvui_opts, "dvui_dx11", true);
             linkBackend(dvui_dx11, dx11_mod);
             addExample(dvui_opts, "dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11);
             addExample(dvui_opts, "dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11);
