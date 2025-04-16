@@ -18,6 +18,7 @@ wd: WidgetData = undefined,
 hash: u32 = undefined,
 refresh_prev_value: u8 = undefined,
 caching: bool = false,
+texture_create_error: bool = false,
 tex_uv: Size = undefined,
 old_target: dvui.RenderTarget = undefined,
 old_clip: ?Rect = null,
@@ -93,7 +94,14 @@ pub fn install(self: *CacheWidget) !void {
             var tex: ?dvui.Texture = null;
 
             if (self.caching) {
-                tex = dvui.textureCreateTarget(w, h, .linear) catch blk: {
+                tex = dvui.textureCreateTarget(w, h, .linear) catch |err| blk: {
+                    if (err == error.TextureCreate) {
+                        self.texture_create_error = dvui.dataGet(null, self.wd.id, "_texture_create_error", bool) orelse false;
+                        if (!self.texture_create_error) {
+                            // indicate that texture failed last frame to prevent backends that always return errors from forever refreshing
+                            dvui.dataSet(null, self.wd.id, "_texture_create_error", true);
+                        }
+                    }
                     self.caching = false;
                     break :blk null;
                 };
@@ -152,7 +160,7 @@ pub fn processEvent(self: *CacheWidget, e: *dvui.Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *CacheWidget) void {
-    if (self.uncached()) {
+    if (!self.texture_create_error and self.uncached()) {
         if (dvui.currentWindow().extra_frames_needed == 0) {
             dvui.dataSet(null, self.wd.id, "_cache_now", true);
             dvui.refresh(null, @src(), self.wd.id);
