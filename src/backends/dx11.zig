@@ -655,21 +655,75 @@ pub fn textureCreate(self: Context, pixels: [*]u8, width: u32, height: u32, ti: 
     return dvui.Texture{ .ptr = texture, .width = width, .height = height };
 }
 
-pub fn textureCreateTarget(self: Context, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
-    _ = self;
-    _ = width;
-    _ = height;
-    _ = interpolation;
-    dvui.log.debug("dx11 textureCreateTarget unimplemented", .{});
-    return error.TextureCreate;
+pub fn textureCreateTarget(self: Context, width: u32, height: u32, _: dvui.enums.TextureInterpolation) !dvui.Texture {
+    const state = stateFromHwnd(hwndFromContext(self));
+
+    const texture_desc = win32.D3D11_TEXTURE2D_DESC{
+        .Height = height,
+        .Width = width,
+        .MipLevels = 1,
+        .ArraySize = 1,
+        .Format = win32.DXGI_FORMAT.R8G8B8A8_UNORM,
+        .SampleDesc = .{
+            .Count = 1,
+            .Quality = 0,
+        },
+        .Usage = win32.D3D11_USAGE.DEFAULT,
+        .BindFlags = .{ .RENDER_TARGET = 1 },
+        .CPUAccessFlags = .{},
+        .MiscFlags = .{},
+    };
+    var texture: *win32.ID3D11Texture2D = undefined;
+    const texture_result = state.device.CreateTexture2D(&texture_desc, null, &texture);
+    if (!isOk(texture_result)) {
+        log.err("Texture for render target creation failed", .{});
+        return error.TextureCreate;
+    }
+    return .{ .ptr = @ptrCast(texture), .width = width, .height = height };
 }
 
 pub fn textureRead(self: Context, texture: dvui.Texture, pixels_out: [*]u8) error{TextureRead}!void {
-    _ = self;
-    _ = texture;
-    _ = pixels_out;
-    dvui.log.debug("dx11 textureRead unimplemented", .{});
-    return error.TextureRead;
+    const state = stateFromHwnd(hwndFromContext(self));
+    const tex: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
+
+    const texture_desc = win32.D3D11_TEXTURE2D_DESC{
+        .Height = texture.height,
+        .Width = texture.width,
+        .MipLevels = 1,
+        .ArraySize = 1,
+        .Format = win32.DXGI_FORMAT.R8G8B8A8_UNORM,
+        .SampleDesc = .{
+            .Count = 1,
+            .Quality = 0,
+        },
+        .Usage = win32.D3D11_USAGE.STAGING,
+        .BindFlags = .{},
+        .CPUAccessFlags = .{ .READ = 1 },
+        .MiscFlags = .{},
+    };
+    var staging: *win32.ID3D11Texture2D = undefined;
+    const texture_result = state.device.CreateTexture2D(&texture_desc, null, &staging);
+    if (!isOk(texture_result)) {
+        log.err("Texture creation for read failed", .{});
+        return error.TextureRead;
+    }
+    defer _ = staging.IUnknown.Release();
+
+    state.device_context.CopyResource(&staging.ID3D11Resource, &tex.ID3D11Resource);
+    defer state.device_context.Unmap(&staging.ID3D11Resource, 0);
+
+    var mapped: win32.D3D11_MAPPED_SUBRESOURCE = undefined;
+    _ = state.device_context.Map(&staging.ID3D11Resource, 0, win32.D3D11_MAP.READ, 0, &mapped);
+
+    if (mapped.pData) |data_ptr| {
+        const data: [*]const u8 = @ptrCast(data_ptr);
+        const row_len = texture.width * 4;
+        for (0..texture.height) |i| {
+            const offset = (i * row_len);
+            // copy row by row as mapping may not store the rows contiguously
+            @memcpy(pixels_out[offset..(offset + row_len)], data + (i * mapped.RowPitch));
+        }
+    }
 }
 
 pub fn textureDestroy(self: Context, texture: dvui.Texture) void {
@@ -679,9 +733,26 @@ pub fn textureDestroy(self: Context, texture: dvui.Texture) void {
 }
 
 pub fn renderTarget(self: Context, texture: ?dvui.Texture) void {
-    _ = self;
-    _ = texture;
-    dvui.log.debug("dx11 renderTarget unimplemented", .{});
+    const state = stateFromHwnd(hwndFromContext(self));
+    cleanupRenderTarget(state);
+    if (texture) |tex| {
+        const target: *win32.ID3D11Texture2D = @ptrCast(@alignCast(tex.ptr));
+        var render_target: @TypeOf(state.render_target.?) = undefined;
+        const target_result = state.device.CreateRenderTargetView(
+            @ptrCast(&target.ID3D11Resource),
+            null,
+            &render_target,
+        );
+        if (!isOk(target_result)) {
+            log.err("Render target creation failed", .{});
+            state.render_target = null;
+            return;
+        }
+        state.device_context.ClearRenderTargetView(render_target, &0.0);
+        state.render_target = render_target;
+    } else {
+        state.render_target = null;
+    }
 }
 
 pub fn drawClippedTriangles(
@@ -1464,6 +1535,8 @@ fn wWinMain(
 }
 
 pub fn main() !void {
+    _ = win32.AttachConsole(0xFFFFFFFF);
+
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
     const window_class = win32.L("DvuiWindow");
