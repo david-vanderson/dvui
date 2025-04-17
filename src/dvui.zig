@@ -12,6 +12,11 @@ const builtin = @import("builtin");
 const std = @import("std");
 pub const backend = @import("backend");
 const tvg = @import("tinyvg/tinyvg.zig");
+comptime {
+    if (@hasDecl(backend, "deprecated")) {
+        @compileError(backend.deprecated);
+    }
+}
 
 pub const math = std.math;
 pub const fnv = std.hash.Fnv1a_32;

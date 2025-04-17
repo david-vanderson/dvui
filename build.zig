@@ -34,6 +34,20 @@ pub fn build(b: *std.Build) !void {
         _ = addDvuiModule(.{ .b = b, .target = target, .optimize = optimize }, "dvui", true);
     }
 
+    // Deprecated modules
+    if (back_to_build == null or back_to_build == .sdl) {
+        // The sdl backend name is deprecated. This is here to provide a useful error during transition
+        _ = b.addModule("dvui_sdl", .{ .root_source_file = b.path("src/backends/sdl_deprecated.zig") });
+        // TODO: If more deprecation messages are needed, the source files could be generated at compile time with a runArtifact
+
+        if (back_to_build == .sdl) {
+            const deprecation_message = b.addFail("Backend 'sdl' is deprecated. Use either 'sdl2' or 'sdl3'");
+            b.getInstallStep().dependOn(&deprecation_message.step);
+            test_step.dependOn(&deprecation_message.step);
+            check_step.dependOn(&deprecation_message.step);
+        }
+    }
+
     // SDL2
     if (back_to_build == null or back_to_build == .sdl2) {
         const sdl_mod = b.addModule("sdl2", .{
