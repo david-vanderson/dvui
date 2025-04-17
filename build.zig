@@ -48,6 +48,18 @@ pub fn build(b: *std.Build) !void {
         }
     }
 
+    // Testing
+    if (back_to_build == null or back_to_build == .testing) {
+        const testing_mod = b.addModule("testing", .{
+            .root_source_file = b.path("src/backends/testing.zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+        const dvui_testing = addDvuiModule(dvui_opts, "dvui_testing", true);
+        linkBackend(dvui_testing, testing_mod);
+        addExample(dvui_opts, "testing-app", b.path("examples/app.zig"), dvui_testing);
+    }
+
     // SDL2
     if (back_to_build == null or back_to_build == .sdl2) {
         const sdl_mod = b.addModule("sdl2", .{
