@@ -82,7 +82,7 @@ pub fn init(options: InitOptions) !Self {
             .title = "",
             .hidden = true,
         }),
-        .dummy => Backend.init(.{
+        .testing => Backend.init(.{
             .allocator = options.allocator,
             .size = options.window_size,
         }),
@@ -246,7 +246,7 @@ fn hash_png(png_reader: std.io.AnyReader) !u32 {
 }
 
 fn should_ignore_snapshots() bool {
-    return Backend.kind == .dummy or std.process.hasEnvVarConstant("DVUI_SNAPSHOT_IGNORE");
+    return Backend.kind == .testing or std.process.hasEnvVarConstant("DVUI_SNAPSHOT_IGNORE");
 }
 
 fn should_write_snapshots() bool {
