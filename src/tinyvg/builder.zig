@@ -52,21 +52,21 @@ pub fn Builder(comptime Writer: type) type {
                     const rwidth = mapSizeToType(u8, width) catch return error.OutOfRange;
                     const rheight = mapSizeToType(u8, height) catch return error.OutOfRange;
 
-                    try self.writer.writeIntLittle(u8, rwidth);
-                    try self.writer.writeIntLittle(u8, rheight);
+                    try self.writer.writeInt(u8, rwidth, .little);
+                    try self.writer.writeInt(u8, rheight, .little);
                 },
 
                 .default => {
                     const rwidth = mapSizeToType(u16, width) catch return error.OutOfRange;
                     const rheight = mapSizeToType(u16, height) catch return error.OutOfRange;
 
-                    try self.writer.writeIntLittle(u16, rwidth);
-                    try self.writer.writeIntLittle(u16, rheight);
+                    try self.writer.writeInt(u16, rwidth, .little);
+                    try self.writer.writeInt(u16, rheight, .little);
                 },
 
                 .enhanced => {
-                    try self.writer.writeIntLittle(u32, width);
-                    try self.writer.writeIntLittle(u32, height);
+                    try self.writer.writeInt(u32, width, .little);
+                    try self.writer.writeInt(u32, height, .little);
                 },
             }
 
@@ -93,21 +93,21 @@ pub fn Builder(comptime Writer: type) type {
                         (@as(u16, ((rgb8[1] >> 2) & 0x2F)) << 5) |
                         (@as(u16, ((rgb8[2] >> 3) & 0x1F)) << 11);
 
-                    try self.writer.writeIntLittle(u16, value);
+                    try self.writer.writeInt(u16, value, .little);
                 },
 
                 .u8888 => for (colors) |c| {
                     const rgba = c.toRgba8();
-                    try self.writer.writeIntLittle(u8, rgba[0]);
-                    try self.writer.writeIntLittle(u8, rgba[1]);
-                    try self.writer.writeIntLittle(u8, rgba[2]);
-                    try self.writer.writeIntLittle(u8, rgba[3]);
+                    try self.writer.writeInt(u8, rgba[0], .little);
+                    try self.writer.writeInt(u8, rgba[1], .little);
+                    try self.writer.writeInt(u8, rgba[2], .little);
+                    try self.writer.writeInt(u8, rgba[3], .little);
                 },
                 .f32 => for (colors) |c| {
-                    try self.writer.writeIntLittle(u32, @as(u32, @bitCast(c.r)));
-                    try self.writer.writeIntLittle(u32, @as(u32, @bitCast(c.g)));
-                    try self.writer.writeIntLittle(u32, @as(u32, @bitCast(c.b)));
-                    try self.writer.writeIntLittle(u32, @as(u32, @bitCast(c.a)));
+                    try self.writer.writeInt(u32, @as(u32, @bitCast(c.r)), .little);
+                    try self.writer.writeInt(u32, @as(u32, @bitCast(c.g)), .little);
+                    try self.writer.writeInt(u32, @as(u32, @bitCast(c.b)), .little);
+                    try self.writer.writeInt(u32, @as(u32, @bitCast(c.a)), .little);
                 },
 
                 .custom => return error.UnsupportedColorEncoding,
@@ -357,14 +357,14 @@ pub fn Builder(comptime Writer: type) type {
             switch (self.range) {
                 .reduced => {
                     const reduced_val = std.math.cast(i8, val) orelse return error.OutOfRange;
-                    try self.writer.writeIntLittle(i8, reduced_val);
+                    try self.writer.writeInt(i8, reduced_val, .little);
                 },
                 .default => {
                     const reduced_val = std.math.cast(i16, val) orelse return error.OutOfRange;
-                    try self.writer.writeIntLittle(i16, reduced_val);
+                    try self.writer.writeInt(i16, reduced_val, .little);
                 },
                 .enhanced => {
-                    try self.writer.writeIntLittle(i32, val);
+                    try self.writer.writeInt(i32, val, .little);
                 },
             }
         }

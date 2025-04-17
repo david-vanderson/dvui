@@ -332,3 +332,7 @@ pub const voicemail = @embedFile("entypo/voicemail.tvg");
 pub const wallet = @embedFile("entypo/wallet.tvg");
 pub const warning = @embedFile("entypo/warning.tvg");
 pub const water = @embedFile("entypo/water.tvg");
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

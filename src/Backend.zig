@@ -190,3 +190,7 @@ pub fn openURL(self: *Backend, url: []const u8) error{OutOfMemory}!void {
 pub fn refresh(self: *Backend) void {
     return self.vtable.refresh(self.ctx);
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

@@ -1445,16 +1445,6 @@ fn convertVKeyToDvuiKey(vkey: win32.VIRTUAL_KEY) dvui.enums.Key {
     };
 }
 
-// dvui_app stuff
-const root = @import("root");
-pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
-comptime {
-    if (dvui_app != null) {
-        dvui.App.assertIsApp(root);
-        @export(&wWinMain, .{ .name = "wWinMain" });
-    }
-}
-
 // win32 is Windows exclusive so this can be unconditionally defined
 extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
 
@@ -1474,6 +1464,8 @@ fn wWinMain(
 }
 
 pub fn main() !void {
+    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
+
     const window_class = win32.L("DvuiWindow");
 
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
@@ -1485,7 +1477,7 @@ pub fn main() !void {
         win32.GetLastError(),
     );
 
-    const init_opts = dvui_app.?.config.get();
+    const init_opts = app.config.get();
 
     var window_state: WindowState = undefined;
 
@@ -1505,8 +1497,8 @@ pub fn main() !void {
 
     const win = b.getWindow();
 
-    if (dvui_app.?.initFn) |initFn| initFn(win);
-    defer if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
+    if (app.initFn) |initFn| initFn(win);
+    defer if (app.deinitFn) |deinitFn| deinitFn();
 
     while (true) switch (serviceMessageQueue()) {
         .queue_empty => {
@@ -1517,7 +1509,7 @@ pub fn main() !void {
             try win.begin(nstime);
 
             // both dvui and dx11 drawing
-            const res = try dvui_app.?.frameFn();
+            const res = try app.frameFn();
 
             // marks end of dvui frame, don't call dvui functions after this
             // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
@@ -1530,4 +1522,8 @@ pub fn main() !void {
         },
         .quit, .close_windows => break,
     };
+}
+
+test {
+    std.testing.refAllDecls(@This());
 }

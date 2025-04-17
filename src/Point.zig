@@ -42,3 +42,7 @@ pub fn normalize(self: *const Point) Point {
 pub fn format(self: *const Point, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
     try std.fmt.format(writer, "Point{{ {d} {d} }}", .{ self.x, self.y });
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

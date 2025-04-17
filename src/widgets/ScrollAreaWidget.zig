@@ -161,3 +161,7 @@ pub fn deinit(self: *ScrollAreaWidget) void {
 
     self.hbox.deinit();
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
