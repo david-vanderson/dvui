@@ -277,3 +277,7 @@ pub fn minSizeReportToParent(self: *const WidgetData) void {
         self.parent.minSizeForChild(self.min_size);
     }
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

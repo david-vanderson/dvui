@@ -12,6 +12,11 @@ const builtin = @import("builtin");
 const std = @import("std");
 pub const backend = @import("backend");
 const tvg = @import("tinyvg/tinyvg.zig");
+comptime {
+    if (@hasDecl(backend, "deprecated")) {
+        @compileError(backend.deprecated);
+    }
+}
 
 pub const math = std.math;
 pub const fnv = std.hash.Fnv1a_32;
@@ -2781,7 +2786,7 @@ pub fn wantTextInput(r: Rect) void {
     cw.text_input_rect = r.scale(1 / cw.natural_scale);
 }
 
-pub const popup = @compileError("popup renamed to floatingMenu");
+pub const popup = if (!builtin.is_test) @compileError("popup renamed to floatingMenu");
 
 pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) !*FloatingMenuWidget {
     var ret = try currentWindow().arena().create(FloatingMenuWidget);
@@ -5914,4 +5919,8 @@ pub fn plotXY(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions
 
     s1.deinit();
     p.deinit();
+}
+
+test {
+    std.testing.refAllDecls(@This());
 }

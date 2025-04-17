@@ -36,7 +36,7 @@ const EventTemp = struct {
 
 pub var event_temps = std.ArrayList(EventTemp).init(gpa);
 
-pub const wasm = struct {
+pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_about_webgl2() u8;
 
     pub extern "dvui" fn wasm_panic(ptr: [*]const u8, len: usize) void;
@@ -59,7 +59,7 @@ pub const wasm = struct {
     pub extern "dvui" fn wasm_textureDestroy(u32) void;
     pub extern "dvui" fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, clip: u8, x: i32, y: i32, w: i32, h: i32) void;
 
-    pub extern "dvui" fn wasm_cursor(name: [*]const u8, name_len: u32) void;
+    pub extern "dvui" fn wasm_cursor(name: [*]const u8, name_len: usize) void;
     pub extern "dvui" fn wasm_text_input(x: f32, y: f32, w: f32, h: f32) void;
     pub extern "dvui" fn wasm_open_url(ptr: [*]const u8, len: usize) void;
     pub extern "dvui" fn wasm_download_data(name_ptr: [*]const u8, name_len: usize, data_ptr: [*]const u8, data_len: usize) void;
@@ -73,6 +73,66 @@ pub const wasm = struct {
     pub extern "dvui" fn wasm_read_file_data(id: u32, file_index: usize, data: [*]u8) void;
 
     pub extern "dvui" fn wasm_add_noto_font() void;
+} else struct { // Mock api for testing that this backend is semantically correct, cannot test behaviour
+    pub fn wasm_about_webgl2() u8 {
+        return undefined;
+    }
+
+    pub fn wasm_panic(_: [*]const u8, _: usize) void {}
+    pub fn wasm_log_write(_: [*]const u8, _: usize) void {}
+    pub fn wasm_log_flush() void {}
+
+    pub fn wasm_now() f64 {
+        return undefined;
+    }
+    pub fn wasm_sleep(_: u32) void {}
+
+    pub fn wasm_pixel_width() f32 {
+        return undefined;
+    }
+    pub fn wasm_pixel_height() f32 {
+        return undefined;
+    }
+    pub fn wasm_canvas_width() f32 {
+        return undefined;
+    }
+    pub fn wasm_canvas_height() f32 {
+        return undefined;
+    }
+
+    pub fn wasm_frame_buffer() u8 {
+        return undefined;
+    }
+    pub fn wasm_textureCreate(_: [*]u8, _: u32, _: u32, _: u8) u32 {
+        return undefined;
+    }
+    pub fn wasm_textureCreateTarget(_: u32, _: u32, _: u8) u32 {
+        return undefined;
+    }
+    pub fn wasm_textureRead(_: u32, _: [*]u8, _: u32, _: u32) void {}
+    pub fn wasm_renderTarget(_: u32) void {}
+    pub fn wasm_textureDestroy(_: u32) void {}
+    pub fn wasm_renderGeometry(_: u32, _: [*]const u8, _: usize, _: [*]const u8, _: usize, _: u8, _: u8, _: u8, _: u8, _: u8, _: i32, _: i32, _: i32, _: i32) void {}
+
+    pub fn wasm_cursor(_: [*]const u8, _: usize) void {}
+    pub fn wasm_text_input(_: f32, _: f32, _: f32, _: f32) void {}
+    pub fn wasm_open_url(_: [*]const u8, _: usize) void {}
+    pub fn wasm_download_data(_: [*]const u8, _: usize, _: [*]const u8, _: usize) void {}
+    pub fn wasm_clipboardTextSet(_: [*]const u8, _: usize) void {}
+
+    pub fn wasm_open_file_picker(_: u32, _: [*]const u8, _: usize, _: bool) void {}
+    pub fn wasm_get_number_of_files_available(_: u32) usize {
+        return undefined;
+    }
+    pub fn wasm_get_file_name(_: u32, _: usize) [*:0]u8 {
+        return undefined;
+    }
+    pub fn wasm_get_file_size(_: u32, _: usize) isize {
+        return undefined;
+    }
+    pub fn wasm_read_file_data(_: u32, _: usize, _: [*]u8) void {}
+
+    pub fn wasm_add_noto_font() void {}
 };
 
 export fn dvui_c_alloc(size: usize) ?*anyopaque {
@@ -556,7 +616,7 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const
     const vertex_slice = std.mem.sliceAsBytes(vtx);
 
     wasm.wasm_renderGeometry(
-        if (texture) |t| @as(u32, @intFromPtr(t.ptr)) else 0,
+        if (texture) |t| @intCast(@intFromPtr(t.ptr)) else 0,
         index_slice.ptr,
         index_slice.len,
         vertex_slice.ptr,
@@ -599,18 +659,18 @@ pub fn textureCreateTarget(self: *WebBackend, width: u32, height: u32, interpola
 pub fn renderTarget(self: *WebBackend, texture: ?dvui.Texture) void {
     _ = self;
     if (texture) |tex| {
-        wasm.wasm_renderTarget(@as(u32, @intFromPtr(tex.ptr)));
+        wasm.wasm_renderTarget(@intCast(@intFromPtr(tex.ptr)));
     } else {
         wasm.wasm_renderTarget(0);
     }
 }
 
 pub fn textureRead(_: *WebBackend, texture: dvui.Texture, pixels_out: [*]u8) error{TextureRead}!void {
-    wasm.wasm_textureRead(@as(u32, @intFromPtr(texture.ptr)), pixels_out, texture.width, texture.height);
+    wasm.wasm_textureRead(@intCast(@intFromPtr(texture.ptr)), pixels_out, texture.width, texture.height);
 }
 
 pub fn textureDestroy(_: *WebBackend, texture: dvui.Texture) void {
-    wasm.wasm_textureDestroy(@as(u32, @intFromPtr(texture.ptr)));
+    wasm.wasm_textureDestroy(@intCast(@intFromPtr(texture.ptr)));
 }
 
 pub fn textInputRect(_: *WebBackend, rect: ?dvui.Rect) void {
@@ -703,11 +763,8 @@ pub fn getNumberOfFilesAvailable(id: u32) usize {
 }
 
 // dvui_app stuff
-const root = @import("root");
-pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
 comptime {
-    if (dvui_app != null) {
-        dvui.App.assertIsApp(root);
+    if (dvui.App.get() != null) {
         @export(&dvui_init, .{ .name = "dvui_init" });
         @export(&dvui_deinit, .{ .name = "dvui_deinit" });
         @export(&dvui_update, .{ .name = "dvui_update" });
@@ -753,7 +810,8 @@ pub const panic = std.debug.FullPanic(struct {
 pub var back: WebBackend = undefined;
 
 fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
-    const init_opts = dvui_app.?.config.get();
+    const app = dvui.App.get() orelse return 404;
+    const init_opts = app.config.get();
     // TODO: Allow web backend to set title of browser tab via init_opts
     // TODO: Respect min size (maybe max size?) via css on the canvas element
     // TODO: Use the icon to set the browser tab icon (if possible considering size requirements)
@@ -772,13 +830,14 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 
     win_ok = true;
 
-    if (dvui_app.?.initFn) |initFn| initFn(&win);
+    if (app.initFn) |initFn| initFn(&win);
 
     return 0;
 }
 
 fn dvui_deinit() callconv(.c) void {
-    if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
+    const app = dvui.App.get() orelse return;
+    if (app.deinitFn) |deinitFn| deinitFn();
 
     win.deinit();
     back.deinit();
@@ -795,6 +854,8 @@ fn dvui_update() callconv(.c) i32 {
 }
 
 fn update() !i32 {
+    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
+
     const nstime = win.beginWait(back.hasEvent());
 
     try win.begin(nstime);
@@ -803,7 +864,7 @@ fn update() !i32 {
     // backend is directly sending the events to dvui
     //try backend.addAllEvents(&win);
 
-    const res = try dvui_app.?.frameFn();
+    const res = try app.frameFn();
 
     const end_micros = try win.end(.{});
 
@@ -818,4 +879,8 @@ fn update() !i32 {
 
     const wait_event_micros = win.waitTime(end_micros, null);
     return @intCast(@divTrunc(wait_event_micros, 1000));
+}
+
+test {
+    std.testing.refAllDecls(@This());
 }

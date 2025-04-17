@@ -400,3 +400,7 @@ pub fn rgb2hpluv(r: f32, g: f32, b: f32, ph: *f32, ps: *f32, pl: *f32) bool {
 
     return if (0.0 <= tmp.b and tmp.b <= 100.0) true else false;
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

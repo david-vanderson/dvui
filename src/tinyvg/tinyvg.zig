@@ -376,7 +376,5 @@ pub const Gradient = struct {
 };
 
 test {
-    _ = builder;
-    _ = parsing;
-    _ = rendering;
+    std.testing.refAllDecls(@This());
 }

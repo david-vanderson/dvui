@@ -189,3 +189,7 @@ pub fn deinit(self: *CacheWidget) void {
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

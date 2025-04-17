@@ -1762,3 +1762,7 @@ const std = @import("std");
 const math = std.math;
 const builtin = @import("builtin");
 const dvui = @import("dvui.zig");
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

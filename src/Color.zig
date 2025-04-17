@@ -181,3 +181,7 @@ pub fn fromHex(hex: HexString) !Color {
     };
     return result;
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

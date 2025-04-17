@@ -120,3 +120,7 @@ pub fn deinit(self: *FlexBoxWidget) void {
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);
 }
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

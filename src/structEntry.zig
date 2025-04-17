@@ -964,3 +964,7 @@ pub fn structEntryExAlloc(
 //    return result;
 //}
 //
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

@@ -16,7 +16,7 @@ pub const c = blk: {
     });
 };
 
-pub const kind: dvui.enums.Backend = .sdl;
+pub const kind: dvui.enums.Backend = if (sdl3) .sdl3 else .sdl2;
 pub fn description() [:0]const u8 {
     return if (sdl3) "SDL3" else "SDL2";
 }
@@ -1014,14 +1014,6 @@ pub fn getSDLVersion() std.SemanticVersion {
     }
 }
 
-// dvui_app stuff
-const root = @import("root");
-pub const dvui_app: ?dvui.App = if (@hasDecl(root, "dvui_app")) root.dvui_app else null;
-comptime {
-    if (dvui_app != null) {
-        dvui.App.assertIsApp(root);
-    }
-}
 // Optional: windows os only
 const winapi = if (builtin.os.tag == .windows) struct {
     extern "kernel32" fn AttachConsole(dwProcessId: std.os.windows.DWORD) std.os.windows.BOOL;
@@ -1029,13 +1021,15 @@ const winapi = if (builtin.os.tag == .windows) struct {
 
 // This must be exposed in the app's root source file.
 pub fn main() !void {
+    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
+
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         _ = winapi.AttachConsole(0xFFFFFFFF);
     }
     std.log.info("SDL version: {}", .{getSDLVersion()});
 
-    const init_opts = dvui_app.?.config.get();
+    const init_opts = app.config.get();
 
     var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_instance.allocator();
@@ -1061,8 +1055,8 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), gpa, back.backend(), .{});
     defer win.deinit();
 
-    if (dvui_app.?.initFn) |initFn| initFn(&win);
-    defer if (dvui_app.?.deinitFn) |deinitFn| deinitFn();
+    if (app.initFn) |initFn| initFn(&win);
+    defer if (app.deinitFn) |deinitFn| deinitFn();
 
     main_loop: while (true) {
 
@@ -1081,7 +1075,7 @@ pub fn main() !void {
         _ = c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 255);
         _ = c.SDL_RenderClear(back.renderer);
 
-        const res = try dvui_app.?.frameFn();
+        const res = try app.frameFn();
 
         const end_micros = try win.end(.{});
 
@@ -1095,4 +1089,8 @@ pub fn main() !void {
         const wait_event_micros = win.waitTime(end_micros, null);
         back.waitEventTimeout(wait_event_micros);
     }
+}
+
+test {
+    std.testing.refAllDecls(@This());
 }

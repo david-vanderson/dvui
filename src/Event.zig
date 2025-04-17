@@ -159,3 +159,7 @@ pub const ScrollPropagate = struct {
     /// at the edge.
     motion: Point,
 };
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

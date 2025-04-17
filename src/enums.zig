@@ -3,7 +3,10 @@ const std = @import("std");
 
 pub const Backend = enum {
     custom,
+    /// DEPRECATED: Use either sdl2 or sdl3
     sdl,
+    sdl2,
+    sdl3,
     raylib,
     dx11,
     web,
@@ -157,9 +160,10 @@ pub const Mod = enum(u16) {
 
         var found_set = false;
 
-        inline for (@typeInfo(Mod).Enum.fields[0..9]) |field| {
-            if (self.has(@field(Mod, field.name))) {
-                std.debug.print(".{s}, ", .{field.name});
+        const mod_fields = comptime std.meta.fieldNames(Mod);
+        inline for (mod_fields[0..9]) |field_name| {
+            if (self.has(@field(Mod, field_name))) {
+                std.debug.print(".{s}, ", .{field_name});
                 found_set = true;
             }
         }
@@ -324,3 +328,7 @@ pub const Cursor = enum(u8) {
     bad,
     hand,
 };
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
