@@ -713,7 +713,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             const code = SDL_keysym_to_dvui(@intCast(sdl_key));
             const mod = SDL_keymod_to_dvui(if (sdl3) @intCast(event.key.mod) else event.key.keysym.mod);
             if (self.log_events) {
-                std.debug.print("sdl event KEYDOWN {} {s} {} {}\n", .{ sdl_key, @tagName(code), mod, event.key.repeat });
+                log.debug("event KEYDOWN {} {s} {} {}\n", .{ sdl_key, @tagName(code), mod, event.key.repeat });
             }
 
             return try win.addEventKey(.{
@@ -727,7 +727,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             const code = SDL_keysym_to_dvui(@intCast(sdl_key));
             const mod = SDL_keymod_to_dvui(if (sdl3) @intCast(event.key.mod) else event.key.keysym.mod);
             if (self.log_events) {
-                std.debug.print("sdl event KEYUP {} {s} {}\n", .{ sdl_key, @tagName(code), mod });
+                log.debug("event KEYUP {} {s} {}\n", .{ sdl_key, @tagName(code), mod });
             }
 
             return try win.addEventKey(.{
@@ -739,7 +739,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
         if (sdl3) c.SDL_EVENT_TEXT_INPUT else c.SDL_TEXTINPUT => {
             const txt = std.mem.sliceTo(if (sdl3) event.text.text else &event.text.text, 0);
             if (self.log_events) {
-                std.debug.print("sdl event TEXTINPUT {s}\n", .{txt});
+                log.debug("event TEXTINPUT {s}\n", .{txt});
             }
 
             return try win.addEventText(txt);
@@ -747,7 +747,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
         if (sdl3) c.SDL_EVENT_TEXT_EDITING else c.SDL_TEXTEDITING => {
             const strlen: u8 = @intCast(c.SDL_strlen(if (sdl3) event.edit.text else &event.edit.text));
             if (self.log_events) {
-                std.debug.print("sdl event TEXTEDITING {s} start {d} len {d} strlen {d}\n", .{ event.edit.text, event.edit.start, event.edit.length, strlen });
+                log.debug("event TEXTEDITING {s} start {d} len {d} strlen {d}\n", .{ event.edit.text, event.edit.start, event.edit.length, strlen });
             }
             return try win.addEventTextEx(event.edit.text[0..strlen], true);
         },
@@ -757,7 +757,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 var touch_str: []const u8 = " ";
                 if (touch) touch_str = " touch ";
                 if (touch and !self.touch_mouse_events) touch_str = " touch ignored ";
-                std.debug.print("sdl event{s}MOUSEMOTION {d} {d}\n", .{ touch_str, event.motion.x, event.motion.y });
+                log.debug("event{s}MOUSEMOTION {d} {d}\n", .{ touch_str, event.motion.x, event.motion.y });
             }
 
             if (touch and !self.touch_mouse_events) {
@@ -776,7 +776,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 var touch_str: []const u8 = " ";
                 if (touch) touch_str = " touch ";
                 if (touch and !self.touch_mouse_events) touch_str = " touch ignored ";
-                std.debug.print("sdl event{s}MOUSEBUTTONDOWN {d}\n", .{ touch_str, event.button.button });
+                log.debug("event{s}MOUSEBUTTONDOWN {d}\n", .{ touch_str, event.button.button });
             }
 
             if (touch and !self.touch_mouse_events) {
@@ -791,7 +791,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 var touch_str: []const u8 = " ";
                 if (touch) touch_str = " touch ";
                 if (touch and !self.touch_mouse_events) touch_str = " touch ignored ";
-                std.debug.print("sdl event{s}MOUSEBUTTONUP {d}\n", .{ touch_str, event.button.button });
+                log.debug("event{s}MOUSEBUTTONUP {d}\n", .{ touch_str, event.button.button });
             }
 
             if (touch and !self.touch_mouse_events) {
@@ -802,7 +802,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
         },
         if (sdl3) c.SDL_EVENT_MOUSE_WHEEL else c.SDL_MOUSEWHEEL => {
             if (self.log_events) {
-                std.debug.print("sdl event MOUSEWHEEL {d} {d} {d}\n", .{ event.wheel.x, event.wheel.y, event.wheel.which });
+                log.debug("event MOUSEWHEEL {d} {d} {d}\n", .{ event.wheel.x, event.wheel.y, event.wheel.which });
             }
 
             const ticks_x = if (sdl3) event.wheel.x else @as(f32, @floatFromInt(event.wheel.x));
@@ -821,28 +821,28 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
         },
         if (sdl3) c.SDL_EVENT_FINGER_DOWN else c.SDL_FINGERDOWN => {
             if (self.log_events) {
-                std.debug.print("sdl event FINGERDOWN {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
+                log.debug("event FINGERDOWN {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
             }
 
             return try win.addEventPointer(.touch0, .press, .{ .x = event.tfinger.x, .y = event.tfinger.y });
         },
         if (sdl3) c.SDL_EVENT_FINGER_UP else c.SDL_FINGERUP => {
             if (self.log_events) {
-                std.debug.print("sdl event FINGERUP {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
+                log.debug("event FINGERUP {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
             }
 
             return try win.addEventPointer(.touch0, .release, .{ .x = event.tfinger.x, .y = event.tfinger.y });
         },
         if (sdl3) c.SDL_EVENT_FINGER_MOTION else c.SDL_FINGERMOTION => {
             if (self.log_events) {
-                std.debug.print("sdl event FINGERMOTION {d} {d} {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy });
+                log.debug("event FINGERMOTION {d} {d} {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy });
             }
 
             return try win.addEventTouchMotion(.touch0, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy);
         },
         else => {
             if (self.log_events) {
-                std.debug.print("unhandled SDL event type {}\n", .{event.type});
+                log.debug("unhandled SDL event type {}\n", .{event.type});
             }
             return false;
         },
