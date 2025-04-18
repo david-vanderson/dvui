@@ -79,6 +79,7 @@ pub fn build(b: *std.Build) !void {
         const dvui_sdl = addDvuiModule(b, target, optimize, "dvui_sdl", true);
         linkBackend(dvui_sdl, sdl_mod);
         addExample(b, target, optimize, "sdl-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
+        addExample(b, target, optimize, "sdl-mini", b.path("examples/sdl-mini.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
         addExample(b, target, optimize, "sdl-app", b.path("examples/app.zig"), dvui_sdl);
         addExampleTests(b, target, optimize, "sdl-app", b.path("examples/app.zig"), dvui_sdl);
@@ -195,6 +196,17 @@ pub fn build(b: *std.Build) !void {
 
         addWebExample(b, web_target, optimize, "web-test", b.path("examples/web-test.zig"), dvui_web);
         addWebExample(b, web_target, optimize, "web-app", b.path("examples/app.zig"), dvui_web);
+    }
+
+    if (back_to_build == null or back_to_build == .svg) {
+        const svg_mod = b.addModule("svg", .{
+            .root_source_file = b.path("src/backends/svg.zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+        const dvui_svg = addDvuiModule(b, target, optimize, "dvui_svg", true);
+        linkBackend(dvui_svg, svg_mod);
+        addExample(b, target, optimize, "svg-mini", b.path("examples/svg-mini.zig"), dvui_svg);
     }
 
     // Docs

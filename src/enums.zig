@@ -7,6 +7,7 @@ pub const Backend = enum {
     raylib,
     dx11,
     web,
+    svg,
 };
 
 pub const TextureInterpolation = enum {
