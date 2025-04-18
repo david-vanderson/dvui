@@ -151,6 +151,8 @@ pub fn build(b: *std.Build) !void {
         addExample("sdl2-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
         addExample("sdl2-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
         addExample("sdl2-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
+
+        addExample("sdl2-mini", b.path("examples/sdl-mini.zig"), dvui_sdl, false, dvui_opts);
     }
 
     // SDL3
@@ -362,6 +364,17 @@ pub fn build(b: *std.Build) !void {
             addWebExample("web-test", b.path("examples/web-test.zig"), dvui_web_wasm, wasm_dvui_opts);
             addWebExample("web-app", b.path("examples/app.zig"), dvui_web_wasm, wasm_dvui_opts);
         }
+    }
+
+    if (back_to_build == null or back_to_build == .svg) {
+        const svg_mod = b.addModule("svg", .{
+            .root_source_file = b.path("src/backends/svg.zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+        const dvui_svg = addDvuiModule("dvui_svg", dvui_opts);
+        linkBackend(dvui_svg, svg_mod);
+        addExample("svg-mini", b.path("examples/svg-mini.zig"), dvui_svg, false, dvui_opts);
     }
 
     // Docs
