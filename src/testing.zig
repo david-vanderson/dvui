@@ -18,11 +18,7 @@ pub fn moveTo(tag: []const u8) !void {
 /// Moves the mouse to the provided absolute position
 pub fn moveToPoint(point: dvui.Point) !void {
     const cw = dvui.currentWindow();
-    const movement = point.diff(cw.mouse_pt);
-    // std.debug.print("Moving {}", .{movement});
-    if (movement.nonZero()) {
-        _ = try cw.addEventMouseMotion(movement.x, movement.y);
-    }
+    _ = try cw.addEventMouseMotion(point.x, point.y);
 }
 
 /// Presses and releases the button at the current mouse position
