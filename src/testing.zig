@@ -65,7 +65,7 @@ pub fn settle(frame: dvui.App.frameFunction) !void {
 }
 
 pub const InitOptions = struct {
-    allocator: std.mem.Allocator = std.testing.allocator,
+    allocator: std.mem.Allocator = if (@import("builtin").is_test) std.testing.allocator else undefined,
     window_size: dvui.Size = .{ .w = 600, .h = 400 },
     snapshot_dir: []const u8 = "snapshots",
 };
@@ -148,6 +148,35 @@ pub const SnapshotError = error{
     SnapshotsDidNotMatch,
 };
 
+/// Captures one frame and return the png data for that frame
+///
+/// The returned data is allocated by `Self.allocator` and should be freed by the caller
+pub fn capturePng(self: *Self, frame: dvui.App.frameFunction) ![]const u8 {
+    // render the whole screen to a texture
+    var picture = dvui.Picture.start(dvui.windowRectPixels()) orelse {
+        std.debug.print("Current backend does not support capturing images\n", .{});
+        return error.Unsupported;
+    };
+
+    // run the gui code
+    if (try frame() == .close) return error.closed;
+
+    // render the retained dialogs and deferred renders
+    _ = try dvui.currentWindow().endRendering(.{});
+
+    const texture = picture.stop();
+
+    // texture will be destroyed in Window.end() so grab pixels now
+    const png_data = try dvui.pngFromTexture(self.allocator, texture, .{});
+
+    const cw = dvui.currentWindow();
+
+    _ = try cw.end(.{});
+    try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms);
+
+    return png_data;
+}
+
 /// Captures one frame and compares to an earilier captured frame, returning an error if they are not the same
 ///
 /// IMPORTANT: Snapshots are unstable and both backend and platform dependent. Changing any of these might fail the test.
@@ -177,26 +206,8 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     };
     defer dir.close();
 
-    // render the whole screen to a texture
-    var picture = dvui.Picture.start(dvui.windowRectPixels()) orelse {
-        std.debug.print("Current backend does not support capturing images\n", .{});
-        return;
-    };
-
-    // run the gui code
-    if (try frame() == .close) return error.closed;
-
-    const cw = dvui.currentWindow();
-    // render the retained dialogs and deferred renders
-    _ = try cw.endRendering(.{});
-
-    const texture = picture.stop();
-    // texture will be destroyed in Window.end() so grab pixels now
-    const png_data = try dvui.pngFromTexture(self.allocator, texture, .{});
+    const png_data = self.capturePng(frame);
     defer self.allocator.free(png_data);
-
-    _ = try cw.end(.{});
-    try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms);
 
     const file = dir.openFile(filename, .{}) catch |err| switch (err) {
         std.fs.File.OpenError.FileNotFound => {
