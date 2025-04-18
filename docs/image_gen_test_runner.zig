@@ -1,6 +1,10 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+pub const std_options = std.Options{
+    .log_level = .warn,
+};
+
 /// A global handle to the output directory.
 ///
 /// The presence of this declaration signals that the image_gen is currently running
