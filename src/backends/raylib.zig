@@ -17,6 +17,8 @@ pub fn description() [:0]const u8 {
 pub const RaylibBackend = @This();
 pub const Context = *RaylibBackend;
 
+const log = std.log.scoped(.RaylibBackend);
+
 gpa: std.mem.Allocator = undefined,
 we_own_window: bool = false,
 shader: c.Shader = undefined,
@@ -312,7 +314,7 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]u8, width: u32, height: u32, 
 pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
     const id = c.rlLoadFramebuffer(); // Load an empty framebuffer
     if (id == 0) {
-        dvui.log.debug("Raylib textureCreateTarget: rlLoadFramebuffer() failed\n", .{});
+        log.debug("textureCreateTarget: rlLoadFramebuffer() failed\n", .{});
         return error.TextureCreate;
     }
 
@@ -339,7 +341,7 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
 
     // Check if fbo is complete with attachments (valid)
     if (!c.rlFramebufferComplete(id)) {
-        dvui.log.debug("Raylib textureCreateTarget: rlFramebufferComplete() false\n", .{});
+        log.debug("textureCreateTarget: rlFramebufferComplete() false\n", .{});
         return error.TextureCreate;
     }
 
@@ -616,7 +618,7 @@ pub fn raylibMouseButtonToDvui(button: c_int) dvui.enums.Button {
         c.MOUSE_BUTTON_MIDDLE => .middle,
         c.MOUSE_BUTTON_RIGHT => .right,
         else => blk: {
-            dvui.log.debug("Raylib unknown button {}\n", .{button});
+            log.debug("unknown button {}\n", .{button});
             break :blk .six;
         },
     };
@@ -752,7 +754,7 @@ pub fn raylibKeyToDvui(key: c_int) dvui.enums.Key {
         c.KEY_BACK => .grave, //not sure if this is correct
 
         else => blk: {
-            dvui.log.debug("raylibKeymodToDvui unknown key{}\n", .{key});
+            log.debug("raylibKeymodToDvui unknown key{}\n", .{key});
             break :blk .unknown;
         },
     };
