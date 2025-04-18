@@ -297,13 +297,13 @@ pub fn build(b: *std.Build) !void {
     b.getInstallStep().dependOn(docs_step);
 
     // Generate doc images
-    const generate_images = b.addExecutable(.{
-        .name = "generate_images",
-        .root_source_file = b.path("docs/generate_images.zig"),
-        .target = b.graph.host,
+    const generate_images_test = b.addTest(.{
+        .root_module = docs_dvui_mod,
+        .filters = &.{".png"},
+        .name = "doc-img-gen",
+        .test_runner = .{ .path = b.path("docs/image_gen_test_runner.zig"), .mode = .simple },
     });
-    generate_images.root_module.addImport("dvui", docs_dvui_mod);
-    const run_generate_images = b.addRunArtifact(generate_images);
+    const run_generate_images = b.addRunArtifact(generate_images_test);
     docs_step.dependOn(&run_generate_images.step);
     const image_path = run_generate_images.addOutputDirectoryArg("images");
     docs_step.dependOn(&b.addInstallDirectory(.{

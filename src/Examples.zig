@@ -1,4 +1,4 @@
-//! ![demo](Example-demo.png)
+//! ![demo](Examples-demo.png)
 
 const builtin = @import("builtin");
 const std = @import("std");
@@ -3598,4 +3598,23 @@ pub const StrokeTest = struct {
 
 test {
     @import("std").testing.refAllDecls(@This());
+}
+
+test "Examples-demo.png" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
+    defer t.deinit();
+
+    dvui.Examples.show_demo_window = true;
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var over = try dvui.overlay(@src(), .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            defer over.deinit();
+            try dvui.Examples.demo();
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveDocImage(@src(), null, frame);
 }
