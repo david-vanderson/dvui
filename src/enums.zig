@@ -12,6 +12,7 @@ pub const Backend = enum {
     web,
     /// Does no rendering!
     testing,
+    svg,
 };
 
 pub const Units = enum {
