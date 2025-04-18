@@ -60,6 +60,19 @@ pub fn settle(frame: dvui.App.frameFunction) !void {
     return error.unsettled;
 }
 
+// Assumes we are just after Window.begin
+/// Runs for exactly one frame, returning the last wait_time from `dvui.Window.end`.
+///
+/// Useful when you know the frame will not settle, but you need the frame
+/// to handle events.
+pub fn step(frame: dvui.App.frameFunction) !?u32 {
+    const cw = dvui.currentWindow();
+    if (try frame() == .close) return error.closed;
+    const wait_time = try cw.end(.{});
+    try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms);
+    return wait_time;
+}
+
 pub const InitOptions = struct {
     allocator: std.mem.Allocator = if (@import("builtin").is_test) std.testing.allocator else undefined,
     window_size: dvui.Size = .{ .w = 600, .h = 400 },
