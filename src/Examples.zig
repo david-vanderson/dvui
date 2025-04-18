@@ -1,3 +1,5 @@
+//! ![demo](Example-demo.png)
+
 const builtin = @import("builtin");
 const std = @import("std");
 const dvui = @import("dvui.zig");

@@ -279,12 +279,8 @@ pub fn build(b: *std.Build) !void {
     }
 
     // Docs
-    const docs = b.addObject(.{
-        .name = "dvui",
-        .root_source_file = b.path("src/dvui.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    const docs_dvui_mod = b.modules.get("dvui_sdl2") orelse @panic("Docs couldn't find dvui_sdl2");
+    const docs = b.addExecutable(.{ .name = "dvui", .root_module = docs_dvui_mod });
 
     const install_docs = b.addInstallDirectory(.{
         .source_dir = docs.getEmittedDocs(),
@@ -299,6 +295,22 @@ pub fn build(b: *std.Build) !void {
     docs_step.dependOn(&install_docs.step);
 
     b.getInstallStep().dependOn(docs_step);
+
+    // Generate doc images
+    const generate_images = b.addExecutable(.{
+        .name = "generate_images",
+        .root_source_file = b.path("docs/generate_images.zig"),
+        .target = b.graph.host,
+    });
+    generate_images.root_module.addImport("dvui", docs_dvui_mod);
+    const run_generate_images = b.addRunArtifact(generate_images);
+    docs_step.dependOn(&run_generate_images.step);
+    const image_path = run_generate_images.addOutputDirectoryArg("images");
+    docs_step.dependOn(&b.addInstallDirectory(.{
+        .source_dir = image_path,
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+    }).step);
 
     // Use customized index.html
     const add_doc_logo = b.addExecutable(.{
