@@ -176,6 +176,7 @@ pub fn capturePng(self: *Self, frame: dvui.App.frameFunction) ![]const u8 {
 
     return png_data;
 }
+const png_extension = ".png";
 
 /// Captures one frame and compares to an earilier captured frame, returning an error if they are not the same
 ///
@@ -192,7 +193,6 @@ pub fn capturePng(self: *Self, frame: dvui.App.frameFunction) ![]const u8 {
 pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.frameFunction) !void {
     if (should_ignore_snapshots()) return;
 
-    const png_extension = ".png";
     defer self.snapshot_index += 1;
     const filename = try std.fmt.allocPrint(self.allocator, "{s}-{s}-{d}" ++ png_extension, .{ src.file, src.fn_name, self.snapshot_index });
     defer self.allocator.free(filename);
@@ -262,6 +262,39 @@ fn should_ignore_snapshots() bool {
 
 fn should_write_snapshots() bool {
     return !should_ignore_snapshots() and std.process.hasEnvVarConstant("DVUI_SNAPSHOT_WRITE");
+}
+
+/// Internal use only!
+///
+/// Generates and saves images for documentation. The test name is required to end with `.png` and can include '/' directory separators
+pub fn saveDocImage(self: *Self, src: std.builtin.SourceLocation, sub_name: ?[]const u8, frame: dvui.App.frameFunction) !void {
+    if (!std.mem.endsWith(u8, src.fn_name, png_extension)) {
+        return error.SaveDocImageRequiresPNGExtensionInTestName;
+    }
+
+    const root = @import("root");
+    if (!@hasDecl(root, "dvui_image_doc_gen_dir")) {
+        // Do nothing if we are not running with the doc_gen test runner.
+        // This means that the rest of the test is still performed and used as a normal dvui test.
+        return;
+    }
+
+    const test_prefix = "test.";
+    const filename = try std.fmt.allocPrint(self.allocator, "{s}{s}" ++ png_extension, .{
+        src.fn_name[test_prefix.len..(src.fn_name.len - png_extension.len)],
+        sub_name orelse "",
+    });
+    defer self.allocator.free(filename);
+
+    const png_data = try self.capturePng(frame);
+    defer self.allocator.free(png_data);
+
+    try root.dvui_image_doc_gen_dir.writeFile(.{
+        .data = png_data,
+        .sub_path = filename,
+        // set exclusive flag to error if two test generate an image with the same name
+        .flags = .{ .exclusive = true },
+    });
 }
 
 const Self = @This();
