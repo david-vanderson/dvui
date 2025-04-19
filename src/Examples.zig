@@ -3634,7 +3634,7 @@ test "Examples-demo.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-basic_widgets.png" {
@@ -3651,7 +3651,7 @@ test "Examples-basic_widgets.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-calculator.png" {
@@ -3668,7 +3668,7 @@ test "Examples-calculator.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-text_entry.png" {
@@ -3685,7 +3685,7 @@ test "Examples-text_entry.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-styling.png" {
@@ -3702,7 +3702,7 @@ test "Examples-styling.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-layout.png" {
@@ -3719,7 +3719,7 @@ test "Examples-layout.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-text_layout.png" {
@@ -3736,7 +3736,7 @@ test "Examples-text_layout.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-plots.png" {
@@ -3753,7 +3753,7 @@ test "Examples-plots.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-reorderable.png" {
@@ -3770,7 +3770,7 @@ test "Examples-reorderable.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-menus.png" {
@@ -3787,7 +3787,7 @@ test "Examples-menus.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-focus.png" {
@@ -3804,7 +3804,7 @@ test "Examples-focus.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-scrolling.png" {
@@ -3821,7 +3821,7 @@ test "Examples-scrolling.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-scroll_canvas.png" {
@@ -3838,7 +3838,7 @@ test "Examples-scroll_canvas.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-dialogs.png" {
@@ -3864,7 +3864,7 @@ test "Examples-dialogs.png" {
     try dvui.testing.pressKey(.enter, .none);
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-animations.png" {
@@ -3897,7 +3897,7 @@ test "Examples-animations.png" {
     for (0..10) |_| {
         _ = try dvui.testing.step(frame); // animation will never settle so run a fixed amount of frames
     }
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-struct_ui.png" {
@@ -3914,7 +3914,7 @@ test "Examples-struct_ui.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-debugging.png" {
@@ -3939,7 +3939,7 @@ test "Examples-debugging.png" {
     _ = try dvui.testing.step(frame);
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-icon_browser.png" {
@@ -3956,7 +3956,7 @@ test "Examples-icon_browser.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }
 
 test "Examples-themeEditor.png" {
@@ -3986,5 +3986,5 @@ test "Examples-themeEditor.png" {
     try dvui.testing.pressKey(.enter, .none);
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), null, frame);
+    try t.saveDocImage(@src(), .{}, frame);
 }

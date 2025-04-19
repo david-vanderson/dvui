@@ -189,7 +189,7 @@ test {
     @import("std").testing.refAllDecls(@This());
 }
 
-test "easing-plot-.png" {
+test "easing-plot-{s}.png" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 300, .h = 400 } });
     defer t.deinit();
 
@@ -229,12 +229,12 @@ test "easing-plot-.png" {
     };
 
     try dvui.testing.settle(plot.frame);
-    try t.saveDocImage(@src(), "linear", plot.frame);
+    try t.saveDocImage(@src(), .{"linear"}, plot.frame);
 
     inline for (@typeInfo(@This()).@"struct".decls) |decl| {
         if (comptime std.mem.startsWith(u8, decl.name, "in") or std.mem.startsWith(u8, decl.name, "out")) {
             plot.easing = @field(@This(), decl.name);
-            try t.saveDocImage(@src(), decl.name, plot.frame);
+            try t.saveDocImage(@src(), .{decl.name}, plot.frame);
         }
     }
 }

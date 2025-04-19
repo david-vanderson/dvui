@@ -276,7 +276,8 @@ fn should_write_snapshots() bool {
 /// Internal use only!
 ///
 /// Generates and saves images for documentation. The test name is required to end with `.png` and can include '/' directory separators
-pub fn saveDocImage(self: *Self, src: std.builtin.SourceLocation, sub_name: ?[]const u8, frame: dvui.App.frameFunction) !void {
+/// and are format strings evaluated at comptime.
+pub fn saveDocImage(self: *Self, comptime src: std.builtin.SourceLocation, comptime format_args: anytype, frame: dvui.App.frameFunction) !void {
     if (!std.mem.endsWith(u8, src.fn_name, png_extension)) {
         return error.SaveDocImageRequiresPNGExtensionInTestName;
     }
@@ -289,11 +290,7 @@ pub fn saveDocImage(self: *Self, src: std.builtin.SourceLocation, sub_name: ?[]c
     }
 
     const test_prefix = "test.";
-    const filename = try std.fmt.allocPrint(self.allocator, "{s}{s}" ++ png_extension, .{
-        src.fn_name[test_prefix.len..(src.fn_name.len - png_extension.len)],
-        sub_name orelse "",
-    });
-    defer self.allocator.free(filename);
+    const filename = std.fmt.comptimePrint(src.fn_name[test_prefix.len..], format_args);
 
     const png_data = try self.capturePng(frame);
     defer self.allocator.free(png_data);
