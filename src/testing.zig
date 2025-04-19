@@ -281,8 +281,7 @@ pub fn saveDocImage(self: *Self, comptime src: std.builtin.SourceLocation, compt
         return error.SaveDocImageRequiresPNGExtensionInTestName;
     }
 
-    const root = @import("root");
-    if (!@hasDecl(root, "dvui_image_doc_gen_dir")) {
+    if (!is_dvui_doc_gen) {
         // Do nothing if we are not running with the doc_gen test runner.
         // This means that the rest of the test is still performed and used as a normal dvui test.
         return;
@@ -294,13 +293,16 @@ pub fn saveDocImage(self: *Self, comptime src: std.builtin.SourceLocation, compt
     const png_data = try self.capturePng(frame);
     defer self.allocator.free(png_data);
 
-    try root.dvui_image_doc_gen_dir.writeFile(.{
+    try @import("root").dvui_image_doc_gen_dir.writeFile(.{
         .data = png_data,
         .sub_path = filename,
         // set exclusive flag to error if two test generate an image with the same name
         .flags = .{ .exclusive = true },
     });
 }
+
+/// Used internally for documentation generation
+pub const is_dvui_doc_gen = @hasDecl(@import("root"), "dvui_image_doc_gen_dir");
 
 const Self = @This();
 
