@@ -215,7 +215,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     };
     defer dir.close();
 
-    const png_data = self.capturePng(frame);
+    const png_data = try self.capturePng(frame);
     defer self.allocator.free(png_data);
 
     const file = dir.openFile(filename, .{}) catch |err| switch (err) {
