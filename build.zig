@@ -279,51 +279,62 @@ pub fn build(b: *std.Build) !void {
     }
 
     // Docs
-    const docs_dvui_mod = b.modules.get("dvui_sdl2") orelse @panic("Docs couldn't find dvui_sdl2");
-    const docs = b.addExecutable(.{ .name = "dvui", .root_module = docs_dvui_mod });
-
-    const install_docs = b.addInstallDirectory(.{
-        .source_dir = docs.getEmittedDocs(),
-        .install_dir = .prefix,
-        .install_subdir = "docs",
-        // Seems a bit drastic but by default only index.html is installed
-        // and I override it below. Maybe there is a cleaner way ?
-        .exclude_extensions = &.{".html"},
-    });
-
     const docs_step = b.step("docs", "Build and install the documentation");
-    docs_step.dependOn(&install_docs.step);
+    const docs_dvui_mod, const docs_can_generate_images = blk: {
+        const mod = b.modules.get("dvui_sdl2");
+        if (mod == null) break :blk .{ b.modules.get("dvui_sdl2"), false };
+        break :blk .{ mod, true };
+    };
+    if (docs_dvui_mod == null) {
+        docs_step.dependOn(&b.addFail("Docs require the sdl2 or testing backend to be used").step);
+    } else {
+        const docs = b.addExecutable(.{ .name = "dvui", .root_module = docs_dvui_mod });
 
-    b.getInstallStep().dependOn(docs_step);
+        const install_docs = b.addInstallDirectory(.{
+            .source_dir = docs.getEmittedDocs(),
+            .install_dir = .prefix,
+            .install_subdir = "docs",
+            // Seems a bit drastic but by default only index.html is installed
+            // and I override it below. Maybe there is a cleaner way ?
+            .exclude_extensions = &.{".html"},
+        });
+        docs_step.dependOn(&install_docs.step);
 
-    // Generate doc images
-    const generate_images_test = b.addTest(.{
-        .root_module = docs_dvui_mod,
-        .filters = &.{".png"},
-        .name = "doc-img-gen",
-        .test_runner = .{ .path = b.path("docs/image_gen_test_runner.zig"), .mode = .simple },
-    });
-    const run_generate_images = b.addRunArtifact(generate_images_test);
-    docs_step.dependOn(&run_generate_images.step);
-    const image_path = run_generate_images.addOutputDirectoryArg("images");
-    docs_step.dependOn(&b.addInstallDirectory(.{
-        .source_dir = image_path,
-        .install_dir = .prefix,
-        .install_subdir = "docs",
-    }).step);
+        b.getInstallStep().dependOn(docs_step);
 
-    // Use customized index.html
-    const add_doc_logo = b.addExecutable(.{
-        .name = "addDocLogo",
-        .root_source_file = b.path("docs/add_doc_logo.zig"),
-        .target = b.graph.host,
-    });
-    const run_add_logo = b.addRunArtifact(add_doc_logo);
-    run_add_logo.addFileArg(b.path("docs/index.html"));
-    run_add_logo.addFileArg(b.path("docs/favicon.svg"));
-    run_add_logo.addFileArg(b.path("docs/logo.svg"));
-    const indexhtml_file = run_add_logo.captureStdOut();
-    docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
+        // Generate doc images
+        if (docs_can_generate_images) {
+            const generate_images_test = b.addTest(.{
+                .root_module = docs_dvui_mod,
+                .filters = &.{".png"},
+                .name = "doc-img-gen",
+                .test_runner = .{ .path = b.path("docs/image_gen_test_runner.zig"), .mode = .simple },
+            });
+            const run_generate_images = b.addRunArtifact(generate_images_test);
+            docs_step.dependOn(&run_generate_images.step);
+            const image_path = run_generate_images.addOutputDirectoryArg("images");
+            docs_step.dependOn(&b.addInstallDirectory(.{
+                .source_dir = image_path,
+                .install_dir = .prefix,
+                .install_subdir = "docs",
+            }).step);
+        } else {
+            std.log.info("The chosen backend cannot generate images for the docs", .{});
+        }
+
+        // Use customized index.html
+        const add_doc_logo = b.addExecutable(.{
+            .name = "addDocLogo",
+            .root_source_file = b.path("docs/add_doc_logo.zig"),
+            .target = b.graph.host,
+        });
+        const run_add_logo = b.addRunArtifact(add_doc_logo);
+        run_add_logo.addFileArg(b.path("docs/index.html"));
+        run_add_logo.addFileArg(b.path("docs/favicon.svg"));
+        run_add_logo.addFileArg(b.path("docs/logo.svg"));
+        const indexhtml_file = run_add_logo.captureStdOut();
+        docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
+    }
 }
 
 pub fn linkBackend(dvui_mod: *std.Build.Module, backend_mod: *std.Build.Module) void {
