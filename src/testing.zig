@@ -275,8 +275,7 @@ fn should_write_snapshots() bool {
 
 /// Internal use only!
 ///
-/// Generates and saves images for documentation. The test name is required to end with `.png` and can include '/' directory separators
-/// and are format strings evaluated at comptime.
+/// Generates and saves images for documentation. The test name is required to end with `.png` and are format strings evaluated at comptime.
 pub fn saveDocImage(self: *Self, comptime src: std.builtin.SourceLocation, comptime format_args: anytype, frame: dvui.App.frameFunction) !void {
     if (!std.mem.endsWith(u8, src.fn_name, png_extension)) {
         return error.SaveDocImageRequiresPNGExtensionInTestName;
