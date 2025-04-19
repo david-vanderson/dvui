@@ -3918,6 +3918,11 @@ test "Examples-struct_ui.png" {
 }
 
 test "Examples-debugging.png" {
+    // This tests intentionally logs errors, which fails with the normal test runner.
+    // We skip this test instead of downgrading all log.err to log.warn as we usually
+    // want to fail if dvui logs errors (for duplicate id's or similar)
+    if (!dvui.testing.is_dvui_doc_gen) return error.SkipZigTest;
+
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 500 } });
     defer t.deinit();
 
