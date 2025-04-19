@@ -47,10 +47,6 @@ pub fn build(b: *std.Build) !void {
 
     // web test
     {
-        const webtarget_library = std.Target.Query{
-            .cpu_arch = .wasm32,
-            .os_tag = .freestanding,
-        };
         const webtarget_exe = std.Target.Query{
             .cpu_arch = .wasm32,
             .os_tag = .freestanding,
@@ -58,7 +54,7 @@ pub fn build(b: *std.Build) !void {
 
         const dvui_mod_web = b.addModule("dvui_web", .{
             .root_source_file = b.path("src/dvui.zig"),
-            .target = b.resolveTargetQuery(webtarget_library),
+            .target = target,
             .optimize = optimize,
         });
 
