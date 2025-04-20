@@ -19,11 +19,11 @@ triangle_render_count: u32 = 0,
 
 // TODO : Useful debug hooks, to expose somehow at compile time
 /// Paint color dots on triangle's angles.
-const debughl_vertex = true;
+const debughl_vertex = false;
 /// Paint empty triangles vertexes in red.
-const debughl_emtpy_triangle = true;
+const debughl_emtpy_triangle = false;
 /// Output texture files with uv points on.
-const emit_debug_texture = true;
+const emit_debug_texture = false;
 
 const render_dir = "svg_render";
 // Caution : Don't change the template without taking care of dirty cast in drawClippedTriangles
@@ -157,7 +157,7 @@ pub fn contentScale(_: *SvgBackend) f32 {
 /// physical pixels.  If texture is given, the vertexes uv coords are
 /// normalized (0-1).
 pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr: ?dvui.Rect) void {
-    // TODO : ase clip rect when provided
+    // TODO : use clip rect when provided
     if (clipr) |clip| {
         print("CLIP : {}\n", .{clip});
     }
@@ -206,51 +206,72 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
         while (i < idx.len) : (i += 3) {
             const v1, const v2, const v3 = .{ vtx[idx[i]], vtx[idx[i + 1]], vtx[idx[i + 2]] };
 
+            // TODO : Find a way to alpha blend the texture with background color
+
+            // Transformation matrix in svg does :
+            // newX = a * oldX + c * oldY + e
+            // newY = b * oldX + d * oldY + f
+            // Maybe I could make the assumption that v1.uv is always top-left of the bounding box, but in doubt I go for the general case directly.
+            // (which turned out to be a bit more painful to compute than expected)
+
+            // First we consider uv in texture pixel coordinates
+            // This are the "old" position
+            const txr_size: @Vector(2, f32) = .{ @as(f32, @floatFromInt(tx.width)), @as(f32, @floatFromInt(tx.height)) };
+            const x1, const y1 = v1.uv * txr_size;
+            const x2, const y2 = v2.uv * txr_size;
+            const x3, const y3 = v3.uv * txr_size;
+
             if (maybe_debug_txr_file) |debug_trx_file| {
                 debug_trx_file.writer().print(
                     \\<circle cx="{d}" cy="{d}" r="2" fill-opacity="0.6" fill="gold"/>
                     \\<circle cx="{d}" cy="{d}" r="3" fill-opacity="0.6" fill="orchid"/>
                     \\<circle cx="{d}" cy="{d}" r="4" fill-opacity="0.6" fill="aqua"/>
                     \\
-                , .{
-                    v1.uv[0] * @as(f32, @floatFromInt(tx.width)),
-                    v1.uv[1] * @as(f32, @floatFromInt(tx.height)),
-                    v2.uv[0] * @as(f32, @floatFromInt(tx.width)),
-                    v2.uv[1] * @as(f32, @floatFromInt(tx.height)),
-                    v3.uv[0] * @as(f32, @floatFromInt(tx.width)),
-                    v3.uv[1] * @as(f32, @floatFromInt(tx.height)),
-                }) catch unreachable;
+                , .{ x1, y1, x2, y2, x3, y3 }) catch unreachable;
             }
+            // "New" positions
+            const nx: @Vector(3, f32) = .{ v1.pos.x, v2.pos.x, v3.pos.x };
+            const ny: @Vector(3, f32) = .{ v1.pos.y, v2.pos.y, v3.pos.y };
+            // solving a,b,c,d,e,f
+            // Batch the multiplication for more compact code more than runtime perf
+            const ox: @Vector(3, f32) = .{ x1, x2, x3 };
+            const ys: @Vector(3, f32) = .{ y3 - y2, y1 - y3, y2 - y1 };
+            // compute a
+            const a_num_v = ys * nx;
+            const a_num = a_num_v[0] + a_num_v[1] + a_num_v[2];
+            const a_den_v = ys * ox;
+            const a_den = a_den_v[0] + a_den_v[1] + a_den_v[2];
+            const a = a_num / a_den;
+            // compute b
+            const b_num_v = ys * ny;
+            const b_num = b_num_v[0] + b_num_v[1] + b_num_v[2];
+            const b_den_v = ys * ox;
+            const b_den = b_den_v[0] + b_den_v[1] + b_den_v[2];
+            const b = b_num / b_den;
+            // compute c & d
+            const c = (nx[1] - nx[0] + a * (x1 - x2)) / (y2 - y1);
+            const d = (ny[1] - ny[0] + b * (x1 - x2)) / (y2 - y1);
+            // compute e & f
+            const e = nx[0] - x1 * a - y1 * c;
+            const f = ny[0] - x1 * b - y1 * d;
 
-            // TODO :
-            // 1) find the transformation
-            //    It must be doable based on the 2x3 points I have,
-            //    i.e. vx.uv[i] * @as(f32, @floatFromInt(..)) which are the triangles
-            //    in texture coordinates. I have to move theses points with a matrix to
-            //    the triangles in screen coordinates.
-            // 2) the missing piece of the puzzle is how to make the text blue ?
             self.svg_bytes.writer().print(
-                \\  <pattern id="{s}-{d}-{d}" patternUnits="objectBoundingBox"
-                // \\    patternTransform="rotate(20) skewX(30) scale(1 0.5)"
-                \\     patternTransform="translate({d} {d})"
-                // FIXME : width/height must be set to size of the pattern's texture / size of triangle using the pattern
-                // Otherwise the pattern is clipped to the size of the triangle using it and when
-                // I translate it wrap around.
-                // This would be easier with a rect....
-                \\     width="100%" height="100%">
-                \\    <image href="{s}" width="{d}" height="{d}"/>
-                \\  </pattern>
+                \\  <pattern width="{d}" height="{d}"
+                \\     patternUnits="userSpaceOnUse"
+                \\     patternTransform="matrix({d} {d} {d} {d} {d} {d})"
+                \\     id="{s}-{d}-{d}" 
+                \\   >
+                \\    <image href="{s}"/>
                 \\
             , .{
-                maybe_texture_id.?,
-                self.triangle_render_count,
-                i,
-                v1.uv[0],
-                v1.uv[1],
-                png_file,
-                tx.width,
-                tx.height,
+                tx.width,           tx.height,
+                a,                  b,
+                c,                  d,
+                e,                  f,
+                maybe_texture_id.?, self.triangle_render_count,
+                i,                  png_file,
             }) catch unreachable;
+            self.svg_bytes.writer().print("</pattern>\n", .{}) catch unreachable;
         }
         self.svg_bytes.writer().print("</defs>\n", .{}) catch unreachable;
     }
@@ -273,7 +294,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
         if (maybe_texture_id) |texture_id| {
             style = std.fmt.allocPrint(
                 self.arena,
-                "stroke:magenta;fill:url(#{s}-{d}-{d});fill-opacity:{d}",
+                "stroke:none;stroke-width:.2;fill:url(#{s}-{d}-{d});fill-opacity:{d}",
                 .{ texture_id, self.triangle_render_count, i, opacity },
             ) catch unreachable;
         } else {
