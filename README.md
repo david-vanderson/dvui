@@ -6,18 +6,32 @@ Tested with [Zig](https://ziglang.org/) 0.14 (use tag v0.2.0 for zig 0.13)
 
 How to run the built-in examples:
 
-- ```zig build sdl-standalone```
-- ```zig build sdl-ontop```
-- ```zig build raylib-standalone```
-- ```zig build raylib-ontop```
-- ```zig build web-test```
-  - then load `zig-out/bin/index.html`
-  - [online demo](https://david-vanderson.github.io/demo)
-- SDL3:
-  - ```zig build sdl-standalone -Dsdl3```
-  - ```zig build sdl-ontop -Dsdl3```
+- SDL2
+  - ```zig build sdl2-standalone```
+  - ```zig build sdl2-ontop```
+  - ```zig build sdl2-app```
+- SDL3
   - if you encounter error `No Wayland` also add flag `-Dlinux_display_backend=X11`
-
+  - ```zig build sdl3-standalone```
+  - ```zig build sdl3-ontop```  
+  - ```zig build sdl3-app```
+- Raylib
+  - ```zig build raylib-standalone```
+  - ```zig build raylib-ontop```
+  - ```zig build raylib-app```
+- Dx11
+  - ```zig build dx11-standalone```
+  - ```zig build dx11-ontop```
+  - ```zig build dx11-app```
+- Web
+  - to load web examples you need so serve the files through a local web server
+    - `python -m http.server -d zig-out/bin/EXAMPLE_NAME`
+    - `caddy file-server --root zig-out/bin/EXAMPLE_NAME --listen :8000`
+  - ```zig build web-test```
+    - then load `zig-out/bin/web-test/index.html`
+    - [online demo](https://david-vanderson.github.io/demo)
+  - ```zig build web-app```
+    - then load `zig-out/bin/web-app/index.html`
 
 [Online Docs](https://david-vanderson.github.io/docs) This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify widgets.
 
