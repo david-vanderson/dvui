@@ -235,36 +235,7 @@ pub fn build(b: *std.Build) !void {
 
     // Web
     if (back_to_build == null or back_to_build == .web) {
-        const web_dvui_opts = DvuiModuleOptions{
-            .b = b,
-            .target = b.resolveTargetQuery(.{
-                .cpu_arch = .wasm32,
-                .os_tag = .freestanding,
-            }),
-            .optimize = optimize,
-            .check_step = check_step,
-        };
-
-        {
-            // Build test for selected target, not wasm as the test runner doesn't work without stderr
-            const web_test = b.createModule(.{
-                .root_source_file = b.path("src/backends/web.zig"),
-                .target = target,
-                .optimize = optimize,
-            });
-            test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = web_test, .name = "web-backend" })).step);
-
-            // var web_test_opts = dvui_opts;
-            // web_test_opts.test_step = null; // we cannot run web tests, but we can do semantic checks
-            const dvui_web_test = addDvuiModule(dvui_opts, "dvui_web_test", true);
-            linkBackend(dvui_web_test, web_test);
-        }
-
-        const web_mod = b.addModule("web", .{
-            .root_source_file = b.path("src/backends/web.zig"),
-        });
-
-        web_mod.export_symbol_names = &[_][]const u8{
+        const export_symbol_names = &[_][]const u8{
             "dvui_init",
             "dvui_deinit",
             "dvui_update",
@@ -275,11 +246,40 @@ pub fn build(b: *std.Build) !void {
             "new_font",
         };
 
-        const dvui_web = addDvuiModule(web_dvui_opts, "dvui_web", true);
-        linkBackend(dvui_web, web_mod);
+        const web_mod = b.addModule("web", .{
+            .root_source_file = b.path("src/backends/web.zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+        web_mod.export_symbol_names = export_symbol_names;
 
-        addWebExample(web_dvui_opts, "web-test", b.path("examples/web-test.zig"), dvui_web);
-        addWebExample(web_dvui_opts, "web-app", b.path("examples/app.zig"), dvui_web);
+        // NOTE: exported module uses the standard target so it can be overridden by users
+        const dvui_web = addDvuiModule(dvui_opts, "dvui_web", true);
+        linkBackend(dvui_web, web_mod);
+        test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = web_mod, .name = "web-backend" })).step);
+
+        // Examples, must be compiled for wasm32
+        {
+            const wasm_dvui_opts = DvuiModuleOptions{
+                .b = b,
+                .target = b.resolveTargetQuery(.{
+                    .cpu_arch = .wasm32,
+                    .os_tag = .freestanding,
+                }),
+                .optimize = optimize,
+                .check_step = check_step,
+            };
+
+            const web_mod_wasm = b.createModule(.{
+                .root_source_file = b.path("src/backends/web.zig"),
+            });
+            web_mod_wasm.export_symbol_names = export_symbol_names;
+
+            const dvui_web_wasm = addDvuiModule(wasm_dvui_opts, "dvui_web_wasm", true);
+            linkBackend(dvui_web_wasm, web_mod_wasm);
+            addWebExample(wasm_dvui_opts, "web-test", b.path("examples/web-test.zig"), dvui_web_wasm);
+            addWebExample(wasm_dvui_opts, "web-app", b.path("examples/app.zig"), dvui_web_wasm);
+        }
     }
 
     // Docs
