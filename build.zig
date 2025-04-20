@@ -37,8 +37,12 @@ pub fn build(b: *std.Build) !void {
     // Deprecated modules
     if (back_to_build == null or back_to_build == .sdl) {
         // The sdl backend name is deprecated. This is here to provide a useful error during transition
-        _ = b.addModule("dvui_sdl", .{ .root_source_file = b.path("src/backends/sdl_deprecated.zig") });
-        // TODO: If more deprecation messages are needed, the source files could be generated at compile time with a runArtifact
+        const files = b.addWriteFiles();
+        const source_path = files.add("sdl-deprecated.zig",
+            \\comptime { @compileError("The module 'dvui_sdl' is deprecated. Use either 'dvui_sdl2' or 'dvui_sdl3'"); }
+        );
+        _ = b.addModule("sdl", .{ .root_source_file = source_path });
+        _ = b.addModule("dvui_sdl", .{ .root_source_file = source_path });
 
         if (back_to_build == .sdl) {
             const deprecation_message = b.addFail("Backend 'sdl' is deprecated. Use either 'sdl2' or 'sdl3'");
@@ -486,4 +490,11 @@ fn addWebExample(
     compile_step.dependOn(&install_noto.step);
 
     b.getInstallStep().dependOn(compile_step);
+}
+
+/// Adds a module with the specified name with a @compileError containing the message
+fn addDeprecatedModule(opts: DvuiModuleOptions, comptime name: []const u8, message: []const u8) *std.Build.Module {
+    const files = opts.b.addWriteFiles();
+    const source_path = files.add(name ++ "-deprecated.zig", "comptime { @compileError(" ++ message ++ "); }");
+    opts.b.addModule(name, .{ .root_source_file = source_path });
 }
