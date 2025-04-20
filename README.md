@@ -11,11 +11,11 @@ How to run the built-in examples:
   - ```zig build sdl2-ontop```
   - ```zig build sdl2-app```
 - SDL3
-  - if you encounter error `No Wayland` also add flag `-Dlinux_display_backend=X11`
   - ```zig build sdl3-standalone```
   - ```zig build sdl3-ontop```  
   - ```zig build sdl3-app```
 - Raylib
+  - if you encounter error `No Wayland` also add flag `-Dlinux_display_backend=X11`
   - ```zig build raylib-standalone```
   - ```zig build raylib-ontop```
   - ```zig build raylib-app```
