@@ -782,7 +782,7 @@ fn writeLog(_: void, msg: []const u8) WriteError!usize {
 }
 
 pub fn logFn(
-    comptime message_level: log.Level,
+    comptime message_level: std.log.Level,
     comptime scope: @Type(.enum_literal),
     comptime format: []const u8,
     args: anytype,
