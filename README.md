@@ -17,7 +17,7 @@ How to run the built-in examples:
   - ```zig build sdl-standalone -Dsdl3```
   - ```zig build sdl-ontop -Dsdl3```
   - if you encounter error `No Wayland` also add flag `-Dlinux_display_backend=X11`
-  
+
 
 [Online Docs](https://david-vanderson.github.io/docs) This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify widgets.
 
@@ -35,6 +35,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
 * [QEMU frontend](https://github.com/AnErrupTion/ZigEmu)
 * [Static site generator GUI](https://github.com/nhanb/webmaker2000)
 * [File explorer for Altair 8800 disk images](https://github.com/phatchman/altair_tools) - use the experimental branch.
+* [Kanji flashcard app](https://codeberg.org/tensorush/origa)
 
 ## Features
 
@@ -268,4 +269,3 @@ else {
 The theme's color_accent is also used to show keyboard focus.
 
 See [implementation details](readme-implementation.md) for more information.
-
