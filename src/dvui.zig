@@ -1,5 +1,7 @@
 //! [DVUI](https://david-vanderson.github.io/) is a general purpose Zig GUI toolkit.
 //!
+//! ![dvui demo](Examples-demo.png)
+//!
 //! `dvui` module contains all the top level declarations provide all declarations required by client code. - i.e. `const dvui = @import("dvui");` is the only required import.
 //!
 //! Most UI element are expected to be created via high level function like `dvui.button`, which instantiate the corresponding lower level `dvui.ButtonWidget` for you.
