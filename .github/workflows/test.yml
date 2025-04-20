@@ -20,6 +20,11 @@ jobs:
       # uses .minimum_zig_version from build.zig.zon
       - uses: mlugg/setup-zig@v1
 
+      - name: Install libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install mesa-common-dev libgl-dev libglx-dev libegl-dev libpulse-dev libxext-dev libxfixes-dev libxrender-dev libasound2-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
+
       - name: Build and check
         run: zig build check # build all backends
 
