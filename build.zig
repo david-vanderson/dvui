@@ -408,7 +408,7 @@ fn addExample(
     });
     mod.addImport("dvui", dvui_mod);
 
-    const exe = b.addExecutable(.{ .name = name, .root_module = mod });
+    const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_lld = false });
     if (opts.check_step) |step| step.dependOn(&exe.step);
 
     if (opts.target.result.os.tag == .windows) {
