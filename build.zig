@@ -345,8 +345,9 @@ fn addDvuiModule(
         .target = target,
         .optimize = optimize,
     });
-    if (opts.check_step) |step| step.dependOn(&b.addLibrary(.{ .root_module = dvui_mod, .name = name }).step);
-    if (opts.test_step) |step| step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = dvui_mod, .name = name })).step);
+    const tests = b.addTest(.{ .root_module = dvui_mod, .name = name });
+    if (opts.check_step) |step| step.dependOn(&tests.step);
+    if (opts.test_step) |step| step.dependOn(&b.addRunArtifact(tests).step);
 
     if (target.result.os.tag == .windows) {
         // tinyfiledialogs needs this
