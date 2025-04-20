@@ -103,6 +103,7 @@ The build.zig and build.zig.zon files there show how to reference dvui as a zig 
   - Toast
   - Panes with draggable sash
   - Dropdown
+  - Combo Box
   - Reorderable Lists
     - Drag to reorder/remove/add
 - Missing Widgets for now
