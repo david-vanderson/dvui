@@ -60,6 +60,7 @@ Below is a screenshot of the demo window, whose source code can be found at `src
   - [SDL](https://libsdl.org/)
   - [Web](https://david-vanderson.github.io/demo)
   - [Raylib](https://www.raylib.com/)
+  - [Dx11](https://learn.microsoft.com/en-us/windows/win32/direct3d11/atoc-dx-graphics-direct3d-11)
 - Icon support via [TinyVG](https://tinyvg.tech/)
 - Raster image support via [stb_image](https://github.com/nothings/stb)
 - Font support
