@@ -491,10 +491,3 @@ fn addWebExample(
 
     b.getInstallStep().dependOn(compile_step);
 }
-
-/// Adds a module with the specified name with a @compileError containing the message
-fn addDeprecatedModule(opts: DvuiModuleOptions, comptime name: []const u8, message: []const u8) *std.Build.Module {
-    const files = opts.b.addWriteFiles();
-    const source_path = files.add(name ++ "-deprecated.zig", "comptime { @compileError(" ++ message ++ "); }");
-    opts.b.addModule(name, .{ .root_source_file = source_path });
-}
