@@ -2523,7 +2523,7 @@ pub fn scrollCanvas() !void {
             }
         }
 
-        try dvui.label(@src(), "Box {d} {d}x{d}", .{ i, b.x, b.y }, .{});
+        try dvui.label(@src(), "Box {d} {d:0>3.0}x{d:0>3.0}", .{ i, b.x, b.y }, .{});
 
         {
             var hbox = try dvui.box(@src(), .horizontal, .{});
