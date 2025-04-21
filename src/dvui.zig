@@ -10,6 +10,13 @@
 //!
 //! A complete list of available widgets can be found under `dvui.widgets`.
 //!
+//! ## Backends
+//! - [SDL](#dvui.backends.sdl)
+//! - [Web](#dvui.backends.web)
+//! - [rayLib](#dvui.backends.raylib)
+//! - [Dx11](#dvui.backends.dx11)
+//! - [Testing](#dvui.backends.testing)
+//!
 const builtin = @import("builtin");
 const std = @import("std");
 pub const backend = @import("backend");
