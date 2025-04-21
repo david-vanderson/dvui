@@ -11,6 +11,7 @@ max_frame: u13 = 10,
 
 // temporary allocator for current frame.
 arena: std.mem.Allocator = undefined,
+alloc: std.mem.Allocator = undefined,
 
 // counters for filenames
 frame_count: u32 = 0,
@@ -29,10 +30,6 @@ const render_dir = "svg_render";
 // Caution : Don't change the template without taking care of dirty cast in drawClippedTriangles
 const texture_file_template = render_dir ++ "/frame{d:04}-texture{d:04}.{s}";
 
-// FIXME : this global allocator is never freed, find a cleaner approach.
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
-
 pub const SvgBackend = @This();
 pub const Context = *SvgBackend;
 pub const kind: dvui.enums.Backend = .svg;
@@ -40,17 +37,26 @@ pub fn description() [:0]const u8 {
     return "svg";
 }
 
-// pub const InitOptions = struct {
-//     /// The allocator used for temporary allocations used during init()
-//     // allocator: std.mem.Allocator,
-//     /// The size of the window we can render to
-//     size: dvui.Size,
-// };
-// pub fn initWindow(options: InitOptions) !SvgBackend {
-//     _ = options; // autofix
-
-//     return SvgBackend{};
-// }
+pub const InitOptions = struct {
+    // Long lived allocator needed to keep the name of the textures from frame to frame.
+    allocator: std.mem.Allocator,
+    /// The size of the window we can render to
+    size: dvui.Size,
+};
+pub fn initWindow(options: InitOptions) !SvgBackend {
+    std.fs.cwd().makeDir(render_dir) catch |err| {
+        if (err != std.fs.Dir.MakeError.PathAlreadyExists) {
+            log.warn("error creating `{s}` folder : {!}\n", .{ render_dir, err });
+            unreachable;
+        }
+    };
+    return SvgBackend{
+        .size = options.size,
+        .alloc = options.allocator,
+    };
+}
+/// Not used for now, kept for mirroring other backend API
+pub fn deinit(_: *SvgBackend) void {}
 
 pub fn backend(self: *SvgBackend) dvui.Backend {
     return dvui.Backend.init(self, @This());
@@ -81,7 +87,7 @@ pub fn begin(self: *SvgBackend, arena: std.mem.Allocator) void {
         \\<rect width="100%" height="100%" fill="black" />
         \\
     , .{ self.size.w, self.size.h }) catch unreachable;
-    print("---> \n", .{});
+    print("Gen frame {d} ... \n", .{self.frame_count});
     if (self.empty_render_folder) {
         var dir = std.fs.cwd().openDir(render_dir, .{ .iterate = true }) catch unreachable;
         defer dir.close();
@@ -96,7 +102,6 @@ pub fn begin(self: *SvgBackend, arena: std.mem.Allocator) void {
                 }
             }
         }
-
         self.empty_render_folder = false;
     }
 }
@@ -105,7 +110,7 @@ pub fn begin(self: *SvgBackend, arena: std.mem.Allocator) void {
 /// backends.  Probably will be removed.
 pub fn end(self: *SvgBackend) void {
     self.svg_bytes.appendSlice("</svg>") catch unreachable;
-    print("<---\n", .{});
+    print("Frame {d} Done.\n", .{self.frame_count});
 
     if (self.frame_count >= self.max_frame) {
         log.warn("SvgBackend.max_frame reached ({d}). not rendering images anymore", .{self.max_frame});
@@ -118,12 +123,6 @@ pub fn end(self: *SvgBackend) void {
     var buf: [tmpl.len]u8 = undefined;
     const svg_file = std.fmt.bufPrint(&buf, tmpl, .{self.frame_count}) catch "render/frame.svg";
 
-    std.fs.cwd().makeDir(render_dir) catch |err| {
-        if (err != std.fs.Dir.MakeError.PathAlreadyExists) {
-            log.warn("error creating `{s}` folder : {!}\n", .{ render_dir, err });
-            return;
-        }
-    };
     const file = std.fs.cwd().createFile(svg_file, .{}) catch {
         log.warn("Unable to create {s}\n", .{svg_file});
         return;
@@ -261,7 +260,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
                 \\     patternTransform="matrix({d} {d} {d} {d} {d} {d})"
                 \\     id="{s}-{d}-{d}" 
                 \\   >
-                \\    <image href="{s}"/>
+                \\     <image href="{s}"/>
                 \\
             , .{
                 tx.width,           tx.height,
@@ -271,13 +270,14 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
                 maybe_texture_id.?, self.triangle_render_count,
                 i,                  png_file,
             }) catch unreachable;
-            self.svg_bytes.writer().print("</pattern>\n", .{}) catch unreachable;
+            self.svg_bytes.writer().print("  </pattern>\n", .{}) catch unreachable;
         }
         self.svg_bytes.writer().print("</defs>\n", .{}) catch unreachable;
     }
 
     // actually draw the triangles. (i.e. emit <polygon> tags)
     var i: usize = 0;
+    self.svg_bytes.writer().print("<g id=\"triangles-{d}\">\n", .{self.triangle_render_count}) catch unreachable;
     while (i < idx.len) : (i += 3) {
         const v1, const v2, const v3 = .{ vtx[idx[i]], vtx[idx[i + 1]], vtx[idx[i + 2]] };
         const opacity: f32 = @as(f32, @floatFromInt(v3.col.a)) / 255.0;
@@ -305,19 +305,19 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             ) catch unreachable;
         }
         const triangle = std.fmt.allocPrint(self.arena,
-            \\<polygon points="{d},{d} {d},{d} {d},{d}" style="{s}"/>
+            \\  <polygon points="{d},{d} {d},{d} {d},{d}" style="{s}"/>
         , .{
             v1.pos.x, v1.pos.y, v2.pos.x, v2.pos.y,
             v3.pos.x, v3.pos.y, style,
         }) catch unreachable;
         if (debughl_emtpy_triangle and a + b + c == 0) {
             self.svg_bytes.writer().print(
-                \\<g>
-                \\{s}
-                \\<circle cx="{d}" cy="{d}" r="1" fill="red"/>
-                \\<circle cx="{d}" cy="{d}" r="1" fill="red"/>
-                \\<circle cx="{d}" cy="{d}" r="1" fill="red"/>
-                \\</g>
+                \\  <g>
+                \\  {s}
+                \\  <circle cx="{d}" cy="{d}" r="1" fill="red"/>
+                \\  <circle cx="{d}" cy="{d}" r="1" fill="red"/>
+                \\  <circle cx="{d}" cy="{d}" r="1" fill="red"/>
+                \\  </g>
                 \\
             , .{
                 triangle, v1.pos.x, v1.pos.y, v2.pos.x,
@@ -325,12 +325,12 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             }) catch unreachable;
         } else if (debughl_vertex) {
             self.svg_bytes.writer().print(
-                \\<g>
-                \\{s}
-                \\<circle cx="{d}" cy="{d}" r=".15" fill="gold"/>
-                \\<circle cx="{d}" cy="{d}" r=".2" fill="orchid"/>
-                \\<circle cx="{d}" cy="{d}" r=".25" fill="aqua"/>
-                \\</g>
+                \\  <g>
+                \\  {s}
+                \\  <circle cx="{d}" cy="{d}" r=".15" fill="gold"/>
+                \\  <circle cx="{d}" cy="{d}" r=".2" fill="orchid"/>
+                \\  <circle cx="{d}" cy="{d}" r=".25" fill="aqua"/>
+                \\  </g>
                 \\
             , .{
                 triangle, v1.pos.x, v1.pos.y, v2.pos.x,
@@ -340,6 +340,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             self.svg_bytes.writer().print("{s}\n", .{triangle}) catch unreachable;
         }
     }
+    self.svg_bytes.writer().print("</g>\n", .{}) catch unreachable;
     self.triangle_render_count += 1;
 }
 
@@ -393,7 +394,7 @@ pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, 
 
     // convert to png with magik cause tga don't get embedded in svg file well
     // (and let's check if this works before putting effort in a png exporter)
-    const png_file = std.fmt.allocPrint(gpa, texture_file_template, .{ self.frame_count, self.texture_create_count, "png" }) catch "svg_render/texture.png";
+    const png_file = std.fmt.allocPrint(self.alloc, texture_file_template, .{ self.frame_count, self.texture_create_count, "png" }) catch "svg_render/texture.png";
     const argv = [_][]const u8{ "magick", tga_file, png_file };
     var proc = std.process.Child.init(&argv, self.arena);
     proc.spawn() catch unreachable;
