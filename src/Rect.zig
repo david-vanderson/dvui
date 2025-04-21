@@ -355,15 +355,8 @@ test "Rect-unionWith.png" {
 test inset {
     const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
     const res = rect.inset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
-    try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 50, .h = 50 }, res);
+    try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 75, .h = 75 }, res);
 }
-
-test insetAll {
-    const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
-    const res = rect.insetAll(50);
-    try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 50, .h = 50 }, res);
-}
-
 test "Rect-inset.png" {
     var t = try dvui.testing.init(.{ .window_size = .all(250) });
     defer t.deinit();
@@ -386,18 +379,17 @@ test "Rect-inset.png" {
     try t.saveDocImage(@src(), .{}, frame);
 }
 
+test insetAll {
+    const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
+    const res = rect.insetAll(50);
+    try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 50, .h = 50 }, res);
+}
+
 test outset {
     const rect = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
     const res = rect.outset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
     try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 125, .h = 125 }, res);
 }
-
-test outsetAll {
-    const rect = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
-    const res = rect.outsetAll(50);
-    try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 100, .h = 100 }, res);
-}
-
 test "Rect-outset.png" {
     var t = try dvui.testing.init(.{ .window_size = .all(250) });
     defer t.deinit();
@@ -418,4 +410,10 @@ test "Rect-outset.png" {
     }.frame;
 
     try t.saveDocImage(@src(), .{}, frame);
+}
+
+test outsetAll {
+    const rect = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
+    const res = rect.outsetAll(50);
+    try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 150, .h = 150 }, res);
 }
