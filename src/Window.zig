@@ -1,8 +1,8 @@
 //! Maps to an OS window, and save all the state needed between frames.
 //!
-//! Usually this is created at app startup and deinit() called on app shutdown.
+//! Usually this is created at app startup and `deinit` called on app shutdown.
 //!
-//! dvui.currentWindow() returns this when between begin()/end().
+//! `dvui.currentWindow` returns this when between `begin`/`end`.
 
 pub const Window = @This();
 const Self = Window;
@@ -13,27 +13,25 @@ pub const log = std.log.scoped(.dvui);
 backend: dvui.Backend,
 previous_window: ?*Window = null,
 
-// list of subwindows including base, later windows are on top of earlier
-// windows
+/// list of subwindows including base, later windows are on top of earlier
+/// windows
 subwindows: std.ArrayList(Subwindow),
 
-// id of the subwindow widgets are being added to
+/// id of the subwindow widgets are being added to
 subwindow_currentId: u32 = 0,
 
-// pixel screen rect of the last subwindow to give us one, dialogs use this
-// to center themselves on
-// - FloatingWindowWidget does
-// - FloatingWidget and FloatingMenuWidget do not
+/// pixel screen rect of the last subwindow, dialogs use this
+/// to center themselves
 subwindow_currentRect: Rect = .{},
 
-// id of the subwindow that has focus
+/// id of the subwindow that has focus
 focused_subwindowId: u32 = 0,
 
 last_focused_id_this_frame: u32 = 0,
 
-// rect on screen (in natural pixels) telling the backend where our text input box is:
-// * when non-null, we want an on screen keyboard if needed (phones)
-// * when showing the IME input window, position it near this
+/// rect on screen (in natural pixels) telling the backend where our text input box is:
+/// * when non-null, we want an on screen keyboard if needed (phones)
+/// * when showing the IME input window, position it near this
 text_input_rect: ?Rect = null,
 
 snap_to_pixels: bool = true,
@@ -41,10 +39,10 @@ alpha: f32 = 1.0,
 
 events: std.ArrayListUnmanaged(Event) = .{},
 event_num: u16 = 0,
-// mouse_pt tracks the last position we got a mouse event for
-// 1) used to add position info to mouse wheel events
-// 2) used to highlight the widget under the mouse (Event.Mouse.Action.position event)
-// 3) used to change the cursor (Event.Mouse.Action.position event)
+/// mouse_pt tracks the last position we got a mouse event for
+/// 1) used to add position info to mouse wheel events
+/// 2) used to highlight the widget under the mouse (`dvui.Event.Mouse.Action` .position event)
+/// 3) used to change the cursor (`dvui.Event.Mouse.Action` .position event)
 // Start off screen so nothing is highlighted on the first frame
 mouse_pt: Point = Point{ .x = -1, .y = -1 },
 mouse_pt_prev: Point = Point{ .x = -1, .y = -1 },
@@ -95,7 +93,8 @@ cursor_dragging: ?dvui.enums.Cursor = null,
 wd: WidgetData = undefined,
 rect_pixels: Rect = Rect{}, // pixels
 natural_scale: f32 = 1.0,
-content_scale: f32 = 1.0, // can set separately but gets folded into natural_scale
+/// can set separately but gets folded into natural_scale
+content_scale: f32 = 1.0,
 next_widget_ypos: f32 = 0,
 
 capture: ?dvui.CaptureMouse = null,
@@ -108,7 +107,8 @@ render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
 debug_window_show: bool = false,
-debug_widget_id: u32 = 0, // 0 means no widget is selected
+/// 0 means no widget is selected
+debug_widget_id: u32 = 0,
 debug_info_name_rect: []const u8 = "",
 debug_info_src_id_extra: []const u8 = "",
 debug_under_focus: bool = false,
@@ -120,7 +120,8 @@ debug_under_mouse_info: []u8 = "",
 debug_refresh_mutex: std.Thread.Mutex,
 debug_refresh: bool = false,
 
-debug_touch_simulate_events: bool = false, // when true, left mouse button works like a finger
+/// when true, left mouse button works like a finger
+debug_touch_simulate_events: bool = false,
 debug_touch_simulate_down: bool = false,
 
 pub const Subwindow = struct {
@@ -434,7 +435,7 @@ pub fn arena(self: *Self) std.mem.Allocator {
     return self._arena.allocator();
 }
 
-// called from any thread
+/// called from any thread
 pub fn debugRefresh(self: *Self, val: ?bool) bool {
     self.debug_refresh_mutex.lock();
     defer self.debug_refresh_mutex.unlock();
@@ -447,7 +448,7 @@ pub fn debugRefresh(self: *Self, val: ?bool) bool {
     return previous;
 }
 
-// called from gui thread
+/// called from gui thread
 pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?u32) void {
     if (self.debugRefresh(null)) {
         log.debug("{s}:{d} refresh {?x}", .{ src.file, src.line, id });
@@ -455,7 +456,7 @@ pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?u32) voi
     self.extra_frames_needed = 1;
 }
 
-// called from any thread
+/// called from any thread
 pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?u32) void {
     if (self.debugRefresh(null)) {
         log.debug("{s}:{d} refreshBackend {?x}", .{ src.file, src.line, id });
@@ -1159,8 +1160,8 @@ pub fn subwindowFocused(self: *const Self) *Subwindow {
     return &self.subwindows.items[0];
 }
 
-// Return the cursor the gui wants.  Client code should cache this if
-// switching the platform's cursor is expensive.
+/// Return the cursor the gui wants.  Client code should cache this if
+/// switching the platform's cursor is expensive.
 pub fn cursorRequested(self: *const Self) dvui.enums.Cursor {
     if (self.drag_state == .dragging and self.cursor_dragging != null) {
         return self.cursor_dragging.?;
@@ -1169,9 +1170,9 @@ pub fn cursorRequested(self: *const Self) dvui.enums.Cursor {
     }
 }
 
-// Return the cursor the gui wants or null if mouse is not in gui windows.
-// Client code should cache this if switching the platform's cursor is
-// expensive.
+/// Return the cursor the gui wants or null if mouse is not in gui windows.
+/// Client code should cache this if switching the platform's cursor is
+/// expensive.
 pub fn cursorRequestedFloating(self: *const Self) ?dvui.enums.Cursor {
     if (self.capture != null or self.windowFor(self.mouse_pt) != self.wd.id) {
         // gui owns the cursor if we have mouse capture or if the mouse is above
@@ -1227,7 +1228,7 @@ pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !vo
     }
 }
 
-// data is copied into internal storage
+/// data is copied into internal storage
 pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, comptime copy_slice: bool, num_copies: usize) void {
     const hash = dvui.hashIdKey(id, key);
 
@@ -1287,7 +1288,7 @@ pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, 
     }
 }
 
-// returns the backing byte slice if we have one
+/// returns the backing byte slice if we have one
 pub fn dataGetInternal(self: *Self, id: u32, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
     const hash = dvui.hashIdKey(id, key);
 
@@ -1346,7 +1347,7 @@ pub fn dialogAdd(self: *Self, id: u32, display: dvui.DialogDisplayFn) !*std.Thre
     return &self.dialog_mutex;
 }
 
-// Only called from gui thread.
+/// Only called from gui thread.
 pub fn dialogRemove(self: *Self, id: u32) void {
     self.dialog_mutex.lock();
     defer self.dialog_mutex.unlock();
@@ -1400,11 +1401,11 @@ pub fn timerRemove(self: *Self, id: u32) void {
     _ = self.animations.remove(h);
 }
 
-// Add a toast to be displayed on the GUI thread. Can be called from any
-// thread. Returns a locked mutex that must be unlocked by the caller.  If
-// calling from a non-GUI thread, do any dataSet() calls before unlocking
-// the mutex to ensure that data is available before the dialog is
-// displayed.
+/// Add a toast to be displayed on the GUI thread. Can be called from any
+/// thread. Returns a locked mutex that must be unlocked by the caller.  If
+/// calling from a non-GUI thread, do any `dvui.dataSet` calls before unlocking
+/// the mutex to ensure that data is available before the dialog is
+/// displayed.
 pub fn toastAdd(self: *Self, id: u32, subwindow_id: ?u32, display: dvui.DialogDisplayFn, timeout: ?i32) !*std.Thread.Mutex {
     self.dialog_mutex.lock();
 
@@ -1439,7 +1440,7 @@ pub fn toastRemove(self: *Self, id: u32) void {
     }
 }
 
-// show any toasts that didn't have a subwindow_id set
+/// show any toasts that didn't have a subwindow_id set
 fn toastsShow(self: *Self) !void {
     var ti = dvui.toastsFor(null);
     if (ti) |*it| {
@@ -1548,8 +1549,8 @@ pub const endOptions = struct {
     show_toasts: bool = true,
 };
 
-// Normally this is called for you in end(), but you can call it separately in
-// case you want to do something after everything has been rendered.
+/// Normally this is called for you in `end`, but you can call it separately in
+/// case you want to do something after everything has been rendered.
 pub fn endRendering(self: *Self, opts: endOptions) !void {
     if (opts.show_toasts) {
         try self.toastsShow();
@@ -1571,11 +1572,11 @@ pub fn endRendering(self: *Self, opts: endOptions) !void {
     self.end_rendering_done = true;
 }
 
-// End of this window gui's rendering.  Renders retained dialogs and all
-// deferred rendering (subwindows, focus highlights).  Returns micros we
-// want between last call to begin() and next call to begin() (or null
-// meaning wait for event).  If wanted, pass return value to waitTime() to
-// get a useful time to wait between render loops.
+/// End of this window gui's rendering.  Renders retained dialogs and all
+/// deferred rendering (subwindows, focus highlights).  Returns micros we
+/// want between last call to `begin` and next call to `begin` (or null
+/// meaning wait for event).  If wanted, pass return value to `waitTime` to
+/// get a useful time to wait between render loops.
 pub fn end(self: *Self, opts: endOptions) !?u32 {
     if (!self.end_rendering_done) {
         try self.endRendering(opts);
