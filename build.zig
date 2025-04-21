@@ -285,7 +285,10 @@ pub fn build(b: *std.Build) !void {
     // Docs
     {
         const docs_step = b.step("docs", "Build documentation");
-        const docs = b.addExecutable(.{ .name = "dvui", .root_module = b.modules.get("dvui_testing") });
+        const docs = b.addLibrary(.{ .name = "dvui", .root_module = b.createModule(.{
+            .root_source_file = b.path("src/dvui.zig"),
+            .target = target,
+        }) });
 
         const install_docs = b.addInstallDirectory(.{
             .source_dir = docs.getEmittedDocs(),
