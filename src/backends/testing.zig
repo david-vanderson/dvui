@@ -10,9 +10,6 @@ time: i128 = 0,
 clipboard: ?[]const u8 = null,
 
 pub const kind: dvui.enums.Backend = .testing;
-pub fn description() [:0]const u8 {
-    return "testing";
-}
 
 pub const TestingBackend = @This();
 pub const Context = *TestingBackend;

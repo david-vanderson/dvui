@@ -10,9 +10,6 @@ pub const c = @cImport({
 });
 
 pub const kind: dvui.enums.Backend = .raylib;
-pub fn description() [:0]const u8 {
-    return "Raylib";
-}
 
 pub const RaylibBackend = @This();
 pub const Context = *RaylibBackend;

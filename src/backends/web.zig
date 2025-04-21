@@ -3,13 +3,6 @@ const builtin = @import("builtin");
 const dvui = @import("dvui");
 
 pub const kind: dvui.enums.Backend = .web;
-pub fn description() [:0]const u8 {
-    if (wasm.wasm_about_webgl2() == 1) {
-        return "webgl2";
-    } else {
-        return "webgl (no mipmaps)";
-    }
-}
 
 pub const WebBackend = @This();
 pub const Context = *WebBackend;
