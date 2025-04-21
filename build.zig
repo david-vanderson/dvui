@@ -31,7 +31,7 @@ pub fn build(b: *std.Build) !void {
         // For export to users who are bringing their own backend.  Use in your build.zig:
         // const dvui_mod = dvui_dep.module("dvui");
         // @import("dvui").linkBackend(dvui_mod, your_backend_module);
-        _ = addDvuiModule(.{ .b = b, .target = target, .optimize = optimize }, "dvui", true);
+        _ = addDvuiModule("dvui", .{ .b = b, .target = target, .optimize = optimize });
     }
 
     // Deprecated modules
@@ -47,8 +47,6 @@ pub fn build(b: *std.Build) !void {
         if (back_to_build == .sdl) {
             const deprecation_message = b.addFail("Backend 'sdl' is deprecated. Use either 'sdl2' or 'sdl3'");
             b.getInstallStep().dependOn(&deprecation_message.step);
-            test_step.dependOn(&deprecation_message.step);
-            check_step.dependOn(&deprecation_message.step);
         }
     }
 
@@ -59,9 +57,9 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
         });
-        const dvui_testing = addDvuiModule(dvui_opts, "dvui_testing", true);
+        const dvui_testing = addDvuiModule("dvui_testing", dvui_opts);
         linkBackend(dvui_testing, testing_mod);
-        addExample(dvui_opts, "testing-app", b.path("examples/app.zig"), dvui_testing);
+        addExample("testing-app", b.path("examples/app.zig"), dvui_testing, dvui_opts);
     }
 
     // SDL2
@@ -105,11 +103,11 @@ pub fn build(b: *std.Build) !void {
         }
         sdl_mod.addOptions("sdl_options", sdl_options);
 
-        const dvui_sdl = addDvuiModule(dvui_opts, "dvui_sdl2", true);
+        const dvui_sdl = addDvuiModule("dvui_sdl2", dvui_opts);
         linkBackend(dvui_sdl, sdl_mod);
-        addExample(dvui_opts, "sdl2-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
-        addExample(dvui_opts, "sdl2-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
-        addExample(dvui_opts, "sdl2-app", b.path("examples/app.zig"), dvui_sdl);
+        addExample("sdl2-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, dvui_opts);
+        addExample("sdl2-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, dvui_opts);
+        addExample("sdl2-app", b.path("examples/app.zig"), dvui_sdl, dvui_opts);
     }
 
     // SDL3
@@ -140,11 +138,11 @@ pub fn build(b: *std.Build) !void {
         }
         sdl_mod.addOptions("sdl_options", sdl_options);
 
-        const dvui_sdl = addDvuiModule(dvui_opts, "dvui_sdl3", true);
+        const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
         linkBackend(dvui_sdl, sdl_mod);
-        addExample(dvui_opts, "sdl3-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl);
-        addExample(dvui_opts, "sdl3-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl);
-        addExample(dvui_opts, "sdl3-app", b.path("examples/app.zig"), dvui_sdl);
+        addExample("sdl3-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, dvui_opts);
+        addExample("sdl3-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, dvui_opts);
+        addExample("sdl3-app", b.path("examples/app.zig"), dvui_sdl, dvui_opts);
     }
 
     // Raylib
@@ -203,11 +201,13 @@ pub fn build(b: *std.Build) !void {
             }
         }
 
-        const dvui_raylib = addDvuiModule(dvui_opts, "dvui_raylib", false);
+        var dvui_opts_raylib = dvui_opts;
+        dvui_opts_raylib.add_stb_image = false;
+        const dvui_raylib = addDvuiModule("dvui_raylib", dvui_opts_raylib);
         linkBackend(dvui_raylib, raylib_mod);
-        addExample(dvui_opts, "raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib);
-        addExample(dvui_opts, "raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib);
-        addExample(dvui_opts, "raylib-app", b.path("examples/app.zig"), dvui_raylib);
+        addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib, dvui_opts_raylib);
+        addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib, dvui_opts_raylib);
+        addExample("raylib-app", b.path("examples/app.zig"), dvui_raylib, dvui_opts_raylib);
     }
 
     // Dx11
@@ -225,11 +225,11 @@ pub fn build(b: *std.Build) !void {
                 dx11_mod.addImport("win32", zigwin32.module("win32"));
             }
 
-            const dvui_dx11 = addDvuiModule(dvui_opts, "dvui_dx11", true);
+            const dvui_dx11 = addDvuiModule("dvui_dx11", dvui_opts);
             linkBackend(dvui_dx11, dx11_mod);
-            addExample(dvui_opts, "dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11);
-            addExample(dvui_opts, "dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11);
-            addExample(dvui_opts, "dx11-app", b.path("examples/app.zig"), dvui_dx11);
+            addExample("dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11, dvui_opts);
+            addExample("dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11, dvui_opts);
+            addExample("dx11-app", b.path("examples/app.zig"), dvui_dx11, dvui_opts);
         }
     }
 
@@ -254,7 +254,7 @@ pub fn build(b: *std.Build) !void {
         web_mod.export_symbol_names = export_symbol_names;
 
         // NOTE: exported module uses the standard target so it can be overridden by users
-        const dvui_web = addDvuiModule(dvui_opts, "dvui_web", true);
+        const dvui_web = addDvuiModule("dvui_web", dvui_opts);
         linkBackend(dvui_web, web_mod);
         test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = web_mod, .name = "web-backend" })).step);
 
@@ -275,10 +275,10 @@ pub fn build(b: *std.Build) !void {
             });
             web_mod_wasm.export_symbol_names = export_symbol_names;
 
-            const dvui_web_wasm = addDvuiModule(wasm_dvui_opts, "dvui_web_wasm", true);
+            const dvui_web_wasm = addDvuiModule("dvui_web_wasm", wasm_dvui_opts);
             linkBackend(dvui_web_wasm, web_mod_wasm);
-            addWebExample(wasm_dvui_opts, "web-test", b.path("examples/web-test.zig"), dvui_web_wasm);
-            addWebExample(wasm_dvui_opts, "web-app", b.path("examples/app.zig"), dvui_web_wasm);
+            addWebExample("web-test", b.path("examples/web-test.zig"), dvui_web_wasm, wasm_dvui_opts);
+            addWebExample("web-app", b.path("examples/app.zig"), dvui_web_wasm, wasm_dvui_opts);
         }
     }
 
@@ -352,12 +352,12 @@ const DvuiModuleOptions = struct {
     optimize: std.builtin.OptimizeMode,
     check_step: ?*std.Build.Step = null,
     test_step: ?*std.Build.Step = null,
+    add_stb_image: bool = true,
 };
 
 fn addDvuiModule(
-    opts: DvuiModuleOptions,
     comptime name: []const u8,
-    add_stb_image: bool,
+    opts: DvuiModuleOptions,
 ) *std.Build.Module {
     const b = opts.b;
     const target = opts.target;
@@ -389,7 +389,7 @@ fn addDvuiModule(
             .flags = &.{ "-DINCLUDE_CUSTOM_LIBC_FUNCS=1", "-DSTBI_NO_STDLIB=1", "-DSTBIW_NO_STDLIB=1" },
         });
     } else {
-        if (add_stb_image) {
+        if (opts.add_stb_image) {
             dvui_mod.addCSourceFiles(.{ .files = &.{
                 "src/stb/stb_image_impl.c",
                 "src/stb/stb_image_write_impl.c",
@@ -417,10 +417,10 @@ fn addDvuiModule(
 }
 
 fn addExample(
-    opts: DvuiModuleOptions,
     comptime name: []const u8,
     file: std.Build.LazyPath,
     dvui_mod: *std.Build.Module,
+    opts: DvuiModuleOptions,
 ) void {
     const b = opts.b;
 
@@ -462,10 +462,10 @@ fn addExample(
 }
 
 fn addWebExample(
-    opts: DvuiModuleOptions,
     comptime name: []const u8,
     file: std.Build.LazyPath,
     dvui_mod: *std.Build.Module,
+    opts: DvuiModuleOptions,
 ) void {
     const b = opts.b;
 
