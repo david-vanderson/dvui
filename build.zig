@@ -346,10 +346,6 @@ pub fn linkBackend(dvui_mod: *std.Build.Module, backend_mod: *std.Build.Module) 
     dvui_mod.addImport("backend", backend_mod);
 }
 
-fn addTests(b: *std.Build, test_step: *std.Build.Step, mod: *std.Build.Module, comptime name: []const u8) void {
-    test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = mod, .name = "test-" ++ name })).step);
-}
-
 const DvuiModuleOptions = struct {
     b: *std.Build,
     target: std.Build.ResolvedTarget,
