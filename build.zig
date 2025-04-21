@@ -283,16 +283,9 @@ pub fn build(b: *std.Build) !void {
     }
 
     // Docs
-    const docs_step = b.step("docs", "Build and install the documentation");
-    const docs_dvui_mod, const docs_can_generate_images = blk: {
-        const mod = b.modules.get("dvui_sdl2");
-        if (mod == null) break :blk .{ b.modules.get("dvui_testing"), false };
-        break :blk .{ mod, true };
-    };
-    if (docs_dvui_mod == null) {
-        docs_step.dependOn(&b.addFail("Docs require the sdl2 or testing backend to be used").step);
-    } else {
-        const docs = b.addExecutable(.{ .name = "dvui", .root_module = docs_dvui_mod });
+    {
+        const docs_step = b.step("docs", "Build documentation");
+        const docs = b.addExecutable(.{ .name = "dvui", .root_module = b.modules.get("dvui_testing") });
 
         const install_docs = b.addInstallDirectory(.{
             .source_dir = docs.getEmittedDocs(),
@@ -306,26 +299,6 @@ pub fn build(b: *std.Build) !void {
 
         b.getInstallStep().dependOn(docs_step);
 
-        // Generate doc images
-        if (docs_can_generate_images) {
-            const generate_images_test = b.addTest(.{
-                .root_module = docs_dvui_mod,
-                .filters = &.{".png"},
-                .name = "doc-img-gen",
-                .test_runner = .{ .path = b.path("docs/image_gen_test_runner.zig"), .mode = .simple },
-            });
-            const run_generate_images = b.addRunArtifact(generate_images_test);
-            docs_step.dependOn(&run_generate_images.step);
-            const image_path = run_generate_images.addOutputDirectoryArg("images");
-            docs_step.dependOn(&b.addInstallDirectory(.{
-                .source_dir = image_path,
-                .install_dir = .prefix,
-                .install_subdir = "docs",
-            }).step);
-        } else {
-            std.log.info("The chosen backend cannot generate images for the docs", .{});
-        }
-
         // Use customized index.html
         const add_doc_logo = b.addExecutable(.{
             .name = "addDocLogo",
@@ -338,6 +311,28 @@ pub fn build(b: *std.Build) !void {
         run_add_logo.addFileArg(b.path("docs/logo.svg"));
         const indexhtml_file = run_add_logo.captureStdOut();
         docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
+    }
+
+    // Doc images
+    {
+        const docs_img_step = b.step("docs-images", "Build documentation images");
+        const generate_images_test = b.addTest(.{
+            .root_module = b.modules.get("dvui_sdl3"),
+            .filters = &.{".png"},
+            .name = "docs-img-gen",
+            .test_runner = .{ .path = b.path("docs/image_gen_test_runner.zig"), .mode = .simple },
+        });
+        const run_generate_images = b.addRunArtifact(generate_images_test);
+        docs_img_step.dependOn(&run_generate_images.step);
+        const image_path = run_generate_images.addOutputDirectoryArg("images");
+        docs_img_step.dependOn(&b.addInstallDirectory(.{
+            .source_dir = image_path,
+            .install_dir = .prefix,
+            .install_subdir = "docs",
+        }).step);
+
+        // not running by default just yet
+        //b.getInstallStep().dependOn(docs_img_step);
     }
 }
 
