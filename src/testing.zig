@@ -293,12 +293,19 @@ pub fn saveDocImage(self: *Self, comptime src: std.builtin.SourceLocation, compt
     const png_data = try self.capturePng(frame);
     defer self.allocator.free(png_data);
 
-    try @import("root").dvui_image_doc_gen_dir.writeFile(.{
+    @import("root").dvui_image_doc_gen_dir.writeFile(.{
         .data = png_data,
         .sub_path = filename,
         // set exclusive flag to error if two test generate an image with the same name
         .flags = .{ .exclusive = true },
-    });
+    }) catch |err| {
+        if (err == std.fs.File.OpenError.PathAlreadyExists) {
+            std.debug.print("Error generating doc image: duplicated test name '{s}'\n", .{filename});
+            return error.DuplicateDocImageName;
+        } else {
+            return err;
+        }
+    };
 }
 
 /// Used internally for documentation generation

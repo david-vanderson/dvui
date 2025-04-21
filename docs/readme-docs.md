@@ -13,6 +13,19 @@ I also add success temporarily adding in the `<head>` section of `docs/index.htm
 ` <script type="text/javascript" src="http://livejs.com/live.js"></script>`  
 For a full auto reload experience. Cool enough to be mentioned.
 
+# About Images
+
+Images/screenshots are integrated in the docs. It works by : 
+
+- Declaring a `test` block whose name ends with `.png`
+- Said test block should use `dvui.testing.saveDocImage` function
+- It relies on `docs/image_gen_test_runner.zig` test runner to provide a path.
+- To use the image, use the markdown image syntax with the test name.
+
+e.g. :
+- `test "my-image.png" { // declare gui element and call dvui.testing.saveDocImage }`
+- `/// ![image description](my-image.png)`
+
 
 # About Customization
 
