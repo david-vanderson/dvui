@@ -286,7 +286,7 @@ pub fn build(b: *std.Build) !void {
     const docs_step = b.step("docs", "Build and install the documentation");
     const docs_dvui_mod, const docs_can_generate_images = blk: {
         const mod = b.modules.get("dvui_sdl2");
-        if (mod == null) break :blk .{ b.modules.get("dvui_sdl2"), false };
+        if (mod == null) break :blk .{ b.modules.get("dvui_testing"), false };
         break :blk .{ mod, true };
     };
     if (docs_dvui_mod == null) {
