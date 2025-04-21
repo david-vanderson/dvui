@@ -298,19 +298,14 @@ pub fn saveDocImage(self: *Self, comptime src: std.builtin.SourceLocation, compt
         .sub_path = filename,
         // set exclusive flag to error if two test generate an image with the same name
         .flags = .{ .exclusive = true },
-    }) catch |err|
-        {
-            if (err == std.fs.File.OpenError.PathAlreadyExists) {
-                fatal("Error generating doc image : duplicated test name ('{s}')", .{src.fn_name});
-            } else {
-                return err;
-            }
-        };
-}
-
-fn fatal(comptime format: []const u8, args: anytype) noreturn {
-    std.debug.print(format, args);
-    std.process.exit(1);
+    }) catch |err| {
+        if (err == std.fs.File.OpenError.PathAlreadyExists) {
+            std.debug.print("Error generating doc image: duplicated test name '{s}'\n", .{filename});
+            return error.DuplicateDocImageName;
+        } else {
+            return err;
+        }
+    };
 }
 
 /// Used internally for documentation generation
