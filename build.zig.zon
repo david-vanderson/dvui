@@ -21,8 +21,8 @@
             .lazy = true,
         },
         .raylib = .{
-            .url = "git+https://github.com/raysan5/raylib#cb3168a0486edd0b1b6a2595ac73719ee0a4b596",
-            .hash = "raylib-5.5.0-AAAAALVFzQBxAbJGZ9J-H2WWIEo9nYaVF31VS3atRIDS",
+            .url = "git+https://github.com/raysan5/raylib#688a81d3334c789493b24617778a334ac786f52e",
+            .hash = "raylib-5.5.0-whq8uFq2NATO2aMsuIJtFw9YBQyYfVbO-ln5TAvN0bWP",
             .lazy = true,
         },
         //used in the raylib-ontop example
