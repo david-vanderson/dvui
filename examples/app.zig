@@ -49,7 +49,10 @@ pub fn frame() !dvui.App.Result {
     const lorem = "This is a dvui.App example that can compile on multiple backends.";
     try tl.addText(lorem, .{});
     try tl.addText("\n\n", .{});
-    try tl.format("Current backend {s} : {s}", .{ @tagName(dvui.backend.kind), dvui.backend.description() }, .{});
+    try tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
+    if (dvui.backend.kind == .web) {
+        try tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
+    }
     tl.deinit();
 
     var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
@@ -81,7 +84,7 @@ pub fn frame() !dvui.App.Result {
     //if (try dvui.button(@src(), "Panic", .{}, .{})) {
     //std.debug.panic("This is a panic message after {d}s", .{@divTrunc(dvui.currentWindow().frame_time_ns, std.time.ns_per_s)});
     //}
-    if (try dvui.button(@src(), if (dvui.wasm) "Stop" else "Close", .{}, .{})) {
+    if (try dvui.button(@src(), if (dvui.backend.kind == .web) "Stop" else "Close", .{}, .{})) {
         return .close;
     }
 

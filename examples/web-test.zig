@@ -181,15 +181,13 @@ fn dvui_frame() !void {
     tl.deinit();
 
     var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    try tl2.format(
+    try tl2.addText(
         \\DVUI
         \\- paints the entire window
         \\- can show floating windows and dialogs
         \\- example menu at the top of the window
         \\- rest of the window is a scroll area
-        \\
-        \\backend: {s}
-    , .{dvui.backend.description()}, .{});
+    , .{});
     try tl2.addText("\n\n", .{});
     try tl2.addText("Framerate is variable and adjusts as needed for input events and animations.", .{});
     try tl2.addText("\n\n", .{});
