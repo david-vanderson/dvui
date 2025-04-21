@@ -284,32 +284,31 @@ pub fn build(b: *std.Build) !void {
 
     // Docs
     const docs_step = b.step("docs", "Build and install the documentation");
-    const docs_dvui_mod, const docs_can_generate_images = blk: {
-        const mod = b.modules.get("dvui_sdl2");
-        if (mod == null) break :blk .{ b.modules.get("dvui_testing"), false };
-        break :blk .{ mod, true };
-    };
-    if (docs_dvui_mod == null) {
-        docs_step.dependOn(&b.addFail("Docs require the sdl2 or testing backend to be used").step);
-    } else {
-        const docs = b.addExecutable(.{ .name = "dvui", .root_module = docs_dvui_mod });
+    const no_doc_images = b.option(bool, "no-doc-images", "Set this flag to skip generating doc images") orelse false;
+    const docs_mod = b.createModule(.{
+        .root_source_file = b.path("src/dvui.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const docs = b.addLibrary(.{ .name = "dvui", .root_module = docs_mod });
 
-        const install_docs = b.addInstallDirectory(.{
-            .source_dir = docs.getEmittedDocs(),
-            .install_dir = .prefix,
-            .install_subdir = "docs",
-            // Seems a bit drastic but by default only index.html is installed
-            // and I override it below. Maybe there is a cleaner way ?
-            .exclude_extensions = &.{".html"},
-        });
-        docs_step.dependOn(&install_docs.step);
+    const install_docs = b.addInstallDirectory(.{
+        .source_dir = docs.getEmittedDocs(),
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+        // Seems a bit drastic but by default only index.html is installed
+        // and I override it below. Maybe there is a cleaner way ?
+        .exclude_extensions = &.{".html"},
+    });
+    docs_step.dependOn(&install_docs.step);
 
-        b.getInstallStep().dependOn(docs_step);
+    b.getInstallStep().dependOn(docs_step);
 
-        // Generate doc images
-        if (docs_can_generate_images) {
+    // Generate doc images
+    if (!no_doc_images) {
+        if (b.modules.get("dvui_sdl2") orelse b.modules.get("dvui_sdl3")) |image_gen_mod| {
             const generate_images_test = b.addTest(.{
-                .root_module = docs_dvui_mod,
+                .root_module = image_gen_mod,
                 .filters = &.{".png"},
                 .name = "doc-img-gen",
                 .test_runner = .{ .path = b.path("docs/image_gen_test_runner.zig"), .mode = .simple },
@@ -323,22 +322,22 @@ pub fn build(b: *std.Build) !void {
                 .install_subdir = "docs",
             }).step);
         } else {
-            std.log.info("The chosen backend cannot generate images for the docs", .{});
+            docs_step.dependOn(&b.addFail("Docs require the sdl backend to generate doc images. Pass -Dno-doc-images to skip this step").step);
         }
-
-        // Use customized index.html
-        const add_doc_logo = b.addExecutable(.{
-            .name = "addDocLogo",
-            .root_source_file = b.path("docs/add_doc_logo.zig"),
-            .target = b.graph.host,
-        });
-        const run_add_logo = b.addRunArtifact(add_doc_logo);
-        run_add_logo.addFileArg(b.path("docs/index.html"));
-        run_add_logo.addFileArg(b.path("docs/favicon.svg"));
-        run_add_logo.addFileArg(b.path("docs/logo.svg"));
-        const indexhtml_file = run_add_logo.captureStdOut();
-        docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
     }
+
+    // Use customized index.html
+    const add_doc_logo = b.addExecutable(.{
+        .name = "addDocLogo",
+        .root_source_file = b.path("docs/add_doc_logo.zig"),
+        .target = b.graph.host,
+    });
+    const run_add_logo = b.addRunArtifact(add_doc_logo);
+    run_add_logo.addFileArg(b.path("docs/index.html"));
+    run_add_logo.addFileArg(b.path("docs/favicon.svg"));
+    run_add_logo.addFileArg(b.path("docs/logo.svg"));
+    const indexhtml_file = run_add_logo.captureStdOut();
+    docs_step.dependOn(&b.addInstallFileWithDir(indexhtml_file, .prefix, "docs/index.html").step);
 }
 
 pub fn linkBackend(dvui_mod: *std.Build.Module, backend_mod: *std.Build.Module) void {
