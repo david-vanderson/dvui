@@ -369,7 +369,6 @@ fn addDvuiModule(
         .optimize = optimize,
     });
     const tests = b.addTest(.{ .root_module = dvui_mod, .name = name });
-    if (opts.check_step) |step| step.dependOn(&tests.step);
     if (opts.test_step) |step| step.dependOn(&b.addRunArtifact(tests).step);
 
     if (target.result.os.tag == .windows) {
@@ -433,7 +432,9 @@ fn addExample(
     mod.addImport("dvui", dvui_mod);
 
     const exe = b.addExecutable(.{ .name = name, .root_module = mod });
-    if (opts.check_step) |step| step.dependOn(&exe.step);
+
+    const exe_check = b.addExecutable(.{ .name = name, .root_module = mod });
+    if (opts.check_step) |step| step.dependOn(&exe_check.step);
 
     if (opts.target.result.os.tag == .windows) {
         exe.win32_manifest = b.path("./src/main.manifest");
@@ -467,19 +468,23 @@ fn addWebExample(
     dvui_mod: *std.Build.Module,
 ) void {
     const b = opts.b;
-    const web_test = b.addExecutable(.{
+
+    const exeOptions: std.Build.ExecutableOptions = .{
         .name = "web",
         .root_source_file = file,
         .target = opts.target,
         .optimize = opts.optimize,
         .link_libc = false,
         .strip = if (opts.optimize == .ReleaseFast or opts.optimize == .ReleaseSmall) true else false,
-    });
+    };
+    const web_test = b.addExecutable(exeOptions);
     web_test.entry = .disabled;
     web_test.root_module.addImport("dvui", dvui_mod);
 
-    // web does not run tests, only compile checks
-    if (opts.check_step) |step| step.dependOn(&web_test.step);
+    const web_test_check = b.addExecutable(exeOptions);
+    web_test_check.entry = .disabled;
+    web_test_check.root_module.addImport("dvui", dvui_mod);
+    if (opts.check_step) |step| step.dependOn(&web_test_check.step);
 
     const install_dir: std.Build.InstallDir = .{ .custom = "bin/" ++ name };
 
