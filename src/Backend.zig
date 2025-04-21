@@ -11,75 +11,28 @@ ctx: Context,
 vtable: VTable,
 
 const VTableTypes = struct {
-    /// Get monotonic nanosecond timestamp. Doesn't have to be system time.
     pub const nanoTime = *const fn (ctx: Context) i128;
-
-    /// Sleep for nanoseconds.
     pub const sleep = *const fn (ctx: Context, ns: u64) void;
 
-    /// Called by dvui during Window.begin(), so prior to any dvui
-    /// rendering.  Use to setup anything needed for this frame.  The arena
-    /// arg is cleared before begin is called next, useful for any temporary
-    /// allocations needed only for this frame.
     pub const begin = *const fn (ctx: Context, arena: std.mem.Allocator) void;
-
-    /// Called by dvui during Window.end(), but currently unused by any
-    /// backends.  Probably will be removed.
     pub const end = *const fn (ctx: Context) void;
 
-    /// Return size of the window in physical pixels.  For a 300x200 retina
-    /// window (so actually 600x400), this should return 600x400.
     pub const pixelSize = *const fn (ctx: Context) Size;
-
-    /// Return size of the window in logical pixels.  For a 300x200 retina
-    /// window (so actually 600x400), this should return 300x200.
     pub const windowSize = *const fn (ctx: Context) Size;
-
-    /// Return the detected additional scaling.  This represents the user's
-    /// additional display scaling (usually set in their window system's
-    /// settings).  Currently only called during Window.init(), so currently
-    /// this sets the initial content scale.
     pub const contentScale = *const fn (ctx: Context) f32;
 
-    /// Render a triangle list using the idx indexes into the vtx vertexes
-    /// clipped to to clipr (if given).  Vertex positions and clipr are in
-    /// physical pixels.  If texture is given, the vertexes uv coords are
-    /// normalized (0-1).
     pub const drawClippedTriangles = *const fn (ctx: Context, texture: ?dvui.Texture, vtx: []const Vertex, idx: []const u16, clipr: ?dvui.Rect) void;
 
-    /// Create a texture from the given pixels in RGBA.  The returned
-    /// pointer is what will later be passed to drawClippedTriangles.
     pub const textureCreate = *const fn (ctx: Context, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) dvui.Texture;
-
-    /// Create a texture that can be rendered to with renderTarget().  The
-    /// returned pointer is what will later be passed to drawClippedTriangles.
     pub const textureCreateTarget = *const fn (ctx: Context, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!dvui.Texture;
-
-    /// Read pixel data (RGBA) from texture into pixel.
     pub const textureRead = *const fn (ctx: Context, texture: dvui.Texture, pixels_out: [*]u8) error{TextureRead}!void;
-
-    /// Destroy texture that was previously made with textureCreate() or
-    /// textureCreateTarget().  After this call, this texture pointer will not
-    /// be used by dvui.
     pub const textureDestroy = *const fn (ctx: Context, texture: dvui.Texture) void;
-
-    /// Render future drawClippedTriangles() to the passed texture (or screen
-    /// if null).
     pub const renderTarget = *const fn (ctx: Context, texture: ?dvui.Texture) void;
 
-    /// Get clipboard content (text only)
     pub const clipboardText = *const fn (ctx: Context) error{OutOfMemory}![]const u8;
-
-    /// Set clipboard content (text only)
     pub const clipboardTextSet = *const fn (ctx: Context, text: []const u8) error{OutOfMemory}!void;
 
-    /// Open URL in system browser
     pub const openURL = *const fn (ctx: Context, url: []const u8) error{OutOfMemory}!void;
-
-    /// Called by dvui.refresh() when it is called from a background
-    /// thread.  Used to wake up the gui thread.  It only has effect if you
-    /// are using waitTime() or some other method of waiting until a new
-    /// event comes in.
     pub const refresh = *const fn (ctx: Context) void;
 };
 
@@ -139,54 +92,99 @@ pub fn init(
     };
 }
 
+/// Get monotonic nanosecond timestamp. Doesn't have to be system time.
 pub fn nanoTime(self: *Backend) i128 {
     return self.vtable.nanoTime(self.ctx);
 }
+/// Sleep for nanoseconds.
 pub fn sleep(self: *Backend, ns: u64) void {
     return self.vtable.sleep(self.ctx, ns);
 }
+/// Called by dvui during `dvui.Window.begin`, so prior to any dvui
+/// rendering.  Use to setup anything needed for this frame.  The arena
+/// arg is cleared before `dvui.Window.begin` is called next, useful for any
+/// temporary allocations needed only for this frame.
 pub fn begin(self: *Backend, arena: std.mem.Allocator) void {
     return self.vtable.begin(self.ctx, arena);
 }
+/// Called by dvui during `dvui.Window.end`, but currently unused by any
+/// backends.  Probably will be removed.
 pub fn end(self: *Backend) void {
     return self.vtable.end(self.ctx);
 }
+
+/// Return size of the window in physical pixels.  For a 300x200 retina
+/// window (so actually 600x400), this should return 600x400.
 pub fn pixelSize(self: *Backend) Size {
     return self.vtable.pixelSize(self.ctx);
 }
+
+/// Return size of the window in logical pixels.  For a 300x200 retina
+/// window (so actually 600x400), this should return 300x200.
 pub fn windowSize(self: *Backend) Size {
     return self.vtable.windowSize(self.ctx);
 }
+
+/// Return the detected additional scaling.  This represents the user's
+/// additional display scaling (usually set in their window system's
+/// settings).  Currently only called during `dvui.Window.init`, so currently
+/// this sets the initial content scale.
 pub fn contentScale(self: *Backend) f32 {
     return self.vtable.contentScale(self.ctx);
 }
+
+/// Render a triangle list using the idx indexes into the vtx vertexes
+/// clipped to to `clipr` (if given).  Vertex positions and `clipr` are in
+/// physical pixels.  If `texture` is given, the vertexes uv coords are
+/// normalized (0-1).
 pub fn drawClippedTriangles(self: *Backend, texture: ?dvui.Texture, vtx: []const Vertex, idx: []const u16, clipr: ?dvui.Rect) void {
     return self.vtable.drawClippedTriangles(self.ctx, texture, vtx, idx, clipr);
 }
+
+/// Create a `dvui.Texture` from the given `pixels` in RGBA.  The returned
+/// pointer is what will later be passed to `drawClippedTriangles`.
 pub fn textureCreate(self: *Backend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) dvui.Texture {
     return self.vtable.textureCreate(self.ctx, pixels, width, height, interpolation);
 }
+
+/// Create a `dvui.Texture` that can be rendered to with `renderTarget`.  The
+/// returned pointer is what will later be passed to `drawClippedTriangles`.
 pub fn textureCreateTarget(self: *Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
     return try self.vtable.textureCreateTarget(self.ctx, width, height, interpolation);
 }
+/// Read pixel data (RGBA) from `texture` into `pixels_out`.
 pub fn textureRead(self: *Backend, texture: dvui.Texture, pixels_out: [*]u8) !void {
     return try self.vtable.textureRead(self.ctx, texture, pixels_out);
 }
+
+/// Destroy `texture` that was previously made with `textureCreate` or
+/// `textureCreateTarget`.  After this call, this texture pointer will not
+/// be used by dvui.
 pub fn textureDestroy(self: *Backend, texture: dvui.Texture) void {
     return self.vtable.textureDestroy(self.ctx, texture);
 }
+/// Render future `drawClippedTriangles` to the passed `texture` (or screen
+/// if null).
 pub fn renderTarget(self: *Backend, texture: ?dvui.Texture) void {
     return self.vtable.renderTarget(self.ctx, texture);
 }
+/// Get clipboard content (text only)
 pub fn clipboardText(self: *Backend) error{OutOfMemory}![]const u8 {
     return self.vtable.clipboardText(self.ctx);
 }
+/// Set clipboard content (text only)
 pub fn clipboardTextSet(self: *Backend, text: []const u8) error{OutOfMemory}!void {
     return self.vtable.clipboardTextSet(self.ctx, text);
 }
+/// Open URL in system browser
 pub fn openURL(self: *Backend, url: []const u8) error{OutOfMemory}!void {
     return self.vtable.openURL(self.ctx, url);
 }
+
+/// Called by `dvui.refresh` when it is called from a background
+/// thread.  Used to wake up the gui thread.  It only has effect if you
+/// are using `dvui.Window.waitTime` or some other method of waiting until
+/// a new event comes in.
 pub fn refresh(self: *Backend) void {
     return self.vtable.refresh(self.ctx);
 }
