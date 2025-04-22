@@ -19,12 +19,16 @@ pub fn build(b: *std.Build) !void {
     const test_step = b.step("test", "Test the dvui codebase");
     const check_step = b.step("check", "Check that the dvui codebase compiles");
 
+    // Setting this to false may fix linking errors: https://github.com/david-vanderson/dvui/issues/269
+    const use_lld = b.option(bool, "use-lld", "The value of the use_lld executable option");
+
     const dvui_opts = DvuiModuleOptions{
         .b = b,
         .target = target,
         .optimize = optimize,
         .test_step = test_step,
         .check_step = check_step,
+        .use_lld = use_lld,
     };
 
     if (back_to_build == .custom) {
@@ -329,6 +333,7 @@ const DvuiModuleOptions = struct {
     optimize: std.builtin.OptimizeMode,
     check_step: ?*std.Build.Step = null,
     test_step: ?*std.Build.Step = null,
+    use_lld: ?bool = null,
 };
 
 fn addDvuiModule(
@@ -408,7 +413,7 @@ fn addExample(
     });
     mod.addImport("dvui", dvui_mod);
 
-    const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_lld = false });
+    const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_lld = opts.use_lld });
     if (opts.check_step) |step| step.dependOn(&exe.step);
 
     if (opts.target.result.os.tag == .windows) {
