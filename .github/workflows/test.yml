@@ -1,0 +1,32 @@
+name: Test
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the $default-branch branch
+  push:
+    branches: [$default-branch]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Build and test
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+      # uses .minimum_zig_version from build.zig.zon
+      - uses: mlugg/setup-zig@v1
+
+      - name: Install libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install mesa-common-dev libgl-dev libglx-dev libegl-dev libpulse-dev libxext-dev libxfixes-dev libxrender-dev libasound2-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
+
+      - name: Build and check
+        run: zig build check -Duse-lld=false # build all backends
+
+      - name: Run tests
+        run: zig build test -Dbackend=testing -Duse-lld=false
