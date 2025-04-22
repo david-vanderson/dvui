@@ -200,13 +200,11 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
 
         // Need to emit a <pattern> tag for each triangle because svg doesn't allow to manipulate the patern inside the <polygon> tag.
         // <pattern> declaration must be within <defs> tags, so this require to iterate vertexes twice when we have a texture.
+        // We also emit a <filter> def based on the vertex color.
         self.svg_bytes.writer().print("<defs>\n", .{}) catch unreachable;
         var i: usize = 0;
         while (i < idx.len) : (i += 3) {
             const v1, const v2, const v3 = .{ vtx[idx[i]], vtx[idx[i + 1]], vtx[idx[i + 2]] };
-
-            // TODO : Find a way to alpha blend the texture with background color
-
             // Transformation matrix in svg does :
             // newX = a * oldX + c * oldY + e
             // newY = b * oldX + d * oldY + f
@@ -271,6 +269,20 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
                 i,                  png_file,
             }) catch unreachable;
             self.svg_bytes.writer().print("  </pattern>\n", .{}) catch unreachable;
+
+            // Add a color filter based on the vertexes
+            // FIXME : I don't use the v3.col.a here. Don't know what it would mean in this context. To add or to explain why is not required.
+            // FIXME : works but breaks the image rendering. maybe this is where opacity comes into play ?
+            self.svg_bytes.writer().print(
+                \\  <filter id="color-{s}-{d}-{d}">
+                \\    <feFlood flood-opacity="1" flood-color="rgb({d},{d},{d})"/>
+                \\    <feComposite in2="SourceGraphic" operator="in" k2="1"/>
+                \\  </filter>
+                \\
+            , .{
+                maybe_texture_id.?, self.triangle_render_count, i,
+                v3.col.r,           v3.col.g,                   v3.col.b,
+            }) catch unreachable;
         }
         self.svg_bytes.writer().print("</defs>\n", .{}) catch unreachable;
     }
@@ -294,8 +306,12 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
         if (maybe_texture_id) |texture_id| {
             style = std.fmt.allocPrint(
                 self.arena,
-                "stroke:none;stroke-width:.2;fill:url(#{s}-{d}-{d});fill-opacity:{d}",
-                .{ texture_id, self.triangle_render_count, i, opacity },
+                "stroke:none;stroke-width:.2;fill:url(#{s}-{d}-{d});filter:url(#color-{s}-{d}-{d});fill-opacity:{d}",
+                .{
+                    texture_id, self.triangle_render_count, i,
+                    texture_id, self.triangle_render_count, i,
+                    opacity,
+                },
             ) catch unreachable;
         } else {
             style = std.fmt.allocPrint(
