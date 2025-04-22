@@ -321,10 +321,10 @@ pub fn build(b: *std.Build) !void {
     }
 
     // Doc images
-    {
-        const docs_img_step = b.step("docs-images", "Build documentation images");
+    const docs_img_step = b.step("docs-images", "Build documentation images");
+    if (b.modules.get("dvui_sdl3")) |mod| {
         const generate_images_test = b.addTest(.{
-            .root_module = b.modules.get("dvui_sdl3"),
+            .root_module = mod,
             .filters = &.{".png"},
             .name = "docs-img-gen",
             .test_runner = .{ .path = b.path("docs/image_gen_test_runner.zig"), .mode = .simple },
@@ -337,9 +337,10 @@ pub fn build(b: *std.Build) !void {
             .install_dir = .prefix,
             .install_subdir = "docs",
         }).step);
-
         // not running by default just yet
         //b.getInstallStep().dependOn(docs_img_step);
+    } else {
+        docs_img_step.dependOn(&b.addFail("docs-images required the sdl3 backend").step);
     }
 }
 
