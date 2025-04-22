@@ -39,18 +39,16 @@ pub fn pressKey(code: dvui.enums.Key, mod: dvui.enums.Mod) !void {
     _ = try cw.addEventKey(.{ .code = code, .mod = mod, .action = .up });
 }
 
-// Assumes we are just after Window.begin
+/// Runs frames until `dvui.refresh` was not called.
+///
+/// Assumes we are just after `dvui.Window.begin`, and on return will be just
+/// after a future `dvui.Window.begin`.
 pub fn settle(frame: dvui.App.frameFunction) !void {
-    const cw = dvui.currentWindow();
-    if (try frame() == .close) return error.closed;
-
     for (0..100) |_| {
-        const wait_time = try cw.end(.{});
-        try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms);
+        const wait_time = try step(frame);
 
         if (wait_time == 0) {
             // need another frame, someone called refresh()
-            if (try frame() == .close) return error.closed;
             continue;
         }
 
@@ -60,8 +58,10 @@ pub fn settle(frame: dvui.App.frameFunction) !void {
     return error.unsettled;
 }
 
-// Assumes we are just after Window.begin
-/// Runs for exactly one frame, returning the last wait_time from `dvui.Window.end`.
+/// Runs exactly one frame, returning the wait_time from `dvui.Window.end`.
+///
+/// Assumes we are just after `dvui.Window.begin`, and moves to just after the
+/// next `dvui.Window.begin`.
 ///
 /// Useful when you know the frame will not settle, but you need the frame
 /// to handle events.
