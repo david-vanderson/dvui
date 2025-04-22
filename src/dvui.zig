@@ -2917,7 +2917,7 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
     dataSetSlice(opts.window, id, "_ok_label", opts.ok_label);
     dataSet(opts.window, id, "_center_on", (opts.window orelse currentWindow()).subwindow_currentRect);
     if (opts.cancel_label) |cl| {
-        dataSetSlice(opts.window, id, "_cancel_label", cl);
+        dataSetSlice(opts.window, id, 1, cl);
     }
     if (opts.max_size) |ms| {
         dataSet(opts.window, id, "_max_size", ms);
