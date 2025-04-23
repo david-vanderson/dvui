@@ -61,6 +61,7 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
         });
+        dvui_opts.addChecksAndTests(testing_mod, "testing-backend");
         const dvui_testing = addDvuiModule("dvui_testing", dvui_opts);
         linkBackend(dvui_testing, testing_mod);
         addExample("testing-app", b.path("examples/app.zig"), dvui_testing, dvui_opts);
@@ -74,7 +75,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
             .link_libc = true,
         });
-        test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = sdl_mod, .name = "sdl2-backend" })).step);
+        dvui_opts.addChecksAndTests(sdl_mod, "sdl2-backend");
 
         var sdl_options = b.addOptions();
 
@@ -122,7 +123,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
             .link_libc = true,
         });
-        test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = sdl_mod, .name = "sdl3-backend" })).step);
+        dvui_opts.addChecksAndTests(sdl_mod, "sdl3-backend");
 
         var sdl_options = b.addOptions();
 
@@ -171,7 +172,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
             .link_libc = true,
         });
-        test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = raylib_mod, .name = "raylib-backend" })).step);
+        dvui_opts.addChecksAndTests(raylib_mod, "raylib-backend");
 
         const maybe_ray = b.lazyDependency(
             "raylib",
@@ -223,7 +224,7 @@ pub fn build(b: *std.Build) !void {
                 .optimize = optimize,
                 .link_libc = true,
             });
-            test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = dx11_mod, .name = "dx11-backend" })).step);
+            dvui_opts.addChecksAndTests(dx11_mod, "dx11-backend");
 
             if (b.lazyDependency("win32", .{})) |zigwin32| {
                 dx11_mod.addImport("win32", zigwin32.module("win32"));
@@ -256,11 +257,11 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
         });
         web_mod.export_symbol_names = export_symbol_names;
+        dvui_opts.addChecksAndTests(web_mod, "web-backend");
 
         // NOTE: exported module uses the standard target so it can be overridden by users
         const dvui_web = addDvuiModule("dvui_web", dvui_opts);
         linkBackend(dvui_web, web_mod);
-        test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = web_mod, .name = "web-backend" })).step);
 
         // Examples, must be compiled for wasm32
         {
@@ -357,6 +358,12 @@ const DvuiModuleOptions = struct {
     test_step: ?*std.Build.Step = null,
     add_stb_image: bool = true,
     use_lld: ?bool = null,
+
+    fn addChecksAndTests(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
+        const tests = self.b.addTest(.{ .root_module = mod, .name = name });
+        if (self.check_step) |step| step.dependOn(&tests.step);
+        if (self.test_step) |step| step.dependOn(&self.b.addRunArtifact(tests).step);
+    }
 };
 
 fn addDvuiModule(
@@ -372,8 +379,7 @@ fn addDvuiModule(
         .target = target,
         .optimize = optimize,
     });
-    const tests = b.addTest(.{ .root_module = dvui_mod, .name = name });
-    if (opts.test_step) |step| step.dependOn(&b.addRunArtifact(tests).step);
+    opts.addChecksAndTests(dvui_mod, name);
 
     if (target.result.os.tag == .windows) {
         // tinyfiledialogs needs this
