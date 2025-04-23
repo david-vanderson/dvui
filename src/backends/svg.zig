@@ -270,18 +270,25 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             }) catch unreachable;
             self.svg_bytes.writer().print("  </pattern>\n", .{}) catch unreachable;
 
-            // Add a color filter based on the vertexes
-            // FIXME : I don't use the v3.col.a here. Don't know what it would mean in this context. To add or to explain why is not required.
-            // FIXME : works but breaks the image rendering. maybe this is where opacity comes into play ?
+            const r_norm = @as(f32, @floatFromInt(v3.col.r)) / 255.0;
+            const g_norm = @as(f32, @floatFromInt(v3.col.g)) / 255.0;
+            const b_norm = @as(f32, @floatFromInt(v3.col.b)) / 255.0;
+            const opacity = @as(f32, @floatFromInt(v3.col.a)) / 255.0;
             self.svg_bytes.writer().print(
-                \\  <filter id="color-{s}-{d}-{d}">
-                \\    <feFlood flood-opacity="1" flood-color="rgb({d},{d},{d})"/>
-                \\    <feComposite in2="SourceGraphic" operator="in" k2="1"/>
+                \\  <filter id="color-{s}-{d}-{d}"
+                \\    style="color-interpolation-filters:sRGB;">
+                \\      <feColorMatrix type="matrix" values="
+                \\        {d:.2} 0 0 0 0
+                \\        0 {d:.2} 0 0 0
+                \\        0 0 {d:.2} 0 0
+                \\        0 0 0 {d:.2} 0
+                \\      "/>
                 \\  </filter>
                 \\
             , .{
                 maybe_texture_id.?, self.triangle_render_count, i,
-                v3.col.r,           v3.col.g,                   v3.col.b,
+                r_norm,             g_norm,                     b_norm,
+                opacity,
             }) catch unreachable;
         }
         self.svg_bytes.writer().print("</defs>\n", .{}) catch unreachable;
