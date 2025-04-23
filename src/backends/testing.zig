@@ -92,7 +92,7 @@ pub fn textureCreate(self: *TestingBackend, pixels: [*]u8, width: u32, height: u
 
 /// Create a texture that can be rendered to with renderTarget().  The
 /// returned pointer is what will later be passed to drawClippedTriangles.
-pub fn textureCreateTarget(_: *TestingBackend, _: u32, _: u32, _: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!dvui.Texture {
+pub fn textureCreateTarget(_: *TestingBackend, _: u32, _: u32, _: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!dvui.TextureTarget {
     return error.TextureCreate;
 }
 

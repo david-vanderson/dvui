@@ -837,6 +837,13 @@ pub const Texture = struct {
     height: u32,
 };
 
+/// A texture held by the backend that can be drawn onto.  See `Picture`.
+pub const TextureTarget = struct {
+    ptr: *anyopaque,
+    width: u32,
+    height: u32,
+};
+
 /// A texture that will be held by dvui until a frame it is not used.  This is
 /// how dvui caches icon and image rasterizations.
 pub const TextureCacheEntry = struct {
@@ -5513,7 +5520,7 @@ pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enum
 /// Remember to destroy the texture at some point, see `textureDestroyLater`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.TextureInterpolation) !Texture {
+pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.TextureInterpolation) !TextureTarget {
     return try currentWindow().backend.textureCreateTarget(width, height, interpolation);
 }
 
@@ -5522,18 +5529,24 @@ pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.Texture
 /// Returns pixels allocated by arena.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn textureRead(arena: std.mem.Allocator, texture: Texture) ![]u8 {
+pub fn textureReadTarget(arena: std.mem.Allocator, texture: TextureTarget) ![]u8 {
     const size: usize = texture.width * texture.height * 4;
     const pixels = try arena.alloc(u8, size);
     errdefer arena.free(pixels);
 
-    try currentWindow().backend.textureRead(texture, pixels.ptr);
+    try currentWindow().backend.textureReadTarget(texture, pixels.ptr);
 
     return pixels;
 }
 
-/// Destroy a texture created with `textureCreate` or `textureCreateTarget` at
-/// the end of the frame.
+/// Convert a target texture to a normal texture.  target is destroyed.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn textureFromTarget(target: TextureTarget) Texture {
+    return currentWindow().backend.textureFromTarget(target);
+}
+
+/// Destroy a texture created with `textureCreate` at the end of the frame.
 ///
 /// While `Backend.textureDestroy` immediately destroys the texture, this
 /// function deferres the destruction until the end of the frame, so it is safe
@@ -5547,7 +5560,7 @@ pub fn textureDestroyLater(texture: Texture) void {
 }
 
 pub const RenderTarget = struct {
-    texture: ?Texture,
+    texture: ?TextureTarget,
     offset: Point,
     rendering: bool = true,
 };
@@ -5737,7 +5750,7 @@ pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, rot
 /// Captures dvui drawing to part of the screen in a `Texture`.
 pub const Picture = struct {
     r: Rect, // physical pixels captured
-    texture: dvui.Texture = undefined,
+    texture: dvui.TextureTarget = undefined,
     target: dvui.RenderTarget = undefined,
 
     /// Begin recording drawing to the physical pixels in rect (enlarged to pixel boundaries).
@@ -5769,43 +5782,47 @@ pub const Picture = struct {
         return ret;
     }
 
-    /// Stop recording and return texture (only valid this frame).
-    pub fn stop(self: *Picture) dvui.Texture {
+    /// Stop recording.
+    pub fn stop(self: *Picture) void {
         _ = dvui.renderTarget(self.target);
+    }
 
-        // copy pixels to regular texture
-        const px = dvui.textureRead(dvui.currentWindow().arena(), self.texture) catch null;
-        if (px) |pixels| {
-            defer dvui.currentWindow().arena().free(pixels);
+    /// Encode texture as png.  Call after `stop` before `deinit`.
+    pub fn png(self: *Picture, arena: std.mem.Allocator) ![]u8 {
+        const pixels = dvui.textureReadTarget(arena, self.texture) catch unreachable;
+        defer arena.free(pixels);
 
-            dvui.textureDestroyLater(self.texture);
-            self.texture = dvui.textureCreate(pixels.ptr, self.texture.width, self.texture.height, .linear);
-        }
+        return try dvui.pngEncode(arena, pixels, self.texture.width, self.texture.height, .{});
+    }
 
-        // render the texture so you see the picture this frame
-        dvui.renderTexture(self.texture, .{ .r = self.r }, .{}) catch {};
-
-        dvui.textureDestroyLater(self.texture);
-        return self.texture;
+    /// Draw recorded texture and destroy it.
+    pub fn deinit(self: *Picture) void {
+        const texture = dvui.textureFromTarget(self.texture); // destroys self.texture
+        dvui.renderTexture(texture, .{ .r = self.r }, .{}) catch {};
+        dvui.textureDestroyLater(texture);
     }
 };
 
-pub const pngFromTextureOptions = struct {
+pub const pngEncodeOptions = struct {
     /// Physical size of image, pixels per meter added to png pHYs chunk.
     /// 0 => don't write the pHYs chunk
     /// null => dvui will use 72 dpi (2834.64 px/m) times `windowNaturalScale`
     resolution: ?u32 = null,
 };
 
-/// Make a png encoded image from a `Texture`.
+/// Make a png encoded image from RGBA pixels.
 ///
-/// Gives bytes of a png file (allocated by arena) with contents from `texture`.
-pub fn pngFromTexture(arena: std.mem.Allocator, texture: Texture, opts: pngFromTextureOptions) ![]u8 {
-    const px = try textureRead(arena, texture);
-
+/// Gives bytes of a png file (allocated by arena).
+pub fn pngEncode(arena: std.mem.Allocator, pixels: []u8, width: u32, height: u32, opts: pngEncodeOptions) ![]u8 {
     var len: c_int = undefined;
-    const png_bytes = c.stbi_write_png_to_mem(px.ptr, @intCast(texture.width * 4), @intCast(texture.width), @intCast(texture.height), 4, &len);
-    arena.free(px);
+    const png_bytes = c.stbi_write_png_to_mem(pixels.ptr, @intCast(width * 4), @intCast(width), @intCast(height), 4, &len);
+    defer {
+        if (wasm) {
+            backend.dvui_c_free(png_bytes);
+        } else {
+            c.free(png_bytes);
+        }
+    }
 
     // 4 bytes: length of data
     // 4 bytes: "pHYs"
@@ -5851,12 +5868,6 @@ pub fn pngFromTexture(arena: std.mem.Allocator, texture: Texture, opts: pngFromT
         @memcpy(ret[split..][0..extra], &p_buf);
     }
     @memcpy(ret[split + extra ..], png_bytes[split..@as(usize, @intCast(len))]);
-
-    if (wasm) {
-        backend.dvui_c_free(png_bytes);
-    } else {
-        c.free(png_bytes);
-    }
 
     return ret;
 }
