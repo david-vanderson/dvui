@@ -24,10 +24,12 @@ const VTableTypes = struct {
     pub const drawClippedTriangles = *const fn (ctx: Context, texture: ?dvui.Texture, vtx: []const Vertex, idx: []const u16, clipr: ?dvui.Rect) void;
 
     pub const textureCreate = *const fn (ctx: Context, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) dvui.Texture;
-    pub const textureCreateTarget = *const fn (ctx: Context, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!dvui.Texture;
-    pub const textureRead = *const fn (ctx: Context, texture: dvui.Texture, pixels_out: [*]u8) error{TextureRead}!void;
     pub const textureDestroy = *const fn (ctx: Context, texture: dvui.Texture) void;
-    pub const renderTarget = *const fn (ctx: Context, texture: ?dvui.Texture) void;
+    pub const textureFromTarget = *const fn (ctx: Context, texture: dvui.TextureTarget) dvui.Texture;
+
+    pub const textureCreateTarget = *const fn (ctx: Context, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!dvui.TextureTarget;
+    pub const textureReadTarget = *const fn (ctx: Context, texture: dvui.TextureTarget, pixels_out: [*]u8) error{TextureRead}!void;
+    pub const renderTarget = *const fn (ctx: Context, texture: ?dvui.TextureTarget) void;
 
     pub const clipboardText = *const fn (ctx: Context) error{OutOfMemory}![]const u8;
     pub const clipboardTextSet = *const fn (ctx: Context, text: []const u8) error{OutOfMemory}!void;
@@ -48,9 +50,10 @@ pub const VTable = struct {
     contentScale: I.contentScale,
     drawClippedTriangles: I.drawClippedTriangles,
     textureCreate: I.textureCreate,
-    textureCreateTarget: I.textureCreateTarget,
-    textureRead: I.textureRead,
     textureDestroy: I.textureDestroy,
+    textureFromTarget: I.textureFromTarget,
+    textureCreateTarget: I.textureCreateTarget,
+    textureReadTarget: I.textureReadTarget,
     renderTarget: I.renderTarget,
     clipboardText: I.clipboardText,
     clipboardTextSet: I.clipboardTextSet,
@@ -147,35 +150,46 @@ pub fn textureCreate(self: *Backend, pixels: [*]u8, width: u32, height: u32, int
     return self.vtable.textureCreate(self.ctx, pixels, width, height, interpolation);
 }
 
-/// Create a `dvui.Texture` that can be rendered to with `renderTarget`.  The
-/// returned pointer is what will later be passed to `drawClippedTriangles`.
-pub fn textureCreateTarget(self: *Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
-    return try self.vtable.textureCreateTarget(self.ctx, width, height, interpolation);
-}
-/// Read pixel data (RGBA) from `texture` into `pixels_out`.
-pub fn textureRead(self: *Backend, texture: dvui.Texture, pixels_out: [*]u8) !void {
-    return try self.vtable.textureRead(self.ctx, texture, pixels_out);
-}
-
-/// Destroy `texture` that was previously made with `textureCreate` or
-/// `textureCreateTarget`.  After this call, this texture pointer will not
-/// be used by dvui.
+/// Destroy `texture` made with `textureCreate`. After this call, this texture
+/// pointer will not be used by dvui.
 pub fn textureDestroy(self: *Backend, texture: dvui.Texture) void {
     return self.vtable.textureDestroy(self.ctx, texture);
 }
+
+/// Create a `dvui.Texture` that can be rendered to with `renderTarget`.  The
+/// returned pointer is what will later be passed to `drawClippedTriangles`.
+pub fn textureCreateTarget(self: *Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
+    return try self.vtable.textureCreateTarget(self.ctx, width, height, interpolation);
+}
+
+/// Read pixel data (RGBA) from `texture` into `pixels_out`.
+pub fn textureReadTarget(self: *Backend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
+    return try self.vtable.textureReadTarget(self.ctx, texture, pixels_out);
+}
+
+/// Convert texture target made with `textureCreateTarget` into return texture
+/// as if made by `textureCreate`.  After this call, texture target will not be
+/// used by dvui.
+pub fn textureFromTarget(self: *Backend, texture: dvui.TextureTarget) dvui.Texture {
+    return self.vtable.textureFromTarget(self.ctx, texture);
+}
+
 /// Render future `drawClippedTriangles` to the passed `texture` (or screen
 /// if null).
-pub fn renderTarget(self: *Backend, texture: ?dvui.Texture) void {
+pub fn renderTarget(self: *Backend, texture: ?dvui.TextureTarget) void {
     return self.vtable.renderTarget(self.ctx, texture);
 }
+
 /// Get clipboard content (text only)
 pub fn clipboardText(self: *Backend) error{OutOfMemory}![]const u8 {
     return self.vtable.clipboardText(self.ctx);
 }
+
 /// Set clipboard content (text only)
 pub fn clipboardTextSet(self: *Backend, text: []const u8) error{OutOfMemory}!void {
     return self.vtable.clipboardTextSet(self.ctx, text);
 }
+
 /// Open URL in system browser
 pub fn openURL(self: *Backend, url: []const u8) error{OutOfMemory}!void {
     return self.vtable.openURL(self.ctx, url);

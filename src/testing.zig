@@ -160,9 +160,9 @@ pub const SnapshotError = error{
 /// Captures one frame and return the png data for that frame
 ///
 /// The returned data is allocated by `Self.allocator` and should be freed by the caller
-pub fn capturePng(self: *Self, frame: dvui.App.frameFunction) ![]const u8 {
-    // render the whole screen to a texture
-    var picture = dvui.Picture.start(dvui.windowRectPixels()) orelse {
+pub fn capturePng(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect) ![]const u8 {
+    // render the whole screen to a texture, might be only part of the screen
+    var picture = dvui.Picture.start(rect orelse dvui.windowRectPixels()) orelse {
         std.debug.print("Current backend does not support capturing images\n", .{});
         return error.Unsupported;
     };
@@ -173,10 +173,13 @@ pub fn capturePng(self: *Self, frame: dvui.App.frameFunction) ![]const u8 {
     // render the retained dialogs and deferred renders
     _ = try dvui.currentWindow().endRendering(.{});
 
-    const texture = picture.stop();
+    picture.stop();
 
-    // texture will be destroyed in Window.end() so grab pixels now
-    const png_data = try dvui.pngFromTexture(self.allocator, texture, .{});
+    // texture will be destroyed in picture.deinit() so grab pixels now
+    const png_data = try picture.png(self.allocator);
+
+    // draw texture and destroy
+    picture.deinit();
 
     const cw = dvui.currentWindow();
 
@@ -215,7 +218,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     };
     defer dir.close();
 
-    const png_data = try self.capturePng(frame);
+    const png_data = try self.capturePng(frame, null);
     defer self.allocator.free(png_data);
 
     const file = dir.openFile(filename, .{}) catch |err| switch (err) {
@@ -290,7 +293,7 @@ pub fn saveDocImage(self: *Self, comptime src: std.builtin.SourceLocation, compt
     const test_prefix = "test.";
     const filename = std.fmt.comptimePrint(src.fn_name[test_prefix.len..], format_args);
 
-    const png_data = try self.capturePng(frame);
+    const png_data = try self.capturePng(frame, null);
     defer self.allocator.free(png_data);
 
     @import("root").dvui_image_doc_gen_dir.writeFile(.{

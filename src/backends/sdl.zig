@@ -595,7 +595,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]u8, width: u32, height: u32, 
     return dvui.Texture{ .ptr = texture, .width = width, .height = height };
 }
 
-pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
+pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
     if (!sdl3) {
         switch (interpolation) {
             .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
@@ -629,18 +629,26 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
     _ = c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0);
     _ = c.SDL_RenderFillRect(self.renderer, null);
 
-    return dvui.Texture{ .ptr = texture, .width = width, .height = height };
+    return dvui.TextureTarget{ .ptr = texture, .width = width, .height = height };
 }
 
-pub fn textureRead(self: *SDLBackend, texture: dvui.Texture, pixels_out: [*]u8) error{TextureRead}!void {
+pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) error{TextureRead}!void {
     if (sdl3) {
         const orig_target = c.SDL_GetRenderTarget(self.renderer);
-        _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture.ptr)));
+        const r = c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(texture.ptr)));
         defer _ = c.SDL_SetRenderTarget(self.renderer, orig_target);
+
+        if (!r) {
+            std.debug.print("setRenderTarget Error: {s}", .{c.SDL_GetError()});
+            return error.TextureRead;
+        }
 
         var surface: *c.SDL_Surface = c.SDL_RenderReadPixels(self.renderer, null) orelse return error.TextureRead;
         defer c.SDL_DestroySurface(surface);
-        if (texture.width * texture.height != surface.*.w * surface.*.h) return error.TextureRead;
+        if (texture.width * texture.height != surface.*.w * surface.*.h) {
+            std.debug.print("texture {d} {d} surface {d} {d}\n", .{ texture.width, texture.height, surface.*.w, surface.*.h });
+            return error.TextureRead;
+        }
         // TODO: most common format is RGBA8888, doing conversion during copy to pixels_out should be faster
         if (surface.*.format != c.SDL_PIXELFORMAT_ABGR8888) {
             surface = c.SDL_ConvertSurface(surface, c.SDL_PIXELFORMAT_ABGR8888) orelse return error.TextureRead;
@@ -690,7 +698,17 @@ pub fn textureDestroy(_: *SDLBackend, texture: dvui.Texture) void {
     c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture.ptr))));
 }
 
-pub fn renderTarget(self: *SDLBackend, texture: ?dvui.Texture) void {
+pub fn textureFromTarget(self: *SDLBackend, texture: dvui.TextureTarget) dvui.Texture {
+    // SDL can't read from non-target textures, so read all the pixels and make a new texture
+    const pixels = dvui.textureReadTarget(self.arena, texture) catch unreachable;
+    defer self.arena.free(pixels);
+
+    c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture.ptr))));
+
+    return self.textureCreate(pixels.ptr, texture.width, texture.height, .linear);
+}
+
+pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) void {
     const ptr: ?*anyopaque = if (texture) |tex| tex.ptr else null;
     _ = c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(ptr)));
 

@@ -640,7 +640,7 @@ pub fn textureCreate(self: *WebBackend, pixels: [*]u8, width: u32, height: u32, 
     return dvui.Texture{ .ptr = @ptrFromInt(id), .width = width, .height = height };
 }
 
-pub fn textureCreateTarget(self: *WebBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.Texture {
+pub fn textureCreateTarget(self: *WebBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
     _ = self;
     const wasm_interp: u8 = switch (interpolation) {
         .nearest => 0,
@@ -648,10 +648,14 @@ pub fn textureCreateTarget(self: *WebBackend, width: u32, height: u32, interpola
     };
 
     const id = wasm.wasm_textureCreateTarget(width, height, wasm_interp);
-    return dvui.Texture{ .ptr = @ptrFromInt(id), .width = width, .height = height };
+    return dvui.TextureTarget{ .ptr = @ptrFromInt(id), .width = width, .height = height };
 }
 
-pub fn renderTarget(self: *WebBackend, texture: ?dvui.Texture) void {
+pub fn textureFromTarget(_: *WebBackend, texture: dvui.TextureTarget) dvui.Texture {
+    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height };
+}
+
+pub fn renderTarget(self: *WebBackend, texture: ?dvui.TextureTarget) void {
     _ = self;
     if (texture) |tex| {
         wasm.wasm_renderTarget(@intCast(@intFromPtr(tex.ptr)));
@@ -660,7 +664,7 @@ pub fn renderTarget(self: *WebBackend, texture: ?dvui.Texture) void {
     }
 }
 
-pub fn textureRead(_: *WebBackend, texture: dvui.Texture, pixels_out: [*]u8) error{TextureRead}!void {
+pub fn textureReadTarget(_: *WebBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) error{TextureRead}!void {
     wasm.wasm_textureRead(@intCast(@intFromPtr(texture.ptr)), pixels_out, texture.width, texture.height);
 }
 

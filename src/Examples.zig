@@ -1736,16 +1736,20 @@ pub fn plots() !void {
     plot.deinit();
 
     if (pic) |*p| {
-        const texture = p.stop();
-        const png_slice = try dvui.pngFromTexture(dvui.currentWindow().arena(), texture, .{});
-        defer dvui.currentWindow().arena().free(png_slice);
+        p.stop();
+        defer p.deinit();
+
+        const arena = dvui.currentWindow().arena();
+
+        const png_slice = try p.png(arena);
+        defer arena.free(png_slice);
 
         if (dvui.wasm) {
             try dvui.backend.downloadData("plot.png", png_slice);
         } else {
-            const filename = try dvui.dialogNativeFileSave(dvui.currentWindow().arena(), .{ .path = "plot.png" });
+            const filename = try dvui.dialogNativeFileSave(arena, .{ .path = "plot.png" });
             if (filename) |fname| {
-                defer dvui.currentWindow().arena().free(fname);
+                defer arena.free(fname);
 
                 var file = try std.fs.createFileAbsoluteZ(fname, .{});
                 defer file.close();

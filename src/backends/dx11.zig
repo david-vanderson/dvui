@@ -652,7 +652,7 @@ pub fn textureCreate(self: Context, pixels: [*]u8, width: u32, height: u32, ti: 
     return dvui.Texture{ .ptr = texture, .width = width, .height = height };
 }
 
-pub fn textureCreateTarget(self: Context, width: u32, height: u32, _: dvui.enums.TextureInterpolation) !dvui.Texture {
+pub fn textureCreateTarget(self: Context, width: u32, height: u32, _: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
     const state = stateFromHwnd(hwndFromContext(self));
 
     const texture_desc = win32.D3D11_TEXTURE2D_DESC{
@@ -679,7 +679,7 @@ pub fn textureCreateTarget(self: Context, width: u32, height: u32, _: dvui.enums
     return .{ .ptr = @ptrCast(texture), .width = width, .height = height };
 }
 
-pub fn textureRead(self: Context, texture: dvui.Texture, pixels_out: [*]u8) error{TextureRead}!void {
+pub fn textureReadTarget(self: Context, texture: dvui.TextureTarget, pixels_out: [*]u8) error{TextureRead}!void {
     const state = stateFromHwnd(hwndFromContext(self));
     const tex: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
 
@@ -729,7 +729,20 @@ pub fn textureDestroy(self: Context, texture: dvui.Texture) void {
     _ = tex.IUnknown.Release();
 }
 
-pub fn renderTarget(self: Context, texture: ?dvui.Texture) void {
+pub fn textureFromTarget(self: Context, texture: dvui.TextureTarget) dvui.Texture {
+    const state = stateFromHwnd(hwndFromContext(self));
+
+    // DX11 can't draw target textures, so read all the pixels and make a new texture
+    const pixels = dvui.textureReadTarget(state.arena, texture) catch unreachable;
+    defer state.arena.free(pixels);
+
+    const tex: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
+    _ = tex.IUnknown.Release();
+
+    return self.textureCreate(pixels.ptr, texture.width, texture.height, .linear);
+}
+
+pub fn renderTarget(self: Context, texture: ?dvui.TextureTarget) void {
     const state = stateFromHwnd(hwndFromContext(self));
     cleanupRenderTarget(state);
     if (texture) |tex| {
