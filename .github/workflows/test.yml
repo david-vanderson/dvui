@@ -30,3 +30,20 @@ jobs:
 
       - name: Run tests
         run: zig build test -Dbackend=testing -Duse-lld=false
+
+  test-windows:
+    runs-on: windows-latest
+    name: Build and test Windows
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+      # uses .minimum_zig_version from build.zig.zon
+      - uses: mlugg/setup-zig@v1
+
+      - name: Build and check Dx11
+        run: zig build check -Dbackend=dx11
+
+      - name: Run tests
+        run: zig build test -Dbackend=testing
