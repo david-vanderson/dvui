@@ -88,7 +88,6 @@ pub fn begin(self: *SvgBackend, arena: std.mem.Allocator) void {
         \\>
         \\
     , .{ self.size.w, self.size.h }) catch unreachable;
-    print("Gen frame {d} ... \n", .{self.frame_count});
     if (self.empty_render_folder) {
         var dir = std.fs.cwd().openDir(render_dir, .{ .iterate = true }) catch unreachable;
         defer dir.close();
@@ -111,10 +110,9 @@ pub fn begin(self: *SvgBackend, arena: std.mem.Allocator) void {
 /// backends.  Probably will be removed.
 pub fn end(self: *SvgBackend) void {
     self.svg_bytes.appendSlice("</svg>") catch unreachable;
-    print("Frame {d} Done.\n", .{self.frame_count});
 
     if (self.frame_count >= self.max_frame) {
-        log.warn("SvgBackend.max_frame reached ({d}). not rendering images anymore", .{self.max_frame});
+        log.warn("SvgBackend.max_frame reached ({d}). not generating images anymore", .{self.max_frame});
         return;
     } else {
         self.frame_count += 1;
@@ -128,6 +126,7 @@ pub fn end(self: *SvgBackend) void {
         log.warn("Unable to create {s}\n", .{svg_file});
         return;
     };
+    defer log.info("{s} written disk", .{svg_file});
     defer file.close();
     file.writeAll(self.svg_bytes.items) catch unreachable;
 }
@@ -167,7 +166,6 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             \\
         , .{ self.triangle_render_count, clip.x, clip.y, clip.w, clip.h }) catch unreachable;
     }
-    print("drawClippedTriangles called : \n   {}vertices passed\n   {}idx passed\n", .{ vtx.len, idx.len });
 
     var maybe_texture_id: ?[]const u8 = null;
     if (texture) |tx| {
@@ -349,7 +347,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
         }
         if (debughl_no_ccw_triangle and a + b + c <= 0) {
             self.svg_bytes.writer().print(
-                \\  <g>
+                \\  <g id="no-ccw-t{d}">
                 \\  {s}
                 \\  <circle cx="{d}" cy="{d}" r="1" fill="red"/>
                 \\  <circle cx="{d}" cy="{d}" r="1" fill="red"/>
@@ -358,8 +356,8 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
                 \\
                 \\
             , .{
-                triangle, v1.pos.x, v1.pos.y, v2.pos.x,
-                v2.pos.y, v3.pos.x, v3.pos.y,
+                self.triangle_render_count, triangle, v1.pos.x, v1.pos.y,
+                v2.pos.x,                   v2.pos.y, v3.pos.x, v3.pos.y,
             }) catch unreachable;
         } else if (debughl_vertex) {
             self.svg_bytes.writer().print(
@@ -395,7 +393,6 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
 /// pointer is what will later be passed to drawClippedTriangles.
 pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) dvui.Texture {
     _ = interpolation; // autofix
-    print("textureCreate called for {}x{} pixels\n", .{ width, height });
 
     // Dump a tga file because it's easy
     const header = [_]u8{
@@ -458,30 +455,29 @@ pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, 
 /// returned pointer is what will later be passed to drawClippedTriangles.
 pub fn textureCreateTarget(self: *SvgBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!dvui.Texture {
     _ = interpolation; // autofix
-    print("textureCreateTarget called for {}x{} pixels\n", .{ width, height });
     return dvui.Texture{ .ptr = self, .height = height, .width = width };
 }
 
 /// Read pixel data (RGBA) from texture into pixel.
 pub fn textureRead(self: *SvgBackend, texture: dvui.Texture, pixels_out: [*]u8) error{TextureRead}!void {
+    _ = texture; // autofix
     _ = self; // autofix
     _ = pixels_out; // autofix
-    print("textureRead called for {}\n", .{texture});
 }
 
 /// Destroy texture that was previously made with textureCreate() or
 /// textureCreateTarget().  After this call, this texture pointer will not
 /// be used by dvui.
 pub fn textureDestroy(self: *SvgBackend, texture: dvui.Texture) void {
+    _ = texture; // autofix
     _ = self; // autofix
-    print("textureDestroy for {}\n", .{texture});
 }
 
 /// Render future drawClippedTriangles() to the passed texture (or screen
 /// if null).
 pub fn renderTarget(self: *SvgBackend, texture: ?dvui.Texture) void {
+    _ = texture; // autofix
     _ = self; // autofix
-    print("renderTarget for {any}\n", .{texture});
 }
 
 /// Get clipboard content (text only)
@@ -512,5 +508,4 @@ pub fn refresh(self: *SvgBackend) void {
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
-const print = std.debug.print;
 const log = std.log.scoped(.dvui_svg_backend);
