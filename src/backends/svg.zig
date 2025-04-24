@@ -23,6 +23,8 @@ triangle_render_count: u32 = 0,
 const debughl_vertex = false;
 /// Paint empty triangles vertexes in red.
 const debughl_emtpy_triangle = false;
+/// Outline clipping rects passed to drawClippedTriangles
+const debughl_clipr = false;
 /// Output texture files with uv points on.
 const emit_debug_texture = false;
 
@@ -156,9 +158,15 @@ pub fn contentScale(_: *SvgBackend) f32 {
 /// physical pixels.  If texture is given, the vertexes uv coords are
 /// normalized (0-1).
 pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr: ?dvui.Rect) void {
-    // TODO : use clip rect when provided
     if (clipr) |clip| {
-        print("CLIP : {}\n", .{clip});
+        self.svg_bytes.writer().print(
+            \\<defs>
+            \\  <clipPath id="clipr-t{d}">
+            \\    <rect x="{d}" y="{d}" width="{d}" height="{d}" fille="none"/>
+            \\  </clipPath>
+            \\</defs>
+            \\
+        , .{ self.triangle_render_count, clip.x, clip.y, clip.w, clip.h }) catch unreachable;
     }
     print("drawClippedTriangles called : \n   {}vertices passed\n   {}idx passed\n", .{ vtx.len, idx.len });
 
@@ -173,7 +181,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
         if (emit_debug_texture) {
             const debug_txr_filename = std.fmt.allocPrint(
                 self.arena,
-                "{s}/{s}-{d}-debug.{s}",
+                "{s}/{s}-t{d}-debug.{s}",
                 .{ render_dir, texture_id, self.triangle_render_count, "svg" },
             ) catch unreachable;
             const debug_trx_file = std.fs.cwd().createFile(debug_txr_filename, .{}) catch {
@@ -256,8 +264,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
                 \\  <pattern width="{d}" height="{d}"
                 \\     patternUnits="userSpaceOnUse"
                 \\     patternTransform="matrix({d} {d} {d} {d} {d} {d})"
-                \\     id="{s}-{d}-{d}" 
-                \\   >
+                \\     id="{s}-t{d}-{d}">
                 \\     <image href="{s}"/>
                 \\
             , .{
@@ -275,14 +282,13 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             const b_norm = @as(f32, @floatFromInt(v3.col.b)) / 255.0;
             const opacity = @as(f32, @floatFromInt(v3.col.a)) / 255.0;
             self.svg_bytes.writer().print(
-                \\  <filter id="color-{s}-{d}-{d}"
+                \\  <filter id="color-{s}-t{d}-{d}"
                 \\    style="color-interpolation-filters:sRGB;">
                 \\      <feColorMatrix type="matrix" values="
                 \\        {d:.2} 0 0 0 0
                 \\        0 {d:.2} 0 0 0
                 \\        0 0 {d:.2} 0 0
-                \\        0 0 0 {d:.2} 0
-                \\      "/>
+                \\        0 0 0 {d:.2} 0 "/>
                 \\  </filter>
                 \\
             , .{
@@ -291,12 +297,12 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
                 opacity,
             }) catch unreachable;
         }
-        self.svg_bytes.writer().print("</defs>\n", .{}) catch unreachable;
+        self.svg_bytes.writer().print("</defs>\n\n", .{}) catch unreachable;
     }
 
     // actually draw the triangles. (i.e. emit <polygon> tags)
     var i: usize = 0;
-    self.svg_bytes.writer().print("<g id=\"triangles-{d}\">\n", .{self.triangle_render_count}) catch unreachable;
+    self.svg_bytes.writer().print("<g id=\"t-{d}\">\n", .{self.triangle_render_count}) catch unreachable;
     while (i < idx.len) : (i += 3) {
         const v1, const v2, const v3 = .{ vtx[idx[i]], vtx[idx[i + 1]], vtx[idx[i + 2]] };
         const opacity: f32 = @as(f32, @floatFromInt(v3.col.a)) / 255.0;
@@ -313,7 +319,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
         if (maybe_texture_id) |texture_id| {
             style = std.fmt.allocPrint(
                 self.arena,
-                "stroke:none;stroke-width:.2;fill:url(#{s}-{d}-{d});filter:url(#color-{s}-{d}-{d});fill-opacity:{d}",
+                "stroke:none;fill:url(#{s}-t{d}-{d});filter:url(#color-{s}-t{d}-{d});fill-opacity:{d}",
                 .{
                     texture_id, self.triangle_render_count, i,
                     texture_id, self.triangle_render_count, i,
@@ -327,12 +333,22 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
                 .{ v3.col.r, v3.col.g, v3.col.b, opacity },
             ) catch unreachable;
         }
-        const triangle = std.fmt.allocPrint(self.arena,
-            \\  <polygon points="{d},{d} {d},{d} {d},{d}" style="{s}"/>
-        , .{
-            v1.pos.x, v1.pos.y, v2.pos.x, v2.pos.y,
-            v3.pos.x, v3.pos.y, style,
-        }) catch unreachable;
+        var triangle: []const u8 = undefined;
+        if (clipr) |_| {
+            triangle = std.fmt.allocPrint(self.arena,
+                \\  <polygon points="{d:.2},{d:.2} {d:.2},{d:.2} {d:.2},{d:.2}" style="{s}" clip-path="url(#clipr-t{d})"/>
+            , .{
+                v1.pos.x, v1.pos.y, v2.pos.x, v2.pos.y,
+                v3.pos.x, v3.pos.y, style,    self.triangle_render_count,
+            }) catch unreachable;
+        } else {
+            triangle = std.fmt.allocPrint(self.arena,
+                \\  <polygon points="{d:.2},{d:.2} {d:.2},{d:.2} {d:.2},{d:.2}" style="{s}"/>
+            , .{
+                v1.pos.x, v1.pos.y, v2.pos.x, v2.pos.y,
+                v3.pos.x, v3.pos.y, style,
+            }) catch unreachable;
+        }
         if (debughl_emtpy_triangle and a + b + c == 0) {
             self.svg_bytes.writer().print(
                 \\  <g>
@@ -341,6 +357,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
                 \\  <circle cx="{d}" cy="{d}" r="1" fill="red"/>
                 \\  <circle cx="{d}" cy="{d}" r="1" fill="red"/>
                 \\  </g>
+                \\
                 \\
             , .{
                 triangle, v1.pos.x, v1.pos.y, v2.pos.x,
@@ -365,6 +382,15 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
     }
     self.svg_bytes.writer().print("</g>\n", .{}) catch unreachable;
     self.triangle_render_count += 1;
+
+    if (clipr) |clip| {
+        if (debughl_clipr) {
+            self.svg_bytes.writer().print(
+                \\<rect id="clipr-hl-t{d}" x="{d}" y="{d}" width="{d}" height="{d}" stroke="red" fill="none"/>
+                \\
+            , .{ self.triangle_render_count, clip.x, clip.y, clip.w, clip.h }) catch unreachable;
+        }
+    }
 }
 
 /// Create a texture from the given pixels in RGBA.  The returned
@@ -395,8 +421,6 @@ pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, 
     defer file.close();
     file.writeAll(&header) catch unreachable;
 
-    // FIXME : this does pain the letters, but all upside-down.
-    // Maybe it's ok when passed into the image somehow ...
     var i: usize = 0;
     var y: u32 = 0;
     while (y < height) : (y += 1) {
