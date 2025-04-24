@@ -108,6 +108,7 @@ pub fn begin(self: *SvgBackend, arena: std.mem.Allocator) void {
 
 /// Called by dvui during Window.end(), but currently unused by any
 /// backends.  Probably will be removed.
+// TODO : Change the doc of this method since it's usefull for this backend if merged
 pub fn end(self: *SvgBackend) void {
     self.svg_bytes.appendSlice("</svg>") catch unreachable;
 
