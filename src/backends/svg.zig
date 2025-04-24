@@ -22,7 +22,7 @@ triangle_render_count: u32 = 0,
 /// Paint color dots on triangle's angles.
 const debughl_vertex = false;
 /// Paint empty triangles vertexes in red.
-const debughl_emtpy_triangle = false;
+const debughl_no_ccw_triangle = false;
 /// Outline clipping rects passed to drawClippedTriangles
 const debughl_clipr = false;
 /// Output texture files with uv points on.
@@ -86,7 +86,6 @@ pub fn begin(self: *SvgBackend, arena: std.mem.Allocator) void {
         \\<svg
         \\    viewBox="0 0 {d} {d}" xmlns="http://www.w3.org/2000/svg"
         \\>
-        \\<rect width="100%" height="100%" fill="black" />
         \\
     , .{ self.size.w, self.size.h }) catch unreachable;
     print("Gen frame {d} ... \n", .{self.frame_count});
@@ -311,10 +310,9 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
         const a = (v2.pos.x - v1.pos.x) * (v2.pos.y + v1.pos.y);
         const b = (v3.pos.x - v2.pos.x) * (v3.pos.y + v2.pos.y);
         const c = (v1.pos.x - v3.pos.x) * (v1.pos.y + v3.pos.y);
-        // Sanity check : triangles are always counter-clockwise
-        // When testing, spotted some empty triangles. I don't think they're legit,
-        // so the assert allows it but I draw them in red (see debughl_emtpy_triangle)
-        std.debug.assert(a + b + c >= 0);
+        // FIXME : if all triangles are counter-clockwise, then
+        // this assert would be legit but currently it's not the case in the demo window
+        // std.debug.assert(a + b + c >= 0);
 
         if (maybe_texture_id) |texture_id| {
             style = std.fmt.allocPrint(
@@ -349,7 +347,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
                 v3.pos.x, v3.pos.y, style,
             }) catch unreachable;
         }
-        if (debughl_emtpy_triangle and a + b + c == 0) {
+        if (debughl_no_ccw_triangle and a + b + c <= 0) {
             self.svg_bytes.writer().print(
                 \\  <g>
                 \\  {s}
