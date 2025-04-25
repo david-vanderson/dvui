@@ -148,6 +148,19 @@ pub fn collapsed(self: *PanedWidget) bool {
     return self.collapsed_state;
 }
 
+pub fn showFirst(self: *PanedWidget) bool {
+    const ret = self.split_ratio > 0;
+
+    // If we don't show the first side, then record that for rectFor
+    if (!ret) self.first_side = false;
+
+    return ret;
+}
+
+pub fn showSecond(self: *PanedWidget) bool {
+    return self.split_ratio < 1.0;
+}
+
 pub fn animateSplit(self: *PanedWidget, end_val: f32) void {
     dvui.animation(self.wd.id, "_split_ratio", dvui.Animation{ .start_val = self.split_ratio, .end_val = end_val, .end_time = 250_000 });
 }
@@ -177,8 +190,8 @@ pub fn rectFor(self: *PanedWidget, id: u32, min_size: Size, e: Options.Expand, g
             }
         } else {
             switch (self.dir) {
-                .horizontal => r.w = r.w * self.split_ratio - handle_size / 2,
-                .vertical => r.h = r.h * self.split_ratio - handle_size / 2,
+                .horizontal => r.w = @max(0, r.w * self.split_ratio - handle_size / 2),
+                .vertical => r.h = @max(0, r.h * self.split_ratio - handle_size / 2),
             }
         }
         return dvui.placeIn(r, min_size, e, g);
@@ -200,13 +213,14 @@ pub fn rectFor(self: *PanedWidget, id: u32, min_size: Size, e: Options.Expand, g
         } else {
             switch (self.dir) {
                 .horizontal => {
-                    const first = r.w * self.split_ratio - handle_size / 2;
-                    r.w -= first + handle_size;
+                    const first = @max(0, r.w * self.split_ratio - handle_size / 2);
+                    std.debug.print("first {d} r.w {d} r.x {d} handle {d}\n", .{ first, r.w, r.x, handle_size });
+                    r.w = @max(0, r.w - first - handle_size);
                     r.x += first + handle_size;
                 },
                 .vertical => {
-                    const first = r.h * self.split_ratio - handle_size / 2;
-                    r.h -= first + handle_size;
+                    const first = @max(0, r.h * self.split_ratio - handle_size / 2);
+                    r.h = @max(0, r.h - first - handle_size);
                     r.y += first + handle_size;
                 },
             }
