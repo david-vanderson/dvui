@@ -214,7 +214,6 @@ pub fn rectFor(self: *PanedWidget, id: u32, min_size: Size, e: Options.Expand, g
             switch (self.dir) {
                 .horizontal => {
                     const first = @max(0, r.w * self.split_ratio - handle_size / 2);
-                    std.debug.print("first {d} r.w {d} r.x {d} handle {d}\n", .{ first, r.w, r.x, handle_size });
                     r.w = @max(0, r.w - first - handle_size);
                     r.x += first + handle_size;
                 },
