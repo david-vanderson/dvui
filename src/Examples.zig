@@ -403,13 +403,9 @@ pub fn demo() !void {
     //if (dvui.firstFrame(paned.data().id)) {
     //    paned.split_ratio = 0;
     //}
-    blk: {
+    if (paned.showFirst()) {
         var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
         defer scroll.deinit();
-
-        if (paned.collapsed() and paned.split_ratio == 0) {
-            break :blk;
-        }
 
         var invalidate: bool = false;
         {
@@ -503,7 +499,7 @@ pub fn demo() !void {
         }
     }
 
-    {
+    if (paned.showSecond()) {
         var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
         defer scroll.deinit();
 
@@ -1576,7 +1572,7 @@ pub fn layout() !void {
         var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = paned_collapsed_width }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 100 } });
         defer paned.deinit();
 
-        {
+        if (paned.showFirst()) {
             var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true });
             defer vbox.deinit();
 
@@ -1588,7 +1584,7 @@ pub fn layout() !void {
             }
         }
 
-        {
+        if (paned.showSecond()) {
             var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true });
             defer vbox.deinit();
 
