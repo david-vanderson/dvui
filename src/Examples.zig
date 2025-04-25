@@ -474,8 +474,8 @@ pub fn demo() !void {
                     .reorderable => try reorderLists(),
                     .menus => try menus(),
                     .focus => try focus(),
-                    .scrolling => try scrolling(),
-                    .scroll_canvas => try scrollCanvas(),
+                    .scrolling => try scrolling(1),
+                    .scroll_canvas => try scrollCanvas(1),
                     .dialogs => try dialogs(float.data().id),
                     .animations => try animations(),
                     .struct_ui => try structUI(),
@@ -526,8 +526,8 @@ pub fn demo() !void {
             .reorderable => reorderLists(),
             .menus => menus(),
             .focus => focus(),
-            .scrolling => scrolling(),
-            .scroll_canvas => scrollCanvas(),
+            .scrolling => scrolling(2),
+            .scroll_canvas => scrollCanvas(2),
             .dialogs => dialogs(float.data().id),
             .animations => animations(),
             .struct_ui => structUI(),
@@ -2321,12 +2321,20 @@ pub fn focus() !void {
 }
 
 /// ![image](Examples-scrolling.png)
-pub fn scrolling() !void {
-    const Data = struct {
+pub fn scrolling(comptime data: u8) !void {
+    const Data1 = struct {
         var msg_start: usize = 1_000;
         var msg_end: usize = 1_100;
         var scroll_info: ScrollInfo = .{};
     };
+
+    const Data2 = struct {
+        var msg_start: usize = 1_000;
+        var msg_end: usize = 1_100;
+        var scroll_info: ScrollInfo = .{};
+    };
+
+    const Data = if (data == 1) Data1 else Data2;
 
     var scroll_to_msg: ?usize = null;
     var scroll_to_bottom_after = false;
@@ -2439,8 +2447,8 @@ pub fn scrolling() !void {
 }
 
 /// ![image](Examples-scroll_canvas.png)
-pub fn scrollCanvas() !void {
-    const Data = struct {
+pub fn scrollCanvas(comptime data: u8) !void {
+    const Data1 = struct {
         var scroll_info: ScrollInfo = .{ .vertical = .given, .horizontal = .given };
         var origin: Point = .{};
         var scale: f32 = 1.0;
@@ -2452,6 +2460,21 @@ pub fn scrollCanvas() !void {
         const box_blue: dvui.Color = .{ .r = 0, .g = 0, .b = 200 };
         const box_green: dvui.Color = .{ .r = 0, .g = 200, .b = 0 };
     };
+
+    const Data2 = struct {
+        var scroll_info: ScrollInfo = .{ .vertical = .given, .horizontal = .given };
+        var origin: Point = .{};
+        var scale: f32 = 1.0;
+        var boxes: [2]Point = .{ .{ .x = 50, .y = 10 }, .{ .x = 80, .y = 150 } };
+        var box_contents: [2]u8 = .{ 1, 3 };
+
+        var drag_box_window: usize = 0;
+        var drag_box_content: usize = 0;
+        const box_blue: dvui.Color = .{ .r = 0, .g = 0, .b = 200 };
+        const box_green: dvui.Color = .{ .r = 0, .g = 200, .b = 0 };
+    };
+
+    const Data = if (data == 1) Data1 else Data2;
 
     var vbox = try dvui.box(@src(), .vertical, .{});
     defer vbox.deinit();
@@ -3820,7 +3843,7 @@ test "Examples-scrolling.png" {
         fn frame() !dvui.App.Result {
             var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
             defer box.deinit();
-            try scrolling();
+            try scrolling(1);
             return .ok;
         }
     }.frame;
@@ -3837,7 +3860,7 @@ test "Examples-scroll_canvas.png" {
         fn frame() !dvui.App.Result {
             var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
             defer box.deinit();
-            try scrollCanvas();
+            try scrollCanvas(1);
             return .ok;
         }
     }.frame;
