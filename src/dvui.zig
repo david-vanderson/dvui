@@ -1,6 +1,6 @@
 //! [DVUI](https://david-vanderson.github.io/) is a general purpose Zig GUI toolkit.
 //!
-//! ![dvui demo](Examples-demo.png)
+//! ![<Examples-demo.png>](Examples-demo.png)
 //!
 //! `dvui` module contains all the top level declarations provide all declarations required by client code. - i.e. `const dvui = @import("dvui");` is the only required import.
 //!
@@ -175,7 +175,7 @@ pub const TagData = struct {
 pub fn tag(name: []const u8, data: TagData) void {
     var cw = currentWindow();
     const existing_tag = cw.tags.fetchPut(name, .{ .data = data }) catch |err| blk: {
-        dvui.log.err("tag() got {!} for it {x}\n", .{ err, data.id });
+        dvui.log.err("tag() \"{s}\" got {!} for id {x}\n", .{ name, err, data.id });
 
         break :blk null;
     };
@@ -2802,8 +2802,6 @@ pub fn wantTextInput(r: Rect) void {
     const cw = currentWindow();
     cw.text_input_rect = r.scale(1 / cw.natural_scale);
 }
-
-pub const popup = if (!builtin.is_test) @compileError("popup renamed to floatingMenu");
 
 pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) !*FloatingMenuWidget {
     var ret = try currentWindow().arena().create(FloatingMenuWidget);
@@ -5944,4 +5942,5 @@ pub fn plotXY(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions
 
 test {
     std.testing.refAllDecls(@This());
+    std.debug.print("DVUI test\n", .{});
 }

@@ -1110,4 +1110,9 @@ pub fn main() !void {
 
 test {
     std.testing.refAllDecls(@This());
+    if (sdl3) {
+        std.debug.print("SDL3 backend test\n", .{});
+    } else {
+        std.debug.print("SDL2 backend test\n", .{});
+    }
 }

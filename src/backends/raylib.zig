@@ -874,4 +874,5 @@ pub fn main() !void {
 
 test {
     std.testing.refAllDecls(@This());
+    std.debug.print("raylib backend test\n", .{});
 }
