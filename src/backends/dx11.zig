@@ -1608,6 +1608,6 @@ pub fn main() !void {
 }
 
 test {
+    //std.debug.print("dx11 backend test\n", .{});
     std.testing.refAllDecls(@This());
-    std.debug.print("dx11 backend test\n", .{});
 }

@@ -149,8 +149,8 @@ pub fn backend(self: *TestingBackend) dvui.Backend {
 }
 
 test {
+    //std.debug.print("testing backend test\n", .{});
     std.testing.refAllDecls(@This());
-    std.debug.print("testing backend test\n", .{});
 }
 
 pub const dvui = @import("dvui");

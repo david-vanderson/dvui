@@ -5941,6 +5941,6 @@ pub fn plotXY(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions
 }
 
 test {
+    //std.debug.print("DVUI test\n", .{});
     std.testing.refAllDecls(@This());
-    std.debug.print("DVUI test\n", .{});
 }
