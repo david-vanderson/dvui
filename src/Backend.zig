@@ -110,8 +110,8 @@ pub fn sleep(self: *Backend, ns: u64) void {
 pub fn begin(self: *Backend, arena: std.mem.Allocator) void {
     return self.vtable.begin(self.ctx, arena);
 }
-/// Called by dvui during `dvui.Window.end`, but currently unused by any
-/// backends.  Probably will be removed.
+
+/// Called during `dvui.Window.end` before freeing any memory for the current frame.
 pub fn end(self: *Backend) void {
     return self.vtable.end(self.ctx);
 }
