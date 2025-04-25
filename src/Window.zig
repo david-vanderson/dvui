@@ -1582,6 +1582,9 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         try self.endRendering(opts);
     }
 
+    // Call this before freeing data so backend can use data allocated during frame.
+    self.backend.end();
+
     for (self.datas_trash.items) |sd| {
         sd.free(self.gpa);
     }
@@ -1654,8 +1657,6 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         const pt = self.mouse_pt.scale(self.content_scale / self.natural_scale);
         _ = try self.addEventMouseMotion(pt.x, pt.y);
     }
-
-    self.backend.end();
 
     defer dvui.current_window = self.previous_window;
 
