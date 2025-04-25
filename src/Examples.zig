@@ -435,7 +435,7 @@ pub fn demo() !void {
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
-            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = dvui.Size.all(120), .margin = Rect.all(5), .color_fill = .{ .name = .fill } });
+            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = dvui.Size.all(120), .margin = Rect.all(5), .color_fill = .{ .name = .fill }, .tag = "demo_button_" ++ @tagName(e) });
             try bw.install();
             bw.processEvents();
             try bw.drawBackground();
@@ -3638,8 +3638,8 @@ pub const StrokeTest = struct {
 };
 
 test {
+    //std.debug.print("Examples test\n", .{});
     std.testing.refAllDecls(@This());
-    std.debug.print("Examples test\n", .{});
 }
 
 test "Doc Images" {
@@ -3658,11 +3658,20 @@ test "Doc Images" {
     try dvui.testing.settle(frame);
     try t.saveImage(frame, dvui.tagGet(demo_window_tag).?.rect, "Examples-demo.png", .{});
 
-    //try dvui.testing.moveTo("dvui_demo_window_back");
-    //try dvui.testing.click(.left);
-    //try dvui.testing.settle(frame);
+    // this works, but unsure it's what we want, so disable for now
+    //inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
+    //    const e = @as(demoKind, @enumFromInt(i));
 
-    //try t.saveImage(frame, dvui.tagGet("dvui_demo_window").?.rect, "Examples-demo.png", .{});
+    //    try dvui.testing.moveTo("demo_button_" ++ @tagName(e));
+    //    try dvui.testing.click(.left);
+    //    try dvui.testing.settle(frame);
+
+    //    try t.saveImage(frame, dvui.tagGet(demo_window_tag).?.rect, "Examples-" ++ @tagName(e) ++ ".png", .{});
+
+    //    try dvui.testing.moveTo("dvui_demo_window_back");
+    //    try dvui.testing.click(.left);
+    //    try dvui.testing.settle(frame);
+    //}
 }
 
 test "Examples-basic_widgets.png" {
