@@ -103,6 +103,10 @@ pub fn register(self: *WidgetData) !void {
         }
 
         if (self.id == cw.debug_widget_id) {
+            if (cw.debug_widget_panic) {
+                @panic("Debug Window Panic");
+            }
+
             var min_size = Size{};
             if (dvui.minSizeGet(self.id)) |ms| {
                 min_size = ms;
@@ -115,6 +119,11 @@ pub fn register(self: *WidgetData) !void {
             // intersect our rect with the clip - we only want to outline
             // the visible part
             var outline_rect = rs.r.intersect(clipr);
+
+            // make sure something is visible
+            outline_rect.w = @max(outline_rect.w, 1);
+            outline_rect.h = @max(outline_rect.h, 1);
+
             if (cw.snap_to_pixels) {
                 outline_rect.x = @ceil(outline_rect.x) - 0.5;
                 outline_rect.y = @ceil(outline_rect.y) - 0.5;

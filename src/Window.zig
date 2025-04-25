@@ -109,6 +109,7 @@ end_rendering_done: bool = false,
 debug_window_show: bool = false,
 /// 0 means no widget is selected
 debug_widget_id: u32 = 0,
+debug_widget_panic: bool = false,
 debug_info_name_rect: []const u8 = "",
 debug_info_src_id_extra: []const u8 = "",
 debug_under_focus: bool = false,
@@ -1502,7 +1503,30 @@ fn debugWindowShow(self: *Self) !void {
         self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(&buf, 0), 16) catch 0;
     }
 
-    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
+    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
+    try tl.install(.{});
+
+    self.debug_widget_panic = false;
+
+    var color: ?dvui.Options.ColorOrName = null;
+    if (self.debug_widget_id == 0) {
+        // blend text and control colors
+        color = .{ .color = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control) };
+    }
+    if (try dvui.button(@src(), "Panic", .{}, .{ .gravity_x = 1.0, .margin = dvui.Rect.all(8), .color_text = color })) {
+        if (self.debug_widget_id != 0) {
+            self.debug_widget_panic = true;
+        } else {
+            try dvui.dialog(@src(), .{}, .{ .title = "Disabled", .message = "Need valid widget Id to panic" });
+        }
+    }
+
+    if (try tl.touchEditing()) |floating_widget| {
+        defer floating_widget.deinit();
+        try tl.touchEditingMenu();
+    }
+    tl.processEvents();
+
     try tl.addText(self.debug_info_name_rect, .{});
     try tl.addText("\n\n", .{});
     try tl.addText(self.debug_info_src_id_extra, .{});
