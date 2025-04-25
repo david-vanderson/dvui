@@ -130,8 +130,8 @@ pub fn build(b: *std.Build) !void {
         }
 
         linkBackend(dvui_sdl, sdl_mod);
-        addExample("sdl2-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
-        addExample("sdl2-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
+        addExample("sdl2-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
+        addExample("sdl2-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
         addExample("sdl2-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
     }
 
@@ -172,8 +172,8 @@ pub fn build(b: *std.Build) !void {
         }
 
         linkBackend(dvui_sdl, sdl_mod);
-        addExample("sdl3-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
-        addExample("sdl3-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
+        addExample("sdl3-standalone", b.path("examples/sdl-standalone.zig"), dvui_sdl, true, dvui_opts);
+        addExample("sdl3-ontop", b.path("examples/sdl-ontop.zig"), dvui_sdl, true, dvui_opts);
         addExample("sdl3-app", b.path("examples/app.zig"), dvui_sdl, test_dvui_and_app, dvui_opts);
     }
 
@@ -243,8 +243,8 @@ pub fn build(b: *std.Build) !void {
         }
 
         linkBackend(dvui_raylib, raylib_mod);
-        addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib, test_dvui_and_app, dvui_opts_raylib);
-        addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib, test_dvui_and_app, dvui_opts_raylib);
+        addExample("raylib-standalone", b.path("examples/raylib-standalone.zig"), dvui_raylib, true, dvui_opts_raylib);
+        addExample("raylib-ontop", b.path("examples/raylib-ontop.zig"), dvui_raylib, true, dvui_opts_raylib);
         addExample("raylib-app", b.path("examples/app.zig"), dvui_raylib, test_dvui_and_app, dvui_opts_raylib);
     }
 
@@ -271,8 +271,8 @@ pub fn build(b: *std.Build) !void {
             }
 
             linkBackend(dvui_dx11, dx11_mod);
-            addExample("dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11, test_dvui_and_app, dvui_opts);
-            addExample("dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11, test_dvui_and_app, dvui_opts);
+            addExample("dx11-standalone", b.path("examples/dx11-standalone.zig"), dvui_dx11, true, dvui_opts);
+            addExample("dx11-ontop", b.path("examples/dx11-ontop.zig"), dvui_dx11, true, dvui_opts);
             addExample("dx11-app", b.path("examples/app.zig"), dvui_dx11, test_dvui_and_app, dvui_opts);
         }
     }
@@ -387,9 +387,14 @@ const DvuiModuleOptions = struct {
     build_options: *std.Build.Step.Options,
 
     fn addChecksAndTests(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
-        const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters });
-        //if (self.check_step) |step| step.dependOn(&tests.step);
-        if (self.test_step) |step| step.dependOn(&self.b.addRunArtifact(tests).step);
+        if (self.check_step) |step| {
+            const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters });
+            step.dependOn(&tests.step);
+        }
+        if (self.test_step) |step| {
+            const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters });
+            step.dependOn(&self.b.addRunArtifact(tests).step);
+        }
     }
 };
 
@@ -471,8 +476,10 @@ fn addExample(
 
     const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_lld = opts.use_lld });
 
-    const exe_check = b.addExecutable(.{ .name = name, .root_module = mod, .use_lld = opts.use_lld });
-    if (opts.check_step) |step| step.dependOn(&exe_check.step);
+    if (opts.check_step) |step| {
+        const exe_check = b.addExecutable(.{ .name = name, .root_module = mod, .use_lld = opts.use_lld });
+        step.dependOn(&exe_check.step);
+    }
 
     if (opts.target.result.os.tag == .windows) {
         exe.win32_manifest = b.path("./src/main.manifest");
@@ -484,10 +491,17 @@ fn addExample(
     }
 
     if (add_tests) {
-        const test_cmd = b.addRunArtifact(b.addTest(.{ .root_module = mod, .name = name, .filters = opts.test_filters }));
-        const example_test_step = b.step("test-" ++ name, "Test " ++ name);
-        example_test_step.dependOn(&test_cmd.step);
-        if (opts.test_step) |step| step.dependOn(&test_cmd.step);
+        if (opts.check_step) |step| {
+            const tests = b.addTest(.{ .root_module = mod, .name = name, .filters = opts.test_filters });
+            step.dependOn(&tests.step);
+        }
+        if (opts.test_step) |step| {
+            const tests = b.addTest(.{ .root_module = mod, .name = name, .filters = opts.test_filters });
+            const test_cmd = b.addRunArtifact(tests);
+            const example_test_step = b.step("test-" ++ name, "Test " ++ name);
+            example_test_step.dependOn(&test_cmd.step);
+            step.dependOn(&test_cmd.step);
+        }
     }
 
     const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
