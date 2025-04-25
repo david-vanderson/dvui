@@ -32,8 +32,14 @@ How to run the built-in examples:
     - [online demo](https://david-vanderson.github.io/demo)
   - ```zig build web-app```
     - then load `zig-out/bin/web-app/index.html`
+- Docs
+  - [Online Docs](https://david-vanderson.github.io/docs)
+  - ```zig build docs```
+    - then load `zig-out/docs/index.html`
+  - ```zig build test -Ddoc-image-dir=zig-out/docs```
+    - adds images to the docs
 
-[Online Docs](https://david-vanderson.github.io/docs) This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify widgets.
+This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify widgets.
 
 Online discussion happens in #gui-dev on the zig discord server: https://discord.gg/eJgXXTtVzA or in IRC (Libera) channel #dvui
 

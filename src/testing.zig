@@ -1,6 +1,7 @@
 allocator: std.mem.Allocator,
 backend: *Backend,
 window: *Window,
+doc_image_dir: ?[]const u8,
 snapshot_dir: []const u8,
 
 snapshot_index: u8 = 0,
@@ -76,6 +77,7 @@ pub fn step(frame: dvui.App.frameFunction) !?u32 {
 pub const InitOptions = struct {
     allocator: std.mem.Allocator = if (@import("builtin").is_test) std.testing.allocator else undefined,
     window_size: dvui.Size = .{ .w = 600, .h = 400 },
+    doc_image_dir: ?[]const u8 = null,
     snapshot_dir: []const u8 = "snapshots",
 };
 
@@ -101,6 +103,14 @@ pub fn init(options: InitOptions) !Self {
         },
     };
 
+    const img_dir = options.doc_image_dir orelse @import("build_options").doc_image_dir;
+
+    if (img_dir) |imgdir| {
+        std.fs.cwd().makePath(imgdir) catch |err| switch (err) {
+            else => return err,
+        };
+    }
+
     if (should_write_snapshots()) {
         // ensure snapshot directory exists
         // NOTE: do fs operation through cwd to handle relative and absolute paths
@@ -119,6 +129,7 @@ pub fn init(options: InitOptions) !Self {
         .allocator = options.allocator,
         .backend = backend,
         .window = window,
+        .doc_image_dir = img_dir,
         .snapshot_dir = options.snapshot_dir,
     };
 }
@@ -157,11 +168,12 @@ pub const SnapshotError = error{
     SnapshotsDidNotMatch,
 };
 
-/// Captures one frame and return the png data for that frame
+/// Captures one frame and return the png data for that frame.
 ///
-/// The returned data is allocated by `Self.allocator` and should be freed by the caller
+/// Captures the physical pixels in rect, or if null the entire OS window.
+///
+/// The returned data is allocated by `Self.allocator` and should be freed by the caller.
 pub fn capturePng(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect) ![]const u8 {
-    // render the whole screen to a texture, might be only part of the screen
     var picture = dvui.Picture.start(rect orelse dvui.windowRectPixels()) orelse {
         std.debug.print("Current backend does not support capturing images\n", .{});
         return error.Unsupported;
@@ -274,6 +286,29 @@ fn should_ignore_snapshots() bool {
 
 fn should_write_snapshots() bool {
     return !should_ignore_snapshots() and std.process.hasEnvVarConstant("DVUI_SNAPSHOT_WRITE");
+}
+
+/// If image_dir is not null, run a single frame, capture the physical pixels
+/// in rect, and write those as a png file to image_dir/filename_fmt.
+///
+/// If rect is null, capture the whole OS window.
+///
+/// The intended use is for automatically generating documentation images.
+pub fn saveImage(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect, comptime filename_fmt: []const u8, fmt_args: anytype) !void {
+    if (self.doc_image_dir) |img_dir| {
+        const filename = try std.fmt.allocPrint(self.allocator, "{s}/" ++ filename_fmt, .{img_dir} ++ fmt_args);
+        std.debug.print("FILENAME: {s}\n", .{filename});
+        defer self.allocator.free(filename);
+
+        const png_data = try self.capturePng(frame, rect);
+        defer self.allocator.free(png_data);
+
+        try std.fs.cwd().writeFile(.{
+            .data = png_data,
+            .sub_path = filename,
+            .flags = .{},
+        });
+    }
 }
 
 /// Internal use only!

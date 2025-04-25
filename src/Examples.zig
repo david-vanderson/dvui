@@ -361,7 +361,7 @@ pub const demoKind = enum {
 
 pub var demo_active: demoKind = .basic_widgets;
 
-pub const demo_window_tag = "dvui-example-window";
+pub const demo_window_tag = "dvui_example_window";
 
 pub fn demo() !void {
     if (!show_demo_window) {
@@ -509,7 +509,7 @@ pub fn demo() !void {
 
         var hbox = try dvui.box(@src(), .horizontal, .{});
 
-        if (paned.collapsed() and try dvui.button(@src(), "Back to Demos", .{}, .{ .min_size_content = .{ .h = 30 } })) {
+        if (paned.collapsed() and try dvui.button(@src(), "Back to Demos", .{}, .{ .min_size_content = .{ .h = 30 }, .tag = "dvui_demo_window_back" })) {
             paned.animateSplit(1.0);
         }
 
@@ -3619,10 +3619,11 @@ pub const StrokeTest = struct {
 };
 
 test {
-    @import("std").testing.refAllDecls(@This());
+    std.testing.refAllDecls(@This());
+    std.debug.print("Examples test\n", .{});
 }
 
-test "Examples-demo.png" {
+test "Doc Images" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -3630,15 +3631,19 @@ test "Examples-demo.png" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
-            defer box.deinit();
             try dvui.Examples.demo();
             return .ok;
         }
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, dvui.tagGet(demo_window_tag).?.rect, "Examples-demo.png", .{});
+
+    //try dvui.testing.moveTo("dvui_demo_window_back");
+    //try dvui.testing.click(.left);
+    //try dvui.testing.settle(frame);
+
+    //try t.saveImage(frame, dvui.tagGet("dvui_demo_window").?.rect, "Examples-demo.png", .{});
 }
 
 test "Examples-basic_widgets.png" {

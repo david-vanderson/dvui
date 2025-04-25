@@ -882,4 +882,5 @@ fn update() !i32 {
 
 test {
     std.testing.refAllDecls(@This());
+    std.debug.print("web backend test\n", .{});
 }

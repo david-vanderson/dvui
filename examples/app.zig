@@ -95,6 +95,7 @@ pub fn frame() !dvui.App.Result {
 }
 
 test "tab order" {
+    std.debug.print("APP test\n", .{});
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
