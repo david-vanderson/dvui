@@ -415,32 +415,31 @@ pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, 
 
 /// Create a texture that can be rendered to with renderTarget().  The
 /// returned pointer is what will later be passed to drawClippedTriangles.
-pub fn textureCreateTarget(self: *SvgBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!dvui.Texture {
-    _ = interpolation; // autofix
-    return dvui.Texture{ .ptr = self, .height = height, .width = width };
+pub fn textureCreateTarget(_: *SvgBackend, _: u32, _: u32, _: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!dvui.TextureTarget {
+    return error.TextureCreate;
 }
 
 /// Read pixel data (RGBA) from texture into pixel.
-pub fn textureRead(self: *SvgBackend, texture: dvui.Texture, pixels_out: [*]u8) error{TextureRead}!void {
-    _ = texture; // autofix
-    _ = self; // autofix
-    _ = pixels_out; // autofix
+pub fn textureReadTarget(_: *SvgBackend, texture: dvui.TextureTarget, pixels: [*]u8) error{TextureRead}!void {
+    const ptr: [*]const u8 = @ptrCast(texture.ptr);
+    @memcpy(pixels, ptr[0..(texture.width * texture.height * 4)]);
 }
 
 /// Destroy texture that was previously made with textureCreate() or
-/// textureCreateTarget().  After this call, this texture pointer will not
+/// textureFromTarget().  After this call, this texture pointer will not
 /// be used by dvui.
 pub fn textureDestroy(self: *SvgBackend, texture: dvui.Texture) void {
-    _ = texture; // autofix
     _ = self; // autofix
+    _ = texture; // autofix
+}
+
+pub fn textureFromTarget(_: *SvgBackend, texture: dvui.TextureTarget) dvui.Texture {
+    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height };
 }
 
 /// Render future drawClippedTriangles() to the passed texture (or screen
 /// if null).
-pub fn renderTarget(self: *SvgBackend, texture: ?dvui.Texture) void {
-    _ = texture; // autofix
-    _ = self; // autofix
-}
+pub fn renderTarget(_: *SvgBackend, _: ?dvui.TextureTarget) void {}
 
 /// Get clipboard content (text only)
 pub fn clipboardText(_: *SvgBackend) error{OutOfMemory}![]const u8 {
