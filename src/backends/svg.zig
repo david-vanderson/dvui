@@ -9,8 +9,9 @@ empty_render_folder: bool = true,
 /// (and u13 prevents more than 4 digits counter in filenames)
 max_frame: u13 = 10,
 
-// temporary allocator for current frame.
+/// temporary allocator for current frame. (passed in begin)
 arena: std.mem.Allocator = undefined,
+/// longer lived allocator, for e.g. textures. (passed in initWindow)
 alloc: std.mem.Allocator = undefined,
 
 // counters for filenames
@@ -29,8 +30,11 @@ const debughl_clipr = false;
 const emit_debug_texture = false;
 
 const render_dir = "svg_render";
-// Caution : Don't change the template without taking care of dirty cast in drawClippedTriangles
-const texture_file_template = render_dir ++ "/frame{d:04}-texture{d:04}.{s}";
+const texture_file_template = render_dir ++ "/frame{d:04}-texture{d:04}.png";
+// Caution : This is needed for dirty texture ptr cast.
+// Make sure the template resolve to fixed length and compute correctly
+// Here {d:04} -> 0042 => -2, two times.
+const texture_file_len = texture_file_template.len - 2 - 2;
 
 pub const SvgBackend = @This();
 pub const Context = *SvgBackend;
@@ -162,8 +166,8 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
 
     var maybe_texture_id: ?[]const u8 = null;
     if (texture) |tx| {
-        // Dirty cast : {d:04} in template result in 4 chars, 2x means 4char less in final string
-        const png_file: []const u8 = @as([*]u8, @ptrCast(tx.ptr))[render_dir.len + 1 .. texture_file_template.len - 4];
+        // Dirty cast : use known len (see texture_file_len)
+        const png_file: []const u8 = @as([*]u8, @ptrCast(tx.ptr))[render_dir.len + 1 .. texture_file_len];
         const texture_id = png_file[0 .. png_file.len - 4];
         maybe_texture_id = texture_id;
 
@@ -388,19 +392,18 @@ pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, 
     _ = interpolation; // autofix
 
     // Simply dump the texture as png and use the filename as id for later
-
     const png_bytes = dvui.pngEncode(self.arena, pixels[0 .. width * height * 4], width, height, .{}) catch unreachable;
+    const png_file_path = std.fmt.allocPrint(self.alloc, texture_file_template, .{ self.frame_count, self.texture_create_count }) catch "svg_render/texture.png";
 
-    const png_filename = std.fmt.allocPrint(self.alloc, texture_file_template, .{ self.frame_count, self.texture_create_count, "png" }) catch "svg_render/texture.png";
-
-    const file = std.fs.cwd().createFile(png_filename, .{}) catch unreachable;
+    const file = std.fs.cwd().createFile(png_file_path, .{}) catch unreachable;
     defer file.close();
     file.writeAll(png_bytes) catch unreachable;
 
     self.texture_create_count += 1;
 
     // Dirty cast : just pass the pointer to the filename.
-    const png_ref: *anyopaque = @constCast(@ptrCast(png_filename.ptr));
+    // The length is kept constant (see texture_file_len)
+    const png_ref: *anyopaque = @constCast(@ptrCast(png_file_path.ptr));
     return dvui.Texture{ .ptr = png_ref, .height = height, .width = width };
 }
 /// Convert texture target made with `textureCreateTarget` into return texture
@@ -413,8 +416,9 @@ pub fn textureFromTarget(_: *SvgBackend, texture: dvui.TextureTarget) dvui.Textu
 /// textureFromTarget().  After this call, this texture pointer will not
 /// be used by dvui.
 pub fn textureDestroy(self: *SvgBackend, texture: dvui.Texture) void {
-    _ = self; // autofix
-    _ = texture; // autofix
+    // I need to free this guy, but I need to reconstruct the right pointer type first...
+    const png_file_path: []const u8 = @as([*]u8, @ptrCast(texture.ptr))[0..texture_file_len];
+    self.alloc.free(png_file_path);
 }
 
 /// Create a `dvui.Texture` that can be rendered to with `renderTarget`.  The
