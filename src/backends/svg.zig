@@ -35,9 +35,6 @@ const texture_file_template = render_dir ++ "/frame{d:04}-texture{d:04}.{s}";
 pub const SvgBackend = @This();
 pub const Context = *SvgBackend;
 pub const kind: dvui.enums.Backend = .svg;
-pub fn description() [:0]const u8 {
-    return "svg";
-}
 
 pub const InitOptions = struct {
     // Long lived allocator needed to keep the name of the textures from frame to frame.
@@ -45,6 +42,7 @@ pub const InitOptions = struct {
     /// The size of the window we can render to
     size: dvui.Size,
 };
+
 pub fn initWindow(options: InitOptions) !SvgBackend {
     std.fs.cwd().makeDir(render_dir) catch |err| {
         if (err != std.fs.Dir.MakeError.PathAlreadyExists) {
@@ -68,16 +66,15 @@ pub fn backend(self: *SvgBackend) dvui.Backend {
 pub fn nanoTime(_: *SvgBackend) i128 {
     return std.time.nanoTimestamp();
 }
-
 /// Sleep for nanoseconds.
 pub fn sleep(_: *SvgBackend, ns: u64) void {
     std.time.sleep(ns);
 }
 
-/// Called by dvui during Window.begin(), so prior to any dvui
+/// Called by dvui during `dvui.Window.begin`, so prior to any dvui
 /// rendering.  Use to setup anything needed for this frame.  The arena
-/// arg is cleared before begin is called next, useful for any temporary
-/// allocations needed only for this frame.
+/// arg is cleared before `dvui.Window.begin` is called next, useful for any
+/// temporary allocations needed only for this frame.
 pub fn begin(self: *SvgBackend, arena: std.mem.Allocator) void {
     self.arena = arena;
     self.svg_bytes = std.ArrayList(u8).init(arena);
@@ -105,10 +102,7 @@ pub fn begin(self: *SvgBackend, arena: std.mem.Allocator) void {
         self.empty_render_folder = false;
     }
 }
-
-/// Called by dvui during Window.end(), but currently unused by any
-/// backends.  Probably will be removed.
-// TODO : Change the doc of this method since it's usefull for this backend if merged
+/// Called during `dvui.Window.end` before freeing any memory for the current frame.
 pub fn end(self: *SvgBackend) void {
     self.svg_bytes.appendSlice("</svg>") catch unreachable;
 
@@ -137,13 +131,11 @@ pub fn end(self: *SvgBackend) void {
 pub fn pixelSize(self: *SvgBackend) dvui.Size {
     return self.size;
 }
-
 /// Return size of the window in logical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 300x200.
 pub fn windowSize(self: *SvgBackend) dvui.Size {
     return self.size;
 }
-
 /// Return the detected additional scaling.  This represents the user's
 /// additional display scaling (usually set in their window system's
 /// settings).  Currently only called during Window.init(), so currently
@@ -399,7 +391,6 @@ pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, 
 
     const png_bytes = dvui.pngEncode(self.arena, pixels[0 .. width * height * 4], width, height, .{}) catch unreachable;
 
-    // FIXME : don't remember why I alloc this one not with the arena...
     const png_filename = std.fmt.allocPrint(self.alloc, texture_file_template, .{ self.frame_count, self.texture_create_count, "png" }) catch "svg_render/texture.png";
 
     const file = std.fs.cwd().createFile(png_filename, .{}) catch unreachable;
@@ -412,19 +403,12 @@ pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, 
     const png_ref: *anyopaque = @constCast(@ptrCast(png_filename.ptr));
     return dvui.Texture{ .ptr = png_ref, .height = height, .width = width };
 }
-
-/// Create a texture that can be rendered to with renderTarget().  The
-/// returned pointer is what will later be passed to drawClippedTriangles.
-pub fn textureCreateTarget(_: *SvgBackend, _: u32, _: u32, _: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!dvui.TextureTarget {
-    return error.TextureCreate;
+/// Convert texture target made with `textureCreateTarget` into return texture
+/// as if made by `textureCreate`.  After this call, texture target will not be
+/// used by dvui.
+pub fn textureFromTarget(_: *SvgBackend, texture: dvui.TextureTarget) dvui.Texture {
+    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height };
 }
-
-/// Read pixel data (RGBA) from texture into pixel.
-pub fn textureReadTarget(_: *SvgBackend, texture: dvui.TextureTarget, pixels: [*]u8) error{TextureRead}!void {
-    const ptr: [*]const u8 = @ptrCast(texture.ptr);
-    @memcpy(pixels, ptr[0..(texture.width * texture.height * 4)]);
-}
-
 /// Destroy texture that was previously made with textureCreate() or
 /// textureFromTarget().  After this call, this texture pointer will not
 /// be used by dvui.
@@ -433,19 +417,27 @@ pub fn textureDestroy(self: *SvgBackend, texture: dvui.Texture) void {
     _ = texture; // autofix
 }
 
-pub fn textureFromTarget(_: *SvgBackend, texture: dvui.TextureTarget) dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height };
+/// Create a `dvui.Texture` that can be rendered to with `renderTarget`.  The
+/// returned pointer is what will later be passed to `drawClippedTriangles`.
+pub fn textureCreateTarget(_: *SvgBackend, _: u32, _: u32, _: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!dvui.TextureTarget {
+    return error.TextureCreate;
 }
-
-/// Render future drawClippedTriangles() to the passed texture (or screen
+/// Read pixel data (RGBA) from `texture` into `pixels_out`.
+pub fn textureReadTarget(_: *SvgBackend, texture: dvui.TextureTarget, pixels: [*]u8) error{TextureRead}!void {
+    const ptr: [*]const u8 = @ptrCast(texture.ptr);
+    @memcpy(pixels, ptr[0..(texture.width * texture.height * 4)]);
+}
+/// Render future `drawClippedTriangles` to the passed `texture` (or screen
 /// if null).
-pub fn renderTarget(_: *SvgBackend, _: ?dvui.TextureTarget) void {}
+pub fn renderTarget(self: *SvgBackend, texture: ?dvui.TextureTarget) void {
+    _ = self; // autofix
+    _ = texture; // autofix
+}
 
 /// Get clipboard content (text only)
 pub fn clipboardText(_: *SvgBackend) error{OutOfMemory}![]const u8 {
     return "";
 }
-
 /// Set clipboard content (text only)
 pub fn clipboardTextSet(self: *SvgBackend, text: []const u8) error{OutOfMemory}!void {
     _ = self; // autofix
@@ -457,7 +449,6 @@ pub fn openURL(self: *SvgBackend, url: []const u8) error{OutOfMemory}!void {
     _ = self; // autofix
     _ = url; // autofix
 }
-
 /// Called by dvui.refresh() when it is called from a background
 /// thread.  Used to wake up the gui thread.  It only has effect if you
 /// are using waitTime() or some other method of waiting until a new
