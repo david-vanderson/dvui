@@ -395,60 +395,21 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
 pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) dvui.Texture {
     _ = interpolation; // autofix
 
-    // Dump a tga file because it's easy
-    const header = [_]u8{
-        0, // ID length
-        0, // No color map
-        2, // Uncompressed RGB
-        0, 0, 0, 0, 0, // Color map specification (unused)
-        0, 0, // X origin
-        0, 0, // Y origin
-        @as(u8, @truncate(width & 0xFF)), // Width low byte
-        @as(u8, @truncate(width >> 8)), // Width high byte
-        @as(u8, @truncate(height & 0xFF)), // Height low byte
-        @as(u8, @truncate(height >> 8)), // Height high byte
-        32, // 32 bits per pixel (ARGB)
-        0b100000, // Image descriptor (b5 = 1 for origin at top left)
-    };
-    var buf: [texture_file_template.len]u8 = undefined;
-    const tga_file = std.fmt.bufPrint(&buf, texture_file_template, .{ self.frame_count, self.texture_create_count, "tga" }) catch "render/texture.tga";
+    // Simply dump the texture as png and use the filename as id for later
 
-    const file = std.fs.cwd().createFile(tga_file, .{}) catch unreachable;
+    const png_bytes = dvui.pngEncode(self.arena, pixels[0 .. width * height * 4], width, height, .{}) catch unreachable;
+
+    // FIXME : don't remember why I alloc this one not with the arena...
+    const png_filename = std.fmt.allocPrint(self.alloc, texture_file_template, .{ self.frame_count, self.texture_create_count, "png" }) catch "svg_render/texture.png";
+
+    const file = std.fs.cwd().createFile(png_filename, .{}) catch unreachable;
     defer file.close();
-    file.writeAll(&header) catch unreachable;
-
-    var i: usize = 0;
-    var y: u32 = 0;
-    while (y < height) : (y += 1) {
-        var x: u32 = 0;
-        while (x < width) : (x += 1) {
-            const r, const g, const b, const a = .{ pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3] };
-            // const res: u32 = @as(u32, r) + @as(u32, g) + @as(u32, b) + @as(u32, a);
-            // if (last_printed != res) {
-            //     print("{} {} {} {}\n", .{ r, g, b, a });
-            //     last_printed = res;
-            // }
-            // const bgra = (@as(u32, b) << 24) | (@as(u32, g) << 16) | (@as(u32, r) << 8) | a;
-            const argb = (@as(u32, a) << 24) | (@as(u32, r) << 16) | (@as(u32, g) << 8) | b;
-            file.writer().writeInt(u32, argb, .little) catch unreachable;
-            i += 4;
-        }
-    }
-
-    // convert to png with magik cause tga don't get embedded in svg file well
-    // (and let's check if this works before putting effort in a png exporter)
-    const png_file = std.fmt.allocPrint(self.alloc, texture_file_template, .{ self.frame_count, self.texture_create_count, "png" }) catch "svg_render/texture.png";
-    const argv = [_][]const u8{ "magick", tga_file, png_file };
-    var proc = std.process.Child.init(&argv, self.arena);
-    proc.spawn() catch unreachable;
-    const term = proc.wait() catch unreachable;
-    if (term.Exited != 0) unreachable;
-    std.fs.cwd().deleteFile(tga_file) catch unreachable;
+    file.writeAll(png_bytes) catch unreachable;
 
     self.texture_create_count += 1;
 
     // Dirty cast : just pass the pointer to the filename.
-    const png_ref: *anyopaque = @constCast(@ptrCast(png_file.ptr));
+    const png_ref: *anyopaque = @constCast(@ptrCast(png_filename.ptr));
     return dvui.Texture{ .ptr = png_ref, .height = height, .width = width };
 }
 
