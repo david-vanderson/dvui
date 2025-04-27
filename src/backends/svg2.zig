@@ -46,7 +46,7 @@ const debughl_clipr = false;
 /// Output texture files with uv points on.
 const emit_debug_texture = false;
 
-const render_dir = "svg_render/";
+const render_dir = "svg_render2/";
 const texture_file_template = render_dir ++ "/frame{d:04}-texture{d:04}.png";
 
 pub const SvgBackend = @This();
@@ -143,13 +143,13 @@ pub const SvgFilter = packed struct {
         return @as(f32, @floatFromInt(self.r)) / 255.0;
     }
     pub fn gNorm(self: SvgFilter) f32 {
-        return @as(f32, @floatFromInt(self.r)) / 255.0;
+        return @as(f32, @floatFromInt(self.g)) / 255.0;
     }
     pub fn bNorm(self: SvgFilter) f32 {
-        return @as(f32, @floatFromInt(self.r)) / 255.0;
+        return @as(f32, @floatFromInt(self.b)) / 255.0;
     }
     pub fn aNorm(self: SvgFilter) f32 {
-        return @as(f32, @floatFromInt(self.r)) / 255.0;
+        return @as(f32, @floatFromInt(self.a)) / 255.0;
     }
 };
 /// Represent a <clipPath> tag.
