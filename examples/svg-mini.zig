@@ -24,7 +24,10 @@ pub fn main() !void {
     for (0..5) |_| {
         try win.begin(0);
 
-        try dvui.Examples.styling();
+        // try dvui.Examples.calculator();
+        // try dvui.Examples.styling();
+        // try dvui.Examples.plots();
+        try dvui.Examples.demo();
 
         _ = try win.end(.{});
     }

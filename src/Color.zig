@@ -337,6 +337,20 @@ test toHexString {
     try std.testing.expectEqual((Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }).toHexString(), "#a1a2a3".*);
 }
 
+pub fn toU32(self: Color) u32 {
+    const c: u32 = (@as(u32, self.r) << 24) | (@as(u32, self.g) << 16) | (@as(u32, self.b) << 8) | self.a;
+    return c;
+}
+
+pub fn fromU32(value: u32) Color {
+    return Color{
+        .r = (value >> 24) & 0xFF,
+        .g = (value >> 16) & 0xFF,
+        .b = (value >> 8) & 0xFF,
+        .a = (value) & 0xFF,
+    };
+}
+
 /// Converts hex color string to `Color`
 ///
 /// If `hex_color` is invalid, an error is logged and a default color is returned.
