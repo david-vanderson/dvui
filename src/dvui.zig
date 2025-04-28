@@ -5360,46 +5360,49 @@ pub fn renderText(opts: renderTextOptions) !void {
             }
         }
 
-        const len = @as(u32, @intCast(vtx.items.len));
-        var v: Vertex = undefined;
+        // don't output triangles for a zero-width glyph (space seems to be the only one)
+        if (gi.w > 0) {
+            const len = @as(u32, @intCast(vtx.items.len));
+            var v: Vertex = undefined;
 
-        v.pos.x = x + gi.leftBearing * target_fraction;
-        v.pos.y = y + gi.topBearing * target_fraction;
-        v.col = if (sel_in) opts.sel_color orelse opts.color else opts.color;
-        v.col = v.col.alphaMultiply();
-        v.uv = gi.uv;
-        try vtx.append(v);
+            v.pos.x = x + gi.leftBearing * target_fraction;
+            v.pos.y = y + gi.topBearing * target_fraction;
+            v.col = if (sel_in) opts.sel_color orelse opts.color else opts.color;
+            v.col = v.col.alphaMultiply();
+            v.uv = gi.uv;
+            try vtx.append(v);
 
-        if (opts.debug) {
-            log.debug(" - x {d} y {d}", .{ v.pos.x, v.pos.y });
+            if (opts.debug) {
+                log.debug(" - x {d} y {d}", .{ v.pos.x, v.pos.y });
+            }
+
+            if (opts.debug) {
+                //log.debug("{d} pad {d} minx {d} maxx {d} miny {d} maxy {d} x {d} y {d}", .{ bytes_seen, pad, gi.minx, gi.maxx, gi.miny, gi.maxy, v.pos.x, v.pos.y });
+                //log.debug("{d} pad {d} left {d} top {d} w {d} h {d} advance {d}", .{ bytes_seen, pad, gi.f2_leftBearing, gi.f2_topBearing, gi.f2_w, gi.f2_h, gi.f2_advance });
+            }
+
+            v.pos.x = x + (gi.leftBearing + gi.w) * target_fraction;
+            max_x = v.pos.x;
+            v.uv[0] = gi.uv[0] + gi.w / atlas_size.w;
+            try vtx.append(v);
+
+            v.pos.y = y + (gi.topBearing + gi.h) * target_fraction;
+            sel_max_y = @max(sel_max_y, v.pos.y);
+            v.uv[1] = gi.uv[1] + gi.h / atlas_size.h;
+            try vtx.append(v);
+
+            v.pos.x = x + gi.leftBearing * target_fraction;
+            v.uv[0] = gi.uv[0];
+            try vtx.append(v);
+
+            // triangles must be counter-clockwise (y going down) to avoid backface culling
+            try idx.append(@as(u16, @intCast(len + 0)));
+            try idx.append(@as(u16, @intCast(len + 2)));
+            try idx.append(@as(u16, @intCast(len + 1)));
+            try idx.append(@as(u16, @intCast(len + 0)));
+            try idx.append(@as(u16, @intCast(len + 3)));
+            try idx.append(@as(u16, @intCast(len + 2)));
         }
-
-        if (opts.debug) {
-            //log.debug("{d} pad {d} minx {d} maxx {d} miny {d} maxy {d} x {d} y {d}", .{ bytes_seen, pad, gi.minx, gi.maxx, gi.miny, gi.maxy, v.pos.x, v.pos.y });
-            //log.debug("{d} pad {d} left {d} top {d} w {d} h {d} advance {d}", .{ bytes_seen, pad, gi.f2_leftBearing, gi.f2_topBearing, gi.f2_w, gi.f2_h, gi.f2_advance });
-        }
-
-        v.pos.x = x + (gi.leftBearing + gi.w) * target_fraction;
-        max_x = v.pos.x;
-        v.uv[0] = gi.uv[0] + gi.w / atlas_size.w;
-        try vtx.append(v);
-
-        v.pos.y = y + (gi.topBearing + gi.h) * target_fraction;
-        sel_max_y = @max(sel_max_y, v.pos.y);
-        v.uv[1] = gi.uv[1] + gi.h / atlas_size.h;
-        try vtx.append(v);
-
-        v.pos.x = x + gi.leftBearing * target_fraction;
-        v.uv[0] = gi.uv[0];
-        try vtx.append(v);
-
-        // triangles must be counter-clockwise (y going down) to avoid backface culling
-        try idx.append(@as(u16, @intCast(len + 0)));
-        try idx.append(@as(u16, @intCast(len + 2)));
-        try idx.append(@as(u16, @intCast(len + 1)));
-        try idx.append(@as(u16, @intCast(len + 0)));
-        try idx.append(@as(u16, @intCast(len + 3)));
-        try idx.append(@as(u16, @intCast(len + 2)));
 
         x = nextx;
     }
@@ -5431,12 +5434,14 @@ pub fn renderText(opts: renderTextOptions) !void {
         }
     }
 
-    // due to floating point inaccuracies, shrink by 1/1000 of a pixel before testing
-    const txtr = (Rect{ .x = x_start, .y = y, .w = max_x - x_start, .h = sel_max_y - y }).insetAll(0.001);
-    const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-    const clipr: ?Rect = if (txtr.clippedBy(clip_offset)) clip_offset else null;
+    if (vtx.items.len > 0) {
+        // due to floating point inaccuracies, shrink by 1/1000 of a pixel before testing
+        const txtr = (Rect{ .x = x_start, .y = y, .w = max_x - x_start, .h = sel_max_y - y }).insetAll(0.001);
+        const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
+        const clipr: ?Rect = if (txtr.clippedBy(clip_offset)) clip_offset else null;
 
-    cw.backend.drawClippedTriangles(fce.texture_atlas, vtx.items, idx.items, clipr);
+        cw.backend.drawClippedTriangles(fce.texture_atlas, vtx.items, idx.items, clipr);
+    }
 }
 
 pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
