@@ -96,9 +96,11 @@ const AnimatingDialog = struct {
         }
 
         const winHeight = win.data().rect.h;
+        var winHeight_changed = false;
 
         if (dvui.animationGet(win.data().id, "rect_percent")) |a| {
             win.data().rect.h *= a.value();
+            winHeight_changed = true;
 
             // mucking with the window size can screw up the windows auto sizing, so force it
             win.autoSize();
@@ -141,7 +143,9 @@ const AnimatingDialog = struct {
         }
 
         // restore saved win rect so our change is not persisted to next frame
-        win.data().rect.h = winHeight;
+        if (winHeight_changed) {
+            win.data().rect.h = winHeight;
+        }
 
         win.deinit();
 
