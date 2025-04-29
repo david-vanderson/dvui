@@ -45,6 +45,25 @@ pub const FontStyle = enum {
     title_4,
 };
 
+pub const MaxSize = struct {
+    w: f32,
+    h: f32,
+
+    pub const zero: MaxSize = .{ .w = 0, .h = 0 };
+
+    pub fn width(w: f32) MaxSize {
+        return .{ .w = w, .h = 1_000_000 };
+    }
+
+    pub fn height(h: f32) MaxSize {
+        return .{ .w = 1_000_000, .h = h };
+    }
+
+    pub fn size(s: Size) MaxSize {
+        return .{ .w = s.w, .h = s.h };
+    }
+};
+
 // used to adjust widget id when @src() is not enough (like in a loop)
 id_extra: ?usize = null,
 
@@ -110,7 +129,7 @@ min_size_content: ?Size = null,
 /// Use when a child textLayout or scrollArea is making the parent too big.
 ///
 /// padding/border/margin will be added to this.
-max_size_content: ?Size = null,
+max_size_content: ?MaxSize = null,
 
 // whether to fill the background
 background: ?bool = null,
@@ -251,7 +270,11 @@ pub fn max_sizeGet(self: *const Options) Size {
 }
 
 pub fn max_size_contentGet(self: *const Options) Size {
-    return self.max_size_content orelse Size{};
+    if (self.max_size_content) |msc| {
+        return .{ .w = msc.w, .h = msc.h };
+    } else {
+        return Size.all(1_000_000.0);
+    }
 }
 
 pub fn rotationGet(self: *const Options) f32 {

@@ -89,7 +89,7 @@ const AnimatingDialog = struct {
         // once we record a response, refresh it until we close
         _ = dvui.dataGet(null, id, "response", enums.DialogResponse);
 
-        var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id, .max_size_content = .{ .w = 300 } });
+        var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id, .max_size_content = .width(300) });
 
         if (dvui.firstFrame(win.data().id)) {
             dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 0.0, .end_val = 1.0, .end_time = duration, .easing = easing });
@@ -368,7 +368,7 @@ pub fn demo() !void {
         return;
     }
 
-    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 600, .h = 400 }, .max_size_content = .{ .w = 600 }, .tag = demo_window_tag });
+    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 600, .h = 400 }, .max_size_content = .width(600), .tag = demo_window_tag });
     defer float.deinit();
 
     // pad the fps label so that it doesn't trigger refresh when the number
@@ -435,7 +435,7 @@ pub fn demo() !void {
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
-            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = dvui.Size.all(120), .margin = Rect.all(5), .color_fill = .{ .name = .fill }, .tag = "demo_button_" ++ @tagName(e) });
+            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = .size(dvui.Size.all(120)), .margin = Rect.all(5), .color_fill = .{ .name = .fill }, .tag = "demo_button_" ++ @tagName(e) });
             try bw.install();
             bw.processEvents();
             try bw.drawBackground();
@@ -900,7 +900,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
         try left_alignment.spacer(@src(), 0);
 
-        var te = try dvui.textEntry(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{ .max_size_content = dvui.Options.sizeM(20, 0) });
+        var te = try dvui.textEntry(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{ .max_size_content = .size(dvui.Options.sizeM(20, 1)) });
         enter_pressed = te.enter_pressed;
         te.deinit();
 
@@ -1147,7 +1147,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
         try left_alignment.spacer(@src(), 0);
 
-        var te = dvui.TextEntryWidget.init(@src(), .{}, .{ .max_size_content = dvui.Options.sizeM(20, 0) });
+        var te = dvui.TextEntryWidget.init(@src(), .{}, .{ .max_size_content = .size(dvui.Options.sizeM(20, 1)) });
         try te.install();
 
         var sug = try dvui.suggestion(&te, .{ .open_on_text_change = true });
@@ -1395,7 +1395,7 @@ pub fn layout() !void {
 
             var opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
             if (Static.shrink) {
-                opts.max_size_content = opts.min_size_contentGet();
+                opts.max_size_content = .size(opts.min_size_contentGet());
             }
 
             var o = try dvui.overlay(@src(), opts);
@@ -1616,7 +1616,7 @@ pub fn layoutText() !void {
         }
         cbox.deinit();
 
-        cbox = try dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .{ .name = .fill_window }, .min_size_content = .{ .w = 160 }, .max_size_content = .{ .w = 160 } });
+        cbox = try dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .{ .name = .fill_window }, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
         try dvui.icon(@src(), "aircraft", entypo.aircraft, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
         try dvui.label(@src(), "Caption Heading", .{}, .{ .font_style = .caption_heading, .gravity_x = 0.5 });
         var tl_caption = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
@@ -2067,7 +2067,7 @@ pub fn menus() !void {
     _ = try dvui.spacer(@src(), .{ .h = 20 }, .{});
 
     {
-        var hbox = try dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .{ .w = 300 } });
+        var hbox = try dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .width(300) });
         defer hbox.deinit();
 
         var tl = try dvui.textLayout(@src(), .{}, .{ .background = false });
@@ -2080,7 +2080,7 @@ pub fn menus() !void {
     _ = try dvui.spacer(@src(), .{ .h = 10 }, .{});
 
     {
-        var hbox = try dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .{ .w = 300 } });
+        var hbox = try dvui.box(@src(), .horizontal, .{ .border = dvui.Rect.all(1), .min_size_content = .{ .h = 50 }, .max_size_content = .width(300) });
         defer hbox.deinit();
 
         var tl = try dvui.textLayout(@src(), .{}, .{ .background = false });
@@ -2411,7 +2411,7 @@ pub fn scrolling(comptime data: u8) !void {
         }
     }
     {
-        var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .max_size_content = .{ .h = 300 } });
+        var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal, .max_size_content = .height(300) });
         defer vbox.deinit();
 
         try dvui.label(@src(), "{d:0>4.2}% visible, offset {d} frac {d:0>4.2}", .{ Data.scroll_info.visibleFraction(.vertical) * 100.0, Data.scroll_info.viewport.y, Data.scroll_info.offsetFraction(.vertical) }, .{});
@@ -3339,7 +3339,7 @@ pub fn dialogDirect() !void {
     const data = struct {
         var extra_stuff: bool = false;
     };
-    var dialog_win = try dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog }, .{ .max_size_content = .{ .w = 500 } });
+    var dialog_win = try dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = &show_dialog }, .{ .max_size_content = .width(500) });
     defer dialog_win.deinit();
 
     try dvui.windowHeader("Dialog", "", &show_dialog);

@@ -632,7 +632,7 @@ pub const FontCacheEntry = struct {
 
     // doesn't scale the font or max_width, always stops at newlines
     pub fn textSizeRaw(fce: *FontCacheEntry, font_name: []const u8, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: Font.EndMetric) !Size {
-        const mwidth = max_width orelse 1000000.0;
+        const mwidth = max_width orelse 1_000_000;
 
         var x: f32 = 0;
         var minx: f32 = 0;
@@ -2911,7 +2911,7 @@ pub const DialogOptions = struct {
     message: []const u8,
     ok_label: []const u8 = "Ok",
     cancel_label: ?[]const u8 = null,
-    max_size: ?Size = null,
+    max_size: ?Options.MaxSize = null,
     displayFn: DialogDisplayFn = dialogDisplay,
     callafterFn: ?DialogCallAfterFn = null,
 };
@@ -2985,7 +2985,7 @@ pub fn dialogDisplay(id: u32) !void {
 
     const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
-    const maxSize = dvui.dataGet(null, id, "_max_size", Size);
+    const maxSize = dvui.dataGet(null, id, "_max_size", Options.MaxSize);
 
     var win = try floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .id_extra = id, .max_size_content = maxSize });
     defer win.deinit();
