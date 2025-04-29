@@ -29,7 +29,6 @@ si: *ScrollInfo = undefined,
 // those visual artifacts
 frame_viewport: Point = Point{},
 
-process_events: bool = true,
 prevClip: Rect = Rect{},
 
 nextVirtualSize: Size = Size{},
@@ -540,9 +539,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
 }
 
 pub fn deinit(self: *ScrollContainerWidget) void {
-    if (self.process_events) {
-        self.processEventsAfter();
-    }
+    self.processEventsAfter();
 
     dvui.dataSet(null, self.wd.id, "_fv_id", self.first_visible_id);
     dvui.dataSet(null, self.wd.id, "_fv_offset", self.first_visible_offset);
