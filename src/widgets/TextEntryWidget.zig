@@ -93,8 +93,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         // max size not given, so default to the same as min size for direction
         // we can scroll in
         const ms = options.min_size_contentGet();
-        const maxw = if (self.scroll_init_opts.horizontal == .auto) ms.w else 1_000_000;
-        const maxh = if (self.scroll_init_opts.vertical == .auto) ms.h else 1_000_000;
+        const maxw = if (self.scroll_init_opts.horizontal == .auto) ms.w else dvui.max_float_safe;
+        const maxh = if (self.scroll_init_opts.vertical == .auto) ms.h else dvui.max_float_safe;
         options = options.override(.{ .max_size_content = .{ .w = maxw, .h = maxh } });
     }
 
