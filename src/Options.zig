@@ -52,11 +52,11 @@ pub const MaxSize = struct {
     pub const zero: MaxSize = .{ .w = 0, .h = 0 };
 
     pub fn width(w: f32) MaxSize {
-        return .{ .w = w, .h = 1_000_000 };
+        return .{ .w = w, .h = dvui.max_float_safe };
     }
 
     pub fn height(h: f32) MaxSize {
-        return .{ .w = 1_000_000, .h = h };
+        return .{ .w = dvui.max_float_safe, .h = h };
     }
 
     pub fn size(s: Size) MaxSize {
@@ -273,7 +273,7 @@ pub fn max_size_contentGet(self: *const Options) Size {
     if (self.max_size_content) |msc| {
         return .{ .w = msc.w, .h = msc.h };
     } else {
-        return Size.all(1_000_000.0);
+        return Size.all(dvui.max_float_safe);
     }
 }
 
