@@ -1627,7 +1627,6 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             } else if (me.action == .motion) {
                 self.click_num = 0;
             } else if (me.action == .position) {
-                dvui.cursorSet(.ibeam);
                 self.cursor_pt = self.wd.contentRectScale().pointFromScreen(me.p);
             }
         },
@@ -1759,6 +1758,18 @@ pub fn deinit(self: *TextLayoutWidget) void {
             dvui.log.err("TextLayoutWidget.deinit addTextDone got {!}\n", .{err});
         };
     }
+
+    // handle mouse cursor here after all addText because some might set the cursor
+    const evts = dvui.events();
+    for (evts) |*e| {
+        if (!self.matchEvent(e))
+            continue;
+
+        if (e.evt == .mouse and e.evt.mouse.action == .position) {
+            dvui.cursorSet(.ibeam);
+        }
+    }
+
     dvui.dataSet(null, self.wd.id, "_touch_editing", self.touch_editing);
     dvui.dataSet(null, self.wd.id, "_te_first", self.te_first);
     dvui.dataSet(null, self.wd.id, "_te_show_draggables", self.te_show_draggables);
