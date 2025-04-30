@@ -120,6 +120,16 @@ pub fn average(self: Color, other: Color) Color {
     };
 }
 
+/// Multiply two colors component-wise.
+pub fn multiply(self: Color, other: Color) Color {
+    return Color{
+        .r = @intCast(@divTrunc(@as(u16, self.r) * other.r, 255)),
+        .g = @intCast(@divTrunc(@as(u16, self.g) * other.g, 255)),
+        .b = @intCast(@divTrunc(@as(u16, self.b) * other.b, 255)),
+        .a = @intCast(@divTrunc(@as(u16, self.a) * other.a, 255)),
+    };
+}
+
 const clamp = std.math.clamp;
 
 const FieldEnum = std.meta.FieldEnum(@This());

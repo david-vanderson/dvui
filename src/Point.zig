@@ -17,6 +17,14 @@ pub fn diff(a: Point, b: Point) Point {
     return Point{ .x = a.x - b.x, .y = a.y - b.y };
 }
 
+pub fn min(a: Point, b: Point) Point {
+    return Point{ .x = @min(a.x, b.x), .y = @min(a.y, b.y) };
+}
+
+pub fn max(a: Point, b: Point) Point {
+    return Point{ .x = @max(a.x, b.x), .y = @max(a.y, b.y) };
+}
+
 pub fn scale(self: *const Point, s: f32) Point {
     return Point{ .x = self.x * s, .y = self.y * s };
 }
