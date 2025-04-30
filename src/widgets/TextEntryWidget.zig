@@ -93,8 +93,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         // max size not given, so default to the same as min size for direction
         // we can scroll in
         const ms = options.min_size_contentGet();
-        const maxw = if (self.scroll_init_opts.horizontal == .auto) ms.w else 0;
-        const maxh = if (self.scroll_init_opts.vertical == .auto) ms.h else 0;
+        const maxw = if (self.scroll_init_opts.horizontal == .auto) ms.w else dvui.max_float_safe;
+        const maxh = if (self.scroll_init_opts.vertical == .auto) ms.h else dvui.max_float_safe;
         options = options.override(.{ .max_size_content = .{ .w = maxw, .h = maxh } });
     }
 
@@ -105,12 +105,8 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     options.padding = null;
     options.min_size_content.?.w += self.padding.x + self.padding.w;
     options.min_size_content.?.h += self.padding.y + self.padding.h;
-    if (options.max_size_content.?.w != 0) {
-        options.max_size_content.?.w += self.padding.x + self.padding.w;
-    }
-    if (options.max_size_content.?.h != 0) {
-        options.max_size_content.?.h += self.padding.y + self.padding.h;
-    }
+    options.max_size_content.?.w += self.padding.x + self.padding.w;
+    options.max_size_content.?.h += self.padding.y + self.padding.h;
 
     self.wd = WidgetData.init(src, .{}, options);
     self.scroll_init_opts.focus_id = self.wd.id;

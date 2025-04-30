@@ -94,6 +94,19 @@ pub const testing = @import("testing.zig");
 pub const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
 pub const useFreeType = !wasm;
 
+/// Used as a default maximum in various places:
+/// * Options.max_size_content
+/// * Font.textSizeEx max_width
+///
+/// This is a compromise between desires:
+/// * gives a decent range
+/// * is a normal number (not nan/inf) that works in normal math
+/// * can still have some extra added to it (like padding)
+/// * float precision in this range (0.125) is small enough so integer stuff still works
+///
+/// If positions/sizes are getting into this range, then likely something is going wrong.
+pub const max_float_safe: f32 = 1_000_000; // 1000000 and 1e6 for searchability
+
 pub const c = @cImport({
     // musl fails to compile saying missing "bits/setjmp.h", and nobody should
     // be using setjmp anyway
@@ -632,7 +645,7 @@ pub const FontCacheEntry = struct {
 
     // doesn't scale the font or max_width, always stops at newlines
     pub fn textSizeRaw(fce: *FontCacheEntry, font_name: []const u8, text: []const u8, max_width: ?f32, end_idx: ?*usize, end_metric: Font.EndMetric) !Size {
-        const mwidth = max_width orelse 1000000.0;
+        const mwidth = max_width orelse max_float_safe;
 
         var x: f32 = 0;
         var minx: f32 = 0;
@@ -2911,7 +2924,7 @@ pub const DialogOptions = struct {
     message: []const u8,
     ok_label: []const u8 = "Ok",
     cancel_label: ?[]const u8 = null,
-    max_size: ?Size = null,
+    max_size: ?Options.MaxSize = null,
     displayFn: DialogDisplayFn = dialogDisplay,
     callafterFn: ?DialogCallAfterFn = null,
 };
@@ -2985,7 +2998,7 @@ pub fn dialogDisplay(id: u32) !void {
 
     const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
-    const maxSize = dvui.dataGet(null, id, "_max_size", Size);
+    const maxSize = dvui.dataGet(null, id, "_max_size", Options.MaxSize);
 
     var win = try floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .id_extra = id, .max_size_content = maxSize });
     defer win.deinit();
