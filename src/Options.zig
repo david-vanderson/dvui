@@ -106,7 +106,7 @@ color_border: ?ColorOrName = null,
 // use to override font_style
 font: ?Font = null,
 
-// only used for icons/images, rotates around center, only rotates drawing, radians counterclockwise
+// only used for icons/images, rotates around center, radians clockwise
 rotation: ?f32 = null,
 
 // For the rest of these fields, if null, each widget uses its defaults
