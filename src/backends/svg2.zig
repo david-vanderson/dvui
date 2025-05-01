@@ -1,57 +1,38 @@
-//! Backend that dumps SVG file for each frame.
-//!
+//! This Backend that dumps SVG file for each frame.
 //! This is intended for test and debug purpose, as well as images generation.
 //!
-//! TODO clean way to pass in debug flags and document
+//! By default, each frame will result in a single file in "cwd()/svg_render".
+//! For generating extra debug files, and other customization, see `SvgRenderOptions`
+//!
 //! TODO encode png in base64 by default with opt-out and document
 
 /// Size of the resulting svg (aka window size)
 size: dvui.Size,
 
+/// short lived allocator for current frame. (passed in `dvui.begin`)
+arena: std.mem.Allocator = undefined,
+
+/// long lived allocator, for e.g. textures. (passed in initWindow by client code)
+alloc: std.mem.Allocator = undefined,
+
+// Count frames to emit frameXX.svg
+// Max 255 frames, fair enough
+frame_count: u8 = 0,
+// Count textures to emit frameXX-XXX.png
+// Max 4096 texture per frame, seems enough and print nicely in 3 chars
+texture_count: u12 = 0,
+// Count each triangle per frame. Reset for each frame.
+// u24 prints nicely in 6 chars
+// ~16million triangle per frame. Probably more than enough
+triangle_count: u24 = 0,
+// Count each clipping rect per frame
+// Max 4096 clipr per frame, prints in 3 chars, same than texture.
+clipr_count: u12 = 0,
+
 svg_patterns: std.ArrayListUnmanaged(SvgPattern) = undefined,
 svg_filters: std.AutoHashMapUnmanaged(SvgFilter, void) = undefined,
 svg_clippaths: std.ArrayListUnmanaged(SvgClippath) = undefined,
 svg_graphics: std.ArrayListUnmanaged(SvgGraphics) = undefined,
-
-/// temporary allocator for current frame. (passed in begin)
-arena: std.mem.Allocator = undefined,
-/// longer lived allocator, for e.g. textures. (passed in initWindow)
-alloc: std.mem.Allocator = undefined,
-
-/// Count frames to emit frameXX.svg
-/// Max 255 frames, fair enough
-frame_count: u8 = 0,
-/// Count textures to emit frameXX-XXX.png
-/// Max 4096 texture per frame, seems enough and print nicely in 3 chars
-texture_count: u12 = 0,
-/// Count each triangle per frame. Reset for each frame.
-/// u24 prints nicely in 6 chars
-/// ~16million triangle per frame. Probably more than enough
-triangle_count: u24 = 0,
-/// Count each clipping rect per frame
-/// Max 4096 clipr per frame, prints in 3 chars, same than texture.
-clipr_count: u12 = 0,
-
-/// Stop output files after that many frames to avoid accidentyl crazy big folders.
-const max_frame: u8 = 25;
-/// If true, delete all previously emitted images (i.e. "frame**.svg|png)
-const empty_render_folder: bool = true;
-
-/// Paint color dots on triangle's angles.
-const debughl_vertex = false;
-/// Paint empty triangles vertexes in red.
-const debughl_no_ccw_triangle = false;
-/// Outline clipping rects passed to drawClippedTriangles
-const debughl_clipr = false;
-/// Output texture files with uv points on.
-const emit_debug_texture = false;
-
-const render_dir = "svg_render2/";
-const texture_file_template = render_dir ++ "/frame{d:04}-texture{d:04}.png";
-
-pub const SvgBackend = @This();
-pub const Context = *SvgBackend;
-pub const kind: dvui.enums.Backend = .svg;
 
 pub const InitOptions = struct {
     // Long lived allocator needed to keep the name of the textures from frame to frame.
@@ -59,6 +40,61 @@ pub const InitOptions = struct {
     /// The size of the window we can render to
     size: dvui.Size,
 };
+
+/// Allow client code to custimize some of the backend's behaviour.
+///
+/// For this, the root file (usually where the `main()` function lives) must declare
+/// ``` zig
+/// pub const svg_render_options = SvgRenderOptions{
+///     .render_dir = "my_render_dir_path",
+///     ...
+/// };
+/// ```
+pub const SvgRenderOptions = struct {
+    /// Stop output files after that many frames to avoid accidentyl crazy big folders.
+    max_frame: u8 = 25,
+    /// If true, delete all previously emitted images (i.e. "frame**.svg|png)
+    empty_render_folder: bool = true,
+    /// Folder to write files to, relative to current working directory
+    render_dir: []const u8 = "svg_render2/",
+    /// Specify a background color `<rect>` in the generated svg.
+    /// If null (default), the background is transparent.
+    draw_background: ?dvui.Color = null,
+    /// If not `null`, draws circles at the position of each vertex.
+    /// The value is a circle size (svg coordinates).
+    ///
+    /// This can help for some low level debug. To help spotting the "direction" of the
+    /// triangle, each 3 vertexes are respectively :
+    /// - redish and slightly smaller
+    /// - greenish
+    /// - blueish and slightly bigger
+    debughl_vertex: ?u32 = null,
+    /// Paint the empty and clockwise triangles in red.
+    debughl_no_ccw_triangle: bool = false,
+    /// Outline clipping rects in red, as passed to drawClippedTriangles
+    debughl_clipr: bool = false,
+    /// For each texture, emit the corresponding `.png` file, and link it
+    /// in the svg instead of embedding a base64 encoded version.
+    emit_textures: bool = true,
+    /// Emit extra svg file for each texture, with the uv point for each
+    /// vertex drawn on the texture. Imply `emit_textures`.
+    emit_debug_texture: bool = false,
+};
+const root = @import("root");
+const render_opts = if (@hasDecl(root, "svg_render_options"))
+val: {
+    if (@TypeOf(root.svg_render_options) != SvgRenderOptions) {
+        @compileError("'svg_render_options' should be of 'SvgRenderOptions' type");
+    }
+    if (root.svg_render_options.emit_debug_texture) {
+        root.svg_render_options.emit_textures = true;
+    }
+    break :val root.svg_render_options;
+} else SvgRenderOptions{};
+
+pub const SvgBackend = @This();
+pub const Context = *SvgBackend;
+pub const kind: dvui.enums.Backend = .svg;
 
 /// Generic struct for emitting graphics SVG tags
 pub const SvgGraphics = union(enum) {
@@ -209,14 +245,14 @@ pub const SvgCircle = struct { // for debug function, left aside for now
 };
 
 pub fn initWindow(options: InitOptions) !SvgBackend {
-    std.fs.cwd().makeDir(render_dir) catch |err| {
+    std.fs.cwd().makeDir(render_opts.render_dir) catch |err| {
         if (err != std.fs.Dir.MakeError.PathAlreadyExists) {
-            log.warn("error creating `{s}` folder : {!}\n", .{ render_dir, err });
+            log.warn("error creating `{s}` folder : {!}\n", .{ render_opts.render_dir, err });
             unreachable;
         }
     };
-    if (empty_render_folder) {
-        var dir = std.fs.cwd().openDir(render_dir, .{ .iterate = true }) catch unreachable;
+    if (render_opts.empty_render_folder) {
+        var dir = std.fs.cwd().openDir(render_opts.render_dir, .{ .iterate = true }) catch unreachable;
         defer dir.close();
         // Iterate through directory entries
         var dir_iterator = dir.iterate();
@@ -265,12 +301,12 @@ pub fn begin(self: *SvgBackend, arena: std.mem.Allocator) void {
 }
 /// Called during `dvui.Window.end` before freeing any memory for the current frame.
 pub fn end(self: *SvgBackend) void {
-    if (self.frame_count >= max_frame) {
-        log.warn("SvgBackend.max_frame reached ({d}). not generating images anymore", .{max_frame});
+    if (self.frame_count >= render_opts.max_frame) {
+        log.warn("SvgBackend.max_frame reached ({d}). not generating images anymore", .{render_opts.max_frame});
         return;
     }
 
-    const tmpl = render_dir ++ "frame{X:02}.svg";
+    const tmpl = render_opts.render_dir ++ "frame{X:02}.svg";
     var buf: [tmpl.len - 4]u8 = undefined;
     const svg_file = std.fmt.bufPrint(&buf, tmpl, .{self.frame_count}) catch unreachable;
 
@@ -289,9 +325,14 @@ pub fn end(self: *SvgBackend) void {
         \\<svg
         \\    viewBox="0 0 {d} {d}" xmlns="http://www.w3.org/2000/svg"
         \\>
-        \\<rect width="100%" height="100%" fill="black"/>
         \\
     , .{ self.size.w, self.size.h }) catch unreachable;
+    if (render_opts.draw_background) |background_col| {
+        bufwriter.print(
+            "<rect width=\"100%\" height=\"100%\" fill=\"{s}\"/>",
+            .{background_col.toHexString() catch unreachable},
+        ) catch unreachable;
+    }
 
     bufwriter.print("<defs>\n", .{}) catch unreachable;
     for (self.svg_patterns.items) |p| {
@@ -531,9 +572,11 @@ pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, 
 
     const png_bytes = dvui.pngEncode(self.arena, pixels[0 .. width * height * 4], width, height, .{ .resolution = null }) catch unreachable;
 
-    var png_file_path: [render_dir.len + SvgTexture.filename_len]u8 = undefined;
-    png_file_path[0..render_dir.len].* = render_dir.*;
-    texture.filenamePrint(png_file_path[render_dir.len..png_file_path.len]);
+    const dir = render_opts.render_dir;
+
+    var png_file_path: [dir.len + SvgTexture.filename_len]u8 = undefined;
+    png_file_path[0..dir.len].* = dir[0..dir.len].*;
+    texture.filenamePrint(png_file_path[dir.len..png_file_path.len]);
 
     const file = std.fs.cwd().createFile(&png_file_path, .{}) catch unreachable;
     defer file.close();
