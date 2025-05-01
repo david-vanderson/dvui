@@ -4,7 +4,6 @@
 //! By default, each frame will result in a single file in "cwd()/svg_render".
 //! For generating extra debug files, and other customization, see `SvgRenderOptions`
 //!
-//! TODO encode png in base64 by default with opt-out and document
 
 /// Size of the resulting svg (aka window size)
 size: dvui.Size,
@@ -33,6 +32,7 @@ svg_patterns: std.ArrayListUnmanaged(SvgPattern) = undefined,
 svg_filters: std.AutoHashMapUnmanaged(SvgFilter, void) = undefined,
 svg_clippaths: std.ArrayListUnmanaged(SvgClippath) = undefined,
 svg_graphics: std.ArrayListUnmanaged(SvgGraphics) = undefined,
+svg_b64_streams: std.AutoHashMapUnmanaged(SvgTexture, []const u8) = undefined,
 
 pub const InitOptions = struct {
     // Long lived allocator needed to keep the name of the textures from frame to frame.
@@ -43,7 +43,7 @@ pub const InitOptions = struct {
 
 /// Allow client code to custimize some of the backend's behaviour.
 ///
-/// For this, the root file (usually where the `main()` function lives) must declare
+/// For this, the root file (where the `main()` function lives) must declare
 /// ``` zig
 /// pub const svg_render_options = SvgRenderOptions{
 ///     .render_dir = "my_render_dir_path",
@@ -53,10 +53,10 @@ pub const InitOptions = struct {
 pub const SvgRenderOptions = struct {
     /// Stop output files after that many frames to avoid accidentyl crazy big folders.
     max_frame: u8 = 25,
-    /// If true, delete all previously emitted images (i.e. "frame**.svg|png)
+    /// If true, delete all previously emitted images (i.e. "f**.svg|png)
     empty_render_folder: bool = true,
     /// Folder to write files to, relative to current working directory
-    render_dir: []const u8 = "svg_render2/",
+    render_dir: []const u8 = "svg_render2",
     /// Specify a background color `<rect>` in the generated svg.
     /// If null (default), the background is transparent.
     draw_background: ?dvui.Color = null,
@@ -75,9 +75,9 @@ pub const SvgRenderOptions = struct {
     debughl_clipr: bool = false,
     /// For each texture, emit the corresponding `.png` file, and link it
     /// in the svg instead of embedding a base64 encoded version.
-    emit_textures: bool = true,
+    emit_textures: bool = false,
     /// Emit extra svg file for each texture, with the uv point for each
-    /// vertex drawn on the texture. Imply `emit_textures`.
+    /// vertex drawn on the texture.
     emit_debug_texture: bool = false,
 };
 const root = @import("root");
@@ -85,9 +85,6 @@ const render_opts = if (@hasDecl(root, "svg_render_options"))
 val: {
     if (@TypeOf(root.svg_render_options) != SvgRenderOptions) {
         @compileError("'svg_render_options' should be of 'SvgRenderOptions' type");
-    }
-    if (root.svg_render_options.emit_debug_texture) {
-        root.svg_render_options.emit_textures = true;
     }
     break :val root.svg_render_options;
 } else SvgRenderOptions{};
@@ -140,13 +137,61 @@ pub const SvgTriangle = struct {
     };
 };
 
+/// Represent an <image> tag.
+///   It's essentially a glorifield u20 id, that uniquely reference
+///   a texture created by dvui, with convenience method to cast type.
+pub const SvgTexture = struct {
+    frame_id: u8,
+    texture_create_id: u12,
+
+    const filename_template = "f{X:02}-{X:03}.png";
+    const filename_len = filename_template.len - 4 - 3;
+    /// Returns filename for the texture
+    pub fn filename(self: SvgTexture) [filename_len]u8 {
+        var result: [filename_len]u8 = .{0} ** filename_len;
+        _ = std.fmt.bufPrint(
+            &result,
+            filename_template,
+            .{ self.frame_id, self.texture_create_id },
+        ) catch unreachable;
+        return result;
+    }
+
+    pub fn toId(self: SvgTexture) u20 {
+        return @as(u20, self.frame_id) << 12 | self.texture_create_id;
+    }
+    pub fn fromId(id: u20) SvgTexture {
+        return SvgTexture{ .frame_id = @intCast((id >> 12) & 0xFF), .texture_create_id = @intCast(id & 0xFFF) };
+    }
+
+    // Dirty cast : Don't really need a pointer here, just returning the id
+    // casted so it fits the existing API.
+    pub fn toPtr(self: SvgTexture) *anyopaque {
+        // Ptr cannot be NULL, so add some stuff above
+        const id: usize = @intCast(self.toId());
+        return @ptrFromInt(0xACF00000 | id);
+    }
+    // Dirty cast : Just get back my ID. I know it's u20
+    pub fn fromPtr(ptr: *anyopaque) SvgTexture {
+        const int_ptr = @intFromPtr(ptr);
+        const id: u20 = @intCast(0xFFFFF & int_ptr);
+        return SvgTexture{
+            .frame_id = @intCast((id >> 12) & 0xFF),
+            .texture_create_id = @intCast(id & 0xFFF),
+        };
+    }
+};
+/// Holds reference to heap allocated base64 stream for a given SvgTexture.
+pub const SvgB64Stream = struct {
+    stream: []const u8,
+};
 /// Represent a <pattern> tag.
 ///  Each textured triangle has to refer one.
 pub const SvgPattern = struct {
     /// Id of the <pattern>, match the triangle_id using it in this frame.
     id: u24,
     /// Allow to link to a texture, i.e. the <image> tag.
-    texture: SvgTexture,
+    texture_id: u20,
 
     width: u32,
     height: u32,
@@ -195,51 +240,6 @@ pub const SvgClippath = struct {
     /// clipPath id, corresponds to `clipr_count`, per frame.
     id: u12,
 };
-/// Hold info for a texture.
-///  Texture itself is dumped as png file, or embedded in base64 encoding.
-///  Each texture is used multiple times in `SvgPattern`, so needs to have unique id.
-pub const SvgTexture = struct {
-    frame_id: u8,
-    texture_create_id: u12,
-
-    const filename_template = "f{X:02}-{X:03}.png";
-    // To keep in sync with string below.
-    const filename_len = filename_template.len - 4 - 3;
-    /// Prints the filename in buf.
-    /// buf must be at least [`filename_len`]u8
-    pub fn filenamePrint(self: SvgTexture, buf: []u8) void {
-        std.debug.assert(buf.len == filename_len);
-        _ = std.fmt.bufPrint(
-            buf,
-            filename_template,
-            .{ self.frame_id, self.texture_create_id },
-        ) catch unreachable;
-    }
-
-    pub fn toId(self: SvgTexture) u20 {
-        return @as(u20, self.frame_id) << 12 | self.texture_create_id;
-    }
-    pub fn fromId(id: u20) SvgTexture {
-        return SvgTexture{ .frame_id = @intCast((id >> 12) & 0xFF), .texture_create_id = @intCast(id & 0xFFF) };
-    }
-
-    // Dirty cast : Don't really need a pointer here, just returning the id
-    // casted so it fits the existing API.
-    pub fn toPtr(self: SvgTexture) *anyopaque {
-        // Ptr cannot be NULL, so add some stuff above
-        const id: usize = @intCast(self.toId());
-        return @ptrFromInt(0xACF00000 | id);
-    }
-    // Dirty cast : Just get back my ID. I know it's u20
-    pub fn fromPtr(ptr: *anyopaque) SvgTexture {
-        const int_ptr = @intFromPtr(ptr);
-        const id: u20 = @intCast(0xFFFFF & int_ptr);
-        return SvgTexture{
-            .frame_id = @intCast((id >> 12) & 0xFF),
-            .texture_create_id = @intCast(id & 0xFFF),
-        };
-    }
-};
 
 pub const SvgCircle = struct { // for debug function, left aside for now
 };
@@ -258,7 +258,7 @@ pub fn initWindow(options: InitOptions) !SvgBackend {
         var dir_iterator = dir.iterate();
         while (dir_iterator.next() catch unreachable) |entry| {
             if (entry.kind == .file) {
-                if (std.mem.startsWith(u8, entry.name, "frame") and (std.mem.endsWith(u8, entry.name, ".svg") or
+                if (std.mem.startsWith(u8, entry.name, "f") and (std.mem.endsWith(u8, entry.name, ".svg") or
                     std.mem.endsWith(u8, entry.name, ".png")))
                 {
                     dir.deleteFile(entry.name) catch unreachable;
@@ -266,13 +266,25 @@ pub fn initWindow(options: InitOptions) !SvgBackend {
             }
         }
     }
-    return SvgBackend{
-        .size = options.size,
-        .alloc = options.allocator,
-    };
+    if (render_opts.emit_textures) {
+        return SvgBackend{
+            .size = options.size,
+            .alloc = options.allocator,
+        };
+    } else {
+        return SvgBackend{
+            .size = options.size,
+            .alloc = options.allocator,
+            .svg_b64_streams = std.AutoHashMapUnmanaged(SvgTexture, []const u8){},
+        };
+    }
 }
 /// Not used for now, kept for mirroring other backend API
-pub fn deinit(_: *SvgBackend) void {}
+pub fn deinit(self: *SvgBackend) void {
+    if (!render_opts.emit_textures) {
+        self.svg_b64_streams.deinit(self.alloc);
+    }
+}
 
 pub fn backend(self: *SvgBackend) dvui.Backend {
     return dvui.Backend.init(self, @This());
@@ -306,15 +318,18 @@ pub fn end(self: *SvgBackend) void {
         return;
     }
 
-    const tmpl = render_opts.render_dir ++ "frame{X:02}.svg";
-    var buf: [tmpl.len - 4]u8 = undefined;
-    const svg_file = std.fmt.bufPrint(&buf, tmpl, .{self.frame_count}) catch unreachable;
+    const filename_template = "frame{X:02}.svg";
+    var filename: [filename_template.len - 4]u8 = undefined;
+    _ = std.fmt.bufPrint(&filename, filename_template, .{self.frame_count}) catch unreachable;
 
-    const file = std.fs.cwd().createFile(svg_file, .{}) catch {
-        log.warn("Unable to create {s}\n", .{svg_file});
+    const dir = render_opts.render_dir;
+    const svg_filepath = std.fs.path.join(self.arena, &.{ dir, &filename }) catch unreachable;
+
+    const file = std.fs.cwd().createFile(svg_filepath, .{}) catch {
+        log.warn("Unable to create {s}\n", .{svg_filepath});
         return;
     };
-    defer log.info("{s} written disk", .{svg_file});
+    defer log.info("{s} written disk", .{svg_filepath});
     defer file.close();
 
     var buffered = std.io.bufferedWriter(file.writer());
@@ -329,28 +344,22 @@ pub fn end(self: *SvgBackend) void {
     , .{ self.size.w, self.size.h }) catch unreachable;
     if (render_opts.draw_background) |background_col| {
         bufwriter.print(
-            "<rect width=\"100%\" height=\"100%\" fill=\"{s}\"/>",
+            "<rect width=\"100%\" height=\"100%\" fill=\"{s}\"/>\n",
             .{background_col.toHexString() catch unreachable},
         ) catch unreachable;
     }
 
     bufwriter.print("<defs>\n", .{}) catch unreachable;
-    for (self.svg_patterns.items) |p| {
-        var png_file_name: [SvgTexture.filename_len]u8 = undefined;
-        p.texture.filenamePrint(&png_file_name);
+
+    for (self.svg_clippaths.items) |cp| {
         bufwriter.print(
-            \\  <pattern width="{d}" height="{d}"
-            \\     patternUnits="userSpaceOnUse"
-            \\     patternTransform="matrix({d} {d} {d} {d} {d} {d})"
-            \\     id="p{X}">
-            \\     <image href="{s}"/>
-            \\  </pattern>
+            \\  <clipPath id="c{X}">
+            \\    <rect x="{d}" y="{d}" width="{d}" height="{d}" fill="none"/>
+            \\  </clipPath>
             \\
-        , .{
-            p.width, p.height,      p.a, p.b, p.c, p.d, p.e, p.f,
-            p.id,    png_file_name,
-        }) catch unreachable;
+        , .{ cp.id, cp.rect.x, cp.rect.y, cp.rect.w, cp.rect.h }) catch unreachable;
     }
+
     var filter_iter = self.svg_filters.keyIterator();
     while (filter_iter.next()) |f| {
         bufwriter.print(
@@ -365,14 +374,40 @@ pub fn end(self: *SvgBackend) void {
             \\
         , .{ f.toId(), f.rNorm(), f.gNorm(), f.bNorm(), f.aNorm() }) catch unreachable;
     }
-    for (self.svg_clippaths.items) |cp| {
+
+    // Each triangle gets it's own <pattern> but only emit one <image> tag
+    // for each different effective texture (i.e. unique png file)
+    var unique_textures = std.AutoArrayHashMapUnmanaged(SvgTexture, void){};
+    for (self.svg_patterns.items) |p| {
         bufwriter.print(
-            \\  <clipPath id="c{X}">
-            \\    <rect x="{d}" y="{d}" width="{d}" height="{d}" fill="none"/>
-            \\  </clipPath>
+            \\  <pattern width="{d}" height="{d}"
+            \\     patternUnits="userSpaceOnUse"
+            \\     patternTransform="matrix({d} {d} {d} {d} {d} {d})"
+            \\     id="p{X}">
+            \\     <use href="#t{X}"/>
+            \\  </pattern>
             \\
-        , .{ cp.id, cp.rect.x, cp.rect.y, cp.rect.w, cp.rect.h }) catch unreachable;
+        , .{
+            p.width, p.height,     p.a, p.b, p.c, p.d, p.e, p.f,
+            p.id,    p.texture_id,
+        }) catch unreachable;
+        unique_textures.put(self.arena, SvgTexture.fromId(p.texture_id), {}) catch unreachable;
     }
+    var texture_iter = unique_textures.iterator();
+    while (texture_iter.next()) |txr| {
+        if (render_opts.emit_textures) {
+            bufwriter.print(
+                "  <image id=\"t{X}\" href=\"{s}\"/>\n",
+                .{ txr.key_ptr.toId(), txr.key_ptr.filename() },
+            ) catch unreachable;
+        } else {
+            bufwriter.print(
+                "  <image id=\"t{X}\" href=\"data:image/png;base64,{s}\"/>\n",
+                .{ txr.key_ptr.toId(), self.svg_b64_streams.get(txr.key_ptr.*).? },
+            ) catch unreachable;
+        }
+    }
+
     bufwriter.print("</defs>\n", .{}) catch unreachable;
 
     for (self.svg_graphics.items) |graph_el| {
@@ -513,7 +548,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             };
             var pattern = SvgPattern{
                 .id = self.triangle_count,
-                .texture = SvgTexture.fromPtr(txr.ptr),
+                .texture_id = SvgTexture.fromPtr(txr.ptr).toId(),
                 .width = txr.width,
                 .height = txr.height,
                 .a = undefined,
@@ -572,15 +607,22 @@ pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, 
 
     const png_bytes = dvui.pngEncode(self.arena, pixels[0 .. width * height * 4], width, height, .{ .resolution = null }) catch unreachable;
 
-    const dir = render_opts.render_dir;
+    if (render_opts.emit_textures) {
+        const dir = render_opts.render_dir;
+        const png_file_path = std.fs.path.join(self.alloc, &.{ dir, &texture.filename() }) catch unreachable;
+        defer self.alloc.free(png_file_path);
 
-    var png_file_path: [dir.len + SvgTexture.filename_len]u8 = undefined;
-    png_file_path[0..dir.len].* = dir[0..dir.len].*;
-    texture.filenamePrint(png_file_path[dir.len..png_file_path.len]);
-
-    const file = std.fs.cwd().createFile(&png_file_path, .{}) catch unreachable;
-    defer file.close();
-    file.writeAll(png_bytes) catch unreachable;
+        const file = std.fs.cwd().createFile(png_file_path, .{}) catch unreachable;
+        defer file.close();
+        file.writeAll(png_bytes) catch unreachable;
+    } else {
+        const b64encoder = std.base64.standard.Encoder;
+        const stream = self.alloc.alloc(u8, b64encoder.calcSize(png_bytes.len)) catch unreachable;
+        const res = b64encoder.encode(stream, png_bytes);
+        std.debug.assert(stream.ptr == res.ptr);
+        std.debug.assert(stream.len == res.len);
+        self.svg_b64_streams.put(self.alloc, texture, stream) catch unreachable;
+    }
 
     self.texture_count += 1;
 
@@ -595,8 +637,15 @@ pub fn textureFromTarget(_: *SvgBackend, texture: dvui.TextureTarget) dvui.Textu
 /// Destroy texture that was previously made with textureCreate() or
 /// textureFromTarget().  After this call, this texture pointer will not
 /// be used by dvui.
-pub fn textureDestroy(_: *SvgBackend, _: dvui.Texture) void {
-    // Nothing to destroy, I pass and ID around.
+pub fn textureDestroy(self: *SvgBackend, texture: dvui.Texture) void {
+    if (render_opts.emit_textures) {
+        // Nothing to destroy, I pass and ID around that directly represent the filename
+        // and the file is already on the disk straight after TextureCreate
+    } else {
+        const txr = SvgTexture.fromPtr(texture.ptr);
+        const stream = self.svg_b64_streams.get(txr);
+        self.alloc.free(stream.?);
+    }
 }
 
 /// Create a `dvui.Texture` that can be rendered to with `renderTarget`.  The
