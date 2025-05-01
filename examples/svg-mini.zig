@@ -5,6 +5,10 @@ comptime {
 
 const zig_icon = @embedFile("zig-favicon.png");
 
+pub const svg_render_options = Backend.SvgRenderOptions{
+    .emit_textures = true,
+};
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
