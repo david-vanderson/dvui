@@ -190,6 +190,7 @@ class Dvui {
      *
      * @type {[number, number, number, number] | []} */
     textInputRect = [];
+    need_oskCheck = false;
 
     // Used for file uploads. Only valid for one frame
     filesCacheModified = false;
@@ -830,7 +831,6 @@ class Dvui {
                     this.hidden_input.select();
                     document.execCommand("copy");
                     this.hidden_input.value = "";
-                    this.oskCheck();
                 }
             },
             wasm_add_noto_font: () => {
@@ -1067,6 +1067,10 @@ class Dvui {
             this.gl.clear(this.gl.COLOR_BUFFER_BIT);
 
             let millis_to_wait = this.instance.exports.dvui_update();
+            if (this.need_oskCheck) {
+                this.need_oskCheck = false;
+                this.oskCheck();
+            }
 
             if (!this.filesCacheModified) {
                 // Only clear if we didn't add anything this frame. Async could add items after they were requested
@@ -1125,8 +1129,8 @@ class Dvui {
         });
         this.gl.canvas.addEventListener("mouseup", (ev) => {
             this.instance.exports.add_event(3, ev.button, 0, 0, 0);
+            this.need_oskCheck = true;
             requestRender();
-            this.oskCheck();
         });
         this.gl.canvas.addEventListener("wheel", (ev) => {
             ev.preventDefault();
@@ -1199,6 +1203,7 @@ class Dvui {
                 (ev.metaKey << 3) + (ev.altKey << 2) + (ev.ctrlKey << 1) +
                     (ev.shiftKey << 0),
             );
+            this.need_oskCheck = true;
             requestRender();
         };
         this.gl.canvas.addEventListener("keyup", keyup);
@@ -1266,8 +1271,8 @@ class Dvui {
                 );
                 this.touches.splice(tidx, 1);
             }
+            this.need_oskCheck = true;
             requestRender();
-            this.oskCheck();
         });
         this.gl.canvas.addEventListener("touchmove", (ev) => {
             ev.preventDefault();
