@@ -2325,7 +2325,7 @@ pub fn focus() !void {
 
         // firstFrame must be called before te.deinit()
         if (dvui.firstFrame(te.data().id)) {
-            dvui.focusWidget(te.data().id, null, null);
+            dvui.focusWidgetSelf(te.data().id, null);
         }
 
         te.deinit();
