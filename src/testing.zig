@@ -13,12 +13,8 @@ pub fn moveTo(tag: []const u8) !void {
         return error.TagNotFound;
     };
     if (!tag_data.visible) return error.WidgetNotVisible;
-    try moveToPoint(tag_data.rect.center());
-}
-
-/// Moves the mouse to the provided absolute position
-pub fn moveToPoint(point: dvui.Point) !void {
     const cw = dvui.currentWindow();
+    const point = tag_data.rect.center().scale(1 / dvui.windowNaturalScale());
     _ = try cw.addEventMouseMotion(point.x, point.y);
 }
 
@@ -96,6 +92,7 @@ pub fn init(options: InitOptions) !Self {
         .testing => Backend.init(.{
             .allocator = options.allocator,
             .size = options.window_size,
+            .size_pixels = options.window_size.scale(2),
         }),
         inline else => |kind| {
             std.debug.print("dvui.testing does not support the {s} backend\n", .{@tagName(kind)});
