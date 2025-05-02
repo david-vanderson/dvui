@@ -3642,7 +3642,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
     var open_sug = init_opts.opened;
 
     if (init_opts.button) {
-        if (try dvui.buttonIcon(@src(), "combobox_triangle", entypo.chevron_small_down, .{}, .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0 })) {
+        if (try dvui.buttonIcon(@src(), "combobox_triangle", entypo.chevron_small_down, .{}, .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0, .tab_index = 0 })) {
             open_sug = true;
             dvui.focusWidget(te.data().id, null, null);
         }
