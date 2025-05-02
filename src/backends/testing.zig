@@ -1,11 +1,12 @@
 //! This is a testing backend that does no rendering at all intended for non graphical
 //! dvui logic tests.
 
-size: dvui.Size,
 allocator: std.mem.Allocator,
 
 arena: std.mem.Allocator = undefined,
 
+size: dvui.Size,
+size_pixels: dvui.Size,
 time: i128 = 0,
 clipboard: ?[]const u8 = null,
 
@@ -16,13 +17,15 @@ pub const Context = *TestingBackend;
 
 pub const InitOptions = struct {
     allocator: std.mem.Allocator,
-    size: dvui.Size = .{},
+    size: dvui.Size,
+    size_pixels: dvui.Size,
 };
 
 pub fn init(opts: InitOptions) TestingBackend {
     return .{
         .allocator = opts.allocator,
         .size = opts.size,
+        .size_pixels = opts.size_pixels,
     };
 }
 
@@ -56,7 +59,7 @@ pub fn end(_: *TestingBackend) void {}
 /// Return size of the window in physical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 600x400.
 pub fn pixelSize(self: *TestingBackend) dvui.Size {
-    return self.size;
+    return self.size_pixels;
 }
 
 /// Return size of the window in logical pixels.  For a 300x200 retina
