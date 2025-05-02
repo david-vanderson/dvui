@@ -780,7 +780,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event, bubbling: bool) void {
         .mouse => |me| {
             if (me.action == .focus) {
                 e.handled = true;
-                dvui.focusWidget(self.wd.id, null, e.num);
+                dvui.focusWidgetSelf(self.wd.id, e.num);
             }
         },
         else => {},

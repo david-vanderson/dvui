@@ -102,7 +102,7 @@ pub fn processEvent(self: *ContextWidget, e: *Event, bubbling: bool) void {
             } else if (me.action == .press and me.button == .right) {
                 e.handled = true;
 
-                dvui.focusWidget(self.wd.id, null, e.num);
+                dvui.focusWidgetSelf(self.wd.id, e.num);
                 self.focused = true;
 
                 // scale the point back to natural so we can use it in Popup
