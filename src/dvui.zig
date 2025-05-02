@@ -3692,7 +3692,17 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
                         sug.activate_selected = true;
                     }
                 },
-                else => {},
+                else => {
+                    if (sug.willOpen() and e.evt.key.action == .down) {
+                        if (e.evt.key.matchBind("next_widget")) {
+                            e.handled = true;
+                            sug.close();
+                        } else if (e.evt.key.matchBind("prev_widget")) {
+                            e.handled = true;
+                            sug.close();
+                        }
+                    }
+                },
             }
         }
 
