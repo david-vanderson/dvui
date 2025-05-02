@@ -3722,18 +3722,17 @@ pub const ComboBox = struct {
     te: *TextEntryWidget = undefined,
     sug: *SuggestionWidget = undefined,
 
-    /// Returns true if an entry was selected
-    pub fn entries(self: *ComboBox, items: []const []const u8) !bool {
-        var selected = false;
+    /// Returns index of entry if one was selected
+    pub fn entries(self: *ComboBox, items: []const []const u8) !?usize {
         if (try self.sug.dropped()) {
-            for (items) |entry| {
+            for (items, 0..) |entry, i| {
                 if (try self.sug.addChoiceLabel(entry)) {
                     self.te.textSet(entry, false);
-                    selected = true;
+                    return i;
                 }
             }
         }
-        return selected;
+        return null;
     }
 
     pub fn deinit(self: *ComboBox) void {
