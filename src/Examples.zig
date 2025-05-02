@@ -1157,7 +1157,9 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
             dvui.dataSetSlice(null, combo.te.data().id, "suggestions", filtered.items);
         }
 
-        _ = try combo.entries(dvui.dataGetSlice(null, combo.te.data().id, "suggestions", [][]const u8) orelse entries);
+        if (try combo.entries(dvui.dataGetSlice(null, combo.te.data().id, "suggestions", [][]const u8) orelse entries)) |index| {
+            dvui.log.debug("Combo entry index picked: {d}", .{index});
+        }
         combo.deinit();
     }
 
