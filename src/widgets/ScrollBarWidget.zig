@@ -90,7 +90,7 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect) void {
                     .focus => {
                         if (self.focus_id) |fid| {
                             e.handled = true;
-                            dvui.focusWidget(fid, null, e.num);
+                            dvui.focusWidgetSelf(fid, e.num);
                         }
                     },
                     .press => {

@@ -122,7 +122,7 @@ pub fn processEvent(self: *ButtonWidget, e: *Event, bubbling: bool) void {
         .mouse => |me| {
             if (me.action == .focus) {
                 e.handled = true;
-                dvui.focusWidget(self.wd.id, null, e.num);
+                dvui.focusWidgetSelf(self.wd.id, e.num);
             } else if (me.action == .press and me.button.pointer()) {
                 e.handled = true;
                 dvui.captureMouse(self.data());

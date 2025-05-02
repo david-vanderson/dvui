@@ -58,7 +58,7 @@ pub fn dropped(self: *SuggestionWidget) !bool {
         self.drop = try dvui.floatingMenu(@src(), .{ .from = self.init_options.rs.r.scale(1 / dvui.windowNaturalScale()) }, self.options);
         if (dvui.firstFrame(self.drop.?.data().id)) {
             // don't take focus away from text_entry when showing the suggestions
-            dvui.focusWidget(self.init_options.text_entry_id, null, null);
+            dvui.focusWidgetSelf(self.init_options.text_entry_id, null);
         }
     }
 

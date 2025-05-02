@@ -149,7 +149,7 @@ pub fn install(self: *FloatingMenuWidget) !void {
 
     // if no widget in this popup has focus, make the menu have focus to handle keyboard events
     if (dvui.focusedWidgetIdInCurrentSubwindow() == null) {
-        dvui.focusWidget(self.menu.wd.id, null, null);
+        dvui.focusWidgetSelf(self.menu.wd.id, null);
     }
 }
 
