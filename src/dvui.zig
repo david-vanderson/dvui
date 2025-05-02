@@ -3708,26 +3708,41 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
     return sug;
 }
 
-pub fn comboBox(src: std.builtin.SourceLocation, entries: []const []const u8, init_opts: TextEntryWidget.InitOptions, opts: Options) !*TextEntryWidget {
-    var te = try currentWindow().arena().create(TextEntryWidget);
-    te.* = dvui.TextEntryWidget.init(src, init_opts, opts);
-    try te.install();
+pub const ComboBox = struct {
+    te: *TextEntryWidget = undefined,
+    sug: *SuggestionWidget = undefined,
 
-    var sug = try dvui.suggestion(te, .{ .button = true });
-
-    if (try sug.dropped()) {
-        for (entries) |entry| {
-            if (try sug.addChoiceLabel(entry)) {
-                te.textSet(entry, false);
+    /// Returns true if an entry was selected
+    pub fn entries(self: *ComboBox, items: []const []const u8) !bool {
+        var selected = false;
+        if (try self.sug.dropped()) {
+            for (items) |entry| {
+                if (try self.sug.addChoiceLabel(entry)) {
+                    self.te.textSet(entry, false);
+                    selected = true;
+                }
             }
         }
+        return selected;
     }
 
-    sug.deinit();
+    pub fn deinit(self: *ComboBox) void {
+        self.sug.deinit();
+        self.te.deinit();
+    }
+};
 
+pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) !*ComboBox {
+    var combo = try currentWindow().arena().create(ComboBox);
+    combo.te = try currentWindow().arena().create(TextEntryWidget);
+    combo.te.* = dvui.TextEntryWidget.init(src, init_opts, opts);
+    try combo.te.install();
+
+    combo.sug = try dvui.suggestion(combo.te, .{ .button = true });
     // suggestion forwards events to textEntry, so don't call te.processEvents()
-    try te.draw();
-    return te;
+    try combo.te.draw();
+
+    return combo;
 }
 
 pub var expander_defaults: Options = .{

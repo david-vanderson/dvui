@@ -1141,8 +1141,24 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
             "one", "two", "three", "four", "five", "six",
         };
 
-        var te = try dvui.comboBox(@src(), entries, .{}, .{});
-        te.deinit();
+        const combo = try dvui.comboBox(@src(), .{}, .{});
+
+        // filter suggestions to match the start of the entry
+        if (combo.te.text_changed) {
+            const arena = dvui.currentWindow().arena();
+            var filtered = try std.ArrayListUnmanaged([]const u8).initCapacity(arena, entries.len);
+            defer filtered.deinit(arena);
+            const filter_text = combo.te.getText();
+            for (entries) |entry| {
+                if (std.mem.startsWith(u8, entry, filter_text)) {
+                    filtered.appendAssumeCapacity(entry);
+                }
+            }
+            dvui.dataSetSlice(null, combo.te.data().id, "suggestions", filtered.items);
+        }
+
+        _ = try combo.entries(dvui.dataGetSlice(null, combo.te.data().id, "suggestions", [][]const u8) orelse entries);
+        combo.deinit();
     }
 
     {
