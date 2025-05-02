@@ -1141,8 +1141,24 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
             "one", "two", "three", "four", "five", "six",
         };
 
-        var te = try dvui.comboBox(@src(), entries, .{}, .{});
-        te.deinit();
+        const combo = try dvui.comboBox(@src(), .{}, .{});
+
+        // filter suggestions to match the start of the entry
+        if (combo.te.text_changed) {
+            const arena = dvui.currentWindow().arena();
+            var filtered = try std.ArrayListUnmanaged([]const u8).initCapacity(arena, entries.len);
+            defer filtered.deinit(arena);
+            const filter_text = combo.te.getText();
+            for (entries) |entry| {
+                if (std.mem.startsWith(u8, entry, filter_text)) {
+                    filtered.appendAssumeCapacity(entry);
+                }
+            }
+            dvui.dataSetSlice(null, combo.te.data().id, "suggestions", filtered.items);
+        }
+
+        _ = try combo.entries(dvui.dataGetSlice(null, combo.te.data().id, "suggestions", [][]const u8) orelse entries);
+        combo.deinit();
     }
 
     {
@@ -1150,6 +1166,54 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
         defer hbox.deinit();
 
         try dvui.label(@src(), "Suggest", .{}, .{ .gravity_y = 0.5 });
+
+        try left_alignment.spacer(@src(), 0);
+
+        var te = dvui.TextEntryWidget.init(@src(), .{}, .{ .max_size_content = .size(dvui.Options.sizeM(20, 1)) });
+        try te.install();
+
+        const entries: []const []const u8 = &.{
+            "one", "two", "three", "four", "five", "six",
+        };
+
+        var sug = try dvui.suggestion(&te, .{ .open_on_text_change = true });
+
+        // dvui.suggestion processes events so text entry should be updated
+        if (te.text_changed) {
+            const arena = dvui.currentWindow().arena();
+            var filtered = try std.ArrayListUnmanaged([]const u8).initCapacity(arena, entries.len);
+            defer filtered.deinit(arena);
+            const filter_text = te.getText();
+            for (entries) |entry| {
+                if (std.mem.startsWith(u8, entry, filter_text)) {
+                    filtered.appendAssumeCapacity(entry);
+                }
+            }
+            dvui.dataSetSlice(null, te.data().id, "suggestions", filtered.items);
+        }
+
+        const filtered = dvui.dataGetSlice(null, te.data().id, "suggestions", [][]const u8) orelse entries;
+        if (try sug.dropped()) {
+            for (filtered) |entry| {
+                if (try sug.addChoiceLabel(entry)) {
+                    te.textSet(entry, false);
+                    sug.close();
+                }
+            }
+        }
+
+        sug.deinit();
+
+        // suggestion forwards events to textEntry, so don't call te.processEvents()
+        try te.draw();
+        te.deinit();
+    }
+
+    {
+        var hbox = try dvui.box(@src(), .horizontal, .{});
+        defer hbox.deinit();
+
+        try dvui.label(@src(), "Suggest menu", .{}, .{ .gravity_y = 0.5 });
 
         try left_alignment.spacer(@src(), 0);
 
