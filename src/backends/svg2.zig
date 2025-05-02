@@ -4,6 +4,19 @@
 //! By default, each frame will result in a single file in "cwd()/svg_render".
 //! For generating extra debug files, and other customization, see `SvgRenderOptions`
 //!
+//! The generated svg files are trying to be a bit compact but still human readable.
+//! The top of the file has one huge `<defs></defs>` section, and after that all the
+//! triangles are batched by group of color/textures.
+//!
+//! The triangles batches and/or the relevant debug elements are as much as possible
+//! groupped such that if you explore the file in and editor like inkscape you can
+//! manipulate the blocks nicely.
+//!
+
+// TODO : check other function of dvui API to see if I miss something regarding textures
+
+// TODO : find the nice API for rendering only some frames (snapshot style)
+// TODO : check how integration with testing backend could go.
 
 /// Size of the resulting svg (aka window size)
 size: dvui.Size,
@@ -27,12 +40,14 @@ triangle_count: u24 = 0,
 // Count each clipping rect per frame
 // Max 4096 clipr per frame, prints in 3 chars, same than texture.
 clipr_count: u12 = 0,
+// Count each call to drawClippedTriangles with a texture
+debug_texture_count: if (render_opts.emit_debug_textures) |_| u24 else u0 = 0,
 
 svg_patterns: std.ArrayListUnmanaged(SvgPattern) = undefined,
 svg_filters: std.AutoHashMapUnmanaged(SvgFilter, void) = undefined,
 svg_clippaths: std.ArrayListUnmanaged(SvgClippath) = undefined,
 svg_graphics: std.ArrayListUnmanaged(SvgGraphics) = undefined,
-svg_b64_streams: std.AutoHashMapUnmanaged(SvgTexture, []const u8) = undefined,
+svg_b64_streams: if (render_opts.emit_textures) void else std.AutoHashMapUnmanaged(SvgTexture, []const u8) = undefined,
 
 pub const InitOptions = struct {
     // Long lived allocator needed to keep the name of the textures from frame to frame.
@@ -50,6 +65,11 @@ pub const InitOptions = struct {
 ///     ...
 /// };
 /// ```
+/// Note that some debug features might result in difficult to manage files if the rendered
+/// layout is a bit complex (think demo window) e.g. :
+/// - `emit_debug_textures` creates a crazy amount of files.
+/// - `debughl_vertex` creates huge svg frame file that might kill your svg viewer.
+///
 pub const SvgRenderOptions = struct {
     /// Stop output files after that many frames to avoid accidentyl crazy big folders.
     max_frame: u8 = 25,
@@ -59,26 +79,46 @@ pub const SvgRenderOptions = struct {
     render_dir: []const u8 = "svg_render2",
     /// Specify a background color `<rect>` in the generated svg.
     /// If null (default), the background is transparent.
+    /// This works for both the main sgv (frame) and the ones from `emit_debug_textures`
     draw_background: ?dvui.Color = null,
     /// If not `null`, draws circles at the position of each vertex.
     /// The value is a circle size (svg coordinates).
     ///
     /// This can help for some low level debug. To help spotting the "direction" of the
     /// triangle, each 3 vertexes are respectively :
-    /// - redish and slightly smaller
-    /// - greenish
-    /// - blueish and slightly bigger
-    debughl_vertex: ?u32 = null,
-    /// Paint the empty and clockwise triangles in red.
-    debughl_no_ccw_triangle: bool = false,
-    /// Outline clipping rects in red, as passed to drawClippedTriangles
-    debughl_clipr: bool = false,
+    /// - yellowish and slightly smaller
+    /// - magentaish
+    /// - cyanish and slightly bigger
+    debughl_vertex: ?f32 = null,
+    /// If not `null`, stroke the empty and clockwise triangles in red.
+    /// and emit a log warning for such triangles.
+    ///
+    /// The value is the stroke-width of the clockwise triangles.
+    /// Empty ones will result in a circle of that size.
+    debughl_no_ccw_triangles: ?f32 = null,
+    /// If not `null`, stroke the clipping rects (as passed to drawClippedTriangles) in red.
+    /// The value is the stroke-width of the rectangle.
+    debughl_clipr: ?f32 = null,
+    /// Do not apply the clipping rects passed to drawClippedTriangles.
+    /// This is compatible with `debughl_clipr`, in which case the clip is drawn
+    /// in red but doesn't hide anything.
+    no_apply_clipr: bool = false,
     /// For each texture, emit the corresponding `.png` file, and link it
     /// in the svg instead of embedding a base64 encoded version.
     emit_textures: bool = false,
     /// Emit extra svg file for each texture, with the uv point for each
     /// vertex drawn on the texture.
-    emit_debug_texture: bool = false,
+    /// The value is a circle size (svg coordinates).
+    ///
+    /// This can help for some low level debug. To help spotting the "direction" of the
+    /// triangle, each 3 vertexes are respectively :
+    /// - yellowish and slightly smaller
+    /// - magentaish
+    /// - cyanish and slightly bigger
+    emit_debug_textures: ?f32 = null,
+    /// Emit a comment when closing the groups.
+    /// Useful to debug the backend itself or for better readability in the svg.
+    emit_close_group_comment: bool = false,
 };
 const root = @import("root");
 const render_opts = if (@hasDecl(root, "svg_render_options"))
@@ -97,44 +137,54 @@ pub const kind: dvui.enums.Backend = .svg;
 pub const SvgGraphics = union(enum) {
     clip_group: SvgClipGroup,
     color_group: SvgColorGroup,
-    close_group: void,
+    filter_group: SvgFilterGroup,
+    // close group only needed content (so far at least) to debug the clip rect, because
+    // I want to draw it after the triangle, when closing the group.
+    // Otherwise, it's just `</g>` so doesn't carry metadata, but having distinct
+    // groups still help to catch logic errors.
+    group_close: union(enum) {
+        clip_group: if (render_opts.debughl_clipr != null) SvgClipGroup else void,
+        color_group: void,
+        filter_group: void,
+    },
     triangle: SvgTriangle,
-};
-/// Clip group only need an id corresponding to SvgClipPath.
-///  Corresponds to <g clip-path="id">
-pub const SvgClipGroup = struct {
-    id: u12,
-};
-/// Simply wraps a dvui.Color.
-///  Corresponds to <g fill="#xxxxxx" fill-opacity="d">
-pub const SvgColorGroup = struct {
-    col: dvui.Color,
 
-    pub fn toU24Col(self: SvgColorGroup) u24 {
-        const c: u24 = (@as(u24, self.col.r) << 16) | (@as(u24, self.col.g) << 8) | self.col.b;
-        return c;
-    }
-    pub fn toNormOpacity(self: SvgColorGroup) f32 {
-        const op: f32 = @as(f32, @floatFromInt(self.col.a)) / 255.0;
-        return op;
-    }
+    /// Simply wraps a SvgFilter
+    ///  Corresponds to <g filter="#fXXXXXXXX">,
+    ///  allowing to batch triangle using the same filter.
+    pub const SvgFilterGroup = struct {
+        filter: SvgFilter,
+    };
+    /// Clip group only need an id corresponding to SvgClipPath.
+    ///  Corresponds to <g clip-path="id">
+    pub const SvgClipGroup = struct {
+        id: u12,
+    };
+    /// Simply wraps a dvui.Color.
+    ///  Corresponds to <g fill="#xxxxxx" fill-opacity="d">
+    pub const SvgColorGroup = struct {
+        col: dvui.Color,
+
+        pub fn toU24Col(self: SvgColorGroup) u24 {
+            const c: u24 = (@as(u24, self.col.r) << 16) | (@as(u24, self.col.g) << 8) | self.col.b;
+            return c;
+        }
+        pub fn toNormOpacity(self: SvgColorGroup) f32 {
+            const op: f32 = @as(f32, @floatFromInt(self.col.a)) / 255.0;
+            return op;
+        }
+    };
 };
 /// Effective triangle.
-///  Holds a reference to the texture if any.
-///  Otherwise the color is dealt with in a SvgColorGroup.
+///  Holds a reference to the pattern_id if textured triangle.
+///  The color is dealt with in a SvgColorGroup / SvgFilterGroup.
 pub const SvgTriangle = struct {
     p1: dvui.Point,
     p2: dvui.Point,
     p3: dvui.Point,
 
-    tex_info: ?TexInfo,
-
-    const TexInfo = struct {
-        // Pattern id to link to, i.e. pattern="url(#p{pattern_id})"
-        pattern_id: u24,
-        // Filter id to link to, i.e. filter="url(#f{filter_id})"
-        filter_id: u32,
-    };
+    pattern_id: ?u24,
+    filter_id: if (render_opts.debughl_vertex != null) ?u32 else void,
 };
 
 /// Represent an <image> tag.
@@ -180,10 +230,6 @@ pub const SvgTexture = struct {
             .texture_create_id = @intCast(id & 0xFFF),
         };
     }
-};
-/// Holds reference to heap allocated base64 stream for a given SvgTexture.
-pub const SvgB64Stream = struct {
-    stream: []const u8,
 };
 /// Represent a <pattern> tag.
 ///  Each textured triangle has to refer one.
@@ -241,9 +287,6 @@ pub const SvgClippath = struct {
     id: u12,
 };
 
-pub const SvgCircle = struct { // for debug function, left aside for now
-};
-
 pub fn initWindow(options: InitOptions) !SvgBackend {
     std.fs.cwd().makeDir(render_opts.render_dir) catch |err| {
         if (err != std.fs.Dir.MakeError.PathAlreadyExists) {
@@ -279,7 +322,6 @@ pub fn initWindow(options: InitOptions) !SvgBackend {
         };
     }
 }
-/// Not used for now, kept for mirroring other backend API
 pub fn deinit(self: *SvgBackend) void {
     if (!render_opts.emit_textures) {
         self.svg_b64_streams.deinit(self.alloc);
@@ -297,6 +339,63 @@ pub fn nanoTime(_: *SvgBackend) i128 {
 /// Sleep for nanoseconds.
 pub fn sleep(_: *SvgBackend, ns: u64) void {
     std.time.sleep(ns);
+}
+
+fn emitTriangle(bufwriter: anytype, t: SvgTriangle) void {
+    bufwriter.print(
+        \\  <polygon points="{d},{d} {d},{d} {d},{d}"
+    , .{ t.p1.x, t.p1.y, t.p2.x, t.p2.y, t.p3.x, t.p3.y }) catch unreachable;
+    if (t.pattern_id) |p| {
+        bufwriter.print(" fill=\"url(#p{X})\"", .{p}) catch unreachable;
+        if (render_opts.debughl_vertex) |_| {
+            if (t.filter_id) |filter_id| {
+                bufwriter.print(" filter=\"url(#f{X})\"", .{filter_id}) catch unreachable;
+            }
+        }
+    }
+
+    if (render_opts.debughl_no_ccw_triangles) |hl_size| {
+        const a = (t.p2.x - t.p1.x) * (t.p2.y + t.p1.y);
+        const b = (t.p3.x - t.p2.x) * (t.p3.y + t.p2.y);
+        const c = (t.p1.x - t.p3.x) * (t.p1.y + t.p3.y);
+        if (a + b + c < 0) {
+            bufwriter.print(
+                \\ stroke="red" stroke-width="{d}/>" 
+                \\
+            , .{hl_size}) catch unreachable;
+            log.warn("clockwise triangle @{d},{d}\n", .{ t.p1.x, t.p1.y });
+        } else if (a + b + c == 0) {
+            bufwriter.print(
+                \\/>
+                \\  <circle cx="{d}" cy="{d}" r="{d}" fill="red"/>
+                \\
+            , .{ t.p1.x, t.p2.y, hl_size }) catch unreachable;
+            log.warn("empty triangle @{d},{d}\n", .{ t.p1.x, t.p1.y });
+        } else {
+            _ = bufwriter.write("/>\n") catch unreachable;
+        }
+    } else {
+        _ = bufwriter.write("/>\n") catch unreachable;
+    }
+}
+
+fn emitTriangleAndVertexes(comptime dot_size: f32, bufwriter: anytype, t: SvgTriangle) void {
+    // Do a sub-group for each triangle. Verbose but allow nice manipulation in inkscape
+    bufwriter.print("  <g>\n", .{}) catch unreachable;
+
+    emitTriangle(bufwriter, t);
+
+    bufwriter.print(
+        \\  <circle cx="{d}" cy="{d}" r="{d}" stroke="gold" stroke-width="{d}" stroke-opacity="0.6" fill="none"/>
+        \\  <circle cx="{d}" cy="{d}" r="{d}" stroke="violet" stroke-width="{d}"  stroke-opacity="0.6" fill="none"/>
+        \\  <circle cx="{d}" cy="{d}" r="{d}" stroke="turquoise" stroke-width="{d}" stroke-opacity="0.6" fill="none"/>
+        \\  </g>
+        \\
+    , .{
+        t.p1.x, t.p1.y, dot_size * 0.8, dot_size / 5,
+        t.p2.x, t.p2.y, dot_size,       dot_size / 5,
+        t.p3.x, t.p3.y, dot_size * 1.2, dot_size / 5,
+    }) catch unreachable;
 }
 
 /// Called by dvui during `dvui.Window.begin`, so prior to any dvui
@@ -358,6 +457,13 @@ pub fn end(self: *SvgBackend) void {
             \\  </clipPath>
             \\
         , .{ cp.id, cp.rect.x, cp.rect.y, cp.rect.w, cp.rect.h }) catch unreachable;
+        if (render_opts.debughl_clipr) |stroke_width| {
+            // Emit a <rect> in the <defs> to be <use> later
+            bufwriter.print(
+                \\  <rect id="hlc{X}" x="{d}" y="{d}" width="{d}" height="{d}" stroke="red" stroke-width="{d}" fill="none"/>
+                \\
+            , .{ cp.id, cp.rect.x, cp.rect.y, cp.rect.w, cp.rect.h, stroke_width }) catch unreachable;
+        }
     }
 
     var filter_iter = self.svg_filters.keyIterator();
@@ -413,17 +519,18 @@ pub fn end(self: *SvgBackend) void {
     for (self.svg_graphics.items) |graph_el| {
         switch (graph_el) {
             .triangle => |t| {
-                bufwriter.print(
-                    \\  <polygon points="{d},{d} {d},{d} {d},{d}"
-                , .{ t.p1.x, t.p1.y, t.p2.x, t.p2.y, t.p3.x, t.p3.y }) catch unreachable;
-                if (t.tex_info) |tex_info| {
-                    bufwriter.print(
-                        \\ fill="url(#p{X})" filter="url(#f{X})" 
-                    , .{
-                        tex_info.pattern_id, tex_info.filter_id,
-                    }) catch unreachable;
+                if (render_opts.debughl_vertex) |dot_size| {
+                    emitTriangleAndVertexes(dot_size, bufwriter, t);
+                } else {
+                    emitTriangle(bufwriter, t);
                 }
-                _ = bufwriter.write("/>\n") catch unreachable; // closing <polygon
+            },
+            .clip_group => |clip_g| {
+                if (render_opts.no_apply_clipr) {
+                    _ = bufwriter.write("<g>\n") catch unreachable;
+                } else {
+                    bufwriter.print("<g clip-path=\"url(#c{X})\">\n", .{clip_g.id}) catch unreachable;
+                }
             },
             .color_group => |col_g| {
                 bufwriter.print(
@@ -431,11 +538,42 @@ pub fn end(self: *SvgBackend) void {
                     .{ col_g.toU24Col(), col_g.toNormOpacity() },
                 ) catch unreachable;
             },
-            .clip_group => |clip_g| {
-                bufwriter.print("<g clip-path=\"url(#c{X})\">\n", .{clip_g.id}) catch unreachable;
+            .filter_group => |filtr_group| {
+                if (render_opts.debughl_vertex) |_| {
+                    // Cannot emit filter in the group in this case, because
+                    // it override the color of the debug circles
+                    bufwriter.print("<g>\n", .{}) catch unreachable;
+                } else {
+                    bufwriter.print(
+                        "<g filter=\"url(#f{X})\">\n",
+                        .{filtr_group.filter.toId()},
+                    ) catch unreachable;
+                }
             },
-            .close_group => {
-                _ = bufwriter.write("</g>\n") catch unreachable;
+            .group_close => |group_close| {
+                if (render_opts.debughl_clipr) |_| {
+                    switch (group_close) {
+                        .clip_group => |clip_g| {
+                            bufwriter.print("<use href=\"#hlc{X}\"/>\n", .{clip_g.id}) catch unreachable;
+                        },
+                        .color_group, .filter_group => {},
+                    }
+                }
+                if (render_opts.emit_close_group_comment) {
+                    switch (group_close) {
+                        .color_group => {
+                            _ = bufwriter.write("</g><!--closing color group-->\n") catch unreachable;
+                        },
+                        .clip_group => {
+                            _ = bufwriter.write("</g><!--closing clip group-->\n") catch unreachable;
+                        },
+                        .filter_group => {
+                            _ = bufwriter.write("</g><!--closing filter group-->\n") catch unreachable;
+                        },
+                    }
+                } else {
+                    _ = bufwriter.write("</g>\n") catch unreachable;
+                }
             },
         }
     }
@@ -447,6 +585,9 @@ pub fn end(self: *SvgBackend) void {
     self.texture_count = 0;
     self.triangle_count = 0;
     self.clipr_count = 0;
+    if (render_opts.emit_debug_textures) |_| {
+        self.debug_texture_count = 0;
+    }
 }
 
 /// Return size of the window in physical pixels.  For a 300x200 retina
@@ -527,25 +668,43 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
         ) catch unreachable;
         self.svg_graphics.append(
             self.arena,
-            SvgGraphics{ .clip_group = SvgClipGroup{ .id = self.clipr_count } },
+            SvgGraphics{ .clip_group = .{ .id = self.clipr_count } },
         ) catch unreachable;
-        self.clipr_count += 1;
     }
 
     var last_vtx_color: ?dvui.Color = null;
+    var last_vtx_filter: ?SvgFilter = null;
     var i: usize = 0;
     while (i < idx.len) : (i += 3) {
         const v1, const v2, const v3 = .{ vtx[idx[i]], vtx[idx[i + 1]], vtx[idx[i + 2]] };
 
-        var tex_info: ?SvgTriangle.TexInfo = null;
+        var cur_pattern_id: ?u24 = null;
         if (texture) |txr| {
             const filter = SvgFilter.fromCol(v3.col);
+            cur_pattern_id = self.triangle_count;
+            if (last_vtx_filter) |last_filter| {
+                if (last_filter.toId() != filter.toId()) {
+                    // Close previous group
+                    self.svg_graphics.append(
+                        self.arena,
+                        SvgGraphics{ .group_close = .filter_group },
+                    ) catch unreachable;
+                    // Open a new one
+                    self.svg_graphics.append(
+                        self.arena,
+                        SvgGraphics{ .filter_group = .{ .filter = filter } },
+                    ) catch unreachable;
+                }
+            } else {
+                // Only open a new one
+                self.svg_graphics.append(
+                    self.arena,
+                    SvgGraphics{ .filter_group = .{ .filter = filter } },
+                ) catch unreachable;
+                last_vtx_filter = filter;
+            }
             self.svg_filters.put(self.arena, filter, {}) catch unreachable;
 
-            tex_info = SvgTriangle.TexInfo{
-                .pattern_id = self.triangle_count,
-                .filter_id = filter.toId(),
-            };
             var pattern = SvgPattern{
                 .id = self.triangle_count,
                 .texture_id = SvgTexture.fromPtr(txr.ptr).toId(),
@@ -565,14 +724,21 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             // (in textured version, the vertex's color is express with a <filter>)
             if (last_vtx_color) |last_color| {
                 if (last_color.toU32() != v3.col.toU32()) {
-                    self.svg_graphics.append(self.arena, SvgGraphics{ .close_group = {} }) catch unreachable;
-                    self.svg_graphics.append(self.arena, SvgGraphics{
-                        .color_group = SvgColorGroup{ .col = last_color },
-                    }) catch unreachable;
+                    // Close previous group
+                    self.svg_graphics.append(
+                        self.arena,
+                        SvgGraphics{ .group_close = .color_group },
+                    ) catch unreachable;
+                    // Open a new one
+                    self.svg_graphics.append(
+                        self.arena,
+                        SvgGraphics{ .color_group = .{ .col = last_color } },
+                    ) catch unreachable;
                 }
             } else {
+                // Only open a new one.
                 self.svg_graphics.append(self.arena, SvgGraphics{
-                    .color_group = SvgColorGroup{ .col = v3.col },
+                    .color_group = .{ .col = v3.col },
                 }) catch unreachable;
                 last_vtx_color = v3.col;
             }
@@ -581,17 +747,96 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             .p1 = v1.pos,
             .p2 = v2.pos,
             .p3 = v3.pos,
-            .tex_info = tex_info,
+            .pattern_id = cur_pattern_id,
+            .filter_id = if (render_opts.debughl_vertex != null) SvgFilter.fromCol(v3.col).toId() else {},
         };
         self.svg_graphics.append(self.arena, SvgGraphics{ .triangle = triangle }) catch unreachable;
 
         self.triangle_count += 1;
     }
     if (last_vtx_color) |_| {
-        self.svg_graphics.append(self.arena, SvgGraphics{ .close_group = {} }) catch unreachable;
+        self.svg_graphics.append(
+            self.arena,
+            SvgGraphics{ .group_close = .color_group },
+        ) catch unreachable;
+    }
+    if (last_vtx_filter) |_| {
+        self.svg_graphics.append(self.arena, SvgGraphics{ .group_close = .filter_group }) catch unreachable;
     }
     if (clipr) |_| {
-        self.svg_graphics.append(self.arena, SvgGraphics{ .close_group = {} }) catch unreachable;
+        self.svg_graphics.append(
+            self.arena,
+            SvgGraphics{ .group_close = .{
+                .clip_group = if (render_opts.debughl_clipr != null) .{ .id = self.clipr_count } else {},
+            } },
+        ) catch unreachable;
+        self.clipr_count += 1;
+    }
+
+    if (render_opts.emit_debug_textures) |dot_size| {
+        if (texture) |txr| {
+            const svg_texture = SvgTexture.fromPtr(txr.ptr);
+
+            const dir = render_opts.render_dir;
+            const filename = std.fmt.allocPrint(
+                self.arena,
+                "frame{x:02}-t{X}.svg",
+                .{ self.frame_count, self.debug_texture_count },
+            ) catch unreachable;
+            const filepath = std.fs.path.join(self.arena, &.{ dir, filename }) catch unreachable;
+            const debug_trx_file = std.fs.cwd().createFile(filepath, .{}) catch unreachable;
+            var buffered = std.io.bufferedWriter(debug_trx_file.writer());
+            var bufwriter = buffered.writer();
+            bufwriter.print(
+                \\<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+                \\<svg
+                \\    viewBox="0 0 {d} {d}" xmlns="http://www.w3.org/2000/svg"
+                \\>
+                \\
+            , .{ txr.width, txr.height }) catch unreachable;
+            if (render_opts.draw_background) |background_col| {
+                bufwriter.print(
+                    "<rect width=\"100%\" height=\"100%\" fill=\"{s}\"/>\n",
+                    .{background_col.toHexString() catch unreachable},
+                ) catch unreachable;
+            }
+            if (render_opts.emit_textures) {
+                bufwriter.print(
+                    "  <image id=\"t{X}\" href=\"{s}\"/>\n",
+                    .{ svg_texture.toId(), svg_texture.filename() },
+                ) catch unreachable;
+            } else {
+                bufwriter.print(
+                    "  <image id=\"t{X}\" href=\"data:image/png;base64,{s}\"/>\n",
+                    .{ svg_texture.toId(), self.svg_b64_streams.get(svg_texture).? },
+                ) catch unreachable;
+            }
+
+            i = 0;
+            while (i < idx.len) : (i += 3) {
+                const v1, const v2, const v3 = .{ vtx[idx[i]], vtx[idx[i + 1]], vtx[idx[i + 2]] };
+                const txr_size: @Vector(2, f32) = .{ @as(f32, @floatFromInt(txr.width)), @as(f32, @floatFromInt(txr.height)) };
+                const x1, const y1 = v1.uv * txr_size;
+                const x2, const y2 = v2.uv * txr_size;
+                const x3, const y3 = v3.uv * txr_size;
+                bufwriter.print(
+                    \\<g>
+                    \\  <circle cx="{d}" cy="{d}" r="{d}" stroke="gold" stroke-width="{d}" stroke-opacity="0.8" fill="none"/>
+                    \\  <circle cx="{d}" cy="{d}" r="{d}" stroke="violet" stroke-width="{d}"  stroke-opacity="0.8" fill="none"/>
+                    \\  <circle cx="{d}" cy="{d}" r="{d}" stroke="turquoise" stroke-width="{d}" stroke-opacity="0.8" fill="none"/>
+                    \\</g>
+                    \\
+                , .{
+                    x1, y1, dot_size * 0.8, dot_size / 5,
+                    x2, y2, dot_size,       dot_size / 5,
+                    x3, y3, dot_size * 1.2, dot_size / 5,
+                }) catch unreachable;
+            }
+            bufwriter.writeAll("</svg>") catch unreachable;
+            buffered.flush() catch unreachable;
+
+            self.debug_texture_count += 1;
+        }
     }
 }
 
