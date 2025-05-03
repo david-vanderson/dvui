@@ -16,7 +16,7 @@
 //! - [rayLib](#dvui.backends.raylib)
 //! - [Dx11](#dvui.backends.dx11)
 //! - [Testing](#dvui.backends.testing)
-//!
+//! - [SVG](#dvui.backends.svg)
 const builtin = @import("builtin");
 const std = @import("std");
 pub const backend = @import("backend");
