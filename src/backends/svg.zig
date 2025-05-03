@@ -67,8 +67,8 @@ pub const InitOptions = struct {
 /// ```
 /// Note that some debug features might result in difficult to manage files if the rendered
 /// layout is a bit complex (think demo window) e.g. :
-/// - `emit_debug_textures` creates a crazy amount of files.
-/// - `debughl_vertex` creates huge svg frame file that might kill your svg viewer.
+/// - `emit_debug_textures` creates a big amount of files.
+/// - `debughl_vertexes` creates huge svg frame file that might kill your svg viewer.
 ///
 pub const SvgRenderOptions = struct {
     /// Stop output files after that many frames to avoid accidentyl crazy big folders.
@@ -81,15 +81,30 @@ pub const SvgRenderOptions = struct {
     /// If null (default), the background is transparent.
     /// This works for both the main sgv (frame) and the ones from `emit_debug_textures`
     draw_background: ?dvui.Color = null,
+    /// If not `null`, triangle's edges will be drawn.
+    /// The value is the stroke-width.
+    ///
+    /// It defaults to 0.5 as otherwise a small gap appears between the colored triangles.
+    /// I'm not fully sure why this happens, but setting to `null` is a nice debug
+    /// feature to better see how the triangles are drawn.
+    /// For more explicit debugging of triangles, consider `debughl_edges` and `debughl_vertexes`.
+    edges_width: ?f32 = 0.5,
+    // If not null, the edges of the triangles will be drawn in that particular color
+    // instead of the vertex color.
+    //
+    // For this to have an effect, `edges_width` must be set to a value.
+    // Note that the color might not be respected on textured colors because they
+    // apply an extra filter.
+    debughl_edges: ?dvui.Color = null,
     /// If not `null`, draws circles at the position of each vertex.
-    /// The value is a circle size (svg coordinates).
+    /// The value is the circle size.
     ///
     /// This can help for some low level debug. To help spotting the "direction" of the
     /// triangle, each 3 vertexes are respectively :
     /// - yellowish and slightly smaller
     /// - magentaish
     /// - cyanish and slightly bigger
-    debughl_vertex: ?f32 = null,
+    debughl_vertexes: ?f32 = null,
     /// If not `null`, stroke the empty and clockwise triangles in red.
     /// and emit a log warning for such triangles.
     ///
@@ -119,12 +134,6 @@ pub const SvgRenderOptions = struct {
     /// Emit a comment when closing the groups.
     /// Useful to debug the backend itself or for better readability in the svg.
     emit_close_group_comment: bool = false,
-    /// Add a small stroke to color triangles so that we don't see the gaps between them.
-    ///
-    /// I'm not fully sure why this happens, but setting this to false is a nice debug
-    /// feature to better see how the triangles are drawn.
-    /// For more explicit debugging of triangles, consider `debughl_vertex`.
-    fill_triangle_gap: bool = true,
 };
 const root = @import("root");
 const render_opts = if (@hasDecl(root, "svg_render_options"))
@@ -190,7 +199,7 @@ pub const SvgTriangle = struct {
     p3: dvui.Point,
 
     pattern_id: ?u24,
-    filter_id: if (render_opts.debughl_vertex != null) ?u32 else void,
+    filter_id: if (render_opts.debughl_vertexes != null) ?u32 else void,
 };
 
 /// Represent an <image> tag.
@@ -208,6 +217,16 @@ pub const SvgTexture = struct {
         _ = std.fmt.bufPrint(
             &result,
             filename_template,
+            .{ self.frame_id, self.texture_create_id },
+        ) catch unreachable;
+        return result;
+    }
+    /// Same as `filename` but without extension.
+    pub fn textId(self: SvgTexture) [filename_len - 4]u8 {
+        var result: [filename_len - 4]u8 = .{0} ** (filename_len - 4);
+        _ = std.fmt.bufPrint(
+            &result,
+            filename_template[0 .. filename_template.len - 4],
             .{ self.frame_id, self.texture_create_id },
         ) catch unreachable;
         return result;
@@ -353,7 +372,7 @@ fn emitTriangle(bufwriter: anytype, t: SvgTriangle) void {
     , .{ t.p1.x, t.p1.y, t.p2.x, t.p2.y, t.p3.x, t.p3.y }) catch unreachable;
     if (t.pattern_id) |p| {
         bufwriter.print(" fill=\"url(#p{X})\"", .{p}) catch unreachable;
-        if (render_opts.debughl_vertex) |_| {
+        if (render_opts.debughl_vertexes) |_| {
             if (t.filter_id) |filter_id| {
                 bufwriter.print(" filter=\"url(#f{X})\"", .{filter_id}) catch unreachable;
             }
@@ -366,7 +385,7 @@ fn emitTriangle(bufwriter: anytype, t: SvgTriangle) void {
         const c = (t.p1.x - t.p3.x) * (t.p1.y + t.p3.y);
         if (a + b + c < 0) {
             bufwriter.print(
-                \\ stroke="red" stroke-width="{d}/>" 
+                \\ stroke="red" stroke-width="{d}"/>" 
                 \\
             , .{hl_size}) catch unreachable;
             log.warn("clockwise triangle @{d},{d}\n", .{ t.p1.x, t.p1.y });
@@ -447,6 +466,27 @@ pub fn end(self: *SvgBackend) void {
         \\>
         \\
     , .{ self.size.w, self.size.h }) catch unreachable;
+    if (render_opts.edges_width) |w| {
+        bufwriter.print(
+            \\<style>
+            \\  polygon {{
+            \\    stroke-width: {d};
+            \\    stroke-linejoin: round;
+            \\  }}
+            \\</style>
+            \\
+        , .{w}) catch unreachable;
+    }
+    if (render_opts.debughl_edges) |c| {
+        bufwriter.print(
+            \\<style>
+            \\  polygon {{
+            \\    stroke: {s};
+            \\  }}
+            \\</style>
+            \\
+        , .{c.toHexString() catch unreachable}) catch unreachable;
+    }
     if (render_opts.draw_background) |background_col| {
         bufwriter.print(
             "<rect width=\"100%\" height=\"100%\" fill=\"{s}\"/>\n",
@@ -491,17 +531,18 @@ pub fn end(self: *SvgBackend) void {
     // for each different effective texture (i.e. unique png file)
     var unique_textures = std.AutoArrayHashMapUnmanaged(SvgTexture, void){};
     for (self.svg_patterns.items) |p| {
+        const texture = SvgTexture.fromId(p.texture_id);
         bufwriter.print(
             \\  <pattern width="{d}" height="{d}"
             \\     patternUnits="userSpaceOnUse"
             \\     patternTransform="matrix({d} {d} {d} {d} {d} {d})"
             \\     id="p{X}">
-            \\     <use href="#t{X}"/>
+            \\     <use href="#{s}"/>
             \\  </pattern>
             \\
         , .{
-            p.width, p.height,     p.a, p.b, p.c, p.d, p.e, p.f,
-            p.id,    p.texture_id,
+            p.width, p.height,         p.a, p.b, p.c, p.d, p.e, p.f,
+            p.id,    texture.textId(),
         }) catch unreachable;
         unique_textures.put(self.arena, SvgTexture.fromId(p.texture_id), {}) catch unreachable;
     }
@@ -509,14 +550,15 @@ pub fn end(self: *SvgBackend) void {
     while (texture_iter.next()) |txr| {
         if (render_opts.emit_textures) {
             bufwriter.print(
-                "  <image id=\"t{X}\" href=\"{s}\"/>\n",
-                .{ txr.key_ptr.toId(), txr.key_ptr.filename() },
+                "  <image id=\"{s}\" href=\"{s}\"/>\n",
+                .{ txr.key_ptr.textId(), txr.key_ptr.filename() },
             ) catch unreachable;
         } else {
-            // FIXME : remove the name= prop, it's only for debug
             bufwriter.print(
-                "  <image name=\"{s}\" id=\"t{X}\" href=\"data:image/png;base64,{s}\"/>\n",
-                .{ txr.key_ptr.*.filename(), txr.key_ptr.toId(), self.svg_b64_streams.get(txr.key_ptr.*).? },
+                \\  <image id="{s}" href="data:image/png;base64,{s}"/>",
+                \\
+            ,
+                .{ txr.key_ptr.*.textId(), self.svg_b64_streams.get(txr.key_ptr.*).? },
             ) catch unreachable;
             print("used {s} in frame{X}\n", .{ txr.key_ptr.*.filename(), self.frame_count });
         }
@@ -527,7 +569,7 @@ pub fn end(self: *SvgBackend) void {
     for (self.svg_graphics.items) |graph_el| {
         switch (graph_el) {
             .triangle => |t| {
-                if (render_opts.debughl_vertex) |dot_size| {
+                if (render_opts.debughl_vertexes) |dot_size| {
                     emitTriangleAndVertexes(dot_size, bufwriter, t);
                 } else {
                     emitTriangle(bufwriter, t);
@@ -545,16 +587,17 @@ pub fn end(self: *SvgBackend) void {
                     "<g fill=\"#{x:06}\" fill-opacity=\"{d}\"",
                     .{ col_g.toU24Col(), col_g.toNormOpacity() },
                 ) catch unreachable;
-                if (render_opts.fill_triangle_gap) {
+                if (render_opts.edges_width) |_| {
+                    // Only stroke color needed, stroke-width in document wide style.
                     bufwriter.print(
-                        " stroke-width=\".1\" stroke=\"#{x:06}\"",
+                        " stroke=\"#{x:06}\"",
                         .{col_g.toU24Col()},
                     ) catch unreachable;
                 }
                 _ = bufwriter.write(">\n") catch unreachable;
             },
             .filter_group => |filtr_group| {
-                if (render_opts.debughl_vertex) |_| {
+                if (render_opts.debughl_vertexes) |_| {
                     // Cannot emit filter in the group in this case, because
                     // it override the color of the debug circles
                     bufwriter.print("<g>\n", .{}) catch unreachable;
@@ -763,7 +806,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             .p2 = v2.pos,
             .p3 = v3.pos,
             .pattern_id = cur_pattern_id,
-            .filter_id = if (render_opts.debughl_vertex != null) SvgFilter.fromCol(v3.col).toId() else {},
+            .filter_id = if (render_opts.debughl_vertexes != null) SvgFilter.fromCol(v3.col).toId() else {},
         };
         self.svg_graphics.append(self.arena, SvgGraphics{ .triangle = triangle }) catch unreachable;
 
@@ -795,8 +838,8 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             const dir = render_opts.render_dir;
             const filename = std.fmt.allocPrint(
                 self.arena,
-                "frame{x:02}-t{X}.svg",
-                .{ self.frame_count, self.debug_texture_count },
+                "frame{x:02}-{s}-{X}.svg",
+                .{ self.frame_count, svg_texture.textId(), self.debug_texture_count },
             ) catch unreachable;
             const filepath = std.fs.path.join(self.arena, &.{ dir, filename }) catch unreachable;
             const debug_trx_file = std.fs.cwd().createFile(filepath, .{}) catch unreachable;
@@ -817,13 +860,13 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             }
             if (render_opts.emit_textures) {
                 bufwriter.print(
-                    "  <image id=\"t{X}\" href=\"{s}\"/>\n",
+                    "  <image id=\"{s}\" href=\"{s}\"/>\n",
                     .{ svg_texture.toId(), svg_texture.filename() },
                 ) catch unreachable;
             } else {
                 bufwriter.print(
-                    "  <image id=\"t{X}\" href=\"data:image/png;base64,{s}\"/>\n",
-                    .{ svg_texture.toId(), self.svg_b64_streams.get(svg_texture).? },
+                    "  <image id=\"{s}\" href=\"data:image/png;base64,{s}\"/>\n",
+                    .{ svg_texture.textId(), self.svg_b64_streams.get(svg_texture).? },
                 ) catch unreachable;
             }
 
