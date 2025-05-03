@@ -507,10 +507,12 @@ pub fn end(self: *SvgBackend) void {
                 .{ txr.key_ptr.toId(), txr.key_ptr.filename() },
             ) catch unreachable;
         } else {
+            // FIXME : remove the name= prop, it's only for debug
             bufwriter.print(
-                "  <image id=\"t{X}\" href=\"data:image/png;base64,{s}\"/>\n",
-                .{ txr.key_ptr.toId(), self.svg_b64_streams.get(txr.key_ptr.*).? },
+                "  <image name=\"{s}\" id=\"t{X}\" href=\"data:image/png;base64,{s}\"/>\n",
+                .{ txr.key_ptr.*.filename(), txr.key_ptr.toId(), self.svg_b64_streams.get(txr.key_ptr.*).? },
             ) catch unreachable;
+            print("used {s} in frame{X}\n", .{ txr.key_ptr.*.filename(), self.frame_count });
         }
     }
 
@@ -849,6 +851,7 @@ pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, 
         .frame_id = self.frame_count,
         .texture_create_id = self.texture_count,
     };
+    print("textureCreate {s}\n", .{texture.filename()});
 
     const png_bytes = dvui.pngEncode(self.arena, pixels[0 .. width * height * 4], width, height, .{ .resolution = null }) catch unreachable;
 
@@ -877,6 +880,8 @@ pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, 
 /// as if made by `textureCreate`.  After this call, texture target will not be
 /// used by dvui.
 pub fn textureFromTarget(_: *SvgBackend, texture: dvui.TextureTarget) dvui.Texture {
+    print("textureFromTarget for {s}\n", .{SvgTexture.fromPtr(texture.ptr).filename()});
+
     return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height };
 }
 /// Destroy texture that was previously made with textureCreate() or
@@ -887,6 +892,8 @@ pub fn textureDestroy(self: *SvgBackend, texture: dvui.Texture) void {
         // Nothing to destroy, I pass and ID around that directly represent the filename
         // and the file is already on the disk straight after TextureCreate
     } else {
+        print("destroy {s}\n", .{SvgTexture.fromPtr(texture.ptr).filename()});
+
         const txr = SvgTexture.fromPtr(texture.ptr);
         const stream = self.svg_b64_streams.get(txr);
         self.alloc.free(stream.?);
@@ -895,19 +902,25 @@ pub fn textureDestroy(self: *SvgBackend, texture: dvui.Texture) void {
 
 /// Create a `dvui.Texture` that can be rendered to with `renderTarget`.  The
 /// returned pointer is what will later be passed to `drawClippedTriangles`.
-pub fn textureCreateTarget(_: *SvgBackend, _: u32, _: u32, _: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!dvui.TextureTarget {
+pub fn textureCreateTarget(_: *SvgBackend, x: u32, y: u32, _: dvui.enums.TextureInterpolation) error{ OutOfMemory, TextureCreate }!dvui.TextureTarget {
+    print("Called textureCreateTarget {}x{}\n", .{ x, y });
     return error.TextureCreate;
 }
 /// Read pixel data (RGBA) from `texture` into `pixels_out`.
 pub fn textureReadTarget(_: *SvgBackend, texture: dvui.TextureTarget, pixels: [*]u8) error{TextureRead}!void {
+    print("Called textureReadTarget with {s}\n", .{SvgTexture.fromPtr(texture.ptr).filename()});
     const ptr: [*]const u8 = @ptrCast(texture.ptr);
     @memcpy(pixels, ptr[0..(texture.width * texture.height * 4)]);
 }
 /// Render future `drawClippedTriangles` to the passed `texture` (or screen
 /// if null).
 pub fn renderTarget(self: *SvgBackend, texture: ?dvui.TextureTarget) void {
+    if (texture) |txr| {
+        print("Called renderTarget with {s}\n", .{SvgTexture.fromPtr(txr.ptr).filename()});
+    } else {
+        print("Called renderTarget without TextureTarget\n", .{});
+    }
     _ = self; // autofix
-    _ = texture; // autofix
 }
 
 /// Get clipboard content (text only)
@@ -940,3 +953,4 @@ const dvui = @import("dvui");
 const Vertex = dvui.Vertex;
 
 const log = std.log.scoped(.dvui_svg_backend);
+const print = std.debug.print;

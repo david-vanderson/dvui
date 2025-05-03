@@ -27,12 +27,14 @@ pub fn main() !void {
     defer win.deinit();
 
     dvui.Examples.show_demo_window = true;
+    // TODO : integrate to testing so I can do "settle"
     for (0..2) |_| {
         try win.begin(std.time.nanoTimestamp());
         try dvui.Examples.calculator();
         _ = try win.end(.{});
     }
 
+    // FIXME : changing this breaks ... test on main first maybe...
     for (0..2) |_| {
         try win.begin(std.time.nanoTimestamp());
         try dvui.Examples.styling();
