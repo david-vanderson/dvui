@@ -5,8 +5,10 @@ comptime {
 
 const zig_icon = @embedFile("zig-favicon.png");
 
+// Customize some behaviours, mostly debug features
 pub const svg_render_options = Backend.SvgRenderOptions{
-    .emit_textures = true,
+    // .draw_background = dvui.Color.black,
+    // .emit_textures = true,
 };
 
 pub fn main() !void {
@@ -25,14 +27,27 @@ pub fn main() !void {
     defer win.deinit();
 
     dvui.Examples.show_demo_window = true;
-    for (0..5) |_| {
-        try win.begin(0);
+    for (0..2) |_| {
+        try win.begin(std.time.nanoTimestamp());
+        try dvui.Examples.calculator();
+        _ = try win.end(.{});
+    }
 
-        // try dvui.Examples.calculator();
-        // try dvui.Examples.styling();
-        // try dvui.Examples.plots();
+    for (0..2) |_| {
+        try win.begin(std.time.nanoTimestamp());
+        try dvui.Examples.styling();
+        _ = try win.end(.{});
+    }
+
+    for (0..2) |_| {
+        try win.begin(std.time.nanoTimestamp());
+        try dvui.Examples.plots();
+        _ = try win.end(.{});
+    }
+
+    for (0..2) |_| {
+        try win.begin(std.time.nanoTimestamp());
         try dvui.Examples.demo();
-
         _ = try win.end(.{});
     }
 }
