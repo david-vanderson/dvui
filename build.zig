@@ -372,17 +372,9 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
         });
-        const svg_mod2 = b.addModule("svg", .{
-            .root_source_file = b.path("src/backends/svg2.zig"),
-            .target = target,
-            .optimize = optimize,
-        });
         const dvui_svg = addDvuiModule("dvui_svg", dvui_opts);
-        const dvui_svg2 = addDvuiModule("dvui_svg2", dvui_opts);
         linkBackend(dvui_svg, svg_mod);
-        linkBackend(dvui_svg2, svg_mod2);
-        addExample("svg-mini", b.path("examples/svg-mini.zig"), dvui_svg, false, dvui_opts);
-        addExample("svg-mini2", b.path("examples/svg-mini.zig"), dvui_svg2, false, dvui_opts);
+        addExample("svg-demo", b.path("examples/svg-demo.zig"), dvui_svg, false, dvui_opts);
     }
 
     // Docs
