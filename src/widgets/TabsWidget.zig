@@ -112,38 +112,39 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) !*ButtonWidget {
 
     if (self.tab_button.focused() and self.tab_button.data().visible()) {
         const rs = self.tab_button.data().borderRectScale();
+        const r = rs.r.toRect();
         const cr = self.tab_button.data().options.corner_radiusGet();
 
         switch (self.init_options.dir) {
             .horizontal => {
-                var path: std.ArrayList(Point) = .init(dvui.currentWindow().arena());
+                var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
                 defer path.deinit();
 
-                try path.append(rs.r.bottomRight());
+                try path.append(.fromPoint(r.bottomRight()));
 
-                const tr = Point{ .x = rs.r.x + rs.r.w - cr.y, .y = rs.r.y + cr.y };
+                const tr = Point.Physical{ .x = r.x + r.w - cr.y, .y = r.y + cr.y };
                 try dvui.pathAddArc(&path, tr, cr.y, math.pi * 2.0, math.pi * 1.5, false);
 
-                const tl = Point{ .x = rs.r.x + cr.x, .y = rs.r.y + cr.x };
+                const tl = Point.Physical{ .x = r.x + cr.x, .y = r.y + cr.x };
                 try dvui.pathAddArc(&path, tl, cr.x, math.pi * 1.5, math.pi, false);
 
-                try path.append(rs.r.bottomLeft());
+                try path.append(.fromPoint(r.bottomLeft()));
 
                 try dvui.pathStroke(path.items, 2 * rs.s, self.options.color(.accent), .{ .after = true });
             },
             .vertical => {
-                var path: std.ArrayList(Point) = .init(dvui.currentWindow().arena());
+                var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
                 defer path.deinit();
 
-                try path.append(rs.r.topRight());
+                try path.append(.fromPoint(r.topRight()));
 
-                const tl = Point{ .x = rs.r.x + cr.x, .y = rs.r.y + cr.x };
+                const tl = Point.Physical{ .x = r.x + cr.x, .y = r.y + cr.x };
                 try dvui.pathAddArc(&path, tl, cr.x, math.pi * 1.5, math.pi, false);
 
-                const bl = Point{ .x = rs.r.x + cr.h, .y = rs.r.y + rs.r.h - cr.h };
+                const bl = Point.Physical{ .x = r.x + cr.h, .y = r.y + r.h - cr.h };
                 try dvui.pathAddArc(&path, bl, cr.h, math.pi, math.pi * 0.5, false);
 
-                try path.append(rs.r.bottomRight());
+                try path.append(.fromPoint(r.bottomRight()));
 
                 try dvui.pathStroke(path.items, 2 * rs.s, self.options.color(.accent), .{ .after = true });
             },

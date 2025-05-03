@@ -571,19 +571,19 @@ pub fn end(_: *WebBackend) void {
     have_event = false;
 }
 
-pub fn pixelSize(_: *WebBackend) dvui.Size {
-    return dvui.Size{ .w = wasm.wasm_pixel_width(), .h = wasm.wasm_pixel_height() };
+pub fn pixelSize(_: *WebBackend) dvui.Size.Physical {
+    return .{ .w = wasm.wasm_pixel_width(), .h = wasm.wasm_pixel_height() };
 }
 
 pub fn windowSize(_: *WebBackend) dvui.Size {
-    return dvui.Size{ .w = wasm.wasm_canvas_width(), .h = wasm.wasm_canvas_height() };
+    return .{ .w = wasm.wasm_canvas_width(), .h = wasm.wasm_canvas_height() };
 }
 
 pub fn contentScale(_: *WebBackend) f32 {
     return 1.0;
 }
 
-pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect) void {
+pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect.Physical) void {
     var x: i32 = std.math.maxInt(i32);
     var w: i32 = std.math.maxInt(i32);
     var y: i32 = std.math.maxInt(i32);
@@ -672,7 +672,7 @@ pub fn textureDestroy(_: *WebBackend, texture: dvui.Texture) void {
     wasm.wasm_textureDestroy(@intCast(@intFromPtr(texture.ptr)));
 }
 
-pub fn textInputRect(_: *WebBackend, rect: ?dvui.Rect) void {
+pub fn textInputRect(_: *WebBackend, rect: ?dvui.Rect.Natural) void {
     if (rect) |r| {
         wasm.wasm_text_input(r.x, r.y, r.w, r.h);
     } else {

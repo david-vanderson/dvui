@@ -18,7 +18,7 @@ pub var defaults: Options = .{
 prev_rendering: bool = undefined,
 wd: WidgetData = undefined,
 prev_windowId: u32 = 0,
-prevClip: Rect = Rect{},
+prevClip: Rect.Physical = .{},
 scale_val: f32 = undefined,
 scaler: dvui.ScaleWidget = undefined,
 

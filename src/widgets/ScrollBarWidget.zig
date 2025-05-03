@@ -77,7 +77,7 @@ pub fn data(self: *ScrollBarWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect) void {
+pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
     const rs = self.wd.borderRectScale();
     const evts = dvui.events();
     for (evts) |*e| {

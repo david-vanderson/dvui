@@ -195,7 +195,7 @@ pub fn rectScale(self: *const WidgetData) RectScale {
     if (self.init_options.subwindow) {
         const s = dvui.windowNaturalScale();
         const scaled = self.rect.scale(s);
-        return RectScale{ .r = scaled.offset(dvui.windowRectPixels()), .s = s };
+        return RectScale{ .r = .fromRect(scaled.offset(dvui.windowRectPixels().toRect())), .s = s };
     }
 
     return self.parent.screenRectScale(self.rect);

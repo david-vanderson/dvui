@@ -2,13 +2,13 @@ pub const PlotWidget = @This();
 
 box: BoxWidget = undefined,
 data_rs: RectScale = undefined,
-old_clip: Rect = undefined,
+old_clip: Rect.Physical = undefined,
 init_options: InitOptions = undefined,
 x_axis: *Axis = undefined,
 x_axis_store: Axis = .{},
 y_axis: *Axis = undefined,
 y_axis_store: Axis = .{},
-mouse_point: ?Point = null,
+mouse_point: ?Point.Physical = null,
 hover_data: ?Data = null,
 data_min: Data = .{ .x = std.math.floatMax(f64), .y = std.math.floatMax(f64) },
 data_max: Data = .{ .x = -std.math.floatMax(f64), .y = -std.math.floatMax(f64) },
@@ -46,15 +46,15 @@ pub const Data = struct {
 
 pub const Line = struct {
     plot: *PlotWidget,
-    path: std.ArrayList(dvui.Point),
+    path: dvui.PathArrayList,
 
     pub fn point(self: *Line, x: f64, y: f64) !void {
         const data: Data = .{ .x = x, .y = y };
         self.plot.dataForRange(data);
         const screen_p = self.plot.dataToScreen(data);
         if (self.plot.mouse_point) |mp| {
-            const dp = Point.diff(mp, screen_p);
-            const dps = dp.scale(1 / dvui.windowNaturalScale());
+            const dp = Point.Physical.diff(mp, screen_p);
+            const dps = dp.toNatural();
             if (@abs(dps.x) <= 3 and @abs(dps.y) <= 3) {
                 self.plot.hover_data = data;
             }
@@ -79,7 +79,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
     return self;
 }
 
-pub fn dataToScreen(self: *PlotWidget, data: Data) dvui.Point {
+pub fn dataToScreen(self: *PlotWidget, data: Data) dvui.Point.Physical {
     const xfrac = self.x_axis.fraction(data.x);
     const yfrac = self.y_axis.fraction(data.y);
     return .{
@@ -222,7 +222,7 @@ pub fn install(self: *PlotWidget) !void {
                 tick_p.y = @max(tick_p.y, self.data_rs.r.y);
                 tick_p.y = @min(tick_p.y, self.data_rs.r.y + self.data_rs.r.h - tick_str_size.h);
                 //tick_p.y -= tick_str_size.h / 2;
-                const tick_rs: RectScale = .{ .r = Rect.fromPoint(tick_p).toSize(tick_str_size), .s = self.data_rs.s };
+                const tick_rs: RectScale = .{ .r = .fromRect(Rect.fromPoint(tick_p.toPoint()).toSize(tick_str_size)), .s = self.data_rs.s };
 
                 try dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) });
             }
@@ -242,7 +242,7 @@ pub fn install(self: *PlotWidget) !void {
                 tick_p.x = @min(tick_p.x, self.data_rs.r.x + self.data_rs.r.w - tick_str_size.w);
                 //tick_p.x -= tick_str_size.w / 2;
                 tick_p.y += pad;
-                const tick_rs: RectScale = .{ .r = Rect.fromPoint(tick_p).toSize(tick_str_size), .s = self.data_rs.s };
+                const tick_rs: RectScale = .{ .r = .fromRect(Rect.fromPoint(tick_p.toPoint()).toSize(tick_str_size)), .s = self.data_rs.s };
 
                 try dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) });
             }

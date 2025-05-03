@@ -1,4 +1,5 @@
 const std = @import("std");
+const dvui = @import("dvui.zig");
 
 const Point = @This();
 
@@ -50,6 +51,66 @@ pub fn normalize(self: *const Point) Point {
 pub fn format(self: *const Point, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
     try std.fmt.format(writer, "Point{{ {d} {d} }}", .{ self.x, self.y });
 }
+
+/// Natural pixels is the unit for subwindow sizing and placement.
+pub const Natural = struct {
+    x: f32 = 0,
+    y: f32 = 0,
+
+    pub inline fn toPoint(self: Point.Natural) Point {
+        return .{ .x = self.x, .y = self.y };
+    }
+
+    pub inline fn fromPoint(p: Point) Point.Natural {
+        return .{ .x = p.x, .y = p.y };
+    }
+
+    /// Only valid between `dvui.Window.begin`and `dvui.Window.end`.
+    pub inline fn toPhysical(self: Point.Natural) Point.Physical {
+        return .fromPoint(self.toPoint().scale(dvui.windowNaturalScale()));
+    }
+
+    pub fn format(self: *const Point.Natural, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        try std.fmt.format(writer, "Point.Natural{{ {d} {d} }}", .{ self.x, self.y });
+    }
+};
+
+/// Pixels is the unit for rendering and user input.
+///
+/// Physical pixels might be more on a hidpi screen or if the user has content scaling.
+pub const Physical = struct {
+    x: f32 = 0,
+    y: f32 = 0,
+
+    pub inline fn toPoint(self: Point.Physical) Point {
+        return .{ .x = self.x, .y = self.y };
+    }
+
+    pub inline fn fromPoint(p: Point) Point.Physical {
+        return .{ .x = p.x, .y = p.y };
+    }
+
+    /// Only valid between `dvui.Window.begin`and `dvui.Window.end`.
+    pub inline fn toNatural(self: Point.Physical) Point.Natural {
+        return .fromPoint(self.toPoint().scale(1 / dvui.windowNaturalScale()));
+    }
+
+    pub inline fn nonZero(self: *const Point.Physical) bool {
+        return self.toPoint().nonZero();
+    }
+
+    pub inline fn plus(a: Point.Physical, b: Point.Physical) Point.Physical {
+        return .fromPoint(a.toPoint().plus(b.toPoint()));
+    }
+
+    pub inline fn diff(a: Point.Physical, b: Point.Physical) Point.Physical {
+        return .fromPoint(a.toPoint().diff(b.toPoint()));
+    }
+
+    pub fn format(self: *const Point.Physical, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        try std.fmt.format(writer, "Point.Physical{{ {d} {d} }}", .{ self.x, self.y });
+    }
+};
 
 test {
     @import("std").testing.refAllDecls(@This());

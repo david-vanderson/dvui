@@ -19,7 +19,7 @@ pub const ContentPosition = enum { start, center };
 
 wd: WidgetData = undefined,
 init_options: InitOptions = undefined,
-prevClip: Rect = Rect{},
+prevClip: Rect.Physical = .{},
 insert_pt: dvui.Point = .{},
 row_size: Size = .{},
 max_row_width: f32 = 0.0,

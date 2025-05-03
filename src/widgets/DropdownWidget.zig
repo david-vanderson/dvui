@@ -67,7 +67,7 @@ pub fn dropped(self: *DropdownWidget) !bool {
     }
 
     if (self.menuItem.activeRect()) |r| {
-        self.drop = FloatingMenuWidget.init(@src(), .{ .from = r, .avoid = .none }, .{ .min_size_content = r.size() });
+        self.drop = FloatingMenuWidget.init(@src(), .{ .from = r, .avoid = .none }, .{ .min_size_content = r.toRect().size() });
         var drop = &self.drop.?;
         self.drop_first_frame = dvui.firstFrame(drop.wd.id);
 

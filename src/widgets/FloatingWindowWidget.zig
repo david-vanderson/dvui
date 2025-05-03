@@ -25,7 +25,7 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     modal: bool = false,
     rect: ?*Rect = null,
-    center_on: ?Rect = null,
+    center_on: ?Rect.Natural = null,
     open_flag: ?*bool = null,
     process_events_in_deinit: bool = true,
     stay_above_parent_window: bool = false,
@@ -76,7 +76,7 @@ init_options: InitOptions = undefined,
 options: Options = undefined,
 prev_windowInfo: dvui.subwindowCurrentSetReturn = undefined,
 layout: BoxWidget = undefined,
-prevClip: Rect = Rect{},
+prevClip: Rect.Physical = .{},
 auto_pos: bool = false,
 auto_size: bool = false,
 auto_size_refresh_prev_value: ?u8 = null,
@@ -135,7 +135,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             self.auto_size_refresh_prev_value = dvui.currentWindow().extra_frames_needed;
             dvui.currentWindow().extra_frames_needed = 0;
 
-            const ms = Size.min(Size.max(min_size, self.options.min_sizeGet()), dvui.windowRect().size());
+            const ms = Size.min(Size.max(min_size, self.options.min_sizeGet()), dvui.windowRect().toRect().size());
             self.wd.rect.w = ms.w;
             self.wd.rect.h = ms.h;
         }
@@ -155,7 +155,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             }
 
             if (self.init_options.window_avoid != .none) {
-                if (self.wd.rect.topLeft().equals(centering.topLeft())) {
+                if (self.wd.rect.topLeft().equals(centering.toRect().topLeft())) {
                     // if we ended up directly on top, nudge downright a bit
                     self.wd.rect.x += 24;
                     self.wd.rect.y += 24;
@@ -227,7 +227,7 @@ pub fn install(self: *FloatingWindowWidget) !void {
     }
 
     dvui.parentSet(self.widget());
-    self.prev_windowInfo = dvui.subwindowCurrentSet(self.wd.id, self.wd.rect);
+    self.prev_windowInfo = dvui.subwindowCurrentSet(self.wd.id, .fromRect(self.wd.rect));
 
     // reset clip to whole OS window
     // - if modal fade everything below us
@@ -286,7 +286,7 @@ fn dragPart(me: Event.Mouse, rs: RectScale) DragPart {
     return .middle;
 }
 
-fn dragAdjust(self: *FloatingWindowWidget, p: Point, dp: Point, drag_part: DragPart) void {
+fn dragAdjust(self: *FloatingWindowWidget, p: Point.Natural, dp: Point.Natural, drag_part: DragPart) void {
     switch (drag_part) {
         .middle => {
             self.wd.rect.x += dp.x;
@@ -359,8 +359,8 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
             // If we are already dragging, do it here so it happens before drawing
             if (me.action == .motion and dvui.captured(self.wd.id)) {
                 if (dvui.dragging(me.p)) |dps| {
-                    const p = me.p.plus(dvui.dragOffset()).scale(1 / rs.s);
-                    self.dragAdjust(p, dps.scale(1 / rs.s), self.drag_part.?);
+                    const p = me.p.plus(dvui.dragOffset()).toNatural();
+                    self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
                     // don't need refresh() because we're before drawing
                     e.handled = true;
                     continue;
@@ -379,7 +379,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                     // capture and start drag
                     dvui.captureMouse(self.data());
                     self.drag_part = .bottom_right;
-                    dvui.dragStart(me.p, .{ .cursor = .arrow_nw_se, .offset = Point.diff(rs.r.bottomRight(), me.p) });
+                    dvui.dragStart(me.p, .{ .cursor = .arrow_nw_se, .offset = .diff(rs.r.bottomRight(), me.p) });
                     e.handled = true;
                     continue;
                 }
@@ -436,8 +436,8 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                         if (dvui.captured(self.wd.id)) {
                             // move if dragging
                             if (dvui.dragging(me.p)) |dps| {
-                                const p = me.p.plus(dvui.dragOffset()).scale(1 / rs.s);
-                                self.dragAdjust(p, dps.scale(1 / rs.s), self.drag_part.?);
+                                const p = me.p.plus(dvui.dragOffset()).toNatural();
+                                self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
 
                                 e.handled = true;
                                 dvui.refresh(null, @src(), self.wd.id);
