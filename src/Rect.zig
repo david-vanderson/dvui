@@ -11,42 +11,6 @@ y: f32 = 0,
 w: f32 = 0,
 h: f32 = 0,
 
-/// Stroke (outline) a rounded rect.
-///
-/// radius values:
-/// - x is top-left corner
-/// - y is top-right corner
-/// - w is bottom-right corner
-/// - h is bottom-left corner
-///
-/// Only valid between dvui.Window.begin() and end().
-pub fn stroke(self: Rect, radius: Rect, thickness: f32, color: dvui.Color, opts: dvui.PathStrokeOptions) !void {
-    var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
-    defer path.deinit();
-
-    try dvui.pathAddRect(&path, self, radius);
-    var options = opts;
-    options.closed = true;
-    try dvui.pathStroke(path.items, thickness, color, options);
-}
-
-/// Fill a rounded rect.
-///
-/// radius values:
-/// - x is top-left corner
-/// - y is top-right corner
-/// - w is bottom-right corner
-/// - h is bottom-left corner
-///
-/// Only valid between dvui.Window.begin() and end().
-pub fn fill(self: Rect, radius: Rect, color: dvui.Color) !void {
-    var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
-    defer path.deinit();
-
-    try dvui.pathAddRect(&path, self, radius);
-    try dvui.pathFillConvex(path.items, color);
-}
-
 pub fn equals(self: *const Rect, r: Rect) bool {
     return (self.x == r.x and self.y == r.y and self.w == r.w and self.h == r.h);
 }
@@ -144,13 +108,6 @@ pub fn intersect(a: Rect, b: Rect) Rect {
     return Rect{ .x = x, .y = y, .w = @max(0, x2 - x), .h = @max(0, y2 - y) };
 }
 
-/// True if self would be modified when clipped by r.
-pub fn clippedBy(self: *const Rect, r: Rect) bool {
-    return self.x < r.x or self.y < r.y or
-        (self.x + self.w > r.x + r.w) or
-        (self.y + self.h > r.y + r.h);
-}
-
 /// ![image](Rect-unionWith.png)
 pub fn unionWith(a: Rect, b: Rect) Rect {
     const ax2 = a.x + a.w;
@@ -191,6 +148,160 @@ pub fn outsetAll(self: *const Rect, p: f32) Rect {
 pub fn format(self: *const Rect, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
     try std.fmt.format(writer, "Rect{{ {d} {d} {d} {d} }}", .{ self.x, self.y, self.w, self.h });
 }
+
+/// Natural pixels is the unit for subwindow sizing and placement.
+///
+/// Usually received through `Rect.Physical.toNatural` or `dvui.windowRectScale`.
+pub const Natural = struct {
+    x: f32 = 0,
+    y: f32 = 0,
+    w: f32 = 0,
+    h: f32 = 0,
+
+    pub inline fn toRect(self: Rect.Natural) Rect {
+        return .{ .x = self.x, .y = self.y, .w = self.w, .h = self.h };
+    }
+
+    pub inline fn fromRect(r: Rect) Rect.Natural {
+        return .{ .x = r.x, .y = r.y, .w = r.w, .h = r.h };
+    }
+
+    /// Only valid between `dvui.Window.begin`and `dvui.Window.end`.
+    pub inline fn toPhysical(self: Rect.Natural) Rect.Natural {
+        return .fromRect(self.toRect().scale(dvui.windowNaturalScale()));
+    }
+
+    pub fn format(self: *const Rect.Natural, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        try std.fmt.format(writer, "Rect.Natural{{ {d} {d} {d} {d} }}", .{ self.x, self.y, self.w, self.h });
+    }
+};
+
+/// Pixels is the unit for rendering and user input.
+///
+/// Usually received via `dvui.RectScale` through `dvui.WidgetData.rectScale` or similar.
+///
+/// Physical pixels might be more on a hidpi screen or if the user has content scaling.
+pub const Physical = struct {
+    x: f32 = 0,
+    y: f32 = 0,
+    w: f32 = 0,
+    h: f32 = 0,
+
+    pub inline fn toRect(self: Rect.Physical) Rect {
+        return Rect{ .x = self.x, .y = self.y, .w = self.w, .h = self.h };
+    }
+
+    pub inline fn fromRect(r: Rect) Rect.Physical {
+        return Rect.Physical{ .x = r.x, .y = r.y, .w = r.w, .h = r.h };
+    }
+
+    /// Only valid between `dvui.Window.begin`and `dvui.Window.end`.
+    pub inline fn toNatural(self: Rect.Physical) Rect.Natural {
+        return .fromRect(self.toRect().scale(1 / dvui.windowNaturalScale()));
+    }
+
+    /// Stroke (outline) a rounded rect.
+    ///
+    /// radius values:
+    /// - x is top-left corner
+    /// - y is top-right corner
+    /// - w is bottom-right corner
+    /// - h is bottom-left corner
+    ///
+    /// Only valid between dvui.Window.begin() and end().
+    pub fn stroke(self: Rect.Physical, radius: Rect, thickness: f32, color: dvui.Color, opts: dvui.PathStrokeOptions) !void {
+        var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
+        defer path.deinit();
+
+        try dvui.pathAddRect(&path, self, radius);
+        var options = opts;
+        options.closed = true;
+        try dvui.pathStroke(path.items, thickness, color, options);
+    }
+
+    /// Fill a rounded rect.
+    ///
+    /// radius values:
+    /// - x is top-left corner
+    /// - y is top-right corner
+    /// - w is bottom-right corner
+    /// - h is bottom-left corner
+    ///
+    /// Only valid between dvui.Window.begin() and end().
+    pub fn fill(self: Rect.Physical, radius: Rect, color: dvui.Color) !void {
+        var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
+        defer path.deinit();
+
+        try dvui.pathAddRect(&path, self, radius);
+        try dvui.pathFillConvex(path.items, color);
+    }
+
+    pub inline fn topLeft(self: *const Rect.Physical) Point.Physical {
+        return .fromPoint(self.toRect().topLeft());
+    }
+
+    pub inline fn topRight(self: *const Rect.Physical) Point.Physical {
+        return .fromPoint(self.toRect().topRight());
+    }
+
+    pub inline fn bottomLeft(self: *const Rect.Physical) Point.Physical {
+        return .fromPoint(self.toRect().bottomLeft());
+    }
+
+    pub inline fn bottomRight(self: *const Rect.Physical) Point.Physical {
+        return .fromPoint(self.toRect().bottomRight());
+    }
+
+    pub inline fn center(self: *const Rect.Physical) Point.Physical {
+        return .fromPoint(self.toRect().center());
+    }
+
+    pub inline fn contains(self: *const Rect.Physical, p: Point.Physical) bool {
+        return self.toRect().contains(p.toPoint());
+    }
+
+    pub inline fn empty(self: *const Rect.Physical) bool {
+        return self.toRect().empty();
+    }
+
+    /// ![image](Rect-intersect.png)
+    pub inline fn intersect(a: Rect.Physical, b: Rect.Physical) Rect.Physical {
+        return .fromRect(a.toRect().intersect(b.toRect()));
+    }
+
+    /// ![image](Rect-inset.png)
+    pub inline fn inset(self: *const Rect.Physical, r: Rect.Physical) Rect.Physical {
+        return .fromRect(self.toRect().inset(r.toRect()));
+    }
+    /// See `inset`
+    pub inline fn insetAll(self: *const Rect.Physical, p: f32) Rect.Physical {
+        return .fromRect(self.toRect().insetAll(p));
+    }
+    /// ![image](Rect-outset.png)
+    pub inline fn outset(self: *const Rect.Physical, r: Rect.Physical) Rect.Physical {
+        return .fromRect(self.toRect().outset(r.toRect()));
+    }
+    /// See `outset`
+    pub inline fn outsetAll(self: *const Rect.Physical, p: f32) Rect.Physical {
+        return .fromRect(self.toRect().outsetAll(p));
+    }
+
+    /// ![image](Rect-offsetNegPoint.png)
+    pub inline fn offsetNegPoint(self: *const Rect.Physical, p: Point.Physical) Rect.Physical {
+        return .fromRect(self.toRect().offsetNegPoint(p.toPoint()));
+    }
+
+    /// True if self would be modified when clipped by r.
+    pub fn clippedBy(self: *const Rect.Physical, r: Rect.Physical) bool {
+        return self.x < r.x or self.y < r.y or
+            (self.x + self.w > r.x + r.w) or
+            (self.y + self.h > r.y + r.h);
+    }
+
+    pub fn format(self: *const Rect.Physical, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        try std.fmt.format(writer, "Rect.Physical{{ {d} {d} {d} {d} }}", .{ self.x, self.y, self.w, self.h });
+    }
+};
 
 test {
     @import("std").testing.refAllDecls(@This());

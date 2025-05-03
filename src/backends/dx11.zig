@@ -770,7 +770,7 @@ pub fn drawClippedTriangles(
     texture: ?dvui.Texture,
     vtx: []const dvui.Vertex,
     idx: []const u16,
-    clipr: ?dvui.Rect,
+    clipr: ?dvui.Rect.Physical,
 ) void {
     const state = stateFromHwnd(hwndFromContext(self));
     const client_size = win32.getClientSize(hwndFromContext(self));
@@ -894,7 +894,7 @@ pub fn end(self: Context) void {
     _ = state.swap_chain.Present(if (state.vsync) 1 else 0, 0);
 }
 
-pub fn pixelSize(self: Context) dvui.Size {
+pub fn pixelSize(self: Context) dvui.Size.Physical {
     const client_size = win32.getClientSize(hwndFromContext(self));
     return .{
         .w = @floatFromInt(client_size.cx),

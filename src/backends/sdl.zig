@@ -360,7 +360,7 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
     }
 }
 
-pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect) void {
+pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) void {
     if (rect) |r| {
         if (sdl3) {
             // This is the offset from r.x in window coords, supposed to be the
@@ -452,7 +452,7 @@ pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) void {
 
 pub fn end(_: *SDLBackend) void {}
 
-pub fn pixelSize(self: *SDLBackend) dvui.Size {
+pub fn pixelSize(self: *SDLBackend) dvui.Size.Physical {
     var w: i32 = undefined;
     var h: i32 = undefined;
     if (sdl3) {
@@ -460,21 +460,21 @@ pub fn pixelSize(self: *SDLBackend) dvui.Size {
     } else {
         _ = c.SDL_GetRendererOutputSize(self.renderer, &w, &h);
     }
-    return dvui.Size{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
+    return .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
 }
 
 pub fn windowSize(self: *SDLBackend) dvui.Size {
     var w: i32 = undefined;
     var h: i32 = undefined;
     _ = c.SDL_GetWindowSize(self.window, &w, &h);
-    return dvui.Size{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
+    return .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
 }
 
 pub fn contentScale(self: *SDLBackend) f32 {
     return self.initial_scale;
 }
 
-pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect) void {
+pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, maybe_clipr: ?dvui.Rect.Physical) void {
     //std.debug.print("drawClippedTriangles:\n", .{});
     //for (vtx) |v, i| {
     //  std.debug.print("  {d} vertex {}\n", .{i, v});

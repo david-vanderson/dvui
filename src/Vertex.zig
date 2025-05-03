@@ -1,10 +1,7 @@
 const dvui = @import("dvui.zig");
 
-const Point = dvui.Point;
-const Color = dvui.Color;
-
-pos: Point,
-col: Color,
+pos: dvui.Point.Physical,
+col: dvui.Color,
 uv: @Vector(2, f32),
 
 test {

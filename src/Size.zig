@@ -44,6 +44,54 @@ pub fn format(self: *const Size, comptime _: []const u8, _: std.fmt.FormatOption
     try std.fmt.format(writer, "Size{{ {d} {d} }}", .{ self.w, self.h });
 }
 
+/// Natural pixels is the unit for subwindow sizing and placement.
+pub const Natural = struct {
+    w: f32 = 0,
+    h: f32 = 0,
+
+    pub inline fn toSize(self: Size.Natural) Size {
+        return .{ .w = self.w, .h = self.h };
+    }
+
+    pub inline fn fromSize(p: Size) Size.Natural {
+        return .{ .w = p.w, .h = p.h };
+    }
+
+    /// Only valid between `dvui.Window.begin`and `dvui.Window.end`.
+    pub inline fn toPhysical(self: Size.Natural) Size.Physical {
+        return .fromSize(self.toSize().scale(dvui.windowNaturalScale()));
+    }
+
+    pub fn format(self: *const Size.Natural, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        try std.fmt.format(writer, "Size.Natural{{ {d} {d} }}", .{ self.w, self.h });
+    }
+};
+
+/// Pixels is the unit for rendering and user input.
+///
+/// Physical pixels might be more on a hidpi screen or if the user has content scaling.
+pub const Physical = struct {
+    w: f32 = 0,
+    h: f32 = 0,
+
+    pub inline fn toSize(self: Size.Physical) Size {
+        return .{ .w = self.w, .h = self.h };
+    }
+
+    pub inline fn fromSize(p: Size) Size.Physical {
+        return .{ .w = p.w, .h = p.h };
+    }
+
+    /// Only valid between `dvui.Window.begin`and `dvui.Window.end`.
+    pub inline fn toNatural(self: Size.Physical) Size.Natural {
+        return .fromSize(self.toSize().scale(1 / dvui.windowNaturalScale()));
+    }
+
+    pub fn format(self: *const Size.Physical, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        try std.fmt.format(writer, "Size.Physical{{ {d} {d} }}", .{ self.w, self.h });
+    }
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

@@ -181,7 +181,7 @@ pub fn toggleDebugWindow() void {
 
 pub const TagData = struct {
     id: u32,
-    rect: Rect,
+    rect: Rect.Physical,
     visible: bool,
 };
 
@@ -282,11 +282,11 @@ pub const PlaceOnScreenAvoid = enum {
 /// is visible.  Additionally, if start is logically connected to a spawning
 /// rect (like a context menu spawning a submenu), then jump to the opposite
 /// side if needed.
-pub fn placeOnScreen(screen: Rect, spawner: Rect, avoid: PlaceOnScreenAvoid, start: Rect) Rect {
+pub fn placeOnScreen(screen: Rect.Natural, spawner: Rect.Natural, avoid: PlaceOnScreenAvoid, start: Rect) Rect {
     var r = start;
 
     // first move to avoid spawner
-    if (!r.intersect(spawner).empty()) {
+    if (!r.intersect(spawner.toRect()).empty()) {
         switch (avoid) {
             .none => {},
             .horizontal => r.x = spawner.x + spawner.w,
@@ -929,7 +929,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
 /// dvui defers rendering of floating windows so they render on top of widgets
 /// that run later in the frame.
 pub const RenderCommand = struct {
-    clip: Rect,
+    clip: Rect.Physical,
     snap: bool,
     cmd: union(enum) {
         text: renderTextOptions,
@@ -943,11 +943,11 @@ pub const RenderCommand = struct {
             opts: RenderTextureOptions,
         },
         pathFillConvex: struct {
-            path: []const Point,
+            path: PathSlice,
             color: Color,
         },
         pathStroke: struct {
-            path: []const Point,
+            path: PathSlice,
             closed: bool,
             thickness: f32,
             endcap_style: EndCapStyle,
@@ -1109,6 +1109,9 @@ pub fn cursorSet(cursor: enums.Cursor) void {
     }
 }
 
+pub const PathArrayList = std.ArrayList(Point.Physical);
+pub const PathSlice = []const Point.Physical;
+
 /// Add rounded rect to path.  Starts from top left, and ends at top right
 /// unclosed.  See `Rect.fill`.
 ///
@@ -1119,17 +1122,17 @@ pub fn cursorSet(cursor: enums.Cursor) void {
 /// - h is bottom-left corner
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathAddRect(path: *std.ArrayList(Point), r: Rect, radius: Rect) !void {
+pub fn pathAddRect(path: *PathArrayList, r: Rect.Physical, radius: Rect) !void {
     var rad = radius;
     const maxrad = @min(r.w, r.h) / 2;
     rad.x = @min(rad.x, maxrad);
     rad.y = @min(rad.y, maxrad);
     rad.w = @min(rad.w, maxrad);
     rad.h = @min(rad.h, maxrad);
-    const tl = Point{ .x = r.x + rad.x, .y = r.y + rad.x };
-    const bl = Point{ .x = r.x + rad.h, .y = r.y + r.h - rad.h };
-    const br = Point{ .x = r.x + r.w - rad.w, .y = r.y + r.h - rad.w };
-    const tr = Point{ .x = r.x + r.w - rad.y, .y = r.y + rad.y };
+    const tl = Point.Physical{ .x = r.x + rad.x, .y = r.y + rad.x };
+    const bl = Point.Physical{ .x = r.x + rad.h, .y = r.y + r.h - rad.h };
+    const br = Point.Physical{ .x = r.x + r.w - rad.w, .y = r.y + r.h - rad.w };
+    const tr = Point.Physical{ .x = r.x + r.w - rad.y, .y = r.y + rad.y };
     try pathAddArc(path, tl, rad.x, math.pi * 1.5, math.pi, @abs(tl.y - bl.y) < 0.5);
     try pathAddArc(path, bl, rad.h, math.pi, math.pi * 0.5, @abs(bl.x - br.x) < 0.5);
     try pathAddArc(path, br, rad.w, math.pi * 0.5, 0, @abs(br.y - tr.y) < 0.5);
@@ -1144,7 +1147,7 @@ pub fn pathAddRect(path: *std.ArrayList(Point), r: Rect, radius: Rect) !void {
 /// addition to path would duplicate the end of the arc.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathAddArc(path: *std.ArrayList(Point), center: Point, radius: f32, start: f32, end: f32, skip_end: bool) !void {
+pub fn pathAddArc(path: *PathArrayList, center: Point.Physical, radius: f32, start: f32, end: f32, skip_end: bool) !void {
     if (radius == 0) {
         try path.append(center);
         return;
@@ -1166,20 +1169,20 @@ pub fn pathAddArc(path: *std.ArrayList(Point), center: Point, radius: f32, start
     var a: f32 = start;
     var i: u32 = 0;
     while (i < num) : (i += 1) {
-        try path.append(Point{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
+        try path.append(.{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
         a -= step;
     }
 
     if (!skip_end) {
         a = end;
-        try path.append(Point{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
+        try path.append(.{ .x = center.x + radius * @cos(a), .y = center.y + radius * @sin(a) });
     }
 }
 
 /// Fill path (must be convex) with `color`.  See `Rect.fill`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathFillConvex(path: []const Point, color: Color) !void {
+pub fn pathFillConvex(path: PathSlice, color: Color) !void {
     if (path.len < 3) {
         return;
     }
@@ -1191,7 +1194,7 @@ pub fn pathFillConvex(path: []const Point, color: Color) !void {
     const cw = currentWindow();
 
     if (!cw.render_target.rendering) {
-        const path_copy = try cw.arena().dupe(Point, path);
+        const path_copy = try cw.arena().dupe(Point.Physical, path);
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = color } } };
 
         var sw = cw.subwindowCurrent();
@@ -1211,7 +1214,7 @@ pub fn pathFillConvex(path: []const Point, color: Color) !void {
 /// transparent at the edge.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathFillConvexTriangles(path: []const Point) !Triangles {
+pub fn pathFillConvexTriangles(path: PathSlice) !Triangles {
     if (path.len < 3) {
         return Triangles.empty;
     }
@@ -1226,7 +1229,7 @@ pub fn pathFillConvexTriangles(path: []const Point) !Triangles {
     const col: Color = .{};
     const col_trans: Color = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
-    var bounds = Rect{}; // w and h are maxx and maxy for now
+    var bounds = Rect.Physical{}; // w and h are maxx and maxy for now
     bounds.x = std.math.floatMax(f32);
     bounds.y = bounds.x;
     bounds.w = -bounds.x;
@@ -1237,9 +1240,9 @@ pub fn pathFillConvexTriangles(path: []const Point) !Triangles {
         const ai = (i + path.len - 1) % path.len;
         const bi = i % path.len;
         const ci = (i + 1) % path.len;
-        const aa = path[ai].diff(cw.render_target.offset);
-        const bb = path[bi].diff(cw.render_target.offset);
-        const cc = path[ci].diff(cw.render_target.offset);
+        const aa = path[ai].diff(cw.render_target.offset).toPoint();
+        const bb = path[bi].diff(cw.render_target.offset).toPoint();
+        const cc = path[ci].diff(cw.render_target.offset).toPoint();
 
         const diffab = Point.diff(aa, bb).normalize();
         const diffbc = Point.diff(bb, cc).normalize();
@@ -1311,7 +1314,7 @@ pub const PathStrokeOptions = struct {
 /// Stroke path as a series of line segments.  See `Rect.stroke`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathStroke(path: []const Point, thickness: f32, color: Color, opts: PathStrokeOptions) !void {
+pub fn pathStroke(path: PathSlice, thickness: f32, color: Color, opts: PathStrokeOptions) !void {
     if (path.len == 0) {
         return;
     }
@@ -1319,7 +1322,7 @@ pub fn pathStroke(path: []const Point, thickness: f32, color: Color, opts: PathS
     const cw = currentWindow();
 
     if (opts.after or !cw.render_target.rendering) {
-        const path_copy = try cw.arena().dupe(Point, path);
+        const path_copy = try cw.arena().dupe(Point.Physical, path);
         const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = opts.closed, .thickness = thickness, .endcap_style = opts.endcap_style, .color = color } } };
 
         var sw = cw.subwindowCurrent();
@@ -1335,7 +1338,7 @@ pub fn pathStroke(path: []const Point, thickness: f32, color: Color, opts: PathS
     try pathStrokeRaw(path, thickness, color, opts.closed, opts.endcap_style);
 }
 
-pub fn pathStrokeRaw(path: []const Point, thickness: f32, color: Color, closed_in: bool, endcap_style: EndCapStyle) !void {
+pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: bool, endcap_style: EndCapStyle) !void {
     if (dvui.clipGet().empty()) {
         return;
     }
@@ -1346,7 +1349,7 @@ pub fn pathStrokeRaw(path: []const Point, thickness: f32, color: Color, closed_i
         // draw a circle with radius thickness at that point
         const center = path[0].diff(cw.render_target.offset);
 
-        var tempPath: std.ArrayList(Point) = .init(cw.arena());
+        var tempPath: PathArrayList = .init(cw.arena());
         defer tempPath.deinit();
 
         try pathAddArc(&tempPath, center, thickness, math.pi * 2.0, 0, true);
@@ -1378,7 +1381,7 @@ pub fn pathStrokeRaw(path: []const Point, thickness: f32, color: Color, closed_i
     const col = color.alphaMultiply();
     const col_trans = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
-    var bounds = Rect{}; // w and h are maxx and maxy for now
+    var bounds = Rect.Physical{}; // w and h are maxx and maxy for now
     bounds.x = std.math.floatMax(f32);
     bounds.y = bounds.x;
     bounds.w = -bounds.x;
@@ -1391,9 +1394,9 @@ pub fn pathStrokeRaw(path: []const Point, thickness: f32, color: Color, closed_i
         const ai = (i + path.len - 1) % path.len;
         const bi = i % path.len;
         const ci = (i + 1) % path.len;
-        const aa = path[ai].diff(cw.render_target.offset);
-        var bb = path[bi].diff(cw.render_target.offset);
-        const cc = path[ci].diff(cw.render_target.offset);
+        const aa = path[ai].diff(cw.render_target.offset).toPoint();
+        var bb = path[bi].diff(cw.render_target.offset).toPoint();
+        const cc = path[ci].diff(cw.render_target.offset).toPoint();
 
         // the amount to move from bb to the edge of the line
         var halfnorm: Point = undefined;
@@ -1594,7 +1597,7 @@ pub fn pathStrokeRaw(path: []const Point, thickness: f32, color: Color, closed_i
     bounds.h = bounds.h - bounds.y;
 
     const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-    const clipr: ?Rect = if (bounds.clippedBy(clip_offset)) clip_offset else null;
+    const clipr: ?Rect.Physical = if (bounds.clippedBy(clip_offset)) clip_offset else null;
 
     cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
 }
@@ -1602,7 +1605,7 @@ pub fn pathStrokeRaw(path: []const Point, thickness: f32, color: Color, closed_i
 pub const Triangles = struct {
     vertexes: []Vertex,
     indices: []u16,
-    bounds: Rect,
+    bounds: Rect.Physical,
 
     pub const empty = Triangles{
         .vertexes = &.{},
@@ -1636,7 +1639,7 @@ pub const Triangles = struct {
 
     /// Set uv coords of vertexes according to position in r (with r_uv coords
     /// at corners), clamped to 0-1.
-    pub fn uvFromRectuv(self: *Triangles, r: Rect, r_uv: Rect) void {
+    pub fn uvFromRectuv(self: *Triangles, r: Rect.Physical, r_uv: Rect) void {
         for (self.vertexes) |*v| {
             const xfrac = (v.pos.x - r.x) / r.w;
             v.uv[0] = std.math.clamp(r_uv.x + xfrac * (r_uv.w - r_uv.x), 0, 1);
@@ -1647,7 +1650,7 @@ pub const Triangles = struct {
     }
 
     /// Rotate vertexes around origin by radians (positive clockwise).
-    pub fn rotate(self: *Triangles, origin: Point, radians: f32) void {
+    pub fn rotate(self: *Triangles, origin: Point.Physical, radians: f32) void {
         if (radians == 0) return;
 
         const cos = @cos(radians);
@@ -1658,7 +1661,7 @@ pub const Triangles = struct {
             const d = v.pos.diff(origin);
 
             // rotate vector
-            const rotated: Point = .{
+            const rotated: Point.Physical = .{
                 .x = d.x * cos - d.y * sin,
                 .y = d.x * sin + d.y * cos,
             };
@@ -1667,7 +1670,7 @@ pub const Triangles = struct {
         }
 
         // recalc bounds
-        var points: [4]Point = .{
+        var points: [4]Point.Physical = .{
             self.bounds.topLeft(),
             self.bounds.topRight(),
             self.bounds.bottomRight(),
@@ -1679,7 +1682,7 @@ pub const Triangles = struct {
             const d = p.diff(origin);
 
             // rotate vector
-            const rotated: Point = .{
+            const rotated: Point.Physical = .{
                 .x = d.x * cos - d.y * sin,
                 .y = d.x * sin + d.y * cos,
             };
@@ -1717,7 +1720,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) !void {
     }
 
     const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-    const clipr: ?Rect = if (triangles.bounds.clippedBy(clip_offset)) clip_offset else null;
+    const clipr: ?Rect.Physical = if (triangles.bounds.clippedBy(clip_offset)) clip_offset else null;
 
     cw.backend.drawClippedTriangles(tex, triangles.vertexes, triangles.indices, clipr);
 }
@@ -1727,7 +1730,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) !void {
 /// tagged with.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_above_parent_window: ?u32) !void {
+pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?u32) !void {
     const cw = currentWindow();
     const arena = cw.arena();
 
@@ -1778,14 +1781,14 @@ pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect, modal: bool, stay_ab
 
 pub const subwindowCurrentSetReturn = struct {
     id: u32,
-    rect: Rect, // natural pixels
+    rect: Rect.Natural,
 };
 
 /// Used by floating windows (subwindows) to install themselves as the current
 /// subwindow (the subwindow that widgets run now will be in).
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn subwindowCurrentSet(id: u32, rect: ?Rect) subwindowCurrentSetReturn {
+pub fn subwindowCurrentSet(id: u32, rect: ?Rect.Natural) subwindowCurrentSetReturn {
     const cw = currentWindow();
     const ret: subwindowCurrentSetReturn = .{ .id = cw.subwindow_currentId, .rect = cw.subwindow_currentRect };
     cw.subwindow_currentId = id;
@@ -1810,7 +1813,7 @@ pub const DragStartOptions = struct {
 
     /// Offset of point of interest from the mouse.  Useful during a drag to
     /// locate where to move the point of interest.
-    offset: Point = .{},
+    offset: Point.Physical = .{},
 
     /// Used for cross-widget dragging.  See `draggingName`.
     name: []const u8 = "",
@@ -1833,7 +1836,7 @@ pub const DragStartOptions = struct {
 /// See `dragStart` to immediately start a drag.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragPreStart(p: Point, options: DragStartOptions) void {
+pub fn dragPreStart(p: Point.Physical, options: DragStartOptions) void {
     const cw = currentWindow();
     cw.drag_state = .prestart;
     cw.drag_pt = p;
@@ -1854,7 +1857,7 @@ pub fn dragPreStart(p: Point, options: DragStartOptions) void {
 /// recover where to move the true corner.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragStart(p: Point, options: DragStartOptions) void {
+pub fn dragStart(p: Point.Physical, options: DragStartOptions) void {
     const cw = currentWindow();
     cw.drag_state = .dragging;
     cw.drag_pt = p;
@@ -1866,7 +1869,7 @@ pub fn dragStart(p: Point, options: DragStartOptions) void {
 /// Get offset previously given to `dragPreStart` or `dragStart`.  See those.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragOffset() Point {
+pub fn dragOffset() Point.Physical {
     const cw = currentWindow();
     return cw.drag_offset;
 }
@@ -1876,22 +1879,22 @@ pub fn dragOffset() Point {
 /// or `dragStart`).  Otherwise return null, meaning a drag hasn't started yet.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragging(p: Point) ?Point {
+pub fn dragging(p: Point.Physical) ?Point.Physical {
     const cw = currentWindow();
     switch (cw.drag_state) {
         .none => return null,
         .dragging => {
-            const dp = Point.diff(p, cw.drag_pt);
+            const dp = Point.diff(p.toPoint(), cw.drag_pt.toPoint());
             cw.drag_pt = p;
-            return dp;
+            return .fromPoint(dp);
         },
         .prestart => {
-            const dp = Point.diff(p, cw.drag_pt);
+            const dp = Point.diff(p.toPoint(), cw.drag_pt.toPoint());
             const dps = dp.scale(1 / windowNaturalScale());
             if (@abs(dps.x) > 3 or @abs(dps.y) > 3) {
                 cw.drag_pt = p;
                 cw.drag_state = .dragging;
-                return dp;
+                return .fromPoint(dp);
             } else {
                 return null;
             }
@@ -1921,9 +1924,9 @@ pub fn dragEnd() void {
 /// Use `mouseTotalMotion().nonZero()` to detect if any mouse motion has occurred.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn mouseTotalMotion() Point {
+pub fn mouseTotalMotion() Point.Physical {
     const cw = currentWindow();
-    return Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
+    return .diff(cw.mouse_pt, cw.mouse_pt_prev);
 }
 
 /// Used to track which widget holds mouse capture.
@@ -1931,7 +1934,7 @@ pub const CaptureMouse = struct {
     /// widget ID
     id: u32,
     /// physical pixels (aka capture zone)
-    rect: Rect,
+    rect: Rect.Physical,
     /// subwindow id the widget with capture is in
     subwindow_id: u32,
 };
@@ -2016,27 +2019,27 @@ pub fn captureMouseGet() ?CaptureMouse {
 /// Get current screen rectangle in pixels that drawing is being clipped to.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn clipGet() Rect {
+pub fn clipGet() Rect.Physical {
     return currentWindow().clipRect;
 }
 
-/// Intersect the given rect (in pixels) with the current clipping rect and set
+/// Intersect the given physical rect with the current clipping rect and set
 /// as the new clipping rect.
 ///
 /// Returns the previous clipping rect, use clipSet to restore it.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn clip(new: Rect) Rect {
+pub fn clip(new: Rect.Physical) Rect.Physical {
     const cw = currentWindow();
     const ret = cw.clipRect;
     clipSet(cw.clipRect.intersect(new));
     return ret;
 }
 
-/// Set the current clipping rect to the given rect (in pixels).
+/// Set the current clipping rect to the given physical rect.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn clipSet(r: Rect) void {
+pub fn clipSet(r: Rect.Physical) void {
     currentWindow().clipRect = r;
 }
 
@@ -2201,8 +2204,9 @@ pub fn renderingSet(r: bool) bool {
 /// Natural pixels is the unit for subwindow sizing and placement.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn windowRect() Rect {
-    return currentWindow().wd.rect;
+pub fn windowRect() Rect.Natural {
+    // Main window is an exception as it's rect is the basis for all other natural rects
+    return .fromRect(currentWindow().wd.rect);
 }
 
 /// Get the OS window size in pixels.  See `windowRect`.
@@ -2210,17 +2214,41 @@ pub fn windowRect() Rect {
 /// Pixels is the unit for rendering and user input.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn windowRectPixels() Rect {
+pub fn windowRectPixels() Rect.Physical {
     return currentWindow().rect_pixels;
 }
+
+/// A natural rect scale returned by `windowRectScale`. Transform functions on this
+/// type takes and returns `Rect.Natural` and `Point.Natural`.
+///
+/// If a normal `RectScale` is needed, use the `rs` field directly.
+pub const NaturalRectScale = struct {
+    rs: RectScale,
+
+    pub fn rectToScreen(self: *const NaturalRectScale, r: Rect.Natural) Rect.Physical {
+        return self.rs.rectToScreen(r.toRect());
+    }
+
+    pub fn rectFromScreen(self: *const NaturalRectScale, r: Rect.Physical) Rect.Natural {
+        return .fromRect(self.rs.rectFromScreen(r));
+    }
+
+    pub fn pointToScreen(self: *const NaturalRectScale, p: Point.Natural) Point.Physical {
+        return self.rs.pointToScreen(p.toPoint());
+    }
+
+    pub fn pointFromScreen(self: *const NaturalRectScale, p: Point.Physical) Point.Natural {
+        return .fromPoint(self.rs.pointFromScreen(p));
+    }
+};
 
 /// Get the Rect and scale factor for the OS window.  The Rect is in pixels,
 /// and the scale factor is how many pixels per natural pixel.  See
 /// `windowRect`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn windowRectScale() RectScale {
-    return .{ .r = currentWindow().rect_pixels, .s = currentWindow().natural_scale };
+pub fn windowRectScale() NaturalRectScale {
+    return .{ .rs = .{ .r = currentWindow().rect_pixels, .s = currentWindow().natural_scale } };
 }
 
 /// The natural scale is how many pixels per natural pixel.  Useful for
@@ -2630,7 +2658,7 @@ pub const EventMatchOptions = struct {
     id: u32,
 
     /// Physical pixel rect used to match pointer events.
-    r: Rect,
+    r: Rect.Physical,
 
     /// true means match all focus-based events routed to the subwindow with
     /// id.  This is how subwindows catch things like tab if no widget in that
@@ -2960,16 +2988,14 @@ pub fn tabIndexPrev(event_num: ?u16) void {
 
 /// Wigets that accept text input should call this on frames they have focus.
 ///
-/// r is in pixels.
-///
 /// It communicates:
 /// * text input should happen (maybe shows an on screen keyboard)
 /// * rect on screen (position possible IME window)
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn wantTextInput(r: Rect) void {
+pub fn wantTextInput(r: Rect.Natural) void {
     const cw = currentWindow();
-    cw.text_input_rect = r.scale(1 / cw.natural_scale);
+    cw.text_input_rect = r;
 }
 
 pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) !*FloatingMenuWidget {
@@ -3148,7 +3174,7 @@ pub fn dialogDisplay(id: u32) !void {
         return;
     };
 
-    const center_on = dvui.dataGet(null, id, "_center_on", Rect) orelse currentWindow().subwindow_currentRect;
+    const center_on = dvui.dataGet(null, id, "_center_on", Rect.Natural) orelse currentWindow().subwindow_currentRect;
 
     const cancel_label = dvui.dataGetSlice(null, id, "_cancel_label", []u8);
 
@@ -3996,7 +4022,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
         animation(wd.id, "_t", anim);
     }
 
-    var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
+    var path: PathArrayList = .init(dvui.currentWindow().arena());
     defer path.deinit();
 
     const full_circle = 2 * std.math.pi;
@@ -4005,8 +4031,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     // end begins slow, catching up to start
     const end = full_circle * easing.inSine(t);
 
-    const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
-    try pathAddArc(&path, center, @min(r.w, r.h) / 3, start, end, false);
+    try pathAddArc(&path, r.center(), @min(r.w, r.h) / 3, start, end, false);
     try pathStroke(path.items, 3.0 * rs.s, options.color(.text), .{});
 }
 
@@ -4024,12 +4049,12 @@ pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options
     return ret;
 }
 
-pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) !?Rect {
+pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) !?Rect.Natural {
     var mi = try menuItem(src, init_opts, opts);
 
     var labelopts = opts.strip();
 
-    var ret: ?Rect = null;
+    var ret: ?Rect.Natural = null;
     if (mi.activeRect()) |r| {
         ret = r;
     }
@@ -4045,14 +4070,14 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, ini
     return ret;
 }
 
-pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) !?Rect {
+pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) !?Rect.Natural {
     var mi = try menuItem(src, init_opts, opts);
 
     // pass min_size_content through to the icon so that it will figure out the
     // min width based on the height
     var iconopts = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio });
 
-    var ret: ?Rect = null;
+    var ret: ?Rect.Natural = null;
     if (mi.activeRect()) |r| {
         ret = r;
     }
@@ -4433,7 +4458,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
 
         switch (e.evt) {
             .mouse => |me| {
-                var p: ?Point = null;
+                var p: ?Point.Physical = null;
                 if (me.action == .focus) {
                     e.handled = true;
                     focusWidgetSelf(b.data().id, e.num);
@@ -4677,7 +4702,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         }
 
         if (b.data().id == focusedWidgetId()) {
-            dvui.wantTextInput(b.data().borderRectScale().r);
+            dvui.wantTextInput(b.data().borderRectScale().r.toNatural());
         } else {
 
             // we lost focus
@@ -4716,7 +4741,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
             switch (e.evt) {
                 .mouse => |me| {
-                    var p: ?Point = null;
+                    var p: ?Point.Physical = null;
                     if (me.action == .focus) {
                         e.handled = true;
                         focusWidgetSelf(b.data().id, e.num);
@@ -5072,7 +5097,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
         thick /= 1.5;
 
-        const path: []const Point = &.{
+        const path: PathSlice = &.{
             .{ .x = x - third, .y = y - third },
             .{ .x = x, .y = y },
             .{ .x = x + third * 2, .y = y - third * 2 },
@@ -5124,10 +5149,11 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 }
 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
-    try rs.r.fill(Rect.all(1000), opts.color(.border));
+    const r = rs.r;
+    try r.fill(Rect.all(1000), opts.color(.border));
 
     if (focused) {
-        try rs.r.stroke(Rect.all(1000), 2 * rs.s, opts.color(.accent), .{});
+        try r.stroke(Rect.all(1000), 2 * rs.s, opts.color(.accent), .{});
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -5138,16 +5164,15 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     }
 
     if (active) {
-        try rs.r.insetAll(0.5 * rs.s).fill(Rect.all(1000), opts.color(.accent));
+        try r.insetAll(0.5 * rs.s).fill(Rect.all(1000), opts.color(.accent));
     } else {
-        try rs.r.insetAll(rs.s).fill(Rect.all(1000), opts.color(fill));
+        try r.insetAll(rs.s).fill(Rect.all(1000), opts.color(fill));
     }
 
     if (active) {
-        const thick = @max(1.0, rs.r.w / 6);
+        const thick = @max(1.0, r.w / 6);
 
-        const p = Point{ .x = rs.r.x + rs.r.w / 2, .y = rs.r.y + rs.r.h / 2 };
-        try pathStroke(&.{p}, thick, opts.color(fill), .{});
+        try pathStroke(&.{r.center()}, thick, opts.color(fill), .{});
     }
 }
 
@@ -5627,9 +5652,9 @@ pub fn renderText(opts: renderTextOptions) !void {
                 v.uv[1] = 0;
             }
 
-            const selr = Rect.fromPoint(sel_vtx[0].pos).toPoint(sel_vtx[2].pos);
+            const selr = Rect.Physical.fromRect(Rect.fromPoint(sel_vtx[0].pos.toPoint()).toPoint(sel_vtx[2].pos.toPoint()));
             const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-            const clipr: ?Rect = if (selr.clippedBy(clip_offset)) clip_offset else null;
+            const clipr: ?Rect.Physical = if (selr.clippedBy(clip_offset)) clip_offset else null;
 
             // triangles must be counter-clockwise (y going down) to avoid backface culling
             cw.backend.drawClippedTriangles(null, &sel_vtx, &[_]u16{ 0, 2, 1, 0, 3, 2 }, clipr);
@@ -5638,9 +5663,9 @@ pub fn renderText(opts: renderTextOptions) !void {
 
     if (vtx.items.len > 0) {
         // due to floating point inaccuracies, shrink by 1/1000 of a pixel before testing
-        const txtr = (Rect{ .x = x_start, .y = y, .w = max_x - x_start, .h = sel_max_y - y }).insetAll(0.001);
+        const txtr = Rect.Physical.fromRect((Rect{ .x = x_start, .y = y, .w = max_x - x_start, .h = sel_max_y - y }).insetAll(0.001));
         const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-        const clipr: ?Rect = if (txtr.clippedBy(clip_offset)) clip_offset else null;
+        const clipr: ?Rect.Physical = if (txtr.clippedBy(clip_offset)) clip_offset else null;
 
         cw.backend.drawClippedTriangles(fce.texture_atlas, vtx.items, idx.items, clipr);
     }
@@ -5702,7 +5727,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
         try idx.append(@as(u16, @intCast(len + 2)));
 
         const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-        const clipr: ?Rect = if (r.clippedBy(clip_offset)) clip_offset else null;
+        const clipr: ?Rect.Physical = if (r.clippedBy(clip_offset)) clip_offset else null;
 
         cw.backend.drawClippedTriangles(kv.value_ptr.texture_atlas, vtx.items, idx.items, clipr);
 
@@ -5766,7 +5791,7 @@ pub fn textureDestroyLater(texture: Texture) void {
 
 pub const RenderTarget = struct {
     texture: ?TextureTarget,
-    offset: Point,
+    offset: Point.Physical,
     rendering: bool = true,
 };
 
@@ -5813,7 +5838,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
 
     const r = rs.r.offsetNegPoint(cw.render_target.offset);
 
-    var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
+    var path: PathArrayList = .init(dvui.currentWindow().arena());
     defer path.deinit();
 
     try dvui.pathAddRect(&path, r, opts.corner_radius.scale(rs.s));
@@ -5908,7 +5933,7 @@ pub fn renderImage(name: []const u8, image_bytes: []const u8, rs: RectScale, opt
 
 /// Captures dvui drawing to part of the screen in a `Texture`.
 pub const Picture = struct {
-    r: Rect, // physical pixels captured
+    r: Rect.Physical, // pixels captured
     texture: dvui.TextureTarget = undefined,
     target: dvui.RenderTarget = undefined,
 
@@ -5917,7 +5942,7 @@ pub const Picture = struct {
     /// Returns null in case of failure (e.g. if backend does not support texture targets, if the passed rect is empty ...).
     ///
     /// Only valid between `Window.begin`and `Window.end`.
-    pub fn start(rect: Rect) ?Picture {
+    pub fn start(rect: Rect.Physical) ?Picture {
         if (rect.empty()) {
             log.err("Picture.start() was called with an empty rect", .{});
             return null;

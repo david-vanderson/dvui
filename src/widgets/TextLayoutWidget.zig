@@ -103,7 +103,7 @@ corners_min_size: [4]?Size = [_]?Size{null} ** 4,
 corners_last_seen: ?u8 = null,
 insert_pt: Point = Point{},
 current_line_height: f32 = 0.0,
-prevClip: Rect = Rect{},
+prevClip: Rect.Physical = .{},
 break_lines: bool = undefined,
 current_line_width: f32 = 0.0, // width of lines if break_lines was false
 touch_edit_just_focused: bool = undefined,
@@ -288,7 +288,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             var rect = self.sel_start_r;
             rect.y += rect.h; // move to below the line
             const srs = self.screenRectScale(rect);
-            rect = dvui.windowRectScale().rectFromScreen(srs.r);
+            rect = dvui.windowRectScale().rs.rectFromScreen(srs.r);
             rect.x -= size;
             rect.w = size;
             rect.h = size;
@@ -296,7 +296,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
             try fc.install();
 
-            var offset: Point = dvui.dataGet(null, fc.wd.id, "_offset", Point) orelse .{};
+            var offset: Point.Physical = dvui.dataGet(null, fc.wd.id, "_offset", Point.Physical) orelse .{};
 
             const fcrs = fc.wd.rectScale();
             const evts = dvui.events();
@@ -334,7 +334,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             }
 
             if (visible) {
-                var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
+                var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
                 defer path.deinit();
 
                 try path.append(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
@@ -360,7 +360,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             var rect = self.sel_end_r;
             rect.y += rect.h; // move to below the line
             const srs = self.screenRectScale(rect);
-            rect = dvui.windowRectScale().rectFromScreen(srs.r);
+            rect = dvui.windowRectScale().rectFromScreen(srs.r).toRect();
             rect.w = size;
             rect.h = size;
 
@@ -380,7 +380,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                     if (me.action == .press and me.button.touch()) {
                         dvui.captureMouse(fc.data());
                         self.te_show_context_menu = false;
-                        offset = fcrs.r.topLeft().diff(me.p);
+                        offset = fcrs.r.toRect().topLeft().diff(me.p.toPoint());
 
                         // give an extra offset of half the cursor height
                         offset.y -= self.sel_start_r.h * 0.5 * rs.s;
@@ -388,7 +388,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                         dvui.captureMouse(null);
                         dvui.dragEnd();
                     } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
-                        const corner = me.p.plus(offset);
+                        const corner = Point.Physical.fromPoint(me.p.toPoint().plus(offset));
                         self.sel_pts[0] = self.sel_start_r.topLeft().plus(.{ .y = self.sel_start_r.h / 2 });
                         self.sel_pts[1] = self.wd.contentRectScale().pointFromScreen(corner);
 
@@ -405,7 +405,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             }
 
             if (visible) {
-                var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
+                var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
                 defer path.deinit();
 
                 try path.append(.{ .x = fcrs.r.x, .y = fcrs.r.y });
@@ -1395,8 +1395,7 @@ pub fn touchEditing(self: *TextLayoutWidget) !?*FloatingWidget {
     if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.wd.visible()) {
         self.te_floating = dvui.FloatingWidget.init(@src(), .{});
 
-        const r = dvui.clipGet().offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
-
+        const r = dvui.windowRectScale().rectFromScreen(dvui.clipGet());
         if (dvui.minSizeGet(self.te_floating.data().id)) |_| {
             const ms = dvui.minSize(self.te_floating.data().id, self.te_floating.data().options.min_sizeGet());
             self.te_floating.wd.rect.w = ms.w;

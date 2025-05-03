@@ -173,23 +173,23 @@ pub fn sleep(_: *RaylibBackend, ns: u64) void {
     std.time.sleep(ns);
 }
 
-pub fn pixelSize(_: *RaylibBackend) dvui.Size {
+pub fn pixelSize(_: *RaylibBackend) dvui.Size.Physical {
     const w = c.GetRenderWidth();
     const h = c.GetRenderHeight();
-    return dvui.Size{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
+    return .{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
 }
 
 pub fn windowSize(_: *RaylibBackend) dvui.Size {
     const w = c.GetScreenWidth();
     const h = c.GetScreenHeight();
-    return dvui.Size{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
+    return .{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
 }
 
 pub fn contentScale(_: *RaylibBackend) f32 {
     return 1.0;
 }
 
-pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr_in: ?dvui.Rect) void {
+pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr_in: ?dvui.Rect.Physical) void {
 
     //make sure all raylib draw calls are rendered
     //before rendering dvui elements
@@ -804,10 +804,10 @@ pub fn dvuiColorToRaylib(color: dvui.Color) c.Color {
     return c.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
 }
 
-pub fn dvuiRectToRaylib(rect: dvui.Rect) c.Rectangle {
+pub fn dvuiRectToRaylib(rect: dvui.Rect.Physical) c.Rectangle {
     // raylib multiplies everything internally by the monitor scale, so we
     // have to divide by that
-    const r = rect.scale(1 / dvui.windowNaturalScale());
+    const r = rect.toNatural();
     return c.Rectangle{ .x = r.x, .y = r.y, .width = r.w, .height = r.h };
 }
 

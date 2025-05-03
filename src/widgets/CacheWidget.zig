@@ -22,7 +22,7 @@ caching_tex: dvui.TextureTarget = undefined,
 texture_create_error: bool = false,
 tex_uv: Size = undefined,
 old_target: dvui.RenderTarget = undefined,
-old_clip: ?Rect = null,
+old_clip: ?Rect.Physical = null,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) CacheWidget {
     _ = init_opts;

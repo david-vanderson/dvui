@@ -5,27 +5,27 @@ const Rect = dvui.Rect;
 
 const RectScale = @This();
 
-r: Rect = Rect{},
+r: Rect.Physical = .{},
 s: f32 = 1.0,
 
 pub fn rectToRectScale(rs: *const RectScale, r: Rect) RectScale {
-    return .{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };
+    return .{ .r = .fromRect(r.scale(rs.s).offset(rs.r.toRect())), .s = rs.s };
 }
 
-pub fn rectToScreen(rs: *const RectScale, r: Rect) Rect {
-    return r.scale(rs.s).offset(rs.r);
+pub fn rectToScreen(rs: *const RectScale, r: Rect) Rect.Physical {
+    return .fromRect(r.scale(rs.s).offset(rs.r.toRect()));
 }
 
-pub fn rectFromScreen(rs: *const RectScale, r: Rect) Rect {
-    return r.offsetNeg(rs.r).scale(1 / rs.s);
+pub fn rectFromScreen(rs: *const RectScale, r: Rect.Physical) Rect {
+    return r.toRect().offsetNeg(rs.r.toRect()).scale(1 / rs.s);
 }
 
-pub fn pointToScreen(rs: *const RectScale, p: Point) Point {
-    return p.scale(rs.s).plus(rs.r.topLeft());
+pub fn pointToScreen(rs: *const RectScale, p: Point) Point.Physical {
+    return .fromPoint(p.scale(rs.s).plus(rs.r.topLeft().toPoint()));
 }
 
-pub fn pointFromScreen(rs: *const RectScale, p: Point) Point {
-    return Point.diff(p, rs.r.topLeft()).scale(1 / rs.s);
+pub fn pointFromScreen(rs: *const RectScale, p: Point.Physical) Point {
+    return p.diff(rs.r.topLeft()).toPoint().scale(1 / rs.s);
 }
 
 test {

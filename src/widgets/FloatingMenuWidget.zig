@@ -43,7 +43,7 @@ pub var defaults: Options = .{
 };
 
 pub const InitOptions = struct {
-    from: Rect,
+    from: Rect.Natural,
     avoid: FloatingMenuAvoid = .auto,
 };
 
@@ -55,7 +55,7 @@ parent_popup: ?*FloatingMenuWidget = null,
 have_popup_child: bool = false,
 menu: MenuWidget = undefined,
 init_options: InitOptions = undefined,
-prevClip: Rect = Rect{},
+prevClip: Rect.Physical = .{},
 scale_val: f32 = undefined,
 scaler: dvui.ScaleWidget = undefined,
 scroll: ScrollAreaWidget = undefined,
@@ -107,13 +107,13 @@ pub fn install(self: *FloatingMenuWidget) !void {
     };
 
     if (dvui.minSizeGet(self.wd.id)) |_| {
-        self.wd.rect = Rect.fromPoint(self.init_options.from.topLeft());
+        self.wd.rect = Rect.fromPoint(self.init_options.from.toRect().topLeft());
         const ms = dvui.minSize(self.wd.id, self.options.min_sizeGet());
         self.wd.rect.w = ms.w;
         self.wd.rect.h = ms.h;
         self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, self.wd.rect);
     } else {
-        self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, Rect.fromPoint(self.init_options.from.topLeft()));
+        self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, Rect.fromPoint(self.init_options.from.toRect().topLeft()));
         dvui.focusSubwindow(self.wd.id, null);
 
         // need a second frame to fit contents (FocusWindow calls refresh but

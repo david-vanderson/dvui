@@ -6,7 +6,7 @@ allocator: std.mem.Allocator,
 arena: std.mem.Allocator = undefined,
 
 size: dvui.Size,
-size_pixels: dvui.Size,
+size_pixels: dvui.Size.Physical,
 time: i128 = 0,
 clipboard: ?[]const u8 = null,
 
@@ -18,7 +18,7 @@ pub const Context = *TestingBackend;
 pub const InitOptions = struct {
     allocator: std.mem.Allocator,
     size: dvui.Size,
-    size_pixels: dvui.Size,
+    size_pixels: dvui.Size.Physical,
 };
 
 pub fn init(opts: InitOptions) TestingBackend {
@@ -58,7 +58,7 @@ pub fn end(_: *TestingBackend) void {}
 
 /// Return size of the window in physical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 600x400.
-pub fn pixelSize(self: *TestingBackend) dvui.Size {
+pub fn pixelSize(self: *TestingBackend) dvui.Size.Physical {
     return self.size_pixels;
 }
 
@@ -80,7 +80,7 @@ pub fn contentScale(_: *TestingBackend) f32 {
 /// clipped to to clipr (if given).  Vertex positions and clipr are in
 /// physical pixels.  If texture is given, the vertexes uv coords are
 /// normalized (0-1).
-pub fn drawClippedTriangles(_: *TestingBackend, _: ?dvui.Texture, _: []const dvui.Vertex, _: []const u16, _: ?dvui.Rect) void {}
+pub fn drawClippedTriangles(_: *TestingBackend, _: ?dvui.Texture, _: []const dvui.Vertex, _: []const u16, _: ?dvui.Rect.Physical) void {}
 
 /// Create a texture from the given pixels in RGBA.  The returned
 /// pointer is what will later be passed to drawClippedTriangles.

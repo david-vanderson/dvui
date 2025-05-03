@@ -113,7 +113,7 @@ pub fn processEvents(self: *MenuItemWidget) void {
     }
 }
 
-pub fn activeRect(self: *const MenuItemWidget) ?Rect {
+pub fn activeRect(self: *const MenuItemWidget) ?Rect.Natural {
     var act = false;
     if (self.init_opts.submenu) {
         if (dvui.MenuWidget.current().?.submenus_activated and (self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow())) {
@@ -124,8 +124,7 @@ pub fn activeRect(self: *const MenuItemWidget) ?Rect {
     }
 
     if (act) {
-        const rs = self.wd.backgroundRectScale();
-        return rs.r.scale(1 / dvui.windowNaturalScale());
+        return self.wd.backgroundRectScale().r.toNatural();
     } else {
         return null;
     }
