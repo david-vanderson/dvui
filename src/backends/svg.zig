@@ -119,6 +119,12 @@ pub const SvgRenderOptions = struct {
     /// Emit a comment when closing the groups.
     /// Useful to debug the backend itself or for better readability in the svg.
     emit_close_group_comment: bool = false,
+    /// Add a small stroke to color triangles so that we don't see the gaps between them.
+    ///
+    /// I'm not fully sure why this happens, but setting this to false is a nice debug
+    /// feature to better see how the triangles are drawn.
+    /// For more explicit debugging of triangles, consider `debughl_vertex`.
+    fill_triangle_gap: bool = true,
 };
 const root = @import("root");
 const render_opts = if (@hasDecl(root, "svg_render_options"))
@@ -536,9 +542,16 @@ pub fn end(self: *SvgBackend) void {
             },
             .color_group => |col_g| {
                 bufwriter.print(
-                    "<g fill=\"#{x:06}\" fill-opacity=\"{d}\">\n",
+                    "<g fill=\"#{x:06}\" fill-opacity=\"{d}\"",
                     .{ col_g.toU24Col(), col_g.toNormOpacity() },
                 ) catch unreachable;
+                if (render_opts.fill_triangle_gap) {
+                    bufwriter.print(
+                        " stroke-width=\".1\" stroke=\"#{x:06}\"",
+                        .{col_g.toU24Col()},
+                    ) catch unreachable;
+                }
+                _ = bufwriter.write(">\n") catch unreachable;
             },
             .filter_group => |filtr_group| {
                 if (render_opts.debughl_vertex) |_| {
