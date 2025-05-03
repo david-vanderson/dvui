@@ -34,7 +34,6 @@ pub fn main() !void {
         _ = try win.end(.{});
     }
 
-    // FIXME : changing this breaks ... test on main first maybe...
     for (0..2) |_| {
         try win.begin(std.time.nanoTimestamp());
         try dvui.Examples.styling();
