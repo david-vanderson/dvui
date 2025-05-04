@@ -81,7 +81,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Op
     self.scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
     self.options = defaults.override(opts_in);
     if (self.options.min_size_content) |msc| {
-        self.options.min_size_content = msc.scale(self.scale_val);
+        self.options.min_size_content = msc.scale(self.scale_val, Size);
     }
 
     // passing options.rect will stop WidgetData.init from calling
@@ -120,8 +120,8 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
         switch (self.init_options.position) {
             .horizontal, .vertical => |o| {
                 const ar = self.init_options.active_rect.toNatural();
-                const r = dvui.Rect.fromPoint(ar.toRect().topLeft()).toSize(self.wd.rect.size());
-                self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), ar, if (o == .horizontal) .horizontal else .vertical, r);
+                const r = Rect.Natural.fromPoint(ar.topLeft()).toSize(self.wd.rect.size().cast(Size.Natural));
+                self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), ar, if (o == .horizontal) .horizontal else .vertical, r).cast(Rect);
             },
             .sticky => {
                 if (dvui.firstFrame(self.wd.id)) {
@@ -129,10 +129,10 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
                     dvui.dataSet(null, self.wd.id, "_sticky_pt", mp);
                 } else {
                     const mp = dvui.dataGet(null, self.wd.id, "_sticky_pt", dvui.Point.Natural) orelse dvui.Point.Natural{};
-                    var r: Rect = dvui.Rect.fromPoint(mp.toPoint()).toSize(self.wd.rect.size());
+                    var r: Rect.Natural = Rect.Natural.fromPoint(mp).toSize(self.wd.rect.size().cast(Size.Natural));
                     r.x += 10;
                     r.y -= r.h + 10;
-                    self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{}, .none, r);
+                    self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{}, .none, r).cast(Rect);
                 }
             },
         }

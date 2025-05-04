@@ -179,7 +179,7 @@ pub fn pixelSize(_: *RaylibBackend) dvui.Size.Physical {
     return .{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
 }
 
-pub fn windowSize(_: *RaylibBackend) dvui.Size {
+pub fn windowSize(_: *RaylibBackend) dvui.Size.Natural {
     const w = c.GetScreenWidth();
     const h = c.GetScreenHeight();
     return .{ .w = @floatFromInt(w), .h = @floatFromInt(h) };
@@ -547,7 +547,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     const mouse_move = c.GetMouseDelta();
     if (mouse_move.x != 0 or mouse_move.y != 0) {
         const mouse_pos = c.GetMousePosition();
-        if (try win.addEventMouseMotion(mouse_pos.x, mouse_pos.y)) disable_raylib_input = true;
+        if (try win.addEventMouseMotion(.{.x = mouse_pos.x, .y = mouse_pos.y})) disable_raylib_input = true;
         if (self.log_events) {
             //std.debug.print("raylib event Mouse Moved\n", .{});
         }

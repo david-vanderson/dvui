@@ -555,13 +555,13 @@ pub fn addEventTextEx(self: *Self, text: []const u8, selected: bool) !bool {
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventMouseMotion(self: *Self, x: f32, y: f32) !bool {
+pub fn addEventMouseMotion(self: *Self, pt: Point.Natural) !bool {
     self.positionMouseEventRemove();
 
-    const newpt = (Point{ .x = x, .y = y }).scale(self.natural_scale / self.content_scale);
+    const newpt = pt.scale(self.natural_scale / self.content_scale, Point.Physical);
     //log.debug("mouse motion {d} {d} -> {d} {d}", .{ x, y, newpt.x, newpt.y });
-    const dp = Point.Physical.fromPoint(newpt.diff(self.mouse_pt.toPoint()));
-    self.mouse_pt = .fromPoint(newpt);
+    const dp = newpt.diff(self.mouse_pt);
+    self.mouse_pt = newpt;
     const winId = self.windowFor(self.mouse_pt);
 
     // maybe could do focus follows mouse here
@@ -620,8 +620,7 @@ pub fn addEventPointer(self: *Self, b: dvui.enums.Button, action: Event.Mouse.Ac
     self.positionMouseEventRemove();
 
     if (xynorm) |xyn| {
-        const newpt = (Point{ .x = xyn.x * self.wd.rect.w, .y = xyn.y * self.wd.rect.h }).scale(self.natural_scale);
-        self.mouse_pt = .fromPoint(newpt);
+        self.mouse_pt = (Point{ .x = xyn.x * self.wd.rect.w, .y = xyn.y * self.wd.rect.h }).scale(self.natural_scale, Point.Physical);
     }
 
     const winId = self.windowFor(self.mouse_pt);
@@ -698,11 +697,11 @@ pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) !b
 pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, ynorm: f32, dxnorm: f32, dynorm: f32) !bool {
     self.positionMouseEventRemove();
 
-    const newpt: Point.Physical = .fromPoint((Point{ .x = xnorm * self.wd.rect.w, .y = ynorm * self.wd.rect.h }).scale(self.natural_scale));
+    const newpt = (Point{ .x = xnorm * self.wd.rect.w, .y = ynorm * self.wd.rect.h }).scale(self.natural_scale, Point.Physical);
     //std.debug.print("touch motion {} {d} {d}\n", .{ finger, newpt.x, newpt.y });
     self.mouse_pt = newpt;
 
-    const dp: Point.Physical = .fromPoint((Point{ .x = dxnorm * self.wd.rect.w, .y = dynorm * self.wd.rect.h }).scale(self.natural_scale));
+    const dp = (Point{ .x = dxnorm * self.wd.rect.w, .y = dynorm * self.wd.rect.h }).scale(self.natural_scale, Point.Physical);
 
     const winId = self.windowFor(self.mouse_pt);
 
@@ -1010,17 +1009,17 @@ pub fn begin(
     self.tab_index_prev = self.tab_index;
     self.tab_index = @TypeOf(self.tab_index).init(self.tab_index.allocator);
 
-    self.rect_pixels = .fromRect(self.backend.pixelSize().toSize().rect());
+    self.rect_pixels = .fromSize(self.backend.pixelSize());
     dvui.clipSet(self.rect_pixels);
 
-    self.wd.rect = self.backend.windowSize().rect().scale(1.0 / self.content_scale);
+    self.wd.rect = Rect.Natural.fromSize(self.backend.windowSize()).scale(1.0 / self.content_scale, Rect);
     self.natural_scale = if (self.wd.rect.w == 0) 1.0 else self.rect_pixels.w / self.wd.rect.w;
 
     //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d}", .{ self.wd.rect.w, self.wd.rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale });
 
     try dvui.subwindowAdd(self.wd.id, self.wd.rect, self.rect_pixels, false, null);
 
-    _ = dvui.subwindowCurrentSet(self.wd.id, .fromRect(self.wd.rect));
+    _ = dvui.subwindowCurrentSet(self.wd.id, self.wd.rect.cast(Rect.Natural));
 
     self.extra_frames_needed -|= 1;
     self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
@@ -1682,8 +1681,8 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
     if (self.inject_motion_event) {
         self.inject_motion_event = false;
-        const pt = self.mouse_pt.toPoint().scale(self.content_scale / self.natural_scale);
-        _ = try self.addEventMouseMotion(pt.x, pt.y);
+        const pt = self.rectScale().pointFromScreen(self.mouse_pt).cast(Point.Natural);
+        _ = try self.addEventMouseMotion(pt);
     }
 
     defer dvui.current_window = self.previous_window;
@@ -1742,9 +1741,12 @@ pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Optio
     return ret;
 }
 
+pub fn rectScale(self: *Self) RectScale {
+    return .{ .r = self.rect_pixels, .s = self.natural_scale };
+}
+
 pub fn screenRectScale(self: *Self, r: Rect) RectScale {
-    const scaled = r.scale(self.natural_scale);
-    return RectScale{ .r = .fromRect(scaled.offset(self.rect_pixels.toRect())), .s = self.natural_scale };
+    return self.rectScale().rectToRectScale(r);
 }
 
 pub fn minSizeForChild(self: *Self, s: Size) void {

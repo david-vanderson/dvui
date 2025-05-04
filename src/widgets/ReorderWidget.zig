@@ -255,7 +255,7 @@ pub const Reorderable = struct {
                 try self.wd.register();
                 dvui.parentSet(self.widget());
 
-                self.floating_widget = dvui.FloatingWidget.init(@src(), .{ .rect = Rect.fromPoint(topleft.toNatural().toPoint()), .min_size_content = self.reorder.reorderable_size });
+                self.floating_widget = dvui.FloatingWidget.init(@src(), .{ .rect = Rect.fromPoint(topleft.toNatural().cast(dvui.Point)), .min_size_content = self.reorder.reorderable_size });
                 try self.floating_widget.?.install();
             } else {
                 if (self.init_options.last_slot) {
@@ -264,7 +264,7 @@ pub const Reorderable = struct {
                     self.wd = WidgetData.init(self.wd.src, .{}, self.options);
                 }
                 const rs = self.wd.rectScale();
-                const dragRect = Rect.Physical.fromRect(Rect.fromPoint(topleft.toPoint()).toSize(self.reorder.reorderable_size.scale(rs.s)));
+                const dragRect = Rect.Physical.fromPoint(topleft).toSize(self.reorder.reorderable_size.scale(rs.s, Size.Physical));
 
                 if (!self.reorder.found_slot and !rs.r.intersect(dragRect).empty()) {
                     // user is dragging a reorderable over this rect

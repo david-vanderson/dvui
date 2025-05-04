@@ -463,7 +463,7 @@ pub fn pixelSize(self: *SDLBackend) dvui.Size.Physical {
     return .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
 }
 
-pub fn windowSize(self: *SDLBackend) dvui.Size {
+pub fn windowSize(self: *SDLBackend) dvui.Size.Natural {
     var w: i32 = undefined;
     var h: i32 = undefined;
     _ = c.SDL_GetWindowSize(self.window, &w, &h);
@@ -780,9 +780,9 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
 
             if (sdl3) {
-                return try win.addEventMouseMotion(event.motion.x, event.motion.y);
+                return try win.addEventMouseMotion(.{.x = event.motion.x, .y = event.motion.y});
             } else {
-                return try win.addEventMouseMotion(@as(f32, @floatFromInt(event.motion.x)), @as(f32, @floatFromInt(event.motion.y)));
+                return try win.addEventMouseMotion(.{.x = @as(f32, @floatFromInt(event.motion.x)), .y = @as(f32, @floatFromInt(event.motion.y))});
             }
         },
         if (sdl3) c.SDL_EVENT_MOUSE_BUTTON_DOWN else c.SDL_MOUSEBUTTONDOWN => {

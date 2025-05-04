@@ -209,7 +209,7 @@ pub fn draw(self: *TextEntryWidget) !void {
     const focused = (self.wd.id == dvui.focusedWidgetId());
 
     if (focused) {
-        dvui.wantTextInput(.fromRect(self.wd.borderRectScale().r.toRect()));
+        dvui.wantTextInput(self.wd.borderRectScale().r.toNatural());
     }
 
     // set clip back to what textLayout had, so we don't draw over the scrollbars
@@ -295,7 +295,7 @@ pub fn drawCursor(self: *TextEntryWidget) !void {
 
         var crect = self.textLayout.cursor_rect.plus(.{ .x = -1 });
         crect.w = 2;
-        try self.textLayout.screenRectScale(crect).r.fill(Rect.all(0), self.wd.options.color(.accent));
+        try self.textLayout.screenRectScale(crect).r.fill(Rect.Physical.all(0), self.wd.options.color(.accent));
     }
 }
 

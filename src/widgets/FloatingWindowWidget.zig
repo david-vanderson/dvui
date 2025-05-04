@@ -135,7 +135,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             self.auto_size_refresh_prev_value = dvui.currentWindow().extra_frames_needed;
             dvui.currentWindow().extra_frames_needed = 0;
 
-            const ms = Size.min(Size.max(min_size, self.options.min_sizeGet()), dvui.windowRect().toRect().size());
+            const ms = Size.min(Size.max(min_size, self.options.min_sizeGet()), dvui.windowRect().size().cast(Size));
             self.wd.rect.w = ms.w;
             self.wd.rect.h = ms.h;
         }
@@ -155,7 +155,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             }
 
             if (self.init_options.window_avoid != .none) {
-                if (self.wd.rect.topLeft().equals(centering.toRect().topLeft())) {
+                if (self.wd.rect.topLeft().equals(centering.topLeft().cast(Point))) {
                     // if we ended up directly on top, nudge downright a bit
                     self.wd.rect.x += 24;
                     self.wd.rect.y += 24;
@@ -191,7 +191,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         screen.w += offleft + offleft;
         // okay if we are off the bottom but still see the top
         screen.h += self.wd.rect.h - 24;
-        self.wd.rect = dvui.placeOnScreen(screen, .{}, .none, self.wd.rect);
+        self.wd.rect = dvui.placeOnScreen(screen, .{}, .none, self.wd.rect.cast(Rect.Natural)).cast(Rect);
     }
 
     return self;
@@ -227,7 +227,7 @@ pub fn install(self: *FloatingWindowWidget) !void {
     }
 
     dvui.parentSet(self.widget());
-    self.prev_windowInfo = dvui.subwindowCurrentSet(self.wd.id, .fromRect(self.wd.rect));
+    self.prev_windowInfo = dvui.subwindowCurrentSet(self.wd.id, self.wd.rect.cast(Rect.Natural));
 
     // reset clip to whole OS window
     // - if modal fade everything below us
@@ -246,7 +246,7 @@ pub fn drawBackground(self: *FloatingWindowWidget) !void {
         // paint over everything below
         var col = self.options.color(.text);
         col.a = if (dvui.themeGet().dark) 60 else 80;
-        try dvui.windowRectPixels().fill(Rect.all(0), col);
+        try dvui.windowRectPixels().fill(Rect.Physical.all(0), col);
     }
 
     // we are using BoxWidget to do border/background

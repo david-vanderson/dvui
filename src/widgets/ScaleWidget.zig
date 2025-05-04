@@ -52,7 +52,7 @@ pub fn rectFor(self: *ScaleWidget, id: u32, min_size: Size, e: Options.Expand, g
     }
 
     _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize().scale(s), min_size, e, g);
+    return dvui.placeIn(self.wd.contentRect().justSize().scale(s, Rect), min_size, e, g);
 }
 
 pub fn screenRectScale(self: *ScaleWidget, rect: Rect) RectScale {
@@ -62,7 +62,7 @@ pub fn screenRectScale(self: *ScaleWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *ScaleWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s.scale(self.scale)));
+    self.wd.minSizeMax(self.wd.options.padSize(s.scale(self.scale, Size)));
 }
 
 pub fn processEvent(self: *ScaleWidget, e: *Event, bubbling: bool) void {

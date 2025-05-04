@@ -111,7 +111,7 @@ pub fn register(self: *WidgetData) !void {
             if (dvui.minSizeGet(self.id)) |ms| {
                 min_size = ms;
             }
-            cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena(), "{x} {s}\n\n{}\nmin {}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{ self.id, name, rs.r, min_size, self.options.expandGet(), rs.s, self.options.paddingGet().scale(rs.s), self.options.borderGet().scale(rs.s), self.options.marginGet().scale(rs.s) });
+            cw.debug_info_name_rect = try std.fmt.allocPrint(cw.arena(), "{x} {s}\n\n{}\nmin {}\n{}\nscale {d}\npadding {}\nborder {}\nmargin {}", .{ self.id, name, rs.r, min_size, self.options.expandGet(), rs.s, self.options.paddingGet().scale(rs.s, Rect.Physical), self.options.borderGet().scale(rs.s, Rect.Physical), self.options.marginGet().scale(rs.s, Rect.Physical) });
             const clipr = dvui.clipGet();
             // clip to whole window so we always see the outline
             dvui.clipSet(dvui.windowRectPixels());
@@ -153,9 +153,9 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
         const uniform: bool = (b.x == b.y and b.x == b.w and b.x == b.h);
         if (!bg and uniform) {
             // draw border as stroked path
-            const r = self.borderRect().inset(b.scale(0.5));
+            const r = self.borderRect().inset(b.scale(0.5, Rect));
             const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
-            try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s), b.x * rs.s, self.options.color(.border), .{});
+            try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), b.x * rs.s, self.options.color(.border), .{});
         } else {
             // draw border as large rect with background on top
             if (!bg) {
@@ -165,7 +165,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
 
             const rs = self.borderRectScale();
             if (!rs.r.empty()) {
-                try rs.r.fill(self.options.corner_radiusGet().scale(rs.s), self.options.color(.border));
+                try rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), self.options.color(.border));
             }
         }
     }
@@ -173,7 +173,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
     if (bg) {
         const rs = self.backgroundRectScale();
         if (!rs.r.empty()) {
-            try rs.r.fill(self.options.corner_radiusGet().scale(rs.s), opts.fill_color orelse self.options.color(.fill));
+            try rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), opts.fill_color orelse self.options.color(.fill));
         }
     }
 }
@@ -183,7 +183,7 @@ pub fn focusBorder(self: *const WidgetData) !void {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
 
-        try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s), thick, self.options.color(.accent), .{ .after = true });
+        try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), thick, self.options.color(.accent), .{ .after = true });
     }
 }
 
@@ -193,9 +193,7 @@ pub fn rectScale(self: *const WidgetData) RectScale {
     }
 
     if (self.init_options.subwindow) {
-        const s = dvui.windowNaturalScale();
-        const scaled = self.rect.scale(s);
-        return RectScale{ .r = .fromRect(scaled.offset(dvui.windowRectPixels().toRect())), .s = s };
+        return dvui.windowRectScale().rectToRectScale(self.rect);
     }
 
     return self.parent.screenRectScale(self.rect);

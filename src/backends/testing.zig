@@ -5,7 +5,7 @@ allocator: std.mem.Allocator,
 
 arena: std.mem.Allocator = undefined,
 
-size: dvui.Size,
+size: dvui.Size.Natural,
 size_pixels: dvui.Size.Physical,
 time: i128 = 0,
 clipboard: ?[]const u8 = null,
@@ -17,7 +17,7 @@ pub const Context = *TestingBackend;
 
 pub const InitOptions = struct {
     allocator: std.mem.Allocator,
-    size: dvui.Size,
+    size: dvui.Size.Natural,
     size_pixels: dvui.Size.Physical,
 };
 
@@ -64,7 +64,7 @@ pub fn pixelSize(self: *TestingBackend) dvui.Size.Physical {
 
 /// Return size of the window in logical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 300x200.
-pub fn windowSize(self: *TestingBackend) dvui.Size {
+pub fn windowSize(self: *TestingBackend) dvui.Size.Natural {
     return self.size;
 }
 

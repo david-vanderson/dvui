@@ -9,23 +9,23 @@ r: Rect.Physical = .{},
 s: f32 = 1.0,
 
 pub fn rectToRectScale(rs: *const RectScale, r: Rect) RectScale {
-    return .{ .r = .fromRect(r.scale(rs.s).offset(rs.r.toRect())), .s = rs.s };
+    return .{ .r = r.scale(rs.s, Rect.Physical).offset(rs.r), .s = rs.s };
 }
 
 pub fn rectToScreen(rs: *const RectScale, r: Rect) Rect.Physical {
-    return .fromRect(r.scale(rs.s).offset(rs.r.toRect()));
+    return r.scale(rs.s, Rect.Physical).offset(rs.r);
 }
 
 pub fn rectFromScreen(rs: *const RectScale, r: Rect.Physical) Rect {
-    return r.toRect().offsetNeg(rs.r.toRect()).scale(1 / rs.s);
+    return r.offsetNeg(rs.r).scale(1 / rs.s, Rect);
 }
 
 pub fn pointToScreen(rs: *const RectScale, p: Point) Point.Physical {
-    return .fromPoint(p.scale(rs.s).plus(rs.r.topLeft().toPoint()));
+    return p.scale(rs.s, Point.Physical).plus(rs.r.topLeft());
 }
 
 pub fn pointFromScreen(rs: *const RectScale, p: Point.Physical) Point {
-    return p.diff(rs.r.topLeft()).toPoint().scale(1 / rs.s);
+    return p.diff(rs.r.topLeft()).scale(1 / rs.s, Point);
 }
 
 test {
