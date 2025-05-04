@@ -43,11 +43,12 @@ clipr_count: u12 = 0,
 // Count each call to drawClippedTriangles with a texture
 debug_texture_count: if (render_opts.emit_debug_textures) |_| u24 else u0 = 0,
 
+// List of stuff emitted during rendering and dumped to file in `end()`
 svg_patterns: std.ArrayListUnmanaged(SvgPattern) = undefined,
 svg_filters: std.AutoHashMapUnmanaged(SvgFilter, void) = undefined,
 svg_clippaths: std.ArrayListUnmanaged(SvgClippath) = undefined,
 svg_graphics: std.ArrayListUnmanaged(SvgGraphics) = undefined,
-svg_b64_streams: if (render_opts.emit_textures) void else std.AutoHashMapUnmanaged(SvgTexture, []const u8) = undefined,
+svg_b64_streams: if (render_opts.emit_textures) void else std.AutoHashMapUnmanaged(SvgTexture, SvgB64Image) = undefined,
 
 pub const InitOptions = struct {
     // Long lived allocator needed to keep the name of the textures from frame to frame.
@@ -209,7 +210,7 @@ pub const SvgTexture = struct {
     frame_id: u8,
     texture_create_id: u12,
 
-    const filename_template = "f{X:02}-{X:03}.png";
+    const filename_template = "frame{X:02}-{X:03}.png";
     const filename_len = filename_template.len - 4 - 3;
     /// Returns filename for the texture
     pub fn filename(self: SvgTexture) [filename_len]u8 {
@@ -221,12 +222,15 @@ pub const SvgTexture = struct {
         ) catch unreachable;
         return result;
     }
-    /// Same as `filename` but without extension.
-    pub fn textId(self: SvgTexture) [filename_len - 4]u8 {
-        var result: [filename_len - 4]u8 = .{0} ** (filename_len - 4);
+    const textid_template = "f{X:02}-{X:03}";
+    const textid_len = textid_template.len - 4 - 3;
+    /// Same as `filename` but shorter and without extension.
+    /// Used as id in the svg for better readability
+    pub fn textId(self: SvgTexture) [textid_len]u8 {
+        var result: [textid_len]u8 = .{0} ** (textid_len);
         _ = std.fmt.bufPrint(
             &result,
-            filename_template[0 .. filename_template.len - 4],
+            textid_template,
             .{ self.frame_id, self.texture_create_id },
         ) catch unreachable;
         return result;
@@ -255,6 +259,14 @@ pub const SvgTexture = struct {
             .texture_create_id = @intCast(id & 0xFFF),
         };
     }
+};
+// Represent a png image as a stream of base64 encoded bytes
+//   Need to allocate this during `textureCreate` but content is dump to file
+//   during `end` only. This mean I cannot de-allocate in `textureDestroy`.
+//   Hence the alive flag that is set to false for later de-allocation.
+pub const SvgB64Image = struct {
+    b64_stream: []const u8,
+    alive: bool = true,
 };
 /// Represent a <pattern> tag.
 ///  Each textured triangle has to refer one.
@@ -343,12 +355,16 @@ pub fn initWindow(options: InitOptions) !SvgBackend {
         return SvgBackend{
             .size = options.size,
             .alloc = options.allocator,
-            .svg_b64_streams = std.AutoHashMapUnmanaged(SvgTexture, []const u8){},
+            .svg_b64_streams = std.AutoHashMapUnmanaged(SvgTexture, SvgB64Image){},
         };
     }
 }
 pub fn deinit(self: *SvgBackend) void {
     if (!render_opts.emit_textures) {
+        var iter = self.svg_b64_streams.iterator();
+        while (iter.next()) |t_entry| {
+            self.alloc.free(t_entry.value_ptr.b64_stream);
+        }
         self.svg_b64_streams.deinit(self.alloc);
     }
 }
@@ -527,8 +543,8 @@ pub fn end(self: *SvgBackend) void {
         , .{ f.toId(), f.rNorm(), f.gNorm(), f.bNorm(), f.aNorm() }) catch unreachable;
     }
 
-    // Each triangle gets it's own <pattern> but only emit one <image> tag
-    // for each different effective texture (i.e. unique png file)
+    // Each triangle gets it's own <pattern> but we only emit one <image> tag
+    // for each different effective texture (i.e. unique png file / b64 stream)
     var unique_textures = std.AutoArrayHashMapUnmanaged(SvgTexture, void){};
     for (self.svg_patterns.items) |p| {
         const texture = SvgTexture.fromId(p.texture_id);
@@ -547,20 +563,27 @@ pub fn end(self: *SvgBackend) void {
         unique_textures.put(self.arena, SvgTexture.fromId(p.texture_id), {}) catch unreachable;
     }
     var texture_iter = unique_textures.iterator();
-    while (texture_iter.next()) |txr| {
+    while (texture_iter.next()) |t_entry| {
         if (render_opts.emit_textures) {
             bufwriter.print(
                 "  <image id=\"{s}\" href=\"{s}\"/>\n",
-                .{ txr.key_ptr.textId(), txr.key_ptr.filename() },
+                .{ t_entry.key_ptr.textId(), t_entry.key_ptr.filename() },
             ) catch unreachable;
         } else {
-            bufwriter.print(
-                \\  <image id="{s}" href="data:image/png;base64,{s}"/>",
-                \\
-            ,
-                .{ txr.key_ptr.*.textId(), self.svg_b64_streams.get(txr.key_ptr.*).? },
-            ) catch unreachable;
-            print("used {s} in frame{X}\n", .{ txr.key_ptr.*.filename(), self.frame_count });
+            if (self.svg_b64_streams.get(t_entry.key_ptr.*)) |img| {
+                bufwriter.print(
+                    \\  <image id="{s}" href="data:image/png;base64,{s}"/>",
+                    \\
+                ,
+                    .{ t_entry.key_ptr.textId(), img.b64_stream },
+                ) catch unreachable;
+                if (!img.alive) {
+                    self.alloc.free(img.b64_stream);
+                    _ = self.svg_b64_streams.remove(t_entry.key_ptr.*);
+                }
+            } else {
+                log.warn("Texture {s} is used in frame{X:02} but doesn't exists", .{ t_entry.key_ptr.textId(), self.frame_count });
+            }
         }
     }
 
@@ -838,7 +861,7 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             const dir = render_opts.render_dir;
             const filename = std.fmt.allocPrint(
                 self.arena,
-                "frame{x:02}-{s}-{X}.svg",
+                "frame{X:02}-{s}-{X}.svg",
                 .{ self.frame_count, svg_texture.textId(), self.debug_texture_count },
             ) catch unreachable;
             const filepath = std.fs.path.join(self.arena, &.{ dir, filename }) catch unreachable;
@@ -861,13 +884,17 @@ pub fn drawClippedTriangles(self: *SvgBackend, texture: ?dvui.Texture, vtx: []co
             if (render_opts.emit_textures) {
                 bufwriter.print(
                     "  <image id=\"{s}\" href=\"{s}\"/>\n",
-                    .{ svg_texture.toId(), svg_texture.filename() },
+                    .{ svg_texture.textId(), svg_texture.filename() },
                 ) catch unreachable;
             } else {
-                bufwriter.print(
-                    "  <image id=\"{s}\" href=\"data:image/png;base64,{s}\"/>\n",
-                    .{ svg_texture.textId(), self.svg_b64_streams.get(svg_texture).? },
-                ) catch unreachable;
+                if (self.svg_b64_streams.get(svg_texture)) |img| {
+                    bufwriter.print(
+                        \\  <image id="{s}" href="data:image/png;base64,{s}"/>",
+                        \\
+                    ,
+                        .{ svg_texture.textId(), img.b64_stream },
+                    ) catch unreachable;
+                }
             }
 
             i = 0;
@@ -907,7 +934,6 @@ pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, 
         .frame_id = self.frame_count,
         .texture_create_id = self.texture_count,
     };
-    print("textureCreate {s}\n", .{texture.filename()});
 
     const png_bytes = dvui.pngEncode(self.arena, pixels[0 .. width * height * 4], width, height, .{ .resolution = null }) catch unreachable;
 
@@ -925,7 +951,7 @@ pub fn textureCreate(self: *SvgBackend, pixels: [*]u8, width: u32, height: u32, 
         const res = b64encoder.encode(stream, png_bytes);
         std.debug.assert(stream.ptr == res.ptr);
         std.debug.assert(stream.len == res.len);
-        self.svg_b64_streams.put(self.alloc, texture, stream) catch unreachable;
+        self.svg_b64_streams.put(self.alloc, texture, .{ .b64_stream = stream }) catch unreachable;
     }
 
     self.texture_count += 1;
@@ -948,11 +974,13 @@ pub fn textureDestroy(self: *SvgBackend, texture: dvui.Texture) void {
         // Nothing to destroy, I pass and ID around that directly represent the filename
         // and the file is already on the disk straight after TextureCreate
     } else {
-        print("destroy {s}\n", .{SvgTexture.fromPtr(texture.ptr).filename()});
-
+        // Mark for deletion, this is actually performed during `end()`
         const txr = SvgTexture.fromPtr(texture.ptr);
-        const stream = self.svg_b64_streams.get(txr);
-        self.alloc.free(stream.?);
+        if (self.svg_b64_streams.getPtr(txr)) |b64| {
+            b64.alive = false;
+        } else {
+            log.warn("Attempt to destroy texture {s} that doesn't exists", .{txr.textId()});
+        }
     }
 }
 
@@ -984,23 +1012,16 @@ pub fn clipboardText(_: *SvgBackend) error{OutOfMemory}![]const u8 {
     return "";
 }
 /// Set clipboard content (text only)
-pub fn clipboardTextSet(self: *SvgBackend, text: []const u8) error{OutOfMemory}!void {
-    _ = self; // autofix
-    _ = text; // autofix
-}
+pub fn clipboardTextSet(_: *SvgBackend, _: []const u8) error{OutOfMemory}!void {}
 
 /// Open URL in system browser
-pub fn openURL(self: *SvgBackend, url: []const u8) error{OutOfMemory}!void {
-    _ = self; // autofix
-    _ = url; // autofix
-}
+pub fn openURL(_: *SvgBackend, _: []const u8) error{OutOfMemory}!void {}
+
 /// Called by dvui.refresh() when it is called from a background
 /// thread.  Used to wake up the gui thread.  It only has effect if you
 /// are using waitTime() or some other method of waiting until a new
 /// event comes in.
-pub fn refresh(self: *SvgBackend) void {
-    _ = self; // autofix
-}
+pub fn refresh(_: *SvgBackend) void {}
 
 const std = @import("std");
 const builtin = @import("builtin");
