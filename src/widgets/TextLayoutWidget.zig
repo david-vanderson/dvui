@@ -288,7 +288,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             var rect = self.sel_start_r;
             rect.y += rect.h; // move to below the line
             const srs = self.screenRectScale(rect);
-            rect = dvui.windowRectScale().rs.rectFromScreen(srs.r);
+            rect = dvui.windowRectScale().rectFromScreen(srs.r);
             rect.x -= size;
             rect.w = size;
             rect.h = size;
@@ -360,14 +360,14 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             var rect = self.sel_end_r;
             rect.y += rect.h; // move to below the line
             const srs = self.screenRectScale(rect);
-            rect = dvui.windowRectScale().rectFromScreen(srs.r).toRect();
+            rect = dvui.windowRectScale().rectFromScreen(srs.r);
             rect.w = size;
             rect.h = size;
 
             var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
             try fc.install();
 
-            var offset: Point = dvui.dataGet(null, fc.wd.id, "_offset", Point) orelse .{};
+            var offset: Point.Physical = dvui.dataGet(null, fc.wd.id, "_offset", Point.Physical) orelse .{};
 
             const fcrs = fc.wd.rectScale();
             const evts = dvui.events();
@@ -380,7 +380,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                     if (me.action == .press and me.button.touch()) {
                         dvui.captureMouse(fc.data());
                         self.te_show_context_menu = false;
-                        offset = fcrs.r.toRect().topLeft().diff(me.p.toPoint());
+                        offset = fcrs.r.topLeft().diff(me.p);
 
                         // give an extra offset of half the cursor height
                         offset.y -= self.sel_start_r.h * 0.5 * rs.s;
@@ -388,7 +388,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                         dvui.captureMouse(null);
                         dvui.dragEnd();
                     } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
-                        const corner = Point.Physical.fromPoint(me.p.toPoint().plus(offset));
+                        const corner = me.p.plus(offset);
                         self.sel_pts[0] = self.sel_start_r.topLeft().plus(.{ .y = self.sel_start_r.h / 2 });
                         self.sel_pts[1] = self.wd.contentRectScale().pointFromScreen(corner);
 
@@ -1404,7 +1404,7 @@ pub fn touchEditing(self: *TextLayoutWidget) !?*FloatingWidget {
             self.te_floating.wd.rect.x = r.x + r.w - self.te_floating.wd.rect.w;
             self.te_floating.wd.rect.y = r.y - self.te_floating.wd.rect.h - self.wd.options.paddingGet().y;
 
-            self.te_floating.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.te_floating.wd.rect.x, .y = self.te_floating.wd.rect.y }, .vertical, self.te_floating.wd.rect);
+            self.te_floating.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.te_floating.wd.rect.x, .y = self.te_floating.wd.rect.y }, .vertical, self.te_floating.wd.rect.cast(Rect.Natural)).cast(Rect);
         } else {
             // need another frame to get our min size
             dvui.refresh(null, @src(), self.te_floating.wd.id);

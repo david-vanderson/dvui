@@ -15,7 +15,7 @@ const VTableTypes = struct {
     pub const end = *const fn (ctx: Context) void;
 
     pub const pixelSize = *const fn (ctx: Context) dvui.Size.Physical;
-    pub const windowSize = *const fn (ctx: Context) dvui.Size;
+    pub const windowSize = *const fn (ctx: Context) dvui.Size.Natural;
     pub const contentScale = *const fn (ctx: Context) f32;
 
     pub const drawClippedTriangles = *const fn (ctx: Context, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr: ?dvui.Rect.Physical) void;
@@ -121,7 +121,7 @@ pub fn pixelSize(self: *Backend) dvui.Size.Physical {
 
 /// Return size of the window in logical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 300x200.
-pub fn windowSize(self: *Backend) dvui.Size {
+pub fn windowSize(self: *Backend) dvui.Size.Natural {
     return self.vtable.windowSize(self.ctx);
 }
 

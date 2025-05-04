@@ -34,11 +34,11 @@ pub const Color = @import("Color.zig");
 pub const Event = @import("Event.zig");
 pub const Font = @import("Font.zig");
 pub const Options = @import("Options.zig");
-pub const Point = @import("Point.zig");
-pub const Rect = @import("Rect.zig");
+pub const Point = @import("Point.zig").Point;
+pub const Rect = @import("Rect.zig").Rect;
 pub const RectScale = @import("RectScale.zig");
 pub const ScrollInfo = @import("ScrollInfo.zig");
-pub const Size = @import("Size.zig");
+pub const Size = @import("Size.zig").Size;
 pub const Theme = @import("Theme.zig");
 pub const Vertex = @import("Vertex.zig");
 pub const Widget = @import("Widget.zig");
@@ -282,11 +282,11 @@ pub const PlaceOnScreenAvoid = enum {
 /// is visible.  Additionally, if start is logically connected to a spawning
 /// rect (like a context menu spawning a submenu), then jump to the opposite
 /// side if needed.
-pub fn placeOnScreen(screen: Rect.Natural, spawner: Rect.Natural, avoid: PlaceOnScreenAvoid, start: Rect) Rect {
+pub fn placeOnScreen(screen: Rect.Natural, spawner: Rect.Natural, avoid: PlaceOnScreenAvoid, start: Rect.Natural) Rect.Natural {
     var r = start;
 
     // first move to avoid spawner
-    if (!r.intersect(spawner.toRect()).empty()) {
+    if (!r.intersect(spawner).empty()) {
         switch (avoid) {
             .none => {},
             .horizontal => r.x = spawner.x + spawner.w,
@@ -1122,7 +1122,7 @@ pub const PathSlice = []const Point.Physical;
 /// - h is bottom-left corner
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathAddRect(path: *PathArrayList, r: Rect.Physical, radius: Rect) !void {
+pub fn pathAddRect(path: *PathArrayList, r: Rect.Physical, radius: Rect.Physical) !void {
     var rad = radius;
     const maxrad = @min(r.w, r.h) / 2;
     rad.x = @min(rad.x, maxrad);
@@ -1240,14 +1240,14 @@ pub fn pathFillConvexTriangles(path: PathSlice) !Triangles {
         const ai = (i + path.len - 1) % path.len;
         const bi = i % path.len;
         const ci = (i + 1) % path.len;
-        const aa = path[ai].diff(cw.render_target.offset).toPoint();
-        const bb = path[bi].diff(cw.render_target.offset).toPoint();
-        const cc = path[ci].diff(cw.render_target.offset).toPoint();
+        const aa = path[ai].diff(cw.render_target.offset);
+        const bb = path[bi].diff(cw.render_target.offset);
+        const cc = path[ci].diff(cw.render_target.offset);
 
-        const diffab = Point.diff(aa, bb).normalize();
-        const diffbc = Point.diff(bb, cc).normalize();
+        const diffab = aa.diff(bb).normalize();
+        const diffbc = bb.diff(cc).normalize();
         // average of normals on each side
-        const halfnorm = (Point{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 }).normalize().scale(0.5);
+        const halfnorm = (Point.Physical{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 }).normalize().scale(0.5, Point.Physical);
 
         var v: Vertex = undefined;
         // inner vertex
@@ -1394,21 +1394,21 @@ pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: b
         const ai = (i + path.len - 1) % path.len;
         const bi = i % path.len;
         const ci = (i + 1) % path.len;
-        const aa = path[ai].diff(cw.render_target.offset).toPoint();
-        var bb = path[bi].diff(cw.render_target.offset).toPoint();
-        const cc = path[ci].diff(cw.render_target.offset).toPoint();
+        const aa = path[ai].diff(cw.render_target.offset);
+        var bb = path[bi].diff(cw.render_target.offset);
+        const cc = path[ci].diff(cw.render_target.offset);
 
         // the amount to move from bb to the edge of the line
-        var halfnorm: Point = undefined;
+        var halfnorm: Point.Physical = undefined;
 
         var v: Vertex = undefined;
-        var diffab: Point = undefined;
+        var diffab: Point.Physical = undefined;
 
         if (!closed and ((i == 0) or ((i + 1) == path.len))) {
             if (i == 0) {
-                const diffbc = Point.diff(bb, cc).normalize();
+                const diffbc = bb.diff(cc).normalize();
                 // rotate by 90 to get normal
-                halfnorm = Point{ .x = diffbc.y / 2, .y = (-diffbc.x) / 2 };
+                halfnorm = .{ .x = diffbc.y / 2, .y = (-diffbc.x) / 2 };
 
                 if (endcap_style == .square) {
                     // square endcaps move bb out by thickness
@@ -1454,9 +1454,9 @@ pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: b
                 try idx.append(@as(u16, @intCast(vtx_start + 2 + 1)));
                 try idx.append(@as(u16, @intCast(vtx_start + 2)));
             } else if ((i + 1) == path.len) {
-                diffab = Point.diff(aa, bb).normalize();
+                diffab = aa.diff(bb).normalize();
                 // rotate by 90 to get normal
-                halfnorm = Point{ .x = diffab.y / 2, .y = (-diffab.x) / 2 };
+                halfnorm = .{ .x = diffab.y / 2, .y = (-diffab.x) / 2 };
 
                 if (endcap_style == .square) {
                     // square endcaps move bb out by thickness
@@ -1465,23 +1465,23 @@ pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: b
                 }
             }
         } else {
-            diffab = Point.diff(aa, bb).normalize();
-            const diffbc = Point.diff(bb, cc).normalize();
+            diffab = aa.diff(bb).normalize();
+            const diffbc = bb.diff(cc).normalize();
             // average of normals on each side
-            halfnorm = Point{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
+            halfnorm = .{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
 
             // scale averaged normal by angle between which happens to be the same as
             // dividing by the length^2
             const d2 = halfnorm.x * halfnorm.x + halfnorm.y * halfnorm.y;
             if (d2 > 0.000001) {
-                halfnorm = halfnorm.scale(0.5 / d2);
+                halfnorm = halfnorm.scale(0.5 / d2, Point.Physical);
             }
 
             // limit distance our vertexes can be from the point to 2 * thickness so
             // very small angles don't produce huge geometries
             const l = halfnorm.length();
             if (l > 2.0) {
-                halfnorm = halfnorm.scale(2.0 / l);
+                halfnorm = halfnorm.scale(2.0 / l, Point.Physical);
             }
         }
 
@@ -1884,17 +1884,17 @@ pub fn dragging(p: Point.Physical) ?Point.Physical {
     switch (cw.drag_state) {
         .none => return null,
         .dragging => {
-            const dp = Point.diff(p.toPoint(), cw.drag_pt.toPoint());
+            const dp = p.diff(cw.drag_pt);
             cw.drag_pt = p;
-            return .fromPoint(dp);
+            return dp;
         },
         .prestart => {
-            const dp = Point.diff(p.toPoint(), cw.drag_pt.toPoint());
-            const dps = dp.scale(1 / windowNaturalScale());
+            const dp = p.diff(cw.drag_pt);
+            const dps = dp.scale(1 / windowNaturalScale(), Point.Natural);
             if (@abs(dps.x) > 3 or @abs(dps.y) > 3) {
                 cw.drag_pt = p;
                 cw.drag_state = .dragging;
-                return .fromPoint(dp);
+                return dp;
             } else {
                 return null;
             }
@@ -2205,8 +2205,8 @@ pub fn renderingSet(r: bool) bool {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn windowRect() Rect.Natural {
-    // Main window is an exception as it's rect is the basis for all other natural rects
-    return .fromRect(currentWindow().wd.rect);
+    // Window.wd.rect is the definition of natural
+    return currentWindow().wd.rect.cast(Rect.Natural);
 }
 
 /// Get the OS window size in pixels.  See `windowRect`.
@@ -2218,37 +2218,13 @@ pub fn windowRectPixels() Rect.Physical {
     return currentWindow().rect_pixels;
 }
 
-/// A natural rect scale returned by `windowRectScale`. Transform functions on this
-/// type takes and returns `Rect.Natural` and `Point.Natural`.
-///
-/// If a normal `RectScale` is needed, use the `rs` field directly.
-pub const NaturalRectScale = struct {
-    rs: RectScale,
-
-    pub fn rectToScreen(self: *const NaturalRectScale, r: Rect.Natural) Rect.Physical {
-        return self.rs.rectToScreen(r.toRect());
-    }
-
-    pub fn rectFromScreen(self: *const NaturalRectScale, r: Rect.Physical) Rect.Natural {
-        return .fromRect(self.rs.rectFromScreen(r));
-    }
-
-    pub fn pointToScreen(self: *const NaturalRectScale, p: Point.Natural) Point.Physical {
-        return self.rs.pointToScreen(p.toPoint());
-    }
-
-    pub fn pointFromScreen(self: *const NaturalRectScale, p: Point.Physical) Point.Natural {
-        return .fromPoint(self.rs.pointFromScreen(p));
-    }
-};
-
 /// Get the Rect and scale factor for the OS window.  The Rect is in pixels,
 /// and the scale factor is how many pixels per natural pixel.  See
 /// `windowRect`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn windowRectScale() NaturalRectScale {
-    return .{ .rs = .{ .r = currentWindow().rect_pixels, .s = currentWindow().natural_scale } };
+pub fn windowRectScale() RectScale {
+    return currentWindow().rectScale();
 }
 
 /// The natural scale is how many pixels per natural pixel.  Useful for
@@ -4347,11 +4323,10 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) !void {
         height += kv.value_ptr.texture_atlas.height;
     }
 
-    var size: Size = .{ .w = @floatFromInt(width), .h = @floatFromInt(height) };
+    const sizePhys: Size.Physical = .{ .w = @floatFromInt(width), .h = @floatFromInt(height) };
 
-    // this size is a pixel size, so inverse scale to get natural pixels
     const ss = parentGet().screenRectScale(Rect{}).s;
-    size = size.scale(1.0 / ss);
+    const size = sizePhys.scale(1.0 / ss, Size);
 
     var wd = WidgetData.init(src, .{}, opts.override(.{ .name = "debugFontAtlases", .min_size_content = size }));
     try wd.register();
@@ -4536,7 +4511,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        try part.fill(options.corner_radiusGet().scale(trackrs.s), options.color(.accent));
+        try part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), options.color(.accent));
     }
 
     switch (dir) {
@@ -4550,7 +4525,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        try part.fill(options.corner_radiusGet().scale(trackrs.s), options.color(.fill));
+        try part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), options.color(.fill));
     }
 
     const knobRect = switch (dir) {
@@ -4889,7 +4864,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
 
-            try knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s), options.color(.fill_press));
+            try knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), options.color(.fill_press));
         }
 
         try label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
@@ -5001,7 +4976,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 
     const rs = b.data().contentRectScale();
 
-    try rs.r.fill(options.corner_radiusGet().scale(rs.s), options.color(.fill));
+    try rs.r.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), options.color(.fill));
 
     const perc = @max(0, @min(1, init_opts.percent));
     if (perc == 0) return;
@@ -5017,7 +4992,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    try part.fill(options.corner_radiusGet().scale(rs.s), options.color(.accent));
+    try part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), options.color(.accent));
 }
 
 pub var checkbox_defaults: Options = .{
@@ -5064,10 +5039,11 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 }
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
-    try rs.r.fill(opts.corner_radiusGet().scale(rs.s), opts.color(.border));
+    const cornerRad = opts.corner_radiusGet().scale(rs.s, Rect.Physical);
+    try rs.r.fill(cornerRad, opts.color(.border));
 
     if (focused) {
-        try rs.r.stroke(opts.corner_radiusGet().scale(rs.s), 2 * rs.s, opts.color(.accent), .{});
+        try rs.r.stroke(cornerRad, 2 * rs.s, opts.color(.accent), .{});
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -5080,9 +5056,9 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     var options = opts;
     if (checked) {
         options = opts.override(themeGet().style_accent);
-        try rs.r.insetAll(0.5 * rs.s).fill(opts.corner_radiusGet().scale(rs.s), options.color(fill));
+        try rs.r.insetAll(0.5 * rs.s).fill(cornerRad, options.color(fill));
     } else {
-        try rs.r.insetAll(rs.s).fill(opts.corner_radiusGet().scale(rs.s), options.color(fill));
+        try rs.r.insetAll(rs.s).fill(cornerRad, options.color(fill));
     }
 
     if (checked) {
@@ -5149,11 +5125,12 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 }
 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
+    const cornerRad = Rect.Physical.all(1000);
     const r = rs.r;
-    try r.fill(Rect.all(1000), opts.color(.border));
+    try r.fill(cornerRad, opts.color(.border));
 
     if (focused) {
-        try r.stroke(Rect.all(1000), 2 * rs.s, opts.color(.accent), .{});
+        try r.stroke(cornerRad, 2 * rs.s, opts.color(.accent), .{});
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -5164,9 +5141,9 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     }
 
     if (active) {
-        try r.insetAll(0.5 * rs.s).fill(Rect.all(1000), opts.color(.accent));
+        try r.insetAll(0.5 * rs.s).fill(cornerRad, opts.color(.accent));
     } else {
-        try r.insetAll(rs.s).fill(Rect.all(1000), opts.color(fill));
+        try r.insetAll(rs.s).fill(cornerRad, opts.color(fill));
     }
 
     if (active) {
@@ -5303,7 +5280,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet(), 3 * rs.s, dvui.themeGet().color_err, .{ .after = true });
+        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), 3 * rs.s, dvui.themeGet().color_err, .{ .after = true });
     }
 
     // display min/max
@@ -5652,7 +5629,7 @@ pub fn renderText(opts: renderTextOptions) !void {
                 v.uv[1] = 0;
             }
 
-            const selr = Rect.Physical.fromRect(Rect.fromPoint(sel_vtx[0].pos.toPoint()).toPoint(sel_vtx[2].pos.toPoint()));
+            const selr = Rect.Physical.fromPoint(sel_vtx[0].pos).toPoint(sel_vtx[2].pos);
             const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
             const clipr: ?Rect.Physical = if (selr.clippedBy(clip_offset)) clip_offset else null;
 
@@ -5662,8 +5639,8 @@ pub fn renderText(opts: renderTextOptions) !void {
     }
 
     if (vtx.items.len > 0) {
-        // due to floating point inaccuracies, shrink by 1/1000 of a pixel before testing
-        const txtr = Rect.Physical.fromRect((Rect{ .x = x_start, .y = y, .w = max_x - x_start, .h = sel_max_y - y }).insetAll(0.001));
+        // due to floating point inaccuracies, shrink by 1/100 of a pixel before testing
+        const txtr = (Rect.Physical{ .x = x_start, .y = y, .w = max_x - x_start, .h = sel_max_y - y }).insetAll(0.01);
         const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
         const clipr: ?Rect.Physical = if (txtr.clippedBy(clip_offset)) clip_offset else null;
 
@@ -5841,7 +5818,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
     var path: PathArrayList = .init(dvui.currentWindow().arena());
     defer path.deinit();
 
-    try dvui.pathAddRect(&path, r, opts.corner_radius.scale(rs.s));
+    try dvui.pathAddRect(&path, r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
     var triangles = try pathFillConvexTriangles(path.items);
     defer triangles.deinit(cw.arena());

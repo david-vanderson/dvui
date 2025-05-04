@@ -216,13 +216,13 @@ pub fn install(self: *PlotWidget) !void {
             if (m_ytick) |ytick| {
                 const tick: Data = .{ .x = self.x_axis.min orelse 0, .y = ytick };
                 const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{ytick});
-                const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s);
+                const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
                 var tick_p = self.dataToScreen(tick);
                 tick_p.x -= tick_str_size.w + pad;
                 tick_p.y = @max(tick_p.y, self.data_rs.r.y);
                 tick_p.y = @min(tick_p.y, self.data_rs.r.y + self.data_rs.r.h - tick_str_size.h);
                 //tick_p.y -= tick_str_size.h / 2;
-                const tick_rs: RectScale = .{ .r = .fromRect(Rect.fromPoint(tick_p.toPoint()).toSize(tick_str_size)), .s = self.data_rs.s };
+                const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_p).toSize(tick_str_size), .s = self.data_rs.s };
 
                 try dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) });
             }
@@ -236,13 +236,13 @@ pub fn install(self: *PlotWidget) !void {
             if (m_xtick) |xtick| {
                 const tick: Data = .{ .x = xtick, .y = self.y_axis.min orelse 0 };
                 const tick_str = try std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}", .{xtick});
-                const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s);
+                const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
                 var tick_p = self.dataToScreen(tick);
                 tick_p.x = @max(tick_p.x, self.data_rs.r.x);
                 tick_p.x = @min(tick_p.x, self.data_rs.r.x + self.data_rs.r.w - tick_str_size.w);
                 //tick_p.x -= tick_str_size.w / 2;
                 tick_p.y += pad;
-                const tick_rs: RectScale = .{ .r = .fromRect(Rect.fromPoint(tick_p.toPoint()).toSize(tick_str_size)), .s = self.data_rs.s };
+                const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_p).toSize(tick_str_size), .s = self.data_rs.s };
 
                 try dvui.renderText(.{ .font = tick_font, .text = tick_str, .rs = tick_rs, .color = self.box.data().options.color(.text) });
             }

@@ -38,7 +38,7 @@ pub fn init(src: std.builtin.SourceLocation, opts_in: Options) FloatingWidget {
     self.scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
     var opts = opts_in;
     if (opts.min_size_content) |msc| {
-        opts.min_size_content = msc.scale(self.scale_val);
+        opts.min_size_content = msc.scale(self.scale_val, Size);
     }
 
     // passing options.rect will stop WidgetData.init from calling
