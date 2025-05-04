@@ -344,10 +344,10 @@ pub fn toU32(self: Color) u32 {
 
 pub fn fromU32(value: u32) Color {
     return Color{
-        .r = (value >> 24) & 0xFF,
-        .g = (value >> 16) & 0xFF,
-        .b = (value >> 8) & 0xFF,
-        .a = (value) & 0xFF,
+        .r = @intCast((value >> 24) & 0xFF),
+        .g = @intCast((value >> 16) & 0xFF),
+        .b = @intCast((value >> 8) & 0xFF),
+        .a = @intCast((value) & 0xFF),
     };
 }
 
