@@ -229,12 +229,12 @@ test "easing-plot-{s}.png" {
     };
 
     try dvui.testing.settle(plot.frame);
-    try t.saveDocImage(@src(), .{"linear"}, plot.frame);
+    try t.saveDocImage(@src(), plot.frame, null, .{"linear"});
 
     inline for (@typeInfo(@This()).@"struct".decls) |decl| {
         if (comptime std.mem.startsWith(u8, decl.name, "in") or std.mem.startsWith(u8, decl.name, "out")) {
             plot.easing = @field(@This(), decl.name);
-            try t.saveDocImage(@src(), .{decl.name}, plot.frame);
+            try t.saveDocImage(@src(), plot.frame, null, .{decl.name});
         }
     }
 }
