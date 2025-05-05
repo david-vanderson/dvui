@@ -380,7 +380,7 @@ pub fn build(b: *std.Build) !void {
                 const image_tests = b.addTest(.{
                     .name = "generate-images",
                     .root_module = dvui,
-                    .filters = &.{".png"},
+                    .filters = &.{"DOCIMG"},
                     .test_runner = .{ .mode = .simple, .path = b.path("docs/image_gen_test_runner.zig") },
                 });
                 docs_step.dependOn(&b.addRunArtifact(image_tests).step);
