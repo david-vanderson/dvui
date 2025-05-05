@@ -232,231 +232,238 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         pub fn toNatural(self: Rect.Physical) Rect.Natural {
             return self.scale(1 / dvui.windowNaturalScale(), Rect.Natural);
         }
-    };
-}
 
-test {
-    @import("std").testing.refAllDecls(@This());
-}
-
-test "Rect.scale" {
-    const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
-    const res = rect.scale(0.5, Rect);
-    try std.testing.expectEqualDeep(Rect{ .x = 25, .y = 25, .w = 75, .h = 75 }, res);
-}
-
-test "Rect-scale.png" {
-    var t = try dvui.testing.init(.{ .window_size = .all(250) });
-    defer t.deinit();
-
-    const frame = struct {
-        fn frame() !dvui.App.Result {
-            // NOTE: Should be kept up to date with the doctest
+        test scale {
             const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
-            const res = rect.scale(0.5);
+            const res = rect.scale(0.5, Rect);
             try std.testing.expectEqualDeep(Rect{ .x = 25, .y = 25, .w = 75, .h = 75 }, res);
-
-            var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
-            defer box.deinit();
-            try rect.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-            try res.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
-            return .ok;
         }
-    }.frame;
 
-    try t.saveDocImage(@src(), .{}, frame);
-}
+        test "Rect-scale.png" {
+            if (units != .none) return;
+            var t = try dvui.testing.init(.{ .window_size = .all(250) });
+            defer t.deinit();
 
-test "Rect.offset" {
-    const rect = Rect{ .x = 50, .y = 50, .w = 100, .h = 100 };
-    const res = rect.offset(.{ .x = 50, .y = 50 }); // width and height does nothing
-    try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 100, .h = 100 }, res);
-}
+            const frame = struct {
+                fn frame() !dvui.App.Result {
+                    // NOTE: Should be kept up to date with the doctest
+                    const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
+                    const res = rect.scale(0.5);
+                    try std.testing.expectEqualDeep(Rect{ .x = 25, .y = 25, .w = 75, .h = 75 }, res);
 
-test "Rect-offset.png" {
-    var t = try dvui.testing.init(.{ .window_size = .all(250) });
-    defer t.deinit();
+                    var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    defer box.deinit();
+                    try rect.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
+                    try res.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    return .ok;
+                }
+            }.frame;
 
-    const frame = struct {
-        fn frame() !dvui.App.Result {
-            // NOTE: Should be kept up to date with the doctest
+            try t.saveDocImage(@src(), .{}, frame);
+        }
+
+        test offset {
             const rect = Rect{ .x = 50, .y = 50, .w = 100, .h = 100 };
             const res = rect.offset(.{ .x = 50, .y = 50 }); // width and height does nothing
             try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 100, .h = 100 }, res);
-
-            var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
-            defer box.deinit();
-            try rect.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-            try res.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
-            return .ok;
         }
-    }.frame;
 
-    try t.saveDocImage(@src(), .{}, frame);
-}
+        test "Rect-offset.png" {
+            if (units != .none) return;
+            var t = try dvui.testing.init(.{ .window_size = .all(250) });
+            defer t.deinit();
 
-test "Rect.offsetNeg" {
-    const rect = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
-    const res = rect.offsetNeg(.{ .x = 50, .y = 50 }); // width and height does nothing
-    try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 100, .h = 100 }, res);
-}
+            const frame = struct {
+                fn frame() !dvui.App.Result {
+                    // NOTE: Should be kept up to date with the doctest
+                    const rect = Rect{ .x = 50, .y = 50, .w = 100, .h = 100 };
+                    const res = rect.offset(.{ .x = 50, .y = 50 }); // width and height does nothing
+                    try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 100, .h = 100 }, res);
 
-test "Rect.offsetNegPoint" {
-    const rect = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
-    const res = rect.offsetNegPoint(.{ .x = 50, .y = 50 });
-    try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 100, .h = 100 }, res);
-}
+                    var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    defer box.deinit();
+                    try rect.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
+                    try res.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    return .ok;
+                }
+            }.frame;
 
-test "Rect-offsetNegPoint.png" {
-    var t = try dvui.testing.init(.{ .window_size = .all(250) });
-    defer t.deinit();
+            try t.saveDocImage(@src(), .{}, frame);
+        }
 
-    const frame = struct {
-        fn frame() !dvui.App.Result {
-            // NOTE: Should be kept up to date with the doctest
+        test offsetNeg {
+            const rect = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
+            const res = rect.offsetNeg(.{ .x = 50, .y = 50 }); // width and height does nothing
+            try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 100, .h = 100 }, res);
+        }
+
+        test offsetNegPoint {
             const rect = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
             const res = rect.offsetNegPoint(.{ .x = 50, .y = 50 });
             try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 100, .h = 100 }, res);
-
-            var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
-            defer box.deinit();
-            try rect.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-            try res.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
-            return .ok;
         }
-    }.frame;
 
-    try t.saveDocImage(@src(), .{}, frame);
-}
+        test "Rect-offsetNegPoint.png" {
+            if (units != .none) return;
+            var t = try dvui.testing.init(.{ .window_size = .all(250) });
+            defer t.deinit();
 
-test "Rect.intersect" {
-    const a = Rect{ .x = 50, .y = 50, .w = 100, .h = 100 };
-    const b = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
+            const frame = struct {
+                fn frame() !dvui.App.Result {
+                    // NOTE: Should be kept up to date with the doctest
+                    const rect = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
+                    const res = rect.offsetNegPoint(.{ .x = 50, .y = 50 });
+                    try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 100, .h = 100 }, res);
 
-    const ab = Rect.intersect(a, b);
-    try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 50, .h = 50 }, ab);
-}
+                    var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    defer box.deinit();
+                    try rect.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
+                    try res.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    return .ok;
+                }
+            }.frame;
 
-test "Rect-intersect.png" {
-    var t = try dvui.testing.init(.{ .window_size = .all(250) });
-    defer t.deinit();
+            try t.saveDocImage(@src(), .{}, frame);
+        }
 
-    const frame = struct {
-        fn frame() !dvui.App.Result {
-            // NOTE: Should be kept up to date with the doctest
+        test intersect {
             const a = Rect{ .x = 50, .y = 50, .w = 100, .h = 100 };
             const b = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
 
             const ab = Rect.intersect(a, b);
             try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 50, .h = 50 }, ab);
-
-            var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
-            defer box.deinit();
-            try a.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-            try b.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-            try ab.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
-            return .ok;
         }
-    }.frame;
 
-    try t.saveDocImage(@src(), .{}, frame);
-}
+        test "Rect-intersect.png" {
+            if (units != .none) return;
+            var t = try dvui.testing.init(.{ .window_size = .all(250) });
+            defer t.deinit();
 
-test "Rect.unionWith" {
-    const a = Rect{ .x = 50, .y = 50, .w = 100, .h = 100 };
-    const b = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
+            const frame = struct {
+                fn frame() !dvui.App.Result {
+                    // NOTE: Should be kept up to date with the doctest
+                    const a = Rect{ .x = 50, .y = 50, .w = 100, .h = 100 };
+                    const b = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
 
-    const ab = Rect.unionWith(a, b);
-    try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 150, .h = 150 }, ab);
-}
+                    const ab = Rect.intersect(a, b);
+                    try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 50, .h = 50 }, ab);
 
-test "Rect-unionWith.png" {
-    var t = try dvui.testing.init(.{ .window_size = .all(250) });
-    defer t.deinit();
+                    var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    defer box.deinit();
+                    try a.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
+                    try b.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
+                    try ab.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    return .ok;
+                }
+            }.frame;
 
-    const frame = struct {
-        fn frame() !dvui.App.Result {
-            // NOTE: Should be kept up to date with the doctest
+            try t.saveDocImage(@src(), .{}, frame);
+        }
+
+        test unionWith {
             const a = Rect{ .x = 50, .y = 50, .w = 100, .h = 100 };
             const b = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
 
             const ab = Rect.unionWith(a, b);
             try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 150, .h = 150 }, ab);
-
-            var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
-            defer box.deinit();
-            try a.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-            try b.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-            try ab.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
-            return .ok;
         }
-    }.frame;
 
-    try t.saveDocImage(@src(), .{}, frame);
-}
+        test "Rect-unionWith.png" {
+            if (units != .none) return;
+            var t = try dvui.testing.init(.{ .window_size = .all(250) });
+            defer t.deinit();
 
-test "Rect.inset" {
-    const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
-    const res = rect.inset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
-    try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 75, .h = 75 }, res);
-}
-test "Rect-inset.png" {
-    var t = try dvui.testing.init(.{ .window_size = .all(250) });
-    defer t.deinit();
+            const frame = struct {
+                fn frame() !dvui.App.Result {
+                    // NOTE: Should be kept up to date with the doctest
+                    const a = Rect{ .x = 50, .y = 50, .w = 100, .h = 100 };
+                    const b = Rect{ .x = 100, .y = 100, .w = 100, .h = 100 };
 
-    const frame = struct {
-        fn frame() !dvui.App.Result {
-            // NOTE: Should be kept up to date with the doctest
+                    const ab = Rect.unionWith(a, b);
+                    try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 150, .h = 150 }, ab);
+
+                    var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    defer box.deinit();
+                    try a.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
+                    try b.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
+                    try ab.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    return .ok;
+                }
+            }.frame;
+
+            try t.saveDocImage(@src(), .{}, frame);
+        }
+
+        test inset {
             const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
             const res = rect.inset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
             try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 75, .h = 75 }, res);
-
-            var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
-            defer box.deinit();
-            try rect.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-            try res.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
-            return .ok;
         }
-    }.frame;
+        test "Rect-inset.png" {
+            if (units != .none) return;
+            var t = try dvui.testing.init(.{ .window_size = .all(250) });
+            defer t.deinit();
 
-    try t.saveDocImage(@src(), .{}, frame);
-}
+            const frame = struct {
+                fn frame() !dvui.App.Result {
+                    // NOTE: Should be kept up to date with the doctest
+                    const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
+                    const res = rect.inset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
+                    try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 75, .h = 75 }, res);
 
-test "Rect.insetAll" {
-    const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
-    const res = rect.insetAll(50);
-    try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 50, .h = 50 }, res);
-}
+                    var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    defer box.deinit();
+                    try rect.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
+                    try res.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    return .ok;
+                }
+            }.frame;
 
-test "Rect.outset" {
-    const rect = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
-    const res = rect.outset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
-    try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 125, .h = 125 }, res);
-}
-test "Rect-outset.png" {
-    var t = try dvui.testing.init(.{ .window_size = .all(250) });
-    defer t.deinit();
+            try t.saveDocImage(@src(), .{}, frame);
+        }
 
-    const frame = struct {
-        fn frame() !dvui.App.Result {
-            // NOTE: Should be kept up to date with the doctest
+        test insetAll {
+            const rect = Rect{ .x = 50, .y = 50, .w = 150, .h = 150 };
+            const res = rect.insetAll(50);
+            try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 50, .h = 50 }, res);
+        }
+
+        test outset {
             const rect = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
             const res = rect.outset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
             try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 125, .h = 125 }, res);
-
-            var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
-            defer box.deinit();
-            try rect.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-            try res.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
-            return .ok;
         }
-    }.frame;
+        test "Rect-outset.png" {
+            if (units != .none) return;
+            var t = try dvui.testing.init(.{ .window_size = .all(250) });
+            defer t.deinit();
 
-    try t.saveDocImage(@src(), .{}, frame);
+            const frame = struct {
+                fn frame() !dvui.App.Result {
+                    // NOTE: Should be kept up to date with the doctest
+                    const rect = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
+                    const res = rect.outset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
+                    try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 125, .h = 125 }, res);
+
+                    var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
+                    defer box.deinit();
+                    try rect.stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
+                    try res.stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    return .ok;
+                }
+            }.frame;
+
+            try t.saveDocImage(@src(), .{}, frame);
+        }
+
+        test outsetAll {
+            const rect = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
+            const res = rect.outsetAll(50);
+            try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 150, .h = 150 }, res);
+        }
+    };
 }
 
-test "Rect.outsetAll"{
-    const rect = Rect{ .x = 100, .y = 100, .w = 50, .h = 50 };
-    const res = rect.outsetAll(50);
-    try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 150, .h = 150 }, res);
+test {
+    @import("std").testing.refAllDecls(@This());
 }
