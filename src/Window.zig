@@ -1681,7 +1681,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
     if (self.inject_motion_event) {
         self.inject_motion_event = false;
-        const pt = self.rectScale().pointFromScreen(self.mouse_pt);
+        const pt = self.rectScale().pointFromPhysical(self.mouse_pt);
         _ = try self.addEventMouseMotion(.cast(pt));
     }
 

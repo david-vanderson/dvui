@@ -2606,13 +2606,13 @@ pub fn scrollCanvas(comptime data: u8) !void {
     const dataRectScale = scaler.screenRectScale(.{});
 
     try dvui.pathStroke(&.{
-        dataRectScale.pointToScreen(.{ .x = -10 }),
-        dataRectScale.pointToScreen(.{ .x = 10 }),
+        dataRectScale.pointToPhysical(.{ .x = -10 }),
+        dataRectScale.pointToPhysical(.{ .x = 10 }),
     }, 1, dvui.Color.black, .{});
 
     try dvui.pathStroke(&.{
-        dataRectScale.pointToScreen(.{ .y = -10 }),
-        dataRectScale.pointToScreen(.{ .y = 10 }),
+        dataRectScale.pointToPhysical(.{ .y = -10 }),
+        dataRectScale.pointToPhysical(.{ .y = 10 }),
     }, 1, dvui.Color.black, .{});
 
     // keep record of bounding box
@@ -2756,7 +2756,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
                         if (dvui.captured(dragBox.data().id)) {
                             if (dvui.dragging(me.p)) |_| {
                                 const p = me.p.diff(dvui.dragOffset()); // pixel corner we want
-                                b.* = dataRectScale.pointFromScreen(p);
+                                b.* = dataRectScale.pointFromPhysical(p);
                                 dvui.refresh(null, @src(), scroll.scroll.data().id);
 
                                 var scrolldrag = dvui.Event{ .evt = .{ .scroll_drag = .{
@@ -2833,7 +2833,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
     if (zoom != 1.0) {
         // scale around mouse point
         // first get data point of mouse
-        const prevP = dataRectScale.pointFromScreen(zoomP);
+        const prevP = dataRectScale.pointFromPhysical(zoomP);
 
         // scale
         var pp = prevP.scale(1 / Data.scale, Point);
@@ -2841,10 +2841,10 @@ pub fn scrollCanvas(comptime data: u8) !void {
         pp = pp.scale(Data.scale, Point);
 
         // get where the mouse would be now
-        const newP = dataRectScale.pointToScreen(pp);
+        const newP = dataRectScale.pointToPhysical(pp);
 
         // convert both to viewport
-        const diff = scrollRectScale.pointFromScreen(newP).diff(scrollRectScale.pointFromScreen(zoomP));
+        const diff = scrollRectScale.pointFromPhysical(newP).diff(scrollRectScale.pointFromPhysical(zoomP));
         Data.scroll_info.viewport.x += diff.x;
         Data.scroll_info.viewport.y += diff.y;
 
@@ -2866,7 +2866,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
         var bbox = Data.scroll_info.viewport.outsetAll(pad);
         if (mbbox) |bb| {
             // convert bb from screen space to viewport space
-            const scrollbbox = scrollRectScale.rectFromScreen(bb);
+            const scrollbbox = scrollRectScale.rectFromPhysical(bb);
             bbox = bbox.unionWith(scrollbbox);
         }
 
@@ -3633,7 +3633,7 @@ pub const StrokeTest = struct {
         const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
         for (points, 0..) |p, i| {
             const rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
-            try rs.rectToScreen(rect).fill(dvui.Rect.Physical.all(1), fill_color);
+            try rs.rectToPhysical(rect).fill(dvui.Rect.Physical.all(1), fill_color);
 
             _ = i;
             //_ = try dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });
@@ -3643,7 +3643,7 @@ pub const StrokeTest = struct {
         defer path.deinit();
 
         for (points) |p| {
-            try path.append(rs.pointToScreen(p));
+            try path.append(rs.pointToPhysical(p));
         }
 
         const stroke_color = dvui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
@@ -3676,7 +3676,7 @@ pub const StrokeTest = struct {
         switch (e.evt) {
             .mouse => |me| {
                 const rs = self.wd.contentRectScale();
-                const mp = rs.pointFromScreen(me.p);
+                const mp = rs.pointFromPhysical(me.p);
                 switch (me.action) {
                     .press => {
                         if (me.button == .left) {
