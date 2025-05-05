@@ -120,8 +120,8 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
         switch (self.init_options.position) {
             .horizontal, .vertical => |o| {
                 const ar = self.init_options.active_rect.toNatural();
-                const r = Rect.Natural.fromPoint(ar.topLeft()).toSize(self.wd.rect.size().cast(Size.Natural));
-                self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), ar, if (o == .horizontal) .horizontal else .vertical, r).cast(Rect);
+                const r = Rect.Natural.fromPoint(ar.topLeft()).toSize(.cast(self.wd.rect.size()));
+                self.wd.rect = .cast(dvui.placeOnScreen(dvui.windowRect(), ar, if (o == .horizontal) .horizontal else .vertical, r));
             },
             .sticky => {
                 if (dvui.firstFrame(self.wd.id)) {
@@ -129,10 +129,10 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
                     dvui.dataSet(null, self.wd.id, "_sticky_pt", mp);
                 } else {
                     const mp = dvui.dataGet(null, self.wd.id, "_sticky_pt", dvui.Point.Natural) orelse dvui.Point.Natural{};
-                    var r: Rect.Natural = Rect.Natural.fromPoint(mp).toSize(self.wd.rect.size().cast(Size.Natural));
+                    var r = Rect.Natural.fromPoint(mp).toSize(.cast(self.wd.rect.size()));
                     r.x += 10;
                     r.y -= r.h + 10;
-                    self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{}, .none, r).cast(Rect);
+                    self.wd.rect = .cast(dvui.placeOnScreen(dvui.windowRect(), .{}, .none, r));
                 }
             },
         }

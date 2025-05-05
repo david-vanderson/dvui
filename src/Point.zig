@@ -19,8 +19,8 @@ pub fn PointType(comptime units: dvui.enums.Units) type {
         /// matches the output screen.
         pub const Physical = if (units == .none) PointType(.physical) else @compileError("tried to nest Point.Physical");
 
-        pub fn cast(self: *const Self, pointType: type) pointType {
-            return .{ .x = self.x, .y = self.y };
+        pub fn cast(point: anytype) Self {
+            return .{ .x = point.x, .y = point.y };
         }
 
         pub fn nonZero(self: *const Self) bool {
@@ -79,7 +79,6 @@ pub fn PointType(comptime units: dvui.enums.Units) type {
             };
             try std.fmt.format(writer, "{s}{{ {d} {d} }}", .{ type_name, self.x, self.y });
         }
-
     };
 }
 

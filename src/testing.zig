@@ -91,7 +91,7 @@ pub fn init(options: InitOptions) !Self {
         }),
         .testing => Backend.init(.{
             .allocator = options.allocator,
-            .size = options.window_size.cast(dvui.Size.Natural),
+            .size = .cast(options.window_size),
             .size_pixels = options.window_size.scale(2, dvui.Size.Physical),
         }),
         inline else => |kind| {

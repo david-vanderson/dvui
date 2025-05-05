@@ -25,8 +25,8 @@ pub fn SizeType(comptime units: dvui.enums.Units) type {
             .physical => dvui.Rect.Physical,
         };
 
-        pub fn cast(self: *const Self, sizeType: type) sizeType {
-            return .{ .w = self.w, .h = self.h };
+        pub fn cast(size: anytype) Self {
+            return .{ .w = size.w, .h = size.h };
         }
 
         pub fn all(v: f32) Self {
