@@ -380,6 +380,7 @@ pub fn build(b: *std.Build) !void {
                     .root_module = dvui,
                     .filters = &.{"DOCIMG"},
                     .test_runner = .{ .mode = .simple, .path = b.path("docs/image_gen_test_runner.zig") },
+                    .use_lld = use_lld,
                 });
                 docs_step.dependOn(&b.addRunArtifact(image_tests).step);
             } else {
@@ -421,7 +422,7 @@ const DvuiModuleOptions = struct {
     build_options: *std.Build.Step.Options,
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
-        const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters });
+        const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters, .use_lld = self.use_lld });
         self.b.installArtifact(tests); // Compile check on default install step
         if (self.check_step) |step| {
             step.dependOn(&tests.step);
@@ -429,7 +430,7 @@ const DvuiModuleOptions = struct {
     }
     fn addTests(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
         if (self.test_step) |step| {
-            const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters });
+            const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters, .use_lld = self.use_lld });
             step.dependOn(&self.b.addRunArtifact(tests).step);
         }
     }
