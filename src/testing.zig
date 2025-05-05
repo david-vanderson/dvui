@@ -193,7 +193,8 @@ const png_extension = ".png";
 ///
 /// IMPORTANT: Snapshots are unstable and both backend and platform dependent. Changing any of these might fail the test.
 ///
-/// All snapshot tests can be ignored (without skipping the whole test) by setting the environment variable `DVUI_SNAPSHOT_IGNORE`
+/// All snapshot tests can be ignored (without skipping the whole test) by setting the environment variable `DVUI_SNAPSHOT_IGNORE`.
+/// This function will always run exactly one frame.
 ///
 /// Set the environment variable `DVUI_SNAPSHOT_WRITE` to create/overwrite the snapshot files
 ///
@@ -202,7 +203,10 @@ const png_extension = ".png";
 /// 2. Delete the snapshot directory
 /// 3. Run all snapshot tests with `DVUI_SNAPSHOT_WRITE` set to recreate only the used files
 pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.frameFunction) !void {
-    if (should_ignore_snapshots()) return;
+    if (should_ignore_snapshots()) {
+        _ = try step(frame);
+        return;
+    }
 
     defer self.snapshot_index += 1;
     const filename = try std.fmt.allocPrint(self.allocator, "{s}-{s}-{d}" ++ png_extension, .{ src.file, src.fn_name, self.snapshot_index });
