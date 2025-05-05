@@ -61,12 +61,12 @@ pub const InitOptions = struct {
 };
 
 wd: WidgetData = undefined,
-prevClip: Rect = undefined,
+prevClip: Rect.Physical = undefined,
 scroll: ScrollAreaWidget = undefined,
 scroll_init_opts: ScrollAreaWidget.InitOpts = undefined,
-scrollClip: Rect = undefined,
+scrollClip: Rect.Physical = undefined,
 textLayout: TextLayoutWidget = undefined,
-textClip: Rect = undefined,
+textClip: Rect.Physical = undefined,
 padding: Rect = undefined,
 
 init_opts: InitOptions = undefined,
@@ -209,7 +209,7 @@ pub fn draw(self: *TextEntryWidget) !void {
     const focused = (self.wd.id == dvui.focusedWidgetId());
 
     if (focused) {
-        dvui.wantTextInput(self.wd.borderRectScale().r);
+        dvui.wantTextInput(self.wd.borderRectScale().r.toNatural());
     }
 
     // set clip back to what textLayout had, so we don't draw over the scrollbars
@@ -295,7 +295,7 @@ pub fn drawCursor(self: *TextEntryWidget) !void {
 
         var crect = self.textLayout.cursor_rect.plus(.{ .x = -1 });
         crect.w = 2;
-        try self.textLayout.screenRectScale(crect).r.fill(Rect.all(0), self.wd.options.color(.accent));
+        try self.textLayout.screenRectScale(crect).r.fill(Rect.Physical.all(0), self.wd.options.color(.accent));
     }
 }
 

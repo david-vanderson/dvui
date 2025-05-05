@@ -37,8 +37,8 @@ pub const Position = enum {
 };
 
 pub const InitOptions = struct {
-    /// Show when mouse enters this rect in screen pixels
-    active_rect: Rect,
+    /// Show when mouse enters this physical rect
+    active_rect: Rect.Physical,
 
     position: Position = .horizontal,
 
@@ -50,7 +50,7 @@ parent_tooltip: ?*FloatingTooltipWidget = null,
 prev_rendering: bool = undefined,
 wd: WidgetData = undefined,
 prev_windowId: u32 = 0,
-prevClip: Rect = Rect{},
+prevClip: Rect.Physical = .{},
 scale_val: f32 = undefined,
 scaler: dvui.ScaleWidget = undefined,
 options: Options = undefined,
@@ -81,7 +81,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Op
     self.scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
     self.options = defaults.override(opts_in);
     if (self.options.min_size_content) |msc| {
-        self.options.min_size_content = msc.scale(self.scale_val);
+        self.options.min_size_content = msc.scale(self.scale_val, Size);
     }
 
     // passing options.rect will stop WidgetData.init from calling
@@ -119,20 +119,20 @@ pub fn shown(self: *FloatingTooltipWidget) !bool {
     if (self.showing) {
         switch (self.init_options.position) {
             .horizontal, .vertical => |o| {
-                const ar = self.init_options.active_rect.scale(1 / dvui.windowNaturalScale());
-                const r: Rect = dvui.Rect.fromPoint(ar.topLeft()).toSize(self.wd.rect.size());
-                self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), ar, if (o == .horizontal) .horizontal else .vertical, r);
+                const ar = self.init_options.active_rect.toNatural();
+                const r = Rect.Natural.fromPoint(ar.topLeft()).toSize(.cast(self.wd.rect.size()));
+                self.wd.rect = .cast(dvui.placeOnScreen(dvui.windowRect(), ar, if (o == .horizontal) .horizontal else .vertical, r));
             },
             .sticky => {
                 if (dvui.firstFrame(self.wd.id)) {
-                    const mp = dvui.currentWindow().mouse_pt.scale(1 / dvui.windowNaturalScale());
+                    const mp = dvui.currentWindow().mouse_pt.toNatural();
                     dvui.dataSet(null, self.wd.id, "_sticky_pt", mp);
                 } else {
-                    const mp = dvui.dataGet(null, self.wd.id, "_sticky_pt", dvui.Point) orelse dvui.Point{};
-                    var r: Rect = dvui.Rect.fromPoint(mp).toSize(self.wd.rect.size());
+                    const mp = dvui.dataGet(null, self.wd.id, "_sticky_pt", dvui.Point.Natural) orelse dvui.Point.Natural{};
+                    var r = Rect.Natural.fromPoint(mp).toSize(.cast(self.wd.rect.size()));
                     r.x += 10;
                     r.y -= r.h + 10;
-                    self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{}, .none, r);
+                    self.wd.rect = .cast(dvui.placeOnScreen(dvui.windowRect(), .{}, .none, r));
                 }
             },
         }

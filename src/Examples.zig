@@ -2017,7 +2017,7 @@ pub fn reorderListsAdvanced() !void {
 
     // template you can drag to add to list
     var added_idx: ?usize = null;
-    var added_idx_p: ?dvui.Point = null;
+    var added_idx_p: ?dvui.Point.Physical = null;
 
     if (g.strings_len == g.strings.len) {
         try dvui.label(@src(), "List Full", .{}, .{ .gravity_x = 1.0 });
@@ -2125,7 +2125,7 @@ pub fn menus() !void {
         defer ctext.deinit();
 
         if (ctext.activePoint()) |cp| {
-            var fw2 = try dvui.floatingMenu(@src(), .{ .from = Rect.fromPoint(cp) }, .{});
+            var fw2 = try dvui.floatingMenu(@src(), .{ .from = Rect.Natural.fromPoint(cp) }, .{});
             defer fw2.deinit();
 
             try submenus();
@@ -2616,7 +2616,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
     }, 1, dvui.Color.black, .{});
 
     // keep record of bounding box
-    var mbbox: ?Rect = null;
+    var mbbox: ?Rect.Physical = null;
 
     const dragging_box = dvui.draggingName("box_transfer");
     const evts = dvui.events();
@@ -2634,8 +2634,8 @@ pub fn scrollCanvas(comptime data: u8) !void {
         });
 
         const boxRect = dragBox.data().rectScale().r;
-        if (mbbox) |_| {
-            mbbox = mbbox.?.unionWith(boxRect);
+        if (mbbox) |bb| {
+            mbbox = bb.unionWith(boxRect);
         } else {
             mbbox = boxRect;
         }
@@ -2778,7 +2778,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
 
     var ctrl_down = dvui.dataGet(null, vbox.data().id, "_ctrl", bool) orelse false;
     var zoom: f32 = 1;
-    var zoomP: Point = .{};
+    var zoomP: Point.Physical = .{};
 
     // process scroll area events after boxes so the boxes get first pick (so
     // the button works)
@@ -2836,9 +2836,9 @@ pub fn scrollCanvas(comptime data: u8) !void {
         const prevP = dataRectScale.pointFromScreen(zoomP);
 
         // scale
-        var pp = prevP.scale(1 / Data.scale);
+        var pp = prevP.scale(1 / Data.scale, Point);
         Data.scale *= zoom;
-        pp = pp.scale(Data.scale);
+        pp = pp.scale(Data.scale, Point);
 
         // get where the mouse would be now
         const newP = dataRectScale.pointToScreen(pp);
@@ -3632,15 +3632,14 @@ pub const StrokeTest = struct {
         const rs = self.wd.contentRectScale();
         const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
         for (points, 0..) |p, i| {
-            var rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
-            const rsrect = rect.scale(rs.s).offset(rs.r);
-            try rsrect.fill(dvui.Rect.all(1), fill_color);
+            const rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
+            try rs.rectToScreen(rect).fill(dvui.Rect.Physical.all(1), fill_color);
 
             _ = i;
             //_ = try dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });
         }
 
-        var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
+        var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
         defer path.deinit();
 
         for (points) |p| {
@@ -3664,9 +3663,8 @@ pub const StrokeTest = struct {
         return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
     }
 
-    pub fn screenRectScale(self: *Self, r: dvui.Rect) dvui.RectScale {
-        const rs = self.wd.contentRectScale();
-        return dvui.RectScale{ .r = r.scale(rs.s).offset(rs.r), .s = rs.s };
+    pub fn screenRectScale(self: *Self, rect: dvui.Rect) dvui.RectScale {
+        return self.wd.contentRectScale().rectToRectScale(rect);
     }
 
     pub fn minSizeForChild(self: *Self, s: dvui.Size) void {
@@ -3715,7 +3713,7 @@ pub const StrokeTest = struct {
                     .motion => {
                         e.handled = true;
                         if (dvui.dragging(me.p)) |dps| {
-                            const dp = dps.scale(1 / rs.s);
+                            const dp = dps.scale(1 / rs.s, Point);
                             points[dragi.?].x += dp.x;
                             points[dragi.?].y += dp.y;
                             dvui.refresh(null, @src(), self.wd.id);

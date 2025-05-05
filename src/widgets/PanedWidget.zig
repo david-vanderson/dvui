@@ -27,7 +27,7 @@ split_ratio: f32 = undefined,
 dir: enums.Direction = undefined,
 collapsed_size: f32 = 0,
 hovered: bool = false,
-prevClip: Rect = Rect{},
+prevClip: Rect.Physical = .{},
 collapsed_state: bool = false,
 collapsing: bool = false,
 first_side: bool = true,
@@ -139,7 +139,7 @@ pub fn draw(self: *PanedWidget) !void {
                     r.w = width;
                 },
             }
-            try r.fill(Rect.all(thick), self.wd.options.color(.text).transparent(0.5));
+            try r.fill(Rect.Physical.all(thick), self.wd.options.color(.text).transparent(0.5));
         }
     }
 }

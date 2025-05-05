@@ -87,14 +87,14 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
                 try self.wd.focusBorder();
             } else {
                 const rs = self.wd.backgroundRectScale();
-                try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s), self.wd.options.color(.accent));
+                try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), self.wd.options.color(.accent));
             }
         } else if ((self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
             const rs = self.wd.backgroundRectScale();
-            try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s), self.wd.options.color(.fill_hover));
+            try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), self.wd.options.color(.fill_hover));
         } else if (self.wd.options.backgroundGet()) {
             const rs = self.wd.backgroundRectScale();
-            try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s), self.wd.options.color(.fill));
+            try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), self.wd.options.color(.fill));
         }
     }
 }
@@ -113,7 +113,7 @@ pub fn processEvents(self: *MenuItemWidget) void {
     }
 }
 
-pub fn activeRect(self: *const MenuItemWidget) ?Rect {
+pub fn activeRect(self: *const MenuItemWidget) ?Rect.Natural {
     var act = false;
     if (self.init_opts.submenu) {
         if (dvui.MenuWidget.current().?.submenus_activated and (self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow())) {
@@ -124,8 +124,7 @@ pub fn activeRect(self: *const MenuItemWidget) ?Rect {
     }
 
     if (act) {
-        const rs = self.wd.backgroundRectScale();
-        return rs.r.scale(1 / dvui.windowNaturalScale());
+        return self.wd.backgroundRectScale().r.toNatural();
     } else {
         return null;
     }

@@ -103,7 +103,7 @@ corners_min_size: [4]?Size = [_]?Size{null} ** 4,
 corners_last_seen: ?u8 = null,
 insert_pt: Point = Point{},
 current_line_height: f32 = 0.0,
-prevClip: Rect = Rect{},
+prevClip: Rect.Physical = .{},
 break_lines: bool = undefined,
 current_line_width: f32 = 0.0, // width of lines if break_lines was false
 touch_edit_just_focused: bool = undefined,
@@ -296,7 +296,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
             try fc.install();
 
-            var offset: Point = dvui.dataGet(null, fc.wd.id, "_offset", Point) orelse .{};
+            var offset: Point.Physical = dvui.dataGet(null, fc.wd.id, "_offset", Point.Physical) orelse .{};
 
             const fcrs = fc.wd.rectScale();
             const evts = dvui.events();
@@ -334,7 +334,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             }
 
             if (visible) {
-                var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
+                var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
                 defer path.deinit();
 
                 try path.append(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
@@ -367,7 +367,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             var fc = dvui.FloatingWidget.init(@src(), .{ .rect = rect });
             try fc.install();
 
-            var offset: Point = dvui.dataGet(null, fc.wd.id, "_offset", Point) orelse .{};
+            var offset: Point.Physical = dvui.dataGet(null, fc.wd.id, "_offset", Point.Physical) orelse .{};
 
             const fcrs = fc.wd.rectScale();
             const evts = dvui.events();
@@ -405,7 +405,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             }
 
             if (visible) {
-                var path: std.ArrayList(dvui.Point) = .init(dvui.currentWindow().arena());
+                var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
                 defer path.deinit();
 
                 try path.append(.{ .x = fcrs.r.x, .y = fcrs.r.y });
@@ -1395,8 +1395,7 @@ pub fn touchEditing(self: *TextLayoutWidget) !?*FloatingWidget {
     if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.wd.visible()) {
         self.te_floating = dvui.FloatingWidget.init(@src(), .{});
 
-        const r = dvui.clipGet().offsetNeg(dvui.windowRectPixels()).scale(1.0 / dvui.windowNaturalScale());
-
+        const r = dvui.windowRectScale().rectFromScreen(dvui.clipGet());
         if (dvui.minSizeGet(self.te_floating.data().id)) |_| {
             const ms = dvui.minSize(self.te_floating.data().id, self.te_floating.data().options.min_sizeGet());
             self.te_floating.wd.rect.w = ms.w;
@@ -1405,7 +1404,7 @@ pub fn touchEditing(self: *TextLayoutWidget) !?*FloatingWidget {
             self.te_floating.wd.rect.x = r.x + r.w - self.te_floating.wd.rect.w;
             self.te_floating.wd.rect.y = r.y - self.te_floating.wd.rect.h - self.wd.options.paddingGet().y;
 
-            self.te_floating.wd.rect = dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.te_floating.wd.rect.x, .y = self.te_floating.wd.rect.y }, .vertical, self.te_floating.wd.rect);
+            self.te_floating.wd.rect = .cast(dvui.placeOnScreen(dvui.windowRect(), .{ .x = self.te_floating.wd.rect.x, .y = self.te_floating.wd.rect.y }, .vertical, .cast(self.te_floating.wd.rect)));
         } else {
             // need another frame to get our min size
             dvui.refresh(null, @src(), self.te_floating.wd.id);

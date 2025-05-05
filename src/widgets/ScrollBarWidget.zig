@@ -77,7 +77,7 @@ pub fn data(self: *ScrollBarWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect) void {
+pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
     const rs = self.wd.borderRectScale();
     const evts = dvui.events();
     for (evts) |*e| {
@@ -187,7 +187,7 @@ pub fn deinit(self: *ScrollBarWidget) void {
     }
     self.grabRect = self.grabRect.insetAll(2);
     const grabrs = self.wd.parent.screenRectScale(self.grabRect);
-    grabrs.r.fill(Rect.all(100), fill) catch {};
+    grabrs.r.fill(Rect.Physical.all(100), fill) catch {};
 
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
