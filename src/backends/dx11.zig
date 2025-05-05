@@ -902,7 +902,7 @@ pub fn pixelSize(self: Context) dvui.Size.Physical {
     };
 }
 
-pub fn windowSize(self: Context) dvui.Size {
+pub fn windowSize(self: Context) dvui.Size.Natural {
     var rect: win32.RECT = undefined;
     if (0 == win32.GetWindowRect(hwndFromContext(self), &rect)) win32.panicWin32(
         "GetWindowRect",
@@ -1016,7 +1016,7 @@ fn addEvent(self: Context, window: *dvui.Window, key_event: KeyEvent) !bool {
             return window.addEventMouseButton(ev, if (action == .up) .release else .press);
         },
         .mouse_event => |ev| {
-            return window.addEventMouseMotion(@floatFromInt(ev.x), @floatFromInt(ev.y));
+            return window.addEventMouseMotion(.{ .x = @floatFromInt(ev.x), .y = @floatFromInt(ev.y) });
         },
         .wheel_event => |ev| {
             return window.addEventMouseWheel(@floatFromInt(ev), .vertical);
