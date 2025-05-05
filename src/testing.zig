@@ -1,7 +1,7 @@
 allocator: std.mem.Allocator,
 backend: *Backend,
 window: *Window,
-doc_image_dir: ?[]const u8,
+image_dir: ?[]const u8,
 snapshot_dir: []const u8,
 
 snapshot_index: u8 = 0,
@@ -73,7 +73,7 @@ pub fn step(frame: dvui.App.frameFunction) !?u32 {
 pub const InitOptions = struct {
     allocator: std.mem.Allocator = if (@import("builtin").is_test) std.testing.allocator else undefined,
     window_size: dvui.Size = .{ .w = 600, .h = 400 },
-    doc_image_dir: ?[]const u8 = null,
+    image_dir: ?[]const u8 = null,
     snapshot_dir: []const u8 = "snapshots",
 };
 
@@ -100,14 +100,6 @@ pub fn init(options: InitOptions) !Self {
         },
     };
 
-    const img_dir = options.doc_image_dir orelse @import("build_options").doc_image_dir;
-
-    if (img_dir) |imgdir| {
-        std.fs.cwd().makePath(imgdir) catch |err| switch (err) {
-            else => return err,
-        };
-    }
-
     if (should_write_snapshots()) {
         // ensure snapshot directory exists
         // NOTE: do fs operation through cwd to handle relative and absolute paths
@@ -126,7 +118,7 @@ pub fn init(options: InitOptions) !Self {
         .allocator = options.allocator,
         .backend = backend,
         .window = window,
-        .doc_image_dir = img_dir,
+        .image_dir = options.image_dir orelse @import("build_options").image_dir,
         .snapshot_dir = options.snapshot_dir,
     };
 }
@@ -203,7 +195,8 @@ const png_extension = ".png";
 ///
 /// IMPORTANT: Snapshots are unstable and both backend and platform dependent. Changing any of these might fail the test.
 ///
-/// All snapshot tests can be ignored (without skipping the whole test) by setting the environment variable `DVUI_SNAPSHOT_IGNORE`
+/// All snapshot tests can be ignored (without skipping the whole test) by setting the environment variable `DVUI_SNAPSHOT_IGNORE`.
+/// This function will always run exactly one frame.
 ///
 /// Set the environment variable `DVUI_SNAPSHOT_WRITE` to create/overwrite the snapshot files
 ///
@@ -212,7 +205,10 @@ const png_extension = ".png";
 /// 2. Delete the snapshot directory
 /// 3. Run all snapshot tests with `DVUI_SNAPSHOT_WRITE` set to recreate only the used files
 pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.frameFunction) !void {
-    if (should_ignore_snapshots()) return;
+    if (should_ignore_snapshots()) {
+        _ = try step(frame);
+        return;
+    }
 
     defer self.snapshot_index += 1;
     const filename = try std.fmt.allocPrint(self.allocator, "{s}-{s}-{d}" ++ png_extension, .{ src.file, src.fn_name, self.snapshot_index });
@@ -285,66 +281,32 @@ fn should_write_snapshots() bool {
     return !should_ignore_snapshots() and std.process.hasEnvVarConstant("DVUI_SNAPSHOT_WRITE");
 }
 
-/// If image_dir is not null, run a single frame, capture the physical pixels
-/// in rect, and write those as a png file to image_dir/filename_fmt.
+/// Internal use only!
+///
+/// Always runs a single frame. If `-Dgenerate-images` is passed to `zig build docs`,
+/// capture the physical pixels in rect, and write those as a png file.
 ///
 /// If rect is null, capture the whole OS window.
 ///
-/// The intended use is for automatically generating documentation images.
-pub fn saveImage(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, comptime filename_fmt: []const u8, fmt_args: anytype) !void {
-    if (self.doc_image_dir) |img_dir| {
-        const filename = try std.fmt.allocPrint(self.allocator, "{s}/" ++ filename_fmt, .{img_dir} ++ fmt_args);
-        std.debug.print("FILENAME: {s}\n", .{filename});
-        defer self.allocator.free(filename);
-
-        const png_data = try self.capturePng(frame, rect);
-        defer self.allocator.free(png_data);
-
-        try std.fs.cwd().writeFile(.{
-            .data = png_data,
-            .sub_path = filename,
-            .flags = .{},
-        });
-    }
-}
-
-/// Internal use only!
-///
-/// Generates and saves images for documentation. The test name is required to end with `.png` and are format strings evaluated at comptime.
-pub fn saveDocImage(self: *Self, comptime src: std.builtin.SourceLocation, comptime format_args: anytype, frame: dvui.App.frameFunction) !void {
-    if (!std.mem.endsWith(u8, src.fn_name, png_extension)) {
-        return error.SaveDocImageRequiresPNGExtensionInTestName;
-    }
-
-    if (!is_dvui_doc_gen) {
-        // Do nothing if we are not running with the doc_gen test runner.
+/// Generates and saves images for documentation. The test name is required to
+/// end with `.png` and are format strings evaluated at comptime.
+pub fn saveImage(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, filename: []const u8) !void {
+    if (self.image_dir == null) {
         // This means that the rest of the test is still performed and used as a normal dvui test.
+        _ = try step(frame);
         return;
     }
 
-    const test_prefix = "test.";
-    const filename = std.fmt.comptimePrint(src.fn_name[test_prefix.len..], format_args);
-
-    const png_data = try self.capturePng(frame, null);
+    const png_data = try self.capturePng(frame, rect);
     defer self.allocator.free(png_data);
 
-    @import("root").dvui_image_doc_gen_dir.writeFile(.{
-        .data = png_data,
-        .sub_path = filename,
-        // set exclusive flag to error if two test generate an image with the same name
-        .flags = .{ .exclusive = true },
-    }) catch |err| {
-        if (err == std.fs.File.OpenError.PathAlreadyExists) {
-            std.debug.print("Error generating doc image: duplicated test name '{s}'\n", .{filename});
-            return error.DuplicateDocImageName;
-        } else {
-            return err;
-        }
-    };
+    var dir = try std.fs.cwd().makeOpenPath(self.image_dir.?, .{});
+    defer dir.close();
+    try dir.writeFile(.{ .data = png_data, .sub_path = filename });
 }
 
 /// Used internally for documentation generation
-pub const is_dvui_doc_gen = @hasDecl(@import("root"), "dvui_image_doc_gen_dir");
+pub const is_dvui_doc_gen_runner = @hasDecl(@import("root"), "DvuiDocGenRunner");
 
 const Self = @This();
 

@@ -23,8 +23,17 @@ pub fn build(b: *std.Build) !void {
     const use_lld = b.option(bool, "use-lld", "The value of the use_lld executable option");
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &[0][]const u8{};
 
+    const generate_doc_images = b.option(bool, "generate-images", "Add this to 'docs' to generate images") orelse false;
+
     const build_options = b.addOptions();
-    build_options.addOption(?[]const u8, "doc_image_dir", b.option([]const u8, "doc-image-dir", "Directory for documentation images"));
+    build_options.addOption(
+        ?[]const u8,
+        "image_dir",
+        if (generate_doc_images)
+            b.getInstallPath(.prefix, "docs")
+        else
+            b.option([]const u8, "image-dir", "Default directory for dvui.testing.saveImage"),
+    );
 
     const dvui_opts = DvuiModuleOptions{
         .b = b,
@@ -363,6 +372,20 @@ pub fn build(b: *std.Build) !void {
             .exclude_extensions = &.{".html"},
         });
         docs_step.dependOn(&install_docs.step);
+
+        if (generate_doc_images) {
+            if (b.modules.get("dvui_sdl2")) |dvui| {
+                const image_tests = b.addTest(.{
+                    .name = "generate-images",
+                    .root_module = dvui,
+                    .filters = &.{"DOCIMG"},
+                    .test_runner = .{ .mode = .simple, .path = b.path("docs/image_gen_test_runner.zig") },
+                });
+                docs_step.dependOn(&b.addRunArtifact(image_tests).step);
+            } else {
+                docs_step.dependOn(&b.addFail("'generate-images' requires the sdl2 backend").step);
+            }
+        }
 
         b.getInstallStep().dependOn(docs_step);
 
