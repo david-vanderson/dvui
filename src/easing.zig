@@ -189,7 +189,7 @@ test {
     @import("std").testing.refAllDecls(@This());
 }
 
-test "easing-plot-{s}.png" {
+test "DOCIMG easing plots" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 300, .h = 400 } });
     defer t.deinit();
 
