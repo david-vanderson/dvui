@@ -3,13 +3,7 @@ const dvui = @import("dvui.zig");
 
 pub const Point = PointType(.none);
 
-pub const Units = enum{
-    none,
-    natural,
-    physical,
-};
-
-pub fn PointType(comptime units: Units) type {
+pub fn PointType(comptime units: dvui.enums.Units) type {
     return struct {
         const Self = @This();
 
