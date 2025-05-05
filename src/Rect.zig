@@ -259,7 +259,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveDocImage(@src(), frame, null, .{});
         }
 
         test offset {
@@ -288,7 +288,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveDocImage(@src(), frame, null, .{});
         }
 
         test offsetNeg {
@@ -323,7 +323,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveDocImage(@src(), frame, null, .{});
         }
 
         test intersect {
@@ -357,7 +357,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveDocImage(@src(), frame, null, .{});
         }
 
         test unionWith {
@@ -391,7 +391,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveDocImage(@src(), frame, null, .{});
         }
 
         test inset {
@@ -419,7 +419,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveDocImage(@src(), frame, null, .{});
         }
 
         test insetAll {
@@ -453,7 +453,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveDocImage(@src(), frame, null, .{});
         }
 
         test outsetAll {

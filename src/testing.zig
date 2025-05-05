@@ -1,7 +1,6 @@
 allocator: std.mem.Allocator,
 backend: *Backend,
 window: *Window,
-doc_image_dir: ?[]const u8,
 snapshot_dir: []const u8,
 
 snapshot_index: u8 = 0,
@@ -100,14 +99,6 @@ pub fn init(options: InitOptions) !Self {
         },
     };
 
-    const img_dir = options.doc_image_dir orelse @import("build_options").doc_image_dir;
-
-    if (img_dir) |imgdir| {
-        std.fs.cwd().makePath(imgdir) catch |err| switch (err) {
-            else => return err,
-        };
-    }
-
     if (should_write_snapshots()) {
         // ensure snapshot directory exists
         // NOTE: do fs operation through cwd to handle relative and absolute paths
@@ -126,7 +117,6 @@ pub fn init(options: InitOptions) !Self {
         .allocator = options.allocator,
         .backend = backend,
         .window = window,
-        .doc_image_dir = img_dir,
         .snapshot_dir = options.snapshot_dir,
     };
 }
@@ -285,47 +275,30 @@ fn should_write_snapshots() bool {
     return !should_ignore_snapshots() and std.process.hasEnvVarConstant("DVUI_SNAPSHOT_WRITE");
 }
 
-/// If image_dir is not null, run a single frame, capture the physical pixels
-/// in rect, and write those as a png file to image_dir/filename_fmt.
+/// Internal use only!
+///
+/// Always runs a single frame. If `-Dgenerate-images` is passed to `zig build docs`,
+/// capture the physical pixels in rect, and write those as a png file.
 ///
 /// If rect is null, capture the whole OS window.
 ///
-/// The intended use is for automatically generating documentation images.
-pub fn saveImage(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, comptime filename_fmt: []const u8, fmt_args: anytype) !void {
-    if (self.doc_image_dir) |img_dir| {
-        const filename = try std.fmt.allocPrint(self.allocator, "{s}/" ++ filename_fmt, .{img_dir} ++ fmt_args);
-        std.debug.print("FILENAME: {s}\n", .{filename});
-        defer self.allocator.free(filename);
-
-        const png_data = try self.capturePng(frame, rect);
-        defer self.allocator.free(png_data);
-
-        try std.fs.cwd().writeFile(.{
-            .data = png_data,
-            .sub_path = filename,
-            .flags = .{},
-        });
-    }
-}
-
-/// Internal use only!
-///
-/// Generates and saves images for documentation. The test name is required to end with `.png` and are format strings evaluated at comptime.
-pub fn saveDocImage(self: *Self, comptime src: std.builtin.SourceLocation, comptime format_args: anytype, frame: dvui.App.frameFunction) !void {
+/// Generates and saves images for documentation. The test name is required to
+/// end with `.png` and are format strings evaluated at comptime.
+pub fn saveDocImage(self: *Self, comptime src: std.builtin.SourceLocation, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, comptime format_args: anytype) !void {
     if (!std.mem.endsWith(u8, src.fn_name, png_extension)) {
         return error.SaveDocImageRequiresPNGExtensionInTestName;
     }
 
     if (!is_dvui_doc_gen) {
-        // Do nothing if we are not running with the doc_gen test runner.
         // This means that the rest of the test is still performed and used as a normal dvui test.
+        _ = try step(frame);
         return;
     }
 
     const test_prefix = "test.";
     const filename = std.fmt.comptimePrint(src.fn_name[test_prefix.len..], format_args);
 
-    const png_data = try self.capturePng(frame, null);
+    const png_data = try self.capturePng(frame, rect);
     defer self.allocator.free(png_data);
 
     @import("root").dvui_image_doc_gen_dir.writeFile(.{
