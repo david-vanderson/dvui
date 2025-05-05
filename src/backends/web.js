@@ -208,14 +208,28 @@ class Dvui {
         if (this.textInputRect.length == 0) {
             this.gl.canvas.focus();
         } else {
-            this.hidden_input.style.left =
-                (window.scrollX + this.gl.canvas.getBoundingClientRect().left +
-                    this.textInputRect[0]) + "px";
-            this.hidden_input.style.top =
-                (window.scrollY + this.gl.canvas.getBoundingClientRect().top +
-                    this.textInputRect[1]) + "px";
-            this.hidden_input.style.width = this.textInputRect[2] + "px";
-            this.hidden_input.style.height = this.textInputRect[3] + "px";
+            const rect = this.gl.canvas.getBoundingClientRect();
+            const left = window.scrollX + rect.left + this.textInputRect[0];
+            const top = window.scrollY + rect.top + this.textInputRect[1];
+            // limit the width and height to prevent overflow
+            const width = Math.max(
+                0,
+                Math.min(
+                    this.textInputRect[2],
+                    this.gl.canvas.clientWidth - left,
+                ),
+            );
+            const height = Math.max(
+                0,
+                Math.min(
+                    this.textInputRect[2],
+                    this.gl.canvas.clientHeight - top,
+                ),
+            );
+            this.hidden_input.style.left = left + "px";
+            this.hidden_input.style.top = top + "px";
+            this.hidden_input.style.width = width + "px";
+            this.hidden_input.style.height = height + "px";
             this.hidden_input.focus();
             //par.textContent = hidden_input.style.left + " " + hidden_input.style.top + " " + hidden_input.style.width + " " + hidden_input.style.height;
         }
@@ -236,6 +250,10 @@ class Dvui {
         this.hidden_input.style.position = "absolute";
         this.hidden_input.style.left = 0;
         this.hidden_input.style.top = 0;
+        // remove extra size so input doesn't cause overflow
+        this.hidden_input.style.padding = 0;
+        this.hidden_input.style.border = 0;
+        this.hidden_input.style.margin = 0;
         this.hidden_input.style.opacity = 0;
         this.hidden_input.style.zIndex = -1;
         document.body.prepend(this.hidden_input);
