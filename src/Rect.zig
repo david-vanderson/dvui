@@ -3,13 +3,7 @@ const dvui = @import("dvui.zig");
 
 pub const Rect = RectType(.none);
 
-pub const Units = enum{
-    none,
-    natural,
-    physical,
-};
-
-pub fn RectType(comptime units: Units) type {
+pub fn RectType(comptime units: dvui.enums.Units) type {
     return struct {
         const Self = @This();
 

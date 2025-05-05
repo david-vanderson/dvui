@@ -3,13 +3,7 @@ const dvui = @import("dvui.zig");
 
 pub const Size = SizeType(.none);
 
-pub const Units = enum{
-    none,
-    natural,
-    physical,
-};
-
-pub fn SizeType(comptime units: Units) type {
+pub fn SizeType(comptime units: dvui.enums.Units) type {
     return struct {
         const Self = @This();
 
