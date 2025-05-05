@@ -12,19 +12,19 @@ pub fn rectToRectScale(rs: *const RectScale, r: Rect) RectScale {
     return .{ .r = r.scale(rs.s, Rect.Physical).offset(rs.r), .s = rs.s };
 }
 
-pub fn rectToScreen(rs: *const RectScale, r: Rect) Rect.Physical {
+pub fn rectToPhysical(rs: *const RectScale, r: Rect) Rect.Physical {
     return r.scale(rs.s, Rect.Physical).offset(rs.r);
 }
 
-pub fn rectFromScreen(rs: *const RectScale, r: Rect.Physical) Rect {
+pub fn rectFromPhysical(rs: *const RectScale, r: Rect.Physical) Rect {
     return r.offsetNeg(rs.r).scale(1 / rs.s, Rect);
 }
 
-pub fn pointToScreen(rs: *const RectScale, p: Point) Point.Physical {
+pub fn pointToPhysical(rs: *const RectScale, p: Point) Point.Physical {
     return p.scale(rs.s, Point.Physical).plus(rs.r.topLeft());
 }
 
-pub fn pointFromScreen(rs: *const RectScale, p: Point.Physical) Point {
+pub fn pointFromPhysical(rs: *const RectScale, p: Point.Physical) Point {
     return p.diff(rs.r.topLeft()).scale(1 / rs.s, Point);
 }
 

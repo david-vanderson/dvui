@@ -283,12 +283,12 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             var cursor = self.sel_start_r;
             cursor.x -= 1;
             cursor.w += 1;
-            const visible = !dvui.clipGet().intersect(rs.rectToScreen(cursor)).empty();
+            const visible = !dvui.clipGet().intersect(rs.rectToPhysical(cursor)).empty();
 
             var rect = self.sel_start_r;
             rect.y += rect.h; // move to below the line
             const srs = self.screenRectScale(rect);
-            rect = dvui.windowRectScale().rectFromScreen(srs.r);
+            rect = dvui.windowRectScale().rectFromPhysical(srs.r);
             rect.x -= size;
             rect.w = size;
             rect.h = size;
@@ -318,7 +318,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                         dvui.dragEnd();
                     } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
                         const corner = me.p.plus(offset);
-                        self.sel_pts[0] = self.wd.contentRectScale().pointFromScreen(corner);
+                        self.sel_pts[0] = self.wd.contentRectScale().pointFromPhysical(corner);
                         self.sel_pts[1] = self.sel_end_r.topLeft().plus(.{ .y = self.sel_end_r.h / 2 });
 
                         self.sel_pts[0].?.y = @min(self.sel_pts[0].?.y, self.sel_pts[1].?.y);
@@ -355,12 +355,12 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
             var cursor = self.sel_end_r;
             cursor.x -= 1;
             cursor.w += 1;
-            const visible = !dvui.clipGet().intersect(rs.rectToScreen(cursor)).empty();
+            const visible = !dvui.clipGet().intersect(rs.rectToPhysical(cursor)).empty();
 
             var rect = self.sel_end_r;
             rect.y += rect.h; // move to below the line
             const srs = self.screenRectScale(rect);
-            rect = dvui.windowRectScale().rectFromScreen(srs.r);
+            rect = dvui.windowRectScale().rectFromPhysical(srs.r);
             rect.w = size;
             rect.h = size;
 
@@ -390,7 +390,7 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                     } else if (me.action == .motion and dvui.captured(fc.wd.id)) {
                         const corner = me.p.plus(offset);
                         self.sel_pts[0] = self.sel_start_r.topLeft().plus(.{ .y = self.sel_start_r.h / 2 });
-                        self.sel_pts[1] = self.wd.contentRectScale().pointFromScreen(corner);
+                        self.sel_pts[1] = self.wd.contentRectScale().pointFromPhysical(corner);
 
                         self.sel_pts[1].?.y = @max(self.sel_pts[0].?.y, self.sel_pts[1].?.y);
 
@@ -1395,7 +1395,7 @@ pub fn touchEditing(self: *TextLayoutWidget) !?*FloatingWidget {
     if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.wd.visible()) {
         self.te_floating = dvui.FloatingWidget.init(@src(), .{});
 
-        const r = dvui.windowRectScale().rectFromScreen(dvui.clipGet());
+        const r = dvui.windowRectScale().rectFromPhysical(dvui.clipGet());
         if (dvui.minSizeGet(self.te_floating.data().id)) |_| {
             const ms = dvui.minSize(self.te_floating.data().id, self.te_floating.data().options.min_sizeGet());
             self.te_floating.wd.rect.w = ms.w;
@@ -1540,7 +1540,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     }
                 } else {
                     // a click always sets sel_move - has the highest priority
-                    const p = self.wd.contentRectScale().pointFromScreen(me.p);
+                    const p = self.wd.contentRectScale().pointFromPhysical(me.p);
                     self.sel_move = .{ .mouse = .{ .down_pt = p } };
                     self.scroll_to_cursor = true;
 
@@ -1558,7 +1558,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 if (dvui.captured(self.wd.id)) {
                     if (!self.touch_editing and dvui.dragging(me.p) == null) {
                         // click without drag
-                        self.click_pt = self.wd.contentRectScale().pointFromScreen(me.p);
+                        self.click_pt = self.wd.contentRectScale().pointFromPhysical(me.p);
 
                         self.click_num += 1;
                         if (self.click_num == 4) {
@@ -1569,7 +1569,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     if (me.button.touch()) {
                         // this was a touch-release without drag, which transitions
                         // us between touch editing
-                        const p = self.wd.contentRectScale().pointFromScreen(me.p);
+                        const p = self.wd.contentRectScale().pointFromPhysical(me.p);
 
                         if (self.te_focus_on_touchdown) {
                             self.touch_editing = !self.touch_editing;
@@ -1605,9 +1605,9 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     if (!me.button.touch()) {
                         e.handled = true;
                         if (self.sel_move == .mouse) {
-                            self.sel_move.mouse.drag_pt = self.wd.contentRectScale().pointFromScreen(me.p);
+                            self.sel_move.mouse.drag_pt = self.wd.contentRectScale().pointFromPhysical(me.p);
                         } else if (self.sel_move == .expand_pt) {
-                            self.sel_move.expand_pt.pt = self.wd.contentRectScale().pointFromScreen(me.p);
+                            self.sel_move.expand_pt.pt = self.wd.contentRectScale().pointFromPhysical(me.p);
                             self.sel_move.expand_pt.done = false;
                             self.sel_move.expand_pt.dragging = true;
                         }
@@ -1626,7 +1626,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             } else if (me.action == .motion) {
                 self.click_num = 0;
             } else if (me.action == .position) {
-                self.cursor_pt = self.wd.contentRectScale().pointFromScreen(me.p);
+                self.cursor_pt = self.wd.contentRectScale().pointFromPhysical(me.p);
             }
         },
         .key => |ke| blk: {

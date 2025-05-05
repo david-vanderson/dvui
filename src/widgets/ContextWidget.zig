@@ -27,7 +27,7 @@ activePt: Point.Natural = .{},
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ContextWidget {
     var self = ContextWidget{};
     const defaults = Options{ .name = "Context" };
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = dvui.parentGet().data().rectScale().rectFromScreen(init_opts.rect) }));
+    self.wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = dvui.parentGet().data().rectScale().rectFromPhysical(init_opts.rect) }));
     self.init_options = init_opts;
     self.winId = dvui.subwindowCurrentId();
     if (dvui.focusedWidgetIdInCurrentSubwindow()) |fid| {

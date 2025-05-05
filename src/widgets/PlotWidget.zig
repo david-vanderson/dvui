@@ -284,7 +284,7 @@ pub fn deinit(self: *PlotWidget) void {
     dvui.dataSet(null, self.box.data().id, "_y_axis", self.y_axis.*);
 
     if (self.hover_data) |hd| {
-        var p = self.box.data().contentRectScale().pointFromScreen(self.mouse_point.?);
+        var p = self.box.data().contentRectScale().pointFromPhysical(self.mouse_point.?);
         const str = std.fmt.allocPrint(dvui.currentWindow().arena(), "{d}, {d}", .{ hd.x, hd.y }) catch "";
         const size: Size = (dvui.Options{}).fontGet().textSize(str);
         p.x -= size.w / 2;

@@ -19,6 +19,8 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         /// Physical pixels is the units for rendering and dvui events.
         /// Regardless of dpi or content scaling, physical pixels always
         /// matches the output screen.
+        ///
+        /// To convert between Rect and Rect.Physical, use `RectScale.rectToPhysical` and `RectScale.rectFromPhysical`
         pub const Physical = if (units == .none) RectType(.physical) else @compileError("tried to nest Rect.Physical");
 
         pub const PointType = switch (units) {
