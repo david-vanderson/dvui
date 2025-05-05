@@ -2,9 +2,6 @@ const std = @import("std");
 const dvui = @import("dvui.zig");
 
 const Context = dvui.backend.Context;
-const Size = dvui.Size;
-const Vertex = dvui.Vertex;
-
 const Backend = @This();
 
 ctx: Context,
@@ -17,11 +14,11 @@ const VTableTypes = struct {
     pub const begin = *const fn (ctx: Context, arena: std.mem.Allocator) void;
     pub const end = *const fn (ctx: Context) void;
 
-    pub const pixelSize = *const fn (ctx: Context) Size;
-    pub const windowSize = *const fn (ctx: Context) Size;
+    pub const pixelSize = *const fn (ctx: Context) dvui.Size.Physical;
+    pub const windowSize = *const fn (ctx: Context) dvui.Size.Natural;
     pub const contentScale = *const fn (ctx: Context) f32;
 
-    pub const drawClippedTriangles = *const fn (ctx: Context, texture: ?dvui.Texture, vtx: []const Vertex, idx: []const u16, clipr: ?dvui.Rect) void;
+    pub const drawClippedTriangles = *const fn (ctx: Context, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr: ?dvui.Rect.Physical) void;
 
     pub const textureCreate = *const fn (ctx: Context, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) dvui.Texture;
     pub const textureDestroy = *const fn (ctx: Context, texture: dvui.Texture) void;
@@ -118,13 +115,13 @@ pub fn end(self: *Backend) void {
 
 /// Return size of the window in physical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 600x400.
-pub fn pixelSize(self: *Backend) Size {
+pub fn pixelSize(self: *Backend) dvui.Size.Physical {
     return self.vtable.pixelSize(self.ctx);
 }
 
 /// Return size of the window in logical pixels.  For a 300x200 retina
 /// window (so actually 600x400), this should return 300x200.
-pub fn windowSize(self: *Backend) Size {
+pub fn windowSize(self: *Backend) dvui.Size.Natural {
     return self.vtable.windowSize(self.ctx);
 }
 
@@ -140,7 +137,7 @@ pub fn contentScale(self: *Backend) f32 {
 /// clipped to to `clipr` (if given).  Vertex positions and `clipr` are in
 /// physical pixels.  If `texture` is given, the vertexes uv coords are
 /// normalized (0-1).
-pub fn drawClippedTriangles(self: *Backend, texture: ?dvui.Texture, vtx: []const Vertex, idx: []const u16, clipr: ?dvui.Rect) void {
+pub fn drawClippedTriangles(self: *Backend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr: ?dvui.Rect.Physical) void {
     return self.vtable.drawClippedTriangles(self.ctx, texture, vtx, idx, clipr);
 }
 

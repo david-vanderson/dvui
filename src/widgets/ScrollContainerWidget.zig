@@ -29,7 +29,7 @@ si: *ScrollInfo = undefined,
 // those visual artifacts
 frame_viewport: Point = Point{},
 
-prevClip: Rect = Rect{},
+prevClip: Rect.Physical = .{},
 
 nextVirtualSize: Size = Size{},
 seen_expanded_child: bool = false,
@@ -430,7 +430,7 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
     }
 }
 
-pub fn processMotionScrollEvent(self: *ScrollContainerWidget, e: *dvui.Event, motion: dvui.Point) void {
+pub fn processMotionScrollEvent(self: *ScrollContainerWidget, e: *dvui.Event, motion: dvui.Point.Physical) void {
     e.handled = true;
 
     const rs = self.wd.borderRectScale();

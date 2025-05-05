@@ -53,7 +53,7 @@ mouse_over: bool = false,
 
 // if we have a child popup menu, save it's rect for next frame
 // supports mouse skipping over menu items if towards the submenu
-child_popup_rect: ?Rect = null,
+child_popup_rect: ?Rect.Physical = null,
 
 // false means the last interaction we got was keyboard, so don't highlight the
 // entry that happens to be under the mouse
@@ -131,11 +131,11 @@ pub fn processEvent(self: *MenuWidget, e: *Event, bubbling: bool) void {
             if (me.action == .position) {
                 if (dvui.mouseTotalMotion().nonZero()) {
                     self.mouse_mode = true;
-                    if (dvui.dataGet(null, self.wd.id, "_child_popup", Rect)) |r| {
-                        const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
+                    if (dvui.dataGet(null, self.wd.id, "_child_popup", Rect.Physical)) |r| {
+                        const center = Point.Physical{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
                         const cw = dvui.currentWindow();
-                        const to_center = Point.diff(center, cw.mouse_pt_prev);
-                        const movement = Point.diff(cw.mouse_pt, cw.mouse_pt_prev);
+                        const to_center = center.diff(cw.mouse_pt_prev);
+                        const movement = cw.mouse_pt.diff(cw.mouse_pt_prev);
                         const dot_prod = movement.x * to_center.x + movement.y * to_center.y;
                         const cos = dot_prod / (to_center.length() * movement.length());
                         if (std.math.acos(cos) < std.math.pi / 3.0) {

@@ -14,8 +14,8 @@ pub fn moveTo(tag: []const u8) !void {
     };
     if (!tag_data.visible) return error.WidgetNotVisible;
     const cw = dvui.currentWindow();
-    const point = tag_data.rect.center().scale(1 / dvui.windowNaturalScale());
-    _ = try cw.addEventMouseMotion(point.x, point.y);
+    const point = tag_data.rect.center().toNatural();
+    _ = try cw.addEventMouseMotion(point);
 }
 
 /// Presses and releases the button at the current mouse position
@@ -91,8 +91,8 @@ pub fn init(options: InitOptions) !Self {
         }),
         .testing => Backend.init(.{
             .allocator = options.allocator,
-            .size = options.window_size,
-            .size_pixels = options.window_size.scale(2),
+            .size = .cast(options.window_size),
+            .size_pixels = options.window_size.scale(2, dvui.Size.Physical),
         }),
         inline else => |kind| {
             std.debug.print("dvui.testing does not support the {s} backend\n", .{@tagName(kind)});
@@ -170,7 +170,7 @@ pub const SnapshotError = error{
 /// Captures the physical pixels in rect, or if null the entire OS window.
 ///
 /// The returned data is allocated by `Self.allocator` and should be freed by the caller.
-pub fn capturePng(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect) ![]const u8 {
+pub fn capturePng(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical) ![]const u8 {
     var picture = dvui.Picture.start(rect orelse dvui.windowRectPixels()) orelse {
         std.debug.print("Current backend does not support capturing images\n", .{});
         return error.Unsupported;
@@ -291,7 +291,7 @@ fn should_write_snapshots() bool {
 /// If rect is null, capture the whole OS window.
 ///
 /// The intended use is for automatically generating documentation images.
-pub fn saveImage(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect, comptime filename_fmt: []const u8, fmt_args: anytype) !void {
+pub fn saveImage(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, comptime filename_fmt: []const u8, fmt_args: anytype) !void {
     if (self.doc_image_dir) |img_dir| {
         const filename = try std.fmt.allocPrint(self.allocator, "{s}/" ++ filename_fmt, .{img_dir} ++ fmt_args);
         std.debug.print("FILENAME: {s}\n", .{filename});

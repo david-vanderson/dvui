@@ -14,6 +14,19 @@ pub const Backend = enum {
     testing,
 };
 
+pub const Units = enum {
+    /// None is the logical units. It's used for relative placements
+    /// and other non-pixel use cases
+    none,
+    /// Natural pixels is the unit for subwindows. It differs from
+    /// physical pixels on hidpi screens or with content scaling.
+    natural,
+    /// Physical pixels is the units for rendering and dvui events.
+    /// Regardless of dpi or content scaling, physical pixels always
+    /// matches the output screen.
+    physical,
+};
+
 pub const TextureInterpolation = enum {
     nearest,
     linear,

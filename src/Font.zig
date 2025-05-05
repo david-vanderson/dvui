@@ -97,7 +97,7 @@ pub fn textSizeEx(self: *const Font, text: []const u8, max_width: ?f32, end_idx:
     if (ask_size == 0.0) return Size{};
 
     // convert size back from font units
-    return s.scale(target_fraction);
+    return s.scale(target_fraction, Size);
 }
 
 // default bytes if font id is not found in database
