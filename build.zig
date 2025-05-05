@@ -17,8 +17,8 @@ pub fn build(b: *std.Build) !void {
     const back_to_build: ?enums.Backend = b.option(enums.Backend, "backend", "Backend to build");
 
     const test_step = b.step("test", "Test the dvui codebase");
-    const check_step = b.step("check", "Check that the dvui codebase compiles");
-    const syntax_step = b.step("syntax", "Check that the dvui codebase parses");
+    const compile_step = b.step("compile", "Check that the entire dvui codebase compiles");
+    const check_step = b.step("check", "Check that the entire dvui codebase has no syntax errors");
 
     // Setting this to false may fix linking errors: https://github.com/david-vanderson/dvui/issues/269
     const use_lld = b.option(bool, "use-lld", "The value of the use_lld executable option");
@@ -33,8 +33,8 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .test_step = test_step,
         .test_filters = test_filters,
+        .compile_step = compile_step,
         .check_step = check_step,
-        .syntax_step = syntax_step,
         .use_lld = use_lld,
         .build_options = build_options,
     };
@@ -393,20 +393,20 @@ const DvuiModuleOptions = struct {
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     check_step: ?*std.Build.Step = null,
+    compile_step: ?*std.Build.Step = null,
     test_step: ?*std.Build.Step = null,
-    syntax_step: ?*std.Build.Step = null,
     test_filters: []const []const u8,
     add_stb_image: bool = true,
     use_lld: ?bool = null,
     build_options: *std.Build.Step.Options,
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
-        if (self.check_step != null or self.syntax_step != null) {
+        if (self.compile_step != null or self.check_step != null) {
             const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters });
-            if (self.syntax_step) |step| {
+            if (self.check_step) |step| {
                 step.dependOn(&tests.step);
             }
-            if (self.check_step) |step| {
+            if (self.compile_step) |step| {
                 step.dependOn(&self.b.addInstallArtifact(tests, .{}).step);
             }
         }
@@ -496,12 +496,8 @@ fn addExample(
     mod.addImport("dvui", dvui_mod);
 
     const exe = b.addExecutable(.{ .name = name, .root_module = mod, .use_lld = opts.use_lld });
-
-    if (opts.syntax_step) |step| {
-        step.dependOn(&exe.step);
-    }
     if (opts.check_step) |step| {
-        step.dependOn(&b.addInstallArtifact(exe, .{}).step);
+        step.dependOn(&exe.step);
     }
 
     if (opts.target.result.os.tag == .windows) {
@@ -522,7 +518,11 @@ fn addExample(
     }
 
     const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
-    compile_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
+    const compile_cmd = b.addInstallArtifact(exe, .{});
+    compile_step.dependOn(&compile_cmd.step);
+    if (opts.compile_step) |step| {
+        step.dependOn(&compile_cmd.step);
+    }
     b.getInstallStep().dependOn(compile_step);
 
     const run_cmd = b.addRunArtifact(exe);
