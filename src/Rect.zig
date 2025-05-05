@@ -33,8 +33,8 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             .physical => dvui.Size.Physical,
         };
 
-        pub fn cast(self: *const Self, rectType: type) rectType {
-            return .{ .x = self.x, .y = self.y, .w = self.w, .h = self.h };
+        pub fn cast(rect: anytype) Self {
+            return .{ .x = rect.x, .y = rect.y, .w = rect.w, .h = rect.h };
         }
 
         pub fn equals(self: *const Self, r: Self) bool {

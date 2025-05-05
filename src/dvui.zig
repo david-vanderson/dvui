@@ -2206,7 +2206,7 @@ pub fn renderingSet(r: bool) bool {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn windowRect() Rect.Natural {
     // Window.wd.rect is the definition of natural
-    return currentWindow().wd.rect.cast(Rect.Natural);
+    return .cast(currentWindow().wd.rect);
 }
 
 /// Get the OS window size in pixels.  See `windowRect`.

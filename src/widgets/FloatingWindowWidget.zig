@@ -135,7 +135,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             self.auto_size_refresh_prev_value = dvui.currentWindow().extra_frames_needed;
             dvui.currentWindow().extra_frames_needed = 0;
 
-            const ms = Size.min(Size.max(min_size, self.options.min_sizeGet()), dvui.windowRect().size().cast(Size));
+            const ms = Size.min(Size.max(min_size, self.options.min_sizeGet()), .cast(dvui.windowRect().size()));
             self.wd.rect.w = ms.w;
             self.wd.rect.h = ms.h;
         }
@@ -144,7 +144,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             // only position ourselves once by default
             self.auto_pos = false;
 
-            const centering = self.init_options.center_on orelse dvui.currentWindow().subwindow_currentRect;
+            const centering: Rect.Natural = self.init_options.center_on orelse dvui.currentWindow().subwindow_currentRect;
             self.wd.rect.x = centering.x + (centering.w - self.wd.rect.w) / 2;
             self.wd.rect.y = centering.y + (centering.h - self.wd.rect.h) / 2;
 
@@ -155,7 +155,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
             }
 
             if (self.init_options.window_avoid != .none) {
-                if (self.wd.rect.topLeft().equals(centering.topLeft().cast(Point))) {
+                if (self.wd.rect.topLeft().equals(.cast(centering.topLeft()))) {
                     // if we ended up directly on top, nudge downright a bit
                     self.wd.rect.x += 24;
                     self.wd.rect.y += 24;
@@ -191,7 +191,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         screen.w += offleft + offleft;
         // okay if we are off the bottom but still see the top
         screen.h += self.wd.rect.h - 24;
-        self.wd.rect = dvui.placeOnScreen(screen, .{}, .none, self.wd.rect.cast(Rect.Natural)).cast(Rect);
+        self.wd.rect = .cast(dvui.placeOnScreen(screen, .{}, .none, .cast(self.wd.rect)));
     }
 
     return self;
@@ -227,7 +227,7 @@ pub fn install(self: *FloatingWindowWidget) !void {
     }
 
     dvui.parentSet(self.widget());
-    self.prev_windowInfo = dvui.subwindowCurrentSet(self.wd.id, self.wd.rect.cast(Rect.Natural));
+    self.prev_windowInfo = dvui.subwindowCurrentSet(self.wd.id, .cast(self.wd.rect));
 
     // reset clip to whole OS window
     // - if modal fade everything below us

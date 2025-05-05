@@ -1019,7 +1019,7 @@ pub fn begin(
 
     try dvui.subwindowAdd(self.wd.id, self.wd.rect, self.rect_pixels, false, null);
 
-    _ = dvui.subwindowCurrentSet(self.wd.id, self.wd.rect.cast(Rect.Natural));
+    _ = dvui.subwindowCurrentSet(self.wd.id, .cast(self.wd.rect));
 
     self.extra_frames_needed -|= 1;
     self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
@@ -1681,8 +1681,8 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
     if (self.inject_motion_event) {
         self.inject_motion_event = false;
-        const pt = self.rectScale().pointFromScreen(self.mouse_pt).cast(Point.Natural);
-        _ = try self.addEventMouseMotion(pt);
+        const pt = self.rectScale().pointFromScreen(self.mouse_pt);
+        _ = try self.addEventMouseMotion(.cast(pt));
     }
 
     defer dvui.current_window = self.previous_window;

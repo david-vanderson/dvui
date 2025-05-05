@@ -106,13 +106,13 @@ pub fn install(self: *FloatingMenuWidget) !void {
         .auto => unreachable,
     };
 
-    self.wd.rect = Rect.fromPoint(self.init_options.from.cast(Rect).topLeft());
+    self.wd.rect = Rect.fromPoint(.cast(self.init_options.from.topLeft()));
     if (dvui.minSizeGet(self.wd.id)) |_| {
         const ms = dvui.minSize(self.wd.id, self.options.min_sizeGet());
         self.wd.rect = self.wd.rect.toSize(ms);
-        self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, self.wd.rect.cast(Rect.Natural)).cast(Rect);
+        self.wd.rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.wd.rect)));
     } else {
-        self.wd.rect = dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, self.wd.rect.cast(Rect.Natural)).cast(Rect);
+        self.wd.rect = .cast(dvui.placeOnScreen(dvui.windowRect(), self.init_options.from, avoid, .cast(self.wd.rect)));
         dvui.focusSubwindow(self.wd.id, null);
 
         // need a second frame to fit contents (FocusWindow calls refresh but
