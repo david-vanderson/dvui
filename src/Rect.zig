@@ -239,7 +239,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             try std.testing.expectEqualDeep(Rect{ .x = 25, .y = 25, .w = 75, .h = 75 }, res);
         }
 
-        test "Rect-scale.png" {
+        test "DOCIMG scale" {
             if (units != .none) return;
             var t = try dvui.testing.init(.{ .window_size = .all(250) });
             defer t.deinit();
@@ -259,7 +259,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveImage(frame, null, "Rect-scale.png");
         }
 
         test offset {
@@ -268,7 +268,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 100, .h = 100 }, res);
         }
 
-        test "Rect-offset.png" {
+        test "DOCIMG offset" {
             if (units != .none) return;
             var t = try dvui.testing.init(.{ .window_size = .all(250) });
             defer t.deinit();
@@ -288,7 +288,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveImage(frame, null, "Rect-offset.png");
         }
 
         test offsetNeg {
@@ -303,7 +303,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 100, .h = 100 }, res);
         }
 
-        test "Rect-offsetNegPoint.png" {
+        test "DOCIMG offsetNegPoint" {
             if (units != .none) return;
             var t = try dvui.testing.init(.{ .window_size = .all(250) });
             defer t.deinit();
@@ -323,7 +323,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveImage(frame, null, "Rect-offsetNegPoint.png");
         }
 
         test intersect {
@@ -334,7 +334,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 50, .h = 50 }, ab);
         }
 
-        test "Rect-intersect.png" {
+        test "DOCIMG intersect" {
             if (units != .none) return;
             var t = try dvui.testing.init(.{ .window_size = .all(250) });
             defer t.deinit();
@@ -357,7 +357,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveImage(frame, null, "Rect-intersect.png");
         }
 
         test unionWith {
@@ -368,7 +368,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 150, .h = 150 }, ab);
         }
 
-        test "Rect-unionWith.png" {
+        test "DOCIMG unionWith" {
             if (units != .none) return;
             var t = try dvui.testing.init(.{ .window_size = .all(250) });
             defer t.deinit();
@@ -391,7 +391,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveImage(frame, null, "Rect-unionWith.png");
         }
 
         test inset {
@@ -399,7 +399,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             const res = rect.inset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
             try std.testing.expectEqualDeep(Rect{ .x = 100, .y = 100, .w = 75, .h = 75 }, res);
         }
-        test "Rect-inset.png" {
+        test "DOCIMG inset" {
             if (units != .none) return;
             var t = try dvui.testing.init(.{ .window_size = .all(250) });
             defer t.deinit();
@@ -419,7 +419,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveImage(frame, null, "Rect-inset.png");
         }
 
         test insetAll {
@@ -433,7 +433,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             const res = rect.outset(.{ .x = 50, .y = 50, .w = 25, .h = 25 });
             try std.testing.expectEqualDeep(Rect{ .x = 50, .y = 50, .w = 125, .h = 125 }, res);
         }
-        test "Rect-outset.png" {
+        test "DOCIMG outset" {
             if (units != .none) return;
             var t = try dvui.testing.init(.{ .window_size = .all(250) });
             defer t.deinit();
@@ -453,7 +453,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
                 }
             }.frame;
 
-            try t.saveDocImage(@src(), .{}, frame);
+            try t.saveImage(frame, null, "Rect-outset.png");
         }
 
         test outsetAll {

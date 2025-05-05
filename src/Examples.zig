@@ -3752,7 +3752,7 @@ test {
     std.testing.refAllDecls(@This());
 }
 
-test "Doc Images" {
+test "DOCIMG demo" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
     defer t.deinit();
 
@@ -3766,8 +3766,7 @@ test "Doc Images" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveImage(frame, dvui.tagGet(demo_window_tag).?.rect, "Examples-demo.png", .{});
-
+    try t.saveImage(frame, dvui.tagGet(demo_window_tag).?.rect, "Examples-demo.png");
     // this works, but unsure it's what we want, so disable for now
     //inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
     //    const e = @as(demoKind, @enumFromInt(i));
@@ -3776,7 +3775,7 @@ test "Doc Images" {
     //    try dvui.testing.click(.left);
     //    try dvui.testing.settle(frame);
 
-    //    try t.saveImage(frame, dvui.tagGet(demo_window_tag).?.rect, "Examples-" ++ @tagName(e) ++ ".png", .{});
+    //    try t.saveImage(frame, dvui.tagGet(demo_window_tag).?.rect, "Examples-" ++ @tagName(e) ++ ".png");
 
     //    try dvui.testing.moveTo("dvui_demo_window_back");
     //    try dvui.testing.click(.left);
@@ -3784,7 +3783,7 @@ test "Doc Images" {
     //}
 }
 
-test "Examples-basic_widgets.png" {
+test "DOCIMG basic_widgets" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 500 } });
     defer t.deinit();
 
@@ -3798,10 +3797,10 @@ test "Examples-basic_widgets.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-basic_widgets.png");
 }
 
-test "Examples-calculator.png" {
+test "DOCIMG calculator" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 250, .h = 250 } });
     defer t.deinit();
 
@@ -3815,10 +3814,10 @@ test "Examples-calculator.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-calculator.png");
 }
 
-test "Examples-text_entry.png" {
+test "DOCIMG text_entry" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 500 } });
     defer t.deinit();
 
@@ -3832,10 +3831,10 @@ test "Examples-text_entry.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-text_entry.png");
 }
 
-test "Examples-styling.png" {
+test "DOCIMG styling" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 300 } });
     defer t.deinit();
 
@@ -3849,10 +3848,10 @@ test "Examples-styling.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-styling.png");
 }
 
-test "Examples-layout.png" {
+test "DOCIMG layout" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 800 } });
     defer t.deinit();
 
@@ -3866,10 +3865,10 @@ test "Examples-layout.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-layout.png");
 }
 
-test "Examples-text_layout.png" {
+test "DOCIMG text_layout" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 500 } });
     defer t.deinit();
 
@@ -3883,10 +3882,10 @@ test "Examples-text_layout.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-text_layout.png");
 }
 
-test "Examples-plots.png" {
+test "DOCIMG plots" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 300 } });
     defer t.deinit();
 
@@ -3900,10 +3899,10 @@ test "Examples-plots.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-plots.png");
 }
 
-test "Examples-reorderable.png" {
+test "DOCIMG reorderable" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 500 } });
     defer t.deinit();
 
@@ -3917,10 +3916,10 @@ test "Examples-reorderable.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-reorderable.png");
 }
 
-test "Examples-menus.png" {
+test "DOCIMG menus" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 300, .h = 500 } });
     defer t.deinit();
 
@@ -3934,10 +3933,10 @@ test "Examples-menus.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-menus.png");
 }
 
-test "Examples-focus.png" {
+test "DOCIMG focus" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 300 } });
     defer t.deinit();
 
@@ -3951,10 +3950,10 @@ test "Examples-focus.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-focus.png");
 }
 
-test "Examples-scrolling.png" {
+test "DOCIMG scrolling" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 400 } });
     defer t.deinit();
 
@@ -3968,10 +3967,10 @@ test "Examples-scrolling.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-scrolling.png");
 }
 
-test "Examples-scroll_canvas.png" {
+test "DOCIMG scroll_canvas" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 300, .h = 400 } });
     defer t.deinit();
 
@@ -3985,10 +3984,10 @@ test "Examples-scroll_canvas.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-scroll_canvas.png");
 }
 
-test "Examples-dialogs.png" {
+test "DOCIMG dialogs" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 300 } });
     defer t.deinit();
 
@@ -4011,10 +4010,10 @@ test "Examples-dialogs.png" {
     try dvui.testing.pressKey(.enter, .none);
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-dialogs.png");
 }
 
-test "Examples-animations.png" {
+test "DOCIMG animations" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 400 } });
     defer t.deinit();
 
@@ -4044,10 +4043,10 @@ test "Examples-animations.png" {
     for (0..10) |_| {
         _ = try dvui.testing.step(frame); // animation will never settle so run a fixed amount of frames
     }
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-animations.png");
 }
 
-test "Examples-struct_ui.png" {
+test "DOCIMG struct_ui" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 700 } });
     defer t.deinit();
 
@@ -4061,14 +4060,16 @@ test "Examples-struct_ui.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-struct_ui.png");
 }
 
-test "Examples-debugging.png" {
+test "DOCIMG debugging" {
     // This tests intentionally logs errors, which fails with the normal test runner.
     // We skip this test instead of downgrading all log.err to log.warn as we usually
     // want to fail if dvui logs errors (for duplicate id's or similar)
-    if (!dvui.testing.is_dvui_doc_gen) return error.SkipZigTest;
+    if (!dvui.testing.is_dvui_doc_gen_runner) return error.SkipZigTest;
+
+    std.debug.print("IGNORE ERROR LOGS FOR THIS TEST, IT IS EXPECTED\n", .{});
 
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 500, .h = 500 } });
     defer t.deinit();
@@ -4091,10 +4092,10 @@ test "Examples-debugging.png" {
     _ = try dvui.testing.step(frame);
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-debugging.png");
 }
 
-test "Examples-icon_browser.png" {
+test "DOCIMG icon_browser" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 500 } });
     defer t.deinit();
 
@@ -4108,10 +4109,10 @@ test "Examples-icon_browser.png" {
     }.frame;
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-icon_browser.png");
 }
 
-test "Examples-themeEditor.png" {
+test "DOCIMG themeEditor" {
     var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 500 } });
     defer t.deinit();
 
@@ -4138,5 +4139,5 @@ test "Examples-themeEditor.png" {
     try dvui.testing.pressKey(.enter, .none);
 
     try dvui.testing.settle(frame);
-    try t.saveDocImage(@src(), .{}, frame);
+    try t.saveImage(frame, null, "Examples-themeEditor.png");
 }
