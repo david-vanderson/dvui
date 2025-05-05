@@ -17,7 +17,6 @@ pub fn build(b: *std.Build) !void {
     const back_to_build: ?enums.Backend = b.option(enums.Backend, "backend", "Backend to build");
 
     const test_step = b.step("test", "Test the dvui codebase");
-    const compile_step = b.step("compile", "Check that the entire dvui codebase compiles");
     const check_step = b.step("check", "Check that the entire dvui codebase has no syntax errors");
 
     // Setting this to false may fix linking errors: https://github.com/david-vanderson/dvui/issues/269
@@ -33,7 +32,6 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .test_step = test_step,
         .test_filters = test_filters,
-        .compile_step = compile_step,
         .check_step = check_step,
         .use_lld = use_lld,
         .build_options = build_options,
@@ -393,7 +391,6 @@ const DvuiModuleOptions = struct {
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     check_step: ?*std.Build.Step = null,
-    compile_step: ?*std.Build.Step = null,
     test_step: ?*std.Build.Step = null,
     test_filters: []const []const u8,
     add_stb_image: bool = true,
@@ -401,14 +398,10 @@ const DvuiModuleOptions = struct {
     build_options: *std.Build.Step.Options,
 
     fn addChecks(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
-        if (self.compile_step != null or self.check_step != null) {
-            const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters });
-            if (self.check_step) |step| {
-                step.dependOn(&tests.step);
-            }
-            if (self.compile_step) |step| {
-                step.dependOn(&self.b.addInstallArtifact(tests, .{}).step);
-            }
+        const tests = self.b.addTest(.{ .root_module = mod, .name = name, .filters = self.test_filters });
+        self.b.installArtifact(tests); // Compile check on default install step
+        if (self.check_step) |step| {
+            step.dependOn(&tests.step);
         }
     }
     fn addTests(self: *const @This(), mod: *std.Build.Module, name: []const u8) void {
@@ -520,9 +513,6 @@ fn addExample(
     const compile_step = b.step("compile-" ++ name, "Compile " ++ name);
     const compile_cmd = b.addInstallArtifact(exe, .{});
     compile_step.dependOn(&compile_cmd.step);
-    if (opts.compile_step) |step| {
-        step.dependOn(&compile_cmd.step);
-    }
     b.getInstallStep().dependOn(compile_step);
 
     const run_cmd = b.addRunArtifact(exe);
