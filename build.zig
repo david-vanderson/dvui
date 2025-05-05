@@ -24,8 +24,17 @@ pub fn build(b: *std.Build) !void {
     const use_lld = b.option(bool, "use-lld", "The value of the use_lld executable option");
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &[0][]const u8{};
 
-    // NOTE: Currently unused, but is not removed because it's imported everywhere for future use cases
+    const generate_doc_images = b.option(bool, "generate-images", "Add this to 'docs' to generate images") orelse false;
+
     const build_options = b.addOptions();
+    build_options.addOption(
+        ?[]const u8,
+        "image_dir",
+        if (generate_doc_images)
+            b.getInstallPath(.prefix, "docs")
+        else
+            b.option([]const u8, "image-dir", "Default directory for dvui.testing.saveImage"),
+    );
 
     const dvui_opts = DvuiModuleOptions{
         .b = b,
@@ -366,7 +375,7 @@ pub fn build(b: *std.Build) !void {
         });
         docs_step.dependOn(&install_docs.step);
 
-        if (b.option(bool, "generate-images", "Add this to 'docs' to generate images") orelse false) {
+        if (generate_doc_images) {
             if (b.modules.get("dvui_sdl2")) |dvui| {
                 const image_tests = b.addTest(.{
                     .name = "generate-images",
@@ -374,13 +383,7 @@ pub fn build(b: *std.Build) !void {
                     .filters = &.{".png"},
                     .test_runner = .{ .mode = .simple, .path = b.path("docs/image_gen_test_runner.zig") },
                 });
-                const image_gen = b.addRunArtifact(image_tests);
-                const image_path = image_gen.addOutputDirectoryArg("/docs");
-                docs_step.dependOn(&b.addInstallDirectory(.{
-                    .install_dir = .prefix,
-                    .install_subdir = "docs",
-                    .source_dir = image_path,
-                }).step);
+                docs_step.dependOn(&b.addRunArtifact(image_tests).step);
             } else {
                 docs_step.dependOn(&b.addFail("'generate-images' requires the sdl2 backend").step);
             }

@@ -1,6 +1,7 @@
 allocator: std.mem.Allocator,
 backend: *Backend,
 window: *Window,
+image_dir: ?[]const u8,
 snapshot_dir: []const u8,
 
 snapshot_index: u8 = 0,
@@ -72,7 +73,7 @@ pub fn step(frame: dvui.App.frameFunction) !?u32 {
 pub const InitOptions = struct {
     allocator: std.mem.Allocator = if (@import("builtin").is_test) std.testing.allocator else undefined,
     window_size: dvui.Size = .{ .w = 600, .h = 400 },
-    doc_image_dir: ?[]const u8 = null,
+    image_dir: ?[]const u8 = null,
     snapshot_dir: []const u8 = "snapshots",
 };
 
@@ -117,6 +118,7 @@ pub fn init(options: InitOptions) !Self {
         .allocator = options.allocator,
         .backend = backend,
         .window = window,
+        .image_dir = options.image_dir orelse @import("build_options").image_dir,
         .snapshot_dir = options.snapshot_dir,
     };
 }
@@ -288,40 +290,23 @@ fn should_write_snapshots() bool {
 ///
 /// Generates and saves images for documentation. The test name is required to
 /// end with `.png` and are format strings evaluated at comptime.
-pub fn saveDocImage(self: *Self, comptime src: std.builtin.SourceLocation, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, comptime format_args: anytype) !void {
-    if (!std.mem.endsWith(u8, src.fn_name, png_extension)) {
-        return error.SaveDocImageRequiresPNGExtensionInTestName;
-    }
-
-    if (!is_dvui_doc_gen) {
+pub fn saveImage(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, filename: []const u8) !void {
+    if (self.image_dir == null) {
         // This means that the rest of the test is still performed and used as a normal dvui test.
         _ = try step(frame);
         return;
     }
 
-    const test_prefix = "test.";
-    const filename = std.fmt.comptimePrint(src.fn_name[test_prefix.len..], format_args);
-
     const png_data = try self.capturePng(frame, rect);
     defer self.allocator.free(png_data);
 
-    @import("root").dvui_image_doc_gen_dir.writeFile(.{
-        .data = png_data,
-        .sub_path = filename,
-        // set exclusive flag to error if two test generate an image with the same name
-        .flags = .{ .exclusive = true },
-    }) catch |err| {
-        if (err == std.fs.File.OpenError.PathAlreadyExists) {
-            std.debug.print("Error generating doc image: duplicated test name '{s}'\n", .{filename});
-            return error.DuplicateDocImageName;
-        } else {
-            return err;
-        }
-    };
+    var dir = try std.fs.cwd().makeOpenPath(self.image_dir.?, .{});
+    defer dir.close();
+    try dir.writeFile(.{ .data = png_data, .sub_path = filename });
 }
 
 /// Used internally for documentation generation
-pub const is_dvui_doc_gen = @hasDecl(@import("root"), "dvui_image_doc_gen_dir");
+pub const is_dvui_doc_gen_runner = @hasDecl(@import("root"), "DvuiDocGenRunner");
 
 const Self = @This();
 
