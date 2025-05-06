@@ -118,7 +118,7 @@ pub const SvgRenderOptions = struct {
     /// Do not apply the clipping rects passed to drawClippedTriangles.
     /// This is compatible with `debughl_clipr`, in which case the clip is drawn
     /// in red but doesn't hide anything.
-    no_apply_clipr: bool = false,
+    apply_clipr: bool = true,
     /// For each texture, emit the corresponding `.png` file, and link it
     /// in the svg instead of embedding a base64 encoded version.
     emit_textures: bool = false,
@@ -599,7 +599,7 @@ pub fn end(self: *SvgBackend) void {
                 }
             },
             .clip_group => |clip_g| {
-                if (render_opts.no_apply_clipr) {
+                if (render_opts.apply_clipr) {
                     _ = bufwriter.write("<g>\n") catch unreachable;
                 } else {
                     bufwriter.print("<g clip-path=\"url(#c{X})\">\n", .{clip_g.id}) catch unreachable;
