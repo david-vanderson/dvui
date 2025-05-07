@@ -3504,9 +3504,15 @@ const icon_fields: [@typeInfo(entypo).@"struct".decls.len][]const u8 = blk: {
 
 /// ![image](Examples-icon_browser.png)
 pub fn icon_browser() !void {
+    const g = struct {
+        var icon_rgb: dvui.Color = .black;
+    };
+
     var fwin = try dvui.floatingWindow(@src(), .{ .rect = &IconBrowser.rect, .open_flag = &IconBrowser.show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
     defer fwin.deinit();
     try dvui.windowHeader("Icon Browser", "", &IconBrowser.show);
+
+    _ = try rgbSliders(@src(), &g.icon_rgb, .{ .gravity_y = 0.5 });
 
     const num_icons = @typeInfo(entypo).@"struct".decls.len;
     const height = @as(f32, @floatFromInt(num_icons)) * IconBrowser.row_height;
@@ -3532,7 +3538,7 @@ pub fn icon_browser() !void {
 
             var buf: [100]u8 = undefined;
             const text = try std.fmt.bufPrint(&buf, "entypo.{s}", .{name});
-            if (try dvui.buttonIcon(@src(), text, field, .{}, .{ .min_size_content = .{ .h = 20 } })) {
+            if (try dvui.buttonIcon(@src(), text, field, .{}, .{ .min_size_content = .{ .h = 20 }, .color_text = .{ .color = g.icon_rgb } })) {
                 // TODO: copy full buttonIcon code line into clipboard and show toast
             }
             try dvui.labelNoFmt(@src(), text, .{ .gravity_y = 0.5 });
