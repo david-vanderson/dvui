@@ -902,7 +902,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
         cw.arena(),
         cw.arena(),
         tvg.rendering.SizeHint{ .height = height },
-        @as(tvg.rendering.AntiAliasing, @enumFromInt(2)),
+        .x9,
         tvg_bytes,
     ) catch |err| {
         log.warn("iconTexture Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
