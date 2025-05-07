@@ -57,6 +57,9 @@ pub fn renderStream(
             .width = (height * parser.header.width) / parser.header.height,
             .height = height,
         },
+        .bounded => |bounds| calcBoundedSize(
+            bounds, parser.header.width, parser.header.height
+        ),
     };
 
     const super_scale: u32 = if (anti_alias) |factor|
@@ -138,7 +141,7 @@ pub fn renderStream(
                 .r = mapToGamma8(color[0] / final_a),
                 .g = mapToGamma8(color[1] / final_a),
                 .b = mapToGamma8(color[2] / final_a),
-                .a = @as(u8, @intFromFloat(255.0 * color[3])),
+                .a = @intFromFloat(255.0 * color[3]),
             };
         } else {
             pixel.* = Color8{ .r = 0xFF, .g = 0x00, .b = 0xFF, .a = 0x00 };
@@ -159,7 +162,7 @@ fn mapToGamma(val: f32) f32 {
 }
 
 fn mapToGamma8(val: f32) u8 {
-    return @as(u8, @intFromFloat(255.0 * mapToGamma(val)));
+    return @intFromFloat(255.0 * mapToGamma(val));
 }
 
 const Framebuffer = struct {
@@ -226,7 +229,24 @@ pub const SizeHint = union(enum) {
     width: u32,
     height: u32,
     size: Size,
+    /// The maximum size that maintains the aspect ratio and fits within the given bounds
+    bounded: Size,
 };
+
+fn calcBoundedSize(bounds: Size, width: u32, height: u32) Size {
+    const width_f32: f32 = @floatFromInt(width);
+    const height_f32: f32 = @floatFromInt(height);
+    const width_mult = @as(f32, @floatFromInt(bounds.width)) / width_f32;
+    const height_mult = @as(f32, @floatFromInt(bounds.height)) / height_f32;
+    if (width_mult >= height_mult) return .{
+        .width = @intFromFloat(@trunc(width_f32 * height_mult)),
+        .height = bounds.height,
+    };
+    return .{
+        .width = bounds.width,
+        .height = @intFromFloat(@trunc(height_f32 * width_mult)),
+    };
+}
 
 pub const Size = struct {
     width: u32,
@@ -256,13 +276,13 @@ pub const Image = struct {
 };
 
 pub fn isFramebuffer(comptime T: type) bool {
-    const FbType = if (@typeInfo(T) == .Pointer)
+    const FbType = if (@typeInfo(T) == .pointer)
         std.meta.Child(T)
     else
         T;
-    return std.meta.trait.hasFn("setPixel")(FbType) and
-        std.meta.trait.hasField("width")(FbType) and
-        std.meta.trait.hasField("height")(FbType);
+    return std.meta.hasFn(FbType, "setPixel") and
+        @hasField(FbType, "width") and
+        @hasField(FbType, "height");
 }
 
 const Point = tvg.Point;
@@ -299,10 +319,10 @@ pub fn renderCommand(
     /// When given, the `renderCommand` is able to render complexer graphics
     allocator: ?std.mem.Allocator,
 ) !void {
-    //if (!comptime isFramebuffer(@TypeOf(framebuffer)))
-    //@compileError("framebuffer needs fields width, height and function setPixel!");
-    const fb_width = @as(f32, @floatFromInt(framebuffer.width));
-    const fb_height = @as(f32, @floatFromInt(framebuffer.height));
+    if (!comptime isFramebuffer(@TypeOf(framebuffer)))
+        @compileError("framebuffer needs fields width, height and function setPixel!");
+    const fb_width: f32 = @floatFromInt(framebuffer.width);
+    const fb_height: f32 = @floatFromInt(framebuffer.height);
     // std.debug.print("render {}\n", .{cmd});#
 
     var painter = Painter{
@@ -376,7 +396,8 @@ pub fn renderCommand(
 
             try renderPath(&point_store, &width_store, &slice_store, data.path, data.line_width);
 
-            var slices: [temp_buffer_size][]const Point = undefined;
+            const slice_size = slice_store.buffer.len;
+            var slices: [slice_size][]const Point = undefined;
             for (slice_store.items(), 0..) |src, i| {
                 slices[i] = point_store.items()[src.offset..][0..src.len];
             }
@@ -478,8 +499,9 @@ pub fn renderPath(
             std.debug.assert(!std.math.isNan(pt.x));
             std.debug.assert(!std.math.isNan(pt.y));
 
-            if (approxEqual(self.last, pt, pixel_delta))
-                return;
+            // This breaks back-to-back line segments share end and start
+            //if (approxEqual(self.last, pt, pixel_delta))
+            //    return;
 
             try self.list.append(pt);
             if (self.width_list) |wl| {
@@ -937,12 +959,12 @@ const Painter = struct {
     }
 
     fn fillRectangle(self: Painter, framebuffer: anytype, x: f32, y: f32, width: f32, height: f32, color_table: []const Color, style: Style) void {
-        const xlimit = @as(i16, @intFromFloat(@ceil(self.scale_x * (x + width))));
-        const ylimit = @as(i16, @intFromFloat(@ceil(self.scale_y * (y + height))));
+        const xlimit: i16 = @intFromFloat(@ceil(self.scale_x * (x + width)));
+        const ylimit: i16 = @intFromFloat(@ceil(self.scale_y * (y + height)));
 
-        var py = @as(i16, @intFromFloat(@floor(self.scale_y * y)));
+        var py: i16 = @intFromFloat(@floor(self.scale_y * y));
         while (py < ylimit) : (py += 1) {
-            var px = @as(i16, @intFromFloat(@floor(self.scale_x * x)));
+            var px: i16 = @intFromFloat(@floor(self.scale_x * x));
             while (px < xlimit) : (px += 1) {
                 framebuffer.setPixel(px, py, self.sampleStlye(color_table, style, px, py));
             }
@@ -1175,7 +1197,7 @@ pub fn FixedBufferList(comptime T: type, comptime N: usize) type {
 
         pub fn popBack(self: *Self) ?T {
             if (self.large) |*large| {
-                return large.*.pop();
+                return large.pop();
             }
 
             if (self.count == 0)
@@ -1231,7 +1253,7 @@ fn floatToInt(comptime I: type, f: anytype) error{Overflow}!I {
         return error.Overflow;
     if (f > std.math.maxInt(I))
         return error.Overflow;
-    return @as(I, @intFromFloat(f));
+    return @intFromFloat(f);
 }
 
 fn floatToIntClamped(comptime I: type, f: anytype) I {
@@ -1241,5 +1263,5 @@ fn floatToIntClamped(comptime I: type, f: anytype) I {
         return std.math.minInt(I);
     if (f > std.math.maxInt(I))
         return std.math.maxInt(I);
-    return @as(I, @intFromFloat(f));
+    return @intFromFloat(f);
 }

@@ -229,8 +229,8 @@ pub fn Builder(comptime Writer: type) type {
         /// Writes the preamble for a `outline_fill_*` command
         fn writeOutlineFillHeader(self: *Self, command: tvg.Command, fill_style: tvg.Style, line_style: tvg.Style, line_width: f32, length: usize) Error!void {
             const total_count = try validateLength(length);
-            const reduced_count = if (total_count < std.math.maxInt(u6))
-                @as(ReducedCount, @enumFromInt(@as(u6, @truncate(total_count))))
+            const reduced_count: ReducedCount = if (total_count < std.math.maxInt(u6))
+                @enumFromInt(@as(u6, @truncate(total_count)))
             else
                 return error.OutOfRange;
 
@@ -280,7 +280,7 @@ pub fn Builder(comptime Writer: type) type {
         fn writePath(self: *Self, path: []const tvg.Path.Segment) !void {
             for (path) |item| {
                 std.debug.assert(item.commands.len > 0);
-                try self.writeUint(@as(u32, @intCast(item.commands.len - 1)));
+                try self.writeUint(@intCast(item.commands.len - 1));
             }
             for (path) |item| {
                 try self.writePoint(item.start);
@@ -397,7 +397,7 @@ fn mapSizeToType(comptime Dest: type, value: usize) error{OutOfRange}!Dest {
     }
     if (value == std.math.maxInt(Dest))
         return 0;
-    return @as(Dest, @intCast(value));
+    return @intCast(value);
 }
 
 const ReducedCount = enum(u6) {

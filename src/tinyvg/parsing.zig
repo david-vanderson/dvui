@@ -134,11 +134,11 @@ pub fn Parser(comptime Reader: type) type {
                         if (@sizeOf(ScaleAndFlags) != 1) @compileError("Invalid range!");
                     }
 
-                    const scale_and_flags = @as(ScaleAndFlags, @bitCast(try reader.readByte()));
+                    const scale_and_flags: ScaleAndFlags = @bitCast(try reader.readByte());
 
-                    const scale = @as(tvg.Scale, @enumFromInt(scale_and_flags.scale));
-                    const color_encoding = @as(tvg.ColorEncoding, @enumFromInt(scale_and_flags.color_encoding));
-                    const range = @as(tvg.Range, @enumFromInt(scale_and_flags.coordinate_range));
+                    const scale: tvg.Scale = @enumFromInt(scale_and_flags.scale);
+                    const color_encoding: tvg.ColorEncoding = @enumFromInt(scale_and_flags.color_encoding);
+                    const range: tvg.Range = @enumFromInt(scale_and_flags.coordinate_range);
 
                     const width: u32 = switch (range) {
                         .reduced => mapZeroToMax(try reader.readInt(u8, .little)),
@@ -215,16 +215,17 @@ pub fn Parser(comptime Reader: type) type {
             return items;
         }
 
-        fn SetDualTempStorageResult(comptime T1: type, comptime T2: type) type {
+        fn setDualTempStorageReturn(T1: type, T2: type) type {
             return struct { first: []T1, second: []T2 };
         }
+
         fn setDualTempStorage(
             self: *Self,
             comptime T1: type,
             length1: usize,
             comptime T2: type,
             length2: usize,
-        ) !SetDualTempStorageResult(T1, T2) {
+        ) !setDualTempStorageReturn(T1, T2) {
             // temp_buffer is aligned to 16, so we don't have to worry about
             // alignment for T1
             try self.temp_buffer.resize(@sizeOf(T1) * length1 + @sizeOf(T2) * length2 + (@alignOf(T2) - 1));
@@ -232,7 +233,7 @@ pub fn Parser(comptime Reader: type) type {
             // T2 alignment could be larger than T1
             const offset = std.mem.alignForward(usize, @sizeOf(T1) * length1, @alignOf(T2));
 
-            const result = SetDualTempStorageResult(T1, T2){
+            const result = setDualTempStorageReturn(T1, T2){
                 .first = std.mem.bytesAsSlice(T1, self.temp_buffer.items[0 .. @sizeOf(T1) * length1]),
                 .second = @as([]T2, @alignCast(std.mem.bytesAsSlice(T2, self.temp_buffer.items[offset..][0 .. @sizeOf(T2) * length2]))),
             };
@@ -285,7 +286,7 @@ pub fn Parser(comptime Reader: type) type {
 
             var value: T = undefined;
 
-            const count_and_grad = @as(CountAndStyleTag, @bitCast(try self.readByte()));
+            const count_and_grad: CountAndStyleTag = @bitCast(try self.readByte());
 
             const count = count_and_grad.getCount();
 
@@ -301,7 +302,7 @@ pub fn Parser(comptime Reader: type) type {
                 return null;
             const command_byte = try self.reader.readByte();
             const primary_style_type = std.meta.intToEnum(tvg.StyleType, @as(u2, @truncate(command_byte >> 6))) catch return error.InvalidData;
-            const command = @as(tvg.Command, @enumFromInt(@as(u6, @truncate(command_byte))));
+            const command: tvg.Command = @enumFromInt(@as(u6, @truncate(command_byte)));
 
             return switch (command) {
                 .end_of_document => {
@@ -473,7 +474,7 @@ pub fn Parser(comptime Reader: type) type {
                 has_line_width: bool,
                 padding1: u3 = 0,
             };
-            const tag = @as(Tag, @bitCast(try self.readByte()));
+            const tag: Tag = @bitCast(try self.readByte());
 
             const line_width: ?f32 = if (tag.has_line_width)
                 try self.readUnit()
@@ -591,11 +592,12 @@ pub fn Parser(comptime Reader: type) type {
         }
 
         fn readUnit(self: *const Self) !f32 {
-            switch (self.header.coordinate_range) {
-                .reduced => return @as(tvg.Unit, @enumFromInt(try self.reader.readInt(i8, .little))).toFloat(self.header.scale),
-                .default => return @as(tvg.Unit, @enumFromInt(try self.reader.readInt(i16, .little))).toFloat(self.header.scale),
-                .enhanced => return @as(tvg.Unit, @enumFromInt(try self.reader.readInt(i32, .little))).toFloat(self.header.scale),
-            }
+            const unit: tvg.Unit = switch (self.header.coordinate_range) {
+                .reduced => @enumFromInt(try self.reader.readInt(i8, .little)),
+                .default => @enumFromInt(try self.reader.readInt(i16, .little)),
+                .enhanced => @enumFromInt(try self.reader.readInt(i32, .little)),
+            };
+            return unit.toFloat(self.header.scale);
         }
 
         fn readByte(self: *Self) !u8 {

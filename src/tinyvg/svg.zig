@@ -328,7 +328,7 @@ const SvgStyleCache = struct {
         }
         const color = self.color_table[i];
 
-        const r = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.r, 0.0, 255.0)));
+        const r: u8 = @intFromFloat(std.math.clamp(255.0 * color.r, 0.0, 255.0));
         const g = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.g, 0.0, 255.0)));
         const b = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.b, 0.0, 255.0)));
         try writer.print("{s}:#{X:0>2}{X:0>2}{X:0>2};", .{ prefix, r, g, b });
@@ -343,8 +343,8 @@ const SvgStyleCache = struct {
         }
         const color = self.color_table[i];
 
-        const r = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.r, 0.0, 255.0)));
-        const g = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.g, 0.0, 255.0)));
+        const r: u8 = @intFromFloat(std.math.clamp(255.0 * color.r, 0.0, 255.0));
+        const g: u8 = @intFromFloat(std.math.clamp(255.0 * color.g, 0.0, 255.0));
         const b = @as(u8, @intFromFloat(std.math.clamp(255.0 * color.b, 0.0, 255.0)));
         try writer.print("{s}#{X:0>2}{X:0>2}{X:0>2}{s}", .{ prefix, r, g, b, postfix });
     }

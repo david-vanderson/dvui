@@ -165,7 +165,7 @@ pub const Unit = enum(i32) {
     _,
 
     pub fn init(scale: Scale, value: f32) Self {
-        return @as(Self, @enumFromInt(@as(i32, @intFromFloat(value * @as(f32, @floatFromInt(scale.getScaleFactor())) + 0.5))));
+        return @enumFromInt(@as(i32, @intFromFloat(value * @as(f32, @floatFromInt(scale.getScaleFactor())) + 0.5)));
     }
 
     pub fn raw(self: *const Self) i32 {
@@ -185,7 +185,7 @@ pub const Unit = enum(i32) {
         const i = toInt(self, scale);
         if (i < 0)
             return error.InvalidData;
-        return @as(u31, @intCast(i));
+        return @intCast(i);
     }
 };
 
@@ -199,17 +199,17 @@ pub const Color = extern struct {
 
     pub fn toRgba8(self: *const Self) [4]u8 {
         return [4]u8{
-            @as(u8, @intFromFloat(std.math.clamp(255.0 * self.r, 0.0, 255.0))),
-            @as(u8, @intFromFloat(std.math.clamp(255.0 * self.g, 0.0, 255.0))),
-            @as(u8, @intFromFloat(std.math.clamp(255.0 * self.b, 0.0, 255.0))),
-            @as(u8, @intFromFloat(std.math.clamp(255.0 * self.a, 0.0, 255.0))),
+            @intFromFloat(std.math.clamp(255.0 * self.r, 0.0, 255.0)),
+            @intFromFloat(std.math.clamp(255.0 * self.g, 0.0, 255.0)),
+            @intFromFloat(std.math.clamp(255.0 * self.b, 0.0, 255.0)),
+            @intFromFloat(std.math.clamp(255.0 * self.a, 0.0, 255.0)),
         };
     }
 
     pub fn lerp(lhs: Self, rhs: Self, factor: f32) Self {
         const l = struct {
             fn l(a: f32, b: f32, c: f32) u8 {
-                return @as(u8, @intFromFloat(@as(f32, @floatFromInt(a)) + (@as(f32, @floatFromInt(b)) - @as(f32, @floatFromInt(a))) * std.math.clamp(c, 0, 1)));
+                return @intFromFloat(@as(f32, @floatFromInt(a)) + (@as(f32, @floatFromInt(b)) - @as(f32, @floatFromInt(a))) * std.math.clamp(c, 0, 1));
             }
         }.l;
 
@@ -376,5 +376,7 @@ pub const Gradient = struct {
 };
 
 test {
-    std.testing.refAllDecls(@This());
+    _ = builder;
+    _ = parsing;
+    _ = rendering;
 }
