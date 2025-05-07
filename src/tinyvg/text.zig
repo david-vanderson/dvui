@@ -45,7 +45,7 @@ pub fn renderStream(parser: anytype, writer: anytype) !void {
 
     try writer.writeAll("  (\n");
     while (try parser.next()) |command| {
-        try writer.print("    (\n      {s}", .{std.meta.tagName(command)});
+        try writer.print("    (\n      {s}", .{@tagName(command)});
         switch (command) {
             .fill_rectangles => |data| {
                 try renderStyle("\n      ", writer, data.style);
@@ -225,7 +225,7 @@ fn renderStyle(line_prefix: []const u8, writer: anytype, style: tvg.Style) !void
         .linear, .radial => |grad| {
             try writer.print("{s}({s} ({d} {d}) ({d} {d}) {d} {d} )", .{
                 line_prefix,
-                std.meta.tagName(style),
+                @tagName(style),
                 grad.point_0.x,
                 grad.point_0.y,
                 grad.point_1.x,
@@ -678,7 +678,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8, writer: anytype) 
 
                             .fill_rectangles => {
                                 const style = try self.parseStyle();
-                                const rects = try self.readRectangles();
+                                var rects = try self.readRectangles();
                                 defer rects.deinit();
 
                                 try self.builder.writeFillRectangles(style, rects.items);
