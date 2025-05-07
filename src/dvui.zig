@@ -3622,6 +3622,34 @@ pub fn toastDisplay(id: u32) !void {
     }
 }
 
+/// Standard way of showing toasts.
+pub fn toastsShow(floating_window_data: ?*WidgetData) !void {
+    const id: ?u32, const rect: Rect = blk: {
+        if (floating_window_data) |fwd| {
+            break :blk .{ fwd.id, fwd.rect };
+        } else {
+            break :blk .{ null, .cast(windowRect()) };
+        }
+    };
+    var ti = dvui.toastsFor(id);
+    if (ti) |*it| {
+        var toast_win = dvui.FloatingWindowWidget.init(@src(), .{ .stay_above_parent_window = id != null, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
+        defer toast_win.deinit();
+
+        toast_win.data().rect = dvui.placeIn(rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
+        toast_win.autoSize();
+        try toast_win.install();
+        try toast_win.drawBackground();
+
+        var vbox = try dvui.box(@src(), .vertical, .{});
+        defer vbox.deinit();
+
+        while (it.next()) |t| {
+            try t.display(t.id);
+        }
+    }
+}
+
 pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) !*AnimateWidget {
     var ret = try currentWindow().arena().create(AnimateWidget);
     ret.* = AnimateWidget.init(src, init_opts, opts);

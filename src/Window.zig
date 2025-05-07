@@ -1444,27 +1444,6 @@ pub fn toastRemove(self: *Self, id: u32) void {
     }
 }
 
-/// show any toasts that didn't have a subwindow_id set
-fn toastsShow(self: *Self) !void {
-    var ti = dvui.toastsFor(null);
-    if (ti) |*it| {
-        var toast_win = dvui.FloatingWindowWidget.init(@src(), .{ .stay_above_parent_window = true, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
-        defer toast_win.deinit();
-
-        toast_win.data().rect = dvui.placeIn(self.wd.rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-        toast_win.autoSize();
-        try toast_win.install();
-        try toast_win.drawBackground();
-
-        var vbox = try dvui.box(@src(), .vertical, .{});
-        defer vbox.deinit();
-
-        while (it.next()) |t| {
-            try t.display(t.id);
-        }
-    }
-}
-
 fn debugWindowShow(self: *Self) !void {
     if (self.debug_under_mouse_quitting) {
         self.debug_under_mouse = false;
@@ -1580,7 +1559,7 @@ pub const endOptions = struct {
 /// case you want to do something after everything has been rendered.
 pub fn endRendering(self: *Self, opts: endOptions) !void {
     if (opts.show_toasts) {
-        try self.toastsShow();
+        try dvui.toastsShow(null);
     }
     try self.dialogsShow();
 
