@@ -34,6 +34,7 @@ const RadioChoice = enum(u8) {
 var radio_choice: RadioChoice = @enumFromInt(0);
 var icon_image_size_extra: f32 = 0;
 var icon_image_rotation: f32 = 0;
+var icon_browser_show: bool = false;
 var slider_vector_array = [_]f32{ 0, 1, 2 };
 var slider_val: f32 = 0.0;
 var slider_entry_val: f32 = 0.05;
@@ -72,12 +73,6 @@ var paned_collapsed_width: f32 = 400;
 
 var progress_mutex = std.Thread.Mutex{};
 var progress_val: f32 = 0.0;
-
-const IconBrowser = struct {
-    var show: bool = false;
-    var rect = Rect{};
-    var row_height: f32 = 0;
-};
 
 const AnimatingDialog = struct {
     pub fn dialogDisplay(id: u32) !void {
@@ -547,8 +542,8 @@ pub fn demo() !void {
         try dialogDirect();
     }
 
-    if (IconBrowser.show) {
-        try icon_browser();
+    if (icon_browser_show) {
+        try icon_browser(&icon_browser_show, "entypo", entypo);
     }
 
     if (StrokeTest.show) {
@@ -794,7 +789,7 @@ pub fn basicWidgets(demo_win_id: u32) !void {
         try dvui.icon(@src(), "notes", entypo.beamed_note, icon_opts);
 
         if (try dvui.button(@src(), "Icon Browser", .{}, .{ .gravity_y = 0.5 })) {
-            IconBrowser.show = true;
+            icon_browser_show = true;
         }
     }
 
@@ -3486,41 +3481,40 @@ pub fn dialogDirect() !void {
     }
 }
 
-const icon_decl = dvui.entypo;
-const icon_name = "entypo";
-
-const icon_names: [@typeInfo(icon_decl).@"struct".decls.len][]const u8 = blk: {
-    var blah: [@typeInfo(icon_decl).@"struct".decls.len][]const u8 = undefined;
-    for (@typeInfo(icon_decl).@"struct".decls, 0..) |d, i| {
-        blah[i] = d.name;
-    }
-    break :blk blah;
-};
-
-const icon_fields: [@typeInfo(icon_decl).@"struct".decls.len][]const u8 = blk: {
-    var blah: [@typeInfo(icon_decl).@"struct".decls.len][]const u8 = undefined;
-    for (@typeInfo(icon_decl).@"struct".decls, 0..) |d, i| {
-        blah[i] = @field(icon_decl, d.name);
-    }
-    break :blk blah;
-};
-
 /// ![image](Examples-icon_browser.png)
-pub fn icon_browser() !void {
+pub fn icon_browser(show_flag: *bool, comptime icon_decl_name: []const u8, comptime icon_decl: type) !void {
     const g = struct {
         var icon_size: f32 = 20;
         var icon_rgb: dvui.Color = .black;
+        var rect = Rect{};
+        var row_height: f32 = 0;
     };
 
-    var fwin = try dvui.floatingWindow(@src(), .{ .rect = &IconBrowser.rect, .open_flag = &IconBrowser.show }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
+    const icon_names: [@typeInfo(icon_decl).@"struct".decls.len][]const u8 = blk: {
+        var blah: [@typeInfo(icon_decl).@"struct".decls.len][]const u8 = undefined;
+        inline for (@typeInfo(icon_decl).@"struct".decls, 0..) |d, i| {
+            blah[i] = d.name;
+        }
+        break :blk blah;
+    };
+
+    const icon_fields: [@typeInfo(icon_decl).@"struct".decls.len][]const u8 = blk: {
+        var blah: [@typeInfo(icon_decl).@"struct".decls.len][]const u8 = undefined;
+        inline for (@typeInfo(icon_decl).@"struct".decls, 0..) |d, i| {
+            blah[i] = @field(icon_decl, d.name);
+        }
+        break :blk blah;
+    };
+
+    var fwin = try dvui.floatingWindow(@src(), .{ .rect = &g.rect, .open_flag = show_flag }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
     defer fwin.deinit();
-    try dvui.windowHeader("Icon Browser", "", &IconBrowser.show);
+    try dvui.windowHeader("Icon Browser", "", show_flag);
 
     _ = try dvui.sliderEntry(@src(), "size: {d:0.0}", .{ .value = &g.icon_size, .min = 1, .max = 100, .interval = 1 }, .{ .expand = .horizontal });
     _ = try rgbSliders(@src(), &g.icon_rgb, .{});
 
     const num_icons = @typeInfo(icon_decl).@"struct".decls.len;
-    const height = @as(f32, @floatFromInt(num_icons)) * IconBrowser.row_height;
+    const height = @as(f32, @floatFromInt(num_icons)) * g.row_height;
 
     // we won't have the height the first frame, so always set it
     var scroll_info: ScrollInfo = .{ .vertical = .given };
@@ -3537,23 +3531,26 @@ pub fn icon_browser() !void {
     var cursor: f32 = 0;
 
     for (icon_names, icon_fields, 0..) |name, field, i| {
-        if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + IconBrowser.row_height) >= visibleRect.y) {
-            const r = Rect{ .x = 0, .y = cursor, .w = 0, .h = IconBrowser.row_height };
+        if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + g.row_height) >= visibleRect.y) {
+            const r = Rect{ .x = 0, .y = cursor, .w = 0, .h = g.row_height };
             var iconbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i, .expand = .horizontal, .rect = r });
 
             var buf: [100]u8 = undefined;
-            const text = try std.fmt.bufPrint(&buf, icon_name ++ ".{s}", .{name});
+            const text = try std.fmt.bufPrint(&buf, icon_decl_name ++ ".{s}", .{name});
             if (try dvui.buttonIcon(@src(), text, field, .{}, .{ .min_size_content = .{ .h = g.icon_size }, .color_text = .{ .color = g.icon_rgb } })) {
-                // TODO: copy full buttonIcon code line into clipboard and show toast
+                try dvui.clipboardTextSet(text);
+                var buf2: [100]u8 = undefined;
+                const toast_text = try std.fmt.bufPrint(&buf2, "Copied {s}", .{text});
+                try dvui.toast(@src(), .{ .message = toast_text });
             }
             try dvui.labelNoFmt(@src(), text, .{ .gravity_y = 0.5 });
 
             iconbox.deinit();
 
-            IconBrowser.row_height = iconbox.wd.min_size.h;
+            g.row_height = iconbox.wd.min_size.h;
         }
 
-        cursor += IconBrowser.row_height;
+        cursor += g.row_height;
     }
 }
 
@@ -4114,7 +4111,8 @@ test "DOCIMG icon_browser" {
         fn frame() !dvui.App.Result {
             var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
             defer box.deinit();
-            try icon_browser();
+            var show_flag: bool = true;
+            try icon_browser(&show_flag, "entypo", entypo);
             return .ok;
         }
     }.frame;
