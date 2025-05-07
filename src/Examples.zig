@@ -379,23 +379,7 @@ pub fn demo() !void {
     frame_counter += 1;
     try dvui.windowHeader("DVUI Demo", fps_str, &show_demo_window);
 
-    var ti = dvui.toastsFor(float.data().id);
-    if (ti) |*it| {
-        var toast_win = FloatingWindowWidget.init(@src(), .{ .stay_above_parent_window = true, .process_events_in_deinit = false }, .{ .background = false, .border = .{} });
-        defer toast_win.deinit();
-
-        toast_win.data().rect = dvui.placeIn(float.data().rect, toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 });
-        toast_win.autoSize();
-        try toast_win.install();
-        try toast_win.drawBackground();
-
-        var vbox = try dvui.box(@src(), .vertical, .{});
-        defer vbox.deinit();
-
-        while (it.next()) |t| {
-            try t.display(t.id);
-        }
-    }
+    try dvui.toastsShow(float.data());
 
     var scaler = try dvui.scale(@src(), scale_val, .{ .expand = .both });
     defer scaler.deinit();
