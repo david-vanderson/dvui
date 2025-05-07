@@ -527,7 +527,7 @@ pub fn demo() !void {
     }
 
     if (icon_browser_show) {
-        try icon_browser(&icon_browser_show, "entypo", entypo);
+        try icon_browser(@src(), &icon_browser_show, "entypo", entypo);
     }
 
     if (StrokeTest.show) {
@@ -3466,12 +3466,11 @@ pub fn dialogDirect() !void {
 }
 
 /// ![image](Examples-icon_browser.png)
-pub fn icon_browser(show_flag: *bool, comptime icon_decl_name: []const u8, comptime icon_decl: type) !void {
-    const g = struct {
-        var icon_size: f32 = 20;
-        var icon_rgb: dvui.Color = .black;
-        var rect = Rect{};
-        var row_height: f32 = 0;
+pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime icon_decl_name: []const u8, comptime icon_decl: type) !void {
+    const Settings = struct {
+        icon_size: f32 = 20,
+        icon_rgb: dvui.Color = .black,
+        row_height: f32 = 0,
     };
 
     const icon_names: [@typeInfo(icon_decl).@"struct".decls.len][]const u8 = blk: {
@@ -3490,15 +3489,20 @@ pub fn icon_browser(show_flag: *bool, comptime icon_decl_name: []const u8, compt
         break :blk blah;
     };
 
-    var fwin = try dvui.floatingWindow(@src(), .{ .rect = &g.rect, .open_flag = show_flag }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
-    defer fwin.deinit();
-    try dvui.windowHeader("Icon Browser", "", show_flag);
+    var vp = try dvui.virtualParent(src, .{});
+    defer vp.deinit();
 
-    _ = try dvui.sliderEntry(@src(), "size: {d:0.0}", .{ .value = &g.icon_size, .min = 1, .max = 100, .interval = 1 }, .{ .expand = .horizontal });
-    _ = try rgbSliders(@src(), &g.icon_rgb, .{});
+    var fwin = try dvui.floatingWindow(@src(), .{ .open_flag = show_flag }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
+    defer fwin.deinit();
+    try dvui.windowHeader("Icon Browser " ++ icon_decl_name, "", show_flag);
+
+    var settings: *Settings = dvui.dataGetPtrDefault(null, fwin.data().id, "settings", Settings, .{});
+
+    _ = try dvui.sliderEntry(@src(), "size: {d:0.0}", .{ .value = &settings.icon_size, .min = 1, .max = 100, .interval = 1 }, .{ .expand = .horizontal });
+    _ = try rgbSliders(@src(), &settings.icon_rgb, .{});
 
     const num_icons = @typeInfo(icon_decl).@"struct".decls.len;
-    const height = @as(f32, @floatFromInt(num_icons)) * g.row_height;
+    const height = @as(f32, @floatFromInt(num_icons)) * settings.row_height;
 
     // we won't have the height the first frame, so always set it
     var scroll_info: ScrollInfo = .{ .vertical = .given };
@@ -3515,26 +3519,26 @@ pub fn icon_browser(show_flag: *bool, comptime icon_decl_name: []const u8, compt
     var cursor: f32 = 0;
 
     for (icon_names, icon_fields, 0..) |name, field, i| {
-        if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + g.row_height) >= visibleRect.y) {
-            const r = Rect{ .x = 0, .y = cursor, .w = 0, .h = g.row_height };
+        if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + settings.row_height) >= visibleRect.y) {
+            const r = Rect{ .x = 0, .y = cursor, .w = 0, .h = settings.row_height };
             var iconbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i, .expand = .horizontal, .rect = r });
 
             var buf: [100]u8 = undefined;
             const text = try std.fmt.bufPrint(&buf, icon_decl_name ++ ".{s}", .{name});
-            if (try dvui.buttonIcon(@src(), text, field, .{}, .{ .min_size_content = .{ .h = g.icon_size }, .color_text = .{ .color = g.icon_rgb } })) {
+            if (try dvui.buttonIcon(@src(), text, field, .{}, .{ .min_size_content = .{ .h = settings.icon_size }, .color_text = .{ .color = settings.icon_rgb } })) {
                 try dvui.clipboardTextSet(text);
                 var buf2: [100]u8 = undefined;
-                const toast_text = try std.fmt.bufPrint(&buf2, "Copied {s}", .{text});
+                const toast_text = try std.fmt.bufPrint(&buf2, "Copied \"{s}\"", .{text});
                 try dvui.toast(@src(), .{ .message = toast_text });
             }
             try dvui.labelNoFmt(@src(), text, .{ .gravity_y = 0.5 });
 
             iconbox.deinit();
 
-            g.row_height = iconbox.wd.min_size.h;
+            settings.row_height = iconbox.wd.min_size.h;
         }
 
-        cursor += g.row_height;
+        cursor += settings.row_height;
     }
 }
 
@@ -4096,7 +4100,7 @@ test "DOCIMG icon_browser" {
             var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
             defer box.deinit();
             var show_flag: bool = true;
-            try icon_browser(&show_flag, "entypo", entypo);
+            try icon_browser(@src(), &show_flag, "entypo", entypo);
             return .ok;
         }
     }.frame;
