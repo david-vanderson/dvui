@@ -3785,7 +3785,7 @@ test "DOCIMG basic_widgets" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try basicWidgets(box.data().id);
             return .ok;
@@ -3802,7 +3802,7 @@ test "DOCIMG calculator" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try calculator();
             return .ok;
@@ -3819,7 +3819,7 @@ test "DOCIMG text_entry" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try textEntryWidgets(box.data().id);
             return .ok;
@@ -3836,7 +3836,7 @@ test "DOCIMG styling" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try styling();
             return .ok;
@@ -3853,7 +3853,7 @@ test "DOCIMG layout" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try layout();
             return .ok;
@@ -3870,7 +3870,7 @@ test "DOCIMG text_layout" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try layoutText();
             return .ok;
@@ -3887,7 +3887,7 @@ test "DOCIMG plots" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try plots();
             return .ok;
@@ -3904,7 +3904,7 @@ test "DOCIMG reorderable" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try reorderLists();
             return .ok;
@@ -3921,7 +3921,7 @@ test "DOCIMG menus" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try menus();
             return .ok;
@@ -3938,7 +3938,7 @@ test "DOCIMG focus" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try focus();
             return .ok;
@@ -3955,7 +3955,7 @@ test "DOCIMG scrolling" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try scrolling(1);
             return .ok;
@@ -3972,7 +3972,7 @@ test "DOCIMG scroll_canvas" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try scrollCanvas(1);
             return .ok;
@@ -3989,7 +3989,7 @@ test "DOCIMG dialogs" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try dialogs(box.data().id);
             return .ok;
@@ -4015,7 +4015,7 @@ test "DOCIMG animations" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try animations();
             return .ok;
@@ -4048,7 +4048,7 @@ test "DOCIMG struct_ui" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try structUI();
             return .ok;
@@ -4072,7 +4072,7 @@ test "DOCIMG debugging" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try debuggingErrors();
             return .ok;
@@ -4097,7 +4097,7 @@ test "DOCIMG icon_browser" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             var show_flag: bool = true;
             try icon_browser(@src(), &show_flag, "entypo", entypo);
@@ -4115,7 +4115,7 @@ test "DOCIMG themeEditor" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window) });
             defer box.deinit();
             try themeEditor();
             return .ok;
