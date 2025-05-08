@@ -2,6 +2,8 @@ const std = @import("std");
 const hsluv = @import("hsluv.zig");
 
 const Color = @This();
+const dvui = @import("dvui.zig");
+const ColorsFromTheme = dvui.Options.ColorsFromTheme;
 
 r: u8 = 0xff,
 g: u8 = 0xff,
@@ -190,6 +192,58 @@ pub fn fromHex(hex: HexString) !Color {
         .b = @intCast(num & 0xff),
     };
     return result;
+}
+
+pub fn fromComptimeHex(comptime rgb_hex: []const u8, alpha: u8) @This() {
+    const m = struct {
+        inline fn hexToRgb(hex: []const u8) ![4]u8 {
+            var xrgba: [4]u8 = .{ 0, 0, 0, 255 };
+            if (hex.len == 6) {
+                for (xrgba[0..3], 0..) |_, i| {
+                    const start = i * 2;
+                    const slice = hex[start .. start + 2];
+                    const value = try std.fmt.parseInt(u8, slice, 16);
+                    xrgba[i] = value;
+                }
+                return xrgba;
+            }
+            if (hex.len == 7 and hex[0] == '#') {
+                const hex1 = hex[1..];
+                for (xrgba[0..3], 0..) |_, i| {
+                    const start = i * 2;
+                    const slice = hex1[start .. start + 2];
+                    const value = try std.fmt.parseInt(u8, slice, 16);
+                    xrgba[i] = value;
+                }
+                return xrgba;
+            }
+            return error.FailedToParseHexColor;
+        }
+    };
+    const rgba = comptime m.hexToRgb(rgb_hex) catch {
+        @compileError("failed to convert rgba from hex code");
+    };
+    return @This(){
+        .r = rgba[0],
+        .g = rgba[1],
+        .b = rgba[2],
+        .a = alpha,
+    };
+}
+
+pub fn fromTheme(theme_color: ColorsFromTheme) @This() {
+    return switch (theme_color) {
+        .accent => dvui.themeGet().color_accent,
+        .text => dvui.themeGet().color_text,
+        .text_press => dvui.themeGet().color_text_press,
+        .fill => dvui.themeGet().color_fill,
+        .fill_hover => dvui.themeGet().color_fill_hover,
+        .fill_press => dvui.themeGet().color_fill_press,
+        .border => dvui.themeGet().color_border,
+        .err => dvui.themeGet().color_err,
+        .fill_window => dvui.themeGet().color_fill_window,
+        .fill_control => dvui.themeGet().color_fill_control,
+    };
 }
 
 test {
