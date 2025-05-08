@@ -10,6 +10,9 @@ g: u8 = 0xff,
 b: u8 = 0xff,
 a: u8 = 0xff,
 
+pub const white = Color{ .r = 0xff, .g = 0xff, .b = 0xff };
+pub const black = Color{ .r = 0x00, .g = 0x00, .b = 0x00 };
+
 /// Convert normal color to premultiplied alpha.
 pub fn alphaMultiply(self: @This()) @This() {
     var c = self;
@@ -109,9 +112,6 @@ pub fn format(self: *const Color, comptime _: []const u8, _: std.fmt.FormatOptio
     try std.fmt.format(writer, "Color{{ {x} {x} {x} {x} }}", .{ self.r, self.g, self.b, self.a });
 }
 
-pub const white = Color{ .r = 0xff, .g = 0xff, .b = 0xff };
-pub const black = Color{ .r = 0x00, .g = 0x00, .b = 0x00 };
-
 /// Average two colors component-wise
 pub fn average(self: Color, other: Color) Color {
     return Color{
@@ -179,7 +179,6 @@ pub fn toHexString(self: Color) !HexString {
     _ = try std.fmt.bufPrint(&result, "#{x:0>2}{x:0>2}{x:0>2}", .{ self.r, self.g, self.b });
     return result;
 }
-
 /// Converts slice of HexString to Color
 pub fn fromHex(hex: HexString) !Color {
     //if (hex[0] != '#') return error.NotAColor;
@@ -194,6 +193,7 @@ pub fn fromHex(hex: HexString) !Color {
     return result;
 }
 
+/// Comptime Converts slice of HexString to Color
 pub fn fromComptimeHex(comptime rgb_hex: []const u8, alpha: u8) @This() {
     const m = struct {
         inline fn hexToRgb(hex: []const u8) ![4]u8 {
@@ -231,6 +231,9 @@ pub fn fromComptimeHex(comptime rgb_hex: []const u8, alpha: u8) @This() {
     };
 }
 
+/// Get a Color from the active Theme
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn fromTheme(theme_color: ColorsFromTheme) @This() {
     return switch (theme_color) {
         .accent => dvui.themeGet().color_accent,
