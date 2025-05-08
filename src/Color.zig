@@ -172,10 +172,18 @@ pub fn alphaAverage(self: Color, other: Color) Color {
 
 pub const HexString = [7]u8;
 
+/// Returns a hex color string in the format "#rrggbb"
 pub fn toHexString(self: Color) !HexString {
-    var result: [7]u8 = .{0} ** 7;
+    var result: HexString = undefined;
     _ = try std.fmt.bufPrint(&result, "#{x:0>2}{x:0>2}{x:0>2}", .{ self.r, self.g, self.b });
     return result;
+}
+
+test toHexString {
+    try std.testing.expectEqual((Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0xFF }).toHexString(), "#010203".*);
+    try std.testing.expectEqual((Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0x4 }).toHexString(), "#010203".*);
+    try std.testing.expectEqual((Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xFF }).toHexString(), "#a1a2a3".*);
+    try std.testing.expectEqual((Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }).toHexString(), "#a1a2a3".*);
 }
 
 /// Converts hex color string to `Color`
@@ -210,6 +218,21 @@ pub fn fromHex(hex_color: []const u8) !Color {
         .b = @intCast((num >> step * (0 + offset)) & mask),
         .a = if (has_alpha) @intCast(num & mask) else 0xFF,
     };
+}
+
+test fromHex {
+    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0xFF }, Color.fromHex("123"));
+    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0xFF }, Color.fromHex("#123"));
+    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0x4 }, Color.fromHex("1234"));
+    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0x4 }, Color.fromHex("#1234"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xFF }, Color.fromHex("a1a2a3"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xFF }, Color.fromHex("#a1a2a3"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }, Color.fromHex("a1a2a3a4"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }, Color.fromHex("#a1a2a3a4"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xFF }, Color.fromHex("A1A2A3"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xFF }, Color.fromHex("#A1A2A3"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }, Color.fromHex("A1A2A3A4"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }, Color.fromHex("#A1A2A3A4"));
 }
 
 test {
