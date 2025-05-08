@@ -155,6 +155,23 @@ pub const ColorsFromTheme = enum {
 pub const ColorOrName = union(enum) {
     color: Color,
     name: ColorsFromTheme,
+
+    pub fn fromTheme(theme_color: ColorsFromTheme) Color {
+        return switch (theme_color) {
+            .accent => dvui.themeGet().color_accent,
+            .text => dvui.themeGet().color_text,
+            .text_press => dvui.themeGet().color_text_press,
+            .fill => dvui.themeGet().color_fill,
+            .fill_hover => dvui.themeGet().color_fill_hover,
+            .fill_press => dvui.themeGet().color_fill_press,
+            .border => dvui.themeGet().color_border,
+            .err => dvui.themeGet().color_err,
+            .fill_window => dvui.themeGet().color_fill_window,
+            .fill_control => dvui.themeGet().color_fill_control,
+        };
+    }
+
+
 };
 
 // All the colors you can ask Options for
