@@ -156,17 +156,30 @@ pub const ColorOrName = union(enum) {
     color: Color,
     name: ColorsFromTheme,
 
+    pub const theme = struct {
+        pub const accent = .{ .name = .accent };
+        pub const err = .{ .name = .err };
+        pub const text = .{ .name = .text };
+        pub const text_press = .{ .name = .text_press };
+        pub const fill = .{ .name = .fill };
+        pub const fill_window = .{ .name = .fill_window };
+        pub const fill_control = .{ .name = .fill_control };
+        pub const fill_hover = .{ .name = .fill_hover };
+        pub const fill_press = .{ .name = .fill_press };
+        pub const border = .{ .name = .border };
+    };
+    pub const debug_color = struct {
+        pub const Red = fromHex("#FF0000");
+        pub const Blue = fromHex("#0000FF");
+        pub const Green = fromHex("#00FF00");
+    };
+
     pub fn fromColor(col: Color) @This() {
         return .{ .color = col };
     }
-    pub fn fromTheme(name: ColorsFromTheme) @This() {
-        return .{ .name = name };
-    }
-    pub fn fromHex(hex: Color.HexString) !@This() {
-        return .fromColor(try Color.fromHex(hex));
-    }
-    pub fn fromComptimeHex(comptime rgb_hex: []const u8, alpha: u8) @This() {
-        return .fromColor(Color.fromComptimeHex(rgb_hex, alpha));
+    pub fn fromHex(hex: Color.HexString) @This() {
+        if (@inComptime()) return comptime .fromColor(Color.fromHex(hex) catch unreachable);
+        return .fromColor(Color.fromHex(hex) catch unreachable);
     }
 };
 
