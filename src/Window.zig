@@ -1490,10 +1490,10 @@ fn debugWindowShow(self: *Self) !void {
 
     self.debug_widget_panic = false;
 
-    var color: ?dvui.Options.ColorOrName = null;
+    var color: ?dvui.Color = null;
     if (self.debug_widget_id == 0) {
         // blend text and control colors
-        color = .{ .color = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control) };
+        color = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control);
     }
     if (try dvui.button(@src(), "Panic", .{}, .{ .gravity_x = 1.0, .margin = dvui.Rect.all(8), .color_text = color })) {
         if (self.debug_widget_id != 0) {

@@ -95,13 +95,13 @@ gravity_y: ?f32 = null,
 tab_index: ?u16 = null,
 
 // used to override widget and theme defaults
-color_accent: ?ColorOrName = null,
-color_text: ?ColorOrName = null,
-color_text_press: ?ColorOrName = null,
-color_fill: ?ColorOrName = null,
-color_fill_hover: ?ColorOrName = null,
-color_fill_press: ?ColorOrName = null,
-color_border: ?ColorOrName = null,
+color_accent: ?Color = null,
+color_text: ?Color = null,
+color_text_press: ?Color = null,
+color_fill: ?Color = null,
+color_fill_hover: ?Color = null,
+color_fill_press: ?Color = null,
+color_border: ?Color = null,
 
 // use to override font_style
 font: ?Font = null,
@@ -151,12 +151,6 @@ pub const ColorsFromTheme = enum {
     border,
 };
 
-// Either specify the color directly or name a color from the Theme
-pub const ColorOrName = union(enum) {
-    color: Color,
-    name: ColorsFromTheme,
-};
-
 // All the colors you can ask Options for
 pub const ColorAsk = enum {
     accent,
@@ -167,39 +161,30 @@ pub const ColorAsk = enum {
     fill_press,
     border,
 };
-
+pub fn colorFromTheme(theme_color: ColorsFromTheme) Color {
+    return switch (theme_color) {
+        .accent => dvui.themeGet().color_accent,
+        .text => dvui.themeGet().color_text,
+        .text_press => dvui.themeGet().color_text_press,
+        .fill => dvui.themeGet().color_fill,
+        .fill_hover => dvui.themeGet().color_fill_hover,
+        .fill_press => dvui.themeGet().color_fill_press,
+        .border => dvui.themeGet().color_border,
+        .err => dvui.themeGet().color_err,
+        .fill_window => dvui.themeGet().color_fill_window,
+        .fill_control => dvui.themeGet().color_fill_control,
+    };
+}
 pub fn color(self: *const Options, ask: ColorAsk) Color {
-    const color_or_name: ColorOrName = switch (ask) {
-        .accent => self.color_accent orelse .{ .name = .accent },
-        .text => self.color_text orelse .{ .name = .text },
-        .text_press => self.color_text_press orelse .{ .name = .text_press },
-        .fill => self.color_fill orelse .{ .name = .fill },
-        .fill_hover => self.color_fill_hover orelse .{ .name = .fill_hover },
-        .fill_press => self.color_fill_press orelse .{ .name = .fill_press },
-        .border => self.color_border orelse .{ .name = .border },
+    const col = switch (ask) {
+        .accent => self.color_accent orelse dvui.themeGet().color_accent,
+        .text => self.color_text orelse dvui.themeGet().color_text,
+        .text_press => self.color_text_press orelse dvui.themeGet().color_text_press,
+        .fill => self.color_fill orelse dvui.themeGet().color_fill,
+        .fill_hover => self.color_fill_hover orelse dvui.themeGet().color_fill_hover,
+        .fill_press => self.color_fill_press orelse dvui.themeGet().color_fill_press,
+        .border => self.color_border orelse dvui.themeGet().color_border,
     };
-
-    const col = blk: {
-        switch (color_or_name) {
-            // if we have a custom color, use it
-            .color => |col| break :blk col,
-
-            .name => |from_theme| switch (from_theme) {
-                // named color, get from theme
-                .accent => break :blk dvui.themeGet().color_accent,
-                .err => break :blk dvui.themeGet().color_err,
-                .text => break :blk dvui.themeGet().color_text,
-                .text_press => break :blk dvui.themeGet().color_text_press,
-                .fill => break :blk dvui.themeGet().color_fill,
-                .fill_window => break :blk dvui.themeGet().color_fill_window,
-                .fill_control => break :blk dvui.themeGet().color_fill_control,
-                .fill_hover => break :blk dvui.themeGet().color_fill_hover,
-                .fill_press => break :blk dvui.themeGet().color_fill_press,
-                .border => break :blk dvui.themeGet().color_border,
-            },
-        }
-    };
-
     return col.transparent(dvui.themeGet().alpha);
 }
 
@@ -357,13 +342,37 @@ pub fn wrapInner(self: *const Options) Options {
 
 pub fn override(self: *const Options, over: Options) Options {
     var ret = self.*;
-
     inline for (@typeInfo(Options).@"struct".fields) |f| {
         if (@field(over, f.name)) |fval| {
             @field(ret, f.name) = fval;
         }
     }
+    return ret;
+}
 
+pub fn fromAny(comptime opt_tuple: anytype) Options {
+    const m = struct {
+        fn has_field(T: type, comptime field_name: []const u8) bool {
+            comptime {
+                for (@typeInfo(T).@"struct".fields) |f| {
+                    if (std.mem.eql(u8, f.name, field_name)) return true;
+                }
+                return false;
+            }
+        }
+    };
+    var ret = Options{};
+    inline for (@typeInfo(Options).@"struct".fields) |f| {
+        if (comptime m.has_field(@TypeOf(opt_tuple), f.name)) {
+            const def = comptime @field(opt_tuple, f.name);
+            if (comptime @TypeOf(def) == ColorsFromTheme) {
+                const col = colorFromTheme(def);
+                @field(ret, f.name) = col;
+            } else {
+                @field(ret, f.name) = def;
+            }
+        }
+    }
     return ret;
 }
 

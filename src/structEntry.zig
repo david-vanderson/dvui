@@ -631,7 +631,7 @@ pub fn sliceFieldWidget(
             .expand = .both,
             .border = dvui.Rect.all(1),
             .background = true,
-            .color_fill = .{ .name = .fill_window },
+            .color_fill = .fromTheme(.fill_window),
         });
         defer hbox.deinit();
 
@@ -673,7 +673,7 @@ pub fn sliceFieldWidget(
                 .expand = .both,
                 .border = dvui.Rect.all(1),
                 .background = true,
-                .color_fill = .{ .name = .fill_window },
+                .color_fill = .fromTheme(.fill_window),
             });
             defer hbox.deinit();
 

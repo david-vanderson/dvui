@@ -67,7 +67,7 @@ pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8) !bool {
 
     var label_opts = tab.data().options.strip();
     if (dvui.captured(tab.data().id)) {
-        label_opts.color_text = .{ .name = .text_press };
+        label_opts.color_text = .fromTheme(.text_press);
     }
 
     try dvui.labelNoFmt(@src(), text, label_opts);
@@ -85,13 +85,13 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) !*ButtonWidget {
 
     if (selected) {
         tab_defaults.font_style = .heading;
-        tab_defaults.color_fill = .{ .name = .fill_window };
+        tab_defaults.color_fill = .fromTheme(.fill_window);
         tab_defaults.border = switch (self.init_options.dir) {
             .horizontal => .{ .x = 1, .y = 1, .w = 1 },
             .vertical => .{ .x = 1, .y = 1, .h = 1 },
         };
     } else {
-        tab_defaults.color_fill = .{ .name = .fill_control };
+        tab_defaults.color_fill = .fromTheme(.fill_control);
         switch (self.init_options.dir) {
             .horizontal => tab_defaults.margin.?.h = 1,
             .vertical => tab_defaults.margin.?.w = 1,

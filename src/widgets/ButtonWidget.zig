@@ -4,6 +4,7 @@ const dvui = @import("../dvui.zig");
 const Color = dvui.Color;
 const Event = dvui.Event;
 const Options = dvui.Options;
+const ColorsFromTheme = Options.ColorsFromTheme;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -13,9 +14,10 @@ const WidgetData = dvui.WidgetData;
 
 const ButtonWidget = @This();
 
-pub var defaults: Options = .{
+pub var defaults: Options = Options{};
+pub const defaults_Def = .{
     .name = "Button",
-    .color_fill = .{ .name = .fill_control },
+    .color_fill = ColorsFromTheme.fill_control,
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
@@ -35,7 +37,7 @@ click: bool = false,
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ButtonWidget {
     var self = ButtonWidget{};
     self.init_options = init_opts;
-    self.wd = WidgetData.init(src, .{}, defaults.override(opts));
+    self.wd = WidgetData.init(src, .{}, Options.fromAny(defaults_Def).override(defaults).override(opts));
     return self;
 }
 

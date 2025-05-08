@@ -420,7 +420,7 @@ pub fn demo() !void {
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
-            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = .size(dvui.Size.all(120)), .margin = Rect.all(5), .color_fill = .{ .name = .fill }, .tag = "demo_button_" ++ @tagName(e) });
+            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = .size(dvui.Size.all(120)), .margin = Rect.all(5), .color_fill = .fromTheme(.fill), .tag = "demo_button_" ++ @tagName(e) });
             try bw.install();
             bw.processEvents();
             try bw.drawBackground();
@@ -435,7 +435,7 @@ pub fn demo() !void {
                 defer box.deinit();
 
                 var options: dvui.Options = .{ .gravity_x = 0.5, .gravity_y = 1.0 };
-                if (dvui.captured(bw.wd.id)) options = options.override(.{ .color_text = .{ .color = options.color(.text_press) } });
+                if (dvui.captured(bw.wd.id)) options = options.override(.{ .color_text = .fromTheme(.text_press) });
 
                 try dvui.label(@src(), "{s}", .{e.name()}, options);
 
@@ -639,10 +639,10 @@ pub fn basicWidgets(demo_win_id: u32) !void {
             defer vbox.deinit();
 
             {
-                var color: ?dvui.Options.ColorOrName = null;
+                var color: ?dvui.Color = null;
                 if (checkbox_gray) {
                     // blend text and control colors
-                    color = .{ .color = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control) };
+                    color = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control);
                 }
                 var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .gravity_y = 0.5, .color_text = color });
                 defer bw.deinit();
@@ -675,11 +675,11 @@ pub fn basicWidgets(demo_win_id: u32) !void {
 
         try dvui.label(@src(), "Link:", .{}, .{ .gravity_y = 0.5 });
 
-        if (try dvui.labelClick(@src(), "https://david-vanderson.github.io/", .{}, .{ .gravity_y = 0.5, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
+        if (try dvui.labelClick(@src(), "https://david-vanderson.github.io/", .{}, .{ .gravity_y = 0.5, .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } })) {
             try dvui.openURL("https://david-vanderson.github.io/");
         }
 
-        if (try dvui.labelClick(@src(), "docs", .{}, .{ .gravity_y = 0.5, .margin = .{ .x = 10 }, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
+        if (try dvui.labelClick(@src(), "docs", .{}, .{ .gravity_y = 0.5, .margin = .{ .x = 10 }, .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } })) {
             try dvui.openURL("https://david-vanderson.github.io/docs");
         }
     }
@@ -1321,8 +1321,8 @@ pub fn styling() !void {
 
         _ = try dvui.button(@src(), "Accent", .{}, dvui.themeGet().style_accent);
         _ = try dvui.button(@src(), "Error", .{}, dvui.themeGet().style_err);
-        _ = try dvui.button(@src(), "Window", .{}, .{ .color_fill = .{ .name = .fill_window } });
-        _ = try dvui.button(@src(), "Content", .{}, .{ .color_fill = .{ .name = .fill } });
+        _ = try dvui.button(@src(), "Window", .{}, .{ .color_fill = .fromTheme(.fill_window) });
+        _ = try dvui.button(@src(), "Content", .{}, .{ .color_fill = .fromTheme(.fill) });
         _ = try dvui.button(@src(), "Control", .{}, .{});
     }
 
@@ -1354,7 +1354,7 @@ pub fn styling() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = .{ .color = backbox_color }, .gravity_y = 0.5 });
+        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = backbox_color, .gravity_y = 0.5 });
         backbox.deinit();
 
         _ = try rgbSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 });
@@ -1365,7 +1365,7 @@ pub fn styling() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = .{ .color = hsluv_rgb }, .gravity_y = 0.5 });
+        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = hsluv_rgb, .gravity_y = 0.5 });
         backbox.deinit();
 
         try hsluvSliders(@src(), &hsluv_hsl, &hsluv_rgb, .{ .gravity_y = 0.5 });
@@ -1464,7 +1464,7 @@ pub fn layout() !void {
                 _ = try dvui.image(@src(), .{ .name = "zig favicon", .bytes = zig_favicon, .shrink = if (Static.shrink) Static.shrinkE else null, .uv = Static.uv }, options.override(.{
                     .min_size_content = Static.size,
                     .background = Static.background,
-                    .color_fill = .{ .color = dvui.themeGet().color_text },
+                    .color_fill = dvui.themeGet().color_text,
                     .border = if (Static.border) Rect.all(1) else null,
                 }));
             } else {
@@ -1701,7 +1701,7 @@ pub fn layoutText() !void {
         }
         cbox.deinit();
 
-        cbox = try dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .{ .name = .fill_window }, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
+        cbox = try dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .fromTheme(.fill_window), .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
         try dvui.icon(@src(), "aircraft", entypo.aircraft, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
         try dvui.label(@src(), "Caption Heading", .{}, .{ .font_style = .caption_heading, .gravity_x = 0.5 });
         var tl_caption = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
@@ -1720,7 +1720,7 @@ pub fn layoutText() !void {
         const lorem2 = " Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n";
         try tl.addText(lorem, .{ .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
 
-        if (try tl.addTextClick("This text is a link that is part of the text layout and goes to the dvui home page.", .{ .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } }, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) })) {
+        if (try tl.addTextClick("This text is a link that is part of the text layout and goes to the dvui home page.", .{ .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 }, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) })) {
             try dvui.openURL("https://david-vanderson.github.io/");
         }
 
@@ -1730,7 +1730,7 @@ pub fn layoutText() !void {
         try tl.addText(start, .{ .font_style = .title_4 });
 
         const col = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill);
-        try tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = .{ .color = col }, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
+        try tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = col, .font = dvui.themeGet().font_body.lineHeightFactor(line_height_factor) });
 
         try tl.addText("Title ", .{ .font_style = .title });
         try tl.addText("Title-1 ", .{ .font_style = .title_1 });
@@ -1739,10 +1739,10 @@ pub fn layoutText() !void {
         try tl.addText("Title-4 ", .{ .font_style = .title_4 });
         try tl.addText("Heading\n", .{ .font_style = .heading });
 
-        try tl.addText("Here ", .{ .font_style = .title, .color_text = .{ .color = .{ .r = 100, .b = 100 } } });
-        try tl.addText("is some ", .{ .font_style = .title_2, .color_text = .{ .color = .{ .b = 100, .g = 100 } } });
-        try tl.addText("ugly text ", .{ .font_style = .title_1, .color_text = .{ .color = .{ .r = 100, .g = 100 } } });
-        try tl.addText("that shows styling.", .{ .font_style = .caption, .color_text = .{ .color = .{ .r = 100, .g = 50, .b = 50 } } });
+        try tl.addText("Here ", .{ .font_style = .title, .color_text = .{ .r = 100, .b = 100 } });
+        try tl.addText("is some ", .{ .font_style = .title_2, .color_text = .{ .b = 100, .g = 100 } });
+        try tl.addText("ugly text ", .{ .font_style = .title_1, .color_text = .{ .r = 100, .g = 100 } });
+        try tl.addText("that shows styling.", .{ .font_style = .caption, .color_text = .{ .r = 100, .g = 50, .b = 50 } });
     }
 }
 
@@ -1767,7 +1767,7 @@ pub fn plots() !void {
 
         const xs: []const f64 = &.{ 0, 1, 2, 3, 4, 5 };
         const ys: []const f64 = &.{ 9, 5, 6, 2, 4, 0 };
-        try dvui.plotXY(@src(), .{}, 2, xs, ys, .{ .color_accent = .{ .color = dvui.themeGet().color_err } });
+        try dvui.plotXY(@src(), .{}, 2, xs, ys, .{ .color_accent = dvui.themeGet().color_err });
     }
 
     var save: bool = false;
@@ -1937,7 +1937,7 @@ pub fn reorderListsSimple(lay: reorderLayout) !void {
         }
 
         // actual content of the list entry
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .fromTheme(.fill_window) });
         defer hbox.deinit();
 
         try dvui.label(@src(), "{s}", .{s}, .{});
@@ -2001,7 +2001,7 @@ pub fn reorderListsAdvanced() !void {
     if (g.strings_len == g.strings.len) {
         try dvui.label(@src(), "List Full", .{}, .{ .gravity_x = 1.0 });
     } else {
-        var hbox2 = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0, .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .color_fill = .{ .name = .fill_window } });
+        var hbox2 = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0, .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .color_fill = .fromTheme(.fill_window) });
         defer hbox2.deinit();
 
         try dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
@@ -2064,7 +2064,7 @@ pub fn reorderListsAdvanced() !void {
         }
 
         // actual content of the list entry
-        var hbox2 = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+        var hbox2 = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .fromTheme(.fill_window) });
         defer hbox2.deinit();
 
         try dvui.label(@src(), "{s}", .{s}, .{});
@@ -2246,7 +2246,7 @@ pub fn menus() !void {
 
                     var label_opts = tab.data().options.strip();
                     if (dvui.captured(tab.data().id)) {
-                        label_opts.color_text = .{ .name = .text_press };
+                        label_opts.color_text = .fromTheme(.text_press);
                     }
 
                     try dvui.labelNoFmt(@src(), tabname, label_opts);
@@ -2264,7 +2264,7 @@ pub fn menus() !void {
                 .horizontal => border.y = 0,
                 .vertical => border.x = 0,
             }
-            var vbox3 = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window }, .border = border });
+            var vbox3 = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fromTheme(.fill_window), .border = border });
             defer vbox3.deinit();
 
             try dvui.label(@src(), "This is tab {d}", .{Data.tab}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
@@ -2390,7 +2390,7 @@ pub fn focus() !void {
 
             if (e.evt == .mouse and e.evt.mouse.action == .position) {
                 hbox.data().options.background = true;
-                hbox.data().options.color_fill = .{ .name = .fill_hover };
+                hbox.data().options.color_fill = .fromTheme(.fill_hover);
             }
         }
 
@@ -2505,7 +2505,7 @@ pub fn scrolling(comptime data: u8) !void {
         defer scroll.deinit();
 
         for (Data.msg_start..Data.msg_end + 1) |i| {
-            var tl = try dvui.textLayout(@src(), .{}, .{ .id_extra = i, .color_fill = .{ .name = .fill_window } });
+            var tl = try dvui.textLayout(@src(), .{}, .{ .id_extra = i, .color_fill = .fromTheme(.fill_window) });
             try tl.format("Message {d}", .{i}, .{});
 
             if (scroll_to_msg != null and scroll_to_msg.? == i) {
@@ -2514,7 +2514,7 @@ pub fn scrolling(comptime data: u8) !void {
 
             tl.deinit();
 
-            var tl2 = try dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .color_fill = .{ .name = .fill_window } });
+            var tl2 = try dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .color_fill = .fromTheme(.fill_window) });
             try tl2.format("Reply {d}", .{i}, .{});
             tl2.deinit();
         }
@@ -2564,7 +2564,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
     var vbox = try dvui.box(@src(), .vertical, .{});
     defer vbox.deinit();
 
-    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .color_fill = .{ .name = .fill_window } });
+    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .color_fill = .fromTheme(.fill_window) });
     try tl.addText("Click-drag to pan\n", .{});
     try tl.addText("Ctrl-wheel to zoom\n", .{});
     try tl.addText("Drag blue cubes from box to box\n\n", .{});
@@ -2606,10 +2606,10 @@ pub fn scrollCanvas(comptime data: u8) !void {
             .rect = dvui.Rect{ .x = b.x, .y = b.y },
             .padding = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
             .background = true,
-            .color_fill = .{ .name = .fill_window },
+            .color_fill = .fromTheme(.fill_window),
             .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
             .corner_radius = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
-            .color_border = .{ .color = if (dragging_box and i != Data.drag_box_window) Data.box_green else dvui.Color.black },
+            .color_border = if (dragging_box and i != Data.drag_box_window) Data.box_green else dvui.Color.black,
         });
 
         const boxRect = dragBox.data().rectScale().r;
@@ -2662,7 +2662,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
         }
 
         {
-            var hbox = try dvui.box(@src(), .horizontal, .{ .margin = dvui.Rect.all(4), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4), .background = true, .color_fill = .{ .name = .fill_window } });
+            var hbox = try dvui.box(@src(), .horizontal, .{ .margin = dvui.Rect.all(4), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4), .background = true, .color_fill = .fromTheme(.fill_window) });
             defer hbox.deinit();
 
             for (evts) |*e| {
@@ -2676,7 +2676,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
                     _ = try dvui.spacer(@src(), .{ .w = 5 }, .{ .id_extra = k });
                 }
                 const col = if (dragging_box and i == Data.drag_box_window and k == Data.drag_box_content) Data.box_green else Data.box_blue;
-                var dbox = try dvui.box(@src(), .vertical, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = .{ .color = col } });
+                var dbox = try dvui.box(@src(), .vertical, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = col });
                 defer dbox.deinit();
 
                 for (evts) |*e| {
@@ -3239,7 +3239,7 @@ pub fn animations() !void {
 
     if (try dvui.expander(@src(), "Spinner", .{}, .{ .expand = .horizontal })) {
         try dvui.labelNoFmt(@src(), "Spinner maxes out frame rate", .{});
-        try dvui.spinner(@src(), .{ .color_text = .{ .color = .{ .r = 100, .g = 200, .b = 100 } } });
+        try dvui.spinner(@src(), .{ .color_text = .{ .r = 100, .g = 200, .b = 100 } });
     }
 
     if (try dvui.expander(@src(), "Clock", .{}, .{ .expand = .horizontal })) {
@@ -3344,7 +3344,7 @@ pub fn debuggingErrors() !void {
             try dvui.label(@src(), " - fix by passing .id_extra = <loop index>", .{}, .{ .id_extra = i });
         }
 
-        if (try dvui.labelClick(@src(), "See https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids", .{}, .{ .gravity_y = 0.5, .color_text = .{ .color = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } } })) {
+        if (try dvui.labelClick(@src(), "See https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids", .{}, .{ .gravity_y = 0.5, .color_text = .{ .r = 0x35, .g = 0x84, .b = 0xe4 } })) {
             try dvui.openURL("https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids");
         }
     }
@@ -3525,7 +3525,7 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
 
             var buf: [100]u8 = undefined;
             const text = try std.fmt.bufPrint(&buf, icon_decl_name ++ ".{s}", .{name});
-            if (try dvui.buttonIcon(@src(), text, field, .{}, .{ .min_size_content = .{ .h = settings.icon_size }, .color_text = .{ .color = settings.icon_rgb } })) {
+            if (try dvui.buttonIcon(@src(), text, field, .{}, .{ .min_size_content = .{ .h = settings.icon_size }, .color_text = settings.icon_rgb })) {
                 try dvui.clipboardTextSet(text);
                 var buf2: [100]u8 = undefined;
                 const toast_text = try std.fmt.bufPrint(&buf2, "Copied \"{s}\"", .{text});

@@ -2,11 +2,16 @@ const std = @import("std");
 const hsluv = @import("hsluv.zig");
 
 const Color = @This();
+const ColorsFromTheme = @import("Options.zig").ColorsFromTheme;
 
 r: u8 = 0xff,
 g: u8 = 0xff,
 b: u8 = 0xff,
 a: u8 = 0xff,
+
+pub fn fromTheme(theme_color: ColorsFromTheme) @This() {
+    return @import("Options.zig").colorFromTheme(theme_color);
+}
 
 /// Convert normal color to premultiplied alpha.
 pub fn alphaMultiply(self: @This()) @This() {

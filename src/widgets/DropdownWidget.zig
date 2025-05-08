@@ -11,8 +11,10 @@ drop_mi_index: usize = 0,
 drop_height: f32 = 0,
 drop_adjust: f32 = undefined,
 
-pub var defaults: Options = .{
-    .color_fill = .{ .name = .fill_control },
+const ColorsFromTheme = Options.ColorsFromTheme;
+pub var defaults: Options = Options{};
+pub const defaults_Def = .{
+    .color_fill = ColorsFromTheme.fill_control,
     .margin = Rect.all(4),
     .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
@@ -27,7 +29,7 @@ pub const InitOptions = struct {
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) DropdownWidget {
     var self = DropdownWidget{};
-    self.options = defaults.override(opts);
+    self.options = Options.fromAny(defaults_Def).override(defaults).override(opts);
     self.init_options = init_opts;
     self.menu = MenuWidget.init(src, .{ .dir = .horizontal }, self.options.wrapOuter());
     self.drop_adjust = dvui.dataGet(null, self.menu.wd.id, "_drop_adjust", f32) orelse 0;

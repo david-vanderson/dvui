@@ -3,6 +3,7 @@ const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
 const Options = dvui.Options;
+const ColorsFromTheme = Options.ColorsFromTheme;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -13,13 +14,14 @@ const BoxWidget = dvui.BoxWidget;
 
 const FloatingWindowWidget = @This();
 
-pub var defaults: Options = .{
+pub var defaults: Options = Options{};
+pub const defaults_Def = .{
     .name = "FloatingWindow",
     .corner_radius = Rect.all(5),
     .margin = Rect.all(2),
     .border = Rect.all(1),
     .background = true,
-    .color_fill = .{ .name = .fill_window },
+    .color_fill = ColorsFromTheme.fill_window,
 };
 
 pub const InitOptions = struct {
@@ -87,7 +89,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 
     // options is really for our embedded BoxWidget, so save them for the
     // end of install()
-    self.options = defaults.override(opts);
+    self.options = Options.fromAny(defaults_Def).override(defaults).override(opts);
     self.options.rect = null; // if the user passes in a rect, don't pass it to the BoxWidget
 
     // the floating window itself doesn't have any styling, it comes from

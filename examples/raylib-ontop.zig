@@ -111,7 +111,7 @@ fn colorPicker(result: *dvui.Color) !void {
         defer hbox.deinit();
 
         try dvui.labelNoFmt(@src(), &color_hex, .{
-            .color_text = .{ .color = result.* },
+            .color_text = result.*,
             .gravity_y = 0.5,
         });
 
@@ -130,7 +130,7 @@ fn dvuiStuff() !void {
 
     try dvui.windowHeader("Floating Window", "", null);
 
-    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
+    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fromTheme(.fill_window) });
     defer scroll.deinit();
 
     var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });

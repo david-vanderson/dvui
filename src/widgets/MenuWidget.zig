@@ -3,6 +3,7 @@ const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
 const Options = dvui.Options;
+const ColorsFromTheme = Options.ColorsFromTheme;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -26,10 +27,10 @@ fn menuSet(m: ?*MenuWidget) ?*MenuWidget {
     menu_current = m;
     return ret;
 }
-
-pub var defaults: Options = .{
+pub var defaults = Options{};
+pub const defaults_Def = .{
     .name = "Menu",
-    .color_fill = .{ .name = .fill_window },
+    .color_fill = ColorsFromTheme.fill_window,
 };
 
 pub const InitOptions = struct {
@@ -61,7 +62,7 @@ mouse_mode: bool = false,
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) MenuWidget {
     var self = MenuWidget{};
-    const options = defaults.override(opts);
+    const options = Options.fromAny(defaults_Def).override(defaults).override(opts);
     self.wd = WidgetData.init(src, .{}, options);
     self.init_opts = init_opts;
 

@@ -3,6 +3,7 @@ const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
 const Options = dvui.Options;
+const ColorsFromTheme = Options.ColorsFromTheme;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -33,13 +34,14 @@ fn popupSet(p: ?*FloatingMenuWidget) ?*FloatingMenuWidget {
     return ret;
 }
 
-pub var defaults: Options = .{
+pub var defaults = Options{};
+pub const defaults_Def = .{
     .name = "FloatingMenu",
     .corner_radius = Rect.all(5),
     .border = Rect.all(1),
     .padding = Rect.all(4),
     .background = true,
-    .color_fill = .{ .name = .fill_window },
+    .color_fill = ColorsFromTheme.fill_window,
 };
 
 pub const InitOptions = struct {
@@ -65,7 +67,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 
     // options is really for our embedded ScrollAreaWidget, so save them for the
     // end of install()
-    self.options = defaults.override(opts);
+    self.options = Options.fromAny(defaults_Def).override(defaults).override(opts);
 
     // the widget itself doesn't have any styling, it comes from the
     // embedded MenuWidget

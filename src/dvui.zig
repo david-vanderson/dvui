@@ -3196,7 +3196,7 @@ pub fn dialogDisplay(id: u32) !void {
     }
 
     // Now add the scroll area which will get the remaining space
-    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .{ .name = .fill_window } });
+    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fromTheme(.fill_window) });
     var tl = try dvui.textLayout(@src(), .{}, .{ .background = false, .gravity_x = 0.5 });
     try tl.addText(message, .{});
     tl.deinit();
@@ -3966,7 +3966,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) !void {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
-        .color_fill = .{ .name = .border },
+        .color_fill = .fromTheme(.border),
         .min_size_content = .{ .w = 1, .h = 1 },
     };
 
@@ -4385,7 +4385,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     const click = bw.clicked();
     var options = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
 
-    if (bw.pressed()) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
+    if (bw.pressed()) options = options.override(.{ .color_text = .fromTheme(.text_press) });
 
     // this child widget:
     // - has bw as parent
@@ -4421,10 +4421,11 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
     return click;
 }
 
-pub var slider_defaults: Options = .{
+pub var slider_defaults = Options{};
+pub const slider_defaults_Def = .{
     .padding = Rect.all(2),
-    .min_size_content = .{ .w = 20, .h = 20 },
-    .color_fill = .{ .name = .fill_control },
+    .min_size_content = Size{ .w = 20, .h = 20 },
+    .color_fill = ColorsFromTheme.fill_control,
 };
 
 // returns true if fraction (0-1) was changed
@@ -4432,7 +4433,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
     std.debug.assert(fraction.* >= 0);
     std.debug.assert(fraction.* <= 1);
 
-    const options = slider_defaults.override(opts);
+    const options = Options.fromAny(slider_defaults_Def).override(slider_defaults).override(opts);
 
     var b = try box(src, dir, options);
     defer b.deinit();
@@ -4569,7 +4570,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
     } else {
         fill_color = options.color(.fill);
     }
-    var knob = BoxWidget.init(@src(), .horizontal, false, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = .{ .color = fill_color } });
+    var knob = BoxWidget.init(@src(), .horizontal, false, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
     try knob.install();
     try knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
@@ -4584,11 +4585,12 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
     return ret;
 }
 
-pub var slider_entry_defaults: Options = .{
+pub var slider_entry_defaults: Options = Options{};
+pub const slider_entry_defaults_Def: Options = .{
     .margin = Rect.all(4),
     .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(2),
-    .color_fill = .{ .name = .fill_control },
+    .color_fill = ColorsFromTheme.fill_control,
     .background = true,
     // min size calculated from font
 };
@@ -4985,10 +4987,12 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
     return any_changed;
 }
 
-pub var progress_defaults: Options = .{
+const ColorsFromTheme = Options.ColorsFromTheme;
+pub var progress_defaults: Options = Options{};
+pub const progress_defaults_Def = .{
     .padding = Rect.all(2),
-    .min_size_content = .{ .w = 10, .h = 10 },
-    .color_fill = .{ .name = .fill_control },
+    .min_size_content = Size{ .w = 10, .h = 10 },
+    .color_fill = ColorsFromTheme.fill_control,
 };
 
 pub const Progress_InitOptions = struct {
@@ -4997,7 +5001,7 @@ pub const Progress_InitOptions = struct {
 };
 
 pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions, opts: Options) !void {
-    const options = progress_defaults.override(opts);
+    const options = Options.fromAny(progress_defaults_Def).override(progress_defaults).override(opts);
 
     var b = try box(src, init_opts.dir, options);
     defer b.deinit();
@@ -5322,7 +5326,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         } else if (init_opts.max != null) {
             minmax_text = try std.fmt.bufPrint(&minmax_buffer, "(max: {d})", .{init_opts.max.?});
         }
-        try te.textLayout.addText(minmax_text, .{ .color_text = .{ .name = .fill_hover } });
+        try te.textLayout.addText(minmax_text, .{ .color_text = .fromTheme(.fill_hover) });
     }
 
     te.deinit();
