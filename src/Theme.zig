@@ -195,16 +195,16 @@ pub const QuickTheme = struct {
     }
 
     pub fn toTheme(self: @This(), gpa: std.mem.Allocator) !Theme {
-        const color_accent = try Color.fromHex(self.color_focus);
-        const color_err = try Color.fromHex("#ffaaaa");
-        const color_text = try Color.fromHex(self.color_text);
-        const color_text_press = try Color.fromHex(self.color_text_press);
-        const color_fill = try Color.fromHex(self.color_fill_text);
-        const color_fill_window = try Color.fromHex(self.color_fill_container);
-        const color_fill_control = try Color.fromHex(self.color_fill_control);
-        const color_fill_hover = try Color.fromHex(self.color_fill_hover);
-        const color_fill_press = try Color.fromHex(self.color_fill_press);
-        const color_border = try Color.fromHex(self.color_border);
+        const color_accent = try Color.tryFromHex(self.color_focus);
+        const color_err = try Color.tryFromHex("#ffaaaa");
+        const color_text = try Color.tryFromHex(self.color_text);
+        const color_text_press = try Color.tryFromHex(self.color_text_press);
+        const color_fill = try Color.tryFromHex(self.color_fill_text);
+        const color_fill_window = try Color.tryFromHex(self.color_fill_container);
+        const color_fill_control = try Color.tryFromHex(self.color_fill_control);
+        const color_fill_hover = try Color.tryFromHex(self.color_fill_hover);
+        const color_fill_press = try Color.tryFromHex(self.color_fill_press);
+        const color_border = try Color.tryFromHex(self.color_border);
 
         return Theme{
             .name = try gpa.dupe(u8, self.name),
