@@ -7,6 +7,8 @@ pub const c = @cImport({
     @cInclude("raymath.h");
     @cInclude("rlgl.h");
     @cInclude("raygui.h");
+
+    @cInclude("glfw3.h");
 });
 
 pub const kind: dvui.enums.Backend = .raylib;
@@ -547,7 +549,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     const mouse_move = c.GetMouseDelta();
     if (mouse_move.x != 0 or mouse_move.y != 0) {
         const mouse_pos = c.GetMousePosition();
-        if (try win.addEventMouseMotion(.{.x = mouse_pos.x, .y = mouse_pos.y})) disable_raylib_input = true;
+        if (try win.addEventMouseMotion(.{ .x = mouse_pos.x, .y = mouse_pos.y })) disable_raylib_input = true;
         if (self.log_events) {
             //std.debug.print("raylib event Mouse Moved\n", .{});
         }
@@ -861,13 +863,26 @@ pub fn main() !void {
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
-        _ = try win.end(.{});
+        const end_micros = try win.end(.{});
+        const wait_event_micros = win.waitTime(end_micros, null);
 
         // cursor management
         b.setCursor(win.cursorRequested());
 
-        // render frame to OS
-        c.EndDrawing();
+        if (wait_event_micros == std.math.maxInt(u32)) {
+            c.EnableEventWaiting();
+            // render frame to OS
+            c.EndDrawing();
+            c.DisableEventWaiting();
+        } else {
+            // render frame to OS
+            c.EndDrawing();
+
+            // wait with timeout
+            const timeout: f64 = @as(f64, @floatFromInt(wait_event_micros)) / 1_000_000.0;
+            c.glfwWaitEventsTimeout(timeout);
+        }
+
         if (res != .ok) break :main_loop;
     }
 }
