@@ -156,22 +156,18 @@ pub const ColorOrName = union(enum) {
     color: Color,
     name: ColorsFromTheme,
 
-    pub fn fromTheme(theme_color: ColorsFromTheme) Color {
-        return switch (theme_color) {
-            .accent => dvui.themeGet().color_accent,
-            .text => dvui.themeGet().color_text,
-            .text_press => dvui.themeGet().color_text_press,
-            .fill => dvui.themeGet().color_fill,
-            .fill_hover => dvui.themeGet().color_fill_hover,
-            .fill_press => dvui.themeGet().color_fill_press,
-            .border => dvui.themeGet().color_border,
-            .err => dvui.themeGet().color_err,
-            .fill_window => dvui.themeGet().color_fill_window,
-            .fill_control => dvui.themeGet().color_fill_control,
-        };
+    pub fn fromColor(col: Color) @This() {
+        return .{ .color = col };
     }
-
-
+    pub fn fromTheme(name: ColorsFromTheme) @This() {
+        return .{ .name = name };
+    }
+    pub fn fromHex(hex: Color.HexString) !@This() {
+        return .fromColor(try Color.fromHex(hex));
+    }
+    pub fn fromComptimeHex(comptime rgb_hex: []const u8, alpha: u8) @This() {
+        return .fromColor(Color.fromComptimeHex(rgb_hex, alpha));
+    }
 };
 
 // All the colors you can ask Options for
