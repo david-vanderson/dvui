@@ -197,6 +197,42 @@ pub fn fromHex(hex: HexString) !Color {
     return result;
 }
 
+pub fn fromComptimeHex(comptime rgb_hex: []const u8, alpha: u8) @This() {
+    const xrgba = comptime hexToRgb(rgb_hex) catch {
+        @compileError("failed to convert rgba from hex code");
+    };
+    return @This(){
+        .r = xrgba[0],
+        .g = xrgba[1],
+        .b = xrgba[2],
+        .a = alpha,
+    };
+}
+
+pub inline fn hexToRgb(hex: []const u8) ![4]u8 {
+    var xrgba: [4]u8 = .{ 0, 0, 0, 255 };
+    if (hex.len == 6) {
+        for (xrgba[0..3], 0..) |_, i| {
+            const start = i * 2;
+            const slice = hex[start .. start + 2];
+            const value = try std.fmt.parseInt(u8, slice, 16);
+            xrgba[i] = value;
+        }
+        return xrgba;
+    }
+    if (hex.len == 7 and hex[0] == '#') {
+        const hex1 = hex[1..];
+        for (xrgba[0..3], 0..) |_, i| {
+            const start = i * 2;
+            const slice = hex1[start .. start + 2];
+            const value = try std.fmt.parseInt(u8, slice, 16);
+            xrgba[i] = value;
+        }
+        return xrgba;
+    }
+    return error.FailedToParseHexColor;
+}
+
 test {
     @import("std").testing.refAllDecls(@This());
 }
