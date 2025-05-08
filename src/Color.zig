@@ -178,18 +178,38 @@ pub fn toHexString(self: Color) !HexString {
     return result;
 }
 
-/// Converts slice of HexString to Color
-pub fn fromHex(hex: HexString) !Color {
-    //if (hex[0] != '#') return error.NotAColor;
-    //if (hex.len != 7) return error.WrongStringLength;
+/// Converts hex color string to `Color`
+///
+/// Supports the following formats:
+/// - "#RGB"
+/// - "#RGBA"
+/// - "#RRGGBB"
+/// - "#RRGGBBAA"
+/// - "RGB"
+/// - "RGBA"
+/// - "RRGGBB"
+/// - "RRGGBBAA"
+pub fn fromHex(hex_color: []const u8) !Color {
+    const hex = if (hex_color[0] == '#') hex_color[1..] else hex_color;
 
-    const num: u24 = try std.fmt.parseInt(u24, hex[1..], 16);
-    const result = Color{
-        .r = @intCast(num >> 16 & 0xff),
-        .g = @intCast(num >> 8 & 0xff),
-        .b = @intCast(num & 0xff),
+    const num = try std.fmt.parseUnsigned(u32, hex, 16);
+
+    const is_nibble_size, const has_alpha = switch (hex.len) {
+        3 => .{ true, false },
+        4 => .{ true, true },
+        6 => .{ false, false },
+        8 => .{ false, true },
+        else => return error.InvalidHexStringLength,
     };
-    return result;
+    const mask: u32 = if (is_nibble_size) 0xF else 0xFF;
+    const step: u5 = if (is_nibble_size) 4 else 8;
+    const offset: u5 = @intFromBool(has_alpha);
+    return .{
+        .r = @intCast((num >> step * (2 + offset)) & mask),
+        .g = @intCast((num >> step * (1 + offset)) & mask),
+        .b = @intCast((num >> step * (0 + offset)) & mask),
+        .a = if (has_alpha) @intCast(num & mask) else 0xFF,
+    };
 }
 
 test {
