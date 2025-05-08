@@ -148,27 +148,27 @@ pub const QuickTheme = struct {
     font_name_title: []u8,
 
     // used for focus
-    color_focus: [7]u8 = "#638465".*,
+    color_focus: []const u8 = "#638465",
 
     // text/foreground color
-    color_text: [7]u8 = "$82a29f".*,
+    color_text: []const u8 = "#82a29f",
 
     // text/foreground color when widget is pressed
-    color_text_press: [7]u8 = "#971f81".*,
+    color_text_press: []const u8 = "#971f81",
 
     // background color for displaying lots of text
-    color_fill_text: [7]u8 = "#2c3332".*,
+    color_fill_text: []const u8 = "#2c3332",
 
     // background color for containers that have other widgets inside
-    color_fill_container: [7]u8 = "#2b3a3a".*,
+    color_fill_container: []const u8 = "#2b3a3a",
 
     // background color for controls like buttons
-    color_fill_control: [7]u8 = "#2c3334".*,
+    color_fill_control: []const u8 = "#2c3334",
 
-    color_fill_hover: [7]u8 = "#333e57".*,
-    color_fill_press: [7]u8 = "#3b6357".*,
+    color_fill_hover: []const u8 = "#333e57",
+    color_fill_press: []const u8 = "#3b6357",
 
-    color_border: [7]u8 = "#60827d".*,
+    color_border: []const u8 = "#60827d",
 
     pub const colorFieldNames = &.{
         "color_focus",
@@ -196,7 +196,7 @@ pub const QuickTheme = struct {
 
     pub fn toTheme(self: @This(), gpa: std.mem.Allocator) !Theme {
         const color_accent = try Color.fromHex(self.color_focus);
-        const color_err = try Color.fromHex("#ffaaaa".*);
+        const color_err = try Color.fromHex("#ffaaaa");
         const color_text = try Color.fromHex(self.color_text);
         const color_text_press = try Color.fromHex(self.color_text_press);
         const color_fill = try Color.fromHex(self.color_fill_text);
