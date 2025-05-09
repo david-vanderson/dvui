@@ -170,6 +170,9 @@ pub const ColorOrName = union(enum) {
     pub fn fromColor(col: Color) @This() {
         return .{ .color = col };
     }
+    pub fn fromHex(hex_color: []const u8) @This() {
+        return fromColor(Color.fromHex(hex_color));
+    }
 };
 
 // All the colors you can ask Options for
