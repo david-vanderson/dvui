@@ -420,7 +420,7 @@ pub fn demo() !void {
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
-            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = .size(dvui.Size.all(120)), .margin = Rect.all(5), .color_fill = .{ .name = .fill }, .tag = "demo_button_" ++ @tagName(e) });
+            var bw = dvui.ButtonWidget.init(@src(), .{}, .{ .id_extra = i, .border = Rect.all(1), .background = true, .min_size_content = dvui.Size.all(120), .max_size_content = .size(dvui.Size.all(120)), .margin = Rect.all(5), .color_fill = .fill, .tag = "demo_button_" ++ @tagName(e) });
             try bw.install();
             bw.processEvents();
             try bw.drawBackground();
@@ -1321,8 +1321,8 @@ pub fn styling() !void {
 
         _ = try dvui.button(@src(), "Accent", .{}, dvui.themeGet().style_accent);
         _ = try dvui.button(@src(), "Error", .{}, dvui.themeGet().style_err);
-        _ = try dvui.button(@src(), "Window", .{}, .{ .color_fill = .{ .name = .fill_window } });
-        _ = try dvui.button(@src(), "Content", .{}, .{ .color_fill = .{ .name = .fill } });
+        _ = try dvui.button(@src(), "Window", .{}, .{ .color_fill = .fill_window });
+        _ = try dvui.button(@src(), "Content", .{}, .{ .color_fill = .fill });
         _ = try dvui.button(@src(), "Control", .{}, .{});
     }
 
@@ -1701,7 +1701,7 @@ pub fn layoutText() !void {
         }
         cbox.deinit();
 
-        cbox = try dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .{ .name = .fill_window }, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
+        cbox = try dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .fill_window, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
         try dvui.icon(@src(), "aircraft", entypo.aircraft, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
         try dvui.label(@src(), "Caption Heading", .{}, .{ .font_style = .caption_heading, .gravity_x = 0.5 });
         var tl_caption = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
@@ -1937,7 +1937,7 @@ pub fn reorderListsSimple(lay: reorderLayout) !void {
         }
 
         // actual content of the list entry
-        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+        var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .fill_window });
         defer hbox.deinit();
 
         try dvui.label(@src(), "{s}", .{s}, .{});
@@ -2001,7 +2001,7 @@ pub fn reorderListsAdvanced() !void {
     if (g.strings_len == g.strings.len) {
         try dvui.label(@src(), "List Full", .{}, .{ .gravity_x = 1.0 });
     } else {
-        var hbox2 = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0, .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .color_fill = .{ .name = .fill_window } });
+        var hbox2 = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1.0, .border = dvui.Rect.all(1), .margin = dvui.Rect.all(4), .background = true, .color_fill = .fill_window });
         defer hbox2.deinit();
 
         try dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
@@ -2064,7 +2064,7 @@ pub fn reorderListsAdvanced() !void {
         }
 
         // actual content of the list entry
-        var hbox2 = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .{ .name = .fill_window } });
+        var hbox2 = try dvui.box(@src(), .horizontal, .{ .expand = .both, .border = dvui.Rect.all(1), .background = true, .color_fill = .fill_window });
         defer hbox2.deinit();
 
         try dvui.label(@src(), "{s}", .{s}, .{});
@@ -2246,7 +2246,7 @@ pub fn menus() !void {
 
                     var label_opts = tab.data().options.strip();
                     if (dvui.captured(tab.data().id)) {
-                        label_opts.color_text = .{ .name = .text_press };
+                        label_opts.color_text = .text_press;
                     }
 
                     try dvui.labelNoFmt(@src(), tabname, label_opts);
@@ -2264,7 +2264,7 @@ pub fn menus() !void {
                 .horizontal => border.y = 0,
                 .vertical => border.x = 0,
             }
-            var vbox3 = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window }, .border = border });
+            var vbox3 = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window, .border = border });
             defer vbox3.deinit();
 
             try dvui.label(@src(), "This is tab {d}", .{Data.tab}, .{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 });
@@ -2390,7 +2390,7 @@ pub fn focus() !void {
 
             if (e.evt == .mouse and e.evt.mouse.action == .position) {
                 hbox.data().options.background = true;
-                hbox.data().options.color_fill = .{ .name = .fill_hover };
+                hbox.data().options.color_fill = .fill_hover;
             }
         }
 
@@ -2505,7 +2505,7 @@ pub fn scrolling(comptime data: u8) !void {
         defer scroll.deinit();
 
         for (Data.msg_start..Data.msg_end + 1) |i| {
-            var tl = try dvui.textLayout(@src(), .{}, .{ .id_extra = i, .color_fill = .{ .name = .fill_window } });
+            var tl = try dvui.textLayout(@src(), .{}, .{ .id_extra = i, .color_fill = .fill_window });
             try tl.format("Message {d}", .{i}, .{});
 
             if (scroll_to_msg != null and scroll_to_msg.? == i) {
@@ -2514,7 +2514,7 @@ pub fn scrolling(comptime data: u8) !void {
 
             tl.deinit();
 
-            var tl2 = try dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .color_fill = .{ .name = .fill_window } });
+            var tl2 = try dvui.textLayout(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .color_fill = .fill_window });
             try tl2.format("Reply {d}", .{i}, .{});
             tl2.deinit();
         }
@@ -2564,7 +2564,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
     var vbox = try dvui.box(@src(), .vertical, .{});
     defer vbox.deinit();
 
-    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .color_fill = .{ .name = .fill_window } });
+    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .color_fill = .fill_window });
     try tl.addText("Click-drag to pan\n", .{});
     try tl.addText("Ctrl-wheel to zoom\n", .{});
     try tl.addText("Drag blue cubes from box to box\n\n", .{});
@@ -2606,7 +2606,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
             .rect = dvui.Rect{ .x = b.x, .y = b.y },
             .padding = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
             .background = true,
-            .color_fill = .{ .name = .fill_window },
+            .color_fill = .fill_window,
             .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
             .corner_radius = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
             .color_border = .{ .color = if (dragging_box and i != Data.drag_box_window) Data.box_green else dvui.Color.black },
@@ -2662,7 +2662,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
         }
 
         {
-            var hbox = try dvui.box(@src(), .horizontal, .{ .margin = dvui.Rect.all(4), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4), .background = true, .color_fill = .{ .name = .fill_window } });
+            var hbox = try dvui.box(@src(), .horizontal, .{ .margin = dvui.Rect.all(4), .border = dvui.Rect.all(1), .padding = dvui.Rect.all(4), .background = true, .color_fill = .fill_window });
             defer hbox.deinit();
 
             for (evts) |*e| {
@@ -3797,7 +3797,7 @@ test "DOCIMG basic_widgets" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try basicWidgets(box.data().id);
             return .ok;
@@ -3814,7 +3814,7 @@ test "DOCIMG calculator" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try calculator();
             return .ok;
@@ -3831,7 +3831,7 @@ test "DOCIMG text_entry" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try textEntryWidgets(box.data().id);
             return .ok;
@@ -3848,7 +3848,7 @@ test "DOCIMG styling" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try styling();
             return .ok;
@@ -3865,7 +3865,7 @@ test "DOCIMG layout" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try layout();
             return .ok;
@@ -3882,7 +3882,7 @@ test "DOCIMG text_layout" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try layoutText();
             return .ok;
@@ -3899,7 +3899,7 @@ test "DOCIMG plots" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try plots();
             return .ok;
@@ -3916,7 +3916,7 @@ test "DOCIMG reorderable" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try reorderLists();
             return .ok;
@@ -3933,7 +3933,7 @@ test "DOCIMG menus" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try menus();
             return .ok;
@@ -3950,7 +3950,7 @@ test "DOCIMG focus" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try focus();
             return .ok;
@@ -3967,7 +3967,7 @@ test "DOCIMG scrolling" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try scrolling(1);
             return .ok;
@@ -3984,7 +3984,7 @@ test "DOCIMG scroll_canvas" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try scrollCanvas(1);
             return .ok;
@@ -4001,7 +4001,7 @@ test "DOCIMG dialogs" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try dialogs(box.data().id);
             return .ok;
@@ -4027,7 +4027,7 @@ test "DOCIMG animations" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try animations();
             return .ok;
@@ -4060,7 +4060,7 @@ test "DOCIMG struct_ui" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try structUI();
             return .ok;
@@ -4084,7 +4084,7 @@ test "DOCIMG debugging" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try debuggingErrors();
             return .ok;
@@ -4109,7 +4109,7 @@ test "DOCIMG icon_browser" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             var show_flag: bool = true;
             try icon_browser(@src(), &show_flag, "entypo", entypo);
@@ -4127,7 +4127,7 @@ test "DOCIMG themeEditor" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .{ .name = .fill_window } });
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
             try themeEditor();
             return .ok;
