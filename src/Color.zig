@@ -190,8 +190,9 @@ test toHexString {
 /// Converts hex color string to `Color`
 ///
 /// If `hex_color` is invalid, an error is logged and a default color is returned.
-///
 /// In comptime an invalid `hex_color` will cause a compile error.
+///
+/// See `tryFromHex` for a version that returns an error.
 ///
 /// Supports the following formats:
 /// - `#RGB`
