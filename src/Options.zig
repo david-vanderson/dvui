@@ -197,25 +197,10 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
         .border => self.color_border orelse .{ .name = .border },
     };
 
-    const col = blk: {
-        switch (color_or_name) {
-            // if we have a custom color, use it
-            .color => |col| break :blk col,
-
-            .name => |from_theme| switch (from_theme) {
-                // named color, get from theme
-                .accent => break :blk dvui.themeGet().color_accent,
-                .err => break :blk dvui.themeGet().color_err,
-                .text => break :blk dvui.themeGet().color_text,
-                .text_press => break :blk dvui.themeGet().color_text_press,
-                .fill => break :blk dvui.themeGet().color_fill,
-                .fill_window => break :blk dvui.themeGet().color_fill_window,
-                .fill_control => break :blk dvui.themeGet().color_fill_control,
-                .fill_hover => break :blk dvui.themeGet().color_fill_hover,
-                .fill_press => break :blk dvui.themeGet().color_fill_press,
-                .border => break :blk dvui.themeGet().color_border,
-            },
-        }
+    const col = switch (color_or_name) {
+        // if we have a custom color, use it
+        .color => |col| col,
+        .name => |from_theme| Color.fromTheme(from_theme),
     };
 
     return col.transparent(dvui.themeGet().alpha);
