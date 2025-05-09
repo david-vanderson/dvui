@@ -2,11 +2,17 @@ const std = @import("std");
 const hsluv = @import("hsluv.zig");
 
 const Color = @This();
+const dvui = @import("dvui.zig");
+const ColorsFromTheme = dvui.Options.ColorsFromTheme;
 
 r: u8 = 0xff,
 g: u8 = 0xff,
 b: u8 = 0xff,
 a: u8 = 0xff,
+
+pub const white = Color{ .r = 0xff, .g = 0xff, .b = 0xff };
+pub const black = Color{ .r = 0x00, .g = 0x00, .b = 0x00 };
+pub const magenta = Color{ .r = 0xFD, .g = 0x3D, .b = 0xB5 };
 
 /// Convert normal color to premultiplied alpha.
 pub fn alphaMultiply(self: @This()) @This() {
@@ -106,10 +112,6 @@ pub fn transparent(x: Color, y: f32) Color {
 pub fn format(self: *const Color, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
     try std.fmt.format(writer, "Color{{ {x} {x} {x} {x} }}", .{ self.r, self.g, self.b, self.a });
 }
-
-pub const white = Color{ .r = 0xff, .g = 0xff, .b = 0xff };
-pub const black = Color{ .r = 0x00, .g = 0x00, .b = 0x00 };
-pub const magenta = Color{ .r = 0xFD, .g = 0x3D, .b = 0xB5 };
 
 /// Average two colors component-wise
 pub fn average(self: Color, other: Color) Color {
@@ -269,6 +271,24 @@ test tryFromHex {
     try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }, Color.tryFromHex("#A1A2A3A4"));
     try std.testing.expectEqual(FromHexError.InvalidCharacter, Color.tryFromHex("XXX"));
     try std.testing.expectEqual(FromHexError.InvalidHexStringLength, Color.tryFromHex("#12"));
+}
+
+/// Get a Color from the active Theme
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn fromTheme(theme_color: ColorsFromTheme) @This() {
+    return switch (theme_color) {
+        .accent => dvui.themeGet().color_accent,
+        .text => dvui.themeGet().color_text,
+        .text_press => dvui.themeGet().color_text_press,
+        .fill => dvui.themeGet().color_fill,
+        .fill_hover => dvui.themeGet().color_fill_hover,
+        .fill_press => dvui.themeGet().color_fill_press,
+        .border => dvui.themeGet().color_border,
+        .err => dvui.themeGet().color_err,
+        .fill_window => dvui.themeGet().color_fill_window,
+        .fill_control => dvui.themeGet().color_fill_control,
+    };
 }
 
 test {

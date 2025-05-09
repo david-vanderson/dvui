@@ -155,6 +155,24 @@ pub const ColorsFromTheme = enum {
 pub const ColorOrName = union(enum) {
     color: Color,
     name: ColorsFromTheme,
+
+    pub const accent = .{ .name = .accent };
+    pub const err = .{ .name = .err };
+    pub const text = .{ .name = .text };
+    pub const text_press = .{ .name = .text_press };
+    pub const fill = .{ .name = .fill };
+    pub const fill_window = .{ .name = .fill_window };
+    pub const fill_control = .{ .name = .fill_control };
+    pub const fill_hover = .{ .name = .fill_hover };
+    pub const fill_press = .{ .name = .fill_press };
+    pub const border = .{ .name = .border };
+
+    pub fn fromColor(col: Color) @This() {
+        return .{ .color = col };
+    }
+    pub fn fromHex(hex_color: []const u8) @This() {
+        return fromColor(Color.fromHex(hex_color));
+    }
 };
 
 // All the colors you can ask Options for
