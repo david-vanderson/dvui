@@ -3467,22 +3467,25 @@ pub fn dialogDirect() !void {
 
 /// ![image](Examples-icon_browser.png)
 pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime icon_decl_name: []const u8, comptime icon_decl: type) !void {
+    const num_icons = @typeInfo(icon_decl).@"struct".decls.len;
     const Settings = struct {
         icon_size: f32 = 20,
         icon_rgb: dvui.Color = .black,
         row_height: f32 = 0,
+        num_rows: u32 = num_icons,
+        search: [64:0]u8 = @splat(0),
     };
 
-    const icon_names: [@typeInfo(icon_decl).@"struct".decls.len][]const u8 = blk: {
-        var blah: [@typeInfo(icon_decl).@"struct".decls.len][]const u8 = undefined;
+    const icon_names: [num_icons][]const u8 = blk: {
+        var blah: [num_icons][]const u8 = undefined;
         inline for (@typeInfo(icon_decl).@"struct".decls, 0..) |d, i| {
             blah[i] = d.name;
         }
         break :blk blah;
     };
 
-    const icon_fields: [@typeInfo(icon_decl).@"struct".decls.len][]const u8 = blk: {
-        var blah: [@typeInfo(icon_decl).@"struct".decls.len][]const u8 = undefined;
+    const icon_fields: [num_icons][]const u8 = blk: {
+        var blah: [num_icons][]const u8 = undefined;
         inline for (@typeInfo(icon_decl).@"struct".decls, 0..) |d, i| {
             blah[i] = @field(icon_decl, d.name);
         }
@@ -3501,8 +3504,11 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
     _ = try dvui.sliderEntry(@src(), "size: {d:0.0}", .{ .value = &settings.icon_size, .min = 1, .max = 100, .interval = 1 }, .{ .expand = .horizontal });
     _ = try rgbSliders(@src(), &settings.icon_rgb, .{});
 
-    const num_icons = @typeInfo(icon_decl).@"struct".decls.len;
-    const height = @as(f32, @floatFromInt(num_icons)) * settings.row_height;
+    const search = try dvui.textEntry(@src(), .{ .text = .{ .buffer = &settings.search }, .placeholder = "Search..." }, .{ .expand = .horizontal });
+    const filter = search.getText();
+    search.deinit();
+
+    const height = @as(f32, @floatFromInt(settings.num_rows)) * settings.row_height;
 
     // we won't have the height the first frame, so always set it
     var scroll_info: ScrollInfo = .{ .vertical = .given };
@@ -3517,8 +3523,14 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
 
     const visibleRect = scroll.si.viewport;
     var cursor: f32 = 0;
+    settings.num_rows = 0;
 
     for (icon_names, icon_fields, 0..) |name, field, i| {
+        if (std.ascii.indexOfIgnoreCase(name, filter) == null) {
+            continue;
+        }
+        settings.num_rows += 1;
+
         if (cursor <= (visibleRect.y + visibleRect.h) and (cursor + settings.row_height) >= visibleRect.y) {
             const r = Rect{ .x = 0, .y = cursor, .w = 0, .h = settings.row_height };
             var iconbox = try dvui.box(@src(), .horizontal, .{ .id_extra = i, .expand = .horizontal, .rect = r });
