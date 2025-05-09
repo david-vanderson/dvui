@@ -10,6 +10,14 @@ pub fn SizeType(comptime units: dvui.enums.Units) type {
         w: f32 = 0,
         h: f32 = 0,
 
+        pub fn width(w: f32) Self {
+            return .{ .w = w };
+        }
+
+        pub fn height(h: f32) Self {
+            return .{ .h = h };
+        }
+
         /// Natural pixels is the unit for subwindows. It differs from
         /// physical pixels on hidpi screens or with content scaling.
         pub const Natural = if (units == .none) SizeType(.natural) else @compileError("tried to nest Size.Natural");
