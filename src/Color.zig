@@ -10,9 +10,31 @@ g: u8 = 0xff,
 b: u8 = 0xff,
 a: u8 = 0xff,
 
-pub const white = Color{ .r = 0xff, .g = 0xff, .b = 0xff };
+// Basic web colors
+// https://en.wikipedia.org/wiki/Web_colors#Basic_colors
+pub const white = Color{ .r = 0xFF, .g = 0xFF, .b = 0xFF };
+pub const silver = Color{ .r = 0xC0, .g = 0xC0, .b = 0xC0 };
+pub const gray = Color{ .r = 0x80, .g = 0x80, .b = 0x80 };
 pub const black = Color{ .r = 0x00, .g = 0x00, .b = 0x00 };
-pub const magenta = Color{ .r = 0xFD, .g = 0x3D, .b = 0xB5 };
+pub const red = Color{ .r = 0xFF, .g = 0x00, .b = 0x00 };
+pub const maroon = Color{ .r = 0x80, .g = 0x00, .b = 0x00 };
+pub const yellow = Color{ .r = 0xFF, .g = 0xFF, .b = 0x00 };
+pub const olive = Color{ .r = 0x80, .g = 0x80, .b = 0x00 };
+pub const lime = Color{ .r = 0x00, .g = 0xFF, .b = 0x00 };
+pub const green = Color{ .r = 0x00, .g = 0x80, .b = 0x00 };
+pub const aqua = Color{ .r = 0x00, .g = 0xFF, .b = 0xFF };
+pub const teal = Color{ .r = 0x00, .g = 0x80, .b = 0x80 };
+pub const blue = Color{ .r = 0x00, .g = 0x00, .b = 0xFF };
+pub const navy = Color{ .r = 0x00, .g = 0x00, .b = 0x80 };
+pub const fuchsia = Color{ .r = 0xFF, .g = 0x00, .b = 0xFF };
+pub const purple = Color{ .r = 0x80, .g = 0x00, .b = 0x80 };
+
+// Aliases for basic colors that are already defined
+// https://en.wikipedia.org/wiki/Web_colors#Extended_colors
+pub const cyan = aqua;
+pub const magenta = fuchsia;
+pub const darl_cyan = teal;
+pub const dark_magenta = purple;
 
 /// Convert normal color to premultiplied alpha.
 pub fn alphaMultiply(self: @This()) @This() {
@@ -35,11 +57,11 @@ pub fn alphaMultiplyPixels(pixels: []u8) void {
 
 /// Returns brightness of the color as a value between 0 and 1
 pub fn brightness(self: @This()) f32 {
-    const red: f32 = @as(f32, @floatFromInt(self.r)) / 255.0;
-    const green: f32 = @as(f32, @floatFromInt(self.g)) / 255.0;
-    const blue: f32 = @as(f32, @floatFromInt(self.b)) / 255.0;
+    const r: f32 = @as(f32, @floatFromInt(self.r)) / 255.0;
+    const g: f32 = @as(f32, @floatFromInt(self.g)) / 255.0;
+    const b: f32 = @as(f32, @floatFromInt(self.b)) / 255.0;
 
-    return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
 /// Hue Saturation Lightness
