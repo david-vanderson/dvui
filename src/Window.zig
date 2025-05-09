@@ -95,7 +95,7 @@ rect_pixels: dvui.Rect.Physical = .{},
 natural_scale: f32 = 1.0,
 /// can set separately but gets folded into natural_scale
 content_scale: f32 = 1.0,
-next_widget_ypos: f32 = 0,
+layout: dvui.BasicLayout = .{},
 
 capture: ?dvui.CaptureMouse = null,
 captured_last_frame: bool = false,
@@ -1100,7 +1100,7 @@ pub fn begin(
     self.wd.rect_scale_cache = null;
     try self.wd.register();
 
-    self.next_widget_ypos = self.wd.rect.y;
+    self.layout = .{};
 
     self.backend.begin(larena);
 }
@@ -1711,13 +1711,7 @@ pub fn data(self: *Self) *WidgetData {
 }
 
 pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    _ = id;
-    var r = self.wd.rect;
-    r.y = self.next_widget_ypos;
-    r.h -= r.y;
-    const ret = dvui.placeIn(r, min_size, e, g);
-    self.next_widget_ypos += ret.h;
-    return ret;
+    return self.layout.rectFor(self.wd.rect, id, min_size, e, g);
 }
 
 pub fn rectScale(self: *Self) RectScale {

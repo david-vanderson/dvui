@@ -2166,16 +2166,18 @@ pub fn parentReset(id: u32, w: Widget) void {
     if (id != actual_current) {
         cw.debug_widget_id = actual_current;
 
-        var ww = cw.wd.parent;
-        var wd = ww.data();
-        var widget_name = wd.options.name orelse "???";
+        var wd = cw.wd.parent.data();
 
         log.err("widget is not closed within its parent. did you forget to call `.deinit()`?", .{});
 
-        while (true) : (ww = ww.data().parent) {
-            wd = ww.data();
-            widget_name = wd.options.name orelse "???";
-            log.err("  {s} id={x} was initialized at [{s}:{d}:{d}]", .{ widget_name, wd.id, wd.src.file, wd.src.line, wd.src.column });
+        while (true) : (wd = wd.parent.data()) {
+            log.err("  {s}:{d} {s} {x}{s}", .{
+                wd.src.file,
+                wd.src.line,
+                wd.options.name orelse "???",
+                wd.id,
+                if (wd.id == cw.wd.id) "\n" else "",
+            });
 
             if (wd.id == cw.wd.id) {
                 // got to base Window
@@ -6130,6 +6132,64 @@ pub fn plotXY(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions
     s1.deinit();
     p.deinit();
 }
+
+/// Helper to layout widgets stacked vertically.
+///
+/// If there is a widget with .expand = .vertical, it takes up the remaining
+/// space and it is an error to have any widget after.
+///
+/// Widgets with .gravity_y not zero might overlap other widgets.
+pub const BasicLayout = struct {
+    ypos: f32 = 0,
+    seen_expanded: bool = false,
+    min_size_children: Size = .{},
+
+    pub fn rectFor(self: *BasicLayout, contentRect: Rect, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+        if (self.seen_expanded) {
+            // A single vertically expanded child can take the rest of the
+            // space, but it should be the last (usually only) child.
+            //
+            // Here we have a child after an expanded one, so it will get no space.
+            //
+            // If you want that to work, wrap the children in a vertical box.
+            const cw = dvui.currentWindow();
+            cw.debug_widget_id = id;
+            dvui.log.err("{s}:{d} rectFor() got child {x} after expanded child", .{ @src().file, @src().line, id });
+            var wd = dvui.parentGet().data();
+            while (true) : (wd = wd.parent.data()) {
+                dvui.log.err("  {s}:{d} {s} {x}{s}", .{
+                    wd.src.file,
+                    wd.src.line,
+                    wd.options.name orelse "???",
+                    wd.id,
+                    if (wd.id == cw.wd.id) "\n" else "",
+                });
+                if (wd.id == cw.wd.id) {
+                    break;
+                }
+            }
+        } else if (e.isVertical()) {
+            self.seen_expanded = true;
+        }
+
+        var r = contentRect;
+        r.y = self.ypos;
+        r.h = @max(0, r.h - r.y);
+        const ret = dvui.placeIn(r, min_size, e, g);
+        self.ypos += ret.h;
+        return ret;
+    }
+
+    pub fn minSizeForChild(self: *BasicLayout, s: Size) Size {
+        // add heights
+        self.min_size_children.h += s.h;
+
+        // max of widths
+        self.min_size_children.w = @max(self.min_size_children.w, s.w);
+
+        return self.min_size_children;
+    }
+};
 
 test {
     //std.debug.print("DVUI test\n", .{});

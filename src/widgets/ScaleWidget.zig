@@ -8,13 +8,12 @@ const RectScale = dvui.RectScale;
 const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
-const BoxWidget = dvui.BoxWidget;
 
 const ScaleWidget = @This();
 
 wd: WidgetData = undefined,
 scale: f32 = undefined,
-box: BoxWidget = undefined,
+layout: dvui.BasicLayout = .{},
 
 pub fn init(src: std.builtin.SourceLocation, scale_in: f32, opts: Options) ScaleWidget {
     var self = ScaleWidget{};
@@ -28,10 +27,6 @@ pub fn install(self: *ScaleWidget) !void {
     dvui.parentSet(self.widget());
     try self.wd.register();
     try self.wd.borderAndBackground(.{});
-
-    self.box = BoxWidget.init(@src(), .vertical, false, self.wd.options.strip().override(.{ .expand = .both }));
-    try self.box.install();
-    try self.box.drawBackground();
 }
 
 pub fn widget(self: *ScaleWidget) Widget {
@@ -51,8 +46,7 @@ pub fn rectFor(self: *ScaleWidget, id: u32, min_size: Size, e: Options.Expand, g
         s = 1_000_000.0;
     }
 
-    _ = id;
-    return dvui.placeIn(self.wd.contentRect().justSize().scale(s, Rect), min_size, e, g);
+    return self.layout.rectFor(self.wd.contentRect().justSize().scale(s, Rect), id, min_size, e, g);
 }
 
 pub fn screenRectScale(self: *ScaleWidget, rect: Rect) RectScale {
@@ -62,7 +56,8 @@ pub fn screenRectScale(self: *ScaleWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *ScaleWidget, s: Size) void {
-    self.wd.minSizeMax(self.wd.options.padSize(s.scale(self.scale, Size)));
+    const ms = self.layout.minSizeForChild(s.scale(self.scale, Size));
+    self.wd.minSizeMax(self.wd.options.padSize(ms));
 }
 
 pub fn processEvent(self: *ScaleWidget, e: *Event, bubbling: bool) void {
@@ -73,7 +68,6 @@ pub fn processEvent(self: *ScaleWidget, e: *Event, bubbling: bool) void {
 }
 
 pub fn deinit(self: *ScaleWidget) void {
-    self.box.deinit();
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();
     dvui.parentReset(self.wd.id, self.wd.parent);
