@@ -48,6 +48,8 @@ pub const InitOptions = struct {
 
     /// If null, same as .internal = .{}
     text: ?TextOption = null,
+    /// Faded text shown when the textEntry is empty
+    placeholder: ?[]const u8 = null,
 
     break_lines: bool = false,
     scroll_vertical: ?bool = null, // default is value of multiline
@@ -145,6 +147,17 @@ pub fn install(self: *TextEntryWidget) !void {
     self.textLayout = TextLayoutWidget.init(@src(), .{ .break_lines = self.init_opts.break_lines, .touch_edit_just_focused = false }, self.wd.options.strip().override(.{ .expand = .both, .padding = self.padding }));
     try self.textLayout.install(.{ .focused = self.wd.id == dvui.focusedWidgetId(), .show_touch_draggables = (self.len > 0) });
     self.textClip = dvui.clipGet();
+
+    if (self.len == 0) {
+        if (self.init_opts.placeholder) |placeholder| {
+            try dvui.renderText(.{
+                .font = self.textLayout.wd.options.fontGet(),
+                .color = self.textLayout.wd.options.color(.text).transparent(0.75),
+                .rs = self.textLayout.wd.contentRectScale(),
+                .text = placeholder,
+            });
+        }
+    }
 
     if (try self.textLayout.touchEditing()) |floating_widget| {
         defer floating_widget.deinit();
