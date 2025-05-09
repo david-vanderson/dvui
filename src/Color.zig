@@ -109,6 +109,7 @@ pub fn format(self: *const Color, comptime _: []const u8, _: std.fmt.FormatOptio
 
 pub const white = Color{ .r = 0xff, .g = 0xff, .b = 0xff };
 pub const black = Color{ .r = 0x00, .g = 0x00, .b = 0x00 };
+pub const magenta = Color{ .r = 0xFD, .g = 0x3D, .b = 0xB5 };
 
 /// Average two colors component-wise
 pub fn average(self: Color, other: Color) Color {
@@ -172,24 +173,102 @@ pub fn alphaAverage(self: Color, other: Color) Color {
 
 pub const HexString = [7]u8;
 
+/// Returns a hex color string in the format "#rrggbb"
 pub fn toHexString(self: Color) !HexString {
-    var result: [7]u8 = .{0} ** 7;
+    var result: HexString = undefined;
     _ = try std.fmt.bufPrint(&result, "#{x:0>2}{x:0>2}{x:0>2}", .{ self.r, self.g, self.b });
     return result;
 }
 
-/// Converts slice of HexString to Color
-pub fn fromHex(hex: HexString) !Color {
-    //if (hex[0] != '#') return error.NotAColor;
-    //if (hex.len != 7) return error.WrongStringLength;
+test toHexString {
+    try std.testing.expectEqual((Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0xFF }).toHexString(), "#010203".*);
+    try std.testing.expectEqual((Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0x4 }).toHexString(), "#010203".*);
+    try std.testing.expectEqual((Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xFF }).toHexString(), "#a1a2a3".*);
+    try std.testing.expectEqual((Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }).toHexString(), "#a1a2a3".*);
+}
 
-    const num: u24 = try std.fmt.parseInt(u24, hex[1..], 16);
-    const result = Color{
-        .r = @intCast(num >> 16 & 0xff),
-        .g = @intCast(num >> 8 & 0xff),
-        .b = @intCast(num & 0xff),
+/// Converts hex color string to `Color`
+///
+/// If `hex_color` is invalid, an error is logged and a default color is returned.
+/// In comptime an invalid `hex_color` will cause a compile error.
+///
+/// See `tryFromHex` for a version that returns an error.
+///
+/// Supports the following formats:
+/// - `#RGB`
+/// - `#RGBA`
+/// - `#RRGGBB`
+/// - `#RRGGBBAA`
+/// - `RGB`
+/// - `RGBA`
+/// - `RRGGBB`
+/// - `RRGGBBAA`
+pub fn fromHex(hex_color: []const u8) Color {
+    return tryFromHex(hex_color) catch |err| if (@inComptime()) {
+        @compileError(std.fmt.comptimePrint("Failed to parse hex color string: {!}", .{err}));
+    } else {
+        std.log.err("Failed to parse hex color string: {!}", .{err});
+        return magenta;
     };
-    return result;
+}
+
+pub const FromHexError = std.fmt.ParseIntError || error{
+    /// The string had a different length that expected for the supported formats
+    InvalidHexStringLength,
+};
+
+/// Converts hex color string to `Color`
+///
+/// Supports the following formats:
+/// - `#RGB`
+/// - `#RGBA`
+/// - `#RRGGBB`
+/// - `#RRGGBBAA`
+/// - `RGB`
+/// - `RGBA`
+/// - `RRGGBB`
+/// - `RRGGBBAA`
+pub fn tryFromHex(hex_color: []const u8) FromHexError!Color {
+    const hex = if (hex_color[0] == '#') hex_color[1..] else hex_color;
+
+    const is_nibble_size, const has_alpha = switch (hex.len) {
+        3 => .{ true, false },
+        4 => .{ true, true },
+        6 => .{ false, false },
+        8 => .{ false, true },
+        else => return error.InvalidHexStringLength,
+    };
+    const num = std.fmt.parseUnsigned(u32, hex, 16) catch |err| switch (err) {
+        std.fmt.ParseIntError.Overflow => unreachable, // Length and base is known, cannot overflow
+        std.fmt.ParseIntError.InvalidCharacter => |e| return e,
+    };
+
+    const mask: u32 = if (is_nibble_size) 0xf else 0xff;
+    const step: u5 = if (is_nibble_size) 4 else 8;
+    const offset: u5 = @intFromBool(has_alpha);
+    return .{
+        .r = @intCast((num >> step * (2 + offset)) & mask),
+        .g = @intCast((num >> step * (1 + offset)) & mask),
+        .b = @intCast((num >> step * (0 + offset)) & mask),
+        .a = if (has_alpha) @intCast(num & mask) else 0xff,
+    };
+}
+
+test tryFromHex {
+    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0xff }, Color.tryFromHex("123"));
+    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0xff }, Color.tryFromHex("#123"));
+    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0x4 }, Color.tryFromHex("1234"));
+    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0x4 }, Color.tryFromHex("#1234"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xff }, Color.tryFromHex("a1a2a3"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xff }, Color.tryFromHex("#a1a2a3"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }, Color.tryFromHex("a1a2a3a4"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }, Color.tryFromHex("#a1a2a3a4"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xff }, Color.tryFromHex("A1A2A3"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xff }, Color.tryFromHex("#A1A2A3"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }, Color.tryFromHex("A1A2A3A4"));
+    try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }, Color.tryFromHex("#A1A2A3A4"));
+    try std.testing.expectEqual(FromHexError.InvalidCharacter, Color.tryFromHex("XXX"));
+    try std.testing.expectEqual(FromHexError.InvalidHexStringLength, Color.tryFromHex("#12"));
 }
 
 test {
