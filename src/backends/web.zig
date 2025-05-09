@@ -15,7 +15,6 @@ const gpa = gpa_instance.allocator();
 pub var win: dvui.Window = undefined;
 pub var win_ok = false;
 var arena: std.mem.Allocator = undefined;
-var last_touch_enum: dvui.enums.Button = .none;
 var touchPoints: [10]?dvui.Point = [_]?dvui.Point{null} ** 10;
 var have_event = false;
 
@@ -277,7 +276,7 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
     //    wasm.wasm_panic(msg.ptr, msg.len);
     //};
     switch (which) {
-        1 => _ = try w.addEventMouseMotion(.{ .x = float1, .y = float2}),
+        1 => _ = try w.addEventMouseMotion(.{ .x = float1, .y = float2 }),
         2 => _ = try w.addEventMouseButton(buttonFromJS(int1), .press),
         3 => _ = try w.addEventMouseButton(buttonFromJS(int1), .release),
         4 => _ = try w.addEventMouseWheel(if (float1 > 0) -20 else 20, if (int1 > 0) .vertical else .horizontal),
@@ -303,19 +302,16 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
         },
         8 => {
             const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
-            last_touch_enum = touch;
             _ = try w.addEventPointer(touch, .press, .{ .x = float1, .y = float2 });
             touchPoints[int1] = .{ .x = float1, .y = float2 };
         },
         9 => {
             const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
-            last_touch_enum = touch;
             _ = try w.addEventPointer(touch, .release, .{ .x = float1, .y = float2 });
             touchPoints[int1] = null;
         },
         10 => {
             const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
-            last_touch_enum = touch;
             var dx: f32 = 0;
             var dy: f32 = 0;
             if (touchPoints[int1]) |p| {
@@ -510,19 +506,16 @@ fn web_mod_code_to_dvui(wmod: u8) dvui.enums.Mod {
 //            },
 //            8 => {
 //                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
-//                self.last_touch_enum = touch;
 //                _ = try win.addEventPointer(touch, .press, .{ .x = e.float1, .y = e.float2 });
 //                self.touchPoints[e.int1] = .{ .x = e.float1, .y = e.float2 };
 //            },
 //            9 => {
 //                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
-//                self.last_touch_enum = touch;
 //                _ = try win.addEventPointer(touch, .release, .{ .x = e.float1, .y = e.float2 });
 //                self.touchPoints[e.int1] = null;
 //            },
 //            10 => {
 //                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
-//                self.last_touch_enum = touch;
 //                var dx: f32 = 0;
 //                var dy: f32 = 0;
 //                if (self.touchPoints[e.int1]) |p| {
