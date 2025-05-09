@@ -229,6 +229,10 @@ pub fn build(b: *std.Build) !void {
         );
         if (maybe_ray) |ray| {
             raylib_mod.linkLibrary(ray.artifact("raylib"));
+
+            // This is to support variable framerate
+            raylib_mod.addIncludePath(ray.path("src/external/glfw/include/GLFW"));
+
             // This seems wonky to me, but is copied from raylib's src/build.zig
             if (b.lazyDependency("raygui", .{})) |raygui_dep| {
                 if (b.lazyImport(@This(), "raylib")) |_| {
