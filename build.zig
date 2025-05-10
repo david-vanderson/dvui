@@ -366,13 +366,20 @@ pub fn build(b: *std.Build) !void {
         }
     }
 
+    // SVG
     if (back_to_build == null or back_to_build == .svg) {
+        const test_dvui_and_app = back_to_build == .svg;
         const svg_mod = b.addModule("svg", .{
             .root_source_file = b.path("src/backends/svg.zig"),
             .target = target,
             .optimize = optimize,
         });
+        dvui_opts.addChecks(svg_mod, "svg-backend");
+        dvui_opts.addTests(svg_mod, "svg-backend");
         const dvui_svg = addDvuiModule("dvui_svg", dvui_opts);
+        if (test_dvui_and_app) {
+            dvui_opts.addTests(dvui_svg, "dvui_svg");
+        }
         linkBackend(dvui_svg, svg_mod);
         addExample("svg-demo", b.path("examples/svg-demo.zig"), dvui_svg, false, dvui_opts);
     }

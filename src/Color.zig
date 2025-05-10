@@ -342,6 +342,10 @@ pub fn toU32(self: Color) u32 {
     return c;
 }
 
+test toU32 {
+    try std.testing.expectEqual(0xFFAC3205, toU32(Color{ .r = 0xFF, .g = 0xAC, .b = 0x32, .a = 0x05 }));
+}
+
 pub fn fromU32(value: u32) Color {
     return Color{
         .r = @intCast((value >> 24) & 0xFF),
@@ -349,6 +353,10 @@ pub fn fromU32(value: u32) Color {
         .b = @intCast((value >> 8) & 0xFF),
         .a = @intCast((value) & 0xFF),
     };
+}
+
+test fromU32 {
+    try std.testing.expectEqual(Color{ .r = 0xFF, .g = 0xAC, .b = 0x32, .a = 0x05 }, fromU32(0xFFAC3205));
 }
 
 /// Converts hex color string to `Color`

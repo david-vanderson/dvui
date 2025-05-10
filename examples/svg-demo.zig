@@ -46,7 +46,7 @@ pub fn main() !void {
         _ = try win.end(.{});
     }
 
-    for (0..2) |_| {
+    for (0..3) |_| {
         try win.begin(std.time.nanoTimestamp());
         try dvui.Examples.demo();
         _ = try win.end(.{});
