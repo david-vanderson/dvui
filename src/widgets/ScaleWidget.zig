@@ -34,6 +34,7 @@ init_options: InitOptions = undefined,
 scale: *f32 = undefined,
 touchPoints: *[2]?dvui.Point.Physical = undefined,
 old_dist: ?f32 = null,
+old_scale: f32 = undefined,
 layout: dvui.BasicLayout = .{},
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ScaleWidget {
@@ -112,6 +113,7 @@ pub fn processEvent(self: *ScaleWidget, e: *Event, bubbling: bool) void {
                         dx = self.touchPoints[0].?.x - self.touchPoints[1].?.x;
                         dy = self.touchPoints[0].?.y - self.touchPoints[1].?.y;
                         self.old_dist = @sqrt(dx * dx + dy * dy);
+                        self.old_scale = self.scale.*;
                     }
 
                     self.touchPoints[idx] = e.evt.mouse.p;
@@ -120,7 +122,7 @@ pub fn processEvent(self: *ScaleWidget, e: *Event, bubbling: bool) void {
                     dy = self.touchPoints[0].?.y - self.touchPoints[1].?.y;
                     const new_dist: f32 = @sqrt(dx * dx + dy * dy);
 
-                    self.scale.* = std.math.clamp(self.scale.* * new_dist / self.old_dist.?, 0.1, 10);
+                    self.scale.* = std.math.clamp(self.old_scale * new_dist / self.old_dist.?, 0.1, 10);
                 }
             },
             else => {},
