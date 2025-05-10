@@ -255,8 +255,8 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
 
                     var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
-                    try Rect.Physical.cast(rect).stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-                    try Rect.Physical.cast(res).stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    try Rect.Physical.cast(rect).stroke(.{}, 1, .gray, .{ .closed = true });
+                    try Rect.Physical.cast(res).stroke(.{}, 1, .red, .{ .closed = true });
                     return .ok;
                 }
             }.frame;
@@ -284,8 +284,8 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
 
                     var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
-                    try Rect.Physical.cast(rect).stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-                    try Rect.Physical.cast(res).stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    try Rect.Physical.cast(rect).stroke(.{}, 1, .gray, .{ .closed = true });
+                    try Rect.Physical.cast(res).stroke(.{}, 1, .red, .{ .closed = true });
                     return .ok;
                 }
             }.frame;
@@ -319,8 +319,8 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
 
                     var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
-                    try Rect.Physical.cast(rect).stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-                    try Rect.Physical.cast(res).stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    try Rect.Physical.cast(rect).stroke(.{}, 1, .gray, .{ .closed = true });
+                    try Rect.Physical.cast(res).stroke(.{}, 1, .red, .{ .closed = true });
                     return .ok;
                 }
             }.frame;
@@ -352,9 +352,9 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
 
                     var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
-                    try Rect.Physical.cast(a).stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-                    try Rect.Physical.cast(b).stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-                    try Rect.Physical.cast(ab).stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    try Rect.Physical.cast(a).stroke(.{}, 1, .gray, .{ .closed = true });
+                    try Rect.Physical.cast(b).stroke(.{}, 1, .gray, .{ .closed = true });
+                    try Rect.Physical.cast(ab).stroke(.{}, 1, .red, .{ .closed = true });
                     return .ok;
                 }
             }.frame;
@@ -386,9 +386,9 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
 
                     var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
-                    try Rect.Physical.cast(a).stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-                    try Rect.Physical.cast(b).stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-                    try Rect.Physical.cast(ab).stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    try Rect.Physical.cast(a).stroke(.{}, 1, .gray, .{ .closed = true });
+                    try Rect.Physical.cast(b).stroke(.{}, 1, .gray, .{ .closed = true });
+                    try Rect.Physical.cast(ab).stroke(.{}, 1, .red, .{ .closed = true });
                     return .ok;
                 }
             }.frame;
@@ -415,8 +415,8 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
 
                     var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
-                    try Rect.Physical.cast(rect).stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-                    try Rect.Physical.cast(res).stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    try Rect.Physical.cast(rect).stroke(.{}, 1, .gray, .{ .closed = true });
+                    try Rect.Physical.cast(res).stroke(.{}, 1, .red, .{ .closed = true });
                     return .ok;
                 }
             }.frame;
@@ -449,8 +449,8 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
 
                     var box = try dvui.box(@src(), .horizontal, .{ .background = true, .color_fill = .{ .name = .fill_window }, .expand = .both });
                     defer box.deinit();
-                    try Rect.Physical.cast(rect).stroke(.{}, 1, dvui.Color.black.transparent(0.5), .{ .closed = true });
-                    try Rect.Physical.cast(res).stroke(.{}, 1, .{ .r = 0xff, .g = 0, .b = 0 }, .{ .closed = true });
+                    try Rect.Physical.cast(rect).stroke(.{}, 1, .gray, .{ .closed = true });
+                    try Rect.Physical.cast(res).stroke(.{}, 1, .red, .{ .closed = true });
                     return .ok;
                 }
             }.frame;
