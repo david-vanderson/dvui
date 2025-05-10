@@ -450,7 +450,7 @@ pub fn demo() !void {
                 defer box2.deinit();
 
                 switch (e) {
-                    .basic_widgets => try basicWidgets(float.data().id),
+                    .basic_widgets => try basicWidgets(),
                     .calculator => try calculator(),
                     .text_entry => try textEntryWidgets(float.data().id),
                     .styling => try styling(),
@@ -502,7 +502,7 @@ pub fn demo() !void {
         defer vbox.deinit();
 
         try switch (demo_active) {
-            .basic_widgets => basicWidgets(float.data().id),
+            .basic_widgets => basicWidgets(),
             .calculator => calculator(),
             .text_entry => try textEntryWidgets(float.data().id),
             .styling => styling(),
@@ -625,7 +625,7 @@ pub fn themeSerialization() !void {
 }
 
 /// ![image](Examples-basic_widgets.png)
-pub fn basicWidgets(demo_win_id: u32) !void {
+pub fn basicWidgets() !void {
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -662,7 +662,7 @@ pub fn basicWidgets(demo_win_id: u32) !void {
                 try dvui.labelNoFmt(@src(), "Icon+Gray", opts);
 
                 if (bw.clicked()) {
-                    try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "This button is grayed out\nbut still clickable." });
+                    try dvui.toast(@src(), .{ .message = "This button is grayed out\nbut still clickable." });
                 }
             }
 
@@ -3800,7 +3800,7 @@ test "DOCIMG basic_widgets" {
         fn frame() !dvui.App.Result {
             var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
             defer box.deinit();
-            try basicWidgets(box.data().id);
+            try basicWidgets();
             return .ok;
         }
     }.frame;

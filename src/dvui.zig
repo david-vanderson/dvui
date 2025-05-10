@@ -3613,7 +3613,7 @@ pub fn toastDisplay(id: u32) !void {
 
     var animator = try dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{ .id_extra = id });
     defer animator.deinit();
-    try dvui.labelNoFmt(@src(), message, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = Rect.all(8) });
+    try dvui.labelNoFmt(@src(), message, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 } });
 
     if (dvui.timerDone(id)) {
         animator.startEnd();
