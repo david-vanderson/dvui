@@ -161,7 +161,7 @@ fn gui_frame() !void {
     }
 
     {
-        var scaler = try dvui.scale(@src(), scale_val, .{ .expand = .horizontal });
+        var scaler = try dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .horizontal });
         defer scaler.deinit();
 
         {
