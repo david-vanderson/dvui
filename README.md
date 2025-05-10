@@ -29,9 +29,9 @@ How to run the built-in examples:
     - `caddy file-server --root zig-out/bin/EXAMPLE_NAME --listen :8000`
   - ```zig build web-test```
     - then load `zig-out/bin/web-test/index.html`
-    - [online demo](https://david-vanderson.github.io/demo)
   - ```zig build web-app```
     - then load `zig-out/bin/web-app/index.html`
+    - [online demo](https://david-vanderson.github.io/demo)
 - Docs
   - [Online Docs](https://david-vanderson.github.io/docs)
   - ```zig build docs```
