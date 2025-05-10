@@ -112,43 +112,8 @@ fn update() !i32 {
 }
 
 fn dvui_frame() !void {
-    var new_content_scale: ?f32 = null;
-    var old_dist: ?f32 = null;
-    for (dvui.events()) |*e| {
-        if (e.evt == .mouse and (e.evt.mouse.button == .touch0 or e.evt.mouse.button == .touch1)) {
-            const idx: usize = if (e.evt.mouse.button == .touch0) 0 else 1;
-            switch (e.evt.mouse.action) {
-                .press => {
-                    touchPoints[idx] = e.evt.mouse.p;
-                },
-                .release => {
-                    touchPoints[idx] = null;
-                },
-                .motion => {
-                    if (touchPoints[0] != null and touchPoints[1] != null) {
-                        e.handled = true;
-                        var dx: f32 = undefined;
-                        var dy: f32 = undefined;
-
-                        if (old_dist == null) {
-                            dx = touchPoints[0].?.x - touchPoints[1].?.x;
-                            dy = touchPoints[0].?.y - touchPoints[1].?.y;
-                            old_dist = @sqrt(dx * dx + dy * dy);
-                        }
-
-                        touchPoints[idx] = e.evt.mouse.p;
-
-                        dx = touchPoints[0].?.x - touchPoints[1].?.x;
-                        dy = touchPoints[0].?.y - touchPoints[1].?.y;
-                        const new_dist: f32 = @sqrt(dx * dx + dy * dy);
-
-                        new_content_scale = @max(0.1, WebBackend.win.content_scale * new_dist / old_dist.?);
-                    }
-                },
-                else => {},
-            }
-        }
-    }
+    var scaler = try dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
+    scaler.deinit();
 
     {
         var m = try dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
@@ -203,7 +168,7 @@ fn dvui_frame() !void {
     tl2.deinit();
 
     if (try dvui.button(@src(), "Reset Scale", .{}, .{})) {
-        new_content_scale = orig_content_scale;
+        dvui.currentWindow().content_scale = orig_content_scale;
     }
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
@@ -213,8 +178,4 @@ fn dvui_frame() !void {
 
     // look at demo() for examples of dvui widgets, shows in a floating window
     try dvui.Examples.demo();
-
-    if (new_content_scale) |ns| {
-        WebBackend.win.content_scale = ns;
-    }
 }

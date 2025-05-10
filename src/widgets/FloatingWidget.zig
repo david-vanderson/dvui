@@ -66,7 +66,7 @@ pub fn install(self: *FloatingWidget) !void {
     self.prevClip = dvui.clipGet();
     dvui.clipSet(rs.r);
 
-    self.scaler = dvui.ScaleWidget.init(@src(), self.scale_val, .{ .expand = .both });
+    self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
     try self.scaler.install();
 }
 

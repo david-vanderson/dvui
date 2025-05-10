@@ -381,7 +381,7 @@ pub fn demo() !void {
 
     try dvui.toastsShow(float.data());
 
-    var scaler = try dvui.scale(@src(), scale_val, .{ .expand = .both });
+    var scaler = try dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .both });
     defer scaler.deinit();
 
     var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = 601 }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 100 } });
@@ -439,7 +439,8 @@ pub fn demo() !void {
 
                 try dvui.label(@src(), "{s}", .{e.name()}, options);
 
-                const demo_scaler = try dvui.scale(@src(), e.scaleOffset().scale, .{ .expand = .both });
+                var s = e.scaleOffset().scale;
+                const demo_scaler = try dvui.scale(@src(), .{ .scale = &s }, .{ .expand = .both });
                 defer demo_scaler.deinit();
 
                 const oldclip = dvui.clip(demo_scaler.data().contentRectScale().r);
@@ -2579,7 +2580,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
     // can use this to convert between viewport/virtual_size and screen coords
     const scrollRectScale = scroll.scroll.screenRectScale(.{});
 
-    var scaler = try dvui.scale(@src(), Data.scale, .{ .rect = .{ .x = -Data.origin.x, .y = -Data.origin.y } });
+    var scaler = try dvui.scale(@src(), .{ .scale = &Data.scale }, .{ .rect = .{ .x = -Data.origin.x, .y = -Data.origin.y } });
 
     // can use this to convert between data and screen coords
     const dataRectScale = scaler.screenRectScale(.{});

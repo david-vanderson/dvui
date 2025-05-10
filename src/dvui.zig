@@ -4041,10 +4041,11 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     try pathStroke(path.items, 3.0 * rs.s, options.color(.text), .{});
 }
 
-pub fn scale(src: std.builtin.SourceLocation, scale_in: f32, opts: Options) !*ScaleWidget {
+pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) !*ScaleWidget {
     var ret = try currentWindow().arena().create(ScaleWidget);
-    ret.* = ScaleWidget.init(src, scale_in, opts);
+    ret.* = ScaleWidget.init(src, init_opts, opts);
     try ret.install();
+    ret.processEvents();
     return ret;
 }
 
