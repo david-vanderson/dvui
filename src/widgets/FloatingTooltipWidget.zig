@@ -178,7 +178,7 @@ pub fn install(self: *FloatingTooltipWidget) !void {
     self.prevClip = dvui.clipGet();
     dvui.clipSet(rs.r);
 
-    self.scaler = dvui.ScaleWidget.init(@src(), self.scale_val, self.options.override(.{ .expand = .both }));
+    self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, self.options.override(.{ .expand = .both }));
     try self.scaler.install();
 }
 

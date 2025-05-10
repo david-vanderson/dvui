@@ -42,6 +42,9 @@ pub fn AppFrame() !dvui.App.Result {
 }
 
 pub fn frame() !dvui.App.Result {
+    var scaler = try dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
+    scaler.deinit();
+
     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_fill = .fill_window });
     defer scroll.deinit();
 
@@ -84,8 +87,10 @@ pub fn frame() !dvui.App.Result {
     //if (try dvui.button(@src(), "Panic", .{}, .{})) {
     //std.debug.panic("This is a panic message after {d}s", .{@divTrunc(dvui.currentWindow().frame_time_ns, std.time.ns_per_s)});
     //}
-    if (try dvui.button(@src(), if (dvui.backend.kind == .web) "Stop" else "Close", .{}, .{})) {
-        return .close;
+    if (dvui.backend.kind != .web) {
+        if (try dvui.button(@src(), "Close", .{}, .{})) {
+            return .close;
+        }
     }
 
     // look at demo() for examples of dvui widgets, shows in a floating window
