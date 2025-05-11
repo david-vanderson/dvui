@@ -37,5 +37,8 @@
             .hash = "zigwin32-25.0.28-preview-AAAAAHsJ-wPA4nREAzT_OOkF6gLrornNuHqREfHDADoS",
             .lazy = true,
         },
+        .svg2tvg = .{
+            .path = "../svg2tvg",
+        },
     },
 }

@@ -20,7 +20,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
 pub const backend = @import("backend");
-const tvg = @import("tinyvg/tinyvg.zig");
+const tvg = @import("svg2tvg");
 
 pub const math = std.math;
 pub const fnv = std.hash.Fnv1a_32;
@@ -877,7 +877,7 @@ pub const TextureCacheEntry = struct {
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
     if (height == 0) return 0.0;
     var stream = std.io.fixedBufferStream(tvg_bytes);
-    var parser = tvg.parse(currentWindow().arena(), stream.reader()) catch |err| {
+    var parser = tvg.tvg.parse(currentWindow().arena(), stream.reader()) catch |err| {
         log.warn("iconWidth Tinyvg error {!} parsing icon {s}\n", .{ err, name });
         return error.tvgError;
     };
@@ -897,25 +897,48 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
         tce.used = true;
         return tce.*;
     }
+    const ImageAdapter = struct {
+        pixels: []u8,
+        width: u32,
+        height: u32,
+        pub fn setPixel(self: *@This(), x: usize, y: usize, col: [4]u8) void {
+            const idx = y * self.height + x;
+            for (&col, 0..) |a, i| {
+                self.pixels[idx * 4 + i] = a;
+            }
+        }
+        pub fn getPixel(self: *@This(), x: usize, y: usize) [4]u8 {
+            const idx = y * self.height + x;
+            const slice = self.pixels[idx * 4 .. (idx + 1) * 4];
+            var col: [4]u8 = undefined;
+            for (&col, slice) |*a, s| a.* = s;
+        }
+    };
 
-    var render = tvg.rendering.renderBuffer(
-        cw.arena(),
-        cw.arena(),
-        tvg.rendering.SizeHint{ .height = height },
-        .x9,
-        tvg_bytes,
-    ) catch |err| {
+    const imdat = try cw.arena().alloc(u8, height * height * 4);
+    for (imdat) |*d| d.* = 0;
+    var img = ImageAdapter{
+        .pixels = imdat,
+        .width = height,
+        .height = height,
+    };
+
+    var fb = std.io.fixedBufferStream(tvg_bytes);
+
+    tvg.renderStream(cw.arena(), &img, fb.reader(), .{ .overwrite_stroke_width = 2, .overwrite_stroke = .{
+        .r = 1,
+        .g = 1,
+        .b = 1,
+        .a = 1,
+    } }) catch |err| {
         log.warn("iconTexture Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
         return error.tvgError;
     };
-    defer render.deinit(cw.arena());
 
-    var pixels: []u8 = undefined;
-    pixels.ptr = @ptrCast(render.pixels.ptr);
-    pixels.len = render.width * render.height * 4;
+    const pixels = img.pixels;
     Color.alphaMultiplyPixels(pixels);
 
-    const texture = textureCreate(pixels.ptr, render.width, render.height, .linear);
+    const texture = textureCreate(pixels.ptr, @intCast(img.width), @intCast(img.height), .linear);
 
     //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, render.width, render.height });
 
