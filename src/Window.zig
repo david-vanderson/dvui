@@ -28,6 +28,7 @@ subwindow_currentRect: Rect.Natural = .{},
 focused_subwindowId: u32 = 0,
 
 last_focused_id_this_frame: u32 = 0,
+last_registered_id_this_frame: u32 = 0,
 
 /// natural rect telling the backend where our text input box is:
 /// * when non-null, we want an on screen keyboard if needed (phones)

@@ -1046,23 +1046,31 @@ pub fn focusWidget(id: ?u32, subwindow_id: ?u32, event_num: ?u16) void {
                     focusRemainingEvents(en, sw.id, sw.focused_widgetId);
                 }
                 refresh(null, @src(), null);
+
+                if (id) |wid| {
+                    if (cw.last_registered_id_this_frame == wid) {
+                        cw.last_focused_id_this_frame = wid;
+                    } else {
+                        // walk parent chain
+                        var wd = cw.wd.parent.data();
+
+                        while (true) : (wd = wd.parent.data()) {
+                            if (wd.id == wid) {
+                                cw.last_focused_id_this_frame = wid;
+                                break;
+                            }
+
+                            if (wd.id == cw.wd.id) {
+                                // got to base Window
+                                break;
+                            }
+                        }
+                    }
+                }
             }
             break;
         }
     }
-}
-
-/// Focuses the given widget id and sets `Window.last_focused_id_this_frame`.
-/// This should only be used by widgets that focuses themselves. If you are
-/// focusing another widget, use `focusWidget`
-///
-/// If you are doing this in response to an `Event`, you can pass that `Event`'s
-/// num to change the focus of any further `Event`s in the list.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn focusWidgetSelf(id: u32, event_num: ?u16) void {
-    currentWindow().last_focused_id_this_frame = id;
-    focusWidget(id, null, event_num);
 }
 
 /// Id of the focused widget (if any) in the focused subwindow.
@@ -1088,11 +1096,13 @@ pub fn focusedWidgetIdInCurrentSubwindow() ?u32 {
     return sw.focused_widgetId;
 }
 
-/// Last widget id we saw this frame that was the focused widget when it called
-/// `WidgetData.register`.
+/// Last widget id we saw this frame that was the focused widget.
 ///
 /// If two calls to this function return different values, then some widget
-/// that ran between them had focus.
+/// that ran between them had focus.  This means one of:
+/// * a widget had focus when it called `WidgetData.register`
+/// * `focusWidget` with the id of the last widget to call `WidgetData.register`
+/// * `focusWidget` with the id of a widget in the parent chain
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn lastFocusedIdInFrame() u32 {
@@ -3689,7 +3699,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
     if (init_opts.button) {
         if (try dvui.buttonIcon(@src(), "combobox_triangle", entypo.chevron_small_down, .{}, .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0, .tab_index = 0 })) {
             open_sug = true;
-            dvui.focusWidgetSelf(te.data().id, null);
+            dvui.focusWidget(te.data().id, null, null);
         }
     }
 
@@ -4140,7 +4150,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
                     e.handled = true;
 
                     // focus this widget for events after this one (starting with e.num)
-                    dvui.focusWidgetSelf(lwid, e.num);
+                    dvui.focusWidget(lwid, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     e.handled = true;
                     dvui.captureMouse(lw.data());
@@ -4467,7 +4477,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
                 var p: ?Point.Physical = null;
                 if (me.action == .focus) {
                     e.handled = true;
-                    focusWidgetSelf(b.data().id, e.num);
+                    focusWidget(b.data().id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     // capture
                     captureMouse(b.data());
@@ -4699,7 +4709,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             // don't want TextEntry to get focus
             if (e.evt == .mouse and e.evt.mouse.action == .focus) {
                 e.handled = true;
-                focusWidgetSelf(b.data().id, e.num);
+                focusWidget(b.data().id, null, e.num);
             }
 
             if (!e.handled) {
@@ -4750,7 +4760,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     var p: ?Point.Physical = null;
                     if (me.action == .focus) {
                         e.handled = true;
-                        focusWidgetSelf(b.data().id, e.num);
+                        focusWidget(b.data().id, null, e.num);
                     } else if (me.action == .press and me.button.pointer()) {
                         e.handled = true;
                         if (ctrl_down) {

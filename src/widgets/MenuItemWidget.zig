@@ -158,7 +158,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
             if (me.action == .focus) {
                 dvui.MenuWidget.current().?.mouse_mode = true;
                 e.handled = true;
-                dvui.focusWidgetSelf(self.wd.id, e.num);
+                dvui.focusWidget(self.wd.id, null, e.num);
             } else if (me.action == .press and me.button.pointer()) {
                 // This works differently than normal (like buttons) where we
                 // captureMouse on press, to support the mouse
@@ -216,7 +216,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                     // we shouldn't have gotten this event if the motion
                     // was towards a submenu (caught in MenuWidget)
                     dvui.focusSubwindow(null, null); // focuses the window we are in
-                    dvui.focusWidgetSelf(self.wd.id, null);
+                    dvui.focusWidget(self.wd.id, null, null);
 
                     if (self.init_opts.submenu) {
                         dvui.MenuWidget.current().?.submenus_in_child = true;
@@ -267,29 +267,27 @@ test {
     @import("std").testing.refAllDecls(@This());
 }
 
-test "test mouse event setting last_focused_id_this_frame" {
+test "menuItem click sets last_focused_id_this_frame" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
     const fns = struct {
-        var test_focus_change = false;
+        var last_focused_id_set: ?u32 = null;
 
         fn frame() !dvui.App.Result {
-            var m = try dvui.menu(@src(), .vertical, .{ .padding = .all(10) });
+            var m = try dvui.menu(@src(), .vertical, .{ .padding = .all(10), .tag = "menu" });
             defer m.deinit();
-            const last_focused = dvui.lastFocusedIdInFrame();
-            try std.testing.expectEqual(0, last_focused);
 
-            _ = try dvui.menuItemLabel(@src(), "item 1", .{}, .{ .tag = "item 1" });
+            const last_focused = dvui.lastFocusedIdInFrame();
+
+            if (try dvui.menuItemLabel(@src(), "item 1", .{}, .{ .tag = "item 1" })) |_| {
+                dvui.focusWidget(m.data().id, null, null);
+            }
             _ = try dvui.menuItemLabel(@src(), "item 2", .{}, .{ .tag = "item 2" });
 
-            if (test_focus_change) {
-                // After first frame, events should have been added to make item 2 take focus
-                const new_focused = dvui.lastFocusedIdInFrame();
-                try std.testing.expect(last_focused != new_focused);
-
-                const item2 = dvui.tagGet("item 2") orelse unreachable;
-                try std.testing.expectEqual(new_focused, item2.id);
+            last_focused_id_set = null;
+            if (last_focused != dvui.lastFocusedIdInFrame()) {
+                last_focused_id_set = dvui.lastFocusedIdInFrame();
             }
 
             return .ok;
@@ -297,9 +295,18 @@ test "test mouse event setting last_focused_id_this_frame" {
     };
 
     try dvui.testing.settle(fns.frame);
+
+    // clicking on item 2 should tell us that it got focus this frame
     try dvui.testing.moveTo("item 2");
     try dvui.testing.click(.left);
-    fns.test_focus_change = true;
     _ = try dvui.testing.step(fns.frame);
+    try std.testing.expect(fns.last_focused_id_set == dvui.tagGet("item 2").?.id);
     try dvui.testing.expectFocused("item 2");
+
+    // clicking on item 1 should tell us that menu got focus this frame
+    try dvui.testing.moveTo("item 1");
+    try dvui.testing.click(.left);
+    _ = try dvui.testing.step(fns.frame);
+    try std.testing.expect(fns.last_focused_id_set == dvui.tagGet("menu").?.id);
+    try dvui.testing.expectFocused("menu");
 }
