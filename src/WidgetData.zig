@@ -74,6 +74,8 @@ pub fn register(self: *WidgetData) !void {
         dvui.tag(t, .{ .id = self.id, .rect = self.rectScale().r, .visible = self.visible() });
     }
 
+    cw.last_registered_id_this_frame = self.id;
+
     const focused_widget_id = dvui.focusedWidgetId();
     if (self.id == focused_widget_id) {
         cw.last_focused_id_this_frame = self.id;

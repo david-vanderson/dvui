@@ -176,7 +176,7 @@ pub fn addChoice(self: *DropdownWidget) !*MenuItemWidget {
     if (self.drop_first_frame) {
         if (self.init_options.selected_index) |si| {
             if (si == self.drop_mi_index) {
-                dvui.focusWidgetSelf(self.drop_mi.?.wd.id, null);
+                dvui.focusWidget(self.drop_mi.?.wd.id, null, null);
                 dvui.dataSet(null, self.menu.wd.id, "_drop_adjust", self.drop_height);
             }
         }

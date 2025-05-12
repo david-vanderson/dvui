@@ -479,7 +479,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                 if (me.action == .focus) {
                     e.handled = true;
                     // focus so that we can receive keyboard input
-                    dvui.focusWidgetSelf(self.wd.id, e.num);
+                    dvui.focusWidget(self.wd.id, null, e.num);
                 } else if (me.action == .wheel_x) {
                     if (self.si.scrollMax(.horizontal) > 0) {
                         if ((me.action.wheel_x < 0 and self.si.viewport.x <= 0) or (me.action.wheel_x > 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
