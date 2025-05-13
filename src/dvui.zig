@@ -3690,7 +3690,8 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 pub const SuggestionInitOptions = struct {
     button: bool = false,
     opened: bool = false,
-    open_on_text_change: bool = false,
+    open_on_text_change: bool = true,
+    open_on_focus: bool = true,
 };
 
 pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*SuggestionWidget {
@@ -3770,6 +3771,17 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
         sug.open();
     }
 
+    if (init_opts.open_on_focus) {
+        const focused_last_frame = dvui.dataGet(null, te.data().id, "_focused_last_frame", bool) orelse false;
+        const focused_now = dvui.focusedWidgetId() == te.data().id;
+
+        if (!focused_last_frame and focused_now) {
+            sug.open();
+        }
+
+        dvui.dataSet(null, te.data().id, "_focused_last_frame", focused_now);
+    }
+
     return sug;
 }
 
@@ -3802,7 +3814,7 @@ pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Init
     combo.te.* = dvui.TextEntryWidget.init(src, init_opts, opts);
     try combo.te.install();
 
-    combo.sug = try dvui.suggestion(combo.te, .{ .button = true });
+    combo.sug = try dvui.suggestion(combo.te, .{ .button = true, .open_on_focus = false, .open_on_text_change = false });
     // suggestion forwards events to textEntry, so don't call te.processEvents()
     try combo.te.draw();
 

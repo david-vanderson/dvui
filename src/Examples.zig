@@ -1182,33 +1182,11 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
                     sug.close();
                 }
             }
-        }
 
-        sug.deinit();
-
-        // suggestion forwards events to textEntry, so don't call te.processEvents()
-        try te.draw();
-        te.deinit();
-    }
-
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        try dvui.label(@src(), "Suggest menu", .{}, .{ .gravity_y = 0.5 });
-
-        try left_alignment.spacer(@src(), 0);
-
-        var te = dvui.TextEntryWidget.init(@src(), .{}, .{ .max_size_content = .size(dvui.Options.sizeM(20, 1)) });
-        try te.install();
-
-        var sug = try dvui.suggestion(&te, .{ .open_on_text_change = true });
-
-        if (try sug.dropped()) {
-            if (try sug.addChoiceLabel("Set to \"hello\"")) {
+            if (try sug.addChoiceLabel("Set to \"hello\" [always shown]")) {
                 te.textSet("hello", false);
             }
-            _ = try sug.addChoiceLabel("close");
+            _ = try sug.addChoiceLabel("close [always shown]");
         }
 
         sug.deinit();
