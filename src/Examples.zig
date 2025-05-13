@@ -1044,7 +1044,15 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
             try la2.spacer(@src(), 0);
 
-            var te_name = try dvui.textEntry(@src(), .{}, .{});
+            const normalOptions: dvui.Options = .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(.all(1)) };
+            const errOptions: dvui.Options = .{ .color_border = .err, .border = dvui.Rect.all(2) };
+
+            const name_error = dvui.dataGetPtrDefault(null, hbox2.data().id, "_name_error", bool, false);
+            var te_name = try dvui.textEntry(@src(), .{}, if (name_error.*) errOptions else normalOptions);
+            const name = te_name.getText();
+            if (te_name.text_changed) {
+                name_error.* = false;
+            }
             te_name.deinit();
             hbox2.deinit();
 
@@ -1060,27 +1068,34 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
             try la2.spacer(@src(), 0);
 
-            var te_file = try dvui.textEntry(@src(), .{}, .{});
+            const file_error = dvui.dataGetPtrDefault(null, hbox2.data().id, "_file_error", bool, false);
+            var te_file = try dvui.textEntry(@src(), .{}, if (file_error.*) errOptions else normalOptions);
             if (new_filename) |f| {
                 te_file.textLayout.selection.selectAll();
                 te_file.textTyped(f, false);
             }
+            if (te_file.text_changed) {
+                file_error.* = false;
+            }
+            const filename = te_file.getText();
             te_file.deinit();
             hbox3.deinit();
 
             if (try dvui.button(@src(), "Add Font", .{}, .{})) {
-                const name = te_name.getText();
                 if (name.len == 0) {
                     try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Add a Name" });
+                    name_error.* = true;
                 } else if (dvui.currentWindow().font_bytes.contains(name)) {
                     try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Already have font named \"{s}\"", .{name}) });
+                    name_error.* = true;
                 } else {
-                    const filename = te_file.getText();
                     var bytes: ?[]u8 = null;
                     if (!std.fs.path.isAbsolute(filename)) {
+                        file_error.* = true;
                         try dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename}) });
                     } else {
                         const file = std.fs.openFileAbsolute(filename, .{}) catch blk: {
+                            file_error.* = true;
                             try dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename}) });
                             break :blk null;
                         };
