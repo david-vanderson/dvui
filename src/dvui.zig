@@ -79,7 +79,9 @@ pub const TabsWidget = widgets.TabsWidget;
 pub const TextEntryWidget = widgets.TextEntryWidget;
 pub const TextLayoutWidget = widgets.TextLayoutWidget;
 pub const VirtualParentWidget = widgets.VirtualParentWidget;
-
+pub const GridWidget = widgets.GridWidget;
+pub const GridHeaderWidget = GridWidget.GridHeaderWidget;
+pub const GridBodyWidget = GridWidget.GridBodyWidget;
 const se = @import("structEntry.zig");
 pub const structEntry = se.structEntry;
 pub const structEntryEx = se.structEntryEx;
@@ -4006,6 +4008,235 @@ pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.I
     return ret;
 }
 
+pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOpts, opts: Options) !*GridWidget {
+    const ret = try currentWindow().arena().create(GridWidget);
+    ret.* = try GridWidget.init(src, init_opts, opts);
+    try ret.install();
+    return ret;
+}
+
+pub fn gridHeader(src: std.builtin.SourceLocation, g: *GridWidget, init_opts: GridHeaderWidget.InitOpts, opts: Options) !*GridHeaderWidget {
+    const ret = try currentWindow().arena().create(GridHeaderWidget);
+    ret.* = GridHeaderWidget.init(src, g, init_opts, opts);
+    try ret.install();
+    return ret;
+}
+
+pub fn gridBody(src: std.builtin.SourceLocation, g: *GridWidget, init_opts: GridBodyWidget.InitOpts, opts: Options) !*GridBodyWidget {
+    const ret = try currentWindow().arena().create(GridBodyWidget);
+    ret.* = GridBodyWidget.init(src, g, init_opts, opts);
+    try ret.install();
+    return ret;
+}
+
+/// Create a heading with a static label
+///
+/// opts controls the styling for the label.
+pub fn gridHeading(src: std.builtin.SourceLocation, header: *GridHeaderWidget, heading: []const u8, opts: dvui.Options) !void {
+    const label_defaults: Options = .{
+        .corner_radius = Rect.all(0),
+        .expand = .horizontal,
+        .gravity_x = 0.5,
+        .gravity_y = 0.5,
+        .color_fill = .{ .name = .fill_control },
+        .background = true,
+    };
+    const label_options = label_defaults.override(opts);
+    try header.colBegin(src, opts);
+    defer header.colEnd();
+    try labelNoFmt(@src(), heading, label_options);
+    try separator(@src(), .{ .expand = .vertical });
+}
+
+/// Create a heading and allow the column to be sorted.
+///
+/// Returns true if the sort direction has changed.
+/// sort_dir is an out parameter containing the current sort direction.
+/// opts controls the styling for the button label used for the heading.
+pub fn gridHeadingSortable(src: std.builtin.SourceLocation, header: *GridHeaderWidget, heading: []const u8, dir: *GridHeaderWidget.SortDirection, opts: dvui.Options) !bool {
+    const icon_ascending = @embedFile("icons/entypo/chevron-small-down.tvg");
+    const icon_descending = @embedFile("icons/entypo/chevron-small-up.tvg");
+    const icon_width = 27.5; // TODO: Is this really a const?
+    const padding = ButtonWidget.defaults.padding orelse Rect.all(6);
+
+    const padding_opts: Options = .{ .padding = .{ .x = icon_width / 2.0, .w = icon_width / 2.0, .y = padding.y, .h = padding.h } };
+    const heading_defaults: Options = .{
+        .expand = .horizontal,
+        .corner_radius = Rect.all(0),
+    };
+    const heading_opts = heading_defaults.override(opts);
+
+    try header.colBegin(src, opts);
+    defer header.colEnd();
+
+    const sort_changed = switch (header.colSortOrder()) {
+        .unsorted => try button(@src(), heading, .{ .draw_focus = false }, padding_opts.override(heading_opts)),
+        .ascending => try buttonLabelAndIcon(@src(), heading, icon_ascending, .{ .draw_focus = false }, heading_opts),
+        .descending => try buttonLabelAndIcon(@src(), heading, icon_descending, .{ .draw_focus = false }, heading_opts),
+    };
+
+    if (sort_changed) {
+        header.sortChanged();
+    }
+    try separator(@src(), .{ .expand = .vertical });
+    dir.* = header.sort_direction;
+    return sort_changed;
+}
+
+/// Create a column from a slice
+///
+/// If data is a slice of struct field_name must be supplied
+/// Enums are displayed as their @tagName and fmt must be "{s}"
+/// Bools are displayed as Y or N and fmt must be "{s}"
+/// Other types are formatted using the supplied fmt string.
+/// opts controls the label displayed in the grid cell.
+/// opts.id_extra is ignored.
+pub fn gridColumnFromSlice(
+    src: std.builtin.SourceLocation,
+    body: *GridBodyWidget,
+    comptime T: type,
+    data: []const T,
+    comptime field_name: ?[]const u8,
+    comptime fmt: []const u8,
+    opts: dvui.Options,
+) !void {
+    // TODO: Support pointer to direct value.
+    comptime var TypeToValidate = T;
+    comptime validate: switch (@typeInfo(T)) {
+        .pointer => |ptr| {
+            if (ptr.size != .one) @compileError("T cannot be an array, slice or vector");
+            const child_type = @typeInfo(ptr.child);
+            if (child_type == .pointer) @compileError("T cannot be a pointer to a pointer");
+            if (child_type == .@"struct") {
+                // If pointer to struct then validate the child struct.
+                TypeToValidate = ptr.child;
+                continue :validate child_type;
+            }
+        },
+        .@"struct" => {
+            if (field_name) |_field_name| {
+                if (!@hasField(TypeToValidate, _field_name)) {
+                    @compileError(std.fmt.comptimePrint("{s} does not contain field {s}.", .{ @typeName(T), _field_name }));
+                }
+            } else @compileError("field_name must be supplied when T is a struct or pointer to a struct");
+        },
+        else => {},
+    };
+
+    const label_defaults: Options = .{
+        // .expand is required so that text labels can be centered.
+        .expand = .horizontal,
+    };
+    const label_opts = label_defaults.override(opts);
+
+    try body.colBegin(src, opts);
+    defer body.colEnd();
+    for (data, 0..) |item, id_extra| {
+        try body.cellBegin(@src());
+        defer body.cellEnd();
+        const cell_value = value: {
+            if (field_name) |_field_name| {
+                // populate value from struct field.
+                break :value switch (@typeInfo(@TypeOf(@field(item, _field_name)))) {
+                    .@"enum" => @tagName(@field(item, _field_name)),
+                    .bool => if (@field(item, _field_name)) "Y" else "N",
+                    else => @field(item, _field_name),
+                };
+            } else {
+                // populate value directly from slice
+                break :value switch (@typeInfo(T)) {
+                    .@"enum" => @tagName(item),
+                    .bool => if (item) "Y" else "N",
+                    else => item,
+                };
+            }
+        };
+        try label(
+            @src(),
+            fmt,
+            .{cell_value},
+            label_opts.override(.{ .id_extra = id_extra }),
+        );
+    }
+}
+
+pub const GridColumnSelectAllState = enum {
+    select_all,
+    select_none,
+    unchanged,
+};
+
+/// A grid heading with a checkbox for select-all and select-none
+///
+/// Returns true if the selection state has changed.
+/// selection - out parameter containing the current selection state.
+pub fn gridHeadingCheckbox(src: std.builtin.SourceLocation, header: *GridHeaderWidget, selection: *GridColumnSelectAllState, opts: dvui.Options) !bool {
+    const header_defaults: Options = .{
+        .background = true,
+        .color_fill = .{ .name = .fill_control },
+        .margin = ButtonWidget.defaults.margin,
+        .expand = .vertical,
+        .gravity_y = 0.5,
+    };
+    const header_options = header_defaults.override(opts);
+    try header.colBegin(src, opts);
+    defer header.colEnd();
+
+    var clicked = false;
+    var selected = false;
+    {
+        var hbox = try dvui.box(@src(), .horizontal, header_options);
+        defer hbox.deinit();
+        selected = dvui.dataGet(null, hbox.data().id, "_selected", bool) orelse false;
+        clicked = try dvui.checkbox(@src(), &selected, null, .{ .gravity_y = 0.5, .gravity_x = 0.5 });
+        dvui.dataSet(null, hbox.data().id, "_selected", selected);
+    }
+    try dvui.separator(@src(), .{ .expand = .vertical });
+
+    if (clicked) {
+        selection.* = if (selected) .select_all else .select_none;
+    } else {
+        selection.* = .unchanged;
+    }
+    return clicked;
+}
+
+/// A checkbox column that allows selection of boolean items.
+///
+/// Returns true if any selections have changed.
+/// If field_name is null, T must be a bool.
+/// Otherwise field_name must refer to a bool field within a struct.
+/// opts is used to style the checkbox.
+pub fn gridColumnCheckbox(src: std.builtin.SourceLocation, body: *dvui.GridBodyWidget, comptime T: type, data: []T, comptime field_name: ?[]const u8, opts: dvui.Options) !bool {
+    if (T != bool) {
+        if (field_name) |_field_name| {
+            if (!@hasField(T, _field_name)) {
+                @compileError(std.fmt.comptimePrint("'{s}' does has no member named {s}.", .{ @typeName(T), _field_name }));
+            } else if (@FieldType(T, _field_name) != bool) {
+                @compileError(std.fmt.comptimePrint("{s}.{s} must be of type bool.", .{ @typeName(T), _field_name }));
+            }
+        } else {
+            @compileError("data must be of type []bool when field_name is null.");
+        }
+    }
+
+    try body.colBegin(src, opts);
+    defer body.colEnd();
+    const cell_defaults: Options = .{
+        .gravity_x = 0.5,
+        .gravity_y = 0.5,
+    };
+
+    var selection_changed = false;
+    for (data, 0..) |*item, i| {
+        const is_selected: *bool = if (T == bool) item else &@field(item, field_name.?);
+        const was_selected = is_selected.*;
+        _ = try dvui.checkbox(@src(), is_selected, null, cell_defaults.override(opts).override(.{ .id_extra = i }));
+        selection_changed = selection_changed or was_selected != is_selected.*;
+    }
+    return selection_changed;
+}
+
 pub fn separator(src: std.builtin.SourceLocation, opts: Options) !void {
     const defaults: Options = .{
         .name = "Separator",
@@ -4462,6 +4693,36 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
 
     const click = bw.clicked();
     try bw.drawFocus();
+    bw.deinit();
+    return click;
+}
+
+pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) !bool {
+    // initialize widget and get rectangle from parent
+    var bw = ButtonWidget.init(src, init_opts, opts);
+
+    // make ourselves the new parent
+    try bw.install();
+
+    // process events (mouse and keyboard)
+    bw.processEvents();
+    var options = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
+    if (bw.pressed()) options = options.override(.{ .color_text = .{ .color = opts.color(.text_press) } });
+
+    // draw background/border
+    try bw.drawBackground();
+    {
+        var hbox = try box(src, .horizontal, .{ .expand = .horizontal });
+        defer hbox.deinit();
+
+        try labelNoFmt(@src(), label_str, options.override(.{ .expand = .horizontal }));
+        try icon(@src(), label_str, tvg_bytes, opts.strip().override(.{ .gravity_y = 0.5 }));
+    }
+
+    const click = bw.clicked();
+
+    try bw.drawFocus();
+
     bw.deinit();
     return click;
 }
