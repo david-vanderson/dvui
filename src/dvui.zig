@@ -945,6 +945,7 @@ pub const RenderCommand = struct {
         pathFillConvex: struct {
             path: PathSlice,
             color: Color,
+            blur: f32,
         },
         pathStroke: struct {
             path: PathSlice,
@@ -1192,7 +1193,7 @@ pub fn pathAddArc(path: *PathArrayList, center: Point.Physical, radius: f32, sta
 /// Fill path (must be convex) with `color`.  See `Rect.fill`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathFillConvex(path: PathSlice, color: Color) !void {
+pub fn pathFillConvex(path: PathSlice, color: Color, blur: f32) !void {
     if (path.len < 3) {
         return;
     }
@@ -1205,14 +1206,14 @@ pub fn pathFillConvex(path: PathSlice, color: Color) !void {
 
     if (!cw.render_target.rendering) {
         const path_copy = try cw.arena().dupe(Point.Physical, path);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = color } } };
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = color, .blur = blur } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
         return;
     }
 
-    var triangles = try pathFillConvexTriangles(path);
+    var triangles = try pathFillConvexTriangles(path, blur);
     defer triangles.deinit(cw.arena());
     triangles.color(color);
     try renderTriangles(triangles, null);
@@ -1224,9 +1225,13 @@ pub fn pathFillConvex(path: PathSlice, color: Color) !void {
 /// transparent at the edge.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathFillConvexTriangles(path: PathSlice) !Triangles {
+pub fn pathFillConvexTriangles(path: PathSlice, blur: f32) !Triangles {
     if (path.len < 3) {
         return Triangles.empty;
+    }
+
+    if (blur < 1.0) {
+        log.err("pathFillConvexTriangles blur < 1.0 not implemented", .{});
     }
 
     const cw = currentWindow();
@@ -1257,12 +1262,27 @@ pub fn pathFillConvexTriangles(path: PathSlice) !Triangles {
         const diffab = aa.diff(bb).normalize();
         const diffbc = bb.diff(cc).normalize();
         // average of normals on each side
-        const halfnorm = (Point.Physical{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 }).normalize().scale(0.5, Point.Physical);
+        const norm: Point.Physical = .{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
+        var blurnorm = norm;
+
+        // scale averaged normal by angle between which happens to be the same as
+        // dividing by the length^2
+        const d2 = blurnorm.x * blurnorm.x + blurnorm.y * blurnorm.y;
+        if (d2 > 0.000001) {
+            blurnorm = blurnorm.scale(1.0 / d2, Point.Physical);
+        }
+
+        // limit distance our vertexes can be from the point to 2 * blur so
+        // very small angles don't produce huge geometries
+        const l = blurnorm.length();
+        if (l > 2.0) {
+            blurnorm = blurnorm.scale(2.0 / l, Point.Physical);
+        }
 
         var v: Vertex = undefined;
         // inner vertex
-        v.pos.x = bb.x - halfnorm.x;
-        v.pos.y = bb.y - halfnorm.y;
+        v.pos.x = bb.x - norm.x * 0.5;
+        v.pos.y = bb.y - norm.y * 0.5;
         v.col = col;
         try vtx.append(v);
         bounds.x = @min(bounds.x, v.pos.x);
@@ -1271,8 +1291,8 @@ pub fn pathFillConvexTriangles(path: PathSlice) !Triangles {
         bounds.h = @max(bounds.h, v.pos.y);
 
         // outer vertex
-        v.pos.x = bb.x + halfnorm.x;
-        v.pos.y = bb.y + halfnorm.y;
+        v.pos.x = bb.x + norm.x * @max(0.5, blur - 0.5);
+        v.pos.y = bb.y + norm.y * @max(0.5, blur - 0.5);
         v.col = col_trans;
         try vtx.append(v);
         bounds.x = @min(bounds.x, v.pos.x);
@@ -1363,7 +1383,7 @@ pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: b
         defer tempPath.deinit();
 
         try pathAddArc(&tempPath, center, thickness, math.pi * 2.0, 0, true);
-        try pathFillConvex(tempPath.items, color);
+        try pathFillConvex(tempPath.items, color, 1.0);
 
         return;
     }
@@ -1623,7 +1643,7 @@ pub const Triangles = struct {
         .bounds = .{},
     };
 
-    pub fn dupe(self: *Triangles, allocator: std.mem.Allocator) !Triangles {
+    pub fn dupe(self: *const Triangles, allocator: std.mem.Allocator) !Triangles {
         return .{
             .vertexes = try allocator.dupe(Vertex, self.vertexes),
             .indices = try allocator.dupe(u16, self.indices),
@@ -1721,8 +1741,8 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) !void {
     const cw = currentWindow();
 
     if (!cw.render_target.rendering) {
-        // FIXME: need to copy triangles here
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .triangles = .{ .tri = triangles, .tex = tex } } };
+        const tri_copy = try triangles.dupe(cw.arena());
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .triangles = .{ .tri = tri_copy, .tex = tex } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
@@ -4564,7 +4584,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        try part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), options.color(.accent));
+        try part.fill(.{ .radius = options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .color = options.color(.accent) });
     }
 
     switch (dir) {
@@ -4578,7 +4598,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        try part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), options.color(.fill));
+        try part.fill(.{ .radius = options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .color = options.color(.fill) });
     }
 
     const knobRect = switch (dir) {
@@ -4917,7 +4937,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
 
-            try knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), options.color(.fill_press));
+            try knobrs.r.fill(.{ .radius = options.corner_radiusGet().scale(knobrs.s, Rect.Physical), .color = options.color(.fill_press) });
         }
 
         try label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
@@ -5029,7 +5049,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 
     const rs = b.data().contentRectScale();
 
-    try rs.r.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), options.color(.fill));
+    try rs.r.fill(.{ .radius = options.corner_radiusGet().scale(rs.s, Rect.Physical), .color = options.color(.fill) });
 
     const perc = @max(0, @min(1, init_opts.percent));
     if (perc == 0) return;
@@ -5045,7 +5065,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    try part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), options.color(.accent));
+    try part.fill(.{ .radius = options.corner_radiusGet().scale(rs.s, Rect.Physical), .color = options.color(.accent) });
 }
 
 pub var checkbox_defaults: Options = .{
@@ -5093,7 +5113,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
     const cornerRad = opts.corner_radiusGet().scale(rs.s, Rect.Physical);
-    try rs.r.fill(cornerRad, opts.color(.border));
+    try rs.r.fill(.{ .radius = cornerRad, .color = opts.color(.border) });
 
     if (focused) {
         try rs.r.stroke(cornerRad, 2 * rs.s, opts.color(.accent), .{});
@@ -5109,9 +5129,9 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     var options = opts;
     if (checked) {
         options = opts.override(themeGet().style_accent);
-        try rs.r.insetAll(0.5 * rs.s).fill(cornerRad, options.color(fill));
+        try rs.r.insetAll(0.5 * rs.s).fill(.{ .radius = cornerRad, .color = options.color(fill) });
     } else {
-        try rs.r.insetAll(rs.s).fill(cornerRad, options.color(fill));
+        try rs.r.insetAll(rs.s).fill(.{ .radius = cornerRad, .color = options.color(fill) });
     }
 
     if (checked) {
@@ -5180,7 +5200,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
     const cornerRad = Rect.Physical.all(1000);
     const r = rs.r;
-    try r.fill(cornerRad, opts.color(.border));
+    try r.fill(.{ .radius = cornerRad, .color = opts.color(.border) });
 
     if (focused) {
         try r.stroke(cornerRad, 2 * rs.s, opts.color(.accent), .{});
@@ -5194,9 +5214,9 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     }
 
     if (active) {
-        try r.insetAll(0.5 * rs.s).fill(cornerRad, opts.color(.accent));
+        try r.insetAll(0.5 * rs.s).fill(.{ .radius = cornerRad, .color = opts.color(.accent) });
     } else {
-        try r.insetAll(rs.s).fill(cornerRad, opts.color(fill));
+        try r.insetAll(rs.s).fill(.{ .radius = cornerRad, .color = opts.color(fill) });
     }
 
     if (active) {
@@ -5873,7 +5893,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
 
     try dvui.pathAddRect(&path, r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    var triangles = try pathFillConvexTriangles(path.items);
+    var triangles = try pathFillConvexTriangles(path.items, 1.0);
     defer triangles.deinit(cw.arena());
 
     triangles.uvFromRectuv(r, opts.uv);

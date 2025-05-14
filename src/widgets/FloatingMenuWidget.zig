@@ -130,7 +130,7 @@ pub fn install(self: *FloatingMenuWidget) !void {
     self.prevClip = dvui.clipGet();
     dvui.clipSet(rs.r);
 
-    self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .margin = .{}, .expand = .both });
+    self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
     try self.scaler.install();
 
     // we are using scroll to do border/background but floating windows

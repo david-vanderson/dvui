@@ -1364,6 +1364,37 @@ pub fn styling() !void {
 
         try hsluvSliders(@src(), &hsluv_hsl, &hsluv_rgb, .{ .gravity_y = 0.5 });
     }
+
+    {
+        var vbox: dvui.BoxWidget = .init(@src(), .vertical, false, .{ .min_size_content = .{ .w = 200, .h = 100 }, .margin = dvui.Rect.all(30), .corner_radius = dvui.Rect.all(5), .background = true });
+        defer vbox.deinit();
+        try vbox.install();
+
+        const border = dvui.dataGetPtrDefault(null, vbox.data().id, "border", bool, true);
+        const radius = dvui.dataGetPtrDefault(null, vbox.data().id, "radius", f32, 5);
+        const blur = dvui.dataGetPtrDefault(null, vbox.data().id, "blur", f32, 5);
+        const shrink = dvui.dataGetPtrDefault(null, vbox.data().id, "shrink", f32, 0);
+        const offset = dvui.dataGetPtrDefault(null, vbox.data().id, "offset", dvui.Point, .{ .x = 5, .y = 5 });
+        const alpha = dvui.dataGetPtrDefault(null, vbox.data().id, "alpha", f32, 1.0);
+
+        const rs = vbox.data().contentRectScale();
+
+        try rs.r.insetAll(rs.s * shrink.*).offsetPoint(offset.*.scale(rs.s, dvui.Point.Physical)).fill(.{ .radius = dvui.Rect.Physical.all(rs.s * radius.*), .color = dvui.Color.black.transparent(alpha.*), .blur = rs.s * blur.* });
+
+        if (border.*) {
+            vbox.wd.options.border = dvui.Rect.all(1);
+        }
+        try vbox.drawBackground();
+
+        try dvui.label(@src(), "Box shadows", .{}, .{ .gravity_x = 0.5 });
+        _ = try dvui.checkbox(@src(), border, "border", .{});
+        _ = try dvui.sliderEntry(@src(), "radius: {d:0.0}", .{ .value = radius, .min = 0, .max = 50, .interval = 1 }, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "blur: {d:0.0}", .{ .value = blur, .min = 1, .max = 50, .interval = 1 }, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "shrink: {d:0.0}", .{ .value = shrink, .min = -10, .max = 50, .interval = 1 }, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "x: {d:0.0}", .{ .value = &offset.x, .min = -20, .max = 20, .interval = 1 }, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "y: {d:0.0}", .{ .value = &offset.y, .min = -20, .max = 20, .interval = 1 }, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "alpha: {d:0.2}", .{ .value = alpha, .min = 0, .max = 1, .interval = 0.01 }, .{ .gravity_x = 0.5 });
+    }
 }
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a Color
@@ -2050,7 +2081,7 @@ pub fn reorderListsAdvanced() !void {
 
         if (reorderable.targetRectScale()) |rs| {
             // user is dragging a reorderable over this rect, could draw anything here
-            try rs.r.fill(.{}, .{ .r = 0, .g = 255, .b = 0 });
+            try rs.r.fill(.{ .color = .green });
 
             // reset to use next space, need a separator
             try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
@@ -2081,7 +2112,7 @@ pub fn reorderListsAdvanced() !void {
 
         if (reorderable.targetRectScale()) |rs| {
             // user is dragging a reorderable over this rect
-            try rs.r.fill(.{}, .{ .r = 0, .g = 255, .b = 0 });
+            try rs.r.fill(.{ .color = .green });
         }
     }
 
@@ -3635,7 +3666,7 @@ pub const StrokeTest = struct {
         const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
         for (points, 0..) |p, i| {
             const rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
-            try rs.rectToPhysical(rect).fill(dvui.Rect.Physical.all(1), fill_color);
+            try rs.rectToPhysical(rect).fill(.{ .radius = dvui.Rect.Physical.all(1), .color = fill_color });
 
             _ = i;
             //_ = try dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });

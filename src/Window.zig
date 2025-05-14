@@ -1218,7 +1218,7 @@ pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !vo
                 try dvui.renderTexture(t.tex, t.rs, t.opts);
             },
             .pathFillConvex => |pf| {
-                try dvui.pathFillConvex(pf.path, pf.color);
+                try dvui.pathFillConvex(pf.path, pf.color, pf.blur);
                 self.arena().free(pf.path);
             },
             .pathStroke => |ps| {

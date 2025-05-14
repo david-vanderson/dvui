@@ -87,14 +87,14 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
                 try self.wd.focusBorder();
             } else {
                 const rs = self.wd.backgroundRectScale();
-                try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), self.wd.options.color(.accent));
+                try rs.r.fill(.{ .radius = self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .color = self.wd.options.color(.accent) });
             }
         } else if ((self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
             const rs = self.wd.backgroundRectScale();
-            try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), self.wd.options.color(.fill_hover));
+            try rs.r.fill(.{ .radius = self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .color = self.wd.options.color(.fill_hover) });
         } else if (self.wd.options.backgroundGet()) {
             const rs = self.wd.backgroundRectScale();
-            try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), self.wd.options.color(.fill));
+            try rs.r.fill(.{ .radius = self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .color = self.wd.options.color(.fill) });
         }
     }
 }

@@ -118,6 +118,10 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             return .{ .x = self.x + r.x, .y = self.y + r.y, .w = self.w, .h = self.h };
         }
 
+        pub fn offsetPoint(self: *const Self, p: PointType) Self {
+            return .{ .x = self.x + p.x, .y = self.y + p.y, .w = self.w, .h = self.h };
+        }
+
         /// Same as `offsetNegPoint` but takes a rect, ignoring the width and height
         pub fn offsetNeg(self: *const Self, r: Self) Self {
             return .{ .x = self.x - r.x, .y = self.y - r.y, .w = self.w, .h = self.h };
@@ -206,6 +210,12 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             try dvui.pathStroke(path.items, thickness, color, options);
         }
 
+        pub const fillOptions = struct {
+            radius: Rect.Physical = .{},
+            color: ?dvui.Color = null,
+            blur: f32 = 1.0,
+        };
+
         /// Fill a rounded rect.
         ///
         /// radius values:
@@ -215,12 +225,12 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         /// - h is bottom-left corner
         ///
         /// Only valid between dvui.Window.begin() and end().
-        pub fn fill(self: Rect.Physical, radius: Rect.Physical, color: dvui.Color) !void {
+        pub fn fill(self: Rect.Physical, opts: fillOptions) !void {
             var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
             defer path.deinit();
 
-            try dvui.pathAddRect(&path, self, radius);
-            try dvui.pathFillConvex(path.items, color);
+            try dvui.pathAddRect(&path, self, opts.radius);
+            try dvui.pathFillConvex(path.items, opts.color orelse dvui.themeGet().color_fill, opts.blur);
         }
 
         /// True if self would be modified when clipped by r.

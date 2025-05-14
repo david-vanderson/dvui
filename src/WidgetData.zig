@@ -155,7 +155,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
         const uniform: bool = (b.x == b.y and b.x == b.w and b.x == b.h);
         if (!bg and uniform) {
             // draw border as stroked path
-            const r = self.borderRect().inset(b.scale(0.5, Rect));
+            const r = self.borderRect().inset(b);
             const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
             try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), b.x * rs.s, self.options.color(.border), .{});
         } else {
@@ -167,7 +167,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
 
             const rs = self.borderRectScale();
             if (!rs.r.empty()) {
-                try rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), self.options.color(.border));
+                try rs.r.fill(.{ .radius = self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .color = self.options.color(.border) });
             }
         }
     }
@@ -175,7 +175,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
     if (bg) {
         const rs = self.backgroundRectScale();
         if (!rs.r.empty()) {
-            try rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), opts.fill_color orelse self.options.color(.fill));
+            try rs.r.fill(.{ .radius = self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .color = opts.fill_color orelse self.options.color(.fill) });
         }
     }
 }
