@@ -878,6 +878,10 @@ pub fn main() !void {
             // render frame to OS
             c.EndDrawing();
 
+            // should investigate raylib with SUPPORT_CUSTOM_FRAME_CONTROL that
+            // could let us do slightly better than this
+            // * if an event came in before EndDrawing, then we will wait anyway
+
             // wait with timeout
             const timeout: f64 = @as(f64, @floatFromInt(wait_event_micros)) / 1_000_000.0;
             c.glfwWaitEventsTimeout(timeout);
