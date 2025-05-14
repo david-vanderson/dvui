@@ -308,7 +308,7 @@ pub fn drawCursor(self: *TextEntryWidget) !void {
 
         var crect = self.textLayout.cursor_rect.plus(.{ .x = -1 });
         crect.w = 2;
-        try self.textLayout.screenRectScale(crect).r.fill(Rect.Physical.all(0), self.wd.options.color(.accent));
+        try self.textLayout.screenRectScale(crect).r.fill(.{ .color = self.wd.options.color(.accent) });
     }
 }
 
