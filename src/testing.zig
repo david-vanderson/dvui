@@ -202,6 +202,9 @@ pub fn capturePng(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.P
 ///
 /// Set the environment variable `DVUI_SNAPSHOT_WRITE` to create/overwrite the snapshot files
 ///
+/// To generate and image of the snapshot for debugging pass `-Dsnapshot-images` with a suffix like "before" or "after".
+/// The images will be places in a `images` directory next to the snapshot files in question
+///
 /// Dvui does not clear out old or unused snapshot files. To clean the snapshot directory follow these steps:
 /// 1. Ensure all snapshot test pass
 /// 2. Delete the snapshot directory
@@ -227,7 +230,24 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
 
     widget_hasher = .init();
     defer widget_hasher = null;
-    _ = try step(frame);
+
+    if (@import("build_options").snapshot_image_suffix) |image_suffix| {
+        const png_data = try self.capturePng(frame, null);
+        defer self.allocator.free(png_data);
+        dir.makeDir("images") catch |err| switch (err) {
+            error.PathAlreadyExists => {},
+            else => return err,
+        };
+        const image_name = try std.fmt.allocPrint(self.allocator, "images/{s}-{s}.png", .{ filename, image_suffix });
+        defer self.allocator.free(image_name);
+        try dir.writeFile(.{ .sub_path = image_name, .data = png_data, .flags = .{} });
+        // Do not continue with checking hashes as it is not deterministic across content_scales because
+        // fonts render in integer steps and scaling changes the step used and the size of the test
+        return; // Do not skip test because other snapshots might run after this one
+    } else {
+        _ = try step(frame);
+    }
+
     const HashInt = u32;
     const hash: HashInt = widget_hasher.?.final();
 
@@ -262,7 +282,8 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
 }
 
 fn should_ignore_snapshots() bool {
-    return std.process.hasEnvVarConstant("DVUI_SNAPSHOT_IGNORE");
+    // If there is a snapshot image suffix, we expect to generate images, thus not ignore the test
+    return @import("build_options").snapshot_image_suffix == null and (Backend.kind != .testing or std.process.hasEnvVarConstant("DVUI_SNAPSHOT_IGNORE"));
 }
 
 fn should_write_snapshots() bool {
