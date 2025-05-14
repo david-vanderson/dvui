@@ -1377,7 +1377,7 @@ pub fn styling() !void {
         const offset = dvui.dataGetPtrDefault(null, vbox.data().id, "offset", dvui.Point, .{ .x = 5, .y = 5 });
         const alpha = dvui.dataGetPtrDefault(null, vbox.data().id, "alpha", f32, 1.0);
 
-        const rs = vbox.data().contentRectScale();
+        const rs = vbox.data().borderRectScale();
 
         try rs.r.insetAll(rs.s * shrink.*).offsetPoint(offset.*.scale(rs.s, dvui.Point.Physical)).fill(.{ .radius = dvui.Rect.Physical.all(rs.s * radius.*), .color = dvui.Color.black.transparent(alpha.*), .blur = rs.s * blur.* });
 
