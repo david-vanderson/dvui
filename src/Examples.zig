@@ -1372,14 +1372,12 @@ pub fn styling() !void {
 
         const border = dvui.dataGetPtrDefault(null, vbox.data().id, "border", bool, true);
         const radius = dvui.dataGetPtrDefault(null, vbox.data().id, "radius", f32, 5);
-        const blur = dvui.dataGetPtrDefault(null, vbox.data().id, "blur", f32, 5);
+        const blur = dvui.dataGetPtrDefault(null, vbox.data().id, "blur", f32, 2);
         const shrink = dvui.dataGetPtrDefault(null, vbox.data().id, "shrink", f32, 0);
-        const offset = dvui.dataGetPtrDefault(null, vbox.data().id, "offset", dvui.Point, .{ .x = 5, .y = 5 });
-        const alpha = dvui.dataGetPtrDefault(null, vbox.data().id, "alpha", f32, 1.0);
+        const offset = dvui.dataGetPtrDefault(null, vbox.data().id, "offset", dvui.Point, .{ .x = 1, .y = 1 });
+        const alpha = dvui.dataGetPtrDefault(null, vbox.data().id, "alpha", f32, 0.5);
 
-        const rs = vbox.data().borderRectScale();
-
-        try rs.r.insetAll(rs.s * shrink.*).offsetPoint(offset.*.scale(rs.s, dvui.Point.Physical)).fill(.{ .radius = dvui.Rect.Physical.all(rs.s * radius.*), .color = dvui.Color.black.transparent(alpha.*), .blur = rs.s * blur.* });
+        try dvui.boxShadow(vbox.data(), .{ .radius = Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .blur = blur.*, .alpha = alpha.* });
 
         if (border.*) {
             vbox.wd.options.border = dvui.Rect.all(1);
@@ -2567,8 +2565,6 @@ pub fn scrollCanvas(comptime data: u8) !void {
 
         var drag_box_window: usize = 0;
         var drag_box_content: usize = 0;
-        const box_blue: dvui.Color = .{ .r = 0, .g = 0, .b = 200 };
-        const box_green: dvui.Color = .{ .r = 0, .g = 200, .b = 0 };
     };
 
     const Data2 = struct {
@@ -2580,8 +2576,6 @@ pub fn scrollCanvas(comptime data: u8) !void {
 
         var drag_box_window: usize = 0;
         var drag_box_content: usize = 0;
-        const box_blue: dvui.Color = .{ .r = 0, .g = 0, .b = 200 };
-        const box_green: dvui.Color = .{ .r = 0, .g = 200, .b = 0 };
     };
 
     const Data = if (data == 1) Data1 else Data2;
@@ -2626,7 +2620,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
     const evts = dvui.events();
 
     for (&Data.boxes, 0..) |*b, i| {
-        var dragBox = try dvui.box(@src(), .vertical, .{
+        var dragBox = dvui.BoxWidget.init(@src(), .vertical, false, .{
             .id_extra = i,
             .rect = dvui.Rect{ .x = b.x, .y = b.y },
             .padding = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
@@ -2634,8 +2628,12 @@ pub fn scrollCanvas(comptime data: u8) !void {
             .color_fill = .fill_window,
             .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
             .corner_radius = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
-            .color_border = .{ .color = if (dragging_box and i != Data.drag_box_window) Data.box_green else dvui.Color.black },
+            .color_border = if (dragging_box and i != Data.drag_box_window) dvui.Options.ColorOrName.fromColor(.lime) else null,
         });
+
+        try dragBox.install();
+        try dvui.boxShadow(dragBox.data(), .{});
+        try dragBox.drawBackground();
 
         const boxRect = dragBox.data().rectScale().r;
         if (mbbox) |bb| {
@@ -2700,7 +2698,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
                 if (k > 0) {
                     _ = try dvui.spacer(@src(), .{ .w = 5 }, .{ .id_extra = k });
                 }
-                const col = if (dragging_box and i == Data.drag_box_window and k == Data.drag_box_content) Data.box_green else Data.box_blue;
+                const col = if (dragging_box and i == Data.drag_box_window and k == Data.drag_box_content) dvui.Color.lime else dvui.Color.blue;
                 var dbox = try dvui.box(@src(), .vertical, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = .{ .color = col } });
                 defer dbox.deinit();
 
