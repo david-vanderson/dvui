@@ -135,6 +135,22 @@ pub fn format(self: *const Color, comptime _: []const u8, _: std.fmt.FormatOptio
     try std.fmt.format(writer, "Color{{ {x} {x} {x} {x} }}", .{ self.r, self.g, self.b, self.a });
 }
 
+/// Linear interpolocation of colors component wise
+pub fn lerp(self: Color, other: Color, t: f32) Color {
+    if (t == 0) return self;
+    if (t == 1) return other;
+    const r: f32 = std.math.lerp(@as(f32, @floatFromInt(self.r)) / 255, @as(f32, @floatFromInt(other.r)) / 255, t);
+    const g: f32 = std.math.lerp(@as(f32, @floatFromInt(self.g)) / 255, @as(f32, @floatFromInt(other.g)) / 255, t);
+    const b: f32 = std.math.lerp(@as(f32, @floatFromInt(self.b)) / 255, @as(f32, @floatFromInt(other.b)) / 255, t);
+    const a: f32 = std.math.lerp(@as(f32, @floatFromInt(self.a)) / 255, @as(f32, @floatFromInt(other.a)) / 255, t);
+    return Color{
+        .r = @intFromFloat(r * 255.99),
+        .g = @intFromFloat(g * 255.99),
+        .b = @intFromFloat(b * 255.99),
+        .a = @intFromFloat(a * 255.99),
+    };
+}
+
 /// Average two colors component-wise
 pub fn average(self: Color, other: Color) Color {
     return Color{

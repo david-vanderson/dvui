@@ -65,7 +65,6 @@ var scale_val: f32 = 1.0;
 var line_height_factor: f32 = 1.2;
 var backbox_color: dvui.Color = .{};
 var hsluv_hsl: dvui.Color.HSLuv = .{ .l = 50 };
-var hsluv_rgb: dvui.Color = .{};
 var animating_window_show: bool = false;
 var animating_window_closing: bool = false;
 var animating_window_rect = Rect{ .x = 100, .y = 100, .w = 300, .h = 200 };
@@ -1348,26 +1347,33 @@ pub fn styling() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = .{ .color = backbox_color }, .gravity_y = 0.5 });
+        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 60, .h = 40 }, .background = true, .color_fill = .{ .color = backbox_color }, .gravity_y = 0.5 });
         backbox.deinit();
 
-        _ = try rgbSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 });
+        var vbox = try dvui.box(@src(), .vertical, .{});
+        defer vbox.deinit();
+
+        {
+            var hbox2 = try dvui.box(@src(), .horizontal, .{});
+            defer hbox2.deinit();
+            if (try rgbSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 })) {
+                hsluv_hsl = .fromColor(backbox_color);
+            }
+        }
+        {
+            var hbox2 = try dvui.box(@src(), .horizontal, .{});
+            defer hbox2.deinit();
+            if (try hsluvSliders(@src(), &hsluv_hsl, .{ .gravity_y = 0.5 })) {
+                backbox_color = hsluv_hsl.color();
+            }
+        }
     }
 
-    try dvui.label(@src(), "HSLuv support", .{}, .{});
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = .{ .color = hsluv_rgb }, .gravity_y = 0.5 });
-        backbox.deinit();
-
-        try hsluvSliders(@src(), &hsluv_hsl, &hsluv_rgb, .{ .gravity_y = 0.5 });
-    }
-
-    {
         var vbox: dvui.BoxWidget = .init(@src(), .vertical, false, .{ .min_size_content = .{ .w = 200, .h = 100 }, .margin = dvui.Rect.all(30), .corner_radius = dvui.Rect.all(5), .background = true });
-        defer vbox.deinit();
         try vbox.install();
 
         const border = dvui.dataGetPtrDefault(null, vbox.data().id, "border", bool, true);
@@ -1387,16 +1393,68 @@ pub fn styling() !void {
         try dvui.label(@src(), "Box shadows", .{}, .{ .gravity_x = 0.5 });
         _ = try dvui.checkbox(@src(), border, "border", .{});
         _ = try dvui.sliderEntry(@src(), "radius: {d:0.0}", .{ .value = radius, .min = 0, .max = 50, .interval = 1 }, .{ .gravity_x = 0.5 });
-        _ = try dvui.sliderEntry(@src(), "blur: {d:0.0}", .{ .value = blur, .min = 1, .max = 50, .interval = 1 }, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "blur: {d:0.0}", .{ .value = blur, .min = 0, .max = 50, .interval = 0.1 }, .{ .gravity_x = 0.5 });
         _ = try dvui.sliderEntry(@src(), "shrink: {d:0.0}", .{ .value = shrink, .min = -10, .max = 50, .interval = 1 }, .{ .gravity_x = 0.5 });
         _ = try dvui.sliderEntry(@src(), "x: {d:0.0}", .{ .value = &offset.x, .min = -20, .max = 20, .interval = 1 }, .{ .gravity_x = 0.5 });
         _ = try dvui.sliderEntry(@src(), "y: {d:0.0}", .{ .value = &offset.y, .min = -20, .max = 20, .interval = 1 }, .{ .gravity_x = 0.5 });
         _ = try dvui.sliderEntry(@src(), "alpha: {d:0.2}", .{ .value = alpha, .min = 0, .max = 1, .interval = 0.01 }, .{ .gravity_x = 0.5 });
+        vbox.deinit();
+
+        {
+            var vbox2 = try dvui.box(@src(), .vertical, .{ .margin = .{ .y = 30 } });
+            defer vbox2.deinit();
+
+            const gradient = dvui.dataGetPtrDefault(null, vbox2.data().id, "gradient", usize, 0);
+
+            _ = try dvui.dropdown(@src(), &.{ "flat", "horizontal", "vertical", "radial" }, gradient, .{});
+
+            var drawBox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 100 } });
+            const rs = drawBox.data().contentRectScale();
+
+            var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
+            try dvui.pathAddRect(&path, rs.r, dvui.Rect.Physical.all(5));
+
+            var triangles = try dvui.pathFillConvexTriangles(path.items, .{ .center = rs.r.center() });
+
+            const ca0 = backbox_color.alphaMultiply();
+            const ca1 = backbox_color.transparent(0).alphaMultiply();
+
+            switch (gradient.*) {
+                1, 2 => |choice| {
+                    for (triangles.vertexes) |*v| {
+                        var t: f32 = undefined;
+                        if (choice == 1) {
+                            t = std.math.clamp((v.pos.x - rs.r.x) / rs.r.w, 0, 1);
+                        } else {
+                            t = std.math.clamp((v.pos.y - rs.r.y) / rs.r.h, 0, 1);
+                        }
+                        v.col = dvui.Color.multiply(v.col, dvui.Color.lerp(ca0, ca1, t));
+                    }
+                },
+                3 => {
+                    const center = rs.r.center();
+                    const max = rs.r.bottomRight().diff(center).length();
+                    for (triangles.vertexes) |*v| {
+                        const l: f32 = v.pos.diff(center).length();
+                        const t = std.math.clamp(l / max, 0, 1);
+                        v.col = dvui.Color.multiply(v.col, dvui.Color.lerp(ca0, ca1, t));
+                    }
+                },
+                else => {
+                    triangles.color(backbox_color);
+                },
+            }
+            try dvui.renderTriangles(triangles, null);
+
+            triangles.deinit(dvui.currentWindow().arena());
+            path.deinit();
+            drawBox.deinit();
+        }
     }
 }
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a Color
-pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) !void {
+pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) !bool {
     var hbox = try dvui.box(src, .horizontal, opts);
     defer hbox.deinit();
 
@@ -1404,17 +1462,26 @@ pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Opt
     var green: f32 = @floatFromInt(color.g);
     var blue: f32 = @floatFromInt(color.b);
 
-    _ = try dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
-    _ = try dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
-    _ = try dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
+    var changed = false;
+    if (try dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+        changed = true;
+    }
+    if (try dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+        changed = true;
+    }
+    if (try dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+        changed = true;
+    }
 
     color.r = @intFromFloat(red);
     color.g = @intFromFloat(green);
     color.b = @intFromFloat(blue);
+
+    return changed;
 }
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a HSLuv Color
-pub fn hsluvSliders(src: std.builtin.SourceLocation, hsluv: *dvui.Color.HSLuv, color_out: *dvui.Color, opts: Options) !void {
+pub fn hsluvSliders(src: std.builtin.SourceLocation, hsluv: *dvui.Color.HSLuv, opts: Options) !bool {
     var hbox = try dvui.box(src, .horizontal, opts);
     defer hbox.deinit();
 
@@ -1429,9 +1496,7 @@ pub fn hsluvSliders(src: std.builtin.SourceLocation, hsluv: *dvui.Color.HSLuv, c
         changed = true;
     }
 
-    if (changed) {
-        color_out.* = hsluv.color();
-    }
+    return changed;
 }
 
 /// ![image](Examples-layout.png)
