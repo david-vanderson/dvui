@@ -1,5 +1,5 @@
 .idea
-snapshots
+snapshots/images
 zig-cache
 .zig-cache
 zig-out
