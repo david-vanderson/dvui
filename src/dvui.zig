@@ -1213,11 +1213,16 @@ pub fn pathFillConvex(path: PathSlice, color: Color, blur: f32) !void {
         return;
     }
 
-    var triangles = try pathFillConvexTriangles(path, blur);
+    var triangles = try pathFillConvexTriangles(path, .{ .blur = blur });
     defer triangles.deinit(cw.arena());
     triangles.color(color);
     try renderTriangles(triangles, null);
 }
+
+pub const pathFillConvexTrianglesOptions = struct {
+    blur: f32 = 1.0,
+    center: ?Point.Physical = null,
+};
 
 /// Generates triangles to fill path (must be convex).
 ///
@@ -1228,22 +1233,29 @@ pub fn pathFillConvex(path: PathSlice, color: Color, blur: f32) !void {
 /// pixel inside. Currently blur < 1 is treated as 1, but might change.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathFillConvexTriangles(path: PathSlice, blur: f32) !Triangles {
+pub fn pathFillConvexTriangles(path: PathSlice, opts: pathFillConvexTrianglesOptions) !Triangles {
     if (path.len < 3) {
         return Triangles.empty;
     }
 
-    //if (blur < 1.0) {
-    //log.err("pathFillConvexTriangles blur < 1.0 not implemented", .{});
-    //}
-
     const cw = currentWindow();
 
-    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), path.len * 2);
+    var vtx_count = path.len;
+    var idx_count = (path.len - 2) * 3;
+    if (opts.blur > 0) {
+        vtx_count *= 2;
+        idx_count += path.len * 6;
+    }
+    if (opts.center) |_| {
+        vtx_count += 1;
+        idx_count += 6;
+    }
+    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), vtx_count);
     defer vtx.deinit();
-    const idx_count = (path.len - 2) * 3 + path.len * 6;
+
     var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
     defer idx.deinit();
+
     const col: Color = .{};
     const col_trans: Color = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
@@ -1265,27 +1277,13 @@ pub fn pathFillConvexTriangles(path: PathSlice, blur: f32) !Triangles {
         const diffab = aa.diff(bb).normalize();
         const diffbc = bb.diff(cc).normalize();
         // average of normals on each side
-        const norm: Point.Physical = .{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
-        var blurnorm = norm;
-
-        // scale averaged normal by angle between which happens to be the same as
-        // dividing by the length^2
-        const d2 = blurnorm.x * blurnorm.x + blurnorm.y * blurnorm.y;
-        if (d2 > 0.000001) {
-            blurnorm = blurnorm.scale(1.0 / d2, Point.Physical);
-        }
-
-        // limit distance our vertexes can be from the point to 2 * blur so
-        // very small angles don't produce huge geometries
-        const l = blurnorm.length();
-        if (l > 2.0) {
-            blurnorm = blurnorm.scale(2.0 / l, Point.Physical);
-        }
+        var norm: Point.Physical = .{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
 
         var v: Vertex = undefined;
         // inner vertex
-        v.pos.x = bb.x - norm.x * 0.5;
-        v.pos.y = bb.y - norm.y * 0.5;
+        const inside_len = @min(0.5, opts.blur / 2);
+        v.pos.x = bb.x - norm.x * inside_len;
+        v.pos.y = bb.y - norm.y * inside_len;
         v.col = col;
         try vtx.append(v);
         bounds.x = @min(bounds.x, v.pos.x);
@@ -1293,32 +1291,60 @@ pub fn pathFillConvexTriangles(path: PathSlice, blur: f32) !Triangles {
         bounds.w = @max(bounds.w, v.pos.x);
         bounds.h = @max(bounds.h, v.pos.y);
 
-        // outer vertex
-        v.pos.x = bb.x + norm.x * @max(0.5, blur - 0.5);
-        v.pos.y = bb.y + norm.y * @max(0.5, blur - 0.5);
-        v.col = col_trans;
-        try vtx.append(v);
-        bounds.x = @min(bounds.x, v.pos.x);
-        bounds.y = @min(bounds.y, v.pos.y);
-        bounds.w = @max(bounds.w, v.pos.x);
-        bounds.h = @max(bounds.h, v.pos.y);
+        const idx_ai = if (opts.blur > 0) ai * 2 else ai;
+        const idx_bi = if (opts.blur > 0) bi * 2 else bi;
 
         // indexes for fill
         // triangles must be counter-clockwise (y going down) to avoid backface culling
-        if (i > 1) {
+        if (opts.center) |_| {
+            try idx.append(@as(u16, @intCast(vtx_count - 1)));
+            try idx.append(@as(u16, @intCast(idx_ai)));
+            try idx.append(@as(u16, @intCast(idx_bi)));
+        } else if (i > 1) {
             try idx.append(@as(u16, @intCast(0)));
-            try idx.append(@as(u16, @intCast(ai * 2)));
-            try idx.append(@as(u16, @intCast(bi * 2)));
+            try idx.append(@as(u16, @intCast(idx_ai)));
+            try idx.append(@as(u16, @intCast(idx_bi)));
         }
 
-        // indexes for aa fade from inner to outer
-        // triangles must be counter-clockwise (y going down) to avoid backface culling
-        try idx.append(@as(u16, @intCast(ai * 2)));
-        try idx.append(@as(u16, @intCast(ai * 2 + 1)));
-        try idx.append(@as(u16, @intCast(bi * 2)));
-        try idx.append(@as(u16, @intCast(ai * 2 + 1)));
-        try idx.append(@as(u16, @intCast(bi * 2 + 1)));
-        try idx.append(@as(u16, @intCast(bi * 2)));
+        if (opts.blur > 0) {
+            // scale averaged normal by angle between which happens to be the same as
+            // dividing by the length^2
+            const d2 = norm.x * norm.x + norm.y * norm.y;
+            if (d2 > 0.000001) {
+                norm = norm.scale(1.0 / d2, Point.Physical);
+            }
+
+            // limit distance our vertexes can be from the point to 2 * blur so
+            // very small angles don't produce huge geometries
+            const l = norm.length();
+            if (l > 2.0) {
+                norm = norm.scale(2.0 / l, Point.Physical);
+            }
+
+            // outer vertex
+            const outside_len = if (opts.blur <= 1) opts.blur / 2 else opts.blur - 0.5;
+            v.pos.x = bb.x + norm.x * outside_len;
+            v.pos.y = bb.y + norm.y * outside_len;
+            v.col = col_trans;
+            try vtx.append(v);
+            bounds.x = @min(bounds.x, v.pos.x);
+            bounds.y = @min(bounds.y, v.pos.y);
+            bounds.w = @max(bounds.w, v.pos.x);
+            bounds.h = @max(bounds.h, v.pos.y);
+
+            // indexes for aa fade from inner to outer
+            // triangles must be counter-clockwise (y going down) to avoid backface culling
+            try idx.append(@as(u16, @intCast(idx_ai)));
+            try idx.append(@as(u16, @intCast(idx_ai + 1)));
+            try idx.append(@as(u16, @intCast(idx_bi)));
+            try idx.append(@as(u16, @intCast(idx_ai + 1)));
+            try idx.append(@as(u16, @intCast(idx_bi + 1)));
+            try idx.append(@as(u16, @intCast(idx_bi)));
+        }
+    }
+
+    if (opts.center) |center| {
+        try vtx.append(.{ .pos = center, .col = col, .uv = undefined });
     }
 
     // convert bounds back to normal rect
@@ -5896,7 +5922,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
 
     try dvui.pathAddRect(&path, r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    var triangles = try pathFillConvexTriangles(path.items, 1.0);
+    var triangles = try pathFillConvexTriangles(path.items, .{});
     defer triangles.deinit(cw.arena());
 
     triangles.uvFromRectuv(r, opts.uv);
