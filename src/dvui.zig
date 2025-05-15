@@ -1224,15 +1224,18 @@ pub fn pathFillConvex(path: PathSlice, color: Color, blur: f32) !void {
 /// Vertexes will have unset uv and color is alpha multiplied white fading to
 /// transparent at the edge.
 ///
+/// blur is how many pixels wide the fade to transparent is, starting a half
+/// pixel inside. Currently blur < 1 is treated as 1, but might change.
+///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn pathFillConvexTriangles(path: PathSlice, blur: f32) !Triangles {
     if (path.len < 3) {
         return Triangles.empty;
     }
 
-    if (blur < 1.0) {
-        log.err("pathFillConvexTriangles blur < 1.0 not implemented", .{});
-    }
+    //if (blur < 1.0) {
+    //log.err("pathFillConvexTriangles blur < 1.0 not implemented", .{});
+    //}
 
     const cw = currentWindow();
 
@@ -6233,6 +6236,38 @@ pub const BasicLayout = struct {
         return self.min_size_children;
     }
 };
+
+/// Options for `boxShadow`
+pub const BoxShadowOptions = struct {
+    /// Radius of each corner.  If null, use widget Options.corner_radius
+    radius: ?Rect = null,
+
+    /// Shrink the shadow on all sides (before blur)
+    shrink: f32 = 0,
+
+    /// Offset down/right
+    offset: Point = .{ .x = 1, .y = 1 },
+
+    /// Extend the size of the transition to transparent at the edges
+    blur: f32 = 3,
+
+    /// If null, use widget Options.color_text
+    color: ?dvui.Color = null,
+
+    /// Additional alpha multiply factor
+    alpha: f32 = 0.5,
+};
+
+/// Draw a box shadow sized to the widget border.  See `BoxShadowOptions`.
+pub fn boxShadow(wd: *WidgetData, opts: BoxShadowOptions) !void {
+    const rs = wd.borderRectScale();
+    const radius = opts.radius orelse wd.options.corner_radiusGet();
+    const color = opts.color orelse wd.options.color(.text);
+
+    const prect = rs.r.insetAll(rs.s * opts.shrink).offsetPoint(opts.offset.scale(rs.s, dvui.Point.Physical));
+
+    try prect.fill(.{ .radius = radius.scale(rs.s, Rect.Physical), .color = color.transparent(opts.alpha), .blur = rs.s * opts.blur });
+}
 
 test {
     //std.debug.print("DVUI test\n", .{});
