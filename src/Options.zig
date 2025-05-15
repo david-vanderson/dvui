@@ -382,6 +382,49 @@ pub fn padSize(self: *const Options, s: Size) Size {
     return s.pad(self.paddingGet()).pad(self.borderGet()).pad(self.marginGet());
 }
 
+/// Hashes all the values of the options
+///
+/// Only useful to check exact equality between two `Options`
+pub fn hash(self: *const Options) u32 {
+    const asBytes = std.mem.asBytes;
+    var hasher = dvui.fnv.init();
+
+    hasher.update(asBytes(&self.min_size_contentGet()));
+    hasher.update(asBytes(&self.max_size_contentGet()));
+    if (self.rect) |rect| hasher.update(asBytes(&rect));
+
+    hasher.update(asBytes(&self.borderGet()));
+    hasher.update(asBytes(&self.marginGet()));
+    hasher.update(asBytes(&self.paddingGet()));
+
+    hasher.update(asBytes(&self.corner_radiusGet()));
+    hasher.update(asBytes(&self.gravityGet()));
+    hasher.update(asBytes(&self.expandGet()));
+    hasher.update(asBytes(&self.rotationGet()));
+    hasher.update(asBytes(&self.background));
+
+    hasher.update(asBytes(&self.color_accent));
+    hasher.update(asBytes(&self.color_text));
+    hasher.update(asBytes(&self.color_text_press));
+    hasher.update(asBytes(&self.color_fill));
+    hasher.update(asBytes(&self.color_fill_hover));
+    hasher.update(asBytes(&self.color_fill_press));
+    hasher.update(asBytes(&self.color_border));
+
+    hasher.update(asBytes(&self.font_style));
+    const font = self.fontGet();
+    hasher.update(font.name);
+    hasher.update(asBytes(&font.line_height_factor));
+    hasher.update(asBytes(&font.size));
+
+    hasher.update(asBytes(&self.tab_index));
+    hasher.update(asBytes(&self.id_extra));
+    if (self.tag) |tag| hasher.update(tag);
+    if (self.name) |name| hasher.update(name);
+
+    return hasher.final();
+}
+
 //pub fn format(self: *const Options, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
 //    try std.fmt.format(writer, "Options{{ .background = {?}, .color_style = {?} }}", .{ self.background, self.color_style });
 //}
