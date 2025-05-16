@@ -1381,10 +1381,8 @@ pub fn styling() !void {
         const alpha = dvui.dataGetPtrDefault(null, hbox.data().id, "alpha", f32, 0.5);
 
         // We are using two boxes here so the box shadow can have different corner_radius values.
-        var shadow_box = try dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(30), .corner_radius = dvui.Rect.all(radius.*), .box_shadow = .{ .color = .fromColor(backbox_color), .shrink = shrink.*, .offset = offset.*, .blur = blur.*, .alpha = alpha.* } });
 
-        var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null });
-
+        var vbox = try dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(30), .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .color = .fromColor(backbox_color), .corner_radius = dvui.Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .blur = blur.*, .alpha = alpha.* } });
         try dvui.label(@src(), "Box shadows", .{}, .{ .gravity_x = 0.5 });
         _ = try dvui.checkbox(@src(), border, "border", .{});
         _ = try dvui.sliderEntry(@src(), "radius: {d:0.0}", .{ .value = radius, .min = 0, .max = 50, .interval = 1 }, .{ .gravity_x = 0.5 });
@@ -1394,7 +1392,6 @@ pub fn styling() !void {
         _ = try dvui.sliderEntry(@src(), "y: {d:0.0}", .{ .value = &offset.y, .min = -20, .max = 20, .interval = 1 }, .{ .gravity_x = 0.5 });
         _ = try dvui.sliderEntry(@src(), "alpha: {d:0.2}", .{ .value = alpha, .min = 0, .max = 1, .interval = 0.01 }, .{ .gravity_x = 0.5 });
         vbox.deinit();
-        shadow_box.deinit();
 
         {
             var vbox2 = try dvui.box(@src(), .vertical, .{ .margin = .{ .y = 30 } });

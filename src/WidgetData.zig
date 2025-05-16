@@ -159,7 +159,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
 
     if (self.options.box_shadow) |bs| {
         const rs = self.borderRectScale();
-        const radius = self.options.corner_radiusGet();
+        const radius = bs.corner_radius orelse self.options.corner_radiusGet();
 
         const prect = rs.r.insetAll(rs.s * bs.shrink).offsetPoint(bs.offset.scale(rs.s, dvui.Point.Physical));
 
