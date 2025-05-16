@@ -160,11 +160,10 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
     if (self.options.box_shadow) |bs| {
         const rs = self.borderRectScale();
         const radius = self.options.corner_radiusGet();
-        const color = self.options.color(.text);
 
         const prect = rs.r.insetAll(rs.s * bs.shrink).offsetPoint(bs.offset.scale(rs.s, dvui.Point.Physical));
 
-        try prect.fill(.{ .radius = radius.scale(rs.s, Rect.Physical), .color = color.transparent(bs.alpha), .blur = rs.s * bs.blur });
+        try prect.fill(.{ .radius = radius.scale(rs.s, Rect.Physical), .color = bs.colorGet().transparent(bs.alpha), .blur = rs.s * bs.blur });
     }
 
     var bg = self.options.backgroundGet();
