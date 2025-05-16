@@ -1380,7 +1380,9 @@ pub fn styling() !void {
         const offset = dvui.dataGetPtrDefault(null, hbox.data().id, "offset", dvui.Point, .{ .x = 1, .y = 1 });
         const alpha = dvui.dataGetPtrDefault(null, hbox.data().id, "alpha", f32, 0.5);
 
-        var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 100 }, .margin = dvui.Rect.all(30), .corner_radius = dvui.Rect.all(radius.*), .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .shrink = shrink.*, .offset = offset.*, .blur = blur.*, .alpha = alpha.* } });
+        var shadow_box = try dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(30), .corner_radius = dvui.Rect.all(radius.*), .box_shadow = .{ .shrink = shrink.*, .offset = offset.*, .blur = blur.*, .alpha = alpha.* } });
+
+        var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null });
 
         try dvui.label(@src(), "Box shadows", .{}, .{ .gravity_x = 0.5 });
         _ = try dvui.checkbox(@src(), border, "border", .{});
@@ -1391,6 +1393,7 @@ pub fn styling() !void {
         _ = try dvui.sliderEntry(@src(), "y: {d:0.0}", .{ .value = &offset.y, .min = -20, .max = 20, .interval = 1 }, .{ .gravity_x = 0.5 });
         _ = try dvui.sliderEntry(@src(), "alpha: {d:0.2}", .{ .value = alpha, .min = 0, .max = 1, .interval = 0.01 }, .{ .gravity_x = 0.5 });
         vbox.deinit();
+        shadow_box.deinit();
 
         {
             var vbox2 = try dvui.box(@src(), .vertical, .{ .margin = .{ .y = 30 } });
