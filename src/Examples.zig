@@ -1373,22 +1373,14 @@ pub fn styling() !void {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        var vbox: dvui.BoxWidget = .init(@src(), .vertical, false, .{ .min_size_content = .{ .w = 200, .h = 100 }, .margin = dvui.Rect.all(30), .corner_radius = dvui.Rect.all(5), .background = true });
-        try vbox.install();
+        const border = dvui.dataGetPtrDefault(null, hbox.data().id, "border", bool, true);
+        const radius = dvui.dataGetPtrDefault(null, hbox.data().id, "radius", f32, 5);
+        const blur = dvui.dataGetPtrDefault(null, hbox.data().id, "blur", f32, 2);
+        const shrink = dvui.dataGetPtrDefault(null, hbox.data().id, "shrink", f32, 0);
+        const offset = dvui.dataGetPtrDefault(null, hbox.data().id, "offset", dvui.Point, .{ .x = 1, .y = 1 });
+        const alpha = dvui.dataGetPtrDefault(null, hbox.data().id, "alpha", f32, 0.5);
 
-        const border = dvui.dataGetPtrDefault(null, vbox.data().id, "border", bool, true);
-        const radius = dvui.dataGetPtrDefault(null, vbox.data().id, "radius", f32, 5);
-        const blur = dvui.dataGetPtrDefault(null, vbox.data().id, "blur", f32, 2);
-        const shrink = dvui.dataGetPtrDefault(null, vbox.data().id, "shrink", f32, 0);
-        const offset = dvui.dataGetPtrDefault(null, vbox.data().id, "offset", dvui.Point, .{ .x = 1, .y = 1 });
-        const alpha = dvui.dataGetPtrDefault(null, vbox.data().id, "alpha", f32, 0.5);
-
-        try dvui.boxShadow(vbox.data(), .{ .radius = Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .blur = blur.*, .alpha = alpha.* });
-
-        if (border.*) {
-            vbox.wd.options.border = dvui.Rect.all(1);
-        }
-        try vbox.drawBackground();
+        var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 100 }, .margin = dvui.Rect.all(30), .corner_radius = dvui.Rect.all(radius.*), .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .shrink = shrink.*, .offset = offset.*, .blur = blur.*, .alpha = alpha.* } });
 
         try dvui.label(@src(), "Box shadows", .{}, .{ .gravity_x = 0.5 });
         _ = try dvui.checkbox(@src(), border, "border", .{});
@@ -1409,7 +1401,7 @@ pub fn styling() !void {
             {
                 var gbox = try dvui.box(@src(), .horizontal, .{});
                 defer gbox.deinit();
-                try dvui.label(@src(), "Gradient", .{}, .{.gravity_y = 0.5});
+                try dvui.label(@src(), "Gradient", .{}, .{ .gravity_y = 0.5 });
                 _ = try dvui.dropdown(@src(), &.{ "flat", "horizontal", "vertical", "radial" }, gradient, .{});
             }
 
@@ -2690,7 +2682,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
     const evts = dvui.events();
 
     for (&Data.boxes, 0..) |*b, i| {
-        var dragBox = dvui.BoxWidget.init(@src(), .vertical, false, .{
+        var dragBox = try dvui.box(@src(), .vertical, .{
             .id_extra = i,
             .rect = dvui.Rect{ .x = b.x, .y = b.y },
             .padding = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
@@ -2699,11 +2691,8 @@ pub fn scrollCanvas(comptime data: u8) !void {
             .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
             .corner_radius = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
             .color_border = if (dragging_box and i != Data.drag_box_window) dvui.Options.ColorOrName.fromColor(.lime) else null,
+            .box_shadow = .{},
         });
-
-        try dragBox.install();
-        try dvui.boxShadow(dragBox.data(), .{});
-        try dragBox.drawBackground();
 
         const boxRect = dragBox.data().rectScale().r;
         if (mbbox) |bb| {
