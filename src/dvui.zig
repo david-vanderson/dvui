@@ -6263,38 +6263,6 @@ pub const BasicLayout = struct {
     }
 };
 
-/// Options for `boxShadow`
-pub const BoxShadowOptions = struct {
-    /// Radius of each corner.  If null, use widget Options.corner_radius
-    radius: ?Rect = null,
-
-    /// Shrink the shadow on all sides (before blur)
-    shrink: f32 = 0,
-
-    /// Offset down/right
-    offset: Point = .{ .x = 1, .y = 1 },
-
-    /// Extend the size of the transition to transparent at the edges
-    blur: f32 = 3,
-
-    /// If null, use widget Options.color_text
-    color: ?dvui.Color = null,
-
-    /// Additional alpha multiply factor
-    alpha: f32 = 0.5,
-};
-
-/// Draw a box shadow sized to the widget border.  See `BoxShadowOptions`.
-pub fn boxShadow(wd: *WidgetData, opts: BoxShadowOptions) !void {
-    const rs = wd.borderRectScale();
-    const radius = opts.radius orelse wd.options.corner_radiusGet();
-    const color = opts.color orelse wd.options.color(.text);
-
-    const prect = rs.r.insetAll(rs.s * opts.shrink).offsetPoint(opts.offset.scale(rs.s, dvui.Point.Physical));
-
-    try prect.fill(.{ .radius = radius.scale(rs.s, Rect.Physical), .color = color.transparent(opts.alpha), .blur = rs.s * opts.blur });
-}
-
 test {
     //std.debug.print("DVUI test\n", .{});
     std.testing.refAllDecls(@This());

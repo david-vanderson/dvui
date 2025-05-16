@@ -9,61 +9,6 @@ const Theme = dvui.Theme;
 
 const Options = @This();
 
-pub const Expand = enum {
-    none,
-    horizontal,
-    vertical,
-    both,
-
-    /// Expand while keeping aspect ratio.
-    ratio,
-
-    pub fn isHorizontal(self: Expand) bool {
-        return (self == .horizontal or self == .both);
-    }
-
-    pub fn isVertical(self: Expand) bool {
-        return (self == .vertical or self == .both);
-    }
-};
-
-pub const Gravity = struct {
-    // wraps Options.gravity_x and Options.gravity_y
-    x: f32,
-    y: f32,
-};
-
-pub const FontStyle = enum {
-    body,
-    heading,
-    caption,
-    caption_heading,
-    title,
-    title_1,
-    title_2,
-    title_3,
-    title_4,
-};
-
-pub const MaxSize = struct {
-    w: f32,
-    h: f32,
-
-    pub const zero: MaxSize = .{ .w = 0, .h = 0 };
-
-    pub fn width(w: f32) MaxSize {
-        return .{ .w = w, .h = dvui.max_float_safe };
-    }
-
-    pub fn height(h: f32) MaxSize {
-        return .{ .w = dvui.max_float_safe, .h = h };
-    }
-
-    pub fn size(s: Size) MaxSize {
-        return .{ .w = s.w, .h = s.h };
-    }
-};
-
 // used to adjust widget id when @src() is not enough (like in a loop)
 id_extra: ?usize = null,
 
@@ -136,6 +81,77 @@ background: ?bool = null,
 
 // use to pick a font from the theme
 font_style: ?FontStyle = null,
+
+box_shadow: ?BoxShadow = null,
+
+pub const Expand = enum {
+    none,
+    horizontal,
+    vertical,
+    both,
+
+    /// Expand while keeping aspect ratio.
+    ratio,
+
+    pub fn isHorizontal(self: Expand) bool {
+        return (self == .horizontal or self == .both);
+    }
+
+    pub fn isVertical(self: Expand) bool {
+        return (self == .vertical or self == .both);
+    }
+};
+
+pub const Gravity = struct {
+    // wraps Options.gravity_x and Options.gravity_y
+    x: f32,
+    y: f32,
+};
+
+pub const FontStyle = enum {
+    body,
+    heading,
+    caption,
+    caption_heading,
+    title,
+    title_1,
+    title_2,
+    title_3,
+    title_4,
+};
+
+pub const MaxSize = struct {
+    w: f32,
+    h: f32,
+
+    pub const zero: MaxSize = .{ .w = 0, .h = 0 };
+
+    pub fn width(w: f32) MaxSize {
+        return .{ .w = w, .h = dvui.max_float_safe };
+    }
+
+    pub fn height(h: f32) MaxSize {
+        return .{ .w = dvui.max_float_safe, .h = h };
+    }
+
+    pub fn size(s: Size) MaxSize {
+        return .{ .w = s.w, .h = s.h };
+    }
+};
+
+pub const BoxShadow = struct {
+    /// Shrink the shadow on all sides (before blur)
+    shrink: f32 = 0,
+
+    /// Offset down/right
+    offset: dvui.Point = .{ .x = 1, .y = 1 },
+
+    /// Extend the size of the transition to transparent at the edges
+    blur: f32 = 3,
+
+    /// Additional alpha multiply factor
+    alpha: f32 = 0.5,
+};
 
 // All the colors you can get from a Theme
 pub const ColorsFromTheme = enum {
@@ -320,6 +336,7 @@ pub fn strip(self: *const Options) Options {
         .padding = Rect{},
         .corner_radius = Rect{},
         .background = false,
+        .box_shadow = null,
 
         // keep the rest
         .color_accent = self.color_accent,
