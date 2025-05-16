@@ -1406,7 +1406,12 @@ pub fn styling() !void {
 
             const gradient = dvui.dataGetPtrDefault(null, vbox2.data().id, "gradient", usize, 0);
 
-            _ = try dvui.dropdown(@src(), &.{ "flat", "horizontal", "vertical", "radial" }, gradient, .{});
+            {
+                var gbox = try dvui.box(@src(), .horizontal, .{});
+                defer gbox.deinit();
+                try dvui.label(@src(), "Gradient", .{}, .{.gravity_y = 0.5});
+                _ = try dvui.dropdown(@src(), &.{ "flat", "horizontal", "vertical", "radial" }, gradient, .{});
+            }
 
             var drawBox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 100 } });
             const rs = drawBox.data().contentRectScale();
