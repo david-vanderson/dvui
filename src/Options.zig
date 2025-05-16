@@ -9,21 +9,26 @@ const Theme = dvui.Theme;
 
 const Options = @This();
 
-// used to adjust widget id when @src() is not enough (like in a loop)
+/// Mixed into widget id. Use when @src() is not unique (like in a loop).
 id_extra: ?usize = null,
 
-// used to id widgets to programmatically interact with them
+/// String for programmatically interacting with widgets, like in tests.
 tag: ?[]const u8 = null,
 
-// used in debugging to give widgets a name, especially in compound widgets
+/// Use to name the kind of widget for debugging.
 name: ?[]const u8 = null,
+
+/// Debugging flag to isolate debug commands/output to a specific widget.
 debug: ?bool = null,
 
-// null is normal, meaning parent picks a rect for the child widget.  If
-// non-null, child widget is choosing its own place, meaning its not being
-// placed normally.  w and h will still be expanded if expand is set.
-// Example is ScrollArea, where user code chooses widget placement. If
-// non-null, should not call rectFor or minSizeForChild.
+/// Specific placement within parent.  Null is normal, meaning parent picks a
+/// rect for the child widget.
+///
+/// If non-null, child widget is choosing its own place, meaning its not being
+/// placed normally.  w and h will still be expanded if expand is set. Example
+/// is the demo Scroll Canvas, where user code chooses widget placement.
+///
+/// If non-null, should not call rectFor or minSizeForChild.
 rect: ?Rect = null,
 
 // default is .none
@@ -82,6 +87,9 @@ background: ?bool = null,
 // use to pick a font from the theme
 font_style: ?FontStyle = null,
 
+/// Render a box shadow in `WidgetData.borderAndBackground`.
+///
+/// Uses .color_text and .corner_radius.
 box_shadow: ?BoxShadow = null,
 
 pub const Expand = enum {
