@@ -89,7 +89,7 @@ font_style: ?FontStyle = null,
 
 /// Render a box shadow in `WidgetData.borderAndBackground`.
 ///
-/// Uses .color_text and .corner_radius.
+/// Uses .corner_radius, and .black if no color specified.
 box_shadow: ?BoxShadow = null,
 
 pub const Expand = enum {
@@ -148,6 +148,9 @@ pub const MaxSize = struct {
 };
 
 pub const BoxShadow = struct {
+    /// Color of shadow
+    color: ColorOrName = .fromColor(.black),
+
     /// Shrink the shadow on all sides (before blur)
     shrink: f32 = 0,
 
@@ -159,6 +162,15 @@ pub const BoxShadow = struct {
 
     /// Additional alpha multiply factor
     alpha: f32 = 0.5,
+
+    pub fn colorGet(self: *const BoxShadow) Color {
+        const col = switch (self.color) {
+            .color => |col| col,
+            .name => |from_theme| Color.fromTheme(from_theme),
+        };
+
+        return col.transparent(dvui.themeGet().alpha);
+    }
 };
 
 // All the colors you can get from a Theme

@@ -63,7 +63,7 @@ var layout_expand: dvui.Options.Expand = .none;
 var show_dialog: bool = false;
 var scale_val: f32 = 1.0;
 var line_height_factor: f32 = 1.2;
-var backbox_color: dvui.Color = .{};
+var backbox_color: dvui.Color = .black;
 var hsluv_hsl: dvui.Color.HSLuv = .{ .l = 50 };
 var animating_window_show: bool = false;
 var animating_window_closing: bool = false;
@@ -1380,7 +1380,8 @@ pub fn styling() !void {
         const offset = dvui.dataGetPtrDefault(null, hbox.data().id, "offset", dvui.Point, .{ .x = 1, .y = 1 });
         const alpha = dvui.dataGetPtrDefault(null, hbox.data().id, "alpha", f32, 0.5);
 
-        var shadow_box = try dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(30), .corner_radius = dvui.Rect.all(radius.*), .box_shadow = .{ .shrink = shrink.*, .offset = offset.*, .blur = blur.*, .alpha = alpha.* } });
+        // We are using two boxes here so the box shadow can have different corner_radius values.
+        var shadow_box = try dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(30), .corner_radius = dvui.Rect.all(radius.*), .box_shadow = .{ .color = .fromColor(backbox_color), .shrink = shrink.*, .offset = offset.*, .blur = blur.*, .alpha = alpha.* } });
 
         var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null });
 
