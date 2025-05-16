@@ -88,8 +88,6 @@ background: ?bool = null,
 font_style: ?FontStyle = null,
 
 /// Render a box shadow in `WidgetData.borderAndBackground`.
-///
-/// Uses .corner_radius, and .black if no color specified.
 box_shadow: ?BoxShadow = null,
 
 pub const Expand = enum {
@@ -150,6 +148,10 @@ pub const MaxSize = struct {
 pub const BoxShadow = struct {
     /// Color of shadow
     color: ColorOrName = .fromColor(.black),
+
+    // x topleft, y topright, w botright, h botleft
+    // if null uses Options.corner_radius
+    corner_radius: ?Rect = null,
 
     /// Shrink the shadow on all sides (before blur)
     shrink: f32 = 0,
