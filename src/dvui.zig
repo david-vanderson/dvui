@@ -3052,7 +3052,7 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 }
 
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !void {
-    var over = try dvui.overlay(@src(), .{ .expand = .horizontal });
+    var over = try dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
     try dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
 
@@ -3076,7 +3076,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
         } else if (e.evt == .mouse and e.evt.mouse.action == .focus) {
             // our window will already be focused, but this prevents the window
             // from clearing the focused widget
-            e.handled = true;
+            e.handle(@src(), over.data());
         }
     }
 
@@ -3772,7 +3772,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
         if (e.evt == .key and (e.evt.key.action == .down or e.evt.key.action == .repeat)) {
             switch (e.evt.key.code) {
                 .up => {
-                    e.handled = true;
+                    e.handle(@src(), sug.menu.data());
                     if (sug.willOpen()) {
                         sug.selected_index -|= 1;
                     } else {
@@ -3780,7 +3780,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
                     }
                 },
                 .down => {
-                    e.handled = true;
+                    e.handle(@src(), sug.menu.data());
                     if (sug.willOpen()) {
                         sug.selected_index += 1;
                     } else {
@@ -3788,22 +3788,22 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
                     }
                 },
                 .escape => {
-                    e.handled = true;
+                    e.handle(@src(), sug.menu.data());
                     sug.close();
                 },
                 .enter => {
                     if (sug.willOpen()) {
-                        e.handled = true;
+                        e.handle(@src(), sug.menu.data());
                         sug.activate_selected = true;
                     }
                 },
                 else => {
                     if (sug.willOpen() and e.evt.key.action == .down) {
                         if (e.evt.key.matchBind("next_widget")) {
-                            e.handled = true;
+                            e.handle(@src(), sug.menu.data());
                             sug.close();
                         } else if (e.evt.key.matchBind("prev_widget")) {
-                            e.handled = true;
+                            e.handle(@src(), sug.menu.data());
                             sug.close();
                         }
                     }
@@ -4208,12 +4208,12 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
         switch (e.evt) {
             .mouse => |me| {
                 if (me.action == .focus) {
-                    e.handled = true;
+                    e.handle(@src(), lw.data());
 
                     // focus this widget for events after this one (starting with e.num)
                     dvui.focusWidget(lwid, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
-                    e.handled = true;
+                    e.handle(@src(), lw.data());
                     dvui.captureMouse(lw.data());
 
                     // for touch events, we want to cancel our click if a drag is started
@@ -4221,7 +4221,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
                 } else if (me.action == .release and me.button.pointer()) {
                     // mouse button was released, do we still have mouse capture?
                     if (dvui.captured(lwid)) {
-                        e.handled = true;
+                        e.handle(@src(), lw.data());
 
                         // cancel our capture
                         dvui.captureMouse(null);
@@ -4256,7 +4256,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
             },
             .key => |ke| {
                 if (ke.action == .down and ke.matchBind("activate")) {
-                    e.handled = true;
+                    e.handle(@src(), lw.data());
                     ret = true;
                     dvui.refresh(null, @src(), lwid);
                 }
@@ -4499,6 +4499,7 @@ pub var slider_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
     .color_fill = .{ .name = .fill_control },
+    .name = "Slider",
 };
 
 // returns true if fraction (0-1) was changed
@@ -4537,21 +4538,21 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
             .mouse => |me| {
                 var p: ?Point.Physical = null;
                 if (me.action == .focus) {
-                    e.handled = true;
+                    e.handle(@src(), b.data());
                     focusWidget(b.data().id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     // capture
                     captureMouse(b.data());
-                    e.handled = true;
+                    e.handle(@src(), b.data());
                     p = me.p;
                 } else if (me.action == .release and me.button.pointer()) {
                     // stop capture
                     captureMouse(null);
                     dragEnd();
-                    e.handled = true;
+                    e.handle(@src(), b.data());
                 } else if (me.action == .motion and captured(b.data().id)) {
                     // handle only if we have capture
-                    e.handled = true;
+                    e.handle(@src(), b.data());
                     p = me.p;
                 } else if (me.action == .position) {
                     dvui.cursorSet(.arrow);
@@ -4584,12 +4585,12 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
                 if (ke.action == .down or ke.action == .repeat) {
                     switch (ke.code) {
                         .left, .down => {
-                            e.handled = true;
+                            e.handle(@src(), b.data());
                             fraction.* = @max(0, @min(1, fraction.* - 0.05));
                             ret = true;
                         },
                         .right, .up => {
-                            e.handled = true;
+                            e.handle(@src(), b.data());
                             fraction.* = @max(0, @min(1, fraction.* + 0.05));
                             ret = true;
                         },
@@ -4665,6 +4666,7 @@ pub var slider_entry_defaults: Options = .{
     .color_fill = .{ .name = .fill_control },
     .background = true,
     // min size calculated from font
+    .name = "SliderEntry",
 };
 
 pub const SliderEntryInitOptions = struct {
@@ -4756,20 +4758,20 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                 continue;
 
             if (e.evt == .key and e.evt.key.action == .down and e.evt.key.code == .enter) {
-                e.handled = true;
+                e.handle(@src(), b.data());
                 text_mode = false;
                 new_val = std.fmt.parseFloat(f32, te_buf[0..te.len]) catch null;
             }
 
             if (e.evt == .key and e.evt.key.action == .down and e.evt.key.code == .escape) {
-                e.handled = true;
+                e.handle(@src(), b.data());
                 text_mode = false;
                 // don't set new_val, we are escaping
             }
 
             // don't want TextEntry to get focus
             if (e.evt == .mouse and e.evt.mouse.action == .focus) {
-                e.handled = true;
+                e.handle(@src(), b.data());
                 focusWidget(b.data().id, null, e.num);
             }
 
@@ -4820,10 +4822,10 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                 .mouse => |me| {
                     var p: ?Point.Physical = null;
                     if (me.action == .focus) {
-                        e.handled = true;
+                        e.handle(@src(), b.data());
                         focusWidget(b.data().id, null, e.num);
                     } else if (me.action == .press and me.button.pointer()) {
-                        e.handled = true;
+                        e.handle(@src(), b.data());
                         if (ctrl_down) {
                             text_mode = true;
                             refresh(null, @src(), b.data().id);
@@ -4847,13 +4849,13 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             text_mode = true;
                             refresh(null, @src(), b.data().id);
                         }
-                        e.handled = true;
+                        e.handle(@src(), b.data());
                         captureMouse(null);
                         dragEnd();
                         dataRemove(null, b.data().id, "_start_x");
                         dataRemove(null, b.data().id, "_start_v");
                     } else if (me.action == .motion and captured(b.data().id)) {
-                        e.handled = true;
+                        e.handle(@src(), b.data());
                         // If this is a touch motion we need to make sure to
                         // only update the value if we are exceeding the
                         // drag threshold to prevent the value from jumping while
@@ -4929,7 +4931,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     } else if (ke.action == .down or ke.action == .repeat) {
                         switch (ke.code) {
                             .left, .right => {
-                                e.handled = true;
+                                e.handle(@src(), b.data());
                                 ret = true;
                                 if (init_opts.interval) |ival| {
                                     init_opts.value.* = init_opts.value.* + (if (ke.code == .left) -ival else ival);

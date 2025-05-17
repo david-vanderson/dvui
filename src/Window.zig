@@ -1622,12 +1622,12 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
             }
         } else if (e.evt == .key) {
             if (e.evt.key.action == .down and e.evt.key.matchBind("next_widget")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.tabIndexNext(e.num);
             }
 
             if (e.evt.key.action == .down and e.evt.key.matchBind("prev_widget")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.tabIndexPrev(e.num);
             }
         }
@@ -1733,7 +1733,7 @@ pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
     // window does cleanup events, but not normal events
     switch (e.evt) {
         .close_popup => |cp| {
-            e.handled = true;
+            e.handle(@src(), self.data());
             if (cp.intentional) {
                 // when a popup is closed due to a menu item being chosen,
                 // the window that spawned it (which had focus previously)

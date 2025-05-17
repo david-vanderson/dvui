@@ -259,17 +259,17 @@ pub fn processEvent(self: *PanedWidget, e: *Event, bubbling: bool) void {
         if (dvui.captured(self.wd.id) or @abs(mouse - target) < (5 * rs.s)) {
             self.hovered = true;
             if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 // capture and start drag
                 dvui.captureMouse(self.data());
                 dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = cursor });
             } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 // stop possible drag and capture
                 dvui.captureMouse(null);
                 dvui.dragEnd();
             } else if (e.evt.mouse.action == .motion and dvui.captured(self.wd.id)) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 // move if dragging
                 if (dvui.dragging(e.evt.mouse.p)) |dps| {
                     _ = dps;
