@@ -117,7 +117,7 @@ pub fn dropped(self: *DropdownWidget) !bool {
             if (e.evt == .mouse) {
                 if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                     if (eat_mouse_up) {
-                        e.handled = true;
+                        e.handle(@src(), drop.data());
                         eat_mouse_up = false;
                         dvui.dataSet(null, drop.wd.id, "_eat_mouse_up", eat_mouse_up);
                     }
