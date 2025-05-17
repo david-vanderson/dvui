@@ -137,21 +137,30 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn expectFocused(tag: []const u8) !void {
-    if (dvui.tagGet(tag)) |data| {
-        try std.testing.expectEqual(data.id, dvui.focusedWidgetId());
-    } else {
-        std.debug.print("tag \"{s}\" not found\n", .{tag});
-        return error.TagNotFound;
-    }
+    const data = try tagGet(tag);
+    try std.testing.expectEqual(data.id, dvui.focusedWidgetId());
+}
+
+pub fn expectNotFocused(tag: []const u8) !void {
+    const data = try tagGet(tag);
+    try std.testing.expect(data.id != dvui.focusedWidgetId());
 }
 
 pub fn expectVisible(tag: []const u8) !void {
-    if (dvui.tagGet(tag)) |data| {
-        try std.testing.expect(data.visible);
-    } else {
+    const data = try tagGet(tag);
+    try std.testing.expect(data.visible);
+}
+
+pub fn expectNotVisible(tag: []const u8) !void {
+    const data = try tagGet(tag);
+    try std.testing.expect(!data.visible);
+}
+
+pub fn tagGet(tag: []const u8) !dvui.TagData {
+    return dvui.tagGet(tag) orelse {
         std.debug.print("tag \"{s}\" not found\n", .{tag});
         return error.TagNotFound;
-    }
+    };
 }
 
 pub const SnapshotError = error{
