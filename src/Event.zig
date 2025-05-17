@@ -5,6 +5,7 @@ const enums = dvui.enums;
 
 const Event = @This();
 
+/// Should not be set directly, use the `handle` method
 handled: bool = false,
 focus_windowId: ?u32 = null,
 focus_widgetId: ?u32 = null,
@@ -36,9 +37,10 @@ pub fn bubbleable(self: *const Event) bool {
 /// matched this event, using `dvui.matchEvent` or similar.
 /// This makes it possible to see which widget handled the event.
 pub fn handle(self: *Event, src: std.builtin.SourceLocation, wd: *const dvui.WidgetData) void {
-    //dvui.log.debug("{s}:{d} {s} event (num {d}) handled by {s} ({x})", .{ src.file, src.line, @tagName(self.evt), self.num, wd.options.name orelse "???", wd.id });
-    _ = src;
-    self.handled_by = wd.id;
+    if (dvui.currentWindow().debug_handled_event) {
+        dvui.log.debug("{s}:{d} {s} event (num {d}) handled by {s} ({x})", .{ src.file, src.line, @tagName(self.evt), self.num, wd.options.name orelse "???", wd.id });
+    }
+    self.handled = true;
 }
 
 pub const Text = struct {
