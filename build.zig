@@ -459,6 +459,10 @@ fn addDvuiModule(
         .optimize = optimize,
     });
     dvui_mod.addOptions("build_options", opts.build_options);
+    dvui_mod.addImport("svg2tvg", b.dependency("svg2tvg", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("svg2tvg"));
 
     if (target.result.os.tag == .windows) {
         // tinyfiledialogs needs this
