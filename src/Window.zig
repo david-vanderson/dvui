@@ -119,8 +119,10 @@ debug_under_mouse_esc_needed: bool = false,
 debug_under_mouse_quitting: bool = false,
 debug_under_mouse_info: []u8 = "",
 
-debug_refresh_mutex: std.Thread.Mutex,
+debug_toggle_mutex: std.Thread.Mutex,
 debug_refresh: bool = false,
+debug_handled_event: bool = false,
+debug_unhandled_events: bool = false,
 
 /// when true, left mouse button works like a finger
 debug_touch_simulate_events: bool = false,
@@ -203,7 +205,7 @@ pub fn init(
         .dialogs = std.ArrayList(Dialog).init(gpa),
         .toasts = std.ArrayList(Toast).init(gpa),
         .keybinds = std.StringHashMap(dvui.enums.Keybind).init(gpa),
-        .debug_refresh_mutex = std.Thread.Mutex{},
+        .debug_toggle_mutex = std.Thread.Mutex{},
         .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
         .backend = backend_ctx,
         .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
@@ -438,9 +440,35 @@ pub fn arena(self: *Self) std.mem.Allocator {
 }
 
 /// called from any thread
+pub fn debugHandleEvents(self: *Self, val: ?bool) bool {
+    self.debug_toggle_mutex.lock();
+    defer self.debug_toggle_mutex.unlock();
+
+    const previous = self.debug_handled_event;
+    if (val) |v| {
+        self.debug_handled_event = v;
+    }
+
+    return previous;
+}
+
+/// called from any thread
+pub fn debugUnhandledEvents(self: *Self, val: ?bool) bool {
+    self.debug_toggle_mutex.lock();
+    defer self.debug_toggle_mutex.unlock();
+
+    const previous = self.debug_unhandled_events;
+    if (val) |v| {
+        self.debug_unhandled_events = v;
+    }
+
+    return previous;
+}
+
+/// called from any thread
 pub fn debugRefresh(self: *Self, val: ?bool) bool {
-    self.debug_refresh_mutex.lock();
-    defer self.debug_refresh_mutex.unlock();
+    self.debug_toggle_mutex.lock();
+    defer self.debug_toggle_mutex.unlock();
 
     const previous = self.debug_refresh;
     if (val) |v| {
@@ -1528,9 +1556,17 @@ fn debugWindowShow(self: *Self) !void {
         duf = !duf;
     }
 
-    const logit = self.debugRefresh(null);
-    if (try dvui.button(@src(), if (logit) "Stop Refresh Logging" else "Start Refresh Logging", .{}, .{})) {
-        _ = self.debugRefresh(!logit);
+    const log_refresh = self.debugRefresh(null);
+    if (try dvui.button(@src(), if (log_refresh) "Stop Refresh Logging" else "Start Refresh Logging", .{}, .{})) {
+        _ = self.debugRefresh(!log_refresh);
+    }
+    const log_event_handled = self.debugHandleEvents(null);
+    if (try dvui.button(@src(), if (log_event_handled) "Stop Event Handled Logging" else "Start Event Handled Logging", .{}, .{})) {
+        _ = self.debugHandleEvents(!log_event_handled);
+    }
+    const log_event_unhandled = self.debugUnhandledEvents(null);
+    if (try dvui.button(@src(), if (log_event_unhandled) "Stop Unhandled Event Logging" else "Start Unhandled Event Logging", .{}, .{})) {
+        _ = self.debugUnhandledEvents(!log_event_unhandled);
     }
 
     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
@@ -1622,14 +1658,21 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
             }
         } else if (e.evt == .key) {
             if (e.evt.key.action == .down and e.evt.key.matchBind("next_widget")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.tabIndexNext(e.num);
             }
 
             if (e.evt.key.action == .down and e.evt.key.matchBind("prev_widget")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.tabIndexPrev(e.num);
             }
+        }
+    }
+
+    if (self.debug_unhandled_events) {
+        for (evts) |*e| {
+            if (e.handled) continue;
+            log.debug("Unhandled {s} event (num {d})", .{ @tagName(e.evt), e.num });
         }
     }
 
@@ -1733,7 +1776,7 @@ pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
     // window does cleanup events, but not normal events
     switch (e.evt) {
         .close_popup => |cp| {
-            e.handled = true;
+            e.handle(@src(), self.data());
             if (cp.intentional) {
                 // when a popup is closed due to a menu item being chosen,
                 // the window that spawned it (which had focus previously)

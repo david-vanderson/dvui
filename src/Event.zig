@@ -1,9 +1,11 @@
 const dvui = @import("dvui.zig");
+const std = @import("std");
 
 const enums = dvui.enums;
 
 const Event = @This();
 
+/// Should not be set directly, use the `handle` method
 handled: bool = false,
 focus_windowId: ?u32 = null,
 focus_widgetId: ?u32 = null,
@@ -27,6 +29,18 @@ evt: union(enum) {
 // this helper at the end of processEvent().
 pub fn bubbleable(self: *const Event) bool {
     return (!self.handled and (self.evt != .mouse));
+}
+
+/// Mark the event as handled
+///
+/// In general, the `dvui.WidgetData` passed here should be the same one that
+/// matched this event, using `dvui.matchEvent` or similar.
+/// This makes it possible to see which widget handled the event.
+pub fn handle(self: *Event, src: std.builtin.SourceLocation, wd: *const dvui.WidgetData) void {
+    if (dvui.currentWindow().debug_handled_event) {
+        dvui.log.debug("{s}:{d} {s} event (num {d}) handled by {s} ({x})", .{ src.file, src.line, @tagName(self.evt), self.num, wd.options.name orelse "???", wd.id });
+    }
+    self.handled = true;
 }
 
 pub const Text = struct {

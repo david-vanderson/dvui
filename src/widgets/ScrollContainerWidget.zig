@@ -281,7 +281,7 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
                 if (self.si.velocity.x != 0 or self.si.velocity.y != 0) {
                     // if we were scrolling, then eat the finger press so it
                     // doesn't do anything other than stop the scroll
-                    e.handled = true;
+                    e.handle(@src(), self.data());
 
                     self.si.velocity.x = 0;
                     self.si.velocity.y = 0;
@@ -291,42 +291,42 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
         .key => |ke| {
             if (bubbling or (self.wd.id == dvui.focusedWidgetId())) {
                 if (ke.code == .up and (ke.action == .down or ke.action == .repeat)) {
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     if (self.si.vertical != .none) {
                         self.si.scrollByOffset(.vertical, -10);
                     }
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     if (self.si.vertical != .none) {
                         self.si.scrollByOffset(.vertical, 10);
                     }
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (ke.code == .left and (ke.action == .down or ke.action == .repeat)) {
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     if (self.si.horizontal != .none) {
                         self.si.scrollByOffset(.horizontal, -10);
                     }
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (ke.code == .right and (ke.action == .down or ke.action == .repeat)) {
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     if (self.si.horizontal != .none) {
                         self.si.scrollByOffset(.horizontal, 10);
                     }
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (ke.code == .page_up and (ke.action == .down or ke.action == .repeat)) {
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     self.si.scrollPageUp(.vertical);
                     dvui.refresh(null, @src(), self.wd.id);
                 } else if (ke.code == .page_down and (ke.action == .down or ke.action == .repeat)) {
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     self.si.scrollPageDown(.vertical);
                     dvui.refresh(null, @src(), self.wd.id);
                 }
             }
         },
         .scroll_drag => |sd| {
-            e.handled = true;
+            e.handle(@src(), self.data());
             const rs = self.wd.contentRectScale();
             var scrolly: f32 = 0;
             if (sd.mouse_pt.y <= rs.r.y and // want to scroll up
@@ -376,7 +376,7 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
             self.seen_scroll_drag = true;
         },
         .scroll_to => |st| {
-            e.handled = true;
+            e.handle(@src(), self.data());
             const rs = self.wd.contentRectScale();
 
             if (self.si.vertical != .none) {
@@ -431,7 +431,7 @@ pub fn processEvent(self: *ScrollContainerWidget, e: *Event, bubbling: bool) voi
 }
 
 pub fn processMotionScrollEvent(self: *ScrollContainerWidget, e: *dvui.Event, motion: dvui.Point.Physical) void {
-    e.handled = true;
+    e.handle(@src(), self.data());
 
     const rs = self.wd.borderRectScale();
 
@@ -477,7 +477,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
         switch (e.evt) {
             .mouse => |me| {
                 if (me.action == .focus) {
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     // focus so that we can receive keyboard input
                     dvui.focusWidget(self.wd.id, null, e.num);
                 } else if (me.action == .wheel_x) {
@@ -485,7 +485,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                         if ((me.action.wheel_x < 0 and self.si.viewport.x <= 0) or (me.action.wheel_x > 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
                             // propagate the scroll event because we are already maxxed out
                         } else {
-                            e.handled = true;
+                            e.handle(@src(), self.data());
                             self.si.scrollByOffset(.horizontal, me.action.wheel_x);
                             dvui.refresh(null, @src(), self.wd.id);
                         }
@@ -500,7 +500,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                         if ((me.action.wheel_y > 0 and self.si.viewport.y <= 0) or (me.action.wheel_y < 0 and self.si.viewport.y >= self.si.scrollMax(.vertical))) {
                             // try horizontal or propagate the scroll event because we are already maxxed out
                         } else {
-                            e.handled = true;
+                            e.handle(@src(), self.data());
                             self.si.scrollByOffset(.vertical, -me.action.wheel_y);
                             dvui.refresh(null, @src(), self.wd.id);
                         }
@@ -508,7 +508,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                         if ((me.action.wheel_y > 0 and self.si.viewport.x <= 0) or (me.action.wheel_y < 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
                             // propagate the scroll event because we are already maxxed out
                         } else {
-                            e.handled = true;
+                            e.handle(@src(), self.data());
                             self.si.scrollByOffset(.horizontal, -me.action.wheel_y);
                             dvui.refresh(null, @src(), self.wd.id);
                         }
@@ -516,10 +516,10 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                 } else if (me.action == .press and me.button.touch()) {
                     // don't let this event go through to floating window
                     // which would capture the mouse preventing scrolling
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     dvui.captureMouse(self.data());
                 } else if (me.action == .release and dvui.captured(self.wd.id)) {
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     dvui.captureMouse(null);
                     dvui.dragEnd();
                 } else if (me.action == .motion and me.button.touch()) {

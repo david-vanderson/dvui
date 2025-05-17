@@ -233,18 +233,18 @@ pub fn deinit(self: *FloatingMenuWidget) void {
         if (e.evt == .mouse) {
             if (e.evt.mouse.action == .focus) {
                 // unhandled click, clear focus
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.focusWidget(null, null, null);
             }
         } else if (e.evt == .key) {
             // catch any tabs that weren't handled by widgets
             if (e.evt.key.action == .down and e.evt.key.matchBind("next_widget")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.tabIndexNext(e.num);
             }
 
             if (e.evt.key.action == .down and e.evt.key.matchBind("prev_widget")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.tabIndexPrev(e.num);
             }
         }
