@@ -1672,7 +1672,13 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     if (self.debug_unhandled_events) {
         for (evts) |*e| {
             if (e.handled) continue;
-            log.debug("Unhandled {s} event (num {d})", .{ @tagName(e.evt), e.num });
+            var action: []const u8 = "";
+            switch (e.evt) {
+                .mouse => action = @tagName(e.evt.mouse.action),
+                .key => action = @tagName(e.evt.key.action),
+                else => {},
+            }
+            log.debug("Unhandled {s} {s} event (num {d})", .{ @tagName(e.evt), action, e.num });
         }
     }
 

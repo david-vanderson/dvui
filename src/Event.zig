@@ -38,7 +38,13 @@ pub fn bubbleable(self: *const Event) bool {
 /// This makes it possible to see which widget handled the event.
 pub fn handle(self: *Event, src: std.builtin.SourceLocation, wd: *const dvui.WidgetData) void {
     if (dvui.currentWindow().debug_handled_event) {
-        dvui.log.debug("{s}:{d} {s} event (num {d}) handled by {s} ({x})", .{ src.file, src.line, @tagName(self.evt), self.num, wd.options.name orelse "???", wd.id });
+        var action: []const u8 = "";
+        switch (self.evt) {
+            .mouse => action = @tagName(self.evt.mouse.action),
+            .key => action = @tagName(self.evt.key.action),
+            else => {},
+        }
+        dvui.log.debug("{s}:{d} {s} {s} event (num {d}) handled by {s} ({x})", .{ src.file, src.line, @tagName(self.evt), action, self.num, wd.options.name orelse "???", wd.id });
     }
     self.handled = true;
 }
