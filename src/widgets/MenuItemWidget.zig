@@ -157,7 +157,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
         .mouse => |me| {
             if (me.action == .focus) {
                 dvui.MenuWidget.current().?.mouse_mode = true;
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.focusWidget(self.wd.id, null, e.num);
             } else if (me.action == .press and me.button.pointer()) {
                 // This works differently than normal (like buttons) where we
@@ -167,7 +167,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                 // pattern for touch.
                 //
                 // This is how dropdowns are triggered.
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
                     dvui.MenuWidget.current().?.submenus_activated = true;
                     dvui.MenuWidget.current().?.submenus_in_child = true;
@@ -181,7 +181,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                 }
             } else if (me.action == .release) {
                 dvui.MenuWidget.current().?.mouse_mode = true;
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (!self.init_opts.submenu and (self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow())) {
                     self.activated = true;
                     dvui.refresh(null, @src(), self.wd.id);
@@ -227,7 +227,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
         .key => |ke| {
             if (ke.action == .down and ke.matchBind("activate")) {
                 dvui.MenuWidget.current().?.mouse_mode = false;
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
                     dvui.MenuWidget.current().?.submenus_activated = true;
                 } else {
@@ -237,13 +237,13 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
             } else if (ke.code == .right and ke.action == .down) {
                 if (self.init_opts.submenu and dvui.MenuWidget.current().?.init_opts.dir == .vertical) {
                     dvui.MenuWidget.current().?.mouse_mode = false;
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     dvui.MenuWidget.current().?.submenus_activated = true;
                 }
             } else if (ke.code == .down and ke.action == .down) {
                 if (self.init_opts.submenu and dvui.MenuWidget.current().?.init_opts.dir == .horizontal) {
                     dvui.MenuWidget.current().?.mouse_mode = false;
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     dvui.MenuWidget.current().?.submenus_activated = true;
                 }
             }

@@ -166,14 +166,14 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
         switch (e.evt) {
             .mouse => |me| {
                 if (me.action == .press and me.button.pointer()) {
-                    e.handled = true;
+                    e.handle(@src(), iw.data());
                     dvui.captureMouse(iw.data());
                     const reo_top_left: ?dvui.Point.Physical = if (init_opts.reorderable) |reo| reo.wd.rectScale().r.topLeft() else null;
                     const top_left: ?dvui.Point.Physical = init_opts.top_left orelse reo_top_left;
                     dvui.dragPreStart(me.p, .{ .offset = (top_left orelse iw.wd.rectScale().r.topLeft()).diff(me.p) });
                 } else if (me.action == .motion) {
                     if (dvui.captured(iw.wd.id)) {
-                        e.handled = true;
+                        e.handle(@src(), iw.data());
                         if (dvui.dragging(me.p)) |_| {
                             ret = me.p;
                             if (init_opts.reorderable) |reo| {

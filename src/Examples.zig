@@ -2712,7 +2712,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
                 switch (e.evt) {
                     .mouse => |me| {
                         if (me.action == .release and me.button.pointer()) {
-                            e.handled = true;
+                            e.handle(@src(), dragBox.data());
                             dvui.dragEnd();
                             dvui.refresh(null, @src(), dragBox.data().id);
 
@@ -2770,12 +2770,12 @@ pub fn scrollCanvas(comptime data: u8) !void {
                     switch (e.evt) {
                         .mouse => |me| {
                             if (me.action == .press and me.button.pointer()) {
-                                e.handled = true;
+                                e.handle(@src(), dragBox.data());
                                 dvui.captureMouse(dbox.data());
                                 dvui.dragPreStart(me.p, .{ .name = "box_transfer" });
                             } else if (me.action == .motion) {
                                 if (dvui.captured(dbox.data().id)) {
-                                    e.handled = true;
+                                    e.handle(@src(), dragBox.data());
                                     if (dvui.dragging(me.p)) |_| {
                                         // started the drag
                                         Data.drag_box_window = i;
@@ -2804,13 +2804,13 @@ pub fn scrollCanvas(comptime data: u8) !void {
             switch (e.evt) {
                 .mouse => |me| {
                     if (me.action == .press and me.button.pointer()) {
-                        e.handled = true;
+                        e.handle(@src(), dragBox.data());
                         dvui.captureMouse(dragBox.data());
                         const offset = me.p.diff(dragBox.data().rectScale().r.topLeft()); // pixel offset from dragBox corner
                         dvui.dragPreStart(me.p, .{ .offset = offset });
                     } else if (me.action == .release and me.button.pointer()) {
                         if (dvui.captured(dragBox.data().id)) {
-                            e.handled = true;
+                            e.handle(@src(), dragBox.data());
                             dvui.captureMouse(null);
                             dvui.dragEnd();
                         }
@@ -2855,23 +2855,23 @@ pub fn scrollCanvas(comptime data: u8) !void {
         switch (e.evt) {
             .mouse => |me| {
                 if (me.action == .press and me.button.pointer()) {
-                    e.handled = true;
+                    e.handle(@src(), scroll.scroll.data());
                     dvui.captureMouse(scroll.scroll.data());
                     dvui.dragPreStart(me.p, .{});
                 } else if (me.action == .release and me.button.pointer()) {
                     if (dvui.captured(scroll.scroll.data().id)) {
-                        e.handled = true;
+                        e.handle(@src(), scroll.scroll.data());
                         dvui.captureMouse(null);
                         dvui.dragEnd();
                     }
                 } else if (me.action == .motion) {
                     if (me.button.touch() and dragging_box) {
                         // eat touch motion events so they don't scroll
-                        e.handled = true;
+                        e.handle(@src(), scroll.scroll.data());
                     }
                     if (dvui.captured(scroll.scroll.data().id)) {
                         if (dvui.dragging(me.p)) |dps| {
-                            e.handled = true;
+                            e.handle(@src(), scroll.scroll.data());
                             const rs = scrollRectScale;
                             Data.scroll_info.viewport.x -= dps.x / rs.s;
                             Data.scroll_info.viewport.y -= dps.y / rs.s;
@@ -2879,7 +2879,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
                         }
                     }
                 } else if (me.action == .wheel_y and ctrl_down) {
-                    e.handled = true;
+                    e.handle(@src(), scroll.scroll.data());
                     const base: f32 = 1.01;
                     const zs = @exp(@log(base) * me.action.wheel_y);
                     if (zs != 1.0) {
@@ -3771,7 +3771,7 @@ pub const StrokeTest = struct {
                 switch (me.action) {
                     .press => {
                         if (me.button == .left) {
-                            e.handled = true;
+                            e.handle(@src(), self.data());
                             dragi = null;
 
                             for (points, 0..) |p, i| {
@@ -3796,13 +3796,13 @@ pub const StrokeTest = struct {
                     },
                     .release => {
                         if (me.button == .left) {
-                            e.handled = true;
+                            e.handle(@src(), self.data());
                             dvui.captureMouse(null);
                             dvui.dragEnd();
                         }
                     },
                     .motion => {
-                        e.handled = true;
+                        e.handle(@src(), self.data());
                         if (dvui.dragging(me.p)) |dps| {
                             const dp = dps.scale(1 / rs.s, Point);
                             points[dragi.?].x += dp.x;
@@ -3811,7 +3811,7 @@ pub const StrokeTest = struct {
                         }
                     },
                     .wheel_y => |ticks| {
-                        e.handled = true;
+                        e.handle(@src(), self.data());
                         const base: f32 = 1.02;
                         const zs = @exp(@log(base) * ticks);
                         if (zs != 1.0) {
