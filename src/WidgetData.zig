@@ -202,7 +202,7 @@ pub fn focusBorder(self: *const WidgetData) !void {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
 
-        try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), thick, self.options.color(.accent), .{ .after = true });
+        try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), thick, dvui.themeGet().color_accent, .{ .after = true });
     }
 }
 
