@@ -105,6 +105,8 @@ test "tab order" {
 
     try dvui.testing.settle(frame);
 
+    try dvui.testing.expectNotFocused("show-demo-btn");
+
     try dvui.testing.pressKey(.tab, .none);
     try dvui.testing.settle(frame);
 
@@ -116,6 +118,11 @@ test "open example window" {
     defer t.deinit();
 
     try dvui.testing.settle(frame);
+
+    // FIXME: The global show_demo_window variable makes tests order dependent
+    dvui.Examples.show_demo_window = false;
+
+    try std.testing.expect(dvui.tagGet(dvui.Examples.demo_window_tag) == null);
 
     try dvui.testing.moveTo("show-demo-btn");
     try dvui.testing.click(.left);
