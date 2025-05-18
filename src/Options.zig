@@ -106,6 +106,13 @@ pub const Expand = enum {
     pub fn isVertical(self: Expand) bool {
         return (self == .vertical or self == .both);
     }
+
+    pub fn fromDirection(dir: dvui.enums.Direction) Expand {
+        return switch (dir) {
+            .horizontal => .horizontal,
+            .vertical => .vertical,
+        };
+    }
 };
 
 pub const Gravity = struct {
