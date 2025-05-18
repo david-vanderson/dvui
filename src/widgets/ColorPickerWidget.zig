@@ -32,7 +32,6 @@ pub fn install(self: *ColorPickerWidget) !void {
     }
 
     if (try hue_slider(@src(), self.init_opts.dir.invert(), &self.init_opts.hsv.h, .{ .expand = .fromDirection(self.init_opts.dir.invert()) })) {
-        // FIXME: invalidate valueSaturation texture
         self.color_changed = true;
     }
 }
@@ -62,29 +61,10 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     const rs = b.data().contentRectScale();
     const size = rs.r.size();
 
-    var vertexes = [_]dvui.Vertex{
-        .{ .pos = rs.r.topLeft(), .col = .white, .uv = .{ 0.25, 0.25 } },
-        .{ .pos = rs.r.bottomLeft(), .col = .white, .uv = .{ 0.25, 0.75 } },
-        .{ .pos = rs.r.bottomRight(), .col = .white, .uv = .{ 0.75, 0.75 } },
-        .{ .pos = rs.r.topRight(), .col = .white, .uv = .{ 0.75, 0.25 } },
-    };
-    var indices = [_]u16{ 0, 1, 2, 2, 3, 0 };
-    const triangles = dvui.Triangles{
-        .vertexes = vertexes[0..],
-        .indices = indices[0..],
-        .bounds = rs.r,
-    };
-
-    var pixels = Color.white.toRGBA() ** 2 ++ Color.black.toRGBA() ** 2;
-    comptime std.debug.assert(pixels.len == 2 * 2 * 4);
-    // set top right corner to the max value of that hue
-    @memcpy(pixels[4..8], &Color.HSV.toColor(.{ .h = hsv.h }).toRGBA());
-
-    const tex = dvui.textureCreate(&pixels, 2, 2, .linear);
-    // FIXME: Cache texture until hue changes, potentially modify existing texture
-    dvui.textureDestroyLater(tex);
-
-    try dvui.renderTriangles(triangles, tex);
+    try dvui.renderTexture(try get_value_saturation_texture(hsv.h), rs, .{
+        .corner_radius = options.corner_radiusGet(),
+        .uv = .{ .x = 0.25, .y = 0.25, .w = 0.75, .h = 0.75 },
+    });
 
     var changed = false;
     const evts = dvui.events();
@@ -333,6 +313,20 @@ pub fn get_hue_selector_texture(dir: dvui.enums.Direction) !dvui.Texture {
         };
         // FIXME: textureCreate should not need a non const pointer to pixels
         res.value_ptr.texture = dvui.textureCreate(@constCast(&hue_selector_pixels), width, height, .linear);
+    }
+    return res.value_ptr.texture;
+}
+
+pub fn get_value_saturation_texture(hue: f32) !dvui.Texture {
+    const hue_texture_id = dvui.hashIdKey(@intFromFloat(hue * 10000), "value_saturation_texture");
+    const res = try dvui.currentWindow().texture_cache.getOrPut(hue_texture_id);
+    res.value_ptr.used = true;
+    if (!res.found_existing) {
+        var pixels = Color.white.toRGBA() ** 2 ++ Color.black.toRGBA() ** 2;
+        comptime std.debug.assert(pixels.len == 2 * 2 * 4);
+        // set top right corner to the max value of that hue
+        @memcpy(pixels[4..8], &Color.HSV.toColor(.{ .h = hue }).toRGBA());
+        res.value_ptr.texture = dvui.textureCreate(&pixels, 2, 2, .linear);
     }
     return res.value_ptr.texture;
 }
