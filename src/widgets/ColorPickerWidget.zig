@@ -28,6 +28,11 @@ pub fn install(self: *ColorPickerWidget) !void {
     if (try valueSaturationBox(@src(), self.init_opts.hsv, .{})) {
         self.color_changed = true;
     }
+
+    if (try hue_slider(@src(), .vertical, &self.init_opts.hsv.h, .{ .expand = .vertical })) {
+        // FIXME: invalidate valueSaturation texture
+        self.color_changed = true;
+    }
 }
 
 pub fn deinit(_: *ColorPickerWidget) void {}
@@ -55,7 +60,6 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
         .{ .pos = rs.r.topRight(), .col = .white, .uv = .{ 0.75, 0.25 } },
     };
     var indices = [_]u16{ 0, 1, 2, 2, 3, 0 };
-
     const triangles = dvui.Triangles{
         .vertexes = vertexes[0..],
         .indices = indices[0..],
@@ -111,8 +115,185 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     return changed;
 }
 
+pub var hue_slider_defaults: Options = .{
+    .padding = .all(2),
+    .border = .all(1),
+    .min_size_content = .{ .w = 20, .h = 20 },
+    .name = "HueSlider",
+};
+
+/// Returns true if the hue was changed
+///
+/// `hue` >= 0 and `hue` < 360
+pub fn hue_slider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue: *f32, opts: Options) !bool {
+    var fraction = std.math.clamp(hue.* / 360, 0, 1);
+    std.debug.assert(fraction >= 0);
+    std.debug.assert(fraction <= 1);
+
+    const options = hue_slider_defaults.override(opts);
+
+    var b = try dvui.box(src, dir, options);
+    defer b.deinit();
+
+    if (b.data().visible()) {
+        try dvui.tabIndexSet(b.data().id, options.tab_index);
+    }
+
+    const br = b.data().contentRect();
+    const knobsize: dvui.Size = switch (dir) {
+        .horizontal => .{ .w = 10, .h = br.h },
+        .vertical => .{ .w = br.w, .h = 10 },
+    };
+    const track_thickness = 10;
+    const track: dvui.Rect = switch (dir) {
+        .horizontal => .{ .x = knobsize.w / 2, .y = br.h / 2 - track_thickness / 2, .w = br.w - knobsize.w, .h = track_thickness },
+        .vertical => .{ .x = br.w / 2 - track_thickness / 2, .y = knobsize.h / 2, .w = track_thickness, .h = br.h - knobsize.h },
+    };
+
+    const trackrs = b.widget().screenRectScale(track);
+
+    var ret = false;
+    const rs = b.data().contentRectScale();
+    const evts = dvui.events();
+    for (evts) |*e| {
+        if (!dvui.eventMatch(e, .{ .id = b.data().id, .r = rs.r }))
+            continue;
+
+        switch (e.evt) {
+            .mouse => |me| {
+                var p: ?dvui.Point.Physical = null;
+                if (me.action == .focus) {
+                    e.handle(@src(), b.data());
+                    dvui.focusWidget(b.data().id, null, e.num);
+                } else if (me.action == .press and me.button.pointer()) {
+                    // capture
+                    dvui.captureMouse(b.data());
+                    e.handle(@src(), b.data());
+                    p = me.p;
+                } else if (me.action == .release and me.button.pointer()) {
+                    // stop capture
+                    dvui.captureMouse(null);
+                    dvui.dragEnd();
+                    e.handle(@src(), b.data());
+                } else if (me.action == .motion and dvui.captured(b.data().id)) {
+                    // handle only if we have capture
+                    e.handle(@src(), b.data());
+                    p = me.p;
+                } else if (me.action == .position) {
+                    dvui.cursorSet(.arrow);
+                }
+
+                if (p) |pp| {
+                    const val = switch (dir) {
+                        .horizontal => (pp.x - trackrs.r.x) / trackrs.r.w,
+                        .vertical => (pp.y - trackrs.r.y) / trackrs.r.h,
+                    };
+                    fraction = std.math.clamp(val, 0, 1);
+                    ret = true;
+                }
+            },
+            .key => |ke| {
+                if (ke.action == .down or ke.action == .repeat) {
+                    switch (ke.code) {
+                        .left, .down => {
+                            e.handle(@src(), b.data());
+                            fraction = std.math.clamp(fraction - 0.05, 0, 1);
+                            ret = true;
+                        },
+                        .right, .up => {
+                            e.handle(@src(), b.data());
+                            fraction = std.math.clamp(fraction + 0.05, 0, 1);
+                            ret = true;
+                        },
+                        else => {},
+                    }
+                }
+            },
+            else => {},
+        }
+    }
+
+    if (ret) {
+        hue.* = fraction * 359.99;
+        dvui.refresh(null, @src(), b.data().id);
+    }
+
+    const uv_offset = comptime 0.5 / @as(f32, @floatFromInt(hue_selector_colors.len));
+    var vertexes = [_]dvui.Vertex{
+        .{ .pos = trackrs.r.topLeft(), .col = .white, .uv = @splat(uv_offset) },
+        .{ .pos = trackrs.r.bottomLeft(), .col = .white, .uv = @splat(if (dir == .horizontal) uv_offset else 1 - uv_offset) },
+        .{ .pos = trackrs.r.bottomRight(), .col = .white, .uv = @splat(1 - uv_offset) },
+        .{ .pos = trackrs.r.topRight(), .col = .white, .uv = @splat(if (dir == .vertical) uv_offset else 1 - uv_offset) },
+    };
+    var indices = [_]u16{ 0, 1, 2, 2, 3, 0 };
+    const triangles = dvui.Triangles{
+        .vertexes = vertexes[0..],
+        .indices = indices[0..],
+        .bounds = trackrs.r,
+    };
+
+    try dvui.renderTriangles(triangles, try get_hue_selector_texture(dir));
+
+    // try dvui.renderTexture(try get_hue_selector_texture(dir), b.data().contentRectScale(), .{});
+
+    const knobRect = dvui.Rect.fromPoint(switch (dir) {
+        .horizontal => .{ .x = (br.w - knobsize.w) * fraction },
+        .vertical => .{ .y = (br.h - knobsize.h) * fraction },
+    }).toSize(knobsize);
+
+    var knob = dvui.BoxWidget.init(@src(), .horizontal, false, .{
+        .rect = knobRect,
+        .padding = .{},
+        .margin = .{},
+        .background = true,
+        .border = .all(1),
+        .corner_radius = .all(100),
+        .color_fill = .fromColor((Color.HSV{ .h = hue.* }).toColor()),
+    });
+    try knob.install();
+    try knob.drawBackground();
+    if (b.data().id == dvui.focusedWidgetId()) {
+        try knob.wd.focusBorder();
+    }
+    knob.deinit();
+
+    return ret;
+}
+
+pub fn get_hue_selector_texture(dir: dvui.enums.Direction) !dvui.Texture {
+    const hue_texture_id = dvui.hashIdKey(@intFromEnum(dir), "hue_selector_texture");
+    const cw = dvui.currentWindow();
+    const res = try cw.texture_cache.getOrPut(hue_texture_id);
+    res.value_ptr.used = true;
+    if (!res.found_existing) {
+        const width: u32, const height: u32 = switch (dir) {
+            .horizontal => .{ hue_selector_colors.len, 1 },
+            .vertical => .{ 1, hue_selector_colors.len },
+        };
+        // FIXME: textureCreate should not need a non const pointer to pixels
+        res.value_ptr.texture = dvui.textureCreate(@constCast(&hue_selector_pixels), width, height, .linear);
+    }
+    return res.value_ptr.texture;
+}
+
+const hue_selector_colors: [7]Color = .{ .red, .yellow, .lime, .cyan, .blue, .magenta, .red };
+const hue_selector_pixels: [hue_selector_colors.len * 4]u8 = blk: {
+    var pixels: [hue_selector_colors.len * 4]u8 = undefined;
+    for (0.., hue_selector_colors) |i, c| {
+        pixels[i * 4 + 0] = c.r;
+        pixels[i * 4 + 1] = c.g;
+        pixels[i * 4 + 2] = c.b;
+        pixels[i * 4 + 3] = c.a;
+    }
+    break :blk pixels;
+};
+
 const Options = dvui.Options;
 const Color = dvui.Color;
 
 const std = @import("std");
 const dvui = @import("../dvui.zig");
+
+test {
+    std.testing.refAllDecls(@This());
+}

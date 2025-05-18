@@ -64,7 +64,8 @@ var show_dialog: bool = false;
 var scale_val: f32 = 1.0;
 var line_height_factor: f32 = 1.2;
 var backbox_color: dvui.Color = .black;
-var hsluv_hsl: dvui.Color.HSLuv = .{ .l = 50 };
+var hsluv_hsl: dvui.Color.HSLuv = .fromColor(.black);
+var hsv_color: dvui.Color.HSV = .fromColor(.black);
 var animating_window_show: bool = false;
 var animating_window_closing: bool = false;
 var animating_window_rect = Rect{ .x = 100, .y = 100, .w = 300, .h = 200 };
@@ -1358,6 +1359,7 @@ pub fn styling() !void {
             defer hbox2.deinit();
             if (try rgbSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 })) {
                 hsluv_hsl = .fromColor(backbox_color);
+                hsv_color = .fromColor(backbox_color);
             }
         }
         {
@@ -1365,17 +1367,18 @@ pub fn styling() !void {
             defer hbox2.deinit();
             if (try hsluvSliders(@src(), &hsluv_hsl, .{ .gravity_y = 0.5 })) {
                 backbox_color = hsluv_hsl.color();
+                hsv_color = .fromColor(backbox_color);
             }
         }
     }
 
     if (try dvui.expander(@src(), "Color picker", .{}, .{ .expand = .horizontal })) {
-        var hsv = dvui.Color.HSV.fromColor(backbox_color);
-        var picker = dvui.ColorPickerWidget.init(@src(), .{ .hsv = &hsv }, .{});
+        var picker = dvui.ColorPickerWidget.init(@src(), .{ .hsv = &hsv_color }, .{});
         try picker.install();
         defer picker.deinit();
         if (picker.color_changed) {
-            backbox_color = hsv.toColor();
+            backbox_color = hsv_color.toColor();
+            hsluv_hsl = .fromColor(backbox_color);
         }
     }
 
