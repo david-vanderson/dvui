@@ -1369,6 +1369,16 @@ pub fn styling() !void {
         }
     }
 
+    if (try dvui.expander(@src(), "Color picker", .{}, .{ .expand = .horizontal })) {
+        var hsv = dvui.Color.HSV.fromColor(backbox_color);
+        var picker = dvui.ColorPickerWidget.init(@src(), .{ .hsv = &hsv }, .{});
+        try picker.install();
+        defer picker.deinit();
+        if (picker.color_changed) {
+            backbox_color = hsv.toColor();
+        }
+    }
+
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
