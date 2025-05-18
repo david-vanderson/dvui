@@ -387,6 +387,7 @@ pub const FromHexError = std.fmt.ParseIntError || error{
 /// - `RRGGBB`
 /// - `RRGGBBAA`
 pub fn tryFromHex(hex_color: []const u8) FromHexError!Color {
+    if (hex_color.len == 0) return error.InvalidHexStringLength;
     const hex = if (hex_color[0] == '#') hex_color[1..] else hex_color;
 
     const is_nibble_size, const has_alpha = switch (hex.len) {
