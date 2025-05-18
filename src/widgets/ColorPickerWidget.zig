@@ -4,15 +4,18 @@ id: u32,
 opts: dvui.Options,
 init_opts: InitOptions,
 color_changed: bool = false,
+box: *dvui.BoxWidget = undefined,
 
 pub const InitOptions = struct {
     hsv: *Color.HSV,
+    dir: dvui.enums.Direction = .horizontal,
+};
+
+pub var defaults = Options{
+    .name = "ColorPicker",
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ColorPickerWidget {
-    const defaults = Options{
-        .name = "ColorPicker",
-    };
     const self = ColorPickerWidget{
         .id = dvui.parentGet().extendId(src, opts.idExtra()),
         .opts = defaults.override(opts),
@@ -22,32 +25,32 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *ColorPickerWidget) !void {
-    var box = try dvui.box(@src(), .horizontal, self.opts);
-    defer box.deinit();
+    self.box = try dvui.box(@src(), self.init_opts.dir, self.opts);
 
     if (try valueSaturationBox(@src(), self.init_opts.hsv, .{})) {
         self.color_changed = true;
     }
 
-    if (try hue_slider(@src(), .vertical, &self.init_opts.hsv.h, .{ .expand = .vertical })) {
+    if (try hue_slider(@src(), self.init_opts.dir.invert(), &self.init_opts.hsv.h, .{ .expand = .fromDirection(self.init_opts.dir.invert()) })) {
         // FIXME: invalidate valueSaturation texture
         self.color_changed = true;
     }
 }
 
-pub fn deinit(_: *ColorPickerWidget) void {}
+pub fn deinit(self: *ColorPickerWidget) void {
+    self.box.deinit();
+}
+
+pub const value_saturation_box_defaults = Options{
+    .name = "ValueSaturationBox",
+    .expand = .ratio,
+    .min_size_content = .all(100),
+    .margin = .all(2),
+};
 
 /// Returns true if the color was changed
 pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts: Options) !bool {
-    const defaults = Options{
-        .name = "ValueSaturationBox",
-        .expand = .ratio,
-        .min_size_content = .all(100),
-        .border = .all(1),
-        .padding = .all(5),
-    };
-
-    const options = defaults.override(opts);
+    const options = value_saturation_box_defaults.override(opts);
 
     var b = try dvui.box(src, .horizontal, options);
     defer b.deinit();
@@ -175,8 +178,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
 }
 
 pub var hue_slider_defaults: Options = .{
-    .padding = .all(2),
-    .border = .all(1),
+    .margin = .all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
     .name = "HueSlider",
 };
@@ -205,8 +207,8 @@ pub fn hue_slider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hu
     };
     const track_thickness = 10;
     const track: dvui.Rect = switch (dir) {
-        .horizontal => .{ .x = knobsize.w / 2, .y = br.h / 2 - track_thickness / 2, .w = br.w - knobsize.w, .h = track_thickness },
-        .vertical => .{ .x = br.w / 2 - track_thickness / 2, .y = knobsize.h / 2, .w = track_thickness, .h = br.h - knobsize.h },
+        .horizontal => .{ .x = 0, .y = br.h / 2 - track_thickness / 2, .w = br.w, .h = track_thickness },
+        .vertical => .{ .x = br.w / 2 - track_thickness / 2, .y = 0, .w = track_thickness, .h = br.h },
     };
 
     const trackrs = b.widget().screenRectScale(track);
