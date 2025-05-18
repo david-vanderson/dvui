@@ -5413,14 +5413,20 @@ pub const TextEntryColorInitOptions = struct {
     /// If a value ptr is provided, a reset button will be shown to reset
     /// the input to the value of the ptr
     show_reset_button: bool = true,
+    /// If this is true, the alpha with be taken from the last hex value,
+    /// if it is included in the input
+    allow_alpha: bool = true,
 };
 
 pub const TextEntryColorResult = struct {
     value: union(enum) {
         Valid: Color,
-        Invalid: void,
+        Invalid: enum {
+            non_hex_value,
+            alpha_passed_when_not_allowed,
+        },
         Empty: void,
-    } = .Invalid,
+    } = .{ .Invalid = .non_hex_value },
 
     /// True if given a value pointer and wrote a valid value back to it.
     changed: bool = false,
@@ -5453,7 +5459,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
         {
             dataSet(null, id, "value", v.*);
             @memset(buffer, 0); // clear out anything that was there before
-            if (v.a != 0xff) {
+            if (init_opts.allow_alpha and v.a != 0xff) {
                 _ = try std.fmt.bufPrint(buffer, "#{x:0>2}{x:0>2}{x:0>2}{x:0>2}", .{ v.r, v.g, v.b, v.a });
                 te.len = 9;
             } else {
@@ -5476,7 +5482,9 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
     if (text.len == 0 and color == null) {
         result.value = .Empty;
     } else if (color == null) {
-        result.value = .Invalid;
+        result.value = .{ .Invalid = .non_hex_value };
+    } else if (!init_opts.allow_alpha and color.?.a != 0xFF) {
+        result.value = .{ .Invalid = .alpha_passed_when_not_allowed };
     } else {
         result.value = .{ .Valid = color.? };
         if (init_opts.value) |v| {
