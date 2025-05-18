@@ -260,22 +260,15 @@ pub fn hue_slider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hu
     }
 
     const uv_offset = comptime 0.5 / @as(f32, @floatFromInt(hue_selector_colors.len));
-    var vertexes = [_]dvui.Vertex{
-        .{ .pos = trackrs.r.topLeft(), .col = .white, .uv = @splat(uv_offset) },
-        .{ .pos = trackrs.r.bottomLeft(), .col = .white, .uv = @splat(if (dir == .horizontal) uv_offset else 1 - uv_offset) },
-        .{ .pos = trackrs.r.bottomRight(), .col = .white, .uv = @splat(1 - uv_offset) },
-        .{ .pos = trackrs.r.topRight(), .col = .white, .uv = @splat(if (dir == .vertical) uv_offset else 1 - uv_offset) },
-    };
-    var indices = [_]u16{ 0, 1, 2, 2, 3, 0 };
-    const triangles = dvui.Triangles{
-        .vertexes = vertexes[0..],
-        .indices = indices[0..],
-        .bounds = trackrs.r,
-    };
-
-    try dvui.renderTriangles(triangles, try get_hue_selector_texture(dir));
-
-    // try dvui.renderTexture(try get_hue_selector_texture(dir), b.data().contentRectScale(), .{});
+    try dvui.renderTexture(try get_hue_selector_texture(dir), trackrs, .{
+        .corner_radius = options.corner_radiusGet(),
+        .uv = .{
+            .x = uv_offset,
+            .y = if (dir == .vertical) uv_offset else 1 - uv_offset,
+            .w = 1 - uv_offset,
+            .h = if (dir == .horizontal) uv_offset else 1 - uv_offset,
+        },
+    });
 
     const knobRect = dvui.Rect.fromPoint(switch (dir) {
         .horizontal => .{ .x = (br.w - knobsize.w) * fraction },
@@ -303,8 +296,7 @@ pub fn hue_slider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hu
 
 pub fn get_hue_selector_texture(dir: dvui.enums.Direction) !dvui.Texture {
     const hue_texture_id = dvui.hashIdKey(@intFromEnum(dir), "hue_selector_texture");
-    const cw = dvui.currentWindow();
-    const res = try cw.texture_cache.getOrPut(hue_texture_id);
+    const res = try dvui.currentWindow().texture_cache.getOrPut(hue_texture_id);
     res.value_ptr.used = true;
     if (!res.found_existing) {
         const width: u32, const height: u32 = switch (dir) {
