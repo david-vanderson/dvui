@@ -38,7 +38,7 @@ pub fn install(self: *ColorPickerWidget) !void {
         self.color_changed = true;
     }
 
-    if (try hue_slider(@src(), self.init_opts.dir.invert(), &self.init_opts.hsv.h, .{ .expand = .fromDirection(self.init_opts.dir.invert()) })) {
+    if (try hueSlider(@src(), self.init_opts.dir.invert(), &self.init_opts.hsv.h, .{ .expand = .fromDirection(self.init_opts.dir.invert()) })) {
         self.color_changed = true;
     }
 }
@@ -68,7 +68,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     const rs = b.data().contentRectScale();
     const size = rs.r.size();
 
-    try dvui.renderTexture(try get_value_saturation_texture(hsv.h), rs, .{
+    try dvui.renderTexture(try getValueSaturationTexture(hsv.h), rs, .{
         .corner_radius = options.corner_radiusGet(),
         .uv = .{ .x = 0.25, .y = 0.25, .w = 0.75, .h = 0.75 },
     });
@@ -173,7 +173,7 @@ pub var hue_slider_defaults: Options = .{
 /// Returns true if the hue was changed
 ///
 /// `hue` >= 0 and `hue` < 360
-pub fn hue_slider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue: *f32, opts: Options) !bool {
+pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue: *f32, opts: Options) !bool {
     var fraction = std.math.clamp(hue.* / 360, 0, 1);
     std.debug.assert(fraction >= 0);
     std.debug.assert(fraction <= 1);
@@ -267,7 +267,7 @@ pub fn hue_slider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hu
     }
 
     const uv_offset = comptime 0.5 / @as(f32, @floatFromInt(hue_selector_colors.len));
-    try dvui.renderTexture(try get_hue_selector_texture(dir), trackrs, .{
+    try dvui.renderTexture(try getHueSelectorTexture(dir), trackrs, .{
         .corner_radius = options.corner_radiusGet(),
         .uv = .{
             .x = uv_offset,
@@ -301,7 +301,7 @@ pub fn hue_slider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hu
     return ret;
 }
 
-pub fn get_hue_selector_texture(dir: dvui.enums.Direction) !dvui.Texture {
+pub fn getHueSelectorTexture(dir: dvui.enums.Direction) !dvui.Texture {
     const hue_texture_id = dvui.hashIdKey(@intFromEnum(dir), "hue_selector_texture");
     const res = try dvui.currentWindow().texture_cache.getOrPut(hue_texture_id);
     res.value_ptr.used = true;
@@ -316,7 +316,7 @@ pub fn get_hue_selector_texture(dir: dvui.enums.Direction) !dvui.Texture {
     return res.value_ptr.texture;
 }
 
-pub fn get_value_saturation_texture(hue: f32) !dvui.Texture {
+pub fn getValueSaturationTexture(hue: f32) !dvui.Texture {
     const hue_texture_id = dvui.hashIdKey(@intFromFloat(hue * 10000), "value_saturation_texture");
     const res = try dvui.currentWindow().texture_cache.getOrPut(hue_texture_id);
     res.value_ptr.used = true;
