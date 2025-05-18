@@ -402,22 +402,23 @@ pub fn tryFromHex(hex_color: []const u8) FromHexError!Color {
         std.fmt.ParseIntError.InvalidCharacter => |e| return e,
     };
 
+    const mult: u32 = if (is_nibble_size) 0x10 else 1;
     const mask: u32 = if (is_nibble_size) 0xf else 0xff;
     const step: u5 = if (is_nibble_size) 4 else 8;
     const offset: u5 = @intFromBool(has_alpha);
     return .{
-        .r = @intCast((num >> step * (2 + offset)) & mask),
-        .g = @intCast((num >> step * (1 + offset)) & mask),
-        .b = @intCast((num >> step * (0 + offset)) & mask),
-        .a = if (has_alpha) @intCast(num & mask) else 0xff,
+        .r = @intCast(mult * ((num >> step * (2 + offset)) & mask)),
+        .g = @intCast(mult * ((num >> step * (1 + offset)) & mask)),
+        .b = @intCast(mult * ((num >> step * (0 + offset)) & mask)),
+        .a = if (has_alpha) @intCast(mult * (num & mask)) else 0xff,
     };
 }
 
 test tryFromHex {
-    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0xff }, Color.tryFromHex("123"));
-    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0xff }, Color.tryFromHex("#123"));
-    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0x4 }, Color.tryFromHex("1234"));
-    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0x4 }, Color.tryFromHex("#1234"));
+    try std.testing.expectEqual(Color{ .r = 0x10, .g = 0x20, .b = 0x30, .a = 0xff }, Color.tryFromHex("123"));
+    try std.testing.expectEqual(Color{ .r = 0x10, .g = 0x20, .b = 0x30, .a = 0xff }, Color.tryFromHex("#123"));
+    try std.testing.expectEqual(Color{ .r = 0x10, .g = 0x20, .b = 0x30, .a = 0x40 }, Color.tryFromHex("1234"));
+    try std.testing.expectEqual(Color{ .r = 0x10, .g = 0x20, .b = 0x30, .a = 0x40 }, Color.tryFromHex("#1234"));
     try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xff }, Color.tryFromHex("a1a2a3"));
     try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xff }, Color.tryFromHex("#a1a2a3"));
     try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }, Color.tryFromHex("a1a2a3a4"));
