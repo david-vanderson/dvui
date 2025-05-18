@@ -53,6 +53,7 @@ pub const widgets = @import("import_widgets.zig");
 pub const AnimateWidget = widgets.AnimateWidget;
 pub const BoxWidget = widgets.BoxWidget;
 pub const CacheWidget = widgets.CacheWidget;
+pub const ColorPickerWidget = widgets.ColorPickerWidget;
 pub const FlexBoxWidget = widgets.FlexBoxWidget;
 pub const ReorderWidget = widgets.ReorderWidget;
 pub const Reorderable = ReorderWidget.Reorderable;
