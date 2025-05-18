@@ -66,7 +66,6 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     }
 
     const rs = b.data().contentRectScale();
-    const size = rs.r.size();
 
     try dvui.renderTexture(try getValueSaturationTexture(hsv.h), rs, .{
         .corner_radius = options.corner_radiusGet(),
@@ -104,9 +103,8 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
                 }
 
                 if (p) |pp| {
-                    const relative = pp.diff(rs.r.topLeft());
-                    hsv.s = std.math.clamp(relative.x / size.w, 0, 1);
-                    hsv.v = std.math.clamp(1 - relative.y / size.h, 0, 1);
+                    hsv.s = std.math.clamp((pp.x - rs.r.x) / rs.r.w, 0, 1);
+                    hsv.v = std.math.clamp(1 - (pp.y - rs.r.y) / rs.r.h, 0, 1);
                     changed = true;
                 }
             },
@@ -143,7 +141,8 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
         }
     }
 
-    const current_point: dvui.Point = .{ .x = size.w * hsv.s, .y = size.h * (1 - hsv.v) };
+    const br = b.data().contentRect();
+    const current_point: dvui.Point = .{ .x = br.w * hsv.s, .y = br.h * (1 - hsv.v) };
 
     var indicator = dvui.BoxWidget.init(@src(), .horizontal, false, .{
         .rect = dvui.Rect.fromPoint(current_point).toSize(.all(10)).offsetNeg(.all(5)),
