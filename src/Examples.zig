@@ -1345,10 +1345,15 @@ pub fn styling() !void {
 
     try dvui.label(@src(), "directly set colors", .{}, .{});
     {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
+        var picker = dvui.ColorPickerWidget.init(@src(), .{ .hsv = &hsv_color, .dir = .horizontal }, .{ .corner_radius = .all(30) });
+        try picker.install();
+        defer picker.deinit();
+        if (picker.color_changed) {
+            backbox_color = hsv_color.toColor();
+            hsluv_hsl = .fromColor(backbox_color);
+        }
 
-        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 60, .h = 40 }, .background = true, .color_fill = .{ .color = backbox_color }, .gravity_y = 0.5 });
+        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 40, .h = 40 }, .corner_radius = .all(200), .background = true, .color_fill = .{ .color = backbox_color } });
         backbox.deinit();
 
         var vbox = try dvui.box(@src(), .vertical, .{});
@@ -1369,16 +1374,6 @@ pub fn styling() !void {
                 backbox_color = hsluv_hsl.color();
                 hsv_color = .fromColor(backbox_color);
             }
-        }
-    }
-
-    if (try dvui.expander(@src(), "Color picker", .{}, .{ .expand = .horizontal })) {
-        var picker = dvui.ColorPickerWidget.init(@src(), .{ .hsv = &hsv_color }, .{});
-        try picker.install();
-        defer picker.deinit();
-        if (picker.color_changed) {
-            backbox_color = hsv_color.toColor();
-            hsluv_hsl = .fromColor(backbox_color);
         }
     }
 
