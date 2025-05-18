@@ -5407,6 +5407,104 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     return result;
 }
 
+pub const TextEntryColorInitOptions = struct {
+    value: ?*Color = null,
+    placeholder: []const u8 = "#ff00ff",
+    /// If a value ptr is provided, a reset button will be shown to reset
+    /// the input to the value of the ptr
+    show_reset_button: bool = true,
+};
+
+pub const TextEntryColorResult = struct {
+    value: union(enum) {
+        Valid: Color,
+        Invalid: void,
+        Empty: void,
+    } = .Invalid,
+
+    /// True if given a value pointer and wrote a valid value back to it.
+    changed: bool = false,
+    enter_pressed: bool = false,
+};
+
+/// A text entry for hex color codes. Supports the same formats as `Color.fromHex`
+pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColorInitOptions, opts: Options) !TextEntryColorResult {
+    const id = dvui.parentGet().extendId(src, opts.idExtra());
+
+    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 9);
+
+    const cw = currentWindow();
+    var te = try cw.arena().create(TextEntryWidget);
+    te.* = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, opts);
+    try te.install();
+
+    //initialize with input number
+    if (init_opts.value) |v| {
+        const old_value = dataGet(null, id, "value", Color);
+        const force_reset = init_opts.show_reset_button and try buttonIcon(@src(), "Reset Color", dvui.entypo.cw, .{}, .{ .gravity_x = 1, .gravity_y = 0.5, .margin = .all(1) });
+        if (force_reset and old_value != null) {
+            v.* = old_value.?;
+        }
+        if (old_value == null or force_reset or
+            old_value.?.r != v.r or
+            old_value.?.g != v.g or
+            old_value.?.b != v.b or
+            old_value.?.a != v.a)
+        {
+            dataSet(null, id, "value", v.*);
+            @memset(buffer, 0); // clear out anything that was there before
+            if (v.a != 0xff) {
+                _ = try std.fmt.bufPrint(buffer, "#{x:0>2}{x:0>2}{x:0>2}{x:0>2}", .{ v.r, v.g, v.b, v.a });
+                te.len = 9;
+            } else {
+                te.textSet(&(v.toHexString() catch unreachable), false);
+            }
+        }
+    }
+
+    te.processEvents();
+    // filter before drawing
+    te.filterIn(std.fmt.hex_charset ++ "ABCDEF" ++ "#");
+
+    var result: TextEntryColorResult = .{ .enter_pressed = te.enter_pressed };
+
+    // validation
+    const text = te.getText();
+    const color: ?Color = Color.tryFromHex(text) catch null;
+
+    //determine error if any
+    if (text.len == 0 and color == null) {
+        result.value = .Empty;
+    } else if (color == null) {
+        result.value = .Invalid;
+    } else {
+        result.value = .{ .Valid = color.? };
+        if (init_opts.value) |v| {
+            if ((te.enter_pressed or te.text_changed) and
+                (color.?.r != v.r or
+                    color.?.g != v.g or
+                    color.?.b != v.b or
+                    color.?.a != v.a))
+            {
+                dataSet(null, id, "value", color.?);
+                v.* = color.?;
+                result.changed = true;
+            }
+        }
+    }
+
+    try te.draw();
+
+    if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
+        const rs = te.data().borderRectScale();
+        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), 3 * rs.s, dvui.themeGet().color_err, .{ .after = true });
+    }
+
+    te.deinit();
+
+    return result;
+}
+
 pub const renderTextOptions = struct {
     font: Font,
     text: []const u8,

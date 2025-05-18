@@ -1375,6 +1375,12 @@ pub fn styling() !void {
                 hsv_color = .fromColor(backbox_color);
             }
         }
+
+        const res = try dvui.textEntryColor(@src(), .{ .value = &backbox_color }, .{});
+        if (res.changed) {
+            hsluv_hsl = .fromColor(backbox_color);
+            hsv_color = .fromColor(backbox_color);
+        }
     }
 
     {
