@@ -47,10 +47,16 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
         .padding = .all(5),
     };
 
-    var box = try dvui.box(src, .horizontal, defaults.override(opts));
-    defer box.deinit();
+    const options = defaults.override(opts);
 
-    const rs = box.data().contentRectScale();
+    var b = try dvui.box(src, .horizontal, options);
+    defer b.deinit();
+
+    if (b.data().visible()) {
+        try dvui.tabIndexSet(b.data().id, options.tab_index);
+    }
+
+    const rs = b.data().contentRectScale();
     const size = rs.r.size();
 
     var vertexes = [_]dvui.Vertex{
@@ -78,22 +84,72 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     try dvui.renderTriangles(triangles, tex);
 
     var changed = false;
-    for (dvui.events()) |*e| {
-        if (!dvui.eventMatchSimple(e, box.data())) {
+    const evts = dvui.events();
+    for (evts) |*e| {
+        if (!dvui.eventMatch(e, .{ .id = b.data().id, .r = rs.r }))
             continue;
-        }
 
-        if (e.evt == .mouse) {
-            switch (e.evt.mouse.action) {
-                .press => {
-                    e.handle(@src(), box.data());
-                    const relative = e.evt.mouse.p.diff(rs.r.topLeft());
+        switch (e.evt) {
+            .mouse => |me| {
+                var p: ?dvui.Point.Physical = null;
+                if (me.action == .focus) {
+                    e.handle(@src(), b.data());
+                    dvui.focusWidget(b.data().id, null, e.num);
+                } else if (me.action == .press and me.button.pointer()) {
+                    // capture
+                    dvui.captureMouse(b.data());
+                    e.handle(@src(), b.data());
+                    p = me.p;
+                } else if (me.action == .release and me.button.pointer()) {
+                    // stop capture
+                    dvui.captureMouse(null);
+                    dvui.dragEnd();
+                    e.handle(@src(), b.data());
+                } else if (me.action == .motion and dvui.captured(b.data().id)) {
+                    // handle only if we have capture
+                    e.handle(@src(), b.data());
+                    p = me.p;
+                } else if (me.action == .position) {
+                    dvui.cursorSet(.arrow);
+                }
+
+                if (p) |pp| {
+                    const relative = pp.diff(rs.r.topLeft());
                     hsv.s = std.math.clamp(relative.x / size.w, 0, 1);
                     hsv.v = std.math.clamp(1 - relative.y / size.h, 0, 1);
                     changed = true;
-                },
-                else => {},
-            }
+                }
+            },
+            .key => |ke| {
+                if (ke.action == .down or ke.action == .repeat) {
+                    switch (ke.code) {
+                        .left => {
+                            e.handle(@src(), b.data());
+                            hsv.s = std.math.clamp(hsv.s - 0.05, 0, 1);
+                            changed = true;
+                        },
+                        .right => {
+                            e.handle(@src(), b.data());
+                            hsv.s = std.math.clamp(hsv.s + 0.05, 0, 1);
+                            changed = true;
+                        },
+                        .up => {
+                            e.handle(@src(), b.data());
+                            // hsv.v is inverted, up is positive
+                            hsv.v = std.math.clamp(hsv.v + 0.05, 0, 1);
+                            changed = true;
+                        },
+                        .down => {
+                            e.handle(@src(), b.data());
+                            // hsv.v is inverted, down is negative
+                            hsv.v = std.math.clamp(hsv.v - 0.05, 0, 1);
+                            changed = true;
+                        },
+                        else => {},
+                    }
+                }
+            },
+            else => {},
         }
     }
 
@@ -110,6 +166,9 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     });
     try indicator.install();
     try indicator.drawBackground();
+    if (b.data().id == dvui.focusedWidgetId()) {
+        try indicator.wd.focusBorder();
+    }
     indicator.deinit();
 
     return changed;
