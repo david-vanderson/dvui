@@ -5917,12 +5917,12 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
         return;
     }
 
-    const r = rs.r.offsetNegPoint(cw.render_target.offset);
-
     var path: PathArrayList = .init(dvui.currentWindow().arena());
     defer path.deinit();
 
-    try dvui.pathAddRect(&path, r, opts.corner_radius.scale(rs.s, Rect.Physical));
+    try dvui.pathAddRect(&path, rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
+
+    const r = rs.r.offsetNegPoint(cw.render_target.offset);
 
     var triangles = try pathFillConvexTriangles(path.items, .{});
     defer triangles.deinit(cw.arena());
