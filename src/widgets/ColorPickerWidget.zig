@@ -1,3 +1,10 @@
+//! ![color-picker](ColorPickerWidget.png)
+//!
+//! A widget that handles the basic color picker square and acompanying hue slider.
+//!
+//! This widget does not include any sliders or input fields for
+//! the individual color values.
+
 pub const ColorPickerWidget = @This();
 
 id: u32,
@@ -343,4 +350,25 @@ const dvui = @import("../dvui.zig");
 
 test {
     std.testing.refAllDecls(@This());
+}
+
+test "DOCIMG ColorPickerWidget" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 250, .h = 200 } });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = try dvui.box(@src(), .vertical, .{ .expand = .both, .background = true, .color_fill = .fill_window });
+            defer box.deinit();
+
+            var hsv: dvui.Color.HSV = .{ .h = 120, .s = 0.8, .v = 0.9 };
+            var picker = ColorPickerWidget.init(@src(), .{ .hsv = &hsv }, .{ .expand = .vertical, .gravity_x = 0.5 });
+            try picker.install();
+            defer picker.deinit();
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    try t.saveImage(frame, null, "ColorPickerWidget.png");
 }
