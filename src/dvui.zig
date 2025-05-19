@@ -1270,9 +1270,9 @@ pub fn pathFillConvexTriangles(path: PathSlice, opts: pathFillConvexTrianglesOpt
         const ai = (i + path.len - 1) % path.len;
         const bi = i % path.len;
         const ci = (i + 1) % path.len;
-        const aa = path[ai].diff(cw.render_target.offset);
-        const bb = path[bi].diff(cw.render_target.offset);
-        const cc = path[ci].diff(cw.render_target.offset);
+        const aa = path[ai];
+        const bb = path[bi];
+        const cc = path[ci];
 
         const diffab = aa.diff(bb).normalize();
         const diffbc = bb.diff(cc).normalize();
@@ -1406,7 +1406,7 @@ pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: b
 
     if (path.len == 1) {
         // draw a circle with radius thickness at that point
-        const center = path[0].diff(cw.render_target.offset);
+        const center = path[0];
 
         var tempPath: PathArrayList = .init(cw.arena());
         defer tempPath.deinit();
@@ -1453,9 +1453,9 @@ pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: b
         const ai = (i + path.len - 1) % path.len;
         const bi = i % path.len;
         const ci = (i + 1) % path.len;
-        const aa = path[ai].diff(cw.render_target.offset);
-        var bb = path[bi].diff(cw.render_target.offset);
-        const cc = path[ci].diff(cw.render_target.offset);
+        const aa = path[ai];
+        var bb = path[bi];
+        const cc = path[ci];
 
         // the amount to move from bb to the edge of the line
         var halfnorm: Point.Physical = undefined;
@@ -1655,8 +1655,14 @@ pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: b
     bounds.w = bounds.w - bounds.x;
     bounds.h = bounds.h - bounds.y;
 
-    const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-    const clipr: ?Rect.Physical = if (bounds.clippedBy(clip_offset)) clip_offset else null;
+    const clipr: ?Rect.Physical = if (bounds.clippedBy(clipGet())) clipGet().offsetNegPoint(cw.render_target.offset) else null;
+
+    if (cw.render_target.offset.nonZero()) {
+        const offset = cw.render_target.offset;
+        for (vtx.items) |*v| {
+            v.pos = v.pos.diff(offset);
+        }
+    }
 
     cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
 }
@@ -1778,8 +1784,14 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) !void {
         return;
     }
 
-    const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-    const clipr: ?Rect.Physical = if (triangles.bounds.clippedBy(clip_offset)) clip_offset else null;
+    const clipr: ?Rect.Physical = if (triangles.bounds.clippedBy(clipGet())) clipGet().offsetNegPoint(cw.render_target.offset) else null;
+
+    if (cw.render_target.offset.nonZero()) {
+        const offset = cw.render_target.offset;
+        for (triangles.vertexes) |*v| {
+            v.pos = v.pos.diff(offset);
+        }
+    }
 
     cw.backend.drawClippedTriangles(tex, triangles.vertexes, triangles.indices, clipr);
 }
@@ -5939,13 +5951,11 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
 
     try dvui.pathAddRect(&path, rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    const r = rs.r.offsetNegPoint(cw.render_target.offset);
-
     var triangles = try pathFillConvexTriangles(path.items, .{});
     defer triangles.deinit(cw.arena());
 
-    triangles.uvFromRectuv(r, opts.uv);
-    triangles.rotate(r.center(), opts.rotation);
+    triangles.uvFromRectuv(rs.r, opts.uv);
+    triangles.rotate(rs.r.center(), opts.rotation);
 
     if (opts.background_color) |bg_col| {
         var back_tri = try triangles.dupe(cw.arena());
