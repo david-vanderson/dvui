@@ -10,6 +10,7 @@ pub const AnimateWidget = @import("widgets/AnimateWidget.zig");
 pub const BoxWidget = @import("widgets/BoxWidget.zig");
 pub const ButtonWidget = @import("widgets/ButtonWidget.zig");
 pub const CacheWidget = @import("widgets/CacheWidget.zig");
+pub const ColorPickerWidget = @import("widgets/ColorPickerWidget.zig");
 pub const ContextWidget = @import("widgets/ContextWidget.zig");
 pub const DropdownWidget = @import("widgets/DropdownWidget.zig");
 pub const FlexBoxWidget = @import("widgets/FlexBoxWidget.zig");

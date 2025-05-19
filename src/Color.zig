@@ -64,6 +64,124 @@ pub fn brightness(self: @This()) f32 {
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+pub fn toRGBA(self: @This()) [4]u8 {
+    return .{ self.r, self.g, self.b, self.a };
+}
+
+/// https://en.wikipedia.org/wiki/HSL_and_HSV#HSV_to_RGB
+pub const HSV = struct {
+    /// Hue 0-360 (degrees)
+    h: f32 = 0.0,
+
+    /// Saturation 0-1 (%)
+    s: f32 = 1.0,
+
+    /// Value 0-1 (%)
+    v: f32 = 1.0,
+
+    /// Alpha 0-1 (%)
+    a: f32 = 1.0,
+
+    pub fn fromColor(color: Color) HSV {
+        const r: f32 = @as(f32, @floatFromInt(color.r)) / 255.0;
+        const g: f32 = @as(f32, @floatFromInt(color.g)) / 255.0;
+        const b: f32 = @as(f32, @floatFromInt(color.b)) / 255.0;
+        const a: f32 = @as(f32, @floatFromInt(color.a)) / 255.0;
+
+        const max = @max(r, g, b);
+        const min = @min(r, g, b);
+        const delta = max - min;
+
+        const h = 60 * (if (delta == 0)
+            0
+        else if (max == r)
+            @mod((g - b) / delta, 6)
+        else if (max == g)
+            (b - r) / delta + 2
+        else if (max == b)
+            (r - g) / delta + 4
+        else
+            unreachable);
+
+        const s = if (max == 0) 0 else delta / max;
+
+        return .{ .h = h, .s = s, .v = max, .a = a };
+    }
+
+    pub fn toColor(self: HSV) Color {
+        const c = self.v * self.s;
+        const x = c * (1 - @abs(@mod(self.h / 60, 2) - 1));
+        const m = self.v - c;
+
+        const step: i8 = @intFromFloat(self.h / 60);
+
+        const r, const g, const b = switch (step) {
+            0 => .{ c, x, 0 },
+            1 => .{ x, c, 0 },
+            2 => .{ 0, c, x },
+            3 => .{ 0, x, c },
+            4 => .{ x, 0, c },
+            5 => .{ c, 0, x },
+            else => return .magenta, // hue was < 0 or >= 360
+        };
+
+        return .{
+            .r = @intFromFloat(@round((r + m) * 255)),
+            .g = @intFromFloat(@round((g + m) * 255)),
+            .b = @intFromFloat(@round((b + m) * 255)),
+            .a = @intFromFloat(@round(self.a * 255)),
+        };
+    }
+
+    test toColor {
+        try std.testing.expectEqualDeep(Color.black, HSV.toColor(.{ .h = 0, .s = 0, .v = 0 }));
+        try std.testing.expectEqualDeep(Color.white, HSV.toColor(.{ .h = 0, .s = 0, .v = 1 }));
+
+        // Hue shouldn't matter with 0 saturation
+        try std.testing.expectEqualDeep(Color.black, HSV.toColor(.{ .h = 123, .s = 0, .v = 0 }));
+        try std.testing.expectEqualDeep(Color.white, HSV.toColor(.{ .h = 123, .s = 0, .v = 1 }));
+
+        try std.testing.expectEqualDeep(Color.red, HSV.toColor(.{ .h = 0 }));
+        try std.testing.expectEqualDeep(Color.yellow, HSV.toColor(.{ .h = 60 }));
+        try std.testing.expectEqualDeep(Color.lime, HSV.toColor(.{ .h = 120 }));
+        try std.testing.expectEqualDeep(Color.cyan, HSV.toColor(.{ .h = 180 }));
+        try std.testing.expectEqualDeep(Color.blue, HSV.toColor(.{ .h = 240 }));
+        try std.testing.expectEqualDeep(Color.magenta, HSV.toColor(.{ .h = 300 }));
+
+        // our silver color is 0xC0, and v == 0.75 is 0xBF
+        try std.testing.expectEqualDeep(Color{ .r = 0xBF, .g = 0xBF, .b = 0xBF }, HSV.toColor(.{ .h = 0, .s = 0, .v = 0.75 }));
+        try std.testing.expectEqualDeep(Color.gray, HSV.toColor(.{ .h = 0, .s = 0, .v = 0.5 }));
+
+        try std.testing.expectEqualDeep(Color.maroon, HSV.toColor(.{ .h = 0, .v = 0.5 }));
+        try std.testing.expectEqualDeep(Color.olive, HSV.toColor(.{ .h = 60, .v = 0.5 }));
+        try std.testing.expectEqualDeep(Color.green, HSV.toColor(.{ .h = 120, .v = 0.5 }));
+        try std.testing.expectEqualDeep(Color.teal, HSV.toColor(.{ .h = 180, .v = 0.5 }));
+        try std.testing.expectEqualDeep(Color.purple, HSV.toColor(.{ .h = 300, .v = 0.5 }));
+    }
+
+    test fromColor {
+        try std.testing.expectEqualDeep(Color.black, HSV.fromColor(.black).toColor());
+        try std.testing.expectEqualDeep(Color.white, HSV.fromColor(.white).toColor());
+
+        try std.testing.expectEqualDeep(Color.red, HSV.fromColor(.red).toColor());
+        try std.testing.expectEqualDeep(Color.yellow, HSV.fromColor(.yellow).toColor());
+        try std.testing.expectEqualDeep(Color.lime, HSV.fromColor(.lime).toColor());
+        try std.testing.expectEqualDeep(Color.cyan, HSV.fromColor(.cyan).toColor());
+        try std.testing.expectEqualDeep(Color.blue, HSV.fromColor(.blue).toColor());
+        try std.testing.expectEqualDeep(Color.magenta, HSV.fromColor(.magenta).toColor());
+
+        // our silver color is 0xC0, and v == 0.75 is 0xBF
+        try std.testing.expectEqualDeep(Color{ .r = 0xBF, .g = 0xBF, .b = 0xBF }, HSV.fromColor(.{ .r = 0xBF, .g = 0xBF, .b = 0xBF }).toColor());
+        try std.testing.expectEqualDeep(Color.gray, HSV.fromColor(.gray).toColor());
+
+        try std.testing.expectEqualDeep(Color.maroon, HSV.fromColor(.maroon).toColor());
+        try std.testing.expectEqualDeep(Color.olive, HSV.fromColor(.olive).toColor());
+        try std.testing.expectEqualDeep(Color.green, HSV.fromColor(.green).toColor());
+        try std.testing.expectEqualDeep(Color.teal, HSV.fromColor(.teal).toColor());
+        try std.testing.expectEqualDeep(Color.purple, HSV.fromColor(.purple).toColor());
+    }
+};
+
 /// Hue Saturation Lightness
 ///
 /// https://www.hsluv.org/
@@ -269,6 +387,7 @@ pub const FromHexError = std.fmt.ParseIntError || error{
 /// - `RRGGBB`
 /// - `RRGGBBAA`
 pub fn tryFromHex(hex_color: []const u8) FromHexError!Color {
+    if (hex_color.len == 0) return error.InvalidHexStringLength;
     const hex = if (hex_color[0] == '#') hex_color[1..] else hex_color;
 
     const is_nibble_size, const has_alpha = switch (hex.len) {
@@ -283,22 +402,23 @@ pub fn tryFromHex(hex_color: []const u8) FromHexError!Color {
         std.fmt.ParseIntError.InvalidCharacter => |e| return e,
     };
 
+    const mult: u32 = if (is_nibble_size) 0x10 else 1;
     const mask: u32 = if (is_nibble_size) 0xf else 0xff;
     const step: u5 = if (is_nibble_size) 4 else 8;
     const offset: u5 = @intFromBool(has_alpha);
     return .{
-        .r = @intCast((num >> step * (2 + offset)) & mask),
-        .g = @intCast((num >> step * (1 + offset)) & mask),
-        .b = @intCast((num >> step * (0 + offset)) & mask),
-        .a = if (has_alpha) @intCast(num & mask) else 0xff,
+        .r = @intCast(mult * ((num >> step * (2 + offset)) & mask)),
+        .g = @intCast(mult * ((num >> step * (1 + offset)) & mask)),
+        .b = @intCast(mult * ((num >> step * (0 + offset)) & mask)),
+        .a = if (has_alpha) @intCast(mult * (num & mask)) else 0xff,
     };
 }
 
 test tryFromHex {
-    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0xff }, Color.tryFromHex("123"));
-    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0xff }, Color.tryFromHex("#123"));
-    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0x4 }, Color.tryFromHex("1234"));
-    try std.testing.expectEqual(Color{ .r = 0x1, .g = 0x2, .b = 0x3, .a = 0x4 }, Color.tryFromHex("#1234"));
+    try std.testing.expectEqual(Color{ .r = 0x10, .g = 0x20, .b = 0x30, .a = 0xff }, Color.tryFromHex("123"));
+    try std.testing.expectEqual(Color{ .r = 0x10, .g = 0x20, .b = 0x30, .a = 0xff }, Color.tryFromHex("#123"));
+    try std.testing.expectEqual(Color{ .r = 0x10, .g = 0x20, .b = 0x30, .a = 0x40 }, Color.tryFromHex("1234"));
+    try std.testing.expectEqual(Color{ .r = 0x10, .g = 0x20, .b = 0x30, .a = 0x40 }, Color.tryFromHex("#1234"));
     try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xff }, Color.tryFromHex("a1a2a3"));
     try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xff }, Color.tryFromHex("#a1a2a3"));
     try std.testing.expectEqual(Color{ .r = 0xa1, .g = 0xa2, .b = 0xa3, .a = 0xa4 }, Color.tryFromHex("a1a2a3a4"));

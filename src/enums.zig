@@ -321,6 +321,13 @@ pub const Key = enum {
 pub const Direction = enum {
     horizontal,
     vertical,
+
+    pub fn invert(self: Direction) Direction {
+        return switch (self) {
+            .horizontal => .vertical,
+            .vertical => .horizontal,
+        };
+    }
 };
 
 pub const DialogResponse = enum(u8) {

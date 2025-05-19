@@ -64,7 +64,8 @@ var show_dialog: bool = false;
 var scale_val: f32 = 1.0;
 var line_height_factor: f32 = 1.2;
 var backbox_color: dvui.Color = .black;
-var hsluv_hsl: dvui.Color.HSLuv = .{ .l = 50 };
+var hsluv_hsl: dvui.Color.HSLuv = .fromColor(.black);
+var hsv_color: dvui.Color.HSV = .fromColor(.black);
 var animating_window_show: bool = false;
 var animating_window_closing: bool = false;
 var animating_window_rect = Rect{ .x = 100, .y = 100, .w = 300, .h = 200 };
@@ -1344,27 +1345,43 @@ pub fn styling() !void {
 
     try dvui.label(@src(), "directly set colors", .{}, .{});
     {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 60, .h = 40 }, .background = true, .color_fill = .{ .color = backbox_color }, .gravity_y = 0.5 });
-        backbox.deinit();
-
-        var vbox = try dvui.box(@src(), .vertical, .{});
-        defer vbox.deinit();
+        var picker = dvui.ColorPickerWidget.init(@src(), .{ .hsv = &hsv_color, .dir = .horizontal }, .{ .expand = .horizontal });
+        try picker.install();
+        defer picker.deinit();
+        if (picker.color_changed) {
+            backbox_color = hsv_color.toColor();
+            hsluv_hsl = .fromColor(backbox_color);
+        }
 
         {
-            var hbox2 = try dvui.box(@src(), .horizontal, .{});
-            defer hbox2.deinit();
-            if (try rgbSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 })) {
+            var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .width(130), .max_size_content = .width(130) });
+            defer vbox.deinit();
+
+            var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .h = 40 }, .expand = .horizontal, .background = true, .color_fill = .{ .color = backbox_color } });
+            backbox.deinit();
+
+            if (try dvui.sliderEntry(@src(), "A: {d:0.2}", .{ .value = &hsv_color.a, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = .horizontal })) {
+                backbox_color = hsv_color.toColor();
                 hsluv_hsl = .fromColor(backbox_color);
+            }
+
+            const res = try dvui.textEntryColor(@src(), .{ .value = &backbox_color }, .{ .expand = .horizontal });
+            if (res.changed) {
+                hsluv_hsl = .fromColor(backbox_color);
+                hsv_color = .fromColor(backbox_color);
             }
         }
         {
-            var hbox2 = try dvui.box(@src(), .horizontal, .{});
-            defer hbox2.deinit();
+            var vbox = try dvui.box(@src(), .vertical, .{});
+            defer vbox.deinit();
+
+            if (try rgbSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 })) {
+                hsluv_hsl = .fromColor(backbox_color);
+                hsv_color = .fromColor(backbox_color);
+            }
             if (try hsluvSliders(@src(), &hsluv_hsl, .{ .gravity_y = 0.5 })) {
                 backbox_color = hsluv_hsl.color();
+                hsv_color = .fromColor(backbox_color);
             }
         }
     }
@@ -1453,7 +1470,7 @@ pub fn styling() !void {
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a Color
 pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) !bool {
-    var hbox = try dvui.box(src, .horizontal, opts);
+    var hbox = try dvui.boxEqual(src, .horizontal, opts);
     defer hbox.deinit();
 
     var red: f32 = @floatFromInt(color.r);
@@ -1480,7 +1497,7 @@ pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Opt
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a HSLuv Color
 pub fn hsluvSliders(src: std.builtin.SourceLocation, hsluv: *dvui.Color.HSLuv, opts: Options) !bool {
-    var hbox = try dvui.box(src, .horizontal, opts);
+    var hbox = try dvui.boxEqual(src, .horizontal, opts);
     defer hbox.deinit();
 
     var changed = false;
