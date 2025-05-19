@@ -255,7 +255,7 @@ pub fn drawBackground(self: *FloatingWindowWidget) !void {
     try self.layout.drawBackground();
 
     // clip to just our window (layout has the margin)
-    dvui.clipSet(self.layout.data().borderRectScale().r);
+    _ = dvui.clip(self.layout.data().borderRectScale().r);
 }
 
 fn dragPart(me: Event.Mouse, rs: RectScale) DragPart {
