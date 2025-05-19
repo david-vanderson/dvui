@@ -64,7 +64,8 @@ pub fn install(self: *FloatingWidget) !void {
 
     // clip to just our window (using clipSet since we are not inside our parent)
     self.prevClip = dvui.clipGet();
-    dvui.clipSet(rs.r);
+    dvui.clipSet(dvui.windowRectPixels());
+    _ = dvui.clip(rs.r);
 
     self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
     try self.scaler.install();
