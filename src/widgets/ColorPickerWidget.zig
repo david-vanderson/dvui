@@ -7,7 +7,7 @@
 
 pub const ColorPickerWidget = @This();
 
-id: u32,
+src: std.builtin.SourceLocation,
 opts: dvui.Options,
 init_opts: InitOptions,
 color_changed: bool = false,
@@ -24,7 +24,7 @@ pub var defaults = Options{
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ColorPickerWidget {
     const self = ColorPickerWidget{
-        .id = dvui.parentGet().extendId(src, opts.idExtra()),
+        .src = src,
         .opts = defaults.override(opts),
         .init_opts = init_opts,
     };
@@ -32,7 +32,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
 }
 
 pub fn install(self: *ColorPickerWidget) !void {
-    self.box = try dvui.box(@src(), self.init_opts.dir, self.opts);
+    self.box = try dvui.box(self.src, self.init_opts.dir, self.opts);
 
     if (try valueSaturationBox(@src(), self.init_opts.hsv, .{})) {
         self.color_changed = true;
