@@ -1354,18 +1354,18 @@ pub fn styling() !void {
         }
 
         {
-            var vbox = try dvui.box(@src(), .vertical, .{ .min_size_content = .width(130), .max_size_content = .width(130) });
+            var vbox = try dvui.box(@src(), .vertical, .{});
             defer vbox.deinit();
 
             var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .h = 40 }, .expand = .horizontal, .background = true, .color_fill = .{ .color = backbox_color } });
             backbox.deinit();
 
-            if (try dvui.sliderEntry(@src(), "A: {d:0.2}", .{ .value = &hsv_color.a, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = .horizontal })) {
+            if (try dvui.sliderEntry(@src(), "A: {d:0.2}", .{ .value = &hsv_color.a, .min = 0, .max = 1, .interval = 0.01 }, .{ .min_size_content = .{}, .expand = .horizontal })) {
                 backbox_color = hsv_color.toColor();
                 hsluv_hsl = .fromColor(backbox_color);
             }
 
-            const res = try dvui.textEntryColor(@src(), .{ .value = &backbox_color }, .{ .expand = .horizontal });
+            const res = try dvui.textEntryColor(@src(), .{ .value = &backbox_color }, .{});
             if (res.changed) {
                 hsluv_hsl = .fromColor(backbox_color);
                 hsv_color = .fromColor(backbox_color);
