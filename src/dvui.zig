@@ -1214,14 +1214,14 @@ pub fn pathFillConvex(path: PathSlice, color: Color, blur: f32) !void {
         return;
     }
 
-    var triangles = try pathFillConvexTriangles(path, .{ .blur = blur });
+    var triangles = try pathFillConvexTriangles(path, .{ .blur = blur, .color = color });
     defer triangles.deinit(cw.arena());
-    triangles.color(color);
     try renderTriangles(triangles, null);
 }
 
 pub const pathFillConvexTrianglesOptions = struct {
     blur: f32 = 1.0,
+    color: Color = .white,
     center: ?Point.Physical = null,
 };
 
@@ -1236,7 +1236,7 @@ pub const pathFillConvexTrianglesOptions = struct {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn pathFillConvexTriangles(path: PathSlice, opts: pathFillConvexTrianglesOptions) !Triangles {
     if (path.len < 3) {
-        return Triangles.empty;
+        return .empty;
     }
 
     const cw = currentWindow();
@@ -1251,26 +1251,18 @@ pub fn pathFillConvexTriangles(path: PathSlice, opts: pathFillConvexTrianglesOpt
         vtx_count += 1;
         idx_count += 6;
     }
-    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), vtx_count);
-    defer vtx.deinit();
 
-    var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
-    defer idx.deinit();
+    var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
+    errdefer comptime unreachable; // No errors from this point on
 
-    const col: Color = .{};
+    const col: Color = opts.color.alphaMultiply();
     const col_trans: Color = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
-
-    var bounds = Rect.Physical{}; // w and h are maxx and maxy for now
-    bounds.x = std.math.floatMax(f32);
-    bounds.y = bounds.x;
-    bounds.w = -bounds.x;
-    bounds.h = -bounds.x;
 
     var i: usize = 0;
     while (i < path.len) : (i += 1) {
-        const ai = (i + path.len - 1) % path.len;
-        const bi = i % path.len;
-        const ci = (i + 1) % path.len;
+        const ai: u16 = @intCast((i + path.len - 1) % path.len);
+        const bi: u16 = @intCast(i % path.len);
+        const ci: u16 = @intCast((i + 1) % path.len);
         const aa = path[ai];
         const bb = path[bi];
         const cc = path[ci];
@@ -1280,17 +1272,16 @@ pub fn pathFillConvexTriangles(path: PathSlice, opts: pathFillConvexTrianglesOpt
         // average of normals on each side
         var norm: Point.Physical = .{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
 
-        var v: Vertex = undefined;
         // inner vertex
         const inside_len = @min(0.5, opts.blur / 2);
-        v.pos.x = bb.x - norm.x * inside_len;
-        v.pos.y = bb.y - norm.y * inside_len;
-        v.col = col;
-        try vtx.append(v);
-        bounds.x = @min(bounds.x, v.pos.x);
-        bounds.y = @min(bounds.y, v.pos.y);
-        bounds.w = @max(bounds.w, v.pos.x);
-        bounds.h = @max(bounds.h, v.pos.y);
+        builder.appendVertex(.{
+            .pos = .{
+                .x = bb.x - norm.x * inside_len,
+                .y = bb.y - norm.y * inside_len,
+            },
+            .col = col,
+            .uv = undefined,
+        });
 
         const idx_ai = if (opts.blur > 0) ai * 2 else ai;
         const idx_bi = if (opts.blur > 0) bi * 2 else bi;
@@ -1298,13 +1289,9 @@ pub fn pathFillConvexTriangles(path: PathSlice, opts: pathFillConvexTrianglesOpt
         // indexes for fill
         // triangles must be counter-clockwise (y going down) to avoid backface culling
         if (opts.center) |_| {
-            try idx.append(@as(u16, @intCast(vtx_count - 1)));
-            try idx.append(@as(u16, @intCast(idx_ai)));
-            try idx.append(@as(u16, @intCast(idx_bi)));
+            builder.appendTriangles(&.{ @intCast(vtx_count - 1), idx_ai, idx_bi });
         } else if (i > 1) {
-            try idx.append(@as(u16, @intCast(0)));
-            try idx.append(@as(u16, @intCast(idx_ai)));
-            try idx.append(@as(u16, @intCast(idx_bi)));
+            builder.appendTriangles(&.{ 0, idx_ai, idx_bi });
         }
 
         if (opts.blur > 0) {
@@ -1324,35 +1311,29 @@ pub fn pathFillConvexTriangles(path: PathSlice, opts: pathFillConvexTrianglesOpt
 
             // outer vertex
             const outside_len = if (opts.blur <= 1) opts.blur / 2 else opts.blur - 0.5;
-            v.pos.x = bb.x + norm.x * outside_len;
-            v.pos.y = bb.y + norm.y * outside_len;
-            v.col = col_trans;
-            try vtx.append(v);
-            bounds.x = @min(bounds.x, v.pos.x);
-            bounds.y = @min(bounds.y, v.pos.y);
-            bounds.w = @max(bounds.w, v.pos.x);
-            bounds.h = @max(bounds.h, v.pos.y);
+            builder.appendVertex(.{
+                .pos = .{
+                    .x = bb.x + norm.x * outside_len,
+                    .y = bb.y + norm.y * outside_len,
+                },
+                .col = col_trans,
+                .uv = undefined,
+            });
 
             // indexes for aa fade from inner to outer
             // triangles must be counter-clockwise (y going down) to avoid backface culling
-            try idx.append(@as(u16, @intCast(idx_ai)));
-            try idx.append(@as(u16, @intCast(idx_ai + 1)));
-            try idx.append(@as(u16, @intCast(idx_bi)));
-            try idx.append(@as(u16, @intCast(idx_ai + 1)));
-            try idx.append(@as(u16, @intCast(idx_bi + 1)));
-            try idx.append(@as(u16, @intCast(idx_bi)));
+            builder.appendTriangles(&.{
+                idx_ai,     idx_ai + 1, idx_bi,
+                idx_ai + 1, idx_bi + 1, idx_bi,
+            });
         }
     }
 
     if (opts.center) |center| {
-        try vtx.append(.{ .pos = center, .col = col, .uv = undefined });
+        builder.appendVertex(.{ .pos = center, .col = col, .uv = undefined });
     }
 
-    // convert bounds back to normal rect
-    bounds.w = bounds.w - bounds.x;
-    bounds.h = bounds.h - bounds.y;
-
-    return .{ .vertexes = try vtx.toOwnedSlice(), .indices = try idx.toOwnedSlice(), .bounds = bounds };
+    return builder.build();
 }
 
 pub const EndCapStyle = enum {
@@ -1395,12 +1376,14 @@ pub fn pathStroke(path: PathSlice, thickness: f32, color: Color, opts: PathStrok
         return;
     }
 
-    try pathStrokeRaw(path, thickness, color, opts.closed, opts.endcap_style);
+    var triangles = try pathStrokeTriangles(path, thickness, color, opts.closed, opts.endcap_style);
+    defer triangles.deinit(cw.arena());
+    try renderTriangles(triangles, null);
 }
 
-pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: bool, endcap_style: EndCapStyle) !void {
+pub fn pathStrokeTriangles(path: PathSlice, thickness: f32, color: Color, closed_in: bool, endcap_style: EndCapStyle) !Triangles {
     if (dvui.clipGet().empty()) {
-        return;
+        return .empty;
     }
 
     const cw = currentWindow();
@@ -1413,9 +1396,7 @@ pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: b
         defer tempPath.deinit();
 
         try pathAddArc(&tempPath, center, thickness, math.pi * 2.0, 0, true);
-        try pathFillConvex(tempPath.items, color, 1.0);
-
-        return;
+        return try pathFillConvexTriangles(tempPath.items, .{ .color = color, .blur = 1.0 });
     }
 
     var closed: bool = closed_in;
@@ -1428,40 +1409,32 @@ pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: b
     if (!closed) {
         vtx_count += 4;
     }
-    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), vtx_count);
-    defer vtx.deinit();
     var idx_count = (path.len - 1) * 18;
     if (closed) {
         idx_count += 18;
     } else {
         idx_count += 8 * 3;
     }
-    var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
-    defer idx.deinit();
+
+    var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
+    errdefer comptime unreachable; // No errors from this point on
+
     const col = color.alphaMultiply();
     const col_trans = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
-    var bounds = Rect.Physical{}; // w and h are maxx and maxy for now
-    bounds.x = std.math.floatMax(f32);
-    bounds.y = bounds.x;
-    bounds.w = -bounds.x;
-    bounds.h = -bounds.x;
-
     const aa_size = 1.0;
-    var vtx_start: usize = 0;
+    var vtx_start: u16 = 0;
     var i: usize = 0;
     while (i < path.len) : (i += 1) {
-        const ai = (i + path.len - 1) % path.len;
-        const bi = i % path.len;
-        const ci = (i + 1) % path.len;
+        const ai: u16 = @intCast((i + path.len - 1) % path.len);
+        const bi: u16 = @intCast(i % path.len);
+        const ci: u16 = @intCast((i + 1) % path.len);
         const aa = path[ai];
         var bb = path[bi];
         const cc = path[ci];
 
         // the amount to move from bb to the edge of the line
         var halfnorm: Point.Physical = undefined;
-
-        var v: Vertex = undefined;
         var diffab: Point.Physical = undefined;
 
         if (!closed and ((i == 0) or ((i + 1) == path.len))) {
@@ -1479,40 +1452,31 @@ pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: b
                 // add 2 extra vertexes for endcap fringe
                 vtx_start += 2;
 
-                v.pos.x = bb.x - halfnorm.x * (thickness + aa_size) + diffbc.x * aa_size;
-                v.pos.y = bb.y - halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size;
-                v.col = col_trans;
-                try vtx.append(v);
-                bounds.x = @min(bounds.x, v.pos.x);
-                bounds.y = @min(bounds.y, v.pos.y);
-                bounds.w = @max(bounds.w, v.pos.x);
-                bounds.h = @max(bounds.h, v.pos.y);
+                builder.appendVertex(.{
+                    .pos = .{
+                        .x = bb.x - halfnorm.x * (thickness + aa_size) + diffbc.x * aa_size,
+                        .y = bb.y - halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size,
+                    },
+                    .col = col_trans,
+                    .uv = undefined,
+                });
 
-                v.pos.x = bb.x + halfnorm.x * (thickness + aa_size) + diffbc.x * aa_size;
-                v.pos.y = bb.y + halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size;
-                v.col = col_trans;
-                try vtx.append(v);
-                bounds.x = @min(bounds.x, v.pos.x);
-                bounds.y = @min(bounds.y, v.pos.y);
-                bounds.w = @max(bounds.w, v.pos.x);
-                bounds.h = @max(bounds.h, v.pos.y);
+                builder.appendVertex(.{
+                    .pos = .{
+                        .x = bb.x + halfnorm.x * (thickness + aa_size) + diffbc.x * aa_size,
+                        .y = bb.y + halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size,
+                    },
+                    .col = col_trans,
+                    .uv = undefined,
+                });
 
                 // add indexes for endcap fringe
-                try idx.append(@as(u16, @intCast(0)));
-                try idx.append(@as(u16, @intCast(vtx_start)));
-                try idx.append(@as(u16, @intCast(vtx_start + 1)));
-
-                try idx.append(@as(u16, @intCast(0)));
-                try idx.append(@as(u16, @intCast(1)));
-                try idx.append(@as(u16, @intCast(vtx_start)));
-
-                try idx.append(@as(u16, @intCast(1)));
-                try idx.append(@as(u16, @intCast(vtx_start + 2)));
-                try idx.append(@as(u16, @intCast(vtx_start)));
-
-                try idx.append(@as(u16, @intCast(1)));
-                try idx.append(@as(u16, @intCast(vtx_start + 2 + 1)));
-                try idx.append(@as(u16, @intCast(vtx_start + 2)));
+                builder.appendTriangles(&.{
+                    0, vtx_start,         vtx_start + 1,
+                    0, 1,                 vtx_start,
+                    1, vtx_start + 2,     vtx_start,
+                    1, vtx_start + 2 + 1, vtx_start + 2,
+                });
             } else if ((i + 1) == path.len) {
                 diffab = aa.diff(bb).normalize();
                 // rotate by 90 to get normal
@@ -1546,126 +1510,90 @@ pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: b
         }
 
         // side 1 inner vertex
-        v.pos.x = bb.x - halfnorm.x * thickness;
-        v.pos.y = bb.y - halfnorm.y * thickness;
-        v.col = col;
-        try vtx.append(v);
-        bounds.x = @min(bounds.x, v.pos.x);
-        bounds.y = @min(bounds.y, v.pos.y);
-        bounds.w = @max(bounds.w, v.pos.x);
-        bounds.h = @max(bounds.h, v.pos.y);
+        builder.appendVertex(.{
+            .pos = .{
+                .x = bb.x - halfnorm.x * thickness,
+                .y = bb.y - halfnorm.y * thickness,
+            },
+            .col = col,
+            .uv = undefined,
+        });
 
         // side 1 AA vertex
-        v.pos.x = bb.x - halfnorm.x * (thickness + aa_size);
-        v.pos.y = bb.y - halfnorm.y * (thickness + aa_size);
-        v.col = col_trans;
-        try vtx.append(v);
-        bounds.x = @min(bounds.x, v.pos.x);
-        bounds.y = @min(bounds.y, v.pos.y);
-        bounds.w = @max(bounds.w, v.pos.x);
-        bounds.h = @max(bounds.h, v.pos.y);
+        builder.appendVertex(.{
+            .pos = .{
+                .x = bb.x - halfnorm.x * (thickness + aa_size),
+                .y = bb.y - halfnorm.y * (thickness + aa_size),
+            },
+            .col = col_trans,
+            .uv = undefined,
+        });
 
         // side 2 inner vertex
-        v.pos.x = bb.x + halfnorm.x * thickness;
-        v.pos.y = bb.y + halfnorm.y * thickness;
-        v.col = col;
-        try vtx.append(v);
-        bounds.x = @min(bounds.x, v.pos.x);
-        bounds.y = @min(bounds.y, v.pos.y);
-        bounds.w = @max(bounds.w, v.pos.x);
-        bounds.h = @max(bounds.h, v.pos.y);
+        builder.appendVertex(.{
+            .pos = .{
+                .x = bb.x + halfnorm.x * thickness,
+                .y = bb.y + halfnorm.y * thickness,
+            },
+            .col = col,
+            .uv = undefined,
+        });
 
         // side 2 AA vertex
-        v.pos.x = bb.x + halfnorm.x * (thickness + aa_size);
-        v.pos.y = bb.y + halfnorm.y * (thickness + aa_size);
-        v.col = col_trans;
-        try vtx.append(v);
-        bounds.x = @min(bounds.x, v.pos.x);
-        bounds.y = @min(bounds.y, v.pos.y);
-        bounds.w = @max(bounds.w, v.pos.x);
-        bounds.h = @max(bounds.h, v.pos.y);
+        builder.appendVertex(.{
+            .pos = .{
+                .x = bb.x + halfnorm.x * (thickness + aa_size),
+                .y = bb.y + halfnorm.y * (thickness + aa_size),
+            },
+            .col = col_trans,
+            .uv = undefined,
+        });
 
         // triangles must be counter-clockwise (y going down) to avoid backface culling
         if (closed or ((i + 1) != path.len)) {
-            // indexes for fill
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4)));
+            builder.appendTriangles(&.{
+                // indexes for fill
+                vtx_start + bi * 4,     vtx_start + bi * 4 + 2, vtx_start + ci * 4,
+                vtx_start + bi * 4 + 2, vtx_start + ci * 4 + 2, vtx_start + ci * 4,
 
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4)));
+                // indexes for aa fade from inner to outer side 1
+                vtx_start + bi * 4,     vtx_start + ci * 4 + 1, vtx_start + bi * 4 + 1,
+                vtx_start + bi * 4,     vtx_start + ci * 4,     vtx_start + ci * 4 + 1,
 
-            // indexes for aa fade from inner to outer side 1
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 1)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
-
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 1)));
-
-            // indexes for aa fade from inner to outer side 2
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 3)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 3)));
-
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 3)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 2)));
+                // indexes for aa fade from inner to outer side 2
+                vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 3, vtx_start + ci * 4 + 3,
+                vtx_start + bi * 4 + 2, vtx_start + ci * 4 + 3, vtx_start + ci * 4 + 2,
+            });
         } else if (!closed and (i + 1) == path.len) {
             // add 2 extra vertexes for endcap fringe
-            v.pos.x = bb.x - halfnorm.x * (thickness + aa_size) - diffab.x * aa_size;
-            v.pos.y = bb.y - halfnorm.y * (thickness + aa_size) - diffab.y * aa_size;
-            v.col = col_trans;
-            try vtx.append(v);
-            bounds.x = @min(bounds.x, v.pos.x);
-            bounds.y = @min(bounds.y, v.pos.y);
-            bounds.w = @max(bounds.w, v.pos.x);
-            bounds.h = @max(bounds.h, v.pos.y);
+            builder.appendVertex(.{
+                .pos = .{
+                    .x = bb.x - halfnorm.x * (thickness + aa_size) - diffab.x * aa_size,
+                    .y = bb.y - halfnorm.y * (thickness + aa_size) - diffab.y * aa_size,
+                },
+                .col = col_trans,
+                .uv = undefined,
+            });
+            builder.appendVertex(.{
+                .pos = .{
+                    .x = bb.x + halfnorm.x * (thickness + aa_size) - diffab.x * aa_size,
+                    .y = bb.y + halfnorm.y * (thickness + aa_size) - diffab.y * aa_size,
+                },
+                .col = col_trans,
+                .uv = undefined,
+            });
 
-            v.pos.x = bb.x + halfnorm.x * (thickness + aa_size) - diffab.x * aa_size;
-            v.pos.y = bb.y + halfnorm.y * (thickness + aa_size) - diffab.y * aa_size;
-            v.col = col_trans;
-            try vtx.append(v);
-            bounds.x = @min(bounds.x, v.pos.x);
-            bounds.y = @min(bounds.y, v.pos.y);
-            bounds.w = @max(bounds.w, v.pos.x);
-            bounds.h = @max(bounds.h, v.pos.y);
-
-            // add indexes for endcap fringe
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
-
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 5)));
-
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 3)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 5)));
+            builder.appendTriangles(&.{
+                // add indexes for endcap fringe
+                vtx_start + bi * 4,     vtx_start + bi * 4 + 4, vtx_start + bi * 4 + 1,
+                vtx_start + bi * 4 + 4, vtx_start + bi * 4,     vtx_start + bi * 4 + 2,
+                vtx_start + bi * 4 + 4, vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 5,
+                vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 3, vtx_start + bi * 4 + 5,
+            });
         }
     }
 
-    // convert bounds back to normal rect
-    bounds.w = bounds.w - bounds.x;
-    bounds.h = bounds.h - bounds.y;
-
-    const clipr: ?Rect.Physical = if (bounds.clippedBy(clipGet())) clipGet().offsetNegPoint(cw.render_target.offset) else null;
-
-    if (cw.render_target.offset.nonZero()) {
-        const offset = cw.render_target.offset;
-        for (vtx.items) |*v| {
-            v.pos = v.pos.diff(offset);
-        }
-    }
-
-    cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
+    return builder.build();
 }
 
 pub const Triangles = struct {
@@ -1677,6 +1605,61 @@ pub const Triangles = struct {
         .vertexes = &.{},
         .indices = &.{},
         .bounds = .{},
+    };
+
+    /// A builder for Triangles that assumes the exact number of
+    /// vertexes and indices is known
+    pub const Builder = struct {
+        vertexes: std.ArrayListUnmanaged(Vertex),
+        indices: std.ArrayListUnmanaged(u16),
+        /// w and h is max_x and max_y
+        bounds: Rect.Physical = .{
+            .x = math.floatMax(f32),
+            .y = math.floatMax(f32),
+            .w = -math.floatMax(f32),
+            .h = -math.floatMax(f32),
+        },
+
+        pub fn init(allocator: std.mem.Allocator, vtx_count: usize, idx_count: usize) !Builder {
+            std.debug.assert(idx_count % 3 == 0);
+            return .{
+                .vertexes = .initBuffer(try allocator.alloc(Vertex, vtx_count)),
+                .indices = .initBuffer(try allocator.alloc(u16, idx_count)),
+            };
+        }
+
+        /// Appends a vertex and updates the bounds
+        pub fn appendVertex(self: *Builder, v: Vertex) void {
+            self.vertexes.appendAssumeCapacity(v);
+            self.bounds.x = @min(self.bounds.x, v.pos.x);
+            self.bounds.y = @min(self.bounds.y, v.pos.y);
+            self.bounds.w = @max(self.bounds.w, v.pos.x);
+            self.bounds.h = @max(self.bounds.h, v.pos.y);
+        }
+
+        /// Triangles must be counter-clockwise (y going down) to avoid backface culling
+        ///
+        /// Asserts that points is a multiple of 3
+        pub fn appendTriangles(self: *Builder, points: []const u16) void {
+            std.debug.assert(points.len % 3 == 0);
+            self.indices.appendSliceAssumeCapacity(points);
+        }
+
+        /// Asserts that the entire array has been filled
+        ///
+        /// The memory ownership is transferred to `Triangles`
+        pub fn build(self: *const Builder) Triangles {
+            std.debug.assert(self.vertexes.items.len == self.vertexes.capacity);
+            std.debug.assert(self.indices.items.len == self.indices.capacity);
+            return .{
+                .vertexes = self.vertexes.items,
+                .indices = self.indices.items,
+                .bounds = self.bounds.toPoint(.{
+                    .x = self.bounds.w,
+                    .y = self.bounds.h,
+                }),
+            };
+        }
     };
 
     pub fn dupe(self: *const Triangles, allocator: std.mem.Allocator) !Triangles {

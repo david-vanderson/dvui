@@ -1250,7 +1250,7 @@ pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !vo
                 self.arena().free(pf.path);
             },
             .pathStroke => |ps| {
-                try dvui.pathStrokeRaw(ps.path, ps.thickness, ps.color, ps.closed, ps.endcap_style);
+                try dvui.pathStroke(ps.path, ps.thickness, ps.color, .{ .closed = ps.closed, .endcap_style = ps.endcap_style });
                 self.arena().free(ps.path);
             },
             .triangles => |t| {
