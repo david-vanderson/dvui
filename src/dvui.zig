@@ -3986,6 +3986,12 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
     return ret;
 }
 
+/// Box that lays out children in one direction.  Extra space is allocated
+/// evenly to all children who are expanded in that direction.
+///
+/// See `boxEqual` and `flexbox`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena().create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, false, opts);
@@ -3994,6 +4000,12 @@ pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options)
     return ret;
 }
 
+/// Box laying out children in `dir` direction.  All children receive equal
+/// space.
+///
+/// See `box` and `flexbox`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena().create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, true, opts);
@@ -4002,6 +4014,11 @@ pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Opt
     return ret;
 }
 
+/// Box laying out children horizontally, making new rows as needed.
+///
+/// See `box` and `boxEqual`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) !*FlexBoxWidget {
     var ret = try currentWindow().arena().create(FlexBoxWidget);
     ret.* = FlexBoxWidget.init(src, init_opts, opts);
