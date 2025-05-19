@@ -5439,9 +5439,6 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 pub const TextEntryColorInitOptions = struct {
     value: ?*Color = null,
     placeholder: []const u8 = "#ff00ff",
-    /// If a value ptr is provided, a reset button will be shown to reset
-    /// the input to the value of the ptr
-    show_reset_button: bool = true,
     /// If this is true, the alpha with be taken from the last hex value,
     /// if it is included in the input
     allow_alpha: bool = true,
@@ -5464,7 +5461,12 @@ pub const TextEntryColorResult = struct {
 
 /// A text entry for hex color codes. Supports the same formats as `Color.fromHex`
 pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColorInitOptions, opts: Options) !TextEntryColorResult {
-    const defaults = Options{ .min_size_content = .width(130) };
+    const defaults = Options{ .name = "textEntryColor" };
+
+    var options = defaults.override(opts);
+    if (options.min_size_content == null) {
+        options = options.override(.{ .min_size_content = opts.fontGet().textSize(if (init_opts.allow_alpha) "#DDDDDDDD" else "#DDDDDD") });
+    }
 
     const id = dvui.parentGet().extendId(src, opts.idExtra());
 
@@ -5472,7 +5474,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     const cw = currentWindow();
     var te = try cw.arena().create(TextEntryWidget);
-    te.* = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, defaults.override(opts));
+    te.* = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, options);
     try te.install();
 
     //initialize with input number
