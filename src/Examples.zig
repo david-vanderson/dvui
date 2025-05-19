@@ -1470,9 +1470,7 @@ pub fn styling() !void {
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a Color
 pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) !bool {
-    var hbox = dvui.BoxWidget.init(src, .horizontal, true, opts);
-    try hbox.install();
-    try hbox.drawBackground();
+    var hbox = try dvui.boxEqual(src, .horizontal, opts);
     defer hbox.deinit();
 
     var red: f32 = @floatFromInt(color.r);
@@ -1499,9 +1497,7 @@ pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Opt
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a HSLuv Color
 pub fn hsluvSliders(src: std.builtin.SourceLocation, hsluv: *dvui.Color.HSLuv, opts: Options) !bool {
-    var hbox = dvui.BoxWidget.init(src, .horizontal, true, opts);
-    try hbox.install();
-    try hbox.drawBackground();
+    var hbox = try dvui.boxEqual(src, .horizontal, opts);
     defer hbox.deinit();
 
     var changed = false;
