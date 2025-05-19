@@ -352,7 +352,7 @@ test {
 }
 
 test "DOCIMG ColorPickerWidget" {
-    var t = try dvui.testing.init(.{ .window_size = .{ .w = 250, .h = 200 } });
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 300, .h = 130 } });
     defer t.deinit();
 
     const frame = struct {
@@ -361,9 +361,7 @@ test "DOCIMG ColorPickerWidget" {
             defer box.deinit();
 
             var hsv: dvui.Color.HSV = .{ .h = 120, .s = 0.8, .v = 0.9 };
-            var picker = ColorPickerWidget.init(@src(), .{ .hsv = &hsv }, .{ .expand = .vertical, .gravity_x = 0.5 });
-            try picker.install();
-            defer picker.deinit();
+            _ = try dvui.colorPicker(@src(), .{ .hsv = &hsv }, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
             return .ok;
         }
     }.frame;
