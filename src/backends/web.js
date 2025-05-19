@@ -1132,6 +1132,12 @@ class Dvui {
         window.addEventListener("resize", (ev) => {
             requestRender();
         });
+        if (this.gl.canvas instanceof HTMLCanvasElement) {
+            const resizeObserver = new ResizeObserver(() => {
+                requestRender();
+            });
+            resizeObserver.observe(this.gl.canvas);
+        }
         this.gl.canvas.addEventListener("mousemove", (ev) => {
             let rect = this.gl.canvas.getBoundingClientRect();
             let x = (ev.clientX - rect.left) / (rect.right - rect.left) *
