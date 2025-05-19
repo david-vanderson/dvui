@@ -53,6 +53,7 @@ pub const widgets = @import("import_widgets.zig");
 pub const AnimateWidget = widgets.AnimateWidget;
 pub const BoxWidget = widgets.BoxWidget;
 pub const CacheWidget = widgets.CacheWidget;
+pub const ColorPickerWidget = widgets.ColorPickerWidget;
 pub const FlexBoxWidget = widgets.FlexBoxWidget;
 pub const ReorderWidget = widgets.ReorderWidget;
 pub const Reorderable = ReorderWidget.Reorderable;
@@ -5433,6 +5434,190 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     te.deinit();
 
     return result;
+}
+
+pub const TextEntryColorInitOptions = struct {
+    value: ?*Color = null,
+    placeholder: []const u8 = "#ff00ff",
+    /// If a value ptr is provided, a reset button will be shown to reset
+    /// the input to the value of the ptr
+    show_reset_button: bool = true,
+    /// If this is true, the alpha with be taken from the last hex value,
+    /// if it is included in the input
+    allow_alpha: bool = true,
+};
+
+pub const TextEntryColorResult = struct {
+    value: union(enum) {
+        Valid: Color,
+        Invalid: enum {
+            non_hex_value,
+            alpha_passed_when_not_allowed,
+        },
+        Empty: void,
+    } = .{ .Invalid = .non_hex_value },
+
+    /// True if given a value pointer and wrote a valid value back to it.
+    changed: bool = false,
+    enter_pressed: bool = false,
+};
+
+/// A text entry for hex color codes. Supports the same formats as `Color.fromHex`
+pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColorInitOptions, opts: Options) !TextEntryColorResult {
+    const defaults = Options{ .min_size_content = .width(130) };
+
+    const id = dvui.parentGet().extendId(src, opts.idExtra());
+
+    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 9);
+
+    const cw = currentWindow();
+    var te = try cw.arena().create(TextEntryWidget);
+    te.* = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, defaults.override(opts));
+    try te.install();
+
+    //initialize with input number
+    if (init_opts.value) |v| {
+        const old_value = dataGet(null, id, "value", Color);
+        const force_reset = init_opts.show_reset_button and try buttonIcon(@src(), "Reset Color", dvui.entypo.cw, .{}, .{ .gravity_x = 1, .gravity_y = 0.5, .margin = .all(1) });
+        if (force_reset and old_value != null) {
+            v.* = old_value.?;
+        }
+        if (old_value == null or force_reset or
+            old_value.?.r != v.r or
+            old_value.?.g != v.g or
+            old_value.?.b != v.b or
+            old_value.?.a != v.a)
+        {
+            dataSet(null, id, "value", v.*);
+            @memset(buffer, 0); // clear out anything that was there before
+            if (init_opts.allow_alpha and v.a != 0xff) {
+                _ = try std.fmt.bufPrint(buffer, "#{x:0>2}{x:0>2}{x:0>2}{x:0>2}", .{ v.r, v.g, v.b, v.a });
+                te.len = 9;
+            } else {
+                te.textSet(&(v.toHexString() catch unreachable), false);
+            }
+        }
+    }
+
+    te.processEvents();
+    // filter before drawing
+    te.filterIn(std.fmt.hex_charset ++ "ABCDEF" ++ "#");
+
+    var result: TextEntryColorResult = .{ .enter_pressed = te.enter_pressed };
+
+    // validation
+    const text = te.getText();
+    const color: ?Color = Color.tryFromHex(text) catch null;
+
+    //determine error if any
+    if (text.len == 0 and color == null) {
+        result.value = .Empty;
+    } else if (color == null) {
+        result.value = .{ .Invalid = .non_hex_value };
+    } else if (!init_opts.allow_alpha and color.?.a != 0xFF) {
+        result.value = .{ .Invalid = .alpha_passed_when_not_allowed };
+    } else {
+        result.value = .{ .Valid = color.? };
+        if (init_opts.value) |v| {
+            if ((te.enter_pressed or te.text_changed) and
+                (color.?.r != v.r or
+                    color.?.g != v.g or
+                    color.?.b != v.b or
+                    color.?.a != v.a))
+            {
+                dataSet(null, id, "value", color.?);
+                v.* = color.?;
+                result.changed = true;
+            }
+        }
+    }
+
+    try te.draw();
+
+    if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
+        const rs = te.data().borderRectScale();
+        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), 3 * rs.s, dvui.themeGet().color_err, .{ .after = true });
+    }
+
+    te.deinit();
+
+    return result;
+}
+
+pub const ColorPickerInitOptions = struct {
+    hsv: *Color.HSV,
+    dir: enums.Direction = .horizontal,
+    sliders: enum { rgb, hsv } = .rgb,
+    alpha: bool = false,
+    /// Shows a `textEntryColor`
+    hex_text_entry: bool = true,
+};
+
+/// A photoshop style color picker
+///
+/// Returns true of the color was changed
+pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOptions, opts: Options) !bool {
+    var picker = ColorPickerWidget.init(src, .{ .dir = init_opts.dir, .hsv = init_opts.hsv }, opts);
+    try picker.install();
+    defer picker.deinit();
+
+    var changed = picker.color_changed;
+    var rgb = init_opts.hsv.toColor();
+
+    var side_box = try dvui.box(@src(), .vertical, .{});
+    defer side_box.deinit();
+
+    const slider_expand = Options.Expand.fromDirection(.horizontal);
+    switch (init_opts.sliders) {
+        .rgb => {
+            var r = @as(f32, @floatFromInt(rgb.r));
+            var g = @as(f32, @floatFromInt(rgb.g));
+            var b = @as(f32, @floatFromInt(rgb.b));
+            var a = @as(f32, @floatFromInt(rgb.a));
+
+            var slider_changed = false;
+            if (try dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &r, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                slider_changed = true;
+            }
+            if (try dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &g, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                slider_changed = true;
+            }
+            if (try dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &b, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                slider_changed = true;
+            }
+            if (init_opts.alpha and try dvui.sliderEntry(@src(), "A: {d:0.0}", .{ .value = &a, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                slider_changed = true;
+            }
+            if (slider_changed) {
+                init_opts.hsv.* = .fromColor(.{ .r = @intFromFloat(r), .g = @intFromFloat(g), .b = @intFromFloat(b), .a = @intFromFloat(a) });
+                changed = true;
+            }
+        },
+        .hsv => {
+            if (try dvui.sliderEntry(@src(), "H: {d:0.0}", .{ .value = &init_opts.hsv.h, .min = 0, .max = 359.99, .interval = 1 }, .{ .expand = slider_expand })) {
+                changed = true;
+            }
+            if (try dvui.sliderEntry(@src(), "S: {d:0.2}", .{ .value = &init_opts.hsv.s, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = slider_expand })) {
+                changed = true;
+            }
+            if (try dvui.sliderEntry(@src(), "V: {d:0.2}", .{ .value = &init_opts.hsv.v, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = slider_expand })) {
+                changed = true;
+            }
+            if (init_opts.alpha and try dvui.sliderEntry(@src(), "A: {d:0.2}", .{ .value = &init_opts.hsv.a, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = slider_expand })) {
+                changed = true;
+            }
+        },
+    }
+
+    if (init_opts.hex_text_entry) {
+        const res = try textEntryColor(@src(), .{ .allow_alpha = init_opts.alpha, .value = &rgb }, .{ .expand = slider_expand });
+        if (res.changed) {
+            init_opts.hsv.* = .fromColor(rgb);
+            changed = true;
+        }
+    }
+
+    return changed;
 }
 
 pub const renderTextOptions = struct {
