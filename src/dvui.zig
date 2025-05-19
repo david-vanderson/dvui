@@ -5478,11 +5478,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
     //initialize with input number
     if (init_opts.value) |v| {
         const old_value = dataGet(null, id, "value", Color);
-        const force_reset = init_opts.show_reset_button and try buttonIcon(@src(), "Reset Color", dvui.entypo.cw, .{}, .{ .gravity_x = 1, .gravity_y = 0.5, .margin = .all(1) });
-        if (force_reset and old_value != null) {
-            v.* = old_value.?;
-        }
-        if (old_value == null or force_reset or
+        if (old_value == null or
             old_value.?.r != v.r or
             old_value.?.g != v.g or
             old_value.?.b != v.b or
@@ -5530,6 +5526,13 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
                 result.changed = true;
             }
         }
+    }
+
+    if (init_opts.value != null and result.value == .Empty and focusedWidgetId() != te.wd.id) {
+        // If the text entry is empty and we loose focus,
+        // reset the hex value by invalidating the stored previous value
+        dataRemove(null, id, "value");
+        refresh(null, @src(), id);
     }
 
     try te.draw();
