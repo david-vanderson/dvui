@@ -5435,13 +5435,15 @@ pub const TextEntryColorResult = struct {
 
 /// A text entry for hex color codes. Supports the same formats as `Color.fromHex`
 pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColorInitOptions, opts: Options) !TextEntryColorResult {
+    const defaults = Options{ .min_size_content = .width(130) };
+
     const id = dvui.parentGet().extendId(src, opts.idExtra());
 
     const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 9);
 
     const cw = currentWindow();
     var te = try cw.arena().create(TextEntryWidget);
-    te.* = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, opts);
+    te.* = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, defaults.override(opts));
     try te.install();
 
     //initialize with input number
@@ -5511,6 +5513,82 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
     te.deinit();
 
     return result;
+}
+
+pub const ColorPickerInitOptions = struct {
+    hsv: *Color.HSV,
+    dir: enums.Direction = .horizontal,
+    sliders: enum { rgb, hsv } = .rgb,
+    alpha: bool = false,
+    /// Shows a `textEntryColor`
+    hex_text_entry: bool = true,
+};
+
+/// A photoshop style color picker
+///
+/// Returns true of the color was changed
+pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOptions, opts: Options) !bool {
+    var picker = ColorPickerWidget.init(src, .{ .dir = init_opts.dir, .hsv = init_opts.hsv }, opts);
+    try picker.install();
+    defer picker.deinit();
+
+    var changed = picker.color_changed;
+    var rgb = init_opts.hsv.toColor();
+
+    var side_box = try dvui.box(@src(), .vertical, .{});
+    defer side_box.deinit();
+
+    const slider_expand = Options.Expand.fromDirection(.horizontal);
+    switch (init_opts.sliders) {
+        .rgb => {
+            var r = @as(f32, @floatFromInt(rgb.r));
+            var g = @as(f32, @floatFromInt(rgb.g));
+            var b = @as(f32, @floatFromInt(rgb.b));
+            var a = @as(f32, @floatFromInt(rgb.a));
+
+            var slider_changed = false;
+            if (try dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &r, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                slider_changed = true;
+            }
+            if (try dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &g, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                slider_changed = true;
+            }
+            if (try dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &b, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                slider_changed = true;
+            }
+            if (init_opts.alpha and try dvui.sliderEntry(@src(), "A: {d:0.0}", .{ .value = &a, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                slider_changed = true;
+            }
+            if (slider_changed) {
+                init_opts.hsv.* = .fromColor(.{ .r = @intFromFloat(r), .g = @intFromFloat(g), .b = @intFromFloat(b), .a = @intFromFloat(a) });
+                changed = true;
+            }
+        },
+        .hsv => {
+            if (try dvui.sliderEntry(@src(), "H: {d:0.0}", .{ .value = &init_opts.hsv.h, .min = 0, .max = 359.99, .interval = 1 }, .{ .expand = slider_expand })) {
+                changed = true;
+            }
+            if (try dvui.sliderEntry(@src(), "S: {d:0.2}", .{ .value = &init_opts.hsv.s, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = slider_expand })) {
+                changed = true;
+            }
+            if (try dvui.sliderEntry(@src(), "V: {d:0.2}", .{ .value = &init_opts.hsv.v, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = slider_expand })) {
+                changed = true;
+            }
+            if (init_opts.alpha and try dvui.sliderEntry(@src(), "A: {d:0.2}", .{ .value = &init_opts.hsv.a, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = slider_expand })) {
+                changed = true;
+            }
+        },
+    }
+
+    if (init_opts.hex_text_entry) {
+        const res = try textEntryColor(@src(), .{ .allow_alpha = init_opts.alpha, .value = &rgb }, .{ .expand = slider_expand });
+        if (res.changed) {
+            init_opts.hsv.* = .fromColor(rgb);
+            changed = true;
+        }
+    }
+
+    return changed;
 }
 
 pub const renderTextOptions = struct {
