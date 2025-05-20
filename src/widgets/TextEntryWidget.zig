@@ -152,7 +152,7 @@ pub fn install(self: *TextEntryWidget) !void {
         if (self.init_opts.placeholder) |placeholder| {
             try dvui.renderText(.{
                 .font = self.textLayout.wd.options.fontGet(),
-                .color = self.textLayout.wd.options.color(.text).transparent(0.75),
+                .color = self.textLayout.wd.options.color(.text).opacity(0.75),
                 .rs = self.textLayout.wd.contentRectScale(),
                 .text = placeholder,
             });

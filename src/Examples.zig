@@ -1432,7 +1432,7 @@ pub fn styling() !void {
             var triangles = try dvui.pathFillConvexTriangles(path.items, .{ .center = rs.r.center() });
 
             const ca0 = backbox_color.alphaMultiply();
-            const ca1 = backbox_color.transparent(0).alphaMultiply();
+            const ca1 = backbox_color.opacity(0).alphaMultiply();
 
             switch (gradient.*) {
                 1, 2 => |choice| {
