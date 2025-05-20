@@ -38,15 +38,6 @@ pub const dark_magenta = purple;
 
 pub const transparent = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
-/// Convert normal color to premultiplied alpha.
-pub fn alphaMultiply(self: @This()) @This() {
-    var c = self;
-    c.r = @intCast(@divTrunc(@as(u16, c.r) * c.a, 255));
-    c.g = @intCast(@divTrunc(@as(u16, c.g) * c.a, 255));
-    c.b = @intCast(@divTrunc(@as(u16, c.b) * c.a, 255));
-    return c;
-}
-
 pub fn alphaMultiplyPixels(pixels: []u8) void {
     for (0..pixels.len / 4) |ii| {
         const i = ii * 4;
@@ -259,8 +250,8 @@ pub fn format(self: *const Color, comptime _: []const u8, _: std.fmt.FormatOptio
 
 /// Linear interpolocation of colors component wise
 pub fn lerp(self: Color, other: Color, t: f32) Color {
-    if (t == 0) return self;
-    if (t == 1) return other;
+    if (t <= 0) return self;
+    if (t >= 1) return other;
     const r: f32 = std.math.lerp(@as(f32, @floatFromInt(self.r)) / 255, @as(f32, @floatFromInt(other.r)) / 255, t);
     const g: f32 = std.math.lerp(@as(f32, @floatFromInt(self.g)) / 255, @as(f32, @floatFromInt(other.g)) / 255, t);
     const b: f32 = std.math.lerp(@as(f32, @floatFromInt(self.b)) / 255, @as(f32, @floatFromInt(other.b)) / 255, t);
@@ -293,45 +284,37 @@ pub fn multiply(self: Color, other: Color) Color {
     };
 }
 
-const clamp = std.math.clamp;
+/// A color premultiplied by alpha, mostly used for vertex colors
+pub const PMA = extern struct {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
 
-const FieldEnum = std.meta.FieldEnum(@This());
+    pub const transparent = PMA{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
-/// extracts clamped field multiplied by alpha value
-pub fn extract(self: Color, field: FieldEnum) u16 {
-    const a: f32 = @floatFromInt(self.a);
-    const normalized_a = a / 255.0;
-    const value: f32 = @floatFromInt(switch (field) {
-        .r => self.r,
-        .g => self.g,
-        .b => self.b,
-        .a => {
-            @panic("This should never be called");
-        },
-    });
-    const result = normalized_a * value;
-    return @intFromFloat(@floor(result));
-}
+    pub fn toColor(self: PMA) Color {
+        // FIXME: Should this undo the alpha multiply?
+        return .{ .r = self.r, .g = self.g, .b = self.b, .a = self.a };
+    }
 
-/// Adds two colors rgb component-wise premultiplied by alpha
-pub fn alphaAdd(self: Color, other: Color) Color {
-    return Color{
-        .r = @intCast(clamp(self.extract(.r) + other.extract(.r), 0, 255)),
-        .g = @intCast(clamp(self.extract(.g) + other.extract(.g), 0, 255)),
-        .b = @intCast(clamp(self.extract(.b) + other.extract(.b), 0, 255)),
-        .a = 255,
-    };
-}
+    /// Convert normal color to premultiplied alpha.
+    pub fn fromColor(color: Color) PMA {
+        if (color.a == 0xFF) return .cast(color);
+        return .{
+            .r = @intCast(@divTrunc(@as(u16, color.r) * color.a, 255)),
+            .g = @intCast(@divTrunc(@as(u16, color.g) * color.a, 255)),
+            .b = @intCast(@divTrunc(@as(u16, color.b) * color.a, 255)),
+            .a = color.a,
+        };
+    }
 
-/// Adds two colors rgb component-wise premultiplied by alpha
-pub fn alphaAverage(self: Color, other: Color) Color {
-    return Color{
-        .r = @intCast((self.extract(.r) + other.extract(.r)) / (255 * 2)),
-        .g = @intCast((self.extract(.g) + other.extract(.g)) / (255 * 2)),
-        .b = @intCast((self.extract(.b) + other.extract(.b)) / (255 * 2)),
-        .a = 255,
-    };
-}
+    /// Casts an opaque color (full alpha) to a PMA
+    pub fn cast(color: Color) PMA {
+        std.debug.assert(color.a == 0xFF);
+        return .{ .r = color.r, .g = color.g, .b = color.b, .a = color.a };
+    }
+};
 
 pub const HexString = [7]u8;
 

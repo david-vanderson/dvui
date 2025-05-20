@@ -1431,19 +1431,17 @@ pub fn styling() !void {
 
             var triangles = try dvui.pathFillConvexTriangles(path.items, .{ .center = rs.r.center() });
 
-            const ca0 = backbox_color.alphaMultiply();
-            const ca1 = backbox_color.opacity(0).alphaMultiply();
+            const ca0 = backbox_color;
+            const ca1 = backbox_color.opacity(0);
 
             switch (gradient.*) {
                 1, 2 => |choice| {
                     for (triangles.vertexes) |*v| {
-                        var t: f32 = undefined;
-                        if (choice == 1) {
-                            t = std.math.clamp((v.pos.x - rs.r.x) / rs.r.w, 0, 1);
-                        } else {
-                            t = std.math.clamp((v.pos.y - rs.r.y) / rs.r.h, 0, 1);
-                        }
-                        v.col = dvui.Color.multiply(v.col, dvui.Color.lerp(ca0, ca1, t));
+                        const t = if (choice == 1)
+                            (v.pos.x - rs.r.x) / rs.r.w
+                        else
+                            (v.pos.y - rs.r.y) / rs.r.h;
+                        v.col = .fromColor(dvui.Color.lerp(ca0, ca1, t));
                     }
                 },
                 3 => {
@@ -1451,12 +1449,12 @@ pub fn styling() !void {
                     const max = rs.r.bottomRight().diff(center).length();
                     for (triangles.vertexes) |*v| {
                         const l: f32 = v.pos.diff(center).length();
-                        const t = std.math.clamp(l / max, 0, 1);
-                        v.col = dvui.Color.multiply(v.col, dvui.Color.lerp(ca0, ca1, t));
+                        const t = l / max;
+                        v.col = .fromColor(dvui.Color.lerp(ca0, ca1, t));
                     }
                 },
                 else => {
-                    triangles.color(backbox_color);
+                    triangles.color(ca0);
                 },
             }
             try dvui.renderTriangles(triangles, null);
