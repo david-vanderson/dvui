@@ -293,14 +293,21 @@ pub const PMA = extern struct {
 
     pub const transparent = PMA{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
+    /// Convert premultiplied alpha color to a `Color`.
     pub fn toColor(self: PMA) Color {
-        // FIXME: Should this undo the alpha multiply?
-        return .{ .r = self.r, .g = self.g, .b = self.b, .a = self.a };
+        if (self.a == 0xFF or self.a == 0) return .{ .r = self.r, .g = self.g, .b = self.b, .a = self.a };
+        return .{
+            .r = @intCast(@divTrunc(@as(u16, self.r) * 255, self.a)),
+            .g = @intCast(@divTrunc(@as(u16, self.g) * 255, self.a)),
+            .b = @intCast(@divTrunc(@as(u16, self.b) * 255, self.a)),
+            .a = self.a,
+        };
     }
 
     /// Convert normal color to premultiplied alpha.
     pub fn fromColor(color: Color) PMA {
         if (color.a == 0xFF) return .cast(color);
+        if (color.a == 0) return .transparent;
         return .{
             .r = @intCast(@divTrunc(@as(u16, color.r) * color.a, 255)),
             .g = @intCast(@divTrunc(@as(u16, color.g) * color.a, 255)),
