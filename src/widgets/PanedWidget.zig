@@ -139,7 +139,7 @@ pub fn draw(self: *PanedWidget) !void {
                     r.w = width;
                 },
             }
-            try r.fill(.all(thick), .{ .color = self.wd.options.color(.text).transparent(0.5) });
+            try r.fill(.all(thick), .{ .color = self.wd.options.color(.text).opacity(0.5) });
         }
     }
 }

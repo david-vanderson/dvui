@@ -36,6 +36,8 @@ pub const magenta = fuchsia;
 pub const darl_cyan = teal;
 pub const dark_magenta = purple;
 
+pub const transparent = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
+
 /// Convert normal color to premultiplied alpha.
 pub fn alphaMultiply(self: @This()) @This() {
     var c = self;
@@ -240,12 +242,14 @@ pub fn fromHSLuv(h: f32, s: f32, l: f32, a: f32) Color {
     };
 }
 
-pub fn transparent(x: Color, y: f32) Color {
+/// Multiply the current opacity with `mult`, usually between 0 and 1
+pub fn opacity(self: Color, mult: f32) Color {
+    if (mult > 1) return self;
     return Color{
-        .r = x.r,
-        .g = x.g,
-        .b = x.b,
-        .a = @as(u8, @intFromFloat(@as(f32, @floatFromInt(x.a)) * y)),
+        .r = self.r,
+        .g = self.g,
+        .b = self.b,
+        .a = @intFromFloat(std.math.clamp(@as(f32, @floatFromInt(self.a)) * mult, 0, 255)),
     };
 }
 

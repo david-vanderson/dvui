@@ -178,7 +178,7 @@ pub const BoxShadow = struct {
             .name => |from_theme| Color.fromTheme(from_theme),
         };
 
-        return col.transparent(dvui.themeGet().alpha);
+        return col.opacity(dvui.themeGet().alpha);
     }
 };
 
@@ -248,7 +248,7 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
         .name => |from_theme| Color.fromTheme(from_theme),
     };
 
-    return col.transparent(dvui.themeGet().alpha);
+    return col.opacity(dvui.themeGet().alpha);
 }
 
 pub fn fontGet(self: *const Options) Font {
