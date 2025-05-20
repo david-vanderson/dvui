@@ -6127,7 +6127,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
 
     try dvui.pathAddRect(&path, rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    var triangles = try pathFillConvexTriangles(path.items, .{});
+    var triangles = try pathFillConvexTriangles(path.items, .{ .color = opts.colormod });
     defer triangles.deinit(cw.arena());
 
     triangles.uvFromRectuv(rs.r, opts.uv);
@@ -6140,8 +6140,6 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
         back_tri.color(bg_col);
         try renderTriangles(back_tri, null);
     }
-
-    triangles.color(opts.colormod);
 
     try renderTriangles(triangles, tex);
 }
