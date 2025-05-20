@@ -1658,6 +1658,7 @@ pub const Triangles = struct {
             return .{
                 .vertexes = self.vertexes.items,
                 .indices = self.indices.items,
+                // convert bounds w/h back to width/height
                 .bounds = self.bounds.toPoint(.{
                     .x = self.bounds.w,
                     .y = self.bounds.h,
