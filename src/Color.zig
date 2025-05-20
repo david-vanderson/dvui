@@ -264,16 +264,6 @@ pub fn average(self: Color, other: Color) Color {
     };
 }
 
-/// Multiply two colors component-wise.
-pub fn multiply(self: Color, other: Color) Color {
-    return Color{
-        .r = @intCast(@divTrunc(@as(u16, self.r) * other.r, 255)),
-        .g = @intCast(@divTrunc(@as(u16, self.g) * other.g, 255)),
-        .b = @intCast(@divTrunc(@as(u16, self.b) * other.b, 255)),
-        .a = @intCast(@divTrunc(@as(u16, self.a) * other.a, 255)),
-    };
-}
-
 /// A color premultiplied by alpha, mostly used for vertex colors
 pub const PMA = extern struct {
     r: u8,
@@ -285,7 +275,7 @@ pub const PMA = extern struct {
 
     /// Convert premultiplied alpha color to a `Color`.
     pub fn toColor(self: PMA) Color {
-        if (self.a == 0xFF or self.a == 0) return .{ .r = self.r, .g = self.g, .b = self.b, .a = self.a };
+        if (self.a == 0xFF or self.a == 0) return self.castToColor();
         return .{
             .r = @intCast(@divTrunc(@as(u16, self.r) * 255, self.a)),
             .g = @intCast(@divTrunc(@as(u16, self.g) * 255, self.a)),
@@ -306,33 +296,28 @@ pub const PMA = extern struct {
         };
     }
 
-    /// Average two colors component-wise
-    ///
-    /// See `Color.average`
-    pub fn average(self: PMA, other: PMA) PMA {
-        return .castFromColor(self.castToColor().average(other.castToColor()));
-    }
-
     /// Multiply two colors component-wise.
-    ///
-    /// See `Color.multiply`
     pub fn multiply(self: PMA, other: PMA) PMA {
-        return .castFromColor(self.castToColor().multiply(other.castToColor()));
-    }
-    /// Casts `PMA` to `Color` without any conversions
-    fn castToColor(self: PMA) Color {
-        return .{ .r = self.r, .g = self.g, .b = self.b, .a = self.a };
-    }
-
-    /// Casts `Color` to `PMA` without any conversions
-    fn castFromColor(self: Color) PMA {
-        return .{ .r = self.r, .g = self.g, .b = self.b, .a = self.a };
+        return .{
+            .r = @intCast(@divTrunc(@as(u16, self.r) * other.r, 255)),
+            .g = @intCast(@divTrunc(@as(u16, self.g) * other.g, 255)),
+            .b = @intCast(@divTrunc(@as(u16, self.b) * other.b, 255)),
+            .a = @intCast(@divTrunc(@as(u16, self.a) * other.a, 255)),
+        };
     }
 
-    /// Casts an opaque color (full alpha) to a `PMA`
+    /// Casts from `Color` by reassigning its fields
+    ///
+    /// Should only be used for valid PMA colors like:
+    /// - Any `Color` with a == 0xFF (opaque)
+    /// - A fully transparent color (`Color.transparent`)
     pub fn cast(color: Color) PMA {
-        std.debug.assert(color.a == 0xFF);
         return .{ .r = color.r, .g = color.g, .b = color.b, .a = color.a };
+    }
+
+    /// Casts to `Color` by reassigning its fields
+    pub fn castToColor(self: PMA) Color {
+        return .{ .r = self.r, .g = self.g, .b = self.b, .a = self.a };
     }
 };
 
