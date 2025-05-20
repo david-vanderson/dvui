@@ -1256,7 +1256,7 @@ pub fn pathFillConvexTriangles(path: PathSlice, opts: PathFillConvexOptions) !Tr
     var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
     errdefer comptime unreachable; // No errors from this point on
 
-    const col: Color = if (opts.color) |color| color.alphaMultiply() else .white;
+    const col: Color.PMA = if (opts.color) |color| .fromColor(color) else .cast(.white);
 
     var i: usize = 0;
     while (i < path.len) : (i += 1) {
@@ -1424,7 +1424,7 @@ pub fn pathStrokeTriangles(path: PathSlice, opts: PathStrokeOptions) !Triangles 
     var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
     errdefer comptime unreachable; // No errors from this point on
 
-    const col = opts.color.alphaMultiply();
+    const col: Color.PMA = .fromColor(opts.color);
 
     const aa_size = 1.0;
     var vtx_start: u16 = 0;
@@ -1680,14 +1680,13 @@ pub const Triangles = struct {
         allocator.free(self.vertexes);
     }
 
-    /// Multiply col into vertex colors.  col is converted to premultiplied alpha.
+    /// Multiply `col` into vertex colors.
     pub fn color(self: *Triangles, col: Color) void {
         if (col.r == 0xff and col.g == 0xff and col.b == 0xff and col.a == 0xff)
             return;
 
-        const ca = col.alphaMultiply();
         for (self.vertexes) |*v| {
-            v.col = Color.multiply(v.col, ca);
+            v.col = .fromColor(v.col.toColor().multiply(col));
         }
     }
 
@@ -5882,8 +5881,7 @@ pub fn renderText(opts: renderTextOptions) !void {
 
             v.pos.x = x + gi.leftBearing * target_fraction;
             v.pos.y = y + gi.topBearing * target_fraction;
-            v.col = if (sel_in) opts.sel_color orelse opts.color else opts.color;
-            v.col = v.col.alphaMultiply();
+            v.col = .fromColor(if (sel_in) opts.sel_color orelse opts.color else opts.color);
             v.uv = gi.uv;
             try vtx.append(v);
 
@@ -5935,7 +5933,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             sel_vtx[2].pos.y = sel_vtx[3].pos.y;
 
             for (&sel_vtx) |*v| {
-                v.col = bgcol.alphaMultiply();
+                v.col = .fromColor(bgcol);
                 v.uv[0] = 0;
                 v.uv[1] = 0;
             }
@@ -5976,7 +5974,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 
     const x: f32 = if (cw.snap_to_pixels) @round(r.x) else r.x;
     const y: f32 = if (cw.snap_to_pixels) @round(r.y) else r.y;
-    const col = color.alphaMultiply();
+    const col: Color.PMA = .fromColor(color);
 
     var offset: f32 = 0;
     var it = cw.font_cache.iterator();
