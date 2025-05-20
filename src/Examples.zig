@@ -1441,7 +1441,7 @@ pub fn styling() !void {
                             (v.pos.x - rs.r.x) / rs.r.w
                         else
                             (v.pos.y - rs.r.y) / rs.r.h;
-                        v.col = .fromColor(dvui.Color.lerp(ca0, ca1, t));
+                        v.col = v.col.multiply(.fromColor(dvui.Color.lerp(ca0, ca1, t)));
                     }
                 },
                 3 => {
@@ -1450,7 +1450,7 @@ pub fn styling() !void {
                     for (triangles.vertexes) |*v| {
                         const l: f32 = v.pos.diff(center).length();
                         const t = l / max;
-                        v.col = .fromColor(dvui.Color.lerp(ca0, ca1, t));
+                        v.col = v.col.multiply(.fromColor(dvui.Color.lerp(ca0, ca1, t)));
                     }
                 },
                 else => {

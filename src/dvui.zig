@@ -1685,8 +1685,9 @@ pub const Triangles = struct {
         if (col.r == 0xff and col.g == 0xff and col.b == 0xff and col.a == 0xff)
             return;
 
+        const pma_col: Color.PMA = .fromColor(col);
         for (self.vertexes) |*v| {
-            v.col = .fromColor(v.col.toColor().multiply(col));
+            v.col = v.col.multiply(pma_col);
         }
     }
 
