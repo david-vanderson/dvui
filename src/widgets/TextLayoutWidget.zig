@@ -340,8 +340,8 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 try path.append(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
                 try dvui.pathAddArc(&path, .{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                try dvui.pathFillConvex(path.items, dvui.themeGet().color_fill_control, 0.5);
-                try dvui.pathStroke(path.items, 1.0 * fcrs.s, self.wd.options.color(.border), .{ .closed = true });
+                try dvui.pathFillConvex(path.items, .{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
+                try dvui.pathStroke(path.items, .{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
             }
 
             dvui.dataSet(null, fc.wd.id, "_offset", offset);
@@ -411,8 +411,8 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 try path.append(.{ .x = fcrs.r.x, .y = fcrs.r.y });
                 try dvui.pathAddArc(&path, .{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                try dvui.pathFillConvex(path.items, dvui.themeGet().color_fill_control, 0.5);
-                try dvui.pathStroke(path.items, 1.0 * fcrs.s, self.wd.options.color(.border), .{ .closed = true });
+                try dvui.pathFillConvex(path.items, .{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
+                try dvui.pathStroke(path.items, .{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
             }
 
             dvui.dataSet(null, fc.wd.id, "_offset", offset);

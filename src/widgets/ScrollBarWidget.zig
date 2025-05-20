@@ -181,13 +181,13 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
 }
 
 pub fn deinit(self: *ScrollBarWidget) void {
-    var fill = self.wd.options.color(.text).transparent(0.5);
+    var fill = self.wd.options.color(.text).opacity(0.5);
     if (dvui.captured(self.wd.id) or self.highlight) {
-        fill = self.wd.options.color(.text).transparent(0.3);
+        fill = self.wd.options.color(.text).opacity(0.3);
     }
     self.grabRect = self.grabRect.insetAll(2);
     const grabrs = self.wd.parent.screenRectScale(self.grabRect);
-    grabrs.r.fill(.{ .radius = Rect.Physical.all(100), .color = fill }) catch {};
+    grabrs.r.fill(.all(100), .{ .color = fill }) catch {};
 
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();

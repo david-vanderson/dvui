@@ -272,7 +272,7 @@ pub const Reorderable = struct {
                     self.reorder.found_slot = true;
 
                     if (self.init_options.draw_target) {
-                        try rs.r.fill(.{ .color = dvui.themeGet().color_accent });
+                        try rs.r.fill(.{}, .{ .color = dvui.themeGet().color_accent });
                     }
 
                     if (self.init_options.reinstall and !self.init_options.last_slot) {

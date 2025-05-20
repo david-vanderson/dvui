@@ -139,7 +139,7 @@ pub fn register(self: *WidgetData) !void {
                 outline_rect.y = @ceil(outline_rect.y) - 0.5;
             }
 
-            try outline_rect.stroke(.{}, 1 * rs.s, dvui.themeGet().color_err, .{ .after = true });
+            try outline_rect.stroke(.{}, .{ .thickness = 1 * rs.s, .color = dvui.themeGet().color_err, .after = true });
 
             dvui.clipSet(clipr);
 
@@ -163,7 +163,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
 
         const prect = rs.r.insetAll(rs.s * bs.shrink).offsetPoint(bs.offset.scale(rs.s, dvui.Point.Physical));
 
-        try prect.fill(.{ .radius = radius.scale(rs.s, Rect.Physical), .color = bs.colorGet().transparent(bs.alpha), .blur = rs.s * bs.blur });
+        try prect.fill(radius.scale(rs.s, Rect.Physical), .{ .color = bs.colorGet().opacity(bs.alpha), .blur = rs.s * bs.blur });
     }
 
     var bg = self.options.backgroundGet();
@@ -174,7 +174,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
             // draw border as stroked path
             const r = self.borderRect().inset(b);
             const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
-            try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), b.x * rs.s, self.options.color(.border), .{});
+            try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = b.x * rs.s, .color = self.options.color(.border) });
         } else {
             // draw border as large rect with background on top
             if (!bg) {
@@ -184,7 +184,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
 
             const rs = self.borderRectScale();
             if (!rs.r.empty()) {
-                try rs.r.fill(.{ .radius = self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .color = self.options.color(.border) });
+                try rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.options.color(.border) });
             }
         }
     }
@@ -192,7 +192,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct { fill_color: ?
     if (bg) {
         const rs = self.backgroundRectScale();
         if (!rs.r.empty()) {
-            try rs.r.fill(.{ .radius = self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .color = opts.fill_color orelse self.options.color(.fill) });
+            try rs.r.fill(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = opts.fill_color orelse self.options.color(.fill) });
         }
     }
 }
@@ -202,7 +202,7 @@ pub fn focusBorder(self: *const WidgetData) !void {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
 
-        try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), thick, dvui.themeGet().color_accent, .{ .after = true });
+        try rs.r.stroke(self.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = thick, .color = dvui.themeGet().color_accent, .after = true });
     }
 }
 
