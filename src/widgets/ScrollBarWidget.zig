@@ -187,7 +187,7 @@ pub fn deinit(self: *ScrollBarWidget) void {
     }
     self.grabRect = self.grabRect.insetAll(2);
     const grabrs = self.wd.parent.screenRectScale(self.grabRect);
-    grabrs.r.fill(.{ .radius = Rect.Physical.all(100), .color = fill }) catch {};
+    grabrs.r.fill(.all(100), .{ .color = fill }) catch {};
 
     self.wd.minSizeSetAndRefresh();
     self.wd.minSizeReportToParent();

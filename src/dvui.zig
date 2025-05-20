@@ -945,15 +945,11 @@ pub const RenderCommand = struct {
         },
         pathFillConvex: struct {
             path: PathSlice,
-            color: Color,
-            blur: f32,
+            opts: PathFillConvexOptions,
         },
         pathStroke: struct {
             path: PathSlice,
-            closed: bool,
-            thickness: f32,
-            endcap_style: EndCapStyle,
-            color: Color,
+            opts: PathStrokeOptions,
         },
         triangles: struct {
             tri: Triangles,
@@ -1191,10 +1187,16 @@ pub fn pathAddArc(path: *PathArrayList, center: Point.Physical, radius: f32, sta
     }
 }
 
-/// Fill path (must be convex) with `color`.  See `Rect.fill`.
+pub const PathFillConvexOptions = struct {
+    blur: f32 = 1.0,
+    color: ?Color = null,
+    center: ?Point.Physical = null,
+};
+
+/// Fill path (must be convex) with `color` (or `Theme.color_fill`).  See `Rect.fill`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathFillConvex(path: PathSlice, color: Color, blur: f32) !void {
+pub fn pathFillConvex(path: PathSlice, opts: PathFillConvexOptions) !void {
     if (path.len < 3) {
         return;
     }
@@ -1203,27 +1205,26 @@ pub fn pathFillConvex(path: PathSlice, color: Color, blur: f32) !void {
         return;
     }
 
+    var options = opts;
+    if (options.color == null) {
+        options.color = dvui.themeGet().color_fill;
+    }
+
     const cw = currentWindow();
 
     if (!cw.render_target.rendering) {
         const path_copy = try cw.arena().dupe(Point.Physical, path);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = color, .blur = blur } } };
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .opts = options } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
         return;
     }
 
-    var triangles = try pathFillConvexTriangles(path, .{ .blur = blur, .color = color });
+    var triangles = try pathFillConvexTriangles(path, options);
     defer triangles.deinit(cw.arena());
     try renderTriangles(triangles, null);
 }
-
-pub const pathFillConvexTrianglesOptions = struct {
-    blur: f32 = 1.0,
-    color: Color = .white,
-    center: ?Point.Physical = null,
-};
 
 /// Generates triangles to fill path (must be convex).
 ///
@@ -1234,7 +1235,7 @@ pub const pathFillConvexTrianglesOptions = struct {
 /// pixel inside. Currently blur < 1 is treated as 1, but might change.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathFillConvexTriangles(path: PathSlice, opts: pathFillConvexTrianglesOptions) !Triangles {
+pub fn pathFillConvexTriangles(path: PathSlice, opts: PathFillConvexOptions) !Triangles {
     if (path.len < 3) {
         return .empty;
     }
@@ -1255,7 +1256,7 @@ pub fn pathFillConvexTriangles(path: PathSlice, opts: pathFillConvexTrianglesOpt
     var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
     errdefer comptime unreachable; // No errors from this point on
 
-    const col: Color = opts.color.alphaMultiply();
+    const col: Color = if (opts.color) |color| color.alphaMultiply() else .white;
     const col_trans: Color = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
     var i: usize = 0;
@@ -1336,26 +1337,28 @@ pub fn pathFillConvexTriangles(path: PathSlice, opts: pathFillConvexTrianglesOpt
     return builder.build();
 }
 
-pub const EndCapStyle = enum {
-    none,
-    square,
-};
-
 pub const PathStrokeOptions = struct {
     /// true => Render this after normal drawing on that subwindow.  Useful for
     /// debugging on cross-gui drawing.
     after: bool = false,
 
+    thickness: f32,
+    color: Color,
+
     /// true => Stroke includes from path end to path start.
     closed: bool = false,
-
     endcap_style: EndCapStyle = .none,
+
+    pub const EndCapStyle = enum {
+        none,
+        square,
+    };
 };
 
 /// Stroke path as a series of line segments.  See `Rect.stroke`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathStroke(path: PathSlice, thickness: f32, color: Color, opts: PathStrokeOptions) !void {
+pub fn pathStroke(path: PathSlice, opts: PathStrokeOptions) !void {
     if (path.len == 0) {
         return;
     }
@@ -1364,7 +1367,7 @@ pub fn pathStroke(path: PathSlice, thickness: f32, color: Color, opts: PathStrok
 
     if (opts.after or !cw.render_target.rendering) {
         const path_copy = try cw.arena().dupe(Point.Physical, path);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = opts.closed, .thickness = thickness, .endcap_style = opts.endcap_style, .color = color } } };
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .opts = opts } } };
 
         var sw = cw.subwindowCurrent();
         if (opts.after) {
@@ -1376,12 +1379,18 @@ pub fn pathStroke(path: PathSlice, thickness: f32, color: Color, opts: PathStrok
         return;
     }
 
-    var triangles = try pathStrokeTriangles(path, thickness, color, opts.closed, opts.endcap_style);
+    var triangles = try pathStrokeTriangles(path, opts);
     defer triangles.deinit(cw.arena());
     try renderTriangles(triangles, null);
 }
 
-pub fn pathStrokeTriangles(path: PathSlice, thickness: f32, color: Color, closed_in: bool, endcap_style: EndCapStyle) !Triangles {
+/// Generates triangles to stroke path.
+///
+/// Vertexes will have unset uv and color is alpha multiplied white fading to
+/// transparent at the edge.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn pathStrokeTriangles(path: PathSlice, opts: PathStrokeOptions) !Triangles {
     if (dvui.clipGet().empty()) {
         return .empty;
     }
@@ -1395,15 +1404,12 @@ pub fn pathStrokeTriangles(path: PathSlice, thickness: f32, color: Color, closed
         var tempPath: PathArrayList = .init(cw.arena());
         defer tempPath.deinit();
 
-        try pathAddArc(&tempPath, center, thickness, math.pi * 2.0, 0, true);
-        return try pathFillConvexTriangles(tempPath.items, .{ .color = color, .blur = 1.0 });
+        try pathAddArc(&tempPath, center, opts.thickness, math.pi * 2.0, 0, true);
+        return try pathFillConvexTriangles(tempPath.items, .{ .color = opts.color, .blur = 1.0 });
     }
 
-    var closed: bool = closed_in;
-    if (path.len == 2) {
-        // a single segment can't be closed
-        closed = false;
-    }
+    // a single segment can't be closed
+    const closed: bool = if (path.len == 2) false else opts.closed;
 
     var vtx_count = path.len * 4;
     if (!closed) {
@@ -1419,7 +1425,7 @@ pub fn pathStrokeTriangles(path: PathSlice, thickness: f32, color: Color, closed
     var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
     errdefer comptime unreachable; // No errors from this point on
 
-    const col = color.alphaMultiply();
+    const col = opts.color.alphaMultiply();
     const col_trans = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
     const aa_size = 1.0;
@@ -1443,10 +1449,10 @@ pub fn pathStrokeTriangles(path: PathSlice, thickness: f32, color: Color, closed
                 // rotate by 90 to get normal
                 halfnorm = .{ .x = diffbc.y / 2, .y = (-diffbc.x) / 2 };
 
-                if (endcap_style == .square) {
+                if (opts.endcap_style == .square) {
                     // square endcaps move bb out by thickness
-                    bb.x += diffbc.x * thickness;
-                    bb.y += diffbc.y * thickness;
+                    bb.x += diffbc.x * opts.thickness;
+                    bb.y += diffbc.y * opts.thickness;
                 }
 
                 // add 2 extra vertexes for endcap fringe
@@ -1454,8 +1460,8 @@ pub fn pathStrokeTriangles(path: PathSlice, thickness: f32, color: Color, closed
 
                 builder.appendVertex(.{
                     .pos = .{
-                        .x = bb.x - halfnorm.x * (thickness + aa_size) + diffbc.x * aa_size,
-                        .y = bb.y - halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size,
+                        .x = bb.x - halfnorm.x * (opts.thickness + aa_size) + diffbc.x * aa_size,
+                        .y = bb.y - halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
                     },
                     .col = col_trans,
                     .uv = undefined,
@@ -1463,8 +1469,8 @@ pub fn pathStrokeTriangles(path: PathSlice, thickness: f32, color: Color, closed
 
                 builder.appendVertex(.{
                     .pos = .{
-                        .x = bb.x + halfnorm.x * (thickness + aa_size) + diffbc.x * aa_size,
-                        .y = bb.y + halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size,
+                        .x = bb.x + halfnorm.x * (opts.thickness + aa_size) + diffbc.x * aa_size,
+                        .y = bb.y + halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
                     },
                     .col = col_trans,
                     .uv = undefined,
@@ -1482,10 +1488,10 @@ pub fn pathStrokeTriangles(path: PathSlice, thickness: f32, color: Color, closed
                 // rotate by 90 to get normal
                 halfnorm = .{ .x = diffab.y / 2, .y = (-diffab.x) / 2 };
 
-                if (endcap_style == .square) {
+                if (opts.endcap_style == .square) {
                     // square endcaps move bb out by thickness
-                    bb.x -= diffab.x * thickness;
-                    bb.y -= diffab.y * thickness;
+                    bb.x -= diffab.x * opts.thickness;
+                    bb.y -= diffab.y * opts.thickness;
                 }
             }
         } else {
@@ -1512,8 +1518,8 @@ pub fn pathStrokeTriangles(path: PathSlice, thickness: f32, color: Color, closed
         // side 1 inner vertex
         builder.appendVertex(.{
             .pos = .{
-                .x = bb.x - halfnorm.x * thickness,
-                .y = bb.y - halfnorm.y * thickness,
+                .x = bb.x - halfnorm.x * opts.thickness,
+                .y = bb.y - halfnorm.y * opts.thickness,
             },
             .col = col,
             .uv = undefined,
@@ -1522,8 +1528,8 @@ pub fn pathStrokeTriangles(path: PathSlice, thickness: f32, color: Color, closed
         // side 1 AA vertex
         builder.appendVertex(.{
             .pos = .{
-                .x = bb.x - halfnorm.x * (thickness + aa_size),
-                .y = bb.y - halfnorm.y * (thickness + aa_size),
+                .x = bb.x - halfnorm.x * (opts.thickness + aa_size),
+                .y = bb.y - halfnorm.y * (opts.thickness + aa_size),
             },
             .col = col_trans,
             .uv = undefined,
@@ -1532,8 +1538,8 @@ pub fn pathStrokeTriangles(path: PathSlice, thickness: f32, color: Color, closed
         // side 2 inner vertex
         builder.appendVertex(.{
             .pos = .{
-                .x = bb.x + halfnorm.x * thickness,
-                .y = bb.y + halfnorm.y * thickness,
+                .x = bb.x + halfnorm.x * opts.thickness,
+                .y = bb.y + halfnorm.y * opts.thickness,
             },
             .col = col,
             .uv = undefined,
@@ -1542,8 +1548,8 @@ pub fn pathStrokeTriangles(path: PathSlice, thickness: f32, color: Color, closed
         // side 2 AA vertex
         builder.appendVertex(.{
             .pos = .{
-                .x = bb.x + halfnorm.x * (thickness + aa_size),
-                .y = bb.y + halfnorm.y * (thickness + aa_size),
+                .x = bb.x + halfnorm.x * (opts.thickness + aa_size),
+                .y = bb.y + halfnorm.y * (opts.thickness + aa_size),
             },
             .col = col_trans,
             .uv = undefined,
@@ -1568,16 +1574,16 @@ pub fn pathStrokeTriangles(path: PathSlice, thickness: f32, color: Color, closed
             // add 2 extra vertexes for endcap fringe
             builder.appendVertex(.{
                 .pos = .{
-                    .x = bb.x - halfnorm.x * (thickness + aa_size) - diffab.x * aa_size,
-                    .y = bb.y - halfnorm.y * (thickness + aa_size) - diffab.y * aa_size,
+                    .x = bb.x - halfnorm.x * (opts.thickness + aa_size) - diffab.x * aa_size,
+                    .y = bb.y - halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
                 },
                 .col = col_trans,
                 .uv = undefined,
             });
             builder.appendVertex(.{
                 .pos = .{
-                    .x = bb.x + halfnorm.x * (thickness + aa_size) - diffab.x * aa_size,
-                    .y = bb.y + halfnorm.y * (thickness + aa_size) - diffab.y * aa_size,
+                    .x = bb.x + halfnorm.x * (opts.thickness + aa_size) - diffab.x * aa_size,
+                    .y = bb.y + halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
                 },
                 .col = col_trans,
                 .uv = undefined,
@@ -4122,7 +4128,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     const end = full_circle * easing.inSine(t);
 
     try pathAddArc(&path, r.center(), @min(r.w, r.h) / 3, start, end, false);
-    try pathStroke(path.items, 3.0 * rs.s, options.color(.text), .{});
+    try pathStroke(path.items, .{ .thickness = 3.0 * rs.s, .color = options.color(.text) });
 }
 
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) !*ScaleWidget {
@@ -4627,7 +4633,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        try part.fill(.{ .radius = options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .color = options.color(.accent) });
+        try part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.accent) });
     }
 
     switch (dir) {
@@ -4641,7 +4647,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        try part.fill(.{ .radius = options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .color = options.color(.fill) });
+        try part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.fill) });
     }
 
     const knobRect = switch (dir) {
@@ -4981,7 +4987,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
 
-            try knobrs.r.fill(.{ .radius = options.corner_radiusGet().scale(knobrs.s, Rect.Physical), .color = options.color(.fill_press) });
+            try knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), .{ .color = options.color(.fill_press) });
         }
 
         try label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
@@ -5093,7 +5099,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 
     const rs = b.data().contentRectScale();
 
-    try rs.r.fill(.{ .radius = options.corner_radiusGet().scale(rs.s, Rect.Physical), .color = options.color(.fill) });
+    try rs.r.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.fill) });
 
     const perc = @max(0, @min(1, init_opts.percent));
     if (perc == 0) return;
@@ -5109,7 +5115,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    try part.fill(.{ .radius = options.corner_radiusGet().scale(rs.s, Rect.Physical), .color = options.color(.accent) });
+    try part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.accent) });
 }
 
 pub var checkbox_defaults: Options = .{
@@ -5157,10 +5163,10 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
     const cornerRad = opts.corner_radiusGet().scale(rs.s, Rect.Physical);
-    try rs.r.fill(.{ .radius = cornerRad, .color = opts.color(.border) });
+    try rs.r.fill(cornerRad, .{ .color = opts.color(.border) });
 
     if (focused) {
-        try rs.r.stroke(cornerRad, 2 * rs.s, opts.color(.accent), .{});
+        try rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = opts.color(.accent) });
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -5173,9 +5179,9 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     var options = opts;
     if (checked) {
         options = opts.override(themeGet().style_accent);
-        try rs.r.insetAll(0.5 * rs.s).fill(.{ .radius = cornerRad, .color = options.color(fill) });
+        try rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill) });
     } else {
-        try rs.r.insetAll(rs.s).fill(.{ .radius = cornerRad, .color = options.color(fill) });
+        try rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill) });
     }
 
     if (checked) {
@@ -5195,7 +5201,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
             .{ .x = x, .y = y },
             .{ .x = x + third * 2, .y = y - third * 2 },
         };
-        try pathStroke(path, thick, options.color(.text), .{ .endcap_style = .square });
+        try pathStroke(path, .{ .thickness = thick, .color = options.color(.text), .endcap_style = .square });
     }
 }
 
@@ -5244,10 +5250,10 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
     const cornerRad = Rect.Physical.all(1000);
     const r = rs.r;
-    try r.fill(.{ .radius = cornerRad, .color = opts.color(.border) });
+    try r.fill(cornerRad, .{ .color = opts.color(.border) });
 
     if (focused) {
-        try r.stroke(cornerRad, 2 * rs.s, opts.color(.accent), .{});
+        try r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = opts.color(.accent) });
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -5258,15 +5264,15 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     }
 
     if (active) {
-        try r.insetAll(0.5 * rs.s).fill(.{ .radius = cornerRad, .color = opts.color(.accent) });
+        try r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = opts.color(.accent) });
     } else {
-        try r.insetAll(rs.s).fill(.{ .radius = cornerRad, .color = opts.color(fill) });
+        try r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill) });
     }
 
     if (active) {
         const thick = @max(1.0, r.w / 6);
 
-        try pathStroke(&.{r.center()}, thick, opts.color(fill), .{});
+        try pathStroke(&.{r.center()}, .{ .thickness = thick, .color = opts.color(fill) });
     }
 }
 
@@ -5397,7 +5403,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), 3 * rs.s, dvui.themeGet().color_err, .{ .after = true });
+        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().color_err, .after = true });
     }
 
     // display min/max
@@ -5524,7 +5530,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), 3 * rs.s, dvui.themeGet().color_err, .{ .after = true });
+        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().color_err, .after = true });
     }
 
     te.deinit();

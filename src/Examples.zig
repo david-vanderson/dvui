@@ -2159,7 +2159,7 @@ pub fn reorderListsAdvanced() !void {
 
         if (reorderable.targetRectScale()) |rs| {
             // user is dragging a reorderable over this rect, could draw anything here
-            try rs.r.fill(.{ .color = .green });
+            try rs.r.fill(.{}, .{ .color = .green });
 
             // reset to use next space, need a separator
             try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
@@ -2190,7 +2190,7 @@ pub fn reorderListsAdvanced() !void {
 
         if (reorderable.targetRectScale()) |rs| {
             // user is dragging a reorderable over this rect
-            try rs.r.fill(.{ .color = .green });
+            try rs.r.fill(.{}, .{ .color = .green });
         }
     }
 
@@ -2686,12 +2686,12 @@ pub fn scrollCanvas(comptime data: u8) !void {
     try dvui.pathStroke(&.{
         dataRectScale.pointToPhysical(.{ .x = -10 }),
         dataRectScale.pointToPhysical(.{ .x = 10 }),
-    }, 1, dvui.Color.black, .{});
+    }, .{ .thickness = 1, .color = dvui.Color.black });
 
     try dvui.pathStroke(&.{
         dataRectScale.pointToPhysical(.{ .y = -10 }),
         dataRectScale.pointToPhysical(.{ .y = 10 }),
-    }, 1, dvui.Color.black, .{});
+    }, .{ .thickness = 1, .color = dvui.Color.black });
 
     // keep record of bounding box
     var mbbox: ?Rect.Physical = null;
@@ -3714,7 +3714,7 @@ pub const StrokeTest = struct {
     var points: []dvui.Point = pointsArray[0..0];
     var dragi: ?usize = null;
     var thickness: f32 = 1.0;
-    var endcap_style: dvui.EndCapStyle = .none;
+    var endcap_style: dvui.PathStrokeOptions.EndCapStyle = .none;
 
     wd: dvui.WidgetData = undefined,
 
@@ -3741,7 +3741,7 @@ pub const StrokeTest = struct {
         const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
         for (points, 0..) |p, i| {
             const rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
-            try rs.rectToPhysical(rect).fill(.{ .radius = dvui.Rect.Physical.all(1), .color = fill_color });
+            try rs.rectToPhysical(rect).fill(.all(1), .{ .color = fill_color });
 
             _ = i;
             //_ = try dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });
@@ -3755,7 +3755,7 @@ pub const StrokeTest = struct {
         }
 
         const stroke_color = dvui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
-        try dvui.pathStroke(path.items, rs.s * thickness, stroke_color, .{ .closed = stroke_test_closed, .endcap_style = StrokeTest.endcap_style });
+        try dvui.pathStroke(path.items, .{ .thickness = rs.s * thickness, .color = stroke_color, .closed = stroke_test_closed, .endcap_style = StrokeTest.endcap_style });
     }
 
     pub fn widget(self: *Self) dvui.Widget {
