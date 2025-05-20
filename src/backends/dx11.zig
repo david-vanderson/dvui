@@ -19,6 +19,8 @@ pub const WindowState = struct {
 
     dvui_window: dvui.Window,
 
+    texture_interpolation: std.AutoHashMap(*anyopaque, dvui.enums.TextureInterpolation) = undefined,
+
     device: *win32.ID3D11Device,
     device_context: *win32.ID3D11DeviceContext,
     swap_chain: *win32.IDXGISwapChain,
@@ -42,6 +44,7 @@ pub const WindowState = struct {
 
     pub fn deinit(state: *WindowState) void {
         state.dvui_window.deinit();
+        state.texture_interpolation.deinit();
         if (state.render_target) |rt| {
             _ = rt.IUnknown.Release();
         }
@@ -81,7 +84,8 @@ const DirectxOptions = struct {
     vertex_buffer: ?*win32.ID3D11Buffer = null,
     index_buffer: ?*win32.ID3D11Buffer = null,
     texture_view: ?*win32.ID3D11ShaderResourceView = null,
-    sampler: ?*win32.ID3D11SamplerState = null,
+    sampler_linear: ?*win32.ID3D11SamplerState = null,
+    sampler_nearest: ?*win32.ID3D11SamplerState = null,
     rasterizer: ?*win32.ID3D11RasterizerState = null,
     blend_state: ?*win32.ID3D11BlendState = null,
 
@@ -111,7 +115,10 @@ const DirectxOptions = struct {
         if (self.texture_view) |tv| {
             _ = tv.IUnknown.Release();
         }
-        if (self.sampler) |s| {
+        if (self.sampler_linear) |s| {
+            _ = s.IUnknown.Release();
+        }
+        if (self.sampler_nearest) |s| {
             _ = s.IUnknown.Release();
         }
         if (self.rasterizer) |r| {
@@ -266,6 +273,8 @@ pub fn RegisterClass(name: [*:0]const u16, opt: RegisterClassOptions) error{Win3
 pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
     const style = win32.WS_OVERLAPPEDWINDOW;
     const style_ex: win32.WINDOW_EX_STYLE = .{ .APPWINDOW = 1, .WINDOWEDGE = 1 };
+
+    window_state.texture_interpolation = .init(options.dvui_gpa);
 
     const create_args: CreateWindowArgs = .{
         .window_state = window_state,
@@ -557,9 +566,12 @@ fn recreateShaderView(state: *WindowState, texture: *anyopaque) void {
     }
 }
 
-fn createSampler(state: *WindowState) !void {
+fn createSampler(state: *WindowState, interpolation: dvui.enums.TextureInterpolation) !void {
     var samp_desc = std.mem.zeroes(win32.D3D11_SAMPLER_DESC);
-    samp_desc.Filter = win32.D3D11_FILTER.MIN_MAG_POINT_MIP_LINEAR;
+    samp_desc.Filter = switch (interpolation) {
+        .linear => win32.D3D11_FILTER.MIN_MAG_MIP_LINEAR,
+        .nearest => win32.D3D11_FILTER.MIN_MAG_MIP_POINT,
+    };
     samp_desc.AddressU = win32.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
     samp_desc.AddressV = win32.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
     samp_desc.AddressW = win32.D3D11_TEXTURE_ADDRESS_MODE.WRAP;
@@ -580,9 +592,12 @@ fn createSampler(state: *WindowState) !void {
     state.dx_options.blend_state = blend_state_result;
     _ = state.device_context.OMSetBlendState(state.dx_options.blend_state, null, 0xffffffff);
 
-    var sampler_result: @TypeOf(state.dx_options.sampler.?) = undefined;
+    var sampler_result: *win32.ID3D11SamplerState = undefined;
     const sampler = state.device.CreateSamplerState(&samp_desc, &sampler_result);
-    state.dx_options.sampler = sampler_result;
+    switch (interpolation) {
+        .linear => state.dx_options.sampler_linear = sampler_result,
+        .nearest => state.dx_options.sampler_nearest = sampler_result,
+    }
 
     if (!isOk(sampler)) {
         log.err("sampler state could not be iniitialized", .{});
@@ -613,8 +628,7 @@ fn createBuffer(state: *WindowState, bind_type: anytype, comptime InitialType: t
 }
 
 // ############ Satisfy DVUI interfaces ############
-pub fn textureCreate(self: Context, pixels: [*]u8, width: u32, height: u32, ti: dvui.enums.TextureInterpolation) dvui.Texture {
-    _ = ti; // autofix
+pub fn textureCreate(self: Context, pixels: [*]u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) dvui.Texture {
     const state = stateFromHwnd(hwndFromContext(self));
 
     var texture: *win32.ID3D11Texture2D = undefined;
@@ -649,10 +663,12 @@ pub fn textureCreate(self: Context, pixels: [*]u8, width: u32, height: u32, ti: 
         @panic("couldn't create texture");
     }
 
+    state.texture_interpolation.put(texture, interpolation) catch @panic("texture interpolation map OOM");
+
     return dvui.Texture{ .ptr = texture, .width = width, .height = height };
 }
 
-pub fn textureCreateTarget(self: Context, width: u32, height: u32, _: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
+pub fn textureCreateTarget(self: Context, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !dvui.TextureTarget {
     const state = stateFromHwnd(hwndFromContext(self));
 
     const texture_desc = win32.D3D11_TEXTURE2D_DESC{
@@ -676,6 +692,7 @@ pub fn textureCreateTarget(self: Context, width: u32, height: u32, _: dvui.enums
         log.err("Texture for render target creation failed", .{});
         return error.TextureCreate;
     }
+    state.texture_interpolation.put(texture, interpolation) catch @panic("texture interpolation map OOM");
     return .{ .ptr = @ptrCast(texture), .width = width, .height = height };
 }
 
@@ -724,8 +741,11 @@ pub fn textureReadTarget(self: Context, texture: dvui.TextureTarget, pixels_out:
 }
 
 pub fn textureDestroy(self: Context, texture: dvui.Texture) void {
-    _ = self;
+    const state = stateFromHwnd(hwndFromContext(self));
     const tex: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
+    if (!state.texture_interpolation.remove(texture.ptr)) {
+        log.err("Destroyed texture that did not have a stored interpolation", .{});
+    }
     _ = tex.IUnknown.Release();
 }
 
@@ -737,9 +757,13 @@ pub fn textureFromTarget(self: Context, texture: dvui.TextureTarget) dvui.Textur
     defer state.arena.free(pixels);
 
     const tex: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
+    const interpolation = if (state.texture_interpolation.fetchRemove(texture.ptr)) |kv| kv.value else blk: {
+        log.err("Target texture destroyed that did not have a stored interpolation", .{});
+        break :blk .linear;
+    };
     _ = tex.IUnknown.Release();
 
-    return self.textureCreate(pixels.ptr, texture.width, texture.height, .linear);
+    return self.textureCreate(pixels.ptr, texture.width, texture.height, interpolation);
 }
 
 pub fn renderTarget(self: Context, texture: ?dvui.TextureTarget) void {
@@ -758,7 +782,7 @@ pub fn renderTarget(self: Context, texture: ?dvui.TextureTarget) void {
             state.render_target = null;
             return;
         }
-        state.device_context.ClearRenderTargetView(render_target, &0.0);
+        state.device_context.ClearRenderTargetView(render_target, @ptrCast(&[4]f32{ 0, 0, 0, 0 }));
         state.render_target = render_target;
     } else {
         state.render_target = null;
@@ -797,9 +821,15 @@ pub fn drawClippedTriangles(
         };
     }
 
-    if (state.dx_options.sampler == null) {
-        createSampler(state) catch |err| {
-            log.err("sampler could not be initialized: {}", .{err});
+    if (state.dx_options.sampler_linear == null) {
+        createSampler(state, .linear) catch |err| {
+            log.err("linear sampler could not be initialized: {}", .{err});
+            return;
+        };
+    }
+    if (state.dx_options.sampler_nearest == null) {
+        createSampler(state, .nearest) catch |err| {
+            log.err("nearest sampler could not be initialized: {}", .{err});
             return;
         };
     }
@@ -841,6 +871,7 @@ pub fn drawClippedTriangles(
     setViewport(state, @floatFromInt(client_size.cx), @floatFromInt(client_size.cy));
 
     if (texture) |tex| recreateShaderView(state, tex.ptr);
+    const interpolation = if (texture) |tex| state.texture_interpolation.get(tex.ptr) orelse .linear else .linear;
 
     var scissor_rect: ?win32.RECT = std.mem.zeroes(win32.RECT);
     var nums: u32 = 1;
@@ -867,7 +898,10 @@ pub fn drawClippedTriangles(
     state.device_context.PSSetShader(state.dx_options.pixel_shader, null, 0);
 
     state.device_context.PSSetShaderResources(0, 1, @ptrCast(&state.dx_options.texture_view));
-    state.device_context.PSSetSamplers(0, 1, @ptrCast(&state.dx_options.sampler));
+    state.device_context.PSSetSamplers(0, 1, switch (interpolation) {
+        .linear => @ptrCast(&state.dx_options.sampler_linear),
+        .nearest => @ptrCast(&state.dx_options.sampler_nearest),
+    });
     state.device_context.DrawIndexed(@intCast(idx.len), 0, 0);
     if (scissor_rect) |srect| state.device_context.RSSetScissorRects(nums, @ptrCast(&srect));
 }
