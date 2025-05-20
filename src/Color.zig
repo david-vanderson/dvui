@@ -38,16 +38,6 @@ pub const dark_magenta = purple;
 
 pub const transparent = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
-pub fn alphaMultiplyPixels(pixels: []u8) void {
-    for (0..pixels.len / 4) |ii| {
-        const i = ii * 4;
-        const a = pixels[i + 3];
-        pixels[i + 0] = @intCast(@divTrunc(@as(u16, pixels[i + 0]) * a, 255));
-        pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * a, 255));
-        pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * a, 255));
-    }
-}
-
 /// Returns brightness of the color as a value between 0 and 1
 pub fn brightness(self: @This()) f32 {
     const r: f32 = @as(f32, @floatFromInt(self.r)) / 255.0;

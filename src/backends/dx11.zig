@@ -753,8 +753,10 @@ pub fn textureFromTarget(self: Context, texture: dvui.TextureTarget) dvui.Textur
     const state = stateFromHwnd(hwndFromContext(self));
 
     // DX11 can't draw target textures, so read all the pixels and make a new texture
-    const pixels = dvui.textureReadTarget(state.arena, texture) catch unreachable;
+
+    const pixels = state.arena.alloc(u8, texture.width * texture.height * 4) catch unreachable;
     defer state.arena.free(pixels);
+    self.textureReadTarget(texture, pixels.ptr) catch unreachable;
 
     const tex: *win32.ID3D11Texture2D = @ptrCast(@alignCast(texture.ptr));
     const interpolation = if (state.texture_interpolation.fetchRemove(texture.ptr)) |kv| kv.value else blk: {

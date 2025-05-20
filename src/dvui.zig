@@ -803,7 +803,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
                     .height = @ceil(height),
                     .ascent = @floor(ascent),
                     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-                    .texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
+                    .texture_atlas = textureCreate(.cast(pixels), @intFromFloat(size.w), @intFromFloat(size.h), .linear),
                     .texture_atlas_regen = true,
                 };
 
@@ -830,7 +830,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
             .height = @ceil(height),
             .ascent = @floor(ascent),
             .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-            .texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
+            .texture_atlas = textureCreate(.cast(pixels), @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
             .texture_atlas_regen = true,
         };
     }
@@ -914,9 +914,8 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
     var pixels: []u8 = undefined;
     pixels.ptr = @ptrCast(render.pixels.ptr);
     pixels.len = render.width * render.height * 4;
-    Color.alphaMultiplyPixels(pixels);
 
-    const texture = textureCreate(pixels.ptr, render.width, render.height, .linear);
+    const texture = textureCreate(.fromRGBA(pixels), render.width, render.height, .linear);
 
     //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, render.width, render.height });
 
@@ -5792,7 +5791,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             }
         }
 
-        fce.texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
+        fce.texture_atlas = textureCreate(.cast(pixels), @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
     }
 
     var vtx = std.ArrayList(Vertex).init(cw.arena());
@@ -6022,13 +6021,57 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
     }
 }
 
-/// Create a texture that can be rendered with `renderTexture`.  pixels is RGBA premultiplied alpha.
+/// Holds a slice of premultiplied alpha (PMA) RGBA pixels
+///
+/// To convert non PMA pixels, use `RGBAPixelsPMA.fromRGBA`
+pub const RGBAPixelsPMA = struct {
+    /// Should only ever store RGBA pixels with premultiplied alpha
+    pma: []u8,
+
+    /// Alpha multiplies `pixels` in place
+    pub fn fromRGBA(pixels: []u8) RGBAPixelsPMA {
+        for (0..pixels.len / 4) |ii| {
+            const i = ii * 4;
+            const a = pixels[i + 3];
+            pixels[i + 0] = @intCast(@divTrunc(@as(u16, pixels[i + 0]) * a, 255));
+            pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * a, 255));
+            pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * a, 255));
+        }
+        return .{ .pma = pixels };
+    }
+
+    /// Unapplies the alpha multiplication in place, returning the inner slice
+    pub fn toRGBA(pma_pixels: RGBAPixelsPMA) []u8 {
+        var pixels = pma_pixels.pma;
+        for (0..pixels.len / 4) |ii| {
+            const i = ii * 4;
+            const a = pixels[i + 3];
+            pixels[i + 0] = @intCast(@divTrunc(@as(u16, pixels[i + 0]) * 255, a));
+            pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * 255, a));
+            pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * 255, a));
+        }
+        return pixels;
+    }
+
+    /// Should only be used where it is guaranteed that the pixels are already
+    /// alpha multiplied or have no transparency
+    ///
+    /// Does no modifications of the pixels
+    pub fn cast(pixels: []u8) RGBAPixelsPMA {
+        return .{ .pma = pixels };
+    }
+};
+
+/// Create a texture that can be rendered with `renderTexture`.
 ///
 /// Remember to destroy the texture at some point, see `textureDestroyLater`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enums.TextureInterpolation) Texture {
-    return currentWindow().backend.textureCreate(pixels, width, height, interpolation);
+pub fn textureCreate(pixels: RGBAPixelsPMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Texture {
+    if (pixels.pma.len != width * height * 4) {
+        log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.pma.len, width * height * 4, width, height });
+    }
+    return currentWindow().backend.textureCreate(pixels.pma.ptr, width, height, interpolation);
 }
 
 /// Create a texture that can be rendered with `renderTexture` and drawn to
@@ -6046,14 +6089,14 @@ pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.Texture
 /// Returns pixels allocated by arena.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn textureReadTarget(arena: std.mem.Allocator, texture: TextureTarget) ![]u8 {
+pub fn textureReadTarget(arena: std.mem.Allocator, texture: TextureTarget) !RGBAPixelsPMA {
     const size: usize = texture.width * texture.height * 4;
     const pixels = try arena.alloc(u8, size);
     errdefer arena.free(pixels);
 
     try currentWindow().backend.textureReadTarget(texture, pixels.ptr);
 
-    return pixels;
+    return .{ .pma = pixels };
 }
 
 /// Convert a target texture to a normal texture.  target is destroyed.
@@ -6181,9 +6224,8 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
     var pixels: []u8 = undefined;
     pixels.ptr = data;
     pixels.len = @intCast(w * h * 4);
-    Color.alphaMultiplyPixels(pixels);
 
-    const texture = textureCreate(pixels.ptr, @intCast(w), @intCast(h), .linear);
+    const texture = textureCreate(.fromRGBA(pixels), @intCast(w), @intCast(h), .linear);
 
     //std.debug.print("created image texture \"{s}\" size {d}x{d}\n", .{ name, w, h });
     //const usizeh: usize = @intCast(h);
@@ -6256,7 +6298,8 @@ pub const Picture = struct {
 
     /// Encode texture as png.  Call after `stop` before `deinit`.
     pub fn png(self: *Picture, arena: std.mem.Allocator) ![]u8 {
-        const pixels = dvui.textureReadTarget(arena, self.texture) catch unreachable;
+        const pma_pixels = try dvui.textureReadTarget(arena, self.texture);
+        const pixels = pma_pixels.toRGBA();
         defer arena.free(pixels);
 
         return try dvui.pngEncode(arena, pixels, self.texture.width, self.texture.height, .{});
