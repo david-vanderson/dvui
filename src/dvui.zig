@@ -1257,7 +1257,6 @@ pub fn pathFillConvexTriangles(path: PathSlice, opts: PathFillConvexOptions) !Tr
     errdefer comptime unreachable; // No errors from this point on
 
     const col: Color = if (opts.color) |color| color.alphaMultiply() else .white;
-    const col_trans: Color = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
     var i: usize = 0;
     while (i < path.len) : (i += 1) {
@@ -1317,7 +1316,7 @@ pub fn pathFillConvexTriangles(path: PathSlice, opts: PathFillConvexOptions) !Tr
                     .x = bb.x + norm.x * outside_len,
                     .y = bb.y + norm.y * outside_len,
                 },
-                .col = col_trans,
+                .col = .transparent,
                 .uv = undefined,
             });
 
@@ -1426,7 +1425,6 @@ pub fn pathStrokeTriangles(path: PathSlice, opts: PathStrokeOptions) !Triangles 
     errdefer comptime unreachable; // No errors from this point on
 
     const col = opts.color.alphaMultiply();
-    const col_trans = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
     const aa_size = 1.0;
     var vtx_start: u16 = 0;
@@ -1463,7 +1461,7 @@ pub fn pathStrokeTriangles(path: PathSlice, opts: PathStrokeOptions) !Triangles 
                         .x = bb.x - halfnorm.x * (opts.thickness + aa_size) + diffbc.x * aa_size,
                         .y = bb.y - halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
                     },
-                    .col = col_trans,
+                    .col = .transparent,
                     .uv = undefined,
                 });
 
@@ -1472,7 +1470,7 @@ pub fn pathStrokeTriangles(path: PathSlice, opts: PathStrokeOptions) !Triangles 
                         .x = bb.x + halfnorm.x * (opts.thickness + aa_size) + diffbc.x * aa_size,
                         .y = bb.y + halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
                     },
-                    .col = col_trans,
+                    .col = .transparent,
                     .uv = undefined,
                 });
 
@@ -1531,7 +1529,7 @@ pub fn pathStrokeTriangles(path: PathSlice, opts: PathStrokeOptions) !Triangles 
                 .x = bb.x - halfnorm.x * (opts.thickness + aa_size),
                 .y = bb.y - halfnorm.y * (opts.thickness + aa_size),
             },
-            .col = col_trans,
+            .col = .transparent,
             .uv = undefined,
         });
 
@@ -1551,7 +1549,7 @@ pub fn pathStrokeTriangles(path: PathSlice, opts: PathStrokeOptions) !Triangles 
                 .x = bb.x + halfnorm.x * (opts.thickness + aa_size),
                 .y = bb.y + halfnorm.y * (opts.thickness + aa_size),
             },
-            .col = col_trans,
+            .col = .transparent,
             .uv = undefined,
         });
 
@@ -1577,7 +1575,7 @@ pub fn pathStrokeTriangles(path: PathSlice, opts: PathStrokeOptions) !Triangles 
                     .x = bb.x - halfnorm.x * (opts.thickness + aa_size) - diffab.x * aa_size,
                     .y = bb.y - halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
                 },
-                .col = col_trans,
+                .col = .transparent,
                 .uv = undefined,
             });
             builder.appendVertex(.{
@@ -1585,7 +1583,7 @@ pub fn pathStrokeTriangles(path: PathSlice, opts: PathStrokeOptions) !Triangles 
                     .x = bb.x + halfnorm.x * (opts.thickness + aa_size) - diffab.x * aa_size,
                     .y = bb.y + halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
                 },
-                .col = col_trans,
+                .col = .transparent,
                 .uv = undefined,
             });
 
