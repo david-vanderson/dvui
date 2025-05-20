@@ -63,7 +63,7 @@ pub const Line = struct {
     }
 
     pub fn stroke(self: *Line, thick: f32, color: dvui.Color) !void {
-        try dvui.pathStroke(self.path.items, thick * self.plot.data_rs.s, color, .{});
+        try dvui.pathStroke(self.path.items, .{ .thickness = thick * self.plot.data_rs.s, .color = color });
     }
 
     pub fn deinit(self: *Line) void {
@@ -180,7 +180,7 @@ pub fn install(self: *PlotWidget) !void {
 
     const bt: f32 = self.init_options.border_thick orelse 0.0;
     if (bt > 0) {
-        try self.data_rs.r.stroke(.{}, bt * self.data_rs.s, self.box.data().options.color(.text), .{});
+        try self.data_rs.r.stroke(.{}, .{ .thickness = bt * self.data_rs.s, .color = self.box.data().options.color(.text) });
     }
 
     const pad = 2 * self.data_rs.s;

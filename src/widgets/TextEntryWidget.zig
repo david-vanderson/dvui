@@ -152,7 +152,7 @@ pub fn install(self: *TextEntryWidget) !void {
         if (self.init_opts.placeholder) |placeholder| {
             try dvui.renderText(.{
                 .font = self.textLayout.wd.options.fontGet(),
-                .color = self.textLayout.wd.options.color(.text).transparent(0.75),
+                .color = self.textLayout.wd.options.color(.text).opacity(0.75),
                 .rs = self.textLayout.wd.contentRectScale(),
                 .text = placeholder,
             });
@@ -308,7 +308,7 @@ pub fn drawCursor(self: *TextEntryWidget) !void {
 
         var crect = self.textLayout.cursor_rect.plus(.{ .x = -1 });
         crect.w = 2;
-        try self.textLayout.screenRectScale(crect).r.fill(.{ .color = self.wd.options.color(.accent) });
+        try self.textLayout.screenRectScale(crect).r.fill(.{}, .{ .color = self.wd.options.color(.accent) });
     }
 }
 
