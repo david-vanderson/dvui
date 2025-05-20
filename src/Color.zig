@@ -316,7 +316,30 @@ pub const PMA = extern struct {
         };
     }
 
-    /// Casts an opaque color (full alpha) to a PMA
+    /// Average two colors component-wise
+    ///
+    /// See `Color.average`
+    pub fn average(self: PMA, other: PMA) PMA {
+        return .castFromColor(self.castToColor().average(other.castToColor()));
+    }
+
+    /// Multiply two colors component-wise.
+    ///
+    /// See `Color.multiply`
+    pub fn multiply(self: PMA, other: PMA) PMA {
+        return .castFromColor(self.castToColor().multiply(other.castToColor()));
+    }
+    /// Casts `PMA` to `Color` without any conversions
+    fn castToColor(self: PMA) Color {
+        return .{ .r = self.r, .g = self.g, .b = self.b, .a = self.a };
+    }
+
+    /// Casts `Color` to `PMA` without any conversions
+    fn castFromColor(self: Color) PMA {
+        return .{ .r = self.r, .g = self.g, .b = self.b, .a = self.a };
+    }
+
+    /// Casts an opaque color (full alpha) to a `PMA`
     pub fn cast(color: Color) PMA {
         std.debug.assert(color.a == 0xFF);
         return .{ .r = color.r, .g = color.g, .b = color.b, .a = color.a };
