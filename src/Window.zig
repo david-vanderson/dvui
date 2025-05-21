@@ -74,7 +74,7 @@ theme: Theme = undefined,
 min_sizes: std.AutoHashMap(u32, SavedSize),
 tags: std.StringHashMap(SavedTagData),
 data_mutex: std.Thread.Mutex,
-datas: std.AutoHashMap(u32, SavedData),
+datas: std.AutoHashMap(u64, SavedData),
 datas_trash: std.ArrayList(SavedData) = undefined,
 animations: std.AutoHashMap(u32, Animation),
 tab_index_prev: std.ArrayList(dvui.TabIndex),
@@ -195,7 +195,7 @@ pub fn init(
         .min_sizes = std.AutoHashMap(u32, SavedSize).init(gpa),
         .tags = std.StringHashMap(SavedTagData).init(gpa),
         .data_mutex = std.Thread.Mutex{},
-        .datas = std.AutoHashMap(u32, SavedData).init(gpa),
+        .datas = std.AutoHashMap(u64, SavedData).init(gpa),
         .animations = std.AutoHashMap(u32, Animation).init(gpa),
         .tab_index_prev = std.ArrayList(dvui.TabIndex).init(gpa),
         .tab_index = std.ArrayList(dvui.TabIndex).init(gpa),
@@ -1015,7 +1015,7 @@ pub fn begin(
         self.data_mutex.lock();
         defer self.data_mutex.unlock();
 
-        var deadDatas = std.ArrayList(u32).init(larena);
+        var deadDatas = std.ArrayList(u64).init(larena);
         defer deadDatas.deinit();
         var it = self.datas.iterator();
         while (it.next()) |kv| {
@@ -1263,9 +1263,16 @@ pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !vo
     }
 }
 
+pub fn hashIdKey64(id: u32, key: []const u8) u64 {
+    var h = std.hash.Fnv1a_64.init();
+    h.value = id;
+    h.update(key);
+    return h.final();
+}
+
 /// data is copied into internal storage
 pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, comptime copy_slice: bool, num_copies: usize) void {
-    const hash = dvui.hashIdKey(id, key);
+    const hash: u64 = hashIdKey64(id, key);
 
     const dt = @typeInfo(@TypeOf(data_in));
     const dt_type_str = @typeName(@TypeOf(data_in));
@@ -1325,7 +1332,7 @@ pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, 
 
 /// returns the backing byte slice if we have one
 pub fn dataGetInternal(self: *Self, id: u32, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
-    const hash = dvui.hashIdKey(id, key);
+    const hash: u64 = hashIdKey64(id, key);
 
     self.data_mutex.lock();
     defer self.data_mutex.unlock();
@@ -1345,7 +1352,7 @@ pub fn dataGetInternal(self: *Self, id: u32, key: []const u8, comptime T: type, 
 }
 
 pub fn dataRemove(self: *Self, id: u32, key: []const u8) void {
-    const hash = dvui.hashIdKey(id, key);
+    const hash: u64 = hashIdKey64(id, key);
 
     self.data_mutex.lock();
     defer self.data_mutex.unlock();
