@@ -130,7 +130,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) !*ButtonWidget {
 
                 try path.append(r.bottomLeft());
 
-                try dvui.pathStroke(path.items, .{ .thickness = 2 * rs.s, .color = self.options.color(.accent), .after = true });
+                try dvui.pathStroke(path.items, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent, .after = true });
             },
             .vertical => {
                 var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
@@ -146,7 +146,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) !*ButtonWidget {
 
                 try path.append(r.bottomRight());
 
-                try dvui.pathStroke(path.items, .{ .thickness = 2 * rs.s, .color = self.options.color(.accent), .after = true });
+                try dvui.pathStroke(path.items, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent, .after = true });
             },
         }
     }
