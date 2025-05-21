@@ -5164,7 +5164,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     try rs.r.fill(cornerRad, .{ .color = opts.color(.border) });
 
     if (focused) {
-        try rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = opts.color(.accent) });
+        try rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -5251,7 +5251,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     try r.fill(cornerRad, .{ .color = opts.color(.border) });
 
     if (focused) {
-        try r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = opts.color(.accent) });
+        try r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -5261,8 +5261,10 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
         fill = .fill_hover;
     }
 
+    var options = opts;
     if (active) {
-        try r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = opts.color(.accent) });
+        options = opts.override(themeGet().style_accent);
+        try r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(.fill) });
     } else {
         try r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill) });
     }
@@ -5270,7 +5272,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     if (active) {
         const thick = @max(1.0, r.w / 6);
 
-        try pathStroke(&.{r.center()}, .{ .thickness = thick, .color = opts.color(fill) });
+        try pathStroke(&.{r.center()}, .{ .thickness = thick, .color = options.color(.text) });
     }
 }
 
