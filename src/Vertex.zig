@@ -1,7 +1,7 @@
 const dvui = @import("dvui.zig");
 
 pos: dvui.Point.Physical,
-col: dvui.Color,
+col: dvui.Color.PMA,
 uv: @Vector(2, f32),
 
 test {

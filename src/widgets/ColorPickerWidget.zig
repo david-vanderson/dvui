@@ -310,7 +310,7 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) !dvui.Texture {
             .vertical => .{ 1, hue_selector_colors.len },
         };
         // FIXME: textureCreate should not need a non const pointer to pixels
-        res.value_ptr.texture = dvui.textureCreate(@constCast(&hue_selector_pixels), width, height, .linear);
+        res.value_ptr.texture = dvui.textureCreate(.cast(@constCast(&hue_selector_pixels)), width, height, .linear);
     }
     return res.value_ptr.texture;
 }
@@ -324,7 +324,7 @@ pub fn getValueSaturationTexture(hue: f32) !dvui.Texture {
         comptime std.debug.assert(pixels.len == 2 * 2 * 4);
         // set top right corner to the max value of that hue
         @memcpy(pixels[4..8], &Color.HSV.toColor(.{ .h = hue }).toRGBA());
-        res.value_ptr.texture = dvui.textureCreate(&pixels, 2, 2, .linear);
+        res.value_ptr.texture = dvui.textureCreate(.cast(&pixels), 2, 2, .linear);
     }
     return res.value_ptr.texture;
 }
