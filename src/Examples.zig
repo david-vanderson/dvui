@@ -369,7 +369,9 @@ pub fn demo() !void {
         return;
     }
 
-    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = 600, .h = 400 }, .max_size_content = .width(600), .tag = demo_window_tag });
+    const width = 600;
+
+    var float = try dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width), .tag = demo_window_tag });
     defer float.deinit();
 
     // pad the fps label so that it doesn't trigger refresh when the number
@@ -384,7 +386,7 @@ pub fn demo() !void {
     var scaler = try dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .both });
     defer scaler.deinit();
 
-    var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = 601 }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 100 } });
+    var paned = try dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = width + 1 }, .{ .expand = .both, .background = false, .min_size_content = .{ .h = 100 } });
     //if (dvui.firstFrame(paned.data().id)) {
     //    paned.split_ratio = 0;
     //}
@@ -415,7 +417,7 @@ pub fn demo() !void {
             }
         }
 
-        var fbox = try dvui.flexbox(@src(), .{}, .{ .expand = .both, .background = true });
+        var fbox = try dvui.flexbox(@src(), .{}, .{ .expand = .both, .background = true, .min_size_content = .width(width), .corner_radius = .{ .w = 5, .h = 5 } });
         defer fbox.deinit();
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
