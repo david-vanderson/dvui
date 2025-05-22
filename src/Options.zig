@@ -9,76 +9,26 @@ const Theme = dvui.Theme;
 
 const Options = @This();
 
-pub const Expand = enum {
-    none,
-    horizontal,
-    vertical,
-    both,
-
-    /// Expand while keeping aspect ratio.
-    ratio,
-
-    pub fn isHorizontal(self: Expand) bool {
-        return (self == .horizontal or self == .both);
-    }
-
-    pub fn isVertical(self: Expand) bool {
-        return (self == .vertical or self == .both);
-    }
-};
-
-pub const Gravity = struct {
-    // wraps Options.gravity_x and Options.gravity_y
-    x: f32,
-    y: f32,
-};
-
-pub const FontStyle = enum {
-    body,
-    heading,
-    caption,
-    caption_heading,
-    title,
-    title_1,
-    title_2,
-    title_3,
-    title_4,
-};
-
-pub const MaxSize = struct {
-    w: f32,
-    h: f32,
-
-    pub const zero: MaxSize = .{ .w = 0, .h = 0 };
-
-    pub fn width(w: f32) MaxSize {
-        return .{ .w = w, .h = dvui.max_float_safe };
-    }
-
-    pub fn height(h: f32) MaxSize {
-        return .{ .w = dvui.max_float_safe, .h = h };
-    }
-
-    pub fn size(s: Size) MaxSize {
-        return .{ .w = s.w, .h = s.h };
-    }
-};
-
-// used to adjust widget id when @src() is not enough (like in a loop)
+/// Mixed into widget id. Use when @src() is not unique (like in a loop).
 id_extra: ?usize = null,
 
-// used to id widgets to programmatically interact with them
+/// String for programmatically interacting with widgets, like in tests.
 tag: ?[]const u8 = null,
 
-// used in debugging to give widgets a name, especially in compound widgets
+/// Use to name the kind of widget for debugging.
 name: ?[]const u8 = null,
+
+/// Debugging flag to isolate debug commands/output to a specific widget.
 debug: ?bool = null,
 
-// null is normal, meaning parent picks a rect for the child widget.  If
-// non-null, child widget is choosing its own place, meaning its not being
-// placed normally.  w and h will still be expanded if expand is set.
-// Example is ScrollArea, where user code chooses widget placement. If
-// non-null, should not call rectFor or minSizeForChild.
+/// Specific placement within parent.  Null is normal, meaning parent picks a
+/// rect for the child widget.
+///
+/// If non-null, child widget is choosing its own place, meaning its not being
+/// placed normally.  w and h will still be expanded if expand is set. Example
+/// is the demo Scroll Canvas, where user code chooses widget placement.
+///
+/// If non-null, should not call rectFor or minSizeForChild.
 rect: ?Rect = null,
 
 // default is .none
@@ -136,6 +86,101 @@ background: ?bool = null,
 
 // use to pick a font from the theme
 font_style: ?FontStyle = null,
+
+/// Render a box shadow in `WidgetData.borderAndBackground`.
+box_shadow: ?BoxShadow = null,
+
+pub const Expand = enum {
+    none,
+    horizontal,
+    vertical,
+    both,
+
+    /// Expand while keeping aspect ratio.
+    ratio,
+
+    pub fn isHorizontal(self: Expand) bool {
+        return (self == .horizontal or self == .both);
+    }
+
+    pub fn isVertical(self: Expand) bool {
+        return (self == .vertical or self == .both);
+    }
+
+    pub fn fromDirection(dir: dvui.enums.Direction) Expand {
+        return switch (dir) {
+            .horizontal => .horizontal,
+            .vertical => .vertical,
+        };
+    }
+};
+
+pub const Gravity = struct {
+    // wraps Options.gravity_x and Options.gravity_y
+    x: f32,
+    y: f32,
+};
+
+pub const FontStyle = enum {
+    body,
+    heading,
+    caption,
+    caption_heading,
+    title,
+    title_1,
+    title_2,
+    title_3,
+    title_4,
+};
+
+pub const MaxSize = struct {
+    w: f32,
+    h: f32,
+
+    pub const zero: MaxSize = .{ .w = 0, .h = 0 };
+
+    pub fn width(w: f32) MaxSize {
+        return .{ .w = w, .h = dvui.max_float_safe };
+    }
+
+    pub fn height(h: f32) MaxSize {
+        return .{ .w = dvui.max_float_safe, .h = h };
+    }
+
+    pub fn size(s: Size) MaxSize {
+        return .{ .w = s.w, .h = s.h };
+    }
+};
+
+pub const BoxShadow = struct {
+    /// Color of shadow
+    color: ColorOrName = .fromColor(.black),
+
+    // x topleft, y topright, w botright, h botleft
+    // if null uses Options.corner_radius
+    corner_radius: ?Rect = null,
+
+    /// Shrink the shadow on all sides (before blur)
+    shrink: f32 = 0,
+
+    /// Offset down/right
+    offset: dvui.Point = .{ .x = 1, .y = 1 },
+
+    /// Extend the size of the transition to transparent at the edges
+    blur: f32 = 3,
+
+    /// Additional alpha multiply factor
+    alpha: f32 = 0.5,
+
+    pub fn colorGet(self: *const BoxShadow) Color {
+        const col = switch (self.color) {
+            .color => |col| col,
+            .name => |from_theme| Color.fromTheme(from_theme),
+        };
+
+        return col.opacity(dvui.themeGet().alpha);
+    }
+};
 
 // All the colors you can get from a Theme
 pub const ColorsFromTheme = enum {
@@ -203,7 +248,7 @@ pub fn color(self: *const Options, ask: ColorAsk) Color {
         .name => |from_theme| Color.fromTheme(from_theme),
     };
 
-    return col.transparent(dvui.themeGet().alpha);
+    return col.opacity(dvui.themeGet().alpha);
 }
 
 pub fn fontGet(self: *const Options) Font {
@@ -320,6 +365,7 @@ pub fn strip(self: *const Options) Options {
         .padding = Rect{},
         .corner_radius = Rect{},
         .background = false,
+        .box_shadow = null,
 
         // keep the rest
         .color_accent = self.color_accent,
@@ -380,6 +426,49 @@ pub fn sizeM(wide: f32, tall: f32) Size {
 
 pub fn padSize(self: *const Options, s: Size) Size {
     return s.pad(self.paddingGet()).pad(self.borderGet()).pad(self.marginGet());
+}
+
+/// Hashes all the values of the options
+///
+/// Only useful to check exact equality between two `Options`
+pub fn hash(self: *const Options) u32 {
+    const asBytes = std.mem.asBytes;
+    var hasher = dvui.fnv.init();
+
+    hasher.update(asBytes(&self.min_size_contentGet()));
+    hasher.update(asBytes(&self.max_size_contentGet()));
+    if (self.rect) |rect| hasher.update(asBytes(&rect));
+
+    hasher.update(asBytes(&self.borderGet()));
+    hasher.update(asBytes(&self.marginGet()));
+    hasher.update(asBytes(&self.paddingGet()));
+
+    hasher.update(asBytes(&self.corner_radiusGet()));
+    hasher.update(asBytes(&self.gravityGet()));
+    hasher.update(asBytes(&self.expandGet()));
+    hasher.update(asBytes(&self.rotationGet()));
+    hasher.update(asBytes(&self.background));
+
+    hasher.update(asBytes(&self.color_accent));
+    hasher.update(asBytes(&self.color_text));
+    hasher.update(asBytes(&self.color_text_press));
+    hasher.update(asBytes(&self.color_fill));
+    hasher.update(asBytes(&self.color_fill_hover));
+    hasher.update(asBytes(&self.color_fill_press));
+    hasher.update(asBytes(&self.color_border));
+
+    hasher.update(asBytes(&self.font_style));
+    const font = self.fontGet();
+    hasher.update(font.name);
+    hasher.update(asBytes(&font.line_height_factor));
+    hasher.update(asBytes(&font.size));
+
+    hasher.update(asBytes(&self.tab_index));
+    hasher.update(asBytes(&self.id_extra));
+    if (self.tag) |tag| hasher.update(tag);
+    if (self.name) |name| hasher.update(name);
+
+    return hasher.final();
 }
 
 //pub fn format(self: *const Options, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {

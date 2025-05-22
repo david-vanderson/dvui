@@ -28,6 +28,7 @@ subwindow_currentRect: Rect.Natural = .{},
 focused_subwindowId: u32 = 0,
 
 last_focused_id_this_frame: u32 = 0,
+last_registered_id_this_frame: u32 = 0,
 
 /// natural rect telling the backend where our text input box is:
 /// * when non-null, we want an on screen keyboard if needed (phones)
@@ -73,7 +74,7 @@ theme: Theme = undefined,
 min_sizes: std.AutoHashMap(u32, SavedSize),
 tags: std.StringHashMap(SavedTagData),
 data_mutex: std.Thread.Mutex,
-datas: std.AutoHashMap(u32, SavedData),
+datas: std.AutoHashMap(u64, SavedData),
 datas_trash: std.ArrayList(SavedData) = undefined,
 animations: std.AutoHashMap(u32, Animation),
 tab_index_prev: std.ArrayList(dvui.TabIndex),
@@ -118,8 +119,10 @@ debug_under_mouse_esc_needed: bool = false,
 debug_under_mouse_quitting: bool = false,
 debug_under_mouse_info: []u8 = "",
 
-debug_refresh_mutex: std.Thread.Mutex,
+debug_toggle_mutex: std.Thread.Mutex,
 debug_refresh: bool = false,
+debug_handled_event: bool = false,
+debug_unhandled_events: bool = false,
 
 /// when true, left mouse button works like a finger
 debug_touch_simulate_events: bool = false,
@@ -192,7 +195,7 @@ pub fn init(
         .min_sizes = std.AutoHashMap(u32, SavedSize).init(gpa),
         .tags = std.StringHashMap(SavedTagData).init(gpa),
         .data_mutex = std.Thread.Mutex{},
-        .datas = std.AutoHashMap(u32, SavedData).init(gpa),
+        .datas = std.AutoHashMap(u64, SavedData).init(gpa),
         .animations = std.AutoHashMap(u32, Animation).init(gpa),
         .tab_index_prev = std.ArrayList(dvui.TabIndex).init(gpa),
         .tab_index = std.ArrayList(dvui.TabIndex).init(gpa),
@@ -202,7 +205,7 @@ pub fn init(
         .dialogs = std.ArrayList(Dialog).init(gpa),
         .toasts = std.ArrayList(Toast).init(gpa),
         .keybinds = std.StringHashMap(dvui.enums.Keybind).init(gpa),
-        .debug_refresh_mutex = std.Thread.Mutex{},
+        .debug_toggle_mutex = std.Thread.Mutex{},
         .wd = WidgetData{ .src = src, .id = hashval, .init_options = .{ .subwindow = true }, .options = .{ .name = "Window" } },
         .backend = backend_ctx,
         .font_bytes = try dvui.Font.initTTFBytesDatabase(gpa),
@@ -437,9 +440,35 @@ pub fn arena(self: *Self) std.mem.Allocator {
 }
 
 /// called from any thread
+pub fn debugHandleEvents(self: *Self, val: ?bool) bool {
+    self.debug_toggle_mutex.lock();
+    defer self.debug_toggle_mutex.unlock();
+
+    const previous = self.debug_handled_event;
+    if (val) |v| {
+        self.debug_handled_event = v;
+    }
+
+    return previous;
+}
+
+/// called from any thread
+pub fn debugUnhandledEvents(self: *Self, val: ?bool) bool {
+    self.debug_toggle_mutex.lock();
+    defer self.debug_toggle_mutex.unlock();
+
+    const previous = self.debug_unhandled_events;
+    if (val) |v| {
+        self.debug_unhandled_events = v;
+    }
+
+    return previous;
+}
+
+/// called from any thread
 pub fn debugRefresh(self: *Self, val: ?bool) bool {
-    self.debug_refresh_mutex.lock();
-    defer self.debug_refresh_mutex.unlock();
+    self.debug_toggle_mutex.lock();
+    defer self.debug_toggle_mutex.unlock();
 
     const previous = self.debug_refresh;
     if (val) |v| {
@@ -986,7 +1015,7 @@ pub fn begin(
         self.data_mutex.lock();
         defer self.data_mutex.unlock();
 
-        var deadDatas = std.ArrayList(u32).init(larena);
+        var deadDatas = std.ArrayList(u64).init(larena);
         defer deadDatas.deinit();
         var it = self.datas.iterator();
         while (it.next()) |kv| {
@@ -1217,12 +1246,14 @@ pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !vo
                 try dvui.renderTexture(t.tex, t.rs, t.opts);
             },
             .pathFillConvex => |pf| {
-                try dvui.pathFillConvex(pf.path, pf.color);
-                self.arena().free(pf.path);
+                var triangles = try dvui.pathFillConvexTriangles(pf.path, pf.opts);
+                defer triangles.deinit(self.arena());
+                try dvui.renderTriangles(triangles, null);
             },
             .pathStroke => |ps| {
-                try dvui.pathStrokeRaw(ps.path, ps.thickness, ps.color, ps.closed, ps.endcap_style);
-                self.arena().free(ps.path);
+                var triangles = try dvui.pathStrokeTriangles(ps.path, ps.opts);
+                defer triangles.deinit(self.arena());
+                try dvui.renderTriangles(triangles, null);
             },
             .triangles => |t| {
                 try dvui.renderTriangles(t.tri, t.tex);
@@ -1232,9 +1263,16 @@ pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !vo
     }
 }
 
+pub fn hashIdKey64(id: u32, key: []const u8) u64 {
+    var h = std.hash.Fnv1a_64.init();
+    h.value = id;
+    h.update(key);
+    return h.final();
+}
+
 /// data is copied into internal storage
 pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, comptime copy_slice: bool, num_copies: usize) void {
-    const hash = dvui.hashIdKey(id, key);
+    const hash: u64 = hashIdKey64(id, key);
 
     const dt = @typeInfo(@TypeOf(data_in));
     const dt_type_str = @typeName(@TypeOf(data_in));
@@ -1294,7 +1332,7 @@ pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, 
 
 /// returns the backing byte slice if we have one
 pub fn dataGetInternal(self: *Self, id: u32, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
-    const hash = dvui.hashIdKey(id, key);
+    const hash: u64 = hashIdKey64(id, key);
 
     self.data_mutex.lock();
     defer self.data_mutex.unlock();
@@ -1314,7 +1352,7 @@ pub fn dataGetInternal(self: *Self, id: u32, key: []const u8, comptime T: type, 
 }
 
 pub fn dataRemove(self: *Self, id: u32, key: []const u8) void {
-    const hash = dvui.hashIdKey(id, key);
+    const hash: u64 = hashIdKey64(id, key);
 
     self.data_mutex.lock();
     defer self.data_mutex.unlock();
@@ -1527,9 +1565,17 @@ fn debugWindowShow(self: *Self) !void {
         duf = !duf;
     }
 
-    const logit = self.debugRefresh(null);
-    if (try dvui.button(@src(), if (logit) "Stop Refresh Logging" else "Start Refresh Logging", .{}, .{})) {
-        _ = self.debugRefresh(!logit);
+    const log_refresh = self.debugRefresh(null);
+    if (try dvui.button(@src(), if (log_refresh) "Stop Refresh Logging" else "Start Refresh Logging", .{}, .{})) {
+        _ = self.debugRefresh(!log_refresh);
+    }
+    const log_event_handled = self.debugHandleEvents(null);
+    if (try dvui.button(@src(), if (log_event_handled) "Stop Event Handled Logging" else "Start Event Handled Logging", .{}, .{})) {
+        _ = self.debugHandleEvents(!log_event_handled);
+    }
+    const log_event_unhandled = self.debugUnhandledEvents(null);
+    if (try dvui.button(@src(), if (log_event_unhandled) "Stop Unhandled Event Logging" else "Start Unhandled Event Logging", .{}, .{})) {
+        _ = self.debugUnhandledEvents(!log_event_unhandled);
     }
 
     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
@@ -1621,14 +1667,27 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
             }
         } else if (e.evt == .key) {
             if (e.evt.key.action == .down and e.evt.key.matchBind("next_widget")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.tabIndexNext(e.num);
             }
 
             if (e.evt.key.action == .down and e.evt.key.matchBind("prev_widget")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.tabIndexPrev(e.num);
             }
+        }
+    }
+
+    if (self.debug_unhandled_events) {
+        for (evts) |*e| {
+            if (e.handled) continue;
+            var action: []const u8 = "";
+            switch (e.evt) {
+                .mouse => action = @tagName(e.evt.mouse.action),
+                .key => action = @tagName(e.evt.key.action),
+                else => {},
+            }
+            log.debug("Unhandled {s} {s} event (num {d})", .{ @tagName(e.evt), action, e.num });
         }
     }
 
@@ -1732,7 +1791,7 @@ pub fn processEvent(self: *Self, e: *Event, bubbling: bool) void {
     // window does cleanup events, but not normal events
     switch (e.evt) {
         .close_popup => |cp| {
-            e.handled = true;
+            e.handle(@src(), self.data());
             if (cp.intentional) {
                 // when a popup is closed due to a menu item being chosen,
                 // the window that spawned it (which had focus previously)

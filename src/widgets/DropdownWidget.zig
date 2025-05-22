@@ -117,7 +117,7 @@ pub fn dropped(self: *DropdownWidget) !bool {
             if (e.evt == .mouse) {
                 if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                     if (eat_mouse_up) {
-                        e.handled = true;
+                        e.handle(@src(), drop.data());
                         eat_mouse_up = false;
                         dvui.dataSet(null, drop.wd.id, "_eat_mouse_up", eat_mouse_up);
                     }
@@ -176,7 +176,7 @@ pub fn addChoice(self: *DropdownWidget) !*MenuItemWidget {
     if (self.drop_first_frame) {
         if (self.init_options.selected_index) |si| {
             if (si == self.drop_mi_index) {
-                dvui.focusWidgetSelf(self.drop_mi.?.wd.id, null);
+                dvui.focusWidget(self.drop_mi.?.wd.id, null, null);
                 dvui.dataSet(null, self.menu.wd.id, "_drop_adjust", self.drop_height);
             }
         }

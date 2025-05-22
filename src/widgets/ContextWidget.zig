@@ -98,11 +98,11 @@ pub fn processEvent(self: *ContextWidget, e: *Event, bubbling: bool) void {
                 // caught by the containing window cleanup and cause us
                 // to lose the focus we are about to get from the right
                 // press below
-                e.handled = true;
+                e.handle(@src(), self.data());
             } else if (me.action == .press and me.button == .right) {
-                e.handled = true;
+                e.handle(@src(), self.data());
 
-                dvui.focusWidgetSelf(self.wd.id, e.num);
+                dvui.focusWidget(self.wd.id, null, e.num);
                 self.focused = true;
 
                 // scale the point back to natural so we can use it in Popup
