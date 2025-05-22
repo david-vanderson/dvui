@@ -89,7 +89,7 @@ pub fn processEvent(self: *ScaleWidget, e: *Event, bubbling: bool) void {
                 self.touchPoints[idx] = e.evt.mouse.p;
                 if (self.touchPoints[1 - idx] != null) {
                     // both fingers down, grab capture
-                    e.handled = true;
+                    e.handle(@src(), self.data());
 
                     // end any drag that might have been happening
                     dvui.dragEnd();
@@ -99,13 +99,13 @@ pub fn processEvent(self: *ScaleWidget, e: *Event, bubbling: bool) void {
             .release => {
                 self.touchPoints[idx] = null;
                 if (dvui.captured(self.wd.id)) {
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     dvui.captureMouse(null);
                 }
             },
             .motion => {
                 if (self.touchPoints[0] != null and self.touchPoints[1] != null) {
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     var dx: f32 = undefined;
                     var dy: f32 = undefined;
 

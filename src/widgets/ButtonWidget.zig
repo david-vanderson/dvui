@@ -121,17 +121,17 @@ pub fn processEvent(self: *ButtonWidget, e: *Event, bubbling: bool) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .focus) {
-                e.handled = true;
-                dvui.focusWidgetSelf(self.wd.id, e.num);
+                e.handle(@src(), self.data());
+                dvui.focusWidget(self.wd.id, null, e.num);
             } else if (me.action == .press and me.button.pointer()) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.captureMouse(self.data());
 
                 // drag prestart is just for touch events
                 dvui.dragPreStart(me.p, .{});
             } else if (me.action == .release and me.button.pointer()) {
                 if (dvui.captured(self.wd.id)) {
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     dvui.captureMouse(null);
                     dvui.dragEnd();
                     if (self.data().borderRectScale().r.contains(me.p)) {
@@ -156,7 +156,7 @@ pub fn processEvent(self: *ButtonWidget, e: *Event, bubbling: bool) void {
         },
         .key => |ke| {
             if (ke.action == .down and ke.matchBind("activate")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 self.click = true;
                 dvui.refresh(null, @src(), self.wd.id);
             }

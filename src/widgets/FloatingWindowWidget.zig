@@ -246,7 +246,7 @@ pub fn drawBackground(self: *FloatingWindowWidget) !void {
         // paint over everything below
         var col = self.options.color(.text);
         col.a = if (dvui.themeGet().dark) 60 else 80;
-        try dvui.windowRectPixels().fill(Rect.Physical.all(0), col);
+        try dvui.windowRectPixels().fill(.{}, .{ .color = col });
     }
 
     // we are using BoxWidget to do border/background
@@ -255,7 +255,7 @@ pub fn drawBackground(self: *FloatingWindowWidget) !void {
     try self.layout.drawBackground();
 
     // clip to just our window (layout has the margin)
-    dvui.clipSet(self.layout.data().borderRectScale().r);
+    _ = dvui.clip(self.layout.data().borderRectScale().r);
 }
 
 fn dragPart(me: Event.Mouse, rs: RectScale) DragPart {
@@ -362,7 +362,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                     const p = me.p.plus(dvui.dragOffset()).toNatural();
                     self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
                     // don't need refresh() because we're before drawing
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     continue;
                 }
             }
@@ -370,7 +370,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
             if (me.action == .release and me.button.pointer() and dvui.captured(self.wd.id)) {
                 dvui.captureMouse(null); // stop drag and capture
                 dvui.dragEnd();
-                e.handled = true;
+                e.handle(@src(), self.data());
                 continue;
             }
 
@@ -380,14 +380,14 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                     dvui.captureMouse(self.data());
                     self.drag_part = .bottom_right;
                     dvui.dragStart(me.p, .{ .cursor = .arrow_nw_se, .offset = .diff(rs.r.bottomRight(), me.p) });
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     continue;
                 }
             }
 
             if (me.action == .position) {
                 if (dragPart(me, rs) == .bottom_right) {
-                    e.handled = true; // don't want any widgets under this to see a hover
+                    e.handle(@src(), self.data()); // don't want any widgets under this to see a hover
                     dvui.cursorSet(.arrow_nw_se);
                     continue;
                 }
@@ -412,13 +412,13 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
             .mouse => |me| {
                 switch (me.action) {
                     .focus => {
-                        e.handled = true;
+                        e.handle(@src(), self.data());
                         // unhandled focus (clicked on nothing)
                         dvui.focusWidget(null, null, null);
                     },
                     .press => {
                         if (me.button.pointer()) {
-                            e.handled = true;
+                            e.handle(@src(), self.data());
                             // capture and start drag
                             dvui.captureMouse(self.data());
                             self.drag_part = dragPart(me, rs);
@@ -427,7 +427,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                     },
                     .release => {
                         if (me.button.pointer() and dvui.captured(self.wd.id)) {
-                            e.handled = true;
+                            e.handle(@src(), self.data());
                             dvui.captureMouse(null); // stop drag and capture
                             dvui.dragEnd();
                         }
@@ -439,7 +439,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                                 const p = me.p.plus(dvui.dragOffset()).toNatural();
                                 self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
 
-                                e.handled = true;
+                                e.handle(@src(), self.data());
                                 dvui.refresh(null, @src(), self.wd.id);
                             }
                         }
@@ -453,12 +453,12 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
             .key => |ke| {
                 // catch any tabs that weren't handled by widgets
                 if (ke.action == .down and ke.matchBind("next_widget")) {
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     dvui.tabIndexNext(e.num);
                 }
 
                 if (ke.action == .down and ke.matchBind("prev_widget")) {
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     dvui.tabIndexPrev(e.num);
                 }
             },
@@ -510,7 +510,7 @@ pub fn processEvent(self: *FloatingWindowWidget, e: *Event, bubbling: bool) void
     // floating window doesn't process events normally
     switch (e.evt) {
         .close_popup => |cp| {
-            e.handled = true;
+            e.handle(@src(), self.data());
             if (cp.intentional) {
                 // when a popup is closed because the user chose to, the
                 // window that spawned it (which had focus previously)

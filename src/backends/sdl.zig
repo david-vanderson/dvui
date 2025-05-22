@@ -700,8 +700,9 @@ pub fn textureDestroy(_: *SDLBackend, texture: dvui.Texture) void {
 
 pub fn textureFromTarget(self: *SDLBackend, texture: dvui.TextureTarget) dvui.Texture {
     // SDL can't read from non-target textures, so read all the pixels and make a new texture
-    const pixels = dvui.textureReadTarget(self.arena, texture) catch unreachable;
+    const pixels = self.arena.alloc(u8, texture.width * texture.height * 4) catch unreachable;
     defer self.arena.free(pixels);
+    self.textureReadTarget(texture, pixels.ptr) catch unreachable;
 
     c.SDL_DestroyTexture(@as(*c.SDL_Texture, @ptrCast(@alignCast(texture.ptr))));
 
@@ -780,9 +781,9 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
 
             if (sdl3) {
-                return try win.addEventMouseMotion(.{.x = event.motion.x, .y = event.motion.y});
+                return try win.addEventMouseMotion(.{ .x = event.motion.x, .y = event.motion.y });
             } else {
-                return try win.addEventMouseMotion(.{.x = @as(f32, @floatFromInt(event.motion.x)), .y = @as(f32, @floatFromInt(event.motion.y))});
+                return try win.addEventMouseMotion(.{ .x = @as(f32, @floatFromInt(event.motion.x)), .y = @as(f32, @floatFromInt(event.motion.y)) });
             }
         },
         if (sdl3) c.SDL_EVENT_MOUSE_BUTTON_DOWN else c.SDL_MOUSEBUTTONDOWN => {

@@ -340,8 +340,8 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 try path.append(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
                 try dvui.pathAddArc(&path, .{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                try dvui.pathFillConvex(path.items, dvui.themeGet().color_fill_control);
-                try dvui.pathStroke(path.items, 1.0 * fcrs.s, self.wd.options.color(.border), .{ .closed = true });
+                try dvui.pathFillConvex(path.items, .{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
+                try dvui.pathStroke(path.items, .{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
             }
 
             dvui.dataSet(null, fc.wd.id, "_offset", offset);
@@ -411,8 +411,8 @@ pub fn install(self: *TextLayoutWidget, opts: struct { focused: ?bool = null, sh
                 try path.append(.{ .x = fcrs.r.x, .y = fcrs.r.y });
                 try dvui.pathAddArc(&path, .{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                try dvui.pathFillConvex(path.items, dvui.themeGet().color_fill_control);
-                try dvui.pathStroke(path.items, 1.0 * fcrs.s, self.wd.options.color(.border), .{ .closed = true });
+                try dvui.pathFillConvex(path.items, .{ .color = dvui.themeGet().color_fill_control, .blur = 0.5 });
+                try dvui.pathStroke(path.items, .{ .thickness = 1.0 * fcrs.s, .color = self.wd.options.color(.border), .closed = true });
             }
 
             dvui.dataSet(null, fc.wd.id, "_offset", offset);
@@ -1521,11 +1521,11 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
     switch (e.evt) {
         .mouse => |me| {
             if (me.action == .focus) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 // focus so that we can receive keyboard input
-                dvui.focusWidgetSelf(self.wd.id, e.num);
+                dvui.focusWidget(self.wd.id, null, e.num);
             } else if (me.action == .press and me.button.pointer()) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 // capture and start drag
                 dvui.captureMouse(self.data());
                 dvui.dragPreStart(me.p, .{ .cursor = .ibeam });
@@ -1553,7 +1553,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                     }
                 }
             } else if (me.action == .release and me.button.pointer()) {
-                e.handled = true;
+                e.handle(@src(), self.data());
 
                 if (dvui.captured(self.wd.id)) {
                     if (!self.touch_editing and dvui.dragging(me.p) == null) {
@@ -1603,7 +1603,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
                 if (dvui.dragging(me.p)) |_| {
                     self.click_num = 0;
                     if (!me.button.touch()) {
-                        e.handled = true;
+                        e.handle(@src(), self.data());
                         if (self.sel_move == .mouse) {
                             self.sel_move.mouse.drag_pt = self.wd.contentRectScale().pointFromPhysical(me.p);
                         } else if (self.sel_move == .expand_pt) {
@@ -1631,21 +1631,21 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
         },
         .key => |ke| blk: {
             if (ke.action == .down and ke.matchBind("text_start_select")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 self.selection.moveCursor(0, true);
                 self.scroll_to_cursor = true;
                 break :blk;
             }
 
             if (ke.action == .down and ke.matchBind("text_end_select")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 self.selection.moveCursor(std.math.maxInt(usize), true);
                 self.scroll_to_cursor = true;
                 break :blk;
             }
 
             if (ke.action == .down and ke.matchBind("line_start_select")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .expand_pt = .{ .which = .home } };
                 }
@@ -1653,7 +1653,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             }
 
             if (ke.action == .down and ke.matchBind("line_end_select")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .expand_pt = .{ .which = .end } };
                 }
@@ -1661,7 +1661,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             }
 
             if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("word_left_select")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .word_left_right = .{} };
                 }
@@ -1672,7 +1672,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             }
 
             if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("word_right_select")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .word_left_right = .{} };
                 }
@@ -1683,7 +1683,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             }
 
             if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_left_select")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .char_left_right = .{} };
                 }
@@ -1694,7 +1694,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             }
 
             if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_right_select")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .char_left_right = .{} };
                 }
@@ -1705,7 +1705,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             }
 
             if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_up_select")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .cursor_updown = .{} };
                 }
@@ -1716,7 +1716,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             }
 
             if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_down_select")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (self.sel_move == .none) {
                     self.sel_move = .{ .cursor_updown = .{} };
                 }
@@ -1727,13 +1727,13 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event, bubbling: bool) void {
             }
 
             if (ke.action == .down and ke.matchBind("copy")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 self.copy();
                 break :blk;
             }
 
             if (ke.action == .down and ke.matchBind("select_all")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 self.selection.selectAll();
                 break :blk;
             }

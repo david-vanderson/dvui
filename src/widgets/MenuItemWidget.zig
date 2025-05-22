@@ -87,14 +87,14 @@ pub fn drawBackground(self: *MenuItemWidget, opts: struct { focus_as_outline: bo
                 try self.wd.focusBorder();
             } else {
                 const rs = self.wd.backgroundRectScale();
-                try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), self.wd.options.color(.accent));
+                try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.wd.options.color(.accent) });
             }
         } else if ((self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
             const rs = self.wd.backgroundRectScale();
-            try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), self.wd.options.color(.fill_hover));
+            try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.wd.options.color(.fill_hover) });
         } else if (self.wd.options.backgroundGet()) {
             const rs = self.wd.backgroundRectScale();
-            try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), self.wd.options.color(.fill));
+            try rs.r.fill(self.wd.options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = self.wd.options.color(.fill) });
         }
     }
 }
@@ -157,8 +157,8 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
         .mouse => |me| {
             if (me.action == .focus) {
                 dvui.MenuWidget.current().?.mouse_mode = true;
-                e.handled = true;
-                dvui.focusWidgetSelf(self.wd.id, e.num);
+                e.handle(@src(), self.data());
+                dvui.focusWidget(self.wd.id, null, e.num);
             } else if (me.action == .press and me.button.pointer()) {
                 // This works differently than normal (like buttons) where we
                 // captureMouse on press, to support the mouse
@@ -167,7 +167,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                 // pattern for touch.
                 //
                 // This is how dropdowns are triggered.
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
                     dvui.MenuWidget.current().?.submenus_activated = true;
                     dvui.MenuWidget.current().?.submenus_in_child = true;
@@ -181,7 +181,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                 }
             } else if (me.action == .release) {
                 dvui.MenuWidget.current().?.mouse_mode = true;
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (!self.init_opts.submenu and (self.wd.id == dvui.focusedWidgetIdInCurrentSubwindow())) {
                     self.activated = true;
                     dvui.refresh(null, @src(), self.wd.id);
@@ -216,7 +216,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
                     // we shouldn't have gotten this event if the motion
                     // was towards a submenu (caught in MenuWidget)
                     dvui.focusSubwindow(null, null); // focuses the window we are in
-                    dvui.focusWidgetSelf(self.wd.id, null);
+                    dvui.focusWidget(self.wd.id, null, null);
 
                     if (self.init_opts.submenu) {
                         dvui.MenuWidget.current().?.submenus_in_child = true;
@@ -227,7 +227,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
         .key => |ke| {
             if (ke.action == .down and ke.matchBind("activate")) {
                 dvui.MenuWidget.current().?.mouse_mode = false;
-                e.handled = true;
+                e.handle(@src(), self.data());
                 if (self.init_opts.submenu) {
                     dvui.MenuWidget.current().?.submenus_activated = true;
                 } else {
@@ -237,13 +237,13 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event, bubbling: bool) void {
             } else if (ke.code == .right and ke.action == .down) {
                 if (self.init_opts.submenu and dvui.MenuWidget.current().?.init_opts.dir == .vertical) {
                     dvui.MenuWidget.current().?.mouse_mode = false;
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     dvui.MenuWidget.current().?.submenus_activated = true;
                 }
             } else if (ke.code == .down and ke.action == .down) {
                 if (self.init_opts.submenu and dvui.MenuWidget.current().?.init_opts.dir == .horizontal) {
                     dvui.MenuWidget.current().?.mouse_mode = false;
-                    e.handled = true;
+                    e.handle(@src(), self.data());
                     dvui.MenuWidget.current().?.submenus_activated = true;
                 }
             }
@@ -267,29 +267,27 @@ test {
     @import("std").testing.refAllDecls(@This());
 }
 
-test "test mouse event setting last_focused_id_this_frame" {
+test "menuItem click sets last_focused_id_this_frame" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
     const fns = struct {
-        var test_focus_change = false;
+        var last_focused_id_set: ?u32 = null;
 
         fn frame() !dvui.App.Result {
-            var m = try dvui.menu(@src(), .vertical, .{ .padding = .all(10) });
+            var m = try dvui.menu(@src(), .vertical, .{ .padding = .all(10), .tag = "menu" });
             defer m.deinit();
-            const last_focused = dvui.lastFocusedIdInFrame();
-            try std.testing.expectEqual(0, last_focused);
 
-            _ = try dvui.menuItemLabel(@src(), "item 1", .{}, .{ .tag = "item 1" });
+            const last_focused = dvui.lastFocusedIdInFrame();
+
+            if (try dvui.menuItemLabel(@src(), "item 1", .{}, .{ .tag = "item 1" })) |_| {
+                dvui.focusWidget(m.data().id, null, null);
+            }
             _ = try dvui.menuItemLabel(@src(), "item 2", .{}, .{ .tag = "item 2" });
 
-            if (test_focus_change) {
-                // After first frame, events should have been added to make item 2 take focus
-                const new_focused = dvui.lastFocusedIdInFrame();
-                try std.testing.expect(last_focused != new_focused);
-
-                const item2 = dvui.tagGet("item 2") orelse unreachable;
-                try std.testing.expectEqual(new_focused, item2.id);
+            last_focused_id_set = null;
+            if (last_focused != dvui.lastFocusedIdInFrame()) {
+                last_focused_id_set = dvui.lastFocusedIdInFrame();
             }
 
             return .ok;
@@ -297,9 +295,18 @@ test "test mouse event setting last_focused_id_this_frame" {
     };
 
     try dvui.testing.settle(fns.frame);
+
+    // clicking on item 2 should tell us that it got focus this frame
     try dvui.testing.moveTo("item 2");
     try dvui.testing.click(.left);
-    fns.test_focus_change = true;
     _ = try dvui.testing.step(fns.frame);
+    try std.testing.expect(fns.last_focused_id_set == dvui.tagGet("item 2").?.id);
     try dvui.testing.expectFocused("item 2");
+
+    // clicking on item 1 should tell us that menu got focus this frame
+    try dvui.testing.moveTo("item 1");
+    try dvui.testing.click(.left);
+    _ = try dvui.testing.step(fns.frame);
+    try std.testing.expect(fns.last_focused_id_set == dvui.tagGet("menu").?.id);
+    try dvui.testing.expectFocused("menu");
 }

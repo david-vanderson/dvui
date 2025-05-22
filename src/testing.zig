@@ -6,6 +6,9 @@ snapshot_dir: []const u8,
 
 snapshot_index: u8 = 0,
 
+/// Used to hash widget data during a frame for snapshot testing
+pub var widget_hasher: ?dvui.fnv = null;
+
 /// Moves the mouse to the center of the widget
 pub fn moveTo(tag: []const u8) !void {
     const tag_data = dvui.tagGet(tag) orelse {
@@ -134,21 +137,30 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn expectFocused(tag: []const u8) !void {
-    if (dvui.tagGet(tag)) |data| {
-        try std.testing.expectEqual(data.id, dvui.focusedWidgetId());
-    } else {
-        std.debug.print("tag \"{s}\" not found\n", .{tag});
-        return error.TagNotFound;
-    }
+    const data = try tagGet(tag);
+    try std.testing.expectEqual(data.id, dvui.focusedWidgetId());
+}
+
+pub fn expectNotFocused(tag: []const u8) !void {
+    const data = try tagGet(tag);
+    try std.testing.expect(data.id != dvui.focusedWidgetId());
 }
 
 pub fn expectVisible(tag: []const u8) !void {
-    if (dvui.tagGet(tag)) |data| {
-        try std.testing.expect(data.visible);
-    } else {
+    const data = try tagGet(tag);
+    try std.testing.expect(data.visible);
+}
+
+pub fn expectNotVisible(tag: []const u8) !void {
+    const data = try tagGet(tag);
+    try std.testing.expect(!data.visible);
+}
+
+pub fn tagGet(tag: []const u8) !dvui.TagData {
+    return dvui.tagGet(tag) orelse {
         std.debug.print("tag \"{s}\" not found\n", .{tag});
         return error.TagNotFound;
-    }
+    };
 }
 
 pub const SnapshotError = error{
@@ -189,16 +201,18 @@ pub fn capturePng(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.P
 
     return png_data;
 }
-const png_extension = ".png";
 
-/// Captures one frame and compares to an earilier captured frame, returning an error if they are not the same
+/// Runs exactly one frame, creating a hash of the state of that frame and compares to an earilier saved hash,
+/// returning an error if they are not the same.
 ///
 /// IMPORTANT: Snapshots are unstable and both backend and platform dependent. Changing any of these might fail the test.
 ///
 /// All snapshot tests can be ignored (without skipping the whole test) by setting the environment variable `DVUI_SNAPSHOT_IGNORE`.
-/// This function will always run exactly one frame.
 ///
 /// Set the environment variable `DVUI_SNAPSHOT_WRITE` to create/overwrite the snapshot files
+///
+/// To generate and image of the snapshot for debugging pass `-Dsnapshot-images` with a suffix like "before" or "after".
+/// The images will be places in a `images` directory next to the snapshot files in question
 ///
 /// Dvui does not clear out old or unused snapshot files. To clean the snapshot directory follow these steps:
 /// 1. Ensure all snapshot test pass
@@ -211,70 +225,74 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     }
 
     defer self.snapshot_index += 1;
-    const filename = try std.fmt.allocPrint(self.allocator, "{s}-{s}-{d}" ++ png_extension, .{ src.file, src.fn_name, self.snapshot_index });
+    const filename = try std.fmt.allocPrint(self.allocator, "{s}-{s}-{d}", .{ src.file, src.fn_name, self.snapshot_index });
     defer self.allocator.free(filename);
     // NOTE: do fs operation through cwd to handle relative and absolute paths
     var dir = std.fs.cwd().openDir(self.snapshot_dir, .{}) catch |err| switch (err) {
         error.FileNotFound => {
             std.debug.print("{s}:{d}:{d}: Snapshot directory did not exist! Run the test with DVUI_SNAPSHOT_WRITE to create all snapshot files\n", .{ src.file, src.line, src.column });
-            return error.SkipZigTest; // FIXME: Test should fail with missing snapshots, but we don't want to commit snapshots while they are unstable, so skip tests instead
+            return error.MissingSnapshotFile;
         },
         else => return err,
     };
     defer dir.close();
 
-    const png_data = try self.capturePng(frame, null);
-    defer self.allocator.free(png_data);
+    widget_hasher = .init();
+    defer widget_hasher = null;
 
-    const file = dir.openFile(filename, .{}) catch |err| switch (err) {
+    if (@import("build_options").snapshot_image_suffix) |image_suffix| {
+        const png_data = try self.capturePng(frame, null);
+        defer self.allocator.free(png_data);
+        dir.makeDir("images") catch |err| switch (err) {
+            error.PathAlreadyExists => {},
+            else => return err,
+        };
+        const image_name = try std.fmt.allocPrint(self.allocator, "images/{s}-{s}.png", .{ filename, image_suffix });
+        defer self.allocator.free(image_name);
+        try dir.writeFile(.{ .sub_path = image_name, .data = png_data, .flags = .{} });
+        // Do not continue with checking hashes as it is not deterministic across content_scales because
+        // fonts render in integer steps and scaling changes the step used and the size of the test
+        return; // Do not skip test because other snapshots might run after this one
+    } else {
+        _ = try step(frame);
+    }
+
+    const HashInt = u32;
+    const hash: HashInt = widget_hasher.?.final();
+
+    const file = dir.openFile(filename, .{ .mode = .read_write }) catch |err| switch (err) {
         std.fs.File.OpenError.FileNotFound => {
             if (should_write_snapshots()) {
-                try dir.writeFile(.{ .sub_path = filename, .data = png_data, .flags = .{} });
+                const file = try dir.createFile(filename, .{});
+                try file.writer().print("{X}", .{hash});
                 std.debug.print("Snapshot: Created file \"{s}\"\n", .{filename});
                 return;
             }
             std.debug.print("{s}:{d}:{d}: Snapshot file did not exist! Run the test with `DVUI_SNAPSHOT_WRITE` to create all snapshot files\n", .{ src.file, src.line, src.column });
-            return error.SkipZigTest; // FIXME: Test should fail with missing snapshots, but we don't want to commit snapshots while they are unstable, so skip tests instead
+            return error.MissingSnapshotFile;
         },
         else => return err,
     };
-    const prev_hash = try hash_png(file.reader().any());
-    file.close();
+    defer file.close();
 
-    var png_reader = std.io.fixedBufferStream(png_data);
-    const new_hash = try hash_png(png_reader.reader().any());
+    var hash_buf: [@sizeOf(HashInt) * 2]u8 = undefined;
+    _ = try file.readAll(&hash_buf);
+    const prev_hash = try std.fmt.parseUnsigned(HashInt, &hash_buf, 16);
 
-    if (prev_hash != new_hash) {
+    if (prev_hash != hash) {
         if (should_write_snapshots()) {
-            try dir.writeFile(.{ .sub_path = filename, .data = png_data, .flags = .{} });
+            try file.seekTo(0);
+            try file.writer().print("{X}", .{hash});
             std.debug.print("Snapshot: Overwrote file \"{s}\"\n", .{filename});
             return;
         }
-        const failed_filename = try std.fmt.allocPrint(self.allocator, "{s}-failed" ++ png_extension, .{filename[0 .. filename.len - png_extension.len]});
-        defer self.allocator.free(failed_filename);
-        try dir.writeFile(.{ .sub_path = failed_filename, .data = png_data, .flags = .{} });
-
-        std.debug.print("Snapshot did not match! See the \"{s}\" for the current output", .{failed_filename});
-
         return SnapshotError.SnapshotsDidNotMatch;
     }
 }
 
-fn hash_png(png_reader: std.io.AnyReader) !u32 {
-    var hasher = dvui.fnv.init();
-
-    var read_buf: [1024 * 4]u8 = undefined;
-    var len: usize = read_buf.len;
-    // len < read_buf indicates the end of the data
-    while (len == read_buf.len) {
-        len = try png_reader.readAll(&read_buf);
-        hasher.update(read_buf[0..len]);
-    }
-    return hasher.final();
-}
-
 fn should_ignore_snapshots() bool {
-    return Backend.kind == .testing or std.process.hasEnvVarConstant("DVUI_SNAPSHOT_IGNORE");
+    // If there is a snapshot image suffix, we expect to generate images, thus not ignore the test
+    return @import("build_options").snapshot_image_suffix == null and (Backend.kind != .testing or std.process.hasEnvVarConstant("DVUI_SNAPSHOT_IGNORE"));
 }
 
 fn should_write_snapshots() bool {

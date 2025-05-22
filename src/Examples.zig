@@ -63,9 +63,9 @@ var layout_expand: dvui.Options.Expand = .none;
 var show_dialog: bool = false;
 var scale_val: f32 = 1.0;
 var line_height_factor: f32 = 1.2;
-var backbox_color: dvui.Color = .{};
-var hsluv_hsl: dvui.Color.HSLuv = .{ .l = 50 };
-var hsluv_rgb: dvui.Color = .{};
+var backbox_color: dvui.Color = .black;
+var hsluv_hsl: dvui.Color.HSLuv = .fromColor(.black);
+var hsv_color: dvui.Color.HSV = .fromColor(.black);
 var animating_window_show: bool = false;
 var animating_window_closing: bool = false;
 var animating_window_rect = Rect{ .x = 100, .y = 100, .w = 300, .h = 200 };
@@ -1044,7 +1044,15 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
             try la2.spacer(@src(), 0);
 
-            var te_name = try dvui.textEntry(@src(), .{}, .{});
+            const normalOptions: dvui.Options = .{ .margin = dvui.TextEntryWidget.defaults.marginGet().plus(.all(1)) };
+            const errOptions: dvui.Options = .{ .color_border = .err, .border = dvui.Rect.all(2) };
+
+            const name_error = dvui.dataGetPtrDefault(null, hbox2.data().id, "_name_error", bool, false);
+            var te_name = try dvui.textEntry(@src(), .{}, if (name_error.*) errOptions else normalOptions);
+            const name = te_name.getText();
+            if (te_name.text_changed) {
+                name_error.* = false;
+            }
             te_name.deinit();
             hbox2.deinit();
 
@@ -1060,27 +1068,34 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
             try la2.spacer(@src(), 0);
 
-            var te_file = try dvui.textEntry(@src(), .{}, .{});
+            const file_error = dvui.dataGetPtrDefault(null, hbox2.data().id, "_file_error", bool, false);
+            var te_file = try dvui.textEntry(@src(), .{}, if (file_error.*) errOptions else normalOptions);
             if (new_filename) |f| {
                 te_file.textLayout.selection.selectAll();
                 te_file.textTyped(f, false);
             }
+            if (te_file.text_changed) {
+                file_error.* = false;
+            }
+            const filename = te_file.getText();
             te_file.deinit();
             hbox3.deinit();
 
             if (try dvui.button(@src(), "Add Font", .{}, .{})) {
-                const name = te_name.getText();
                 if (name.len == 0) {
                     try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = "Add a Name" });
+                    name_error.* = true;
                 } else if (dvui.currentWindow().font_bytes.contains(name)) {
                     try dvui.toast(@src(), .{ .subwindow_id = demo_win_id, .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Already have font named \"{s}\"", .{name}) });
+                    name_error.* = true;
                 } else {
-                    const filename = te_file.getText();
                     var bytes: ?[]u8 = null;
                     if (!std.fs.path.isAbsolute(filename)) {
+                        file_error.* = true;
                         try dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename}) });
                     } else {
                         const file = std.fs.openFileAbsolute(filename, .{}) catch blk: {
+                            file_error.* = true;
                             try dvui.dialog(@src(), .{}, .{ .title = "File Error", .message = try std.fmt.allocPrint(dvui.currentWindow().arena(), "Could not open \"{s}\"", .{filename}) });
                             break :blk null;
                         };
@@ -1182,33 +1197,11 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
                     sug.close();
                 }
             }
-        }
 
-        sug.deinit();
-
-        // suggestion forwards events to textEntry, so don't call te.processEvents()
-        try te.draw();
-        te.deinit();
-    }
-
-    {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
-
-        try dvui.label(@src(), "Suggest menu", .{}, .{ .gravity_y = 0.5 });
-
-        try left_alignment.spacer(@src(), 0);
-
-        var te = dvui.TextEntryWidget.init(@src(), .{}, .{ .max_size_content = .size(dvui.Options.sizeM(20, 1)) });
-        try te.install();
-
-        var sug = try dvui.suggestion(&te, .{ .open_on_text_change = true });
-
-        if (try sug.dropped()) {
-            if (try sug.addChoiceLabel("Set to \"hello\"")) {
+            if (try sug.addChoiceLabel("Set to \"hello\" [always shown]")) {
                 te.textSet("hello", false);
             }
-            _ = try sug.addChoiceLabel("close");
+            _ = try sug.addChoiceLabel("close [always shown]");
         }
 
         sug.deinit();
@@ -1352,48 +1345,157 @@ pub fn styling() !void {
 
     try dvui.label(@src(), "directly set colors", .{}, .{});
     {
-        var hbox = try dvui.box(@src(), .horizontal, .{});
-        defer hbox.deinit();
+        var picker = dvui.ColorPickerWidget.init(@src(), .{ .hsv = &hsv_color, .dir = .horizontal }, .{ .expand = .horizontal });
+        try picker.install();
+        defer picker.deinit();
+        if (picker.color_changed) {
+            backbox_color = hsv_color.toColor();
+            hsluv_hsl = .fromColor(backbox_color);
+        }
 
-        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = .{ .color = backbox_color }, .gravity_y = 0.5 });
-        backbox.deinit();
+        {
+            var vbox = try dvui.box(@src(), .vertical, .{});
+            defer vbox.deinit();
 
-        _ = try rgbSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 });
+            var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .h = 40 }, .expand = .horizontal, .background = true, .color_fill = .{ .color = backbox_color } });
+            backbox.deinit();
+
+            if (try dvui.sliderEntry(@src(), "A: {d:0.2}", .{ .value = &hsv_color.a, .min = 0, .max = 1, .interval = 0.01 }, .{ .min_size_content = .{}, .expand = .horizontal })) {
+                backbox_color = hsv_color.toColor();
+                hsluv_hsl = .fromColor(backbox_color);
+            }
+
+            const res = try dvui.textEntryColor(@src(), .{ .value = &backbox_color }, .{});
+            if (res.changed) {
+                hsluv_hsl = .fromColor(backbox_color);
+                hsv_color = .fromColor(backbox_color);
+            }
+        }
+        {
+            var vbox = try dvui.box(@src(), .vertical, .{});
+            defer vbox.deinit();
+
+            if (try rgbSliders(@src(), &backbox_color, .{ .gravity_y = 0.5 })) {
+                hsluv_hsl = .fromColor(backbox_color);
+                hsv_color = .fromColor(backbox_color);
+            }
+            if (try hsluvSliders(@src(), &hsluv_hsl, .{ .gravity_y = 0.5 })) {
+                backbox_color = hsluv_hsl.color();
+                hsv_color = .fromColor(backbox_color);
+            }
+        }
     }
 
-    try dvui.label(@src(), "HSLuv support", .{}, .{});
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
 
-        var backbox = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 30, .h = 20 }, .background = true, .color_fill = .{ .color = hsluv_rgb }, .gravity_y = 0.5 });
-        backbox.deinit();
+        const border = dvui.dataGetPtrDefault(null, hbox.data().id, "border", bool, true);
+        const radius = dvui.dataGetPtrDefault(null, hbox.data().id, "radius", f32, 5);
+        const blur = dvui.dataGetPtrDefault(null, hbox.data().id, "blur", f32, 2);
+        const shrink = dvui.dataGetPtrDefault(null, hbox.data().id, "shrink", f32, 0);
+        const offset = dvui.dataGetPtrDefault(null, hbox.data().id, "offset", dvui.Point, .{ .x = 1, .y = 1 });
+        const alpha = dvui.dataGetPtrDefault(null, hbox.data().id, "alpha", f32, 0.5);
 
-        try hsluvSliders(@src(), &hsluv_hsl, &hsluv_rgb, .{ .gravity_y = 0.5 });
+        // We are using two boxes here so the box shadow can have different corner_radius values.
+
+        var vbox = try dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(30), .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .color = .fromColor(backbox_color), .corner_radius = dvui.Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .blur = blur.*, .alpha = alpha.* } });
+        try dvui.label(@src(), "Box shadows", .{}, .{ .gravity_x = 0.5 });
+        _ = try dvui.checkbox(@src(), border, "border", .{});
+        _ = try dvui.sliderEntry(@src(), "radius: {d:0.0}", .{ .value = radius, .min = 0, .max = 50, .interval = 1 }, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "blur: {d:0.0}", .{ .value = blur, .min = 0, .max = 50, .interval = 0.1 }, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "shrink: {d:0.0}", .{ .value = shrink, .min = -10, .max = 50, .interval = 1 }, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "x: {d:0.0}", .{ .value = &offset.x, .min = -20, .max = 20, .interval = 1 }, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "y: {d:0.0}", .{ .value = &offset.y, .min = -20, .max = 20, .interval = 1 }, .{ .gravity_x = 0.5 });
+        _ = try dvui.sliderEntry(@src(), "alpha: {d:0.2}", .{ .value = alpha, .min = 0, .max = 1, .interval = 0.01 }, .{ .gravity_x = 0.5 });
+        vbox.deinit();
+
+        {
+            var vbox2 = try dvui.box(@src(), .vertical, .{ .margin = .{ .y = 30 } });
+            defer vbox2.deinit();
+
+            const gradient = dvui.dataGetPtrDefault(null, vbox2.data().id, "gradient", usize, 0);
+
+            {
+                var gbox = try dvui.box(@src(), .horizontal, .{});
+                defer gbox.deinit();
+                try dvui.label(@src(), "Gradient", .{}, .{ .gravity_y = 0.5 });
+                _ = try dvui.dropdown(@src(), &.{ "flat", "horizontal", "vertical", "radial" }, gradient, .{});
+            }
+
+            var drawBox = try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .w = 200, .h = 100 } });
+            const rs = drawBox.data().contentRectScale();
+
+            var path: dvui.PathArrayList = .init(dvui.currentWindow().arena());
+            try dvui.pathAddRect(&path, rs.r, dvui.Rect.Physical.all(5));
+
+            var triangles = try dvui.pathFillConvexTriangles(path.items, .{ .center = rs.r.center() });
+
+            const ca0 = backbox_color;
+            const ca1 = backbox_color.opacity(0);
+
+            switch (gradient.*) {
+                1, 2 => |choice| {
+                    for (triangles.vertexes) |*v| {
+                        const t = if (choice == 1)
+                            (v.pos.x - rs.r.x) / rs.r.w
+                        else
+                            (v.pos.y - rs.r.y) / rs.r.h;
+                        v.col = v.col.multiply(.fromColor(dvui.Color.lerp(ca0, ca1, t)));
+                    }
+                },
+                3 => {
+                    const center = rs.r.center();
+                    const max = rs.r.bottomRight().diff(center).length();
+                    for (triangles.vertexes) |*v| {
+                        const l: f32 = v.pos.diff(center).length();
+                        const t = l / max;
+                        v.col = v.col.multiply(.fromColor(dvui.Color.lerp(ca0, ca1, t)));
+                    }
+                },
+                else => {
+                    triangles.color(ca0);
+                },
+            }
+            try dvui.renderTriangles(triangles, null);
+
+            triangles.deinit(dvui.currentWindow().arena());
+            path.deinit();
+            drawBox.deinit();
+        }
     }
 }
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a Color
-pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) !void {
-    var hbox = try dvui.box(src, .horizontal, opts);
+pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) !bool {
+    var hbox = try dvui.boxEqual(src, .horizontal, opts);
     defer hbox.deinit();
 
     var red: f32 = @floatFromInt(color.r);
     var green: f32 = @floatFromInt(color.g);
     var blue: f32 = @floatFromInt(color.b);
 
-    _ = try dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
-    _ = try dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
-    _ = try dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
+    var changed = false;
+    if (try dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+        changed = true;
+    }
+    if (try dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+        changed = true;
+    }
+    if (try dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 })) {
+        changed = true;
+    }
 
     color.r = @intFromFloat(red);
     color.g = @intFromFloat(green);
     color.b = @intFromFloat(blue);
+
+    return changed;
 }
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a HSLuv Color
-pub fn hsluvSliders(src: std.builtin.SourceLocation, hsluv: *dvui.Color.HSLuv, color_out: *dvui.Color, opts: Options) !void {
-    var hbox = try dvui.box(src, .horizontal, opts);
+pub fn hsluvSliders(src: std.builtin.SourceLocation, hsluv: *dvui.Color.HSLuv, opts: Options) !bool {
+    var hbox = try dvui.boxEqual(src, .horizontal, opts);
     defer hbox.deinit();
 
     var changed = false;
@@ -1407,9 +1509,7 @@ pub fn hsluvSliders(src: std.builtin.SourceLocation, hsluv: *dvui.Color.HSLuv, c
         changed = true;
     }
 
-    if (changed) {
-        color_out.* = hsluv.color();
-    }
+    return changed;
 }
 
 /// ![image](Examples-layout.png)
@@ -2057,7 +2157,7 @@ pub fn reorderListsAdvanced() !void {
 
         if (reorderable.targetRectScale()) |rs| {
             // user is dragging a reorderable over this rect, could draw anything here
-            try rs.r.fill(.{}, .{ .r = 0, .g = 255, .b = 0 });
+            try rs.r.fill(.{}, .{ .color = .green });
 
             // reset to use next space, need a separator
             try dvui.separator(@src(), .{ .expand = .horizontal, .margin = dvui.Rect.all(6) });
@@ -2088,7 +2188,7 @@ pub fn reorderListsAdvanced() !void {
 
         if (reorderable.targetRectScale()) |rs| {
             // user is dragging a reorderable over this rect
-            try rs.r.fill(.{}, .{ .r = 0, .g = 255, .b = 0 });
+            try rs.r.fill(.{}, .{ .color = .green });
         }
     }
 
@@ -2305,7 +2405,7 @@ pub fn focus() !void {
 
         // firstFrame must be called before te.deinit()
         if (dvui.firstFrame(te.data().id)) {
-            dvui.focusWidgetSelf(te.data().id, null);
+            dvui.focusWidget(te.data().id, null, null);
         }
 
         te.deinit();
@@ -2543,8 +2643,6 @@ pub fn scrollCanvas(comptime data: u8) !void {
 
         var drag_box_window: usize = 0;
         var drag_box_content: usize = 0;
-        const box_blue: dvui.Color = .{ .r = 0, .g = 0, .b = 200 };
-        const box_green: dvui.Color = .{ .r = 0, .g = 200, .b = 0 };
     };
 
     const Data2 = struct {
@@ -2556,8 +2654,6 @@ pub fn scrollCanvas(comptime data: u8) !void {
 
         var drag_box_window: usize = 0;
         var drag_box_content: usize = 0;
-        const box_blue: dvui.Color = .{ .r = 0, .g = 0, .b = 200 };
-        const box_green: dvui.Color = .{ .r = 0, .g = 200, .b = 0 };
     };
 
     const Data = if (data == 1) Data1 else Data2;
@@ -2588,12 +2684,12 @@ pub fn scrollCanvas(comptime data: u8) !void {
     try dvui.pathStroke(&.{
         dataRectScale.pointToPhysical(.{ .x = -10 }),
         dataRectScale.pointToPhysical(.{ .x = 10 }),
-    }, 1, dvui.Color.black, .{});
+    }, .{ .thickness = 1, .color = dvui.Color.black });
 
     try dvui.pathStroke(&.{
         dataRectScale.pointToPhysical(.{ .y = -10 }),
         dataRectScale.pointToPhysical(.{ .y = 10 }),
-    }, 1, dvui.Color.black, .{});
+    }, .{ .thickness = 1, .color = dvui.Color.black });
 
     // keep record of bounding box
     var mbbox: ?Rect.Physical = null;
@@ -2610,7 +2706,8 @@ pub fn scrollCanvas(comptime data: u8) !void {
             .color_fill = .fill_window,
             .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
             .corner_radius = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
-            .color_border = .{ .color = if (dragging_box and i != Data.drag_box_window) Data.box_green else dvui.Color.black },
+            .color_border = if (dragging_box and i != Data.drag_box_window) dvui.Options.ColorOrName.fromColor(.lime) else null,
+            .box_shadow = .{},
         });
 
         const boxRect = dragBox.data().rectScale().r;
@@ -2630,7 +2727,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
                 switch (e.evt) {
                     .mouse => |me| {
                         if (me.action == .release and me.button.pointer()) {
-                            e.handled = true;
+                            e.handle(@src(), dragBox.data());
                             dvui.dragEnd();
                             dvui.refresh(null, @src(), dragBox.data().id);
 
@@ -2676,7 +2773,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
                 if (k > 0) {
                     _ = try dvui.spacer(@src(), .{ .w = 5 }, .{ .id_extra = k });
                 }
-                const col = if (dragging_box and i == Data.drag_box_window and k == Data.drag_box_content) Data.box_green else Data.box_blue;
+                const col = if (dragging_box and i == Data.drag_box_window and k == Data.drag_box_content) dvui.Color.lime else dvui.Color.blue;
                 var dbox = try dvui.box(@src(), .vertical, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = .{ .color = col } });
                 defer dbox.deinit();
 
@@ -2688,12 +2785,12 @@ pub fn scrollCanvas(comptime data: u8) !void {
                     switch (e.evt) {
                         .mouse => |me| {
                             if (me.action == .press and me.button.pointer()) {
-                                e.handled = true;
+                                e.handle(@src(), dragBox.data());
                                 dvui.captureMouse(dbox.data());
                                 dvui.dragPreStart(me.p, .{ .name = "box_transfer" });
                             } else if (me.action == .motion) {
                                 if (dvui.captured(dbox.data().id)) {
-                                    e.handled = true;
+                                    e.handle(@src(), dragBox.data());
                                     if (dvui.dragging(me.p)) |_| {
                                         // started the drag
                                         Data.drag_box_window = i;
@@ -2722,13 +2819,13 @@ pub fn scrollCanvas(comptime data: u8) !void {
             switch (e.evt) {
                 .mouse => |me| {
                     if (me.action == .press and me.button.pointer()) {
-                        e.handled = true;
+                        e.handle(@src(), dragBox.data());
                         dvui.captureMouse(dragBox.data());
                         const offset = me.p.diff(dragBox.data().rectScale().r.topLeft()); // pixel offset from dragBox corner
                         dvui.dragPreStart(me.p, .{ .offset = offset });
                     } else if (me.action == .release and me.button.pointer()) {
                         if (dvui.captured(dragBox.data().id)) {
-                            e.handled = true;
+                            e.handle(@src(), dragBox.data());
                             dvui.captureMouse(null);
                             dvui.dragEnd();
                         }
@@ -2773,23 +2870,23 @@ pub fn scrollCanvas(comptime data: u8) !void {
         switch (e.evt) {
             .mouse => |me| {
                 if (me.action == .press and me.button.pointer()) {
-                    e.handled = true;
+                    e.handle(@src(), scroll.scroll.data());
                     dvui.captureMouse(scroll.scroll.data());
                     dvui.dragPreStart(me.p, .{});
                 } else if (me.action == .release and me.button.pointer()) {
                     if (dvui.captured(scroll.scroll.data().id)) {
-                        e.handled = true;
+                        e.handle(@src(), scroll.scroll.data());
                         dvui.captureMouse(null);
                         dvui.dragEnd();
                     }
                 } else if (me.action == .motion) {
                     if (me.button.touch() and dragging_box) {
                         // eat touch motion events so they don't scroll
-                        e.handled = true;
+                        e.handle(@src(), scroll.scroll.data());
                     }
                     if (dvui.captured(scroll.scroll.data().id)) {
                         if (dvui.dragging(me.p)) |dps| {
-                            e.handled = true;
+                            e.handle(@src(), scroll.scroll.data());
                             const rs = scrollRectScale;
                             Data.scroll_info.viewport.x -= dps.x / rs.s;
                             Data.scroll_info.viewport.y -= dps.y / rs.s;
@@ -2797,7 +2894,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
                         }
                     }
                 } else if (me.action == .wheel_y and ctrl_down) {
-                    e.handled = true;
+                    e.handle(@src(), scroll.scroll.data());
                     const base: f32 = 1.01;
                     const zs = @exp(@log(base) * me.action.wheel_y);
                     if (zs != 1.0) {
@@ -3267,7 +3364,7 @@ pub fn animations() !void {
         var box = try dvui.box(@src(), .vertical, .{ .margin = .{ .x = 10 } });
         defer box.deinit();
 
-        const pixel_data = [_]u8{ 0xff, 0xff, 0x00, 0xff, 0x00, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0xff, 0xff, 0x00, 0xff, 0xff };
+        const pixel_data = dvui.Color.yellow.toRGBA() ++ dvui.Color.cyan.toRGBA() ++ dvui.Color.red.toRGBA() ++ dvui.Color.magenta.toRGBA();
         var pixels = pixel_data;
 
         // example of how to run frames at a certain fps
@@ -3295,7 +3392,7 @@ pub fn animations() !void {
 
         std.mem.rotate(u8, &pixels, @intCast(frame * 4));
 
-        const tex = dvui.textureCreate((&pixels).ptr, 2, 2, .nearest);
+        const tex = dvui.textureCreate(.cast(&pixels), 2, 2, .nearest);
         dvui.textureDestroyLater(tex);
 
         var frame_box = try dvui.box(@src(), .horizontal, .{ .min_size_content = .{ .w = 50, .h = 50 } });
@@ -3615,7 +3712,7 @@ pub const StrokeTest = struct {
     var points: []dvui.Point = pointsArray[0..0];
     var dragi: ?usize = null;
     var thickness: f32 = 1.0;
-    var endcap_style: dvui.EndCapStyle = .none;
+    var endcap_style: dvui.PathStrokeOptions.EndCapStyle = .none;
 
     wd: dvui.WidgetData = undefined,
 
@@ -3642,7 +3739,7 @@ pub const StrokeTest = struct {
         const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
         for (points, 0..) |p, i| {
             const rect = dvui.Rect.fromPoint(p.plus(.{ .x = -10, .y = -10 })).toSize(.{ .w = 20, .h = 20 });
-            try rs.rectToPhysical(rect).fill(dvui.Rect.Physical.all(1), fill_color);
+            try rs.rectToPhysical(rect).fill(.all(1), .{ .color = fill_color });
 
             _ = i;
             //_ = try dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });
@@ -3656,7 +3753,7 @@ pub const StrokeTest = struct {
         }
 
         const stroke_color = dvui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
-        try dvui.pathStroke(path.items, rs.s * thickness, stroke_color, .{ .closed = stroke_test_closed, .endcap_style = StrokeTest.endcap_style });
+        try dvui.pathStroke(path.items, .{ .thickness = rs.s * thickness, .color = stroke_color, .closed = stroke_test_closed, .endcap_style = StrokeTest.endcap_style });
     }
 
     pub fn widget(self: *Self) dvui.Widget {
@@ -3689,7 +3786,7 @@ pub const StrokeTest = struct {
                 switch (me.action) {
                     .press => {
                         if (me.button == .left) {
-                            e.handled = true;
+                            e.handle(@src(), self.data());
                             dragi = null;
 
                             for (points, 0..) |p, i| {
@@ -3714,13 +3811,13 @@ pub const StrokeTest = struct {
                     },
                     .release => {
                         if (me.button == .left) {
-                            e.handled = true;
+                            e.handle(@src(), self.data());
                             dvui.captureMouse(null);
                             dvui.dragEnd();
                         }
                     },
                     .motion => {
-                        e.handled = true;
+                        e.handle(@src(), self.data());
                         if (dvui.dragging(me.p)) |dps| {
                             const dp = dps.scale(1 / rs.s, Point);
                             points[dragi.?].x += dp.x;
@@ -3729,7 +3826,7 @@ pub const StrokeTest = struct {
                         }
                     },
                     .wheel_y => |ticks| {
-                        e.handled = true;
+                        e.handle(@src(), self.data());
                         const base: f32 = 1.02;
                         const zs = @exp(@log(base) * ticks);
                         if (zs != 1.0) {

@@ -53,6 +53,7 @@ pub const widgets = @import("import_widgets.zig");
 pub const AnimateWidget = widgets.AnimateWidget;
 pub const BoxWidget = widgets.BoxWidget;
 pub const CacheWidget = widgets.CacheWidget;
+pub const ColorPickerWidget = widgets.ColorPickerWidget;
 pub const FlexBoxWidget = widgets.FlexBoxWidget;
 pub const ReorderWidget = widgets.ReorderWidget;
 pub const Reorderable = ReorderWidget.Reorderable;
@@ -802,7 +803,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
                     .height = @ceil(height),
                     .ascent = @floor(ascent),
                     .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-                    .texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
+                    .texture_atlas = textureCreate(.cast(pixels), @intFromFloat(size.w), @intFromFloat(size.h), .linear),
                     .texture_atlas_regen = true,
                 };
 
@@ -829,7 +830,7 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
             .height = @ceil(height),
             .ascent = @floor(ascent),
             .glyph_info = std.AutoHashMap(u32, GlyphInfo).init(cw.gpa),
-            .texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
+            .texture_atlas = textureCreate(.cast(pixels), @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear),
             .texture_atlas_regen = true,
         };
     }
@@ -967,14 +968,11 @@ pub const RenderCommand = struct {
         },
         pathFillConvex: struct {
             path: PathSlice,
-            color: Color,
+            opts: PathFillConvexOptions,
         },
         pathStroke: struct {
             path: PathSlice,
-            closed: bool,
-            thickness: f32,
-            endcap_style: EndCapStyle,
-            color: Color,
+            opts: PathStrokeOptions,
         },
         triangles: struct {
             tri: Triangles,
@@ -1069,23 +1067,31 @@ pub fn focusWidget(id: ?u32, subwindow_id: ?u32, event_num: ?u16) void {
                     focusRemainingEvents(en, sw.id, sw.focused_widgetId);
                 }
                 refresh(null, @src(), null);
+
+                if (id) |wid| {
+                    if (cw.last_registered_id_this_frame == wid) {
+                        cw.last_focused_id_this_frame = wid;
+                    } else {
+                        // walk parent chain
+                        var wd = cw.wd.parent.data();
+
+                        while (true) : (wd = wd.parent.data()) {
+                            if (wd.id == wid) {
+                                cw.last_focused_id_this_frame = wid;
+                                break;
+                            }
+
+                            if (wd.id == cw.wd.id) {
+                                // got to base Window
+                                break;
+                            }
+                        }
+                    }
+                }
             }
             break;
         }
     }
-}
-
-/// Focuses the given widget id and sets `Window.last_focused_id_this_frame`.
-/// This should only be used by widgets that focuses themselves. If you are
-/// focusing another widget, use `focusWidget`
-///
-/// If you are doing this in response to an `Event`, you can pass that `Event`'s
-/// num to change the focus of any further `Event`s in the list.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn focusWidgetSelf(id: u32, event_num: ?u16) void {
-    currentWindow().last_focused_id_this_frame = id;
-    focusWidget(id, null, event_num);
 }
 
 /// Id of the focused widget (if any) in the focused subwindow.
@@ -1111,11 +1117,13 @@ pub fn focusedWidgetIdInCurrentSubwindow() ?u32 {
     return sw.focused_widgetId;
 }
 
-/// Last widget id we saw this frame that was the focused widget when it called
-/// `WidgetData.register`.
+/// Last widget id we saw this frame that was the focused widget.
 ///
 /// If two calls to this function return different values, then some widget
-/// that ran between them had focus.
+/// that ran between them had focus.  This means one of:
+/// * a widget had focus when it called `WidgetData.register`
+/// * `focusWidget` with the id of the last widget to call `WidgetData.register`
+/// * `focusWidget` with the id of a widget in the parent chain
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn lastFocusedIdInFrame() u32 {
@@ -1202,10 +1210,16 @@ pub fn pathAddArc(path: *PathArrayList, center: Point.Physical, radius: f32, sta
     }
 }
 
-/// Fill path (must be convex) with `color`.  See `Rect.fill`.
+pub const PathFillConvexOptions = struct {
+    blur: f32 = 1.0,
+    color: ?Color = null,
+    center: ?Point.Physical = null,
+};
+
+/// Fill path (must be convex) with `color` (or `Theme.color_fill`).  See `Rect.fill`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathFillConvex(path: PathSlice, color: Color) !void {
+pub fn pathFillConvex(path: PathSlice, opts: PathFillConvexOptions) !void {
     if (path.len < 3) {
         return;
     }
@@ -1214,20 +1228,24 @@ pub fn pathFillConvex(path: PathSlice, color: Color) !void {
         return;
     }
 
+    var options = opts;
+    if (options.color == null) {
+        options.color = dvui.themeGet().color_fill;
+    }
+
     const cw = currentWindow();
 
     if (!cw.render_target.rendering) {
         const path_copy = try cw.arena().dupe(Point.Physical, path);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .color = color } } };
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathFillConvex = .{ .path = path_copy, .opts = options } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
         return;
     }
 
-    var triangles = try pathFillConvexTriangles(path);
+    var triangles = try pathFillConvexTriangles(path, options);
     defer triangles.deinit(cw.arena());
-    triangles.color(color);
     try renderTriangles(triangles, null);
 }
 
@@ -1236,108 +1254,133 @@ pub fn pathFillConvex(path: PathSlice, color: Color) !void {
 /// Vertexes will have unset uv and color is alpha multiplied white fading to
 /// transparent at the edge.
 ///
+/// blur is how many pixels wide the fade to transparent is, starting a half
+/// pixel inside. Currently blur < 1 is treated as 1, but might change.
+///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathFillConvexTriangles(path: PathSlice) !Triangles {
+pub fn pathFillConvexTriangles(path: PathSlice, opts: PathFillConvexOptions) !Triangles {
     if (path.len < 3) {
-        return Triangles.empty;
+        return .empty;
     }
 
     const cw = currentWindow();
 
-    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), path.len * 2);
-    defer vtx.deinit();
-    const idx_count = (path.len - 2) * 3 + path.len * 6;
-    var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
-    defer idx.deinit();
-    const col: Color = .{};
-    const col_trans: Color = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
+    var vtx_count = path.len;
+    var idx_count = (path.len - 2) * 3;
+    if (opts.blur > 0) {
+        vtx_count *= 2;
+        idx_count += path.len * 6;
+    }
+    if (opts.center) |_| {
+        vtx_count += 1;
+        idx_count += 6;
+    }
 
-    var bounds = Rect.Physical{}; // w and h are maxx and maxy for now
-    bounds.x = std.math.floatMax(f32);
-    bounds.y = bounds.x;
-    bounds.w = -bounds.x;
-    bounds.h = -bounds.x;
+    var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
+    errdefer comptime unreachable; // No errors from this point on
+
+    const col: Color.PMA = if (opts.color) |color| .fromColor(color) else .cast(.white);
 
     var i: usize = 0;
     while (i < path.len) : (i += 1) {
-        const ai = (i + path.len - 1) % path.len;
-        const bi = i % path.len;
-        const ci = (i + 1) % path.len;
-        const aa = path[ai].diff(cw.render_target.offset);
-        const bb = path[bi].diff(cw.render_target.offset);
-        const cc = path[ci].diff(cw.render_target.offset);
+        const ai: u16 = @intCast((i + path.len - 1) % path.len);
+        const bi: u16 = @intCast(i % path.len);
+        const ci: u16 = @intCast((i + 1) % path.len);
+        const aa = path[ai];
+        const bb = path[bi];
+        const cc = path[ci];
 
         const diffab = aa.diff(bb).normalize();
         const diffbc = bb.diff(cc).normalize();
         // average of normals on each side
-        const halfnorm = (Point.Physical{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 }).normalize().scale(0.5, Point.Physical);
+        var norm: Point.Physical = .{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
 
-        var v: Vertex = undefined;
         // inner vertex
-        v.pos.x = bb.x - halfnorm.x;
-        v.pos.y = bb.y - halfnorm.y;
-        v.col = col;
-        try vtx.append(v);
-        bounds.x = @min(bounds.x, v.pos.x);
-        bounds.y = @min(bounds.y, v.pos.y);
-        bounds.w = @max(bounds.w, v.pos.x);
-        bounds.h = @max(bounds.h, v.pos.y);
+        const inside_len = @min(0.5, opts.blur / 2);
+        builder.appendVertex(.{
+            .pos = .{
+                .x = bb.x - norm.x * inside_len,
+                .y = bb.y - norm.y * inside_len,
+            },
+            .col = col,
+            .uv = undefined,
+        });
 
-        // outer vertex
-        v.pos.x = bb.x + halfnorm.x;
-        v.pos.y = bb.y + halfnorm.y;
-        v.col = col_trans;
-        try vtx.append(v);
-        bounds.x = @min(bounds.x, v.pos.x);
-        bounds.y = @min(bounds.y, v.pos.y);
-        bounds.w = @max(bounds.w, v.pos.x);
-        bounds.h = @max(bounds.h, v.pos.y);
+        const idx_ai = if (opts.blur > 0) ai * 2 else ai;
+        const idx_bi = if (opts.blur > 0) bi * 2 else bi;
 
         // indexes for fill
         // triangles must be counter-clockwise (y going down) to avoid backface culling
-        if (i > 1) {
-            try idx.append(@as(u16, @intCast(0)));
-            try idx.append(@as(u16, @intCast(ai * 2)));
-            try idx.append(@as(u16, @intCast(bi * 2)));
+        if (opts.center) |_| {
+            builder.appendTriangles(&.{ @intCast(vtx_count - 1), idx_ai, idx_bi });
+        } else if (i > 1) {
+            builder.appendTriangles(&.{ 0, idx_ai, idx_bi });
         }
 
-        // indexes for aa fade from inner to outer
-        // triangles must be counter-clockwise (y going down) to avoid backface culling
-        try idx.append(@as(u16, @intCast(ai * 2)));
-        try idx.append(@as(u16, @intCast(ai * 2 + 1)));
-        try idx.append(@as(u16, @intCast(bi * 2)));
-        try idx.append(@as(u16, @intCast(ai * 2 + 1)));
-        try idx.append(@as(u16, @intCast(bi * 2 + 1)));
-        try idx.append(@as(u16, @intCast(bi * 2)));
+        if (opts.blur > 0) {
+            // scale averaged normal by angle between which happens to be the same as
+            // dividing by the length^2
+            const d2 = norm.x * norm.x + norm.y * norm.y;
+            if (d2 > 0.000001) {
+                norm = norm.scale(1.0 / d2, Point.Physical);
+            }
+
+            // limit distance our vertexes can be from the point to 2 * blur so
+            // very small angles don't produce huge geometries
+            const l = norm.length();
+            if (l > 2.0) {
+                norm = norm.scale(2.0 / l, Point.Physical);
+            }
+
+            // outer vertex
+            const outside_len = if (opts.blur <= 1) opts.blur / 2 else opts.blur - 0.5;
+            builder.appendVertex(.{
+                .pos = .{
+                    .x = bb.x + norm.x * outside_len,
+                    .y = bb.y + norm.y * outside_len,
+                },
+                .col = .transparent,
+                .uv = undefined,
+            });
+
+            // indexes for aa fade from inner to outer
+            // triangles must be counter-clockwise (y going down) to avoid backface culling
+            builder.appendTriangles(&.{
+                idx_ai,     idx_ai + 1, idx_bi,
+                idx_ai + 1, idx_bi + 1, idx_bi,
+            });
+        }
     }
 
-    // convert bounds back to normal rect
-    bounds.w = bounds.w - bounds.x;
-    bounds.h = bounds.h - bounds.y;
+    if (opts.center) |center| {
+        builder.appendVertex(.{ .pos = center, .col = col, .uv = undefined });
+    }
 
-    return .{ .vertexes = try vtx.toOwnedSlice(), .indices = try idx.toOwnedSlice(), .bounds = bounds };
+    return builder.build();
 }
-
-pub const EndCapStyle = enum {
-    none,
-    square,
-};
 
 pub const PathStrokeOptions = struct {
     /// true => Render this after normal drawing on that subwindow.  Useful for
     /// debugging on cross-gui drawing.
     after: bool = false,
 
+    thickness: f32,
+    color: Color,
+
     /// true => Stroke includes from path end to path start.
     closed: bool = false,
-
     endcap_style: EndCapStyle = .none,
+
+    pub const EndCapStyle = enum {
+        none,
+        square,
+    };
 };
 
 /// Stroke path as a series of line segments.  See `Rect.stroke`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn pathStroke(path: PathSlice, thickness: f32, color: Color, opts: PathStrokeOptions) !void {
+pub fn pathStroke(path: PathSlice, opts: PathStrokeOptions) !void {
     if (path.len == 0) {
         return;
     }
@@ -1346,7 +1389,7 @@ pub fn pathStroke(path: PathSlice, thickness: f32, color: Color, opts: PathStrok
 
     if (opts.after or !cw.render_target.rendering) {
         const path_copy = try cw.arena().dupe(Point.Physical, path);
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .closed = opts.closed, .thickness = thickness, .endcap_style = opts.endcap_style, .color = color } } };
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .pathStroke = .{ .path = path_copy, .opts = opts } } };
 
         var sw = cw.subwindowCurrent();
         if (opts.after) {
@@ -1358,73 +1401,67 @@ pub fn pathStroke(path: PathSlice, thickness: f32, color: Color, opts: PathStrok
         return;
     }
 
-    try pathStrokeRaw(path, thickness, color, opts.closed, opts.endcap_style);
+    var triangles = try pathStrokeTriangles(path, opts);
+    defer triangles.deinit(cw.arena());
+    try renderTriangles(triangles, null);
 }
 
-pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: bool, endcap_style: EndCapStyle) !void {
+/// Generates triangles to stroke path.
+///
+/// Vertexes will have unset uv and color is alpha multiplied white fading to
+/// transparent at the edge.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn pathStrokeTriangles(path: PathSlice, opts: PathStrokeOptions) !Triangles {
     if (dvui.clipGet().empty()) {
-        return;
+        return .empty;
     }
 
     const cw = currentWindow();
 
     if (path.len == 1) {
         // draw a circle with radius thickness at that point
-        const center = path[0].diff(cw.render_target.offset);
+        const center = path[0];
 
         var tempPath: PathArrayList = .init(cw.arena());
         defer tempPath.deinit();
 
-        try pathAddArc(&tempPath, center, thickness, math.pi * 2.0, 0, true);
-        try pathFillConvex(tempPath.items, color);
-
-        return;
+        try pathAddArc(&tempPath, center, opts.thickness, math.pi * 2.0, 0, true);
+        return try pathFillConvexTriangles(tempPath.items, .{ .color = opts.color, .blur = 1.0 });
     }
 
-    var closed: bool = closed_in;
-    if (path.len == 2) {
-        // a single segment can't be closed
-        closed = false;
-    }
+    // a single segment can't be closed
+    const closed: bool = if (path.len == 2) false else opts.closed;
 
     var vtx_count = path.len * 4;
     if (!closed) {
         vtx_count += 4;
     }
-    var vtx = try std.ArrayList(Vertex).initCapacity(cw.arena(), vtx_count);
-    defer vtx.deinit();
     var idx_count = (path.len - 1) * 18;
     if (closed) {
         idx_count += 18;
     } else {
         idx_count += 8 * 3;
     }
-    var idx = try std.ArrayList(u16).initCapacity(cw.arena(), idx_count);
-    defer idx.deinit();
-    const col = color.alphaMultiply();
-    const col_trans = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
-    var bounds = Rect.Physical{}; // w and h are maxx and maxy for now
-    bounds.x = std.math.floatMax(f32);
-    bounds.y = bounds.x;
-    bounds.w = -bounds.x;
-    bounds.h = -bounds.x;
+    var builder = try Triangles.Builder.init(cw.arena(), vtx_count, idx_count);
+    errdefer comptime unreachable; // No errors from this point on
+
+    const col: Color.PMA = .fromColor(opts.color);
 
     const aa_size = 1.0;
-    var vtx_start: usize = 0;
+    var vtx_start: u16 = 0;
     var i: usize = 0;
     while (i < path.len) : (i += 1) {
-        const ai = (i + path.len - 1) % path.len;
-        const bi = i % path.len;
-        const ci = (i + 1) % path.len;
-        const aa = path[ai].diff(cw.render_target.offset);
-        var bb = path[bi].diff(cw.render_target.offset);
-        const cc = path[ci].diff(cw.render_target.offset);
+        const ai: u16 = @intCast((i + path.len - 1) % path.len);
+        const bi: u16 = @intCast(i % path.len);
+        const ci: u16 = @intCast((i + 1) % path.len);
+        const aa = path[ai];
+        var bb = path[bi];
+        const cc = path[ci];
 
         // the amount to move from bb to the edge of the line
         var halfnorm: Point.Physical = undefined;
-
-        var v: Vertex = undefined;
         var diffab: Point.Physical = undefined;
 
         if (!closed and ((i == 0) or ((i + 1) == path.len))) {
@@ -1433,58 +1470,49 @@ pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: b
                 // rotate by 90 to get normal
                 halfnorm = .{ .x = diffbc.y / 2, .y = (-diffbc.x) / 2 };
 
-                if (endcap_style == .square) {
+                if (opts.endcap_style == .square) {
                     // square endcaps move bb out by thickness
-                    bb.x += diffbc.x * thickness;
-                    bb.y += diffbc.y * thickness;
+                    bb.x += diffbc.x * opts.thickness;
+                    bb.y += diffbc.y * opts.thickness;
                 }
 
                 // add 2 extra vertexes for endcap fringe
                 vtx_start += 2;
 
-                v.pos.x = bb.x - halfnorm.x * (thickness + aa_size) + diffbc.x * aa_size;
-                v.pos.y = bb.y - halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size;
-                v.col = col_trans;
-                try vtx.append(v);
-                bounds.x = @min(bounds.x, v.pos.x);
-                bounds.y = @min(bounds.y, v.pos.y);
-                bounds.w = @max(bounds.w, v.pos.x);
-                bounds.h = @max(bounds.h, v.pos.y);
+                builder.appendVertex(.{
+                    .pos = .{
+                        .x = bb.x - halfnorm.x * (opts.thickness + aa_size) + diffbc.x * aa_size,
+                        .y = bb.y - halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
+                    },
+                    .col = .transparent,
+                    .uv = undefined,
+                });
 
-                v.pos.x = bb.x + halfnorm.x * (thickness + aa_size) + diffbc.x * aa_size;
-                v.pos.y = bb.y + halfnorm.y * (thickness + aa_size) + diffbc.y * aa_size;
-                v.col = col_trans;
-                try vtx.append(v);
-                bounds.x = @min(bounds.x, v.pos.x);
-                bounds.y = @min(bounds.y, v.pos.y);
-                bounds.w = @max(bounds.w, v.pos.x);
-                bounds.h = @max(bounds.h, v.pos.y);
+                builder.appendVertex(.{
+                    .pos = .{
+                        .x = bb.x + halfnorm.x * (opts.thickness + aa_size) + diffbc.x * aa_size,
+                        .y = bb.y + halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
+                    },
+                    .col = .transparent,
+                    .uv = undefined,
+                });
 
                 // add indexes for endcap fringe
-                try idx.append(@as(u16, @intCast(0)));
-                try idx.append(@as(u16, @intCast(vtx_start)));
-                try idx.append(@as(u16, @intCast(vtx_start + 1)));
-
-                try idx.append(@as(u16, @intCast(0)));
-                try idx.append(@as(u16, @intCast(1)));
-                try idx.append(@as(u16, @intCast(vtx_start)));
-
-                try idx.append(@as(u16, @intCast(1)));
-                try idx.append(@as(u16, @intCast(vtx_start + 2)));
-                try idx.append(@as(u16, @intCast(vtx_start)));
-
-                try idx.append(@as(u16, @intCast(1)));
-                try idx.append(@as(u16, @intCast(vtx_start + 2 + 1)));
-                try idx.append(@as(u16, @intCast(vtx_start + 2)));
+                builder.appendTriangles(&.{
+                    0, vtx_start,         vtx_start + 1,
+                    0, 1,                 vtx_start,
+                    1, vtx_start + 2,     vtx_start,
+                    1, vtx_start + 2 + 1, vtx_start + 2,
+                });
             } else if ((i + 1) == path.len) {
                 diffab = aa.diff(bb).normalize();
                 // rotate by 90 to get normal
                 halfnorm = .{ .x = diffab.y / 2, .y = (-diffab.x) / 2 };
 
-                if (endcap_style == .square) {
+                if (opts.endcap_style == .square) {
                     // square endcaps move bb out by thickness
-                    bb.x -= diffab.x * thickness;
-                    bb.y -= diffab.y * thickness;
+                    bb.x -= diffab.x * opts.thickness;
+                    bb.y -= diffab.y * opts.thickness;
                 }
             }
         } else {
@@ -1509,120 +1537,90 @@ pub fn pathStrokeRaw(path: PathSlice, thickness: f32, color: Color, closed_in: b
         }
 
         // side 1 inner vertex
-        v.pos.x = bb.x - halfnorm.x * thickness;
-        v.pos.y = bb.y - halfnorm.y * thickness;
-        v.col = col;
-        try vtx.append(v);
-        bounds.x = @min(bounds.x, v.pos.x);
-        bounds.y = @min(bounds.y, v.pos.y);
-        bounds.w = @max(bounds.w, v.pos.x);
-        bounds.h = @max(bounds.h, v.pos.y);
+        builder.appendVertex(.{
+            .pos = .{
+                .x = bb.x - halfnorm.x * opts.thickness,
+                .y = bb.y - halfnorm.y * opts.thickness,
+            },
+            .col = col,
+            .uv = undefined,
+        });
 
         // side 1 AA vertex
-        v.pos.x = bb.x - halfnorm.x * (thickness + aa_size);
-        v.pos.y = bb.y - halfnorm.y * (thickness + aa_size);
-        v.col = col_trans;
-        try vtx.append(v);
-        bounds.x = @min(bounds.x, v.pos.x);
-        bounds.y = @min(bounds.y, v.pos.y);
-        bounds.w = @max(bounds.w, v.pos.x);
-        bounds.h = @max(bounds.h, v.pos.y);
+        builder.appendVertex(.{
+            .pos = .{
+                .x = bb.x - halfnorm.x * (opts.thickness + aa_size),
+                .y = bb.y - halfnorm.y * (opts.thickness + aa_size),
+            },
+            .col = .transparent,
+            .uv = undefined,
+        });
 
         // side 2 inner vertex
-        v.pos.x = bb.x + halfnorm.x * thickness;
-        v.pos.y = bb.y + halfnorm.y * thickness;
-        v.col = col;
-        try vtx.append(v);
-        bounds.x = @min(bounds.x, v.pos.x);
-        bounds.y = @min(bounds.y, v.pos.y);
-        bounds.w = @max(bounds.w, v.pos.x);
-        bounds.h = @max(bounds.h, v.pos.y);
+        builder.appendVertex(.{
+            .pos = .{
+                .x = bb.x + halfnorm.x * opts.thickness,
+                .y = bb.y + halfnorm.y * opts.thickness,
+            },
+            .col = col,
+            .uv = undefined,
+        });
 
         // side 2 AA vertex
-        v.pos.x = bb.x + halfnorm.x * (thickness + aa_size);
-        v.pos.y = bb.y + halfnorm.y * (thickness + aa_size);
-        v.col = col_trans;
-        try vtx.append(v);
-        bounds.x = @min(bounds.x, v.pos.x);
-        bounds.y = @min(bounds.y, v.pos.y);
-        bounds.w = @max(bounds.w, v.pos.x);
-        bounds.h = @max(bounds.h, v.pos.y);
+        builder.appendVertex(.{
+            .pos = .{
+                .x = bb.x + halfnorm.x * (opts.thickness + aa_size),
+                .y = bb.y + halfnorm.y * (opts.thickness + aa_size),
+            },
+            .col = .transparent,
+            .uv = undefined,
+        });
 
         // triangles must be counter-clockwise (y going down) to avoid backface culling
         if (closed or ((i + 1) != path.len)) {
-            // indexes for fill
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4)));
+            builder.appendTriangles(&.{
+                // indexes for fill
+                vtx_start + bi * 4,     vtx_start + bi * 4 + 2, vtx_start + ci * 4,
+                vtx_start + bi * 4 + 2, vtx_start + ci * 4 + 2, vtx_start + ci * 4,
 
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4)));
+                // indexes for aa fade from inner to outer side 1
+                vtx_start + bi * 4,     vtx_start + ci * 4 + 1, vtx_start + bi * 4 + 1,
+                vtx_start + bi * 4,     vtx_start + ci * 4,     vtx_start + ci * 4 + 1,
 
-            // indexes for aa fade from inner to outer side 1
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 1)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
-
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 1)));
-
-            // indexes for aa fade from inner to outer side 2
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 3)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 3)));
-
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 3)));
-            try idx.append(@as(u16, @intCast(vtx_start + ci * 4 + 2)));
+                // indexes for aa fade from inner to outer side 2
+                vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 3, vtx_start + ci * 4 + 3,
+                vtx_start + bi * 4 + 2, vtx_start + ci * 4 + 3, vtx_start + ci * 4 + 2,
+            });
         } else if (!closed and (i + 1) == path.len) {
             // add 2 extra vertexes for endcap fringe
-            v.pos.x = bb.x - halfnorm.x * (thickness + aa_size) - diffab.x * aa_size;
-            v.pos.y = bb.y - halfnorm.y * (thickness + aa_size) - diffab.y * aa_size;
-            v.col = col_trans;
-            try vtx.append(v);
-            bounds.x = @min(bounds.x, v.pos.x);
-            bounds.y = @min(bounds.y, v.pos.y);
-            bounds.w = @max(bounds.w, v.pos.x);
-            bounds.h = @max(bounds.h, v.pos.y);
+            builder.appendVertex(.{
+                .pos = .{
+                    .x = bb.x - halfnorm.x * (opts.thickness + aa_size) - diffab.x * aa_size,
+                    .y = bb.y - halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
+                },
+                .col = .transparent,
+                .uv = undefined,
+            });
+            builder.appendVertex(.{
+                .pos = .{
+                    .x = bb.x + halfnorm.x * (opts.thickness + aa_size) - diffab.x * aa_size,
+                    .y = bb.y + halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
+                },
+                .col = .transparent,
+                .uv = undefined,
+            });
 
-            v.pos.x = bb.x + halfnorm.x * (thickness + aa_size) - diffab.x * aa_size;
-            v.pos.y = bb.y + halfnorm.y * (thickness + aa_size) - diffab.y * aa_size;
-            v.col = col_trans;
-            try vtx.append(v);
-            bounds.x = @min(bounds.x, v.pos.x);
-            bounds.y = @min(bounds.y, v.pos.y);
-            bounds.w = @max(bounds.w, v.pos.x);
-            bounds.h = @max(bounds.h, v.pos.y);
-
-            // add indexes for endcap fringe
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 1)));
-
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 4)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 5)));
-
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 2)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 3)));
-            try idx.append(@as(u16, @intCast(vtx_start + bi * 4 + 5)));
+            builder.appendTriangles(&.{
+                // add indexes for endcap fringe
+                vtx_start + bi * 4,     vtx_start + bi * 4 + 4, vtx_start + bi * 4 + 1,
+                vtx_start + bi * 4 + 4, vtx_start + bi * 4,     vtx_start + bi * 4 + 2,
+                vtx_start + bi * 4 + 4, vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 5,
+                vtx_start + bi * 4 + 2, vtx_start + bi * 4 + 3, vtx_start + bi * 4 + 5,
+            });
         }
     }
 
-    // convert bounds back to normal rect
-    bounds.w = bounds.w - bounds.x;
-    bounds.h = bounds.h - bounds.y;
-
-    const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-    const clipr: ?Rect.Physical = if (bounds.clippedBy(clip_offset)) clip_offset else null;
-
-    cw.backend.drawClippedTriangles(null, vtx.items, idx.items, clipr);
+    return builder.build();
 }
 
 pub const Triangles = struct {
@@ -1636,7 +1634,63 @@ pub const Triangles = struct {
         .bounds = .{},
     };
 
-    pub fn dupe(self: *Triangles, allocator: std.mem.Allocator) !Triangles {
+    /// A builder for Triangles that assumes the exact number of
+    /// vertexes and indices is known
+    pub const Builder = struct {
+        vertexes: std.ArrayListUnmanaged(Vertex),
+        indices: std.ArrayListUnmanaged(u16),
+        /// w and h is max_x and max_y
+        bounds: Rect.Physical = .{
+            .x = math.floatMax(f32),
+            .y = math.floatMax(f32),
+            .w = -math.floatMax(f32),
+            .h = -math.floatMax(f32),
+        },
+
+        pub fn init(allocator: std.mem.Allocator, vtx_count: usize, idx_count: usize) !Builder {
+            std.debug.assert(idx_count % 3 == 0);
+            return .{
+                .vertexes = .initBuffer(try allocator.alloc(Vertex, vtx_count)),
+                .indices = .initBuffer(try allocator.alloc(u16, idx_count)),
+            };
+        }
+
+        /// Appends a vertex and updates the bounds
+        pub fn appendVertex(self: *Builder, v: Vertex) void {
+            self.vertexes.appendAssumeCapacity(v);
+            self.bounds.x = @min(self.bounds.x, v.pos.x);
+            self.bounds.y = @min(self.bounds.y, v.pos.y);
+            self.bounds.w = @max(self.bounds.w, v.pos.x);
+            self.bounds.h = @max(self.bounds.h, v.pos.y);
+        }
+
+        /// Triangles must be counter-clockwise (y going down) to avoid backface culling
+        ///
+        /// Asserts that points is a multiple of 3
+        pub fn appendTriangles(self: *Builder, points: []const u16) void {
+            std.debug.assert(points.len % 3 == 0);
+            self.indices.appendSliceAssumeCapacity(points);
+        }
+
+        /// Asserts that the entire array has been filled
+        ///
+        /// The memory ownership is transferred to `Triangles`
+        pub fn build(self: *const Builder) Triangles {
+            std.debug.assert(self.vertexes.items.len == self.vertexes.capacity);
+            std.debug.assert(self.indices.items.len == self.indices.capacity);
+            return .{
+                .vertexes = self.vertexes.items,
+                .indices = self.indices.items,
+                // convert bounds w/h back to width/height
+                .bounds = self.bounds.toPoint(.{
+                    .x = self.bounds.w,
+                    .y = self.bounds.h,
+                }),
+            };
+        }
+    };
+
+    pub fn dupe(self: *const Triangles, allocator: std.mem.Allocator) !Triangles {
         return .{
             .vertexes = try allocator.dupe(Vertex, self.vertexes),
             .indices = try allocator.dupe(u16, self.indices),
@@ -1649,14 +1703,14 @@ pub const Triangles = struct {
         allocator.free(self.vertexes);
     }
 
-    /// Multiply col into vertex colors.  col is converted to premultiplied alpha.
+    /// Multiply `col` into vertex colors.
     pub fn color(self: *Triangles, col: Color) void {
         if (col.r == 0xff and col.g == 0xff and col.b == 0xff and col.a == 0xff)
             return;
 
-        const ca = col.alphaMultiply();
+        const pma_col: Color.PMA = .fromColor(col);
         for (self.vertexes) |*v| {
-            v.col = Color.multiply(v.col, ca);
+            v.col = v.col.multiply(pma_col);
         }
     }
 
@@ -1734,16 +1788,22 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) !void {
     const cw = currentWindow();
 
     if (!cw.render_target.rendering) {
-        // FIXME: need to copy triangles here
-        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .triangles = .{ .tri = triangles, .tex = tex } } };
+        const tri_copy = try triangles.dupe(cw.arena());
+        const cmd = RenderCommand{ .snap = cw.snap_to_pixels, .clip = clipGet(), .cmd = .{ .triangles = .{ .tri = tri_copy, .tex = tex } } };
 
         var sw = cw.subwindowCurrent();
         try sw.render_cmds.append(cmd);
         return;
     }
 
-    const clip_offset = clipGet().offsetNegPoint(cw.render_target.offset);
-    const clipr: ?Rect.Physical = if (triangles.bounds.clippedBy(clip_offset)) clip_offset else null;
+    const clipr: ?Rect.Physical = if (triangles.bounds.clippedBy(clipGet())) clipGet().offsetNegPoint(cw.render_target.offset) else null;
+
+    if (cw.render_target.offset.nonZero()) {
+        const offset = cw.render_target.offset;
+        for (triangles.vertexes) |*v| {
+            v.pos = v.pos.diff(offset);
+        }
+    }
 
     cw.backend.drawClippedTriangles(tex, triangles.vertexes, triangles.indices, clipr);
 }
@@ -3016,7 +3076,7 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 }
 
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !void {
-    var over = try dvui.overlay(@src(), .{ .expand = .horizontal });
+    var over = try dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
 
     try dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
 
@@ -3040,7 +3100,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
         } else if (e.evt == .mouse and e.evt.mouse.action == .focus) {
             // our window will already be focused, but this prevents the window
             // from clearing the focused widget
-            e.handled = true;
+            e.handle(@src(), over.data());
         }
     }
 
@@ -3703,7 +3763,8 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 pub const SuggestionInitOptions = struct {
     button: bool = false,
     opened: bool = false,
-    open_on_text_change: bool = false,
+    open_on_text_change: bool = true,
+    open_on_focus: bool = true,
 };
 
 pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*SuggestionWidget {
@@ -3712,7 +3773,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
     if (init_opts.button) {
         if (try dvui.buttonIcon(@src(), "combobox_triangle", entypo.chevron_small_down, .{}, .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0, .tab_index = 0 })) {
             open_sug = true;
-            dvui.focusWidgetSelf(te.data().id, null);
+            dvui.focusWidget(te.data().id, null, null);
         }
     }
 
@@ -3735,7 +3796,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
         if (e.evt == .key and (e.evt.key.action == .down or e.evt.key.action == .repeat)) {
             switch (e.evt.key.code) {
                 .up => {
-                    e.handled = true;
+                    e.handle(@src(), sug.menu.data());
                     if (sug.willOpen()) {
                         sug.selected_index -|= 1;
                     } else {
@@ -3743,7 +3804,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
                     }
                 },
                 .down => {
-                    e.handled = true;
+                    e.handle(@src(), sug.menu.data());
                     if (sug.willOpen()) {
                         sug.selected_index += 1;
                     } else {
@@ -3751,22 +3812,22 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
                     }
                 },
                 .escape => {
-                    e.handled = true;
+                    e.handle(@src(), sug.menu.data());
                     sug.close();
                 },
                 .enter => {
                     if (sug.willOpen()) {
-                        e.handled = true;
+                        e.handle(@src(), sug.menu.data());
                         sug.activate_selected = true;
                     }
                 },
                 else => {
                     if (sug.willOpen() and e.evt.key.action == .down) {
                         if (e.evt.key.matchBind("next_widget")) {
-                            e.handled = true;
+                            e.handle(@src(), sug.menu.data());
                             sug.close();
                         } else if (e.evt.key.matchBind("prev_widget")) {
-                            e.handled = true;
+                            e.handle(@src(), sug.menu.data());
                             sug.close();
                         }
                     }
@@ -3781,6 +3842,17 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
 
     if (init_opts.open_on_text_change and te.text_changed) {
         sug.open();
+    }
+
+    if (init_opts.open_on_focus) {
+        const focused_last_frame = dvui.dataGet(null, te.data().id, "_focused_last_frame", bool) orelse false;
+        const focused_now = dvui.focusedWidgetId() == te.data().id;
+
+        if (!focused_last_frame and focused_now) {
+            sug.open();
+        }
+
+        dvui.dataSet(null, te.data().id, "_focused_last_frame", focused_now);
     }
 
     return sug;
@@ -3815,7 +3887,7 @@ pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Init
     combo.te.* = dvui.TextEntryWidget.init(src, init_opts, opts);
     try combo.te.install();
 
-    combo.sug = try dvui.suggestion(combo.te, .{ .button = true });
+    combo.sug = try dvui.suggestion(combo.te, .{ .button = true, .open_on_focus = false, .open_on_text_change = false });
     // suggestion forwards events to textEntry, so don't call te.processEvents()
     try combo.te.draw();
 
@@ -3938,6 +4010,12 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) !*OverlayWidget {
     return ret;
 }
 
+/// Box that lays out children in one direction.  Extra space is allocated
+/// evenly to all children who are expanded in that direction.
+///
+/// See `boxEqual` and `flexbox`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena().create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, false, opts);
@@ -3946,6 +4024,12 @@ pub fn box(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options)
     return ret;
 }
 
+/// Box laying out children in `dir` direction.  All children receive equal
+/// space.
+///
+/// See `box` and `flexbox`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) !*BoxWidget {
     var ret = try currentWindow().arena().create(BoxWidget);
     ret.* = BoxWidget.init(src, dir, true, opts);
@@ -3954,6 +4038,11 @@ pub fn boxEqual(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Opt
     return ret;
 }
 
+/// Box laying out children horizontally, making new rows as needed.
+///
+/// See `box` and `boxEqual`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) !*FlexBoxWidget {
     var ret = try currentWindow().arena().create(FlexBoxWidget);
     ret.* = FlexBoxWidget.init(src, init_opts, opts);
@@ -4061,7 +4150,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) !void {
     const end = full_circle * easing.inSine(t);
 
     try pathAddArc(&path, r.center(), @min(r.w, r.h) / 3, start, end, false);
-    try pathStroke(path.items, 3.0 * rs.s, options.color(.text), .{});
+    try pathStroke(path.items, .{ .thickness = 3.0 * rs.s, .color = options.color(.text) });
 }
 
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) !*ScaleWidget {
@@ -4160,12 +4249,12 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
         switch (e.evt) {
             .mouse => |me| {
                 if (me.action == .focus) {
-                    e.handled = true;
+                    e.handle(@src(), lw.data());
 
                     // focus this widget for events after this one (starting with e.num)
-                    dvui.focusWidgetSelf(lwid, e.num);
+                    dvui.focusWidget(lwid, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
-                    e.handled = true;
+                    e.handle(@src(), lw.data());
                     dvui.captureMouse(lw.data());
 
                     // for touch events, we want to cancel our click if a drag is started
@@ -4173,7 +4262,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
                 } else if (me.action == .release and me.button.pointer()) {
                     // mouse button was released, do we still have mouse capture?
                     if (dvui.captured(lwid)) {
-                        e.handled = true;
+                        e.handle(@src(), lw.data());
 
                         // cancel our capture
                         dvui.captureMouse(null);
@@ -4208,7 +4297,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
             },
             .key => |ke| {
                 if (ke.action == .down and ke.matchBind("activate")) {
-                    e.handled = true;
+                    e.handle(@src(), lw.data());
                     ret = true;
                     dvui.refresh(null, @src(), lwid);
                 }
@@ -4451,6 +4540,7 @@ pub var slider_defaults: Options = .{
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 20, .h = 20 },
     .color_fill = .{ .name = .fill_control },
+    .name = "Slider",
 };
 
 // returns true if fraction (0-1) was changed
@@ -4489,21 +4579,21 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
             .mouse => |me| {
                 var p: ?Point.Physical = null;
                 if (me.action == .focus) {
-                    e.handled = true;
-                    focusWidgetSelf(b.data().id, e.num);
+                    e.handle(@src(), b.data());
+                    focusWidget(b.data().id, null, e.num);
                 } else if (me.action == .press and me.button.pointer()) {
                     // capture
                     captureMouse(b.data());
-                    e.handled = true;
+                    e.handle(@src(), b.data());
                     p = me.p;
                 } else if (me.action == .release and me.button.pointer()) {
                     // stop capture
                     captureMouse(null);
                     dragEnd();
-                    e.handled = true;
+                    e.handle(@src(), b.data());
                 } else if (me.action == .motion and captured(b.data().id)) {
                     // handle only if we have capture
-                    e.handled = true;
+                    e.handle(@src(), b.data());
                     p = me.p;
                 } else if (me.action == .position) {
                     dvui.cursorSet(.arrow);
@@ -4536,12 +4626,12 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
                 if (ke.action == .down or ke.action == .repeat) {
                     switch (ke.code) {
                         .left, .down => {
-                            e.handled = true;
+                            e.handle(@src(), b.data());
                             fraction.* = @max(0, @min(1, fraction.* - 0.05));
                             ret = true;
                         },
                         .right, .up => {
-                            e.handled = true;
+                            e.handle(@src(), b.data());
                             fraction.* = @max(0, @min(1, fraction.* + 0.05));
                             ret = true;
                         },
@@ -4565,7 +4655,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        try part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), options.color(.accent));
+        try part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.accent) });
     }
 
     switch (dir) {
@@ -4579,7 +4669,7 @@ pub fn slider(src: std.builtin.SourceLocation, dir: enums.Direction, fraction: *
         },
     }
     if (b.data().visible()) {
-        try part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), options.color(.fill));
+        try part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.fill) });
     }
 
     const knobRect = switch (dir) {
@@ -4617,6 +4707,7 @@ pub var slider_entry_defaults: Options = .{
     .color_fill = .{ .name = .fill_control },
     .background = true,
     // min size calculated from font
+    .name = "SliderEntry",
 };
 
 pub const SliderEntryInitOptions = struct {
@@ -4708,21 +4799,21 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                 continue;
 
             if (e.evt == .key and e.evt.key.action == .down and e.evt.key.code == .enter) {
-                e.handled = true;
+                e.handle(@src(), b.data());
                 text_mode = false;
                 new_val = std.fmt.parseFloat(f32, te_buf[0..te.len]) catch null;
             }
 
             if (e.evt == .key and e.evt.key.action == .down and e.evt.key.code == .escape) {
-                e.handled = true;
+                e.handle(@src(), b.data());
                 text_mode = false;
                 // don't set new_val, we are escaping
             }
 
             // don't want TextEntry to get focus
             if (e.evt == .mouse and e.evt.mouse.action == .focus) {
-                e.handled = true;
-                focusWidgetSelf(b.data().id, e.num);
+                e.handle(@src(), b.data());
+                focusWidget(b.data().id, null, e.num);
             }
 
             if (!e.handled) {
@@ -4772,10 +4863,10 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                 .mouse => |me| {
                     var p: ?Point.Physical = null;
                     if (me.action == .focus) {
-                        e.handled = true;
-                        focusWidgetSelf(b.data().id, e.num);
+                        e.handle(@src(), b.data());
+                        focusWidget(b.data().id, null, e.num);
                     } else if (me.action == .press and me.button.pointer()) {
-                        e.handled = true;
+                        e.handle(@src(), b.data());
                         if (ctrl_down) {
                             text_mode = true;
                             refresh(null, @src(), b.data().id);
@@ -4799,13 +4890,13 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             text_mode = true;
                             refresh(null, @src(), b.data().id);
                         }
-                        e.handled = true;
+                        e.handle(@src(), b.data());
                         captureMouse(null);
                         dragEnd();
                         dataRemove(null, b.data().id, "_start_x");
                         dataRemove(null, b.data().id, "_start_v");
                     } else if (me.action == .motion and captured(b.data().id)) {
-                        e.handled = true;
+                        e.handle(@src(), b.data());
                         // If this is a touch motion we need to make sure to
                         // only update the value if we are exceeding the
                         // drag threshold to prevent the value from jumping while
@@ -4881,7 +4972,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                     } else if (ke.action == .down or ke.action == .repeat) {
                         switch (ke.code) {
                             .left, .right => {
-                                e.handled = true;
+                                e.handle(@src(), b.data());
                                 ret = true;
                                 if (init_opts.interval) |ival| {
                                     init_opts.value.* = init_opts.value.* + (if (ke.code == .left) -ival else ival);
@@ -4918,7 +5009,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
 
-            try knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), options.color(.fill_press));
+            try knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), .{ .color = options.color(.fill_press) });
         }
 
         try label(@src(), label_fmt orelse "{d:.3}", .{init_opts.value.*}, options.strip().override(.{ .expand = .both, .gravity_x = 0.5, .gravity_y = 0.5 }));
@@ -5030,7 +5121,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 
     const rs = b.data().contentRectScale();
 
-    try rs.r.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), options.color(.fill));
+    try rs.r.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.fill) });
 
     const perc = @max(0, @min(1, init_opts.percent));
     if (perc == 0) return;
@@ -5046,7 +5137,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    try part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), options.color(.accent));
+    try part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.accent) });
 }
 
 pub var checkbox_defaults: Options = .{
@@ -5094,10 +5185,10 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
     const cornerRad = opts.corner_radiusGet().scale(rs.s, Rect.Physical);
-    try rs.r.fill(cornerRad, opts.color(.border));
+    try rs.r.fill(cornerRad, .{ .color = opts.color(.border) });
 
     if (focused) {
-        try rs.r.stroke(cornerRad, 2 * rs.s, opts.color(.accent), .{});
+        try rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -5110,9 +5201,9 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     var options = opts;
     if (checked) {
         options = opts.override(themeGet().style_accent);
-        try rs.r.insetAll(0.5 * rs.s).fill(cornerRad, options.color(fill));
+        try rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill) });
     } else {
-        try rs.r.insetAll(rs.s).fill(cornerRad, options.color(fill));
+        try rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill) });
     }
 
     if (checked) {
@@ -5132,7 +5223,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
             .{ .x = x, .y = y },
             .{ .x = x + third * 2, .y = y - third * 2 },
         };
-        try pathStroke(path, thick, options.color(.text), .{ .endcap_style = .square });
+        try pathStroke(path, .{ .thickness = thick, .color = options.color(.text), .endcap_style = .square });
     }
 }
 
@@ -5181,10 +5272,10 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) !void {
     const cornerRad = Rect.Physical.all(1000);
     const r = rs.r;
-    try r.fill(cornerRad, opts.color(.border));
+    try r.fill(cornerRad, .{ .color = opts.color(.border) });
 
     if (focused) {
-        try r.stroke(cornerRad, 2 * rs.s, opts.color(.accent), .{});
+        try r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().color_accent });
     }
 
     var fill: Options.ColorAsk = .fill;
@@ -5194,16 +5285,18 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
         fill = .fill_hover;
     }
 
+    var options = opts;
     if (active) {
-        try r.insetAll(0.5 * rs.s).fill(cornerRad, opts.color(.accent));
+        options = opts.override(themeGet().style_accent);
+        try r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(.fill) });
     } else {
-        try r.insetAll(rs.s).fill(cornerRad, opts.color(fill));
+        try r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill) });
     }
 
     if (active) {
         const thick = @max(1.0, r.w / 6);
 
-        try pathStroke(&.{r.center()}, thick, opts.color(fill), .{});
+        try pathStroke(&.{r.center()}, .{ .thickness = thick, .color = options.color(.text) });
     }
 }
 
@@ -5334,7 +5427,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), 3 * rs.s, dvui.themeGet().color_err, .{ .after = true });
+        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().color_err, .after = true });
     }
 
     // display min/max
@@ -5354,6 +5447,195 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     te.deinit();
 
     return result;
+}
+
+pub const TextEntryColorInitOptions = struct {
+    value: ?*Color = null,
+    placeholder: []const u8 = "#ff00ff",
+    /// If this is true, the alpha with be taken from the last hex value,
+    /// if it is included in the input
+    allow_alpha: bool = true,
+};
+
+pub const TextEntryColorResult = struct {
+    value: union(enum) {
+        Valid: Color,
+        Invalid: enum {
+            non_hex_value,
+            alpha_passed_when_not_allowed,
+        },
+        Empty: void,
+    } = .{ .Invalid = .non_hex_value },
+
+    /// True if given a value pointer and wrote a valid value back to it.
+    changed: bool = false,
+    enter_pressed: bool = false,
+};
+
+/// A text entry for hex color codes. Supports the same formats as `Color.fromHex`
+pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColorInitOptions, opts: Options) !TextEntryColorResult {
+    const defaults = Options{ .name = "textEntryColor" };
+
+    var options = defaults.override(opts);
+    if (options.min_size_content == null) {
+        options = options.override(.{ .min_size_content = opts.fontGet().textSize(if (init_opts.allow_alpha) "#DDDDDDDD" else "#DDDDDD") });
+    }
+
+    const id = dvui.parentGet().extendId(src, opts.idExtra());
+
+    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 9);
+
+    const cw = currentWindow();
+    var te = try cw.arena().create(TextEntryWidget);
+    te.* = TextEntryWidget.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, options);
+    try te.install();
+
+    //initialize with input number
+    if (init_opts.value) |v| {
+        const old_value = dataGet(null, id, "value", Color);
+        if (old_value == null or
+            old_value.?.r != v.r or
+            old_value.?.g != v.g or
+            old_value.?.b != v.b or
+            old_value.?.a != v.a)
+        {
+            dataSet(null, id, "value", v.*);
+            @memset(buffer, 0); // clear out anything that was there before
+            if (init_opts.allow_alpha and v.a != 0xff) {
+                _ = try std.fmt.bufPrint(buffer, "#{x:0>2}{x:0>2}{x:0>2}{x:0>2}", .{ v.r, v.g, v.b, v.a });
+                te.len = 9;
+            } else {
+                te.textSet(&(v.toHexString() catch unreachable), false);
+            }
+        }
+    }
+
+    te.processEvents();
+    // filter before drawing
+    te.filterIn(std.fmt.hex_charset ++ "ABCDEF" ++ "#");
+
+    var result: TextEntryColorResult = .{ .enter_pressed = te.enter_pressed };
+
+    // validation
+    const text = te.getText();
+    const color: ?Color = Color.tryFromHex(text) catch null;
+
+    //determine error if any
+    if (text.len == 0 and color == null) {
+        result.value = .Empty;
+    } else if (color == null) {
+        result.value = .{ .Invalid = .non_hex_value };
+    } else if (!init_opts.allow_alpha and color.?.a != 0xFF) {
+        result.value = .{ .Invalid = .alpha_passed_when_not_allowed };
+    } else {
+        result.value = .{ .Valid = color.? };
+        if (init_opts.value) |v| {
+            if ((te.enter_pressed or te.text_changed) and
+                (color.?.r != v.r or
+                    color.?.g != v.g or
+                    color.?.b != v.b or
+                    color.?.a != v.a))
+            {
+                dataSet(null, id, "value", color.?);
+                v.* = color.?;
+                result.changed = true;
+            }
+        }
+    }
+
+    if (init_opts.value != null and result.value == .Empty and focusedWidgetId() != te.wd.id) {
+        // If the text entry is empty and we loose focus,
+        // reset the hex value by invalidating the stored previous value
+        dataRemove(null, id, "value");
+        refresh(null, @src(), id);
+    }
+
+    try te.draw();
+
+    if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
+        const rs = te.data().borderRectScale();
+        try rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().color_err, .after = true });
+    }
+
+    te.deinit();
+
+    return result;
+}
+
+pub const ColorPickerInitOptions = struct {
+    hsv: *Color.HSV,
+    dir: enums.Direction = .horizontal,
+    sliders: enum { rgb, hsv } = .rgb,
+    alpha: bool = false,
+    /// Shows a `textEntryColor`
+    hex_text_entry: bool = true,
+};
+
+/// A photoshop style color picker
+///
+/// Returns true of the color was changed
+pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOptions, opts: Options) !bool {
+    var picker = ColorPickerWidget.init(src, .{ .dir = init_opts.dir, .hsv = init_opts.hsv }, opts);
+    try picker.install();
+    defer picker.deinit();
+
+    var changed = picker.color_changed;
+    var rgb = init_opts.hsv.toColor();
+
+    var side_box = try dvui.box(@src(), .vertical, .{});
+    defer side_box.deinit();
+
+    const slider_expand = Options.Expand.fromDirection(.horizontal);
+    switch (init_opts.sliders) {
+        .rgb => {
+            var r = @as(f32, @floatFromInt(rgb.r));
+            var g = @as(f32, @floatFromInt(rgb.g));
+            var b = @as(f32, @floatFromInt(rgb.b));
+            var a = @as(f32, @floatFromInt(rgb.a));
+
+            var slider_changed = false;
+            if (try dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &r, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                slider_changed = true;
+            }
+            if (try dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &g, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                slider_changed = true;
+            }
+            if (try dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &b, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                slider_changed = true;
+            }
+            if (init_opts.alpha and try dvui.sliderEntry(@src(), "A: {d:0.0}", .{ .value = &a, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
+                slider_changed = true;
+            }
+            if (slider_changed) {
+                init_opts.hsv.* = .fromColor(.{ .r = @intFromFloat(r), .g = @intFromFloat(g), .b = @intFromFloat(b), .a = @intFromFloat(a) });
+                changed = true;
+            }
+        },
+        .hsv => {
+            if (try dvui.sliderEntry(@src(), "H: {d:0.0}", .{ .value = &init_opts.hsv.h, .min = 0, .max = 359.99, .interval = 1 }, .{ .expand = slider_expand })) {
+                changed = true;
+            }
+            if (try dvui.sliderEntry(@src(), "S: {d:0.2}", .{ .value = &init_opts.hsv.s, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = slider_expand })) {
+                changed = true;
+            }
+            if (try dvui.sliderEntry(@src(), "V: {d:0.2}", .{ .value = &init_opts.hsv.v, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = slider_expand })) {
+                changed = true;
+            }
+            if (init_opts.alpha and try dvui.sliderEntry(@src(), "A: {d:0.2}", .{ .value = &init_opts.hsv.a, .min = 0, .max = 1, .interval = 0.01 }, .{ .expand = slider_expand })) {
+                changed = true;
+            }
+        },
+    }
+
+    if (init_opts.hex_text_entry) {
+        const res = try textEntryColor(@src(), .{ .allow_alpha = init_opts.alpha, .value = &rgb }, .{ .expand = slider_expand });
+        if (res.changed) {
+            init_opts.hsv.* = .fromColor(rgb);
+            changed = true;
+        }
+    }
+
+    return changed;
 }
 
 pub const renderTextOptions = struct {
@@ -5535,7 +5817,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             }
         }
 
-        fce.texture_atlas = textureCreate(pixels.ptr, @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
+        fce.texture_atlas = textureCreate(.cast(pixels), @as(u32, @intFromFloat(size.w)), @as(u32, @intFromFloat(size.h)), .linear);
     }
 
     var vtx = std.ArrayList(Vertex).init(cw.arena());
@@ -5625,8 +5907,7 @@ pub fn renderText(opts: renderTextOptions) !void {
 
             v.pos.x = x + gi.leftBearing * target_fraction;
             v.pos.y = y + gi.topBearing * target_fraction;
-            v.col = if (sel_in) opts.sel_color orelse opts.color else opts.color;
-            v.col = v.col.alphaMultiply();
+            v.col = .fromColor(if (sel_in) opts.sel_color orelse opts.color else opts.color);
             v.uv = gi.uv;
             try vtx.append(v);
 
@@ -5678,7 +5959,7 @@ pub fn renderText(opts: renderTextOptions) !void {
             sel_vtx[2].pos.y = sel_vtx[3].pos.y;
 
             for (&sel_vtx) |*v| {
-                v.col = bgcol.alphaMultiply();
+                v.col = .fromColor(bgcol);
                 v.uv[0] = 0;
                 v.uv[1] = 0;
             }
@@ -5719,7 +6000,7 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
 
     const x: f32 = if (cw.snap_to_pixels) @round(r.x) else r.x;
     const y: f32 = if (cw.snap_to_pixels) @round(r.y) else r.y;
-    const col = color.alphaMultiply();
+    const col: Color.PMA = .fromColor(color);
 
     var offset: f32 = 0;
     var it = cw.font_cache.iterator();
@@ -5766,13 +6047,57 @@ pub fn debugRenderFontAtlases(rs: RectScale, color: Color) !void {
     }
 }
 
-/// Create a texture that can be rendered with `renderTexture`.  pixels is RGBA premultiplied alpha.
+/// Holds a slice of premultiplied alpha (PMA) RGBA pixels
+///
+/// To convert non PMA pixels, use `RGBAPixelsPMA.fromRGBA`
+pub const RGBAPixelsPMA = struct {
+    /// Should only ever store RGBA pixels with premultiplied alpha
+    pma: []u8,
+
+    /// Alpha multiplies `pixels` in place
+    pub fn fromRGBA(pixels: []u8) RGBAPixelsPMA {
+        for (0..pixels.len / 4) |ii| {
+            const i = ii * 4;
+            const a = pixels[i + 3];
+            pixels[i + 0] = @intCast(@divTrunc(@as(u16, pixels[i + 0]) * a, 255));
+            pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * a, 255));
+            pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * a, 255));
+        }
+        return .{ .pma = pixels };
+    }
+
+    /// Unapplies the alpha multiplication in place, returning the inner slice
+    pub fn toRGBA(pma_pixels: RGBAPixelsPMA) []u8 {
+        var pixels = pma_pixels.pma;
+        for (0..pixels.len / 4) |ii| {
+            const i = ii * 4;
+            const a = pixels[i + 3];
+            pixels[i + 0] = @intCast(@divTrunc(@as(u16, pixels[i + 0]) * 255, a));
+            pixels[i + 1] = @intCast(@divTrunc(@as(u16, pixels[i + 1]) * 255, a));
+            pixels[i + 2] = @intCast(@divTrunc(@as(u16, pixels[i + 2]) * 255, a));
+        }
+        return pixels;
+    }
+
+    /// Should only be used where it is guaranteed that the pixels are already
+    /// alpha multiplied or have no transparency
+    ///
+    /// Does no modifications of the pixels
+    pub fn cast(pixels: []u8) RGBAPixelsPMA {
+        return .{ .pma = pixels };
+    }
+};
+
+/// Create a texture that can be rendered with `renderTexture`.
 ///
 /// Remember to destroy the texture at some point, see `textureDestroyLater`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn textureCreate(pixels: [*]u8, width: u32, height: u32, interpolation: enums.TextureInterpolation) Texture {
-    return currentWindow().backend.textureCreate(pixels, width, height, interpolation);
+pub fn textureCreate(pixels: RGBAPixelsPMA, width: u32, height: u32, interpolation: enums.TextureInterpolation) Texture {
+    if (pixels.pma.len != width * height * 4) {
+        log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.pma.len, width * height * 4, width, height });
+    }
+    return currentWindow().backend.textureCreate(pixels.pma.ptr, width, height, interpolation);
 }
 
 /// Create a texture that can be rendered with `renderTexture` and drawn to
@@ -5790,14 +6115,14 @@ pub fn textureCreateTarget(width: u32, height: u32, interpolation: enums.Texture
 /// Returns pixels allocated by arena.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn textureReadTarget(arena: std.mem.Allocator, texture: TextureTarget) ![]u8 {
+pub fn textureReadTarget(arena: std.mem.Allocator, texture: TextureTarget) !RGBAPixelsPMA {
     const size: usize = texture.width * texture.height * 4;
     const pixels = try arena.alloc(u8, size);
     errdefer arena.free(pixels);
 
     try currentWindow().backend.textureReadTarget(texture, pixels.ptr);
 
-    return pixels;
+    return .{ .pma = pixels };
 }
 
 /// Convert a target texture to a normal texture.  target is destroyed.
@@ -5867,18 +6192,16 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
         return;
     }
 
-    const r = rs.r.offsetNegPoint(cw.render_target.offset);
-
     var path: PathArrayList = .init(dvui.currentWindow().arena());
     defer path.deinit();
 
-    try dvui.pathAddRect(&path, r, opts.corner_radius.scale(rs.s, Rect.Physical));
+    try dvui.pathAddRect(&path, rs.r, opts.corner_radius.scale(rs.s, Rect.Physical));
 
-    var triangles = try pathFillConvexTriangles(path.items);
+    var triangles = try pathFillConvexTriangles(path.items, .{ .color = opts.colormod });
     defer triangles.deinit(cw.arena());
 
-    triangles.uvFromRectuv(r, opts.uv);
-    triangles.rotate(r.center(), opts.rotation);
+    triangles.uvFromRectuv(rs.r, opts.uv);
+    triangles.rotate(rs.r.center(), opts.rotation);
 
     if (opts.background_color) |bg_col| {
         var back_tri = try triangles.dupe(cw.arena());
@@ -5887,8 +6210,6 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
         back_tri.color(bg_col);
         try renderTriangles(back_tri, null);
     }
-
-    triangles.color(opts.colormod);
 
     try renderTriangles(triangles, tex);
 }
@@ -5929,9 +6250,8 @@ pub fn imageTexture(name: []const u8, image_bytes: []const u8) !TextureCacheEntr
     var pixels: []u8 = undefined;
     pixels.ptr = data;
     pixels.len = @intCast(w * h * 4);
-    Color.alphaMultiplyPixels(pixels);
 
-    const texture = textureCreate(pixels.ptr, @intCast(w), @intCast(h), .linear);
+    const texture = textureCreate(.fromRGBA(pixels), @intCast(w), @intCast(h), .linear);
 
     //std.debug.print("created image texture \"{s}\" size {d}x{d}\n", .{ name, w, h });
     //const usizeh: usize = @intCast(h);
@@ -6004,7 +6324,8 @@ pub const Picture = struct {
 
     /// Encode texture as png.  Call after `stop` before `deinit`.
     pub fn png(self: *Picture, arena: std.mem.Allocator) ![]u8 {
-        const pixels = dvui.textureReadTarget(arena, self.texture) catch unreachable;
+        const pma_pixels = try dvui.textureReadTarget(arena, self.texture);
+        const pixels = pma_pixels.toRGBA();
         defer arena.free(pixels);
 
         return try dvui.pngEncode(arena, pixels, self.texture.width, self.texture.height, .{});

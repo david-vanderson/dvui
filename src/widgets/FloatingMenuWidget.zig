@@ -128,9 +128,10 @@ pub fn install(self: *FloatingMenuWidget) !void {
 
     // clip to just our window (using clipSet since we are not inside our parent)
     self.prevClip = dvui.clipGet();
-    dvui.clipSet(rs.r);
+    dvui.clipSet(dvui.windowRectPixels());
+    _ = dvui.clip(rs.r);
 
-    self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .margin = .{}, .expand = .both });
+    self.scaler = dvui.ScaleWidget.init(@src(), .{ .scale = &self.scale_val }, .{ .expand = .both });
     try self.scaler.install();
 
     // we are using scroll to do border/background but floating windows
@@ -148,7 +149,7 @@ pub fn install(self: *FloatingMenuWidget) !void {
 
     // if no widget in this popup has focus, make the menu have focus to handle keyboard events
     if (dvui.focusedWidgetIdInCurrentSubwindow() == null) {
-        dvui.focusWidgetSelf(self.menu.wd.id, null);
+        dvui.focusWidget(self.menu.wd.id, null, null);
     }
 }
 
@@ -233,18 +234,18 @@ pub fn deinit(self: *FloatingMenuWidget) void {
         if (e.evt == .mouse) {
             if (e.evt.mouse.action == .focus) {
                 // unhandled click, clear focus
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.focusWidget(null, null, null);
             }
         } else if (e.evt == .key) {
             // catch any tabs that weren't handled by widgets
             if (e.evt.key.action == .down and e.evt.key.matchBind("next_widget")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.tabIndexNext(e.num);
             }
 
             if (e.evt.key.action == .down and e.evt.key.matchBind("prev_widget")) {
-                e.handled = true;
+                e.handle(@src(), self.data());
                 dvui.tabIndexPrev(e.num);
             }
         }
