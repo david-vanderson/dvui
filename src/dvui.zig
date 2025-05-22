@@ -903,9 +903,9 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
         width: u32,
         height: u32,
         pub fn setPixel(self: *@This(), x: usize, y: usize, col: [4]u8) void {
-            const idx = y * self.height + x;
-            for (&col, 0..) |a, i| {
-                self.pixels[idx * 4 + i] = a;
+            const idx = (y * self.height + x) * 4;
+            for (0..4) |i| {
+                self.pixels[idx + i] = col[i];
             }
         }
         pub fn getPixel(self: *@This(), x: usize, y: usize) [4]u8 {
@@ -915,17 +915,14 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
             for (&col, slice) |*a, s| a.* = s;
         }
     };
-
-    const imdat = try cw.arena().alloc(u8, height * height * 4);
-    for (imdat) |*d| d.* = 0;
+    const img_raw_data = try cw.arena().alloc(u8, height * height * 4);
+    for (img_raw_data) |*d| d.* = 0;
     var img = ImageAdapter{
-        .pixels = imdat,
+        .pixels = img_raw_data,
         .width = height,
         .height = height,
     };
-
     var fb = std.io.fixedBufferStream(tvg_bytes);
-
     tvg.renderStream(cw.arena(), &img, fb.reader(), .{ .overwrite_stroke_width = 2, .overwrite_stroke = .{
         .r = 1,
         .g = 1,
@@ -936,10 +933,9 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
         return error.tvgError;
     };
 
-    const pixels = img.pixels;
-    Color.alphaMultiplyPixels(pixels);
+    const pixels = dvui.RGBAPixelsPMA.fromRGBA(img.pixels);
 
-    const texture = textureCreate(pixels.ptr, @intCast(img.width), @intCast(img.height), .linear);
+    const texture = textureCreate(pixels, @intCast(img.width), @intCast(img.height), .linear);
 
     //std.debug.print("created icon texture \"{s}\" ask height {d} size {d}x{d}\n", .{ name, height, render.width, render.height });
 
