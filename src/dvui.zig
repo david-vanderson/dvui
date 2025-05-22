@@ -23,7 +23,7 @@ pub const backend = @import("backend");
 const tvg = @import("tinyvg/tinyvg.zig");
 
 pub const math = std.math;
-pub const fnv = std.hash.Fnv1a_32;
+pub const fnv = std.hash.Fnv1a_64;
 
 pub const App = @import("App.zig");
 pub const Backend = @import("Backend.zig");
@@ -146,6 +146,24 @@ pub const Error = error{ OutOfMemory, InvalidUtf8, freetypeError, tvgError, stbi
 pub const log = std.log.scoped(.dvui);
 const dvui = @This();
 
+pub const WidgetId = enum(u64) {
+    zero = 0,
+    _,
+
+    pub fn asU64(self: WidgetId) u64 {
+        return @intCast(@intFromEnum(self));
+    }
+
+    pub fn asUsize(self: WidgetId) usize {
+        // usize might be u32 (like on wasm32)
+        return @truncate(@intFromEnum(self));
+    }
+
+    pub fn format(self: *const WidgetId, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        try std.fmt.format(writer, "{" ++ fmt ++ "}", .{self.asU64()});
+    }
+};
+
 /// Current `Window` (i.e. the one that widgets will be added to).
 /// Managed by `Window.begin` / `Window.end`
 pub var current_window: ?*Window = null;
@@ -181,7 +199,7 @@ pub fn toggleDebugWindow() void {
 }
 
 pub const TagData = struct {
-    id: u32,
+    id: WidgetId,
     rect: Rect.Physical,
     visible: bool,
 };
@@ -216,7 +234,7 @@ pub fn tagGet(name: []const u8) ?TagData {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub const Alignment = struct {
-    id: u32 = undefined,
+    id: WidgetId = undefined,
     scale: f32 = undefined,
     max: ?f32 = undefined,
     next: f32 = undefined,
@@ -232,14 +250,14 @@ pub const Alignment = struct {
     }
 
     /// Add spacer with margin.x so they all end at the same edge.
-    pub fn spacer(self: *Alignment, src: std.builtin.SourceLocation, id: u32) !void {
-        const uniqueId = dvui.parentGet().extendId(src, id);
-        var wd = try dvui.spacer(src, .{}, .{ .margin = self.margin(uniqueId), .id_extra = id });
+    pub fn spacer(self: *Alignment, src: std.builtin.SourceLocation, id_extra: usize) !void {
+        const uniqueId = dvui.parentGet().extendId(src, id_extra);
+        var wd = try dvui.spacer(src, .{}, .{ .margin = self.margin(uniqueId), .id_extra = id_extra });
         self.record(uniqueId, &wd);
     }
 
     /// Get the margin needed to align this id's left edge.
-    pub fn margin(self: *Alignment, id: u32) Rect {
+    pub fn margin(self: *Alignment, id: WidgetId) Rect {
         if (self.max) |m| {
             if (dvui.dataGet(null, id, "_align", f32)) |a| {
                 return .{ .x = @max(0, (m - a) / self.scale) };
@@ -250,7 +268,7 @@ pub const Alignment = struct {
     }
 
     /// Record where this widget ended up so we can align it next frame.
-    pub fn record(self: *Alignment, id: u32, wd: *WidgetData) void {
+    pub fn record(self: *Alignment, id: WidgetId, wd: *WidgetData) void {
         const x = wd.rectScale().r.x;
         dvui.dataSet(null, id, "_align", x);
         self.next = @max(self.next, x);
@@ -570,7 +588,7 @@ pub const FontCacheEntry = struct {
         };
     }
 
-    pub fn hash(font: Font) u32 {
+    pub fn hash(font: Font) u64 {
         var h = fnv.init();
         var bytes: []const u8 = undefined;
         if (currentWindow().font_bytes.get(font.name)) |fbe| {
@@ -864,7 +882,7 @@ pub const TextureCacheEntry = struct {
     texture: Texture,
     used: bool = true,
 
-    pub fn hash(bytes: []const u8, height: u32) u32 {
+    pub fn hash(bytes: []const u8, height: u32) u64 {
         var h = fnv.init();
         h.update(std.mem.asBytes(&bytes.ptr));
         h.update(std.mem.asBytes(&height));
@@ -961,7 +979,7 @@ pub const RenderCommand = struct {
 /// detect when to stop showing.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn focusedSubwindowId() u32 {
+pub fn focusedSubwindowId() WidgetId {
     const cw = currentWindow();
     const sw = cw.subwindowFocused();
     return sw.id;
@@ -973,14 +991,14 @@ pub fn focusedSubwindowId() u32 {
 /// "num" to change the focus of any further `Event`s in the list.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn focusSubwindow(subwindow_id: ?u32, event_num: ?u16) void {
+pub fn focusSubwindow(subwindow_id: ?WidgetId, event_num: ?u16) void {
     currentWindow().focusSubwindowInternal(subwindow_id, event_num);
 }
 
 /// Helper used by `focusWidget`.  Overwrites the focus information for `Event`s with num >
 /// `event_num`.  This is how a button can get a tab, move focus to a textEntry,
 /// and that textEntry get a keydown all in the same frame.
-pub fn focusRemainingEvents(event_num: u16, focusWindowId: u32, focusWidgetId: ?u32) void {
+pub fn focusRemainingEvents(event_num: u16, focusWindowId: WidgetId, focusWidgetId: ?WidgetId) void {
     currentWindow().focusRemainingEventsInternal(event_num, focusWindowId, focusWidgetId);
 }
 
@@ -989,7 +1007,7 @@ pub fn focusRemainingEvents(event_num: u16, focusWindowId: u32, focusWidgetId: ?
 /// Any subwindows directly above it with "stay_above_parent_window" set will also be moved to stay above it.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn raiseSubwindow(subwindow_id: u32) void {
+pub fn raiseSubwindow(subwindow_id: WidgetId) void {
     const cw = currentWindow();
     // don't check against subwindows[0] - that's that main window
     var items = cw.subwindows.items[1..];
@@ -1032,7 +1050,7 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
 /// num to change the focus of any further `Event`s in the list.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn focusWidget(id: ?u32, subwindow_id: ?u32, event_num: ?u16) void {
+pub fn focusWidget(id: ?WidgetId, subwindow_id: ?WidgetId, event_num: ?u16) void {
     const cw = currentWindow();
     const swid = subwindow_id orelse subwindowCurrentId();
     for (cw.subwindows.items) |*sw| {
@@ -1073,7 +1091,7 @@ pub fn focusWidget(id: ?u32, subwindow_id: ?u32, event_num: ?u16) void {
 /// Id of the focused widget (if any) in the focused subwindow.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn focusedWidgetId() ?u32 {
+pub fn focusedWidgetId() ?WidgetId {
     const cw = currentWindow();
     for (cw.subwindows.items) |*sw| {
         if (cw.focused_subwindowId == sw.id) {
@@ -1087,7 +1105,7 @@ pub fn focusedWidgetId() ?u32 {
 /// Id of the focused widget (if any) in the current subwindow.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn focusedWidgetIdInCurrentSubwindow() ?u32 {
+pub fn focusedWidgetIdInCurrentSubwindow() ?WidgetId {
     const cw = currentWindow();
     const sw = cw.subwindowCurrent();
     return sw.focused_widgetId;
@@ -1102,7 +1120,7 @@ pub fn focusedWidgetIdInCurrentSubwindow() ?u32 {
 /// * `focusWidget` with the id of a widget in the parent chain
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn lastFocusedIdInFrame() u32 {
+pub fn lastFocusedIdInFrame() WidgetId {
     return currentWindow().last_focused_id_this_frame;
 }
 
@@ -1789,7 +1807,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) !void {
 /// tagged with.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?u32) !void {
+pub fn subwindowAdd(id: WidgetId, rect: Rect, rect_pixels: Rect.Physical, modal: bool, stay_above_parent_window: ?WidgetId) !void {
     const cw = currentWindow();
     const arena = cw.arena();
 
@@ -1839,7 +1857,7 @@ pub fn subwindowAdd(id: u32, rect: Rect, rect_pixels: Rect.Physical, modal: bool
 }
 
 pub const subwindowCurrentSetReturn = struct {
-    id: u32,
+    id: WidgetId,
     rect: Rect.Natural,
 };
 
@@ -1847,7 +1865,7 @@ pub const subwindowCurrentSetReturn = struct {
 /// subwindow (the subwindow that widgets run now will be in).
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn subwindowCurrentSet(id: u32, rect: ?Rect.Natural) subwindowCurrentSetReturn {
+pub fn subwindowCurrentSet(id: WidgetId, rect: ?Rect.Natural) subwindowCurrentSetReturn {
     const cw = currentWindow();
     const ret: subwindowCurrentSetReturn = .{ .id = cw.subwindow_currentId, .rect = cw.subwindow_currentRect };
     cw.subwindow_currentId = id;
@@ -1860,7 +1878,7 @@ pub fn subwindowCurrentSet(id: u32, rect: ?Rect.Natural) subwindowCurrentSetRetu
 /// Id of current subwindow (the one widgets run now will be in).
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn subwindowCurrentId() u32 {
+pub fn subwindowCurrentId() WidgetId {
     const cw = currentWindow();
     return cw.subwindow_currentId;
 }
@@ -1991,11 +2009,11 @@ pub fn mouseTotalMotion() Point.Physical {
 /// Used to track which widget holds mouse capture.
 pub const CaptureMouse = struct {
     /// widget ID
-    id: u32,
+    id: WidgetId,
     /// physical pixels (aka capture zone)
     rect: Rect.Physical,
     /// subwindow id the widget with capture is in
-    subwindow_id: u32,
+    subwindow_id: WidgetId,
 };
 /// Capture the mouse for this widget's data.
 /// (i.e. `eventMatch` return true for this widget and false for all others)
@@ -2061,7 +2079,7 @@ pub fn captureMouseMaintain(cm: CaptureMouse) void {
 /// Test if the passed widget ID currently has mouse capture.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn captured(id: u32) bool {
+pub fn captured(id: WidgetId) bool {
     if (captureMouseGet()) |cm| {
         return id == cm.id;
     }
@@ -2139,7 +2157,7 @@ pub fn snapToPixels() bool {
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the Window you want to refresh.  In that case dvui will
 /// go through the backend because the gui thread might be waiting.
-pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?u32) void {
+pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?WidgetId) void {
     if (win) |w| {
         // we are being called from non gui thread, the gui thread might be
         // sleeping, so need to trigger a wakeup via the backend
@@ -2219,7 +2237,7 @@ pub fn parentSet(w: Widget) void {
 /// a widget's `.deinit()` was accidentally not called.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn parentReset(id: u32, w: Widget) void {
+pub fn parentReset(id: WidgetId, w: Widget) void {
     const cw = currentWindow();
     const actual_current = cw.wd.parent.data().id;
     if (id != actual_current) {
@@ -2304,7 +2322,7 @@ pub fn windowNaturalScale() f32 {
 /// firstFrame will return true the next frame we see it.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn firstFrame(id: u32) bool {
+pub fn firstFrame(id: WidgetId) bool {
     return minSizeGet(id) == null;
 }
 
@@ -2315,7 +2333,7 @@ pub fn firstFrame(id: u32) bool {
 /// size provided by the user code.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn minSizeGet(id: u32) ?Size {
+pub fn minSizeGet(id: WidgetId) ?Size {
     var cw = currentWindow();
     const saved_size = cw.min_sizes.getPtr(id);
     if (saved_size) |ss| {
@@ -2330,7 +2348,7 @@ pub fn minSizeGet(id: u32) ?Size {
 /// See `minSizeGet` to get only the min size from last frame.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn minSize(id: u32, min_size: Size) Size {
+pub fn minSize(id: WidgetId, min_size: Size) Size {
     var size = min_size;
 
     // Need to take the max of both given and previous.  ScrollArea could be
@@ -2354,24 +2372,24 @@ pub fn minSize(id: u32, min_size: Size) Size {
 /// ```
 /// is how new widgets get their id, and can be used to make a unique id without
 /// making a widget.
-pub fn hashSrc(start: ?u32, src: std.builtin.SourceLocation, id_extra: usize) u32 {
+pub fn hashSrc(start: ?WidgetId, src: std.builtin.SourceLocation, id_extra: usize) WidgetId {
     var hash = fnv.init();
     if (start) |s| {
-        hash.value = s;
+        hash.value = s.asU64();
     }
     hash.update(std.mem.asBytes(&src.module.ptr));
     hash.update(std.mem.asBytes(&src.file.ptr));
     hash.update(std.mem.asBytes(&src.line));
     hash.update(std.mem.asBytes(&src.column));
     hash.update(std.mem.asBytes(&id_extra));
-    return hash.final();
+    return @enumFromInt(hash.final());
 }
 
 /// Make a new id by combining id with the contents of key.  This is how dvui
 /// tracks things in `dataGet`/`dataSet`, `animation`, and `timer`.
-pub fn hashIdKey(id: u32, key: []const u8) u32 {
+pub fn hashIdKey(id: WidgetId, key: []const u8) u64 {
     var h = fnv.init();
-    h.value = id;
+    h.value = id.asU64();
     h.update(key);
     return h.final();
 }
@@ -2386,7 +2404,7 @@ pub fn hashIdKey(id: u32, key: []const u8) u32 {
 /// Stored data with the same id/key will be freed at next `win.end()`.
 ///
 /// If you want to store the contents of a slice, use `dataSetSlice`.
-pub fn dataSet(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
+pub fn dataSet(win: ?*Window, id: WidgetId, key: []const u8, data: anytype) void {
     dataSetAdvanced(win, id, key, data, false, 1);
 }
 
@@ -2399,14 +2417,14 @@ pub fn dataSet(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the data to.
-pub fn dataSetSlice(win: ?*Window, id: u32, key: []const u8, data: anytype) void {
+pub fn dataSetSlice(win: ?*Window, id: WidgetId, key: []const u8, data: anytype) void {
     dataSetSliceCopies(win, id, key, data, 1);
 }
 
 /// Same as `dataSetSlice`, but will copy data `num_copies` times all concatenated
 /// into a single slice.  Useful to get dvui to allocate a specific number of
 /// entries that you want to fill in after.
-pub fn dataSetSliceCopies(win: ?*Window, id: u32, key: []const u8, data: anytype, num_copies: usize) void {
+pub fn dataSetSliceCopies(win: ?*Window, id: WidgetId, key: []const u8, data: anytype, num_copies: usize) void {
     const dt = @typeInfo(@TypeOf(data));
     if (dt == .pointer and dt.pointer.size == .slice) {
         if (dt.pointer.sentinel()) |s| {
@@ -2438,7 +2456,7 @@ pub fn dataSetSliceCopies(win: ?*Window, id: u32, key: []const u8, data: anytype
 /// If `copy_slice` is true, data must be a slice or pointer to array, and the
 /// contents are copied into internal storage. If false, only the slice itself
 /// (ptr and len) and stored.
-pub fn dataSetAdvanced(win: ?*Window, id: u32, key: []const u8, data: anytype, comptime copy_slice: bool, num_copies: usize) void {
+pub fn dataSetAdvanced(win: ?*Window, id: WidgetId, key: []const u8, data: anytype, comptime copy_slice: bool, num_copies: usize) void {
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
         w.dataSetAdvanced(id, key, data, copy_slice, num_copies);
@@ -2461,7 +2479,7 @@ pub fn dataSetAdvanced(win: ?*Window, id: u32, key: []const u8, data: anytype, c
 /// If you want a pointer to the stored data, use `dataGetPtr`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGet(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
+pub fn dataGet(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type) ?T {
     if (dataGetInternal(win, id, key, T, false)) |bytes| {
         return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
     } else {
@@ -2479,7 +2497,7 @@ pub fn dataGet(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
 /// If you want a pointer to the stored data, use `dataGetPtrDefault`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGetDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: T) T {
+pub fn dataGetDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, default: T) T {
     if (dataGetInternal(win, id, key, T, false)) |bytes| {
         return @as(*T, @alignCast(@ptrCast(bytes.ptr))).*;
     } else {
@@ -2502,7 +2520,7 @@ pub fn dataGetDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type,
 /// combination.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGetPtrDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: T) *T {
+pub fn dataGetPtrDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, default: T) *T {
     if (dataGetPtr(win, id, key, T)) |ptr| {
         return ptr;
     } else {
@@ -2523,7 +2541,7 @@ pub fn dataGetPtrDefault(win: ?*Window, id: u32, key: []const u8, comptime T: ty
 /// combination.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGetPtr(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?*T {
+pub fn dataGetPtr(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type) ?*T {
     if (dataGetInternal(win, id, key, T, false)) |bytes| {
         return @as(*T, @alignCast(@ptrCast(bytes.ptr)));
     } else {
@@ -2544,7 +2562,7 @@ pub fn dataGetPtr(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?*T
 /// The returned slice points to internal storage, which will be freed after
 /// a frame where there is no call to any `dataGet`/`dataSet` functions for that
 /// id/key combination.
-pub fn dataGetSlice(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?T {
+pub fn dataGetSlice(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type) ?T {
     const dt = @typeInfo(T);
     if (dt != .pointer or dt.pointer.size != .slice) {
         @compileError("dataGetSlice needs a slice, given " ++ @typeName(T));
@@ -2574,7 +2592,7 @@ pub fn dataGetSlice(win: ?*Window, id: u32, key: []const u8, comptime T: type) ?
 /// The returned slice points to internal storage, which will be freed after
 /// a frame where there is no call to any `dataGet`/`dataSet` functions for that
 /// id/key combination.
-pub fn dataGetSliceDefault(win: ?*Window, id: u32, key: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
+pub fn dataGetSliceDefault(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
     return dataGetSlice(win, id, key, T) orelse blk: {
         dataSetSlice(win, id, key, default);
         break :blk dataGetSlice(win, id, key, T).?;
@@ -2582,7 +2600,7 @@ pub fn dataGetSliceDefault(win: ?*Window, id: u32, key: []const u8, comptime T: 
 }
 
 // returns the backing slice of bytes if we have it
-pub fn dataGetInternal(win: ?*Window, id: u32, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
+pub fn dataGetInternal(win: ?*Window, id: WidgetId, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
         return w.dataGetInternal(id, key, T, slice);
@@ -2602,7 +2620,7 @@ pub fn dataGetInternal(win: ?*Window, id: u32, key: []const u8, comptime T: type
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the dialog to.
-pub fn dataRemove(win: ?*Window, id: u32, key: []const u8) void {
+pub fn dataRemove(win: ?*Window, id: WidgetId, key: []const u8) void {
     if (win) |w| {
         // we are being called from non gui thread or outside begin()/end()
         return w.dataRemove(id, key);
@@ -2692,7 +2710,7 @@ pub fn eventMatchSimple(e: *Event, wd: *WidgetData) bool {
 /// Data for matching events to widgets.  See `eventMatch`.
 pub const EventMatchOptions = struct {
     /// Id of widget, used to route non pointer events based on focus.
-    id: u32,
+    id: WidgetId,
 
     /// Physical pixel rect used to match pointer events.
     r: Rect.Physical,
@@ -2838,7 +2856,7 @@ pub const Animation = struct {
 /// Add animation a to key associated with id.  See `Animation`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn animation(id: u32, key: []const u8, a: Animation) void {
+pub fn animation(id: WidgetId, key: []const u8, a: Animation) void {
     var cw = currentWindow();
     const h = hashIdKey(id, key);
     cw.animations.put(h, a) catch |err| switch (err) {
@@ -2851,7 +2869,7 @@ pub fn animation(id: u32, key: []const u8, a: Animation) void {
 /// Retrieve an animation previously added with `animation`.  See `Animation`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn animationGet(id: u32, key: []const u8) ?Animation {
+pub fn animationGet(id: WidgetId, key: []const u8) ?Animation {
     var cw = currentWindow();
     const h = hashIdKey(id, key);
     const val = cw.animations.getPtr(h);
@@ -2867,7 +2885,7 @@ pub fn animationGet(id: u32, key: []const u8) ?Animation {
 /// has passed.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn timer(id: u32, micros: i32) !void {
+pub fn timer(id: WidgetId, micros: i32) !void {
     try currentWindow().timer(id, micros);
 }
 
@@ -2876,7 +2894,7 @@ pub fn timer(id: u32, micros: i32) !void {
 /// frame is past the timer expiration.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn timerGet(id: u32) ?i32 {
+pub fn timerGet(id: WidgetId) ?i32 {
     if (animationGet(id, "_timer")) |a| {
         return a.end_time;
     } else {
@@ -2887,7 +2905,7 @@ pub fn timerGet(id: u32) ?i32 {
 /// Return true on the first frame after a timer has expired.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn timerDone(id: u32) bool {
+pub fn timerDone(id: WidgetId) bool {
     if (timerGet(id)) |end_time| {
         if (end_time <= 0) {
             return true;
@@ -2901,13 +2919,13 @@ pub fn timerDone(id: u32) bool {
 /// events (see Clock example in `Examples.animations`).
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn timerDoneOrNone(id: u32) bool {
+pub fn timerDoneOrNone(id: WidgetId) bool {
     return timerDone(id) or (timerGet(id) == null);
 }
 
 pub const TabIndex = struct {
-    windowId: u32,
-    widgetId: u32,
+    windowId: WidgetId,
+    widgetId: WidgetId,
     tabIndex: u16,
 };
 
@@ -2921,7 +2939,7 @@ pub const TabIndex = struct {
 /// null widgets are visited in order of calling `tabIndexSet`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn tabIndexSet(widget_id: u32, tab_index: ?u16) !void {
+pub fn tabIndexSet(widget_id: WidgetId, tab_index: ?u16) !void {
     if (tab_index != null and tab_index.? == 0)
         return;
 
@@ -2952,7 +2970,7 @@ pub fn tabIndexNext(event_num: ?u16) void {
     // find the first widget with a tabindex greater than oldtab
     // or the first widget with lowest tabindex if oldtab is null
     var newtab: u16 = math.maxInt(u16);
-    var newId: ?u32 = null;
+    var newId: ?WidgetId = null;
     var foundFocus = false;
 
     for (cw.tab_index_prev.items) |ti| {
@@ -2998,7 +3016,7 @@ pub fn tabIndexPrev(event_num: ?u16) void {
     // find the last widget with a tabindex less than oldtab
     // or the last widget with highest tabindex if oldtab is null
     var newtab: u16 = 1;
-    var newId: ?u32 = null;
+    var newId: ?WidgetId = null;
     var foundFocus = false;
 
     for (cw.tab_index_prev.items) |ti| {
@@ -3085,16 +3103,16 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     try dvui.separator(@src(), .{ .expand = .horizontal });
 }
 
-pub const DialogDisplayFn = *const fn (u32) anyerror!void;
-pub const DialogCallAfterFn = *const fn (u32, enums.DialogResponse) anyerror!void;
+pub const DialogDisplayFn = *const fn (WidgetId) anyerror!void;
+pub const DialogCallAfterFn = *const fn (WidgetId, enums.DialogResponse) anyerror!void;
 
 pub const Dialog = struct {
-    id: u32,
+    id: WidgetId,
     display: DialogDisplayFn,
 };
 
 pub const IdMutex = struct {
-    id: u32,
+    id: WidgetId,
     mutex: *std.Thread.Mutex,
 };
 
@@ -3129,7 +3147,7 @@ pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize
 }
 
 /// Only called from gui thread.
-pub fn dialogRemove(id: u32) void {
+pub fn dialogRemove(id: WidgetId) void {
     const cw = currentWindow();
     cw.dialogRemove(id);
     refresh(null, @src(), id);
@@ -3186,7 +3204,7 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
     id_mutex.mutex.unlock();
 }
 
-pub fn dialogDisplay(id: u32) !void {
+pub fn dialogDisplay(id: WidgetId) !void {
     const modal = dvui.dataGet(null, id, "_modal", bool) orelse {
         log.err("dialogDisplay lost data for dialog {x}\n", .{id});
         dvui.dialogRemove(id);
@@ -3219,7 +3237,7 @@ pub fn dialogDisplay(id: u32) !void {
 
     const maxSize = dvui.dataGet(null, id, "_max_size", Options.MaxSize);
 
-    var win = try floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .id_extra = id, .max_size_content = maxSize });
+    var win = try floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .id_extra = id.asUsize(), .max_size_content = maxSize });
     defer win.deinit();
 
     var header_openflag = true;
@@ -3272,7 +3290,7 @@ pub const DialogWasmFileOptions = struct {
 };
 
 const WasmFile = struct {
-    id: u32,
+    id: WidgetId,
     index: usize,
     /// The size of the data in bytes
     size: usize,
@@ -3290,7 +3308,7 @@ const WasmFile = struct {
 /// Opens a file picker WITHOUT blocking. The file can be accessed by calling `wasmFileUploaded` with the same id
 ///
 /// This function does nothing in non-wasm builds
-pub fn dialogWasmFileOpen(id: u32, opts: DialogWasmFileOptions) void {
+pub fn dialogWasmFileOpen(id: WidgetId, opts: DialogWasmFileOptions) void {
     if (!wasm) return;
     dvui.backend.openFilePicker(id, opts.accept, false);
 }
@@ -3298,7 +3316,7 @@ pub fn dialogWasmFileOpen(id: u32, opts: DialogWasmFileOptions) void {
 /// Will only return a non-null value for a single frame
 ///
 /// This function does nothing in non-wasm builds
-pub fn wasmFileUploaded(id: u32) ?WasmFile {
+pub fn wasmFileUploaded(id: WidgetId) ?WasmFile {
     if (!wasm) return null;
     const num_files = dvui.backend.getNumberOfFilesAvailable(id);
     if (num_files == 0) return null;
@@ -3322,7 +3340,7 @@ pub fn wasmFileUploaded(id: u32) ?WasmFile {
 /// Opens a file picker WITHOUT blocking. The files can be accessed by calling `wasmFileUploadedMultiple` with the same id
 ///
 /// This function does nothing in non-wasm builds
-pub fn dialogWasmFileOpenMultiple(id: u32, opts: DialogWasmFileOptions) void {
+pub fn dialogWasmFileOpenMultiple(id: WidgetId, opts: DialogWasmFileOptions) void {
     if (!wasm) return;
     dvui.backend.openFilePicker(id, opts.accept, true);
 }
@@ -3330,7 +3348,7 @@ pub fn dialogWasmFileOpenMultiple(id: u32, opts: DialogWasmFileOptions) void {
 /// Will only return a non-null value for a single frame
 ///
 /// This function does nothing in non-wasm builds
-pub fn wasmFileUploadedMultiple(id: u32) ?[]WasmFile {
+pub fn wasmFileUploadedMultiple(id: WidgetId) ?[]WasmFile {
     if (!wasm) return null;
     const num_files = dvui.backend.getNumberOfFilesAvailable(id);
     if (num_files == 0) return null;
@@ -3547,8 +3565,8 @@ pub fn dialogNativeFolderSelect(alloc: std.mem.Allocator, opts: DialogNativeFold
 }
 
 pub const Toast = struct {
-    id: u32,
-    subwindow_id: ?u32,
+    id: WidgetId,
+    subwindow_id: ?WidgetId,
     display: DialogDisplayFn,
 };
 
@@ -3564,7 +3582,7 @@ pub const Toast = struct {
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the Window you want to add the toast to.
-pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?u32, display: DialogDisplayFn, timeout: ?i32) !IdMutex {
+pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize, subwindow_id: ?WidgetId, display: DialogDisplayFn, timeout: ?i32) !IdMutex {
     if (win) |w| {
         // we are being called from non gui thread
         const id = hashSrc(null, src, id_extra);
@@ -3585,13 +3603,13 @@ pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize,
 }
 
 /// Only called from gui thread.
-pub fn toastRemove(id: u32) void {
+pub fn toastRemove(id: WidgetId) void {
     const cw = currentWindow();
     cw.toastRemove(id);
     refresh(null, @src(), id);
 }
 
-pub fn toastsFor(subwindow_id: ?u32) ?ToastIterator {
+pub fn toastsFor(subwindow_id: ?WidgetId) ?ToastIterator {
     const cw = dvui.currentWindow();
     cw.dialog_mutex.lock();
     defer cw.dialog_mutex.unlock();
@@ -3608,11 +3626,11 @@ pub fn toastsFor(subwindow_id: ?u32) ?ToastIterator {
 pub const ToastIterator = struct {
     const Self = @This();
     cw: *Window,
-    subwindow_id: ?u32,
+    subwindow_id: ?WidgetId,
     i: usize,
-    last_id: ?u32 = null,
+    last_id: ?WidgetId = null,
 
-    pub fn init(win: *Window, subwindow_id: ?u32, i: usize) Self {
+    pub fn init(win: *Window, subwindow_id: ?WidgetId, i: usize) Self {
         return Self{ .cw = win, .subwindow_id = subwindow_id, .i = i };
     }
 
@@ -3645,7 +3663,7 @@ pub const ToastIterator = struct {
 pub const ToastOptions = struct {
     id_extra: usize = 0,
     window: ?*Window = null,
-    subwindow_id: ?u32 = null,
+    subwindow_id: ?WidgetId = null,
     timeout: ?i32 = 5_000_000,
     message: []const u8,
     displayFn: DialogDisplayFn = toastDisplay,
@@ -3664,13 +3682,13 @@ pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) !void {
     id_mutex.mutex.unlock();
 }
 
-pub fn toastDisplay(id: u32) !void {
+pub fn toastDisplay(id: WidgetId) !void {
     const message = dvui.dataGetSlice(null, id, "_message", []u8) orelse {
         log.err("toastDisplay lost data for toast {x}\n", .{id});
         return;
     };
 
-    var animator = try dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{ .id_extra = id });
+    var animator = try dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{ .id_extra = id.asUsize() });
     defer animator.deinit();
     try dvui.labelNoFmt(@src(), message, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 } });
 
@@ -3685,7 +3703,7 @@ pub fn toastDisplay(id: u32) !void {
 
 /// Standard way of showing toasts.
 pub fn toastsShow(floating_window_data: ?*WidgetData) !void {
-    const id: ?u32, const rect: Rect = blk: {
+    const id: ?WidgetId, const rect: Rect = blk: {
         if (floating_window_data) |fwd| {
             break :blk .{ fwd.id, fwd.rect };
         } else {
@@ -6465,7 +6483,7 @@ pub const BasicLayout = struct {
     seen_expanded: bool = false,
     min_size_children: Size = .{},
 
-    pub fn rectFor(self: *BasicLayout, contentRect: Rect, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    pub fn rectFor(self: *BasicLayout, contentRect: Rect, id: WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         if (self.seen_expanded) {
             // A single vertically expanded child can take the rest of the
             // space, but it should be the last (usually only) child.

@@ -20,7 +20,7 @@ pub const InitOptions = struct {
 wd: WidgetData = undefined,
 init_options: InitOptions = undefined,
 
-winId: u32 = undefined,
+winId: dvui.WidgetId = undefined,
 focused: bool = false,
 activePt: Point.Natural = .{},
 
@@ -65,7 +65,7 @@ pub fn data(self: *ContextWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn rectFor(self: *ContextWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *ContextWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     dvui.log.debug("{s}:{d} ContextWidget should not have normal child widgets, only menu stuff", .{ self.wd.src.file, self.wd.src.line });
     return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);

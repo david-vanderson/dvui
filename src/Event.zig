@@ -7,8 +7,8 @@ const Event = @This();
 
 /// Should not be set directly, use the `handle` method
 handled: bool = false,
-focus_windowId: ?u32 = null,
-focus_widgetId: ?u32 = null,
+focus_windowId: ?dvui.WidgetId = null,
+focus_widgetId: ?dvui.WidgetId = null,
 // num increments within a frame, used in focusRemainingEvents
 num: u16 = 0,
 evt: union(enum) {
@@ -128,7 +128,7 @@ pub const Mouse = struct {
     button: enums.Button,
 
     p: dvui.Point.Physical,
-    floating_win: u32,
+    floating_win: dvui.WidgetId,
 };
 
 pub const ClosePopup = struct {
@@ -152,7 +152,7 @@ pub const ScrollDrag = struct {
 
     // id of the widget that has mouse capture during the drag (needed to
     // inject synthetic motion events into the next frame to keep scrolling)
-    capture_id: u32,
+    capture_id: dvui.WidgetId,
 };
 
 /// Event bubbled from inside a scrollarea to scroll to a specific place.

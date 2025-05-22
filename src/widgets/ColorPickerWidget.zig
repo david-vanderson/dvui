@@ -301,7 +301,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
 }
 
 pub fn getHueSelectorTexture(dir: dvui.enums.Direction) !dvui.Texture {
-    const hue_texture_id = dvui.hashIdKey(@intFromEnum(dir), "hue_selector_texture");
+    const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromEnum(dir))), "hue_selector_texture");
     const res = try dvui.currentWindow().texture_cache.getOrPut(hue_texture_id);
     res.value_ptr.used = true;
     if (!res.found_existing) {
@@ -316,7 +316,7 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) !dvui.Texture {
 }
 
 pub fn getValueSaturationTexture(hue: f32) !dvui.Texture {
-    const hue_texture_id = dvui.hashIdKey(@intFromFloat(hue * 10000), "value_saturation_texture");
+    const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromFloat(hue * 10000))), "value_saturation_texture");
     const res = try dvui.currentWindow().texture_cache.getOrPut(hue_texture_id);
     res.value_ptr.used = true;
     if (!res.found_existing) {

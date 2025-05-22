@@ -36,7 +36,7 @@ pub fn data(self: *VirtualParentWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn rectFor(self: *VirtualParentWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *VirtualParentWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     const ret = self.wd.parent.rectFor(id, min_size, e, g);
     if (self.child_rect_union) |u| {
         self.child_rect_union = u.unionWith(ret);

@@ -1442,7 +1442,7 @@ pub fn data(self: *TextLayoutWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn rectFor(self: *TextLayoutWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *TextLayoutWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
 
     // For corner widgets, they might want to be closer to the border than the
