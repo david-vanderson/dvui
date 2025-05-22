@@ -18,17 +18,17 @@ previous_window: ?*Window = null,
 subwindows: std.ArrayList(Subwindow),
 
 /// id of the subwindow widgets are being added to
-subwindow_currentId: u32 = 0,
+subwindow_currentId: WidgetId = .zero,
 
 /// natural rect of the last subwindow, dialogs use this
 /// to center themselves
 subwindow_currentRect: Rect.Natural = .{},
 
 /// id of the subwindow that has focus
-focused_subwindowId: u32 = 0,
+focused_subwindowId: WidgetId = .zero,
 
-last_focused_id_this_frame: u32 = 0,
-last_registered_id_this_frame: u32 = 0,
+last_focused_id_this_frame: WidgetId = .zero,
+last_registered_id_this_frame: WidgetId = .zero,
 
 /// natural rect telling the backend where our text input box is:
 /// * when non-null, we want an on screen keyboard if needed (phones)
@@ -71,17 +71,17 @@ clipRect: dvui.Rect.Physical = .{},
 
 theme: Theme = undefined,
 
-min_sizes: std.AutoHashMap(u32, SavedSize),
+min_sizes: std.AutoHashMap(WidgetId, SavedSize),
 tags: std.StringHashMap(SavedTagData),
 data_mutex: std.Thread.Mutex,
 datas: std.AutoHashMap(u64, SavedData),
 datas_trash: std.ArrayList(SavedData) = undefined,
-animations: std.AutoHashMap(u32, Animation),
+animations: std.AutoHashMap(u64, Animation),
 tab_index_prev: std.ArrayList(dvui.TabIndex),
 tab_index: std.ArrayList(dvui.TabIndex),
-font_cache: std.AutoHashMap(u32, dvui.FontCacheEntry),
+font_cache: std.AutoHashMap(u64, dvui.FontCacheEntry),
 font_bytes: std.StringHashMap(dvui.FontBytesEntry),
-texture_cache: std.AutoHashMap(u32, dvui.TextureCacheEntry),
+texture_cache: std.AutoHashMap(u64, dvui.TextureCacheEntry),
 dialog_mutex: std.Thread.Mutex,
 dialogs: std.ArrayList(Dialog),
 toasts: std.ArrayList(Toast),
@@ -109,7 +109,7 @@ end_rendering_done: bool = false,
 
 debug_window_show: bool = false,
 /// 0 means no widget is selected
-debug_widget_id: u32 = 0,
+debug_widget_id: WidgetId = .zero,
 debug_widget_panic: bool = false,
 debug_info_name_rect: []const u8 = "",
 debug_info_src_id_extra: []const u8 = "",
@@ -129,15 +129,15 @@ debug_touch_simulate_events: bool = false,
 debug_touch_simulate_down: bool = false,
 
 pub const Subwindow = struct {
-    id: u32 = 0,
+    id: WidgetId,
     rect: Rect = Rect{},
     rect_pixels: dvui.Rect.Physical = .{},
-    focused_widgetId: ?u32 = null,
+    focused_widgetId: ?WidgetId = null,
     render_cmds: std.ArrayList(dvui.RenderCommand),
     render_cmds_after: std.ArrayList(dvui.RenderCommand),
     used: bool = true,
     modal: bool = false,
-    stay_above_parent_window: ?u32 = null,
+    stay_above_parent_window: ?WidgetId = null,
 };
 
 const SavedSize = struct {
@@ -192,15 +192,15 @@ pub fn init(
         .gpa = gpa,
         ._arena = init_opts.arena orelse std.heap.ArenaAllocator.init(gpa),
         .subwindows = std.ArrayList(Subwindow).init(gpa),
-        .min_sizes = std.AutoHashMap(u32, SavedSize).init(gpa),
+        .min_sizes = std.AutoHashMap(WidgetId, SavedSize).init(gpa),
         .tags = std.StringHashMap(SavedTagData).init(gpa),
         .data_mutex = std.Thread.Mutex{},
         .datas = std.AutoHashMap(u64, SavedData).init(gpa),
-        .animations = std.AutoHashMap(u32, Animation).init(gpa),
+        .animations = std.AutoHashMap(u64, Animation).init(gpa),
         .tab_index_prev = std.ArrayList(dvui.TabIndex).init(gpa),
         .tab_index = std.ArrayList(dvui.TabIndex).init(gpa),
-        .font_cache = std.AutoHashMap(u32, dvui.FontCacheEntry).init(gpa),
-        .texture_cache = std.AutoHashMap(u32, dvui.TextureCacheEntry).init(gpa),
+        .font_cache = std.AutoHashMap(u64, dvui.FontCacheEntry).init(gpa),
+        .texture_cache = std.AutoHashMap(u64, dvui.TextureCacheEntry).init(gpa),
         .dialog_mutex = std.Thread.Mutex{},
         .dialogs = std.ArrayList(Dialog).init(gpa),
         .toasts = std.ArrayList(Toast).init(gpa),
@@ -479,7 +479,7 @@ pub fn debugRefresh(self: *Self, val: ?bool) bool {
 }
 
 /// called from gui thread
-pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?u32) void {
+pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetId) void {
     if (self.debugRefresh(null)) {
         log.debug("{s}:{d} refresh {?x}", .{ src.file, src.line, id });
     }
@@ -487,14 +487,14 @@ pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?u32) voi
 }
 
 /// called from any thread
-pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?u32) void {
+pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?WidgetId) void {
     if (self.debugRefresh(null)) {
         log.debug("{s}:{d} refreshBackend {?x}", .{ src.file, src.line, id });
     }
     self.backend.refresh();
 }
 
-pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?u32, event_num: ?u16) void {
+pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?WidgetId, event_num: ?u16) void {
     const winId = subwindow_id orelse self.subwindow_currentId;
     if (self.focused_subwindowId != winId) {
         self.focused_subwindowId = winId;
@@ -510,7 +510,7 @@ pub fn focusSubwindowInternal(self: *Self, subwindow_id: ?u32, event_num: ?u16) 
     }
 }
 
-pub fn focusRemainingEventsInternal(self: *Self, event_num: u16, focusWindowId: u32, focusWidgetId: ?u32) void {
+pub fn focusRemainingEventsInternal(self: *Self, event_num: u16, focusWindowId: WidgetId, focusWidgetId: ?WidgetId) void {
     var evts = self.events.items;
     var k: usize = 0;
     while (k < evts.len) : (k += 1) {
@@ -939,7 +939,7 @@ pub fn begin(
     self.end_rendering_done = false;
     self.cursor_requested = null;
     self.text_input_rect = null;
-    self.last_focused_id_this_frame = 0;
+    self.last_focused_id_this_frame = .zero;
     self.debug_info_name_rect = "";
     self.debug_info_src_id_extra = "";
     if (self.debug_under_mouse) {
@@ -974,7 +974,7 @@ pub fn begin(
     }
 
     {
-        var deadSizes = std.ArrayList(u32).init(larena);
+        var deadSizes = std.ArrayList(WidgetId).init(larena);
         defer deadSizes.deinit();
         var it = self.min_sizes.iterator();
         while (it.next()) |kv| {
@@ -1055,7 +1055,7 @@ pub fn begin(
 
     {
         const micros: i32 = if (micros_since_last > math.maxInt(i32)) math.maxInt(i32) else @as(i32, @intCast(micros_since_last));
-        var deadAnimations = std.ArrayList(u32).init(larena);
+        var deadAnimations = std.ArrayList(u64).init(larena);
         defer deadAnimations.deinit();
         var it = self.animations.iterator();
         while (it.next()) |kv| {
@@ -1077,7 +1077,7 @@ pub fn begin(
     }
 
     {
-        var deadFonts = std.ArrayList(u32).init(larena);
+        var deadFonts = std.ArrayList(u64).init(larena);
         defer deadFonts.deinit();
         var it = self.font_cache.iterator();
         while (it.next()) |kv| {
@@ -1098,18 +1098,18 @@ pub fn begin(
     }
 
     {
-        var deadIcons = std.ArrayList(u32).init(larena);
-        defer deadIcons.deinit();
+        var deadTextures = std.ArrayList(u64).init(larena);
+        defer deadTextures.deinit();
         var it = self.texture_cache.iterator();
         while (it.next()) |kv| {
             if (kv.value_ptr.used) {
                 kv.value_ptr.used = false;
             } else {
-                try deadIcons.append(kv.key_ptr.*);
+                try deadTextures.append(kv.key_ptr.*);
             }
         }
 
-        for (deadIcons.items) |id| {
+        for (deadTextures.items) |id| {
             const ice = self.texture_cache.fetchRemove(id).?;
             self.backend.textureDestroy(ice.value.texture);
         }
@@ -1151,7 +1151,7 @@ fn positionMouseEventRemove(self: *Self) void {
     }
 }
 
-pub fn windowFor(self: *const Self, p: Point.Physical) u32 {
+pub fn windowFor(self: *const Self, p: Point.Physical) WidgetId {
     var i = self.subwindows.items.len;
     while (i > 0) : (i -= 1) {
         const sw = &self.subwindows.items[i - 1];
@@ -1263,16 +1263,9 @@ pub fn renderCommands(self: *Self, queue: std.ArrayList(dvui.RenderCommand)) !vo
     }
 }
 
-pub fn hashIdKey64(id: u32, key: []const u8) u64 {
-    var h = std.hash.Fnv1a_64.init();
-    h.value = id;
-    h.update(key);
-    return h.final();
-}
-
 /// data is copied into internal storage
-pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, comptime copy_slice: bool, num_copies: usize) void {
-    const hash: u64 = hashIdKey64(id, key);
+pub fn dataSetAdvanced(self: *Self, id: WidgetId, key: []const u8, data_in: anytype, comptime copy_slice: bool, num_copies: usize) void {
+    const hash: u64 = dvui.hashIdKey(id, key);
 
     const dt = @typeInfo(@TypeOf(data_in));
     const dt_type_str = @typeName(@TypeOf(data_in));
@@ -1331,8 +1324,8 @@ pub fn dataSetAdvanced(self: *Self, id: u32, key: []const u8, data_in: anytype, 
 }
 
 /// returns the backing byte slice if we have one
-pub fn dataGetInternal(self: *Self, id: u32, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
-    const hash: u64 = hashIdKey64(id, key);
+pub fn dataGetInternal(self: *Self, id: WidgetId, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
+    const hash: u64 = dvui.hashIdKey(id, key);
 
     self.data_mutex.lock();
     defer self.data_mutex.unlock();
@@ -1351,8 +1344,8 @@ pub fn dataGetInternal(self: *Self, id: u32, key: []const u8, comptime T: type, 
     }
 }
 
-pub fn dataRemove(self: *Self, id: u32, key: []const u8) void {
-    const hash: u64 = hashIdKey64(id, key);
+pub fn dataRemove(self: *Self, id: WidgetId, key: []const u8) void {
+    const hash: u64 = dvui.hashIdKey(id, key);
 
     self.data_mutex.lock();
     defer self.data_mutex.unlock();
@@ -1374,7 +1367,7 @@ pub fn dataRemove(self: *Self, id: u32, key: []const u8) void {
 ///
 ///  If calling from a non-GUI thread, do any dataSet() calls before unlocking the
 ///  mutex to ensure that data is available before the dialog is displayed.
-pub fn dialogAdd(self: *Self, id: u32, display: dvui.DialogDisplayFn) !*std.Thread.Mutex {
+pub fn dialogAdd(self: *Self, id: WidgetId, display: dvui.DialogDisplayFn) !*std.Thread.Mutex {
     self.dialog_mutex.lock();
 
     for (self.dialogs.items) |*d| {
@@ -1390,7 +1383,7 @@ pub fn dialogAdd(self: *Self, id: u32, display: dvui.DialogDisplayFn) !*std.Thre
 }
 
 /// Only called from gui thread.
-pub fn dialogRemove(self: *Self, id: u32) void {
+pub fn dialogRemove(self: *Self, id: WidgetId) void {
     self.dialog_mutex.lock();
     defer self.dialog_mutex.unlock();
 
@@ -1430,7 +1423,7 @@ fn dialogsShow(self: *Self) !void {
     }
 }
 
-pub fn timer(self: *Self, id: u32, micros: i32) !void {
+pub fn timer(self: *Self, id: WidgetId, micros: i32) !void {
     // when start_time is in the future, we won't spam frames, so this will
     // cause a single frame and then expire
     const a = Animation{ .start_time = micros, .end_time = micros };
@@ -1438,7 +1431,7 @@ pub fn timer(self: *Self, id: u32, micros: i32) !void {
     try self.animations.put(h, a);
 }
 
-pub fn timerRemove(self: *Self, id: u32) void {
+pub fn timerRemove(self: *Self, id: WidgetId) void {
     const h = dvui.hashIdKey(id, "_timer");
     _ = self.animations.remove(h);
 }
@@ -1448,7 +1441,7 @@ pub fn timerRemove(self: *Self, id: u32) void {
 /// calling from a non-GUI thread, do any `dvui.dataSet` calls before unlocking
 /// the mutex to ensure that data is available before the dialog is
 /// displayed.
-pub fn toastAdd(self: *Self, id: u32, subwindow_id: ?u32, display: dvui.DialogDisplayFn, timeout: ?i32) !*std.Thread.Mutex {
+pub fn toastAdd(self: *Self, id: WidgetId, subwindow_id: ?WidgetId, display: dvui.DialogDisplayFn, timeout: ?i32) !*std.Thread.Mutex {
     self.dialog_mutex.lock();
 
     for (self.toasts.items) |*t| {
@@ -1470,7 +1463,7 @@ pub fn toastAdd(self: *Self, id: u32, subwindow_id: ?u32, display: dvui.DialogDi
     return &self.dialog_mutex;
 }
 
-pub fn toastRemove(self: *Self, id: u32) void {
+pub fn toastRemove(self: *Self, id: WidgetId) void {
     self.dialog_mutex.lock();
     defer self.dialog_mutex.unlock();
 
@@ -1512,7 +1505,7 @@ fn debugWindowShow(self: *Self) !void {
         try dvui.labelNoFmt(@src(), "Hex id of widget to highlight:", .{ .gravity_y = 0.5 });
 
         var buf = [_]u8{0} ** 20;
-        if (self.debug_widget_id != 0) {
+        if (self.debug_widget_id != .zero) {
             _ = try std.fmt.bufPrint(&buf, "{x}", .{self.debug_widget_id});
         }
         var te = try dvui.textEntry(@src(), .{
@@ -1520,7 +1513,7 @@ fn debugWindowShow(self: *Self) !void {
         }, .{});
         te.deinit();
 
-        self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(&buf, 0), 16) catch 0;
+        self.debug_widget_id = @enumFromInt(std.fmt.parseInt(u64, std.mem.sliceTo(&buf, 0), 16) catch 0);
     }
 
     var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
@@ -1529,12 +1522,12 @@ fn debugWindowShow(self: *Self) !void {
     self.debug_widget_panic = false;
 
     var color: ?dvui.Options.ColorOrName = null;
-    if (self.debug_widget_id == 0) {
+    if (self.debug_widget_id == .zero) {
         // blend text and control colors
         color = .{ .color = dvui.Color.average(dvui.themeGet().color_text, dvui.themeGet().color_fill_control) };
     }
     if (try dvui.button(@src(), "Panic", .{}, .{ .gravity_x = 1.0, .margin = dvui.Rect.all(8), .color_text = color })) {
-        if (self.debug_widget_id != 0) {
+        if (self.debug_widget_id != .zero) {
             self.debug_widget_panic = true;
         } else {
             try dvui.dialog(@src(), .{}, .{ .title = "Disabled", .message = "Need valid widget Id to panic" });
@@ -1589,7 +1582,7 @@ fn debugWindowShow(self: *Self) !void {
             defer hbox.deinit();
 
             if (try dvui.buttonIcon(@src(), "find", dvui.entypo.magnifying_glass, .{}, .{})) {
-                self.debug_widget_id = std.fmt.parseInt(u32, std.mem.sliceTo(line, ' '), 16) catch 0;
+                self.debug_widget_id = @enumFromInt(std.fmt.parseInt(u64, std.mem.sliceTo(line, ' '), 16) catch 0);
             }
 
             try dvui.labelNoFmt(@src(), line, .{ .gravity_y = 0.5 });
@@ -1769,7 +1762,7 @@ pub fn data(self: *Self) *WidgetData {
     return &self.wd;
 }
 
-pub fn rectFor(self: *Self, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *Self, id: WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     return self.layout.rectFor(self.wd.rect, id, min_size, e, g);
 }
 
@@ -1814,6 +1807,7 @@ const Point = dvui.Point;
 const Event = dvui.Event;
 const WidgetData = dvui.WidgetData;
 const Widget = dvui.Widget;
+const WidgetId = dvui.WidgetId;
 
 const Animation = dvui.Animation;
 const Theme = dvui.Theme;

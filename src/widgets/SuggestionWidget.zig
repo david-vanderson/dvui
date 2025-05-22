@@ -1,6 +1,6 @@
 pub const SuggestionWidget = @This();
 
-id: u32 = undefined,
+id: dvui.WidgetId = undefined,
 options: Options = undefined,
 init_options: InitOptions = undefined,
 
@@ -18,7 +18,7 @@ pub var defaults: Options = .{
 
 pub const InitOptions = struct {
     rs: RectScale,
-    text_entry_id: u32,
+    text_entry_id: dvui.WidgetId,
 };
 
 pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) SuggestionWidget {

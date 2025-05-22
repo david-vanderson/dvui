@@ -49,7 +49,7 @@ pub const InitOptions = struct {
 parent_tooltip: ?*FloatingTooltipWidget = null,
 prev_rendering: bool = undefined,
 wd: WidgetData = undefined,
-prev_windowId: u32 = 0,
+prev_windowId: dvui.WidgetId = undefined,
 prevClip: Rect.Physical = .{},
 scale_val: f32 = undefined,
 scaler: dvui.ScaleWidget = undefined,
@@ -191,7 +191,7 @@ pub fn data(self: *FloatingTooltipWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn rectFor(self: *FloatingTooltipWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *FloatingTooltipWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
 }

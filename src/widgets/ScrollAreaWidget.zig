@@ -30,7 +30,7 @@ pub const InitOpts = struct {
     vertical_bar: ScrollInfo.ScrollBarMode = .auto,
     horizontal: ?ScrollInfo.ScrollMode = null, // .none is default
     horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
-    focus_id: ?u32 = null, // clicking on a scrollbar will focus this id, or the scroll container if null
+    focus_id: ?dvui.WidgetId = null, // clicking on a scrollbar will focus this id, or the scroll container if null
     lock_visible: bool = false,
 };
 
@@ -84,7 +84,7 @@ pub fn install(self: *ScrollAreaWidget) !void {
     self.si.viewport.w = crect.w;
     self.si.viewport.h = crect.h;
 
-    const focus_target = self.init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", u32);
+    const focus_target = self.init_opts.focus_id orelse dvui.dataGet(null, self.hbox.data().id, "_scroll_id", dvui.WidgetId);
 
     // due to floating point inaccuracies, give ourselves a tiny bit of extra wiggle room
 

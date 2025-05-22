@@ -7,6 +7,7 @@ const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
 const Widget = dvui.Widget;
+const WidgetId = dvui.WidgetId;
 
 const WidgetData = @This();
 
@@ -15,7 +16,7 @@ pub const InitOptions = struct {
     subwindow: bool = false,
 };
 
-id: u32 = undefined,
+id: WidgetId = undefined,
 parent: Widget = undefined,
 init_options: InitOptions = undefined,
 rect: Rect = Rect{},

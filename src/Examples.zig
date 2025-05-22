@@ -75,7 +75,7 @@ var progress_mutex = std.Thread.Mutex{};
 var progress_val: f32 = 0.0;
 
 const AnimatingDialog = struct {
-    pub fn dialogDisplay(id: u32) !void {
+    pub fn dialogDisplay(id: dvui.WidgetId) !void {
         const modal = dvui.dataGet(null, id, "_modal", bool) orelse unreachable;
         const title = dvui.dataGetSlice(null, id, "_title", []u8) orelse unreachable;
         const message = dvui.dataGetSlice(null, id, "_message", []u8) orelse unreachable;
@@ -86,7 +86,7 @@ const AnimatingDialog = struct {
         // once we record a response, refresh it until we close
         _ = dvui.dataGet(null, id, "response", enums.DialogResponse);
 
-        var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id, .max_size_content = .width(300) });
+        var win = FloatingWindowWidget.init(@src(), .{ .modal = modal }, .{ .id_extra = id.asUsize(), .max_size_content = .width(300) });
 
         if (dvui.firstFrame(win.data().id)) {
             dvui.animation(win.wd.id, "rect_percent", .{ .start_val = 0.0, .end_val = 1.0, .end_time = duration, .easing = easing });
@@ -151,7 +151,7 @@ const AnimatingDialog = struct {
         }
     }
 
-    pub fn after(id: u32, response: enums.DialogResponse) Error!void {
+    pub fn after(id: dvui.WidgetId, response: enums.DialogResponse) Error!void {
         _ = id;
         std.log.debug("You clicked \"{s}\"", .{@tagName(response)});
     }
@@ -873,7 +873,7 @@ pub fn dropdownAdvanced() !void {
 }
 
 /// ![image](Examples-text_entry.png)
-pub fn textEntryWidgets(demo_win_id: u32) !void {
+pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
     var left_alignment = dvui.Alignment.init();
     defer left_alignment.deinit();
 
@@ -2419,7 +2419,7 @@ pub fn focus() !void {
 
             if (try dvui.button(@src(), "Focus Next textEntry", .{}, .{})) {
                 // grab id from previous frame
-                if (dvui.dataGet(null, uniqueId, "next_text_entry_id", u32)) |id| {
+                if (dvui.dataGet(null, uniqueId, "next_text_entry_id", dvui.WidgetId)) |id| {
                     dvui.focusWidget(id, null, null);
                 }
             }
@@ -2992,7 +2992,7 @@ pub fn scrollCanvas(comptime data: u8) !void {
 }
 
 /// ![image](Examples-dialogs.png)
-pub fn dialogs(demo_win_id: u32) !void {
+pub fn dialogs(demo_win_id: dvui.WidgetId) !void {
     {
         var hbox = try dvui.box(@src(), .horizontal, .{});
         defer hbox.deinit();
@@ -3014,7 +3014,7 @@ pub fn dialogs(demo_win_id: u32) !void {
         }
 
         const dialogsFollowup = struct {
-            fn callafter(id: u32, response: enums.DialogResponse) Error!void {
+            fn callafter(id: dvui.WidgetId, response: enums.DialogResponse) Error!void {
                 _ = id;
                 var buf: [100]u8 = undefined;
                 const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\" in the previous dialog", .{@tagName(response)}) catch unreachable;
@@ -3657,7 +3657,7 @@ fn background_dialog(win: *dvui.Window, delay_ns: u64) !void {
     try dvui.dialog(@src(), .{}, .{ .window = win, .modal = false, .title = "Background Dialog", .message = "This non modal dialog was added from a non-GUI thread." });
 }
 
-fn background_toast(win: *dvui.Window, delay_ns: u64, subwindow_id: ?u32) !void {
+fn background_toast(win: *dvui.Window, delay_ns: u64, subwindow_id: ?dvui.WidgetId) !void {
     std.time.sleep(delay_ns);
     dvui.refresh(win, @src(), null);
     try dvui.toast(@src(), .{ .window = win, .subwindow_id = subwindow_id, .message = "Toast came from a non-GUI thread" });
@@ -3764,7 +3764,7 @@ pub const StrokeTest = struct {
         return &self.wd;
     }
 
-    pub fn rectFor(self: *Self, id: u32, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
+    pub fn rectFor(self: *Self, id: dvui.WidgetId, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
         _ = id;
         return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
     }

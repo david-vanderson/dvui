@@ -82,7 +82,7 @@ pub fn data(self: *BoxWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn rectFor(self: *BoxWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *BoxWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     var current_weight: f32 = 0.0;
     if (self.equal_space or (self.dir == .horizontal and e.isHorizontal()) or (self.dir == .vertical and e.isVertical())) {

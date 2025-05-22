@@ -59,7 +59,7 @@ pub fn data(self: *ReorderWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn rectFor(self: *ReorderWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *ReorderWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
 }
@@ -177,7 +177,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
                         if (dvui.dragging(me.p)) |_| {
                             ret = me.p;
                             if (init_opts.reorderable) |reo| {
-                                reo.reorder.dragStart(reo.wd.id, me.p); // reorder grabs capture
+                                reo.reorder.dragStart(reo.wd.id.asUsize(), me.p); // reorder grabs capture
                             }
                             break :loop;
                         }
@@ -239,7 +239,7 @@ pub const Reorderable = struct {
     // can call this after init before install
     pub fn floating(self: *Reorderable) bool {
         // if drag_point is non-null, id_reorderable is non-null
-        if (self.reorder.drag_point != null and self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.wd.id)) {
+        if (self.reorder.drag_point != null and self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.wd.id.asUsize())) {
             return true;
         }
 
@@ -250,7 +250,7 @@ pub const Reorderable = struct {
         self.installed = true;
         if (self.reorder.drag_point) |dp| {
             const topleft = dp.plus(dvui.dragOffset());
-            if (self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.wd.id)) {
+            if (self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.wd.id.asUsize())) {
                 // we are being dragged - put in floating widget
                 try self.wd.register();
                 dvui.parentSet(self.widget());
@@ -300,7 +300,7 @@ pub const Reorderable = struct {
 
     pub fn removed(self: *Reorderable) bool {
         // if drag_ending is true, id_reorderable is non-null
-        if (self.reorder.drag_ending and self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.wd.id)) {
+        if (self.reorder.drag_ending and self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.wd.id.asUsize())) {
             return true;
         }
 
@@ -340,7 +340,7 @@ pub const Reorderable = struct {
         return &self.wd;
     }
 
-    pub fn rectFor(self: *Reorderable, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    pub fn rectFor(self: *Reorderable, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
         _ = id;
         return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
     }
