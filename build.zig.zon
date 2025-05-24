@@ -37,5 +37,10 @@
             .hash = "zigwin32-25.0.28-preview-AAAAAHsJ-wPA4nREAzT_OOkF6gLrornNuHqREfHDADoS",
             .lazy = true,
         },
+        // for rendering tvg icons
+        .svg2tvg = .{
+            .url = "git+https://github.com/nat3Github/zig-lib-svg2tvg#628e32e87e7a2f57493a4af1b70870877e461358",
+            .hash = "svg2tvg-0.0.0-HpMZuTN2BgAWaLEMONTjaMrPki2_9x6KJZtO4W7NNHh2",
+        },
     },
 }
