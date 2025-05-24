@@ -888,6 +888,13 @@ pub const TextureCacheEntry = struct {
         h.update(std.mem.asBytes(&height));
         return h.final();
     }
+    pub fn hash_icon(bytes: []const u8, height: u32, opt: IconRenderOptions) u64 {
+        var h = fnv.init();
+        h.update(std.mem.asBytes(&bytes.ptr));
+        h.update(std.mem.asBytes(&height));
+        h.update(std.mem.asBytes(&opt));
+        return h.final();
+    }
 };
 
 /// Get the width of an icon at a specified height.
@@ -908,9 +915,9 @@ pub const IconRenderOptions = struct {
     /// if null uses original stroke width
     override_stroke_width: ?f32 = null,
     /// if null uses original fill colors
-    override_fill_color: ?Color = null,
+    override_fill_color: ?Color = .white,
     /// if null uses original stroke colors
-    override_stroke_color: ?Color = null,
+    override_stroke_color: ?Color = .white,
     /// only works with icons that are filled
     disable_fill: bool = false,
 };
@@ -920,7 +927,7 @@ pub const IconRenderOptions = struct {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, opt: IconRenderOptions) !TextureCacheEntry {
     var cw = currentWindow();
-    const icon_hash = TextureCacheEntry.hash(tvg_bytes, height);
+    const icon_hash = TextureCacheEntry.hash_icon(tvg_bytes, height, opt);
 
     if (cw.texture_cache.getPtr(icon_hash)) |tce| {
         tce.used = true;
