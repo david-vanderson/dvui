@@ -886,11 +886,21 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
 
     return height * @as(f32, @floatFromInt(parser.header.width)) / @as(f32, @floatFromInt(parser.header.height));
 }
+pub const IconRenderOptions = struct {
+    /// if null uses original stroke width
+    override_stroke_width: ?f32 = null,
+    /// if null uses original fill colors
+    override_fill_color: ?Color = null,
+    /// if null uses original stroke colors
+    override_stroke_color: ?Color = null,
+    /// only works with icons that are filled
+    disable_fill: bool = false,
+};
 
 /// Render `tvg_bytes` at `height` into a `Texture`.  Name is for debugging.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !TextureCacheEntry {
+pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, opt: IconRenderOptions) !TextureCacheEntry {
     var cw = currentWindow();
     const icon_hash = TextureCacheEntry.hash(tvg_bytes, height);
 
@@ -914,6 +924,14 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
             var col: [4]u8 = undefined;
             for (&col, slice) |*a, s| a.* = s;
         }
+        fn conv(dcol: dvui.Color) tvg.Color {
+            return tvg.Color{
+                .r = @as(f32, @floatFromInt(dcol.r)) / 255.0,
+                .g = @as(f32, @floatFromInt(dcol.g)) / 255.0,
+                .b = @as(f32, @floatFromInt(dcol.b)) / 255.0,
+                .a = @as(f32, @floatFromInt(dcol.a)) / 255.0,
+            };
+        }
     };
     const img_raw_data = try cw.arena().alloc(u8, height * height * 4);
     for (img_raw_data) |*d| d.* = 0;
@@ -923,17 +941,22 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !Textur
         .height = height,
     };
     var fb = std.io.fixedBufferStream(tvg_bytes);
-    tvg.renderStream(cw.arena(), &img, fb.reader(), .{ .overwrite_stroke_width = 2, .overwrite_stroke = .{
-        .r = 1,
-        .g = 1,
-        .b = 1,
-        .a = 1,
-    } }) catch |err| {
+
+    var ow_stroke: ?tvg.Color = null;
+    if (opt.override_stroke_color) |cx| ow_stroke = ImageAdapter.conv(cx);
+    var ow_fill: ?tvg.Color = null;
+    if (opt.override_fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
+    tvg.renderStream(cw.arena(), &img, fb.reader(), .{
+        .overwrite_stroke_width = opt.override_stroke_width,
+        .overwrite_stroke = ow_stroke,
+        .overwrite_fill = ow_fill,
+        .disable_fill = opt.disable_fill,
+    }) catch |err| {
         log.warn("iconTexture Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
         return error.tvgError;
     };
 
-    const pixels = dvui.RGBAPixelsPMA.fromRGBA(img.pixels);
+    const pixels = dvui.RGBAPixelsPMA.cast(img.pixels);
 
     const texture = textureCreate(pixels, @intCast(img.width), @intCast(img.height), .linear);
 
@@ -3077,7 +3100,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     try dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
 
     if (openflag) |of| {
-        if (try dvui.buttonIcon(@src(), "close", entypo.cross, .{}, .{ .font_style = .heading, .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio })) {
+        if (try dvui.buttonIcon(@src(), "close", entypo.cross, .{}, .{ .font_style = .heading, .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio }, .{})) {
             of.* = false;
         }
     }
@@ -3767,7 +3790,7 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
     var open_sug = init_opts.opened;
 
     if (init_opts.button) {
-        if (try dvui.buttonIcon(@src(), "combobox_triangle", entypo.chevron_small_down, .{}, .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0, .tab_index = 0 })) {
+        if (try dvui.buttonIcon(@src(), "combobox_triangle", entypo.chevron_small_down, .{}, .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0, .tab_index = 0 }, .{})) {
             open_sug = true;
             dvui.focusWidget(te.data().id, null, null);
         }
@@ -3925,9 +3948,9 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     try bcbox.install();
     try bcbox.drawBackground();
     if (expanded) {
-        try icon(@src(), "down_arrow", entypo.triangle_down, .{ .gravity_y = 0.5 });
+        try icon(@src(), "down_arrow", entypo.triangle_down, .{ .gravity_y = 0.5 }, .{});
     } else {
-        try icon(@src(), "right_arrow", entypo.triangle_right, .{ .gravity_y = 0.5 });
+        try icon(@src(), "right_arrow", entypo.triangle_right, .{ .gravity_y = 0.5 }, .{});
     }
     try labelNoFmt(@src(), label_str, options.strip());
 
@@ -4201,7 +4224,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
         iconopts = iconopts.override(themeGet().style_accent);
     }
 
-    try icon(@src(), name, tvg_bytes, iconopts);
+    try icon(@src(), name, tvg_bytes, iconopts, .{});
 
     mi.deinit();
 
@@ -4338,8 +4361,8 @@ pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, opts: Option
     lw.deinit();
 }
 
-pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, opts: Options) !void {
-    var iw = try IconWidget.init(src, name, tvg_bytes, opts);
+pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, opts: Options, icon_opts: IconRenderOptions) !void {
+    var iw = try IconWidget.init(src, name, tvg_bytes, opts, icon_opts);
     try iw.install();
     try iw.draw();
     iw.deinit();
@@ -4515,7 +4538,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     return click;
 }
 
-pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) !bool {
+pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options, icon_opts: IconRenderOptions) !bool {
     const defaults = Options{ .padding = Rect.all(4) };
     var bw = ButtonWidget.init(src, init_opts, defaults.override(opts));
     try bw.install();
@@ -4524,7 +4547,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
 
     // When someone passes min_size_content to buttonIcon, they want the icon
     // to be that size, so we pass it through.
-    try icon(@src(), name, tvg_bytes, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio }));
+    try icon(@src(), name, tvg_bytes, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio }), icon_opts);
 
     const click = bw.clicked();
     try bw.drawFocus();
@@ -6210,7 +6233,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: RenderTextureOptions) !v
     try renderTriangles(triangles, tex);
 }
 
-pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions) !void {
+pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: RenderTextureOptions, icon_opts: IconRenderOptions) !void {
     if (rs.s == 0) return;
     if (clipGet().intersect(rs.r).empty()) return;
 
@@ -6218,7 +6241,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     const target_size = rs.r.h;
     const ask_height = @ceil(target_size);
 
-    const tce = iconTexture(name, tvg_bytes, @as(u32, @intFromFloat(ask_height))) catch return;
+    const tce = iconTexture(name, tvg_bytes, @as(u32, @intFromFloat(ask_height)), icon_opts) catch return;
 
     try renderTexture(tce.texture, rs, opts);
 }
