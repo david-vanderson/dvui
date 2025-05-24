@@ -4420,28 +4420,21 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
         }
     }
 
-    const rs = wd.parent.screenRectScale(rect);
+    // rect is the content rect, so expand to the whole rect
+    wd.rect = rect.outset(wd.options.paddingGet()).outset(wd.options.borderGet()).outset(wd.options.marginGet());
 
     var renderBackground: ?Color = if (wd.options.backgroundGet()) wd.options.color(.fill) else null;
 
     if (wd.options.rotationGet() == 0.0) {
-        // This will be cleaned up soon - doing this crazy stuff so that the background has the same rect as the image
-        const wd_rect = wd.rect;
-        wd.rect_scale_cache = null;
-
-        wd.rect = rect;
         try wd.borderAndBackground(.{});
         renderBackground = null;
-
-        wd.rect = wd_rect;
-        wd.rect_scale_cache = wd.rectScale();
     } else {
         if (wd.options.borderGet().nonZero()) {
             dvui.log.debug("image {x} can't render border while rotated\n", .{wd.id});
         }
     }
 
-    try dvui.renderImage(init_opts.name, init_opts.bytes, rs, .{ .rotation = wd.options.rotationGet(), .corner_radius = wd.options.corner_radiusGet(), .uv = init_opts.uv, .background_color = renderBackground });
+    try dvui.renderImage(init_opts.name, init_opts.bytes, wd.contentRectScale(), .{ .rotation = wd.options.rotationGet(), .corner_radius = wd.options.corner_radiusGet(), .uv = init_opts.uv, .background_color = renderBackground });
 
     wd.minSizeSetAndRefresh();
     wd.minSizeReportToParent();
