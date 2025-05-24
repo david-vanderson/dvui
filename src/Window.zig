@@ -1516,7 +1516,7 @@ fn debugWindowShow(self: *Self) !void {
         self.debug_widget_id = @enumFromInt(std.fmt.parseInt(u64, std.mem.sliceTo(&buf, 0), 16) catch 0);
     }
 
-    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 80 } });
+    var tl = dvui.TextLayoutWidget.init(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 } });
     try tl.install(.{});
 
     self.debug_widget_panic = false;
@@ -1558,20 +1558,22 @@ fn debugWindowShow(self: *Self) !void {
         duf = !duf;
     }
 
-    const log_refresh = self.debugRefresh(null);
-    if (try dvui.button(@src(), if (log_refresh) "Stop Refresh Logging" else "Start Refresh Logging", .{}, .{})) {
-        _ = self.debugRefresh(!log_refresh);
-    }
-    const log_event_handled = self.debugHandleEvents(null);
-    if (try dvui.button(@src(), if (log_event_handled) "Stop Event Handled Logging" else "Start Event Handled Logging", .{}, .{})) {
-        _ = self.debugHandleEvents(!log_event_handled);
-    }
-    const log_event_unhandled = self.debugUnhandledEvents(null);
-    if (try dvui.button(@src(), if (log_event_unhandled) "Stop Unhandled Event Logging" else "Start Unhandled Event Logging", .{}, .{})) {
-        _ = self.debugUnhandledEvents(!log_event_unhandled);
+    var log_refresh = self.debugRefresh(null);
+    if (try dvui.checkbox(@src(), &log_refresh, "Refresh Logging", .{})) {
+        _ = self.debugRefresh(log_refresh);
     }
 
-    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
+    var log_event_handled = self.debugHandleEvents(null);
+    if (try dvui.checkbox(@src(), &log_event_handled, "Log Handled Events", .{})) {
+        _ = self.debugHandleEvents(log_event_handled);
+    }
+
+    var log_event_unhandled = self.debugUnhandledEvents(null);
+    if (try dvui.checkbox(@src(), &log_event_unhandled, "Log Unhandled Events", .{})) {
+        _ = self.debugUnhandledEvents(log_event_unhandled);
+    }
+
+    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false, .min_size_content = .height(200) });
     defer scroll.deinit();
 
     var iter = std.mem.splitScalar(u8, self.debug_under_mouse_info, '\n');
