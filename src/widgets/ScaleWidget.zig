@@ -142,7 +142,7 @@ pub fn data(self: *ScaleWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn rectFor(self: *ScaleWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *ScaleWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     var s: f32 = undefined;
     if (self.scale.* > 0) {
         s = 1.0 / self.scale.*;

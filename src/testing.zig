@@ -257,7 +257,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
         _ = try step(frame);
     }
 
-    const HashInt = u32;
+    const HashInt = u64;
     const hash: HashInt = widget_hasher.?.final();
 
     const file = dir.openFile(filename, .{ .mode = .read_write }) catch |err| switch (err) {
