@@ -657,7 +657,7 @@ pub fn basicWidgets() !void {
                 var bbox = try dvui.box(@src(), .horizontal, opts);
                 defer bbox.deinit();
 
-                try dvui.icon(@src(), "cycle", entypo.cycle, opts);
+                try dvui.icon(@src(), "cycle", entypo.cycle, opts, .{});
                 _ = try dvui.spacer(@src(), .{ .w = 4 }, .{});
                 try dvui.labelNoFmt(@src(), "Icon+Gray", opts);
 
@@ -769,9 +769,9 @@ pub fn basicWidgets() !void {
         try dvui.label(@src(), "Icons", .{}, .{ .gravity_y = 0.5 });
 
         const icon_opts = dvui.Options{ .gravity_y = 0.5, .min_size_content = .{ .h = 16 + icon_image_size_extra }, .rotation = icon_image_rotation };
-        try dvui.icon(@src(), "cycle", entypo.cycle, icon_opts);
-        try dvui.icon(@src(), "aircraft", entypo.aircraft, icon_opts);
-        try dvui.icon(@src(), "notes", entypo.beamed_note, icon_opts);
+        try dvui.icon(@src(), "cycle", entypo.cycle, icon_opts, .{});
+        try dvui.icon(@src(), "aircraft", entypo.aircraft, icon_opts, .{});
+        try dvui.icon(@src(), "notes", entypo.beamed_note, icon_opts, .{});
 
         if (try dvui.button(@src(), "Icon Browser", .{}, .{ .gravity_y = 0.5 })) {
             icon_browser_show = true;
@@ -784,19 +784,19 @@ pub fn basicWidgets() !void {
 
         try dvui.label(@src(), "Resize Rotate Icons/Images", .{}, .{ .gravity_y = 0.5 });
 
-        if (try dvui.buttonIcon(@src(), "plus", entypo.plus, .{}, .{ .gravity_y = 0.5 })) {
+        if (try dvui.buttonIcon(@src(), "plus", entypo.plus, .{}, .{ .gravity_y = 0.5 }, .{})) {
             icon_image_size_extra += 1;
         }
 
-        if (try dvui.buttonIcon(@src(), "minus", entypo.minus, .{}, .{ .gravity_y = 0.5 })) {
+        if (try dvui.buttonIcon(@src(), "minus", entypo.minus, .{}, .{ .gravity_y = 0.5 }, .{})) {
             icon_image_size_extra = @max(0, icon_image_size_extra - 1);
         }
 
-        if (try dvui.buttonIcon(@src(), "cw", entypo.cw, .{}, .{ .gravity_y = 0.5 })) {
+        if (try dvui.buttonIcon(@src(), "cw", entypo.cw, .{}, .{ .gravity_y = 0.5 }, .{})) {
             icon_image_rotation = icon_image_rotation + 5 * std.math.pi / 180.0;
         }
 
-        if (try dvui.buttonIcon(@src(), "ccw", entypo.ccw, .{}, .{ .gravity_y = 0.5 })) {
+        if (try dvui.buttonIcon(@src(), "ccw", entypo.ccw, .{}, .{ .gravity_y = 0.5 }, .{})) {
             icon_image_rotation = icon_image_rotation - 5 * std.math.pi / 180.0;
         }
     }
@@ -813,7 +813,7 @@ pub fn dropdownAdvanced() !void {
     // Here's what is shown when the dropdown is not dropped
     {
         var hbox2 = try dvui.box(@src(), .horizontal, .{ .expand = .both });
-        try dvui.icon(@src(), "air", entypo.air, .{ .gravity_y = 0.5 });
+        try dvui.icon(@src(), "air", entypo.air, .{ .gravity_y = 0.5 }, .{});
 
         if (g.choice) |c| {
             try dvui.label(@src(), "Dropdown Choice {d}", .{c}, .{ .gravity_y = 0.5, .padding = .{ .x = 6, .w = 6 } });
@@ -821,7 +821,7 @@ pub fn dropdownAdvanced() !void {
             try dvui.label(@src(), "Advanced Dropdown", .{}, .{ .gravity_y = 0.5, .padding = .{ .x = 6, .w = 6 } });
         }
 
-        try dvui.icon(@src(), "dropdown_triangle", entypo.chevron_small_down, .{ .gravity_y = 0.5 });
+        try dvui.icon(@src(), "dropdown_triangle", entypo.chevron_small_down, .{ .gravity_y = 0.5 }, .{});
 
         hbox2.deinit();
     }
@@ -837,7 +837,7 @@ pub fn dropdownAdvanced() !void {
 
             var opts: Options = if (mi.show_active) dvui.themeGet().style_accent else .{};
 
-            try dvui.icon(@src(), "aircraft landing", entypo.aircraft_landing, opts.override(.{ .gravity_y = 0.5 }));
+            try dvui.icon(@src(), "aircraft landing", entypo.aircraft_landing, opts.override(.{ .gravity_y = 0.5 }), .{});
             try dvui.labelNoFmt(@src(), "icon with text", opts.override(.{ .padding = .{ .x = 6 } }));
 
             if (mi.activeRect()) |_| {
@@ -934,6 +934,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
             if (text_entry_password_buf_obf_enable) entypo.eye_with_line else entypo.eye,
             .{},
             .{ .expand = .ratio },
+            .{},
         )) {
             text_entry_password_buf_obf_enable = !text_entry_password_buf_obf_enable;
         }
@@ -1060,7 +1061,7 @@ pub fn textEntryWidgets(demo_win_id: u32) !void {
 
             var new_filename: ?[]const u8 = null;
 
-            if (try dvui.buttonIcon(@src(), "select font", entypo.folder, .{}, .{ .expand = .ratio, .gravity_x = 1.0 })) {
+            if (try dvui.buttonIcon(@src(), "select font", entypo.folder, .{}, .{ .expand = .ratio, .gravity_x = 1.0 }, .{})) {
                 new_filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "Pick Font File" });
             }
 
@@ -1794,16 +1795,16 @@ pub fn layoutText() !void {
         defer tl.deinit();
 
         var cbox = try dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(6), .min_size_content = .{ .w = 40 } });
-        if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{}, .{ .expand = .ratio })) {
+        if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{}, .{ .expand = .ratio }, .{})) {
             try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
         }
-        if (try dvui.buttonIcon(@src(), "more", entypo.dots_three_vertical, .{}, .{ .expand = .ratio })) {
+        if (try dvui.buttonIcon(@src(), "more", entypo.dots_three_vertical, .{}, .{ .expand = .ratio }, .{})) {
             try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
         }
         cbox.deinit();
 
         cbox = try dvui.box(@src(), .vertical, .{ .margin = Rect.all(4), .padding = Rect.all(4), .gravity_x = 1.0, .background = true, .color_fill = .fill_window, .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
-        try dvui.icon(@src(), "aircraft", entypo.aircraft, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 });
+        try dvui.icon(@src(), "aircraft", entypo.aircraft, .{ .min_size_content = .{ .h = 30 }, .gravity_x = 0.5 }, .{});
         try dvui.label(@src(), "Caption Heading", .{}, .{ .font_style = .caption_heading, .gravity_x = 0.5 });
         var tl_caption = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .background = false });
         try tl_caption.addText("Here is some caption text that is in it's own text layout.", .{ .font_style = .caption });
@@ -1975,7 +1976,7 @@ pub fn reorderLists() !void {
             var hbox2 = try dvui.box(@src(), .horizontal, .{});
             defer hbox2.deinit();
             try dvui.label(@src(), "Drag", .{}, .{});
-            try dvui.icon(@src(), "drag_icon", dvui.entypo.menu, .{ .min_size_content = .{ .h = 22 } });
+            try dvui.icon(@src(), "drag_icon", dvui.entypo.menu, .{ .min_size_content = .{ .h = 22 } }, .{});
             try dvui.label(@src(), "to reorder.", .{}, .{});
         }
 
@@ -2341,7 +2342,7 @@ pub fn menus() !void {
                     var tab_box = try dvui.box(@src(), .horizontal, .{});
                     defer tab_box.deinit();
 
-                    try dvui.icon(@src(), "cycle", entypo.cycle, .{});
+                    try dvui.icon(@src(), "cycle", entypo.cycle, .{}, .{});
 
                     _ = try dvui.spacer(@src(), .{ .w = 4 }, .{});
 
@@ -2750,11 +2751,11 @@ pub fn scrollCanvas(comptime data: u8) !void {
         {
             var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
-            if (try dvui.buttonIcon(@src(), "left", entypo.arrow_left, .{}, .{ .min_size_content = .{ .h = 20 } })) {
+            if (try dvui.buttonIcon(@src(), "left", entypo.arrow_left, .{}, .{ .min_size_content = .{ .h = 20 } }, .{})) {
                 b.x -= 10;
             }
 
-            if (try dvui.buttonIcon(@src(), "right", entypo.arrow_right, .{}, .{ .min_size_content = .{ .h = 20 } })) {
+            if (try dvui.buttonIcon(@src(), "right", entypo.arrow_right, .{}, .{ .min_size_content = .{ .h = 20 } }, .{})) {
                 b.x += 10;
             }
         }
@@ -3635,7 +3636,13 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
 
             var buf: [100]u8 = undefined;
             const text = try std.fmt.bufPrint(&buf, icon_decl_name ++ ".{s}", .{name});
-            if (try dvui.buttonIcon(@src(), text, field, .{}, .{ .min_size_content = .{ .h = settings.icon_size }, .color_text = .{ .color = settings.icon_rgb } })) {
+            if (try dvui.buttonIcon(@src(), text, field, .{}, .{
+                .min_size_content = .{ .h = settings.icon_size },
+                .color_text = .{ .color = settings.icon_rgb },
+            }, .{
+                .override_fill_color = settings.icon_rgb,
+                .override_stroke_color = settings.icon_rgb,
+            })) {
                 try dvui.clipboardTextSet(text);
                 var buf2: [100]u8 = undefined;
                 const toast_text = try std.fmt.bufPrint(&buf2, "Copied \"{s}\"", .{text});
