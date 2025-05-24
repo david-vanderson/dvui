@@ -3641,10 +3641,7 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
             if (try dvui.buttonIcon(@src(), text, field, .{}, .{
                 .min_size_content = .{ .h = settings.icon_size },
                 .color_text = .{ .color = settings.icon_rgb },
-            }, .{
-                .override_fill_color = settings.icon_rgb,
-                .override_stroke_color = settings.icon_rgb,
-            })) {
+            }, .{})) {
                 try dvui.clipboardTextSet(text);
                 var buf2: [100]u8 = undefined;
                 const toast_text = try std.fmt.bufPrint(&buf2, "Copied \"{s}\"", .{text});
