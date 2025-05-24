@@ -18,7 +18,7 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
       # uses .minimum_zig_version from build.zig.zon
-      - uses: mlugg/setup-zig@v1
+      - uses: mlugg/setup-zig@v2
 
       - name: Install libraries
         run: |
@@ -40,7 +40,7 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
       # uses .minimum_zig_version from build.zig.zon
-      - uses: mlugg/setup-zig@v1
+      - uses: mlugg/setup-zig@v2
 
       - name: Compile Dx11
         run: zig build -Dbackend=dx11

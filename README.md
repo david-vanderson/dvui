@@ -36,7 +36,7 @@ How to run the built-in examples:
   - [Online Docs](https://david-vanderson.github.io/docs)
   - ```zig build docs```
     - then load `zig-out/docs/index.html`
-  - ```zig build test -Ddoc-image-dir=zig-out/docs```
+  - ```zig build docs -Dgenerate-images```
     - adds images to the docs
 
 This document is a broad overview.  See [implementation details](readme-implementation.md) for how to write and modify widgets.
