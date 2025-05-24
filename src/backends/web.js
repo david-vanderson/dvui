@@ -1,3 +1,5 @@
+/**@typedef {BigInt} WidgetId */
+
 /**
  * @param {number} ms Number of milliseconds to sleep
  */
@@ -197,7 +199,7 @@ class Dvui {
 
     // Used for file uploads. Only valid for one frame
     filesCacheModified = false;
-    /** @type {Map<number, FileList>} */
+    /** @type {Map<WidgetId, FileList>} */
     filesCache = new Map();
 
     //let par = document.createElement("p");
