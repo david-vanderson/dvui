@@ -175,6 +175,9 @@ class Dvui {
     /** @type {[number, number]} */
     renderTargetSize = [0, 0];
 
+    renderRequested = false;
+    renderTimeoutId = 0;
+
     /** @type {WebAssembly.Instance} */
     instance;
     stopped = false;
@@ -784,12 +787,14 @@ class Dvui {
                     Promise.all(data).then((data) => {
                         this.filesCacheModified = true;
                         this.filesCache.set(id, { files, data });
+                        this.requestRender();
                     });
-                }).catch(() =>
+                }).catch(() => {
                     console.debug(
                         "Filepicker canceled: This is currently not detectable from within dvui",
-                    )
-                );
+                    );
+                    this.requestRender();
+                });
             },
             wasm_get_file_size: (id, file_index) => {
                 const cached = this.filesCache.get(id);
@@ -1037,6 +1042,79 @@ class Dvui {
         }
     }
 
+    requestRender() {
+        if (this.renderTimeoutId > 0) {
+            // we got called before the timeout happened
+            clearTimeout(this.renderTimeoutId);
+            this.renderTimeoutId = 0;
+        }
+
+        if (!this.renderRequested) {
+            // multiple events could call requestRender multiple times, and
+            // we only want a single requestAnimationFrame to happen before
+            // each call to dvui_update
+            this.renderRequested = true;
+            requestAnimationFrame(this.render.bind(this));
+        }
+    }
+
+    render() {
+        if (this.stopped) return;
+        this.renderRequested = false;
+
+        // if the canvas changed size, adjust the backing buffer
+        const w = this.gl.canvas.clientWidth;
+        const h = this.gl.canvas.clientHeight;
+        const scale = window.devicePixelRatio;
+        //console.log("wxh " + w + "x" + h + " scale " + scale);
+        this.gl.canvas.width = Math.round(w * scale);
+        this.gl.canvas.height = Math.round(h * scale);
+        this.renderTargetSize = [
+            this.gl.drawingBufferWidth,
+            this.gl.drawingBufferHeight,
+        ];
+        this.gl.viewport(
+            0,
+            0,
+            this.gl.drawingBufferWidth,
+            this.gl.drawingBufferHeight,
+        );
+        this.gl.scissor(
+            0,
+            0,
+            this.gl.drawingBufferWidth,
+            this.gl.drawingBufferHeight,
+        );
+
+        this.gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+
+        let millis_to_wait = this.instance.exports.dvui_update();
+        if (this.need_oskCheck) {
+            this.need_oskCheck = false;
+            this.oskCheck();
+        }
+
+        if (!this.filesCacheModified) {
+            // Only clear if we didn't add anything this frame. Async could add items after they were requested
+            // in the frame, so keep if for two frames
+            this.filesCache.clear();
+        }
+        this.filesCacheModified = false;
+
+        if (millis_to_wait < 0) {
+            this.stopped = true;
+        } else if (millis_to_wait == 0) {
+            this.requestRender();
+        } else if (millis_to_wait > 0) {
+            this.renderTimeoutId = setTimeout(function () {
+                this.renderTimeoutId = 0;
+                this.requestRender();
+            }.bind(this), millis_to_wait);
+        }
+    }
+
+
     run() {
         if (!this.instance) {
             throw new Error(
@@ -1050,91 +1128,16 @@ class Dvui {
         }
         this.init();
 
-        let renderRequested = false;
-        let renderTimeoutId = 0;
-
-        const render = () => {
-            if (this.stopped) return;
-            renderRequested = false;
-
-            // if the canvas changed size, adjust the backing buffer
-            const w = this.gl.canvas.clientWidth;
-            const h = this.gl.canvas.clientHeight;
-            const scale = window.devicePixelRatio;
-            //console.log("wxh " + w + "x" + h + " scale " + scale);
-            this.gl.canvas.width = Math.round(w * scale);
-            this.gl.canvas.height = Math.round(h * scale);
-            this.renderTargetSize = [
-                this.gl.drawingBufferWidth,
-                this.gl.drawingBufferHeight,
-            ];
-            this.gl.viewport(
-                0,
-                0,
-                this.gl.drawingBufferWidth,
-                this.gl.drawingBufferHeight,
-            );
-            this.gl.scissor(
-                0,
-                0,
-                this.gl.drawingBufferWidth,
-                this.gl.drawingBufferHeight,
-            );
-
-            this.gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
-            this.gl.clear(this.gl.COLOR_BUFFER_BIT);
-
-            let millis_to_wait = this.instance.exports.dvui_update();
-            if (this.need_oskCheck) {
-                this.need_oskCheck = false;
-                this.oskCheck();
-            }
-
-            if (!this.filesCacheModified) {
-                // Only clear if we didn't add anything this frame. Async could add items after they were requested
-                // in the frame, so keep if for two frames
-                this.filesCache.clear();
-            }
-            this.filesCacheModified = false;
-
-            if (millis_to_wait < 0) {
-                this.stopped = true;
-            } else if (millis_to_wait == 0) {
-                requestRender();
-            } else if (millis_to_wait > 0) {
-                renderTimeoutId = setTimeout(function () {
-                    renderTimeoutId = 0;
-                    requestRender();
-                }, millis_to_wait);
-            }
-        };
-
-        function requestRender() {
-            if (renderTimeoutId > 0) {
-                // we got called before the timeout happened
-                clearTimeout(renderTimeoutId);
-                renderTimeoutId = 0;
-            }
-
-            if (!renderRequested) {
-                // multiple events could call requestRender multiple times, and
-                // we only want a single requestAnimationFrame to happen before
-                // each call to dvui_update
-                renderRequested = true;
-                requestAnimationFrame(render);
-            }
-        }
-
         // event listeners
         this.gl.canvas.addEventListener("contextmenu", (ev) => {
             ev.preventDefault();
         });
         window.addEventListener("resize", (ev) => {
-            requestRender();
+            this.requestRender();
         });
         if (this.gl.canvas instanceof HTMLCanvasElement) {
             const resizeObserver = new ResizeObserver(() => {
-                requestRender();
+                this.requestRender();
             });
             resizeObserver.observe(this.gl.canvas);
         }
@@ -1145,16 +1148,16 @@ class Dvui {
             let y = (ev.clientY - rect.top) / (rect.bottom - rect.top) *
                 this.gl.canvas.clientHeight;
             this.instance.exports.add_event(1, 0, 0, x, y);
-            requestRender();
+            this.requestRender();
         });
         this.gl.canvas.addEventListener("mousedown", (ev) => {
             this.instance.exports.add_event(2, ev.button, 0, 0, 0);
-            requestRender();
+            this.requestRender();
         });
         this.gl.canvas.addEventListener("mouseup", (ev) => {
             this.instance.exports.add_event(3, ev.button, 0, 0, 0);
             this.need_oskCheck = true;
-            requestRender();
+            this.requestRender();
         });
         this.gl.canvas.addEventListener("wheel", (ev) => {
             ev.preventDefault();
@@ -1176,7 +1179,7 @@ class Dvui {
                     0,
                 );
             }
-            requestRender();
+            this.requestRender();
         });
 
         let keydown = (ev) => {
@@ -1204,11 +1207,11 @@ class Dvui {
                     (ev.metaKey << 3) + (ev.altKey << 2) +
                         (ev.ctrlKey << 1) + (ev.shiftKey << 0),
                 );
-                requestRender();
+                this.requestRender();
             }
         };
-        this.gl.canvas.addEventListener("keydown", keydown);
-        this.hidden_input.addEventListener("keydown", keydown);
+        this.gl.canvas.addEventListener("keydown", keydown.bind(this));
+        this.hidden_input.addEventListener("keydown", keydown.bind(this));
 
         let keyup = (ev) => {
             const str = utf8encoder.encode(ev.key);
@@ -1228,10 +1231,10 @@ class Dvui {
                     (ev.shiftKey << 0),
             );
             this.need_oskCheck = true;
-            requestRender();
+            this.requestRender();
         };
-        this.gl.canvas.addEventListener("keyup", keyup);
-        this.hidden_input.addEventListener("keyup", keyup);
+        this.gl.canvas.addEventListener("keyup", keyup.bind(this));
+        this.hidden_input.addEventListener("keyup", keyup.bind(this));
 
         this.hidden_input.addEventListener("beforeinput", (ev) => {
             ev.preventDefault();
@@ -1253,7 +1256,7 @@ class Dvui {
                     0,
                     0,
                 );
-                requestRender();
+                this.requestRender();
             }
         });
         this.gl.canvas.addEventListener("touchstart", (ev) => {
@@ -1274,7 +1277,7 @@ class Dvui {
                     y,
                 );
             }
-            requestRender();
+            this.requestRender();
         });
         this.gl.canvas.addEventListener("touchend", (ev) => {
             ev.preventDefault();
@@ -1296,7 +1299,7 @@ class Dvui {
                 this.touches.splice(tidx, 1);
             }
             this.need_oskCheck = true;
-            requestRender();
+            this.requestRender();
         });
         this.gl.canvas.addEventListener("touchmove", (ev) => {
             ev.preventDefault();
@@ -1316,14 +1319,14 @@ class Dvui {
                     y,
                 );
             }
-            requestRender();
+            this.requestRender();
         });
         //canvas.addEventListener("touchcancel", (ev) => {
         //    console.log(ev);
-        //    requestRender();
+        //    this.requestRender();
         //});
 
         // start the first update
-        requestRender();
+        this.requestRender();
     }
 }

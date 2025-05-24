@@ -72,10 +72,13 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
         .uv = .{ .x = 0.25, .y = 0.25, .w = 0.75, .h = 0.75 },
     });
 
+    const mouse_rect = b.data().contentRect().justSize().outsetAll(5);
+    const mouse_rs = b.widget().screenRectScale(mouse_rect);
+
     var changed = false;
     const evts = dvui.events();
     for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = b.data().id, .r = rs.r }))
+        if (!dvui.eventMatch(e, .{ .id = b.data().id, .r = mouse_rs.r }))
             continue;
 
         switch (e.evt) {
@@ -200,7 +203,8 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
     const trackrs = b.widget().screenRectScale(track);
 
     var ret = false;
-    const rs = b.data().contentRectScale();
+    const rect = b.data().contentRect().justSize().outset(if (dir == .vertical) .{ .y = 5, .h = 5 } else .{ .x = 5, .w = 5 });
+    const rs = b.widget().screenRectScale(rect);
     const evts = dvui.events();
     for (evts) |*e| {
         if (!dvui.eventMatch(e, .{ .id = b.data().id, .r = rs.r }))
@@ -242,12 +246,12 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
             .key => |ke| {
                 if (ke.action == .down or ke.action == .repeat) {
                     switch (ke.code) {
-                        .left, .down => {
+                        .left, .up => {
                             e.handle(@src(), b.data());
                             fraction = std.math.clamp(fraction - 0.05, 0, 1);
                             ret = true;
                         },
-                        .right, .up => {
+                        .right, .down => {
                             e.handle(@src(), b.data());
                             fraction = std.math.clamp(fraction + 0.05, 0, 1);
                             ret = true;
@@ -277,8 +281,8 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
     });
 
     const knobRect = dvui.Rect.fromPoint(switch (dir) {
-        .horizontal => .{ .x = (br.w - knobsize.w) * fraction },
-        .vertical => .{ .y = (br.h - knobsize.h) * fraction },
+        .horizontal => .{ .x = (br.w * fraction) - knobsize.w / 2 },
+        .vertical => .{ .y = (br.h * fraction) - knobsize.h / 2 },
     }).toSize(knobsize);
 
     var knob = dvui.BoxWidget.init(@src(), .horizontal, false, .{
@@ -301,7 +305,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
 }
 
 pub fn getHueSelectorTexture(dir: dvui.enums.Direction) !dvui.Texture {
-    const hue_texture_id = dvui.hashIdKey(@intFromEnum(dir), "hue_selector_texture");
+    const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromEnum(dir))), "hue_selector_texture");
     const res = try dvui.currentWindow().texture_cache.getOrPut(hue_texture_id);
     res.value_ptr.used = true;
     if (!res.found_existing) {
@@ -316,7 +320,7 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) !dvui.Texture {
 }
 
 pub fn getValueSaturationTexture(hue: f32) !dvui.Texture {
-    const hue_texture_id = dvui.hashIdKey(@intFromFloat(hue * 10000), "value_saturation_texture");
+    const hue_texture_id = dvui.hashIdKey(@enumFromInt(@as(u64, @intFromFloat(hue * 10000))), "value_saturation_texture");
     const res = try dvui.currentWindow().texture_cache.getOrPut(hue_texture_id);
     res.value_ptr.used = true;
     if (!res.found_existing) {

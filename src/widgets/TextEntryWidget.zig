@@ -320,7 +320,7 @@ pub fn data(self: *TextEntryWidget) *WidgetData {
     return &self.wd;
 }
 
-pub fn rectFor(self: *TextEntryWidget, id: u32, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *TextEntryWidget, id: dvui.WidgetId, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.wd.contentRect().justSize(), min_size, e, g);
 }

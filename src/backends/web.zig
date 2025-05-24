@@ -60,11 +60,11 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_clipboardTextSet(ptr: [*]const u8, len: usize) void;
 
     // NOTE: bool in extern becomes 0 and 1 in js, which is falsy and truthy respectively
-    pub extern "dvui" fn wasm_open_file_picker(id: u32, accept_ptr: [*]const u8, accept_len: usize, multiple: bool) void;
-    pub extern "dvui" fn wasm_get_number_of_files_available(id: u32) usize;
-    pub extern "dvui" fn wasm_get_file_name(id: u32, file_index: usize) [*:0]u8;
-    pub extern "dvui" fn wasm_get_file_size(id: u32, file_index: usize) isize;
-    pub extern "dvui" fn wasm_read_file_data(id: u32, file_index: usize, data: [*]u8) void;
+    pub extern "dvui" fn wasm_open_file_picker(id: u64, accept_ptr: [*]const u8, accept_len: usize, multiple: bool) void;
+    pub extern "dvui" fn wasm_get_number_of_files_available(id: u64) usize;
+    pub extern "dvui" fn wasm_get_file_name(id: u64, file_index: usize) [*:0]u8;
+    pub extern "dvui" fn wasm_get_file_size(id: u64, file_index: usize) isize;
+    pub extern "dvui" fn wasm_read_file_data(id: u64, file_index: usize, data: [*]u8) void;
 
     pub extern "dvui" fn wasm_add_noto_font() void;
 } else struct { // Mock api for testing that this backend is semantically correct, cannot test behaviour
@@ -114,17 +114,17 @@ pub const wasm = if (!builtin.is_test) struct {
     pub fn wasm_download_data(_: [*]const u8, _: usize, _: [*]const u8, _: usize) void {}
     pub fn wasm_clipboardTextSet(_: [*]const u8, _: usize) void {}
 
-    pub fn wasm_open_file_picker(_: u32, _: [*]const u8, _: usize, _: bool) void {}
-    pub fn wasm_get_number_of_files_available(_: u32) usize {
+    pub fn wasm_open_file_picker(_: u64, _: [*]const u8, _: usize, _: bool) void {}
+    pub fn wasm_get_number_of_files_available(_: u64) usize {
         return undefined;
     }
-    pub fn wasm_get_file_name(_: u32, _: usize) [*:0]u8 {
+    pub fn wasm_get_file_name(_: u64, _: usize) [*:0]u8 {
         return undefined;
     }
-    pub fn wasm_get_file_size(_: u32, _: usize) isize {
+    pub fn wasm_get_file_size(_: u64, _: usize) isize {
         return undefined;
     }
-    pub fn wasm_read_file_data(_: u32, _: usize, _: [*]u8) void {}
+    pub fn wasm_read_file_data(_: u64, _: usize, _: [*]u8) void {}
 
     pub fn wasm_add_noto_font() void {}
 };
@@ -729,29 +729,29 @@ pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
     }
 }
 
-pub fn openFilePicker(id: u32, accept: ?[]const u8, multiple: bool) void {
+pub fn openFilePicker(id: dvui.WidgetId, accept: ?[]const u8, multiple: bool) void {
     const accept_final = accept orelse "";
-    wasm.wasm_open_file_picker(id, accept_final.ptr, accept_final.len, multiple);
+    wasm.wasm_open_file_picker(id.asU64(), accept_final.ptr, accept_final.len, multiple);
 }
 
-pub fn getFileName(id: u32, file_index: usize) ?[:0]const u8 {
-    const ptr = wasm.wasm_get_file_name(id, file_index);
+pub fn getFileName(id: dvui.WidgetId, file_index: usize) ?[:0]const u8 {
+    const ptr = wasm.wasm_get_file_name(id.asU64(), file_index);
     if (@intFromPtr(ptr) <= 0) return null;
     return std.mem.sliceTo(ptr, 0);
 }
 
-pub fn getFileSize(id: u32, file_index: usize) ?usize {
-    const size: isize = wasm.wasm_get_file_size(id, file_index);
+pub fn getFileSize(id: dvui.WidgetId, file_index: usize) ?usize {
+    const size: isize = wasm.wasm_get_file_size(id.asU64(), file_index);
     if (size <= 0) return null;
     return @intCast(size);
 }
 
-pub fn readFileData(id: u32, file_index: usize, data: [*]u8) void {
-    wasm.wasm_read_file_data(id, file_index, data);
+pub fn readFileData(id: dvui.WidgetId, file_index: usize, data: [*]u8) void {
+    wasm.wasm_read_file_data(id.asU64(), file_index, data);
 }
 
-pub fn getNumberOfFilesAvailable(id: u32) usize {
-    return wasm.wasm_get_number_of_files_available(id);
+pub fn getNumberOfFilesAvailable(id: dvui.WidgetId) usize {
+    return wasm.wasm_get_number_of_files_available(id.asU64());
 }
 
 // dvui_app stuff
