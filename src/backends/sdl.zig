@@ -9,6 +9,9 @@ pub const c = blk: {
         break :blk @cImport({
             @cDefine("SDL_DISABLE_OLD_NAMES", {});
             @cInclude("SDL3/SDL.h");
+
+            @cDefine("SDL_MAIN_HANDLED", {});
+            @cInclude("SDL3/SDL_main.h");
         });
     }
     break :blk @cImport({
@@ -20,6 +23,13 @@ pub const kind: dvui.enums.Backend = if (sdl3) .sdl3 else .sdl2;
 
 pub const SDLBackend = @This();
 pub const Context = *SDLBackend;
+var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
+
+// used when doing sdl callbacks
+pub var gwin: dvui.Window = undefined;
+pub var gback: SDLBackend = undefined;
+pub var ghaveEvent: bool = false;
+pub var gWaiting: bool = false;
 
 const log = std.log.scoped(.SDLBackend);
 
@@ -1038,18 +1048,31 @@ const winapi = if (builtin.os.tag == .windows) struct {
 } else struct {};
 
 // This must be exposed in the app's root source file.
-pub fn main() !void {
+pub fn main() !u8 {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
-    if (@import("builtin").os.tag == .windows) { // optional
+    if (builtin.os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         _ = winapi.AttachConsole(0xFFFFFFFF);
     }
-    log.info("version: {}", .{getSDLVersion()});
+
+    if (sdl3 and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
+        // We are using sdl's callbacks to support rendering during OS resizing
+
+        // For programs that provide their own entry points instead of relying on SDL's main function
+        // macro magic, 'SDL_SetMainReady()' should be called before calling 'SDL_Init()'.
+        c.SDL_SetMainReady();
+
+        // This is more or less what 'SDL_main.h' does behind the curtains.
+        const status = c.SDL_EnterAppMainCallbacks(0, null, appInit, appIterate, appEvent, appQuit);
+
+        return @bitCast(@as(i8, @truncate(status)));
+    }
+
+    log.info("version: {} no callbacks", .{getSDLVersion()});
 
     const init_opts = app.config.get();
 
-    var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
     const gpa = gpa_instance.allocator();
 
     defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
@@ -1107,6 +1130,137 @@ pub fn main() !void {
         const wait_event_micros = win.waitTime(end_micros, null);
         back.waitEventTimeout(wait_event_micros);
     }
+
+    return 0;
+}
+
+// sdl3 callback
+fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callconv(.c) c.SDL_AppResult {
+    _ = appstate;
+    _ = argc;
+    _ = argv;
+    //_ = c.SDL_SetAppMetadata("dvui-demo", "0.1", "com.example.dvui-demo");
+
+    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
+
+    log.info("version: {} callbacks", .{getSDLVersion()});
+
+    const init_opts = app.config.get();
+
+    const gpa = gpa_instance.allocator();
+
+    // init SDL backend (creates and owns OS window)
+    gback = initWindow(.{
+        .allocator = gpa,
+        .size = init_opts.size,
+        .min_size = init_opts.min_size,
+        .max_size = init_opts.max_size,
+        .vsync = init_opts.vsync,
+        .title = init_opts.title,
+        .icon = init_opts.icon,
+        .hidden = init_opts.hidden,
+    }) catch |err| {
+        log.err("initWindow failed: {!}", .{err});
+        return c.SDL_APP_FAILURE;
+    };
+
+    _ = c.SDL_EnableScreenSaver();
+
+    //// init dvui Window (maps onto a single OS window)
+    gwin = dvui.Window.init(@src(), gpa, gback.backend(), .{}) catch |err| {
+        log.err("dvui.Window.init failed: {!}", .{err});
+        return c.SDL_APP_FAILURE;
+    };
+
+    if (app.initFn) |initFn| initFn(&gwin);
+
+    return c.SDL_APP_CONTINUE;
+}
+
+// sdl3 callback
+// This function runs once at shutdown.
+fn appQuit(appstate: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
+    _ = appstate;
+    _ = result;
+
+    const app = dvui.App.get() orelse unreachable;
+    if (app.deinitFn) |deinitFn| deinitFn();
+    gwin.deinit();
+    gback.deinit();
+    if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
+
+    // SDL will clean up the window/renderer for us.
+}
+
+// sdl3 callback
+// This function runs when a new event (mouse input, keypresses, etc) occurs.
+fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
+    const e = event.?.*;
+    ghaveEvent = true;
+    _ = gback.addEvent(&gwin, e) catch |err| {
+        log.err("dvui.Window.addEvent failed: {!}", .{err});
+        return c.SDL_APP_FAILURE;
+    };
+
+    if (event.?.type == c.SDL_EVENT_QUIT) {
+        return c.SDL_APP_SUCCESS; // end the program, reporting success to the OS.
+    }
+
+    return c.SDL_APP_CONTINUE;
+}
+
+// sdl3 callback
+// This function runs once per frame, and is the heart of the program.
+fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
+    // beginWait coordinates with waitTime below to run frames only when needed
+    const nstime = gwin.beginWait(ghaveEvent or gWaiting);
+    ghaveEvent = false;
+
+    // marks the beginning of a frame for dvui, can call dvui functions after this
+    gwin.begin(nstime) catch |err| {
+        log.err("dvui.Window.begin failed: {!}", .{err});
+        return c.SDL_APP_FAILURE;
+    };
+
+    // if dvui widgets might not cover the whole window, then need to clear
+    // the previous frame's render
+    _ = c.SDL_SetRenderDrawColor(gback.renderer, 0, 0, 0, 255);
+    _ = c.SDL_RenderClear(gback.renderer);
+
+    const app = dvui.App.get() orelse unreachable;
+    const res = app.frameFn() catch |err| {
+        log.err("dvui.App.frameFn failed: {!}", .{err});
+        return c.SDL_APP_FAILURE;
+    };
+
+    const end_micros = gwin.end(.{}) catch |err| {
+        log.err("dvui.Window.end failed: {!}", .{err});
+        return c.SDL_APP_FAILURE;
+    };
+
+    gback.setCursor(gwin.cursorRequested());
+    gback.textInputRect(gwin.textInputRequested());
+
+    gback.renderPresent();
+
+    if (res != .ok) return c.SDL_APP_SUCCESS;
+
+    const wait_event_micros = gwin.waitTime(end_micros, null);
+
+    // If a resize event happens while we are in waitEventTimeout below, sdl
+    // will call us again before returning from waitEventTimeout.  We don't
+    // want to wait for events while nested.  Otherwise all event handling gets
+    // screwed up and either never recovers or recovers after many seconds.
+    if (gWaiting) {
+        return c.SDL_APP_CONTINUE;
+    }
+
+    //std.debug.print("waitEventTimeout {d}\n", .{wait_event_micros});
+    gWaiting = true;
+    gback.waitEventTimeout(wait_event_micros);
+    gWaiting = false;
+
+    return c.SDL_APP_CONTINUE;
 }
 
 test {
