@@ -29,7 +29,7 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 pub var gwin: dvui.Window = undefined;
 pub var gback: SDLBackend = undefined;
 pub var ghaveEvent: bool = false;
-pub var ghaveResize: u8 = 0;
+pub var gFramesAfterResize: u8 = 0;
 
 const log = std.log.scoped(.SDLBackend);
 
@@ -1051,7 +1051,12 @@ const winapi = if (builtin.os.tag == .windows) struct {
 pub fn main() !u8 {
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
-    if (sdl3) {
+    if (builtin.os.tag == .windows) { // optional
+        // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
+        _ = winapi.AttachConsole(0xFFFFFFFF);
+    }
+
+    if (sdl3 and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
         // We are using sdl's callbacks to support rendering during OS resizing
 
         // For programs that provide their own entry points instead of relying on SDL's main function
@@ -1064,11 +1069,7 @@ pub fn main() !u8 {
         return @bitCast(@as(i8, @truncate(status)));
     }
 
-    if (@import("builtin").os.tag == .windows) { // optional
-        // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
-        _ = winapi.AttachConsole(0xFFFFFFFF);
-    }
-    log.info("version: {}", .{getSDLVersion()});
+    log.info("version: {} no callbacks", .{getSDLVersion()});
 
     const init_opts = app.config.get();
 
@@ -1142,11 +1143,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
-    if (@import("builtin").os.tag == .windows) { // optional
-        // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
-        _ = winapi.AttachConsole(0xFFFFFFFF);
-    }
-    log.info("version: {}", .{getSDLVersion()});
+    log.info("version: {} callbacks", .{getSDLVersion()});
 
     const init_opts = app.config.get();
 
@@ -1205,7 +1202,9 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
     switch (e.type) {
         c.SDL_EVENT_WINDOW_RESIZED => {
             //std.debug.print("resize {d}x{d}\n", .{e.window.data1, e.window.data2});
-            ghaveResize = 10;
+            if (builtin.target.os.tag == .macos) {
+                gFramesAfterResize = 10;
+            }
         },
         c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED => {
             //std.debug.print("pixel change {d}x{d}\n", .{e.window.data1, e.window.data2});
@@ -1224,7 +1223,7 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
 // This function runs once per frame, and is the heart of the program.
 fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // beginWait coordinates with waitTime below to run frames only when needed
-    const nstime = gwin.beginWait(ghaveEvent or ghaveResize > 0);
+    const nstime = gwin.beginWait(ghaveEvent or gFramesAfterResize > 0);
     ghaveEvent = false;
 
     // marks the beginning of a frame for dvui, can call dvui functions after this
@@ -1266,9 +1265,13 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // My suspicion is that it's due to sdl starting an internal timer during
     // the live resize.  I think we need to wait until that timer is gone.
     // 10ms seems to be enough, but having extra frames seems to look better.
-    if (ghaveResize > 0) {
-        //std.debug.print("ghaveResize {d}\n", .{ghaveResize});
-        ghaveResize -|= 1;
+    //
+    // Testing: insert a printf in SDL/src/main/generic/SDL_sysmain_callbacks.c
+    // function SDL_EnterAppMainCallbacks() in the while loop.  When things go
+    // wrong that loop stops running.
+    if (builtin.target.os.tag == .macos and gFramesAfterResize > 0) {
+        //std.debug.print("gFramesAfterResize {d}\n", .{gFramesAfterResize});
+        gFramesAfterResize -|= 1;
         std.time.sleep(1_000_000);
     } else {
         //std.debug.print("waitEventTimeout {d}\n", .{wait_event_micros});
