@@ -1197,7 +1197,10 @@ fn appQuit(appstate: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
 fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
     const e = event.?.*;
     ghaveEvent = true;
-    _ = gback.addEvent(&gwin, e) catch return c.SDL_APP_FAILURE;
+    _ = gback.addEvent(&gwin, e) catch |err| {
+        log.err("dvui.Window.addEvent failed: {!}", .{err});
+        return c.SDL_APP_FAILURE;
+    };
 
     if (event.?.type == c.SDL_EVENT_QUIT) {
         return c.SDL_APP_SUCCESS; // end the program, reporting success to the OS.
