@@ -29,7 +29,6 @@ var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
 pub var gwin: dvui.Window = undefined;
 pub var gback: SDLBackend = undefined;
 pub var ghaveEvent: bool = false;
-pub var gFramesAfterResize: u8 = 0;
 pub var gWaiting: bool = false;
 
 const log = std.log.scoped(.SDLBackend);
@@ -1200,19 +1199,6 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
     ghaveEvent = true;
     _ = gback.addEvent(&gwin, e) catch return c.SDL_APP_FAILURE;
 
-    if (builtin.target.os.tag == .macos) {
-        switch (e.type) {
-            c.SDL_EVENT_WINDOW_RESIZED => {
-                //std.debug.print("resize {d}x{d}\n", .{e.window.data1, e.window.data2});
-                gFramesAfterResize = 10;
-            },
-            c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED => {
-                //std.debug.print("pixel change {d}x{d}\n", .{e.window.data1, e.window.data2});
-            },
-            else => {},
-        }
-    }
-
     if (event.?.type == c.SDL_EVENT_QUIT) {
         return c.SDL_APP_SUCCESS; // end the program, reporting success to the OS.
     }
@@ -1224,7 +1210,7 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
 // This function runs once per frame, and is the heart of the program.
 fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // beginWait coordinates with waitTime below to run frames only when needed
-    const nstime = gwin.beginWait(ghaveEvent or gFramesAfterResize > 0 or gWaiting);
+    const nstime = gwin.beginWait(ghaveEvent or gWaiting);
     ghaveEvent = false;
 
     // marks the beginning of a frame for dvui, can call dvui functions after this
@@ -1258,35 +1244,12 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
 
     const wait_event_micros = gwin.waitTime(end_micros, null);
 
-    if (builtin.target.os.tag == .macos) {
-        // This works around some bad interaction between macos live resizing in
-        // sdl and calling waitEventTimeout.  The symptom is that normal event
-        // handling stops working, resizing the window reverts to stretching the
-        // image, and the entire app becomes nonfunctional.
-        //
-        // My suspicion is that it's due to sdl starting an internal timer during
-        // the live resize.  I think we need to wait until that timer is gone.
-        // 10ms seems to be enough, but having extra frames seems to look better.
-        //
-        // Testing: insert a printf in SDL/src/main/generic/SDL_sysmain_callbacks.c
-        // function SDL_EnterAppMainCallbacks() in the while loop.  When things go
-        // wrong that loop stops running.
-        if (gFramesAfterResize > 0) {
-            //std.debug.print("gFramesAfterResize {d}\n", .{gFramesAfterResize});
-            gFramesAfterResize -|= 1;
-            std.time.sleep(1_000_000);
-            return c.SDL_APP_CONTINUE;
-        }
-    }
-
-    if (builtin.target.os.tag == .windows) {
-        // If a resize event happens while we are in waitEventTimeout below, sdl
-        // will call us again before returning from waitEventTimeout.  We don't
-        // want to wait for events while nested.  Otherwise all event handling gets
-        // screwed up and either never recovers or recovers after many seconds.
-        if (gWaiting) {
-            return c.SDL_APP_CONTINUE;
-        }
+    // If a resize event happens while we are in waitEventTimeout below, sdl
+    // will call us again before returning from waitEventTimeout.  We don't
+    // want to wait for events while nested.  Otherwise all event handling gets
+    // screwed up and either never recovers or recovers after many seconds.
+    if (gWaiting) {
+        return c.SDL_APP_CONTINUE;
     }
 
     //std.debug.print("waitEventTimeout {d}\n", .{wait_event_micros});
