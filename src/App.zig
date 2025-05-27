@@ -36,7 +36,7 @@ fn nop_main() !void {}
 /// ```
 /// pub const main = dvui.App.main;
 /// ```
-pub const main: fn () anyerror!void = if (@hasDecl(dvui.backend, "main")) dvui.backend.main else nop_main;
+pub const main = if (@hasDecl(dvui.backend, "main")) dvui.backend.main else nop_main;
 
 /// The root file needs to expose the App panic function:
 /// ```
