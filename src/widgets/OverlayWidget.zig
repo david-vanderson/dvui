@@ -21,6 +21,9 @@ pub fn init(src: std.builtin.SourceLocation, opts: Options) OverlayWidget {
 pub fn install(self: *OverlayWidget) !void {
     dvui.parentSet(self.widget());
     try self.wd.register();
+}
+
+pub fn drawBackground(self: *OverlayWidget) !void {
     try self.wd.borderAndBackground(.{});
 }
 
