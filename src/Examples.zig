@@ -798,19 +798,47 @@ pub fn basicWidgets() !void {
 
         try dvui.label(@src(), "Resize Rotate Icons/Images", .{}, .{ .gravity_y = 0.5 });
 
-        if (try dvui.buttonIcon(@src(), "plus", entypo.plus, .{}, .{ .gravity_y = 0.5 }, .{})) {
+        if (try dvui.buttonIcon(
+            @src(),
+            "plus",
+            entypo.plus,
+            .{},
+            .{},
+            .{ .gravity_y = 0.5 },
+        )) {
             icon_image_size_extra += 1;
         }
 
-        if (try dvui.buttonIcon(@src(), "minus", entypo.minus, .{}, .{ .gravity_y = 0.5 }, .{})) {
+        if (try dvui.buttonIcon(
+            @src(),
+            "minus",
+            entypo.minus,
+            .{},
+            .{},
+            .{ .gravity_y = 0.5 },
+        )) {
             icon_image_size_extra = @max(0, icon_image_size_extra - 1);
         }
 
-        if (try dvui.buttonIcon(@src(), "cw", entypo.cw, .{}, .{ .gravity_y = 0.5 }, .{})) {
+        if (try dvui.buttonIcon(
+            @src(),
+            "cw",
+            entypo.cw,
+            .{},
+            .{},
+            .{ .gravity_y = 0.5 },
+        )) {
             icon_image_rotation = icon_image_rotation + 5 * std.math.pi / 180.0;
         }
 
-        if (try dvui.buttonIcon(@src(), "ccw", entypo.ccw, .{}, .{ .gravity_y = 0.5 }, .{})) {
+        if (try dvui.buttonIcon(
+            @src(),
+            "ccw",
+            entypo.ccw,
+            .{},
+            .{},
+            .{ .gravity_y = 0.5 },
+        )) {
             icon_image_rotation = icon_image_rotation - 5 * std.math.pi / 180.0;
         }
     }
@@ -965,8 +993,8 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
             "toggle",
             if (text_entry_password_buf_obf_enable) entypo.eye_with_line else entypo.eye,
             .{},
-            .{ .expand = .ratio },
             .{},
+            .{ .expand = .ratio },
         )) {
             text_entry_password_buf_obf_enable = !text_entry_password_buf_obf_enable;
         }
@@ -1093,7 +1121,14 @@ pub fn textEntryWidgets(demo_win_id: dvui.WidgetId) !void {
 
             var new_filename: ?[]const u8 = null;
 
-            if (try dvui.buttonIcon(@src(), "select font", entypo.folder, .{}, .{ .expand = .ratio, .gravity_x = 1.0 }, .{})) {
+            if (try dvui.buttonIcon(
+                @src(),
+                "select font",
+                entypo.folder,
+                .{},
+                .{},
+                .{ .expand = .ratio, .gravity_x = 1.0 },
+            )) {
                 new_filename = try dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{ .title = "Pick Font File" });
             }
 
@@ -1827,10 +1862,24 @@ pub fn layoutText() !void {
         defer tl.deinit();
 
         var cbox = try dvui.box(@src(), .vertical, .{ .margin = dvui.Rect.all(6), .min_size_content = .{ .w = 40 } });
-        if (try dvui.buttonIcon(@src(), "play", entypo.controller_play, .{}, .{ .expand = .ratio }, .{})) {
+        if (try dvui.buttonIcon(
+            @src(),
+            "play",
+            entypo.controller_play,
+            .{},
+            .{},
+            .{ .expand = .ratio },
+        )) {
             try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Ok Dialog", .message = "You clicked play" });
         }
-        if (try dvui.buttonIcon(@src(), "more", entypo.dots_three_vertical, .{}, .{ .expand = .ratio }, .{})) {
+        if (try dvui.buttonIcon(
+            @src(),
+            "more",
+            entypo.dots_three_vertical,
+            .{},
+            .{},
+            .{ .expand = .ratio },
+        )) {
             try dvui.dialog(@src(), .{}, .{ .modal = false, .title = "Ok Dialog", .message = "You clicked more" });
         }
         cbox.deinit();
@@ -2783,11 +2832,25 @@ pub fn scrollCanvas(comptime data: u8) !void {
         {
             var hbox = try dvui.box(@src(), .horizontal, .{});
             defer hbox.deinit();
-            if (try dvui.buttonIcon(@src(), "left", entypo.arrow_left, .{}, .{ .min_size_content = .{ .h = 20 } }, .{})) {
+            if (try dvui.buttonIcon(
+                @src(),
+                "left",
+                entypo.arrow_left,
+                .{},
+                .{},
+                .{ .min_size_content = .{ .h = 20 } },
+            )) {
                 b.x -= 10;
             }
 
-            if (try dvui.buttonIcon(@src(), "right", entypo.arrow_right, .{}, .{ .min_size_content = .{ .h = 20 } }, .{})) {
+            if (try dvui.buttonIcon(
+                @src(),
+                "right",
+                entypo.arrow_right,
+                .{},
+                .{},
+                .{ .min_size_content = .{ .h = 20 } },
+            )) {
                 b.x += 10;
             }
         }
@@ -3668,10 +3731,17 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
 
             var buf: [100]u8 = undefined;
             const text = try std.fmt.bufPrint(&buf, icon_decl_name ++ ".{s}", .{name});
-            if (try dvui.buttonIcon(@src(), text, field, .{}, .{
-                .min_size_content = .{ .h = settings.icon_size },
-                .color_text = .{ .color = settings.icon_rgb },
-            }, .{})) {
+            if (try dvui.buttonIcon(
+                @src(),
+                text,
+                field,
+                .{},
+                .{},
+                .{
+                    .min_size_content = .{ .h = settings.icon_size },
+                    .color_text = .{ .color = settings.icon_rgb },
+                },
+            )) {
                 try dvui.clipboardTextSet(text);
                 var buf2: [100]u8 = undefined;
                 const toast_text = try std.fmt.bufPrint(&buf2, "Copied \"{s}\"", .{text});
