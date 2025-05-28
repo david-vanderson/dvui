@@ -3127,7 +3127,14 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) !v
     try dvui.labelNoFmt(@src(), str, .{ .gravity_x = 0.5, .gravity_y = 0.5, .expand = .horizontal, .font_style = .heading, .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 } });
 
     if (openflag) |of| {
-        if (try dvui.buttonIcon(@src(), "close", entypo.cross, .{}, .{ .font_style = .heading, .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio }, .{})) {
+        if (try dvui.buttonIcon(
+            @src(),
+            "close",
+            entypo.cross,
+            .{},
+            .{},
+            .{ .font_style = .heading, .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio },
+        )) {
             of.* = false;
         }
     }
@@ -3817,7 +3824,14 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) !*Sugg
     var open_sug = init_opts.opened;
 
     if (init_opts.button) {
-        if (try dvui.buttonIcon(@src(), "combobox_triangle", entypo.chevron_small_down, .{}, .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0, .tab_index = 0 }, .{})) {
+        if (try dvui.buttonIcon(
+            @src(),
+            "combobox_triangle",
+            entypo.chevron_small_down,
+            .{},
+            .{},
+            .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0, .tab_index = 0 },
+        )) {
             open_sug = true;
             dvui.focusWidget(te.data().id, null, null);
         }
@@ -4882,7 +4896,7 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     return click;
 }
 
-pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options, icon_opts: IconRenderOptions) !bool {
+pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, icon_opts: IconRenderOptions, opts: Options) !bool {
     const defaults = Options{ .padding = Rect.all(4) };
     var bw = ButtonWidget.init(src, init_opts, defaults.override(opts));
     try bw.install();
