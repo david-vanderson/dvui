@@ -6813,14 +6813,15 @@ pub fn plotXY(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions
     p.deinit();
 }
 
-/// Helper to layout widgets stacked vertically.
+/// Helper to layout widgets stacked vertically or horizontally.
 ///
-/// If there is a widget with .expand = .vertical, it takes up the remaining
+/// If there is a widget expanded in that direction, it takes up the remaining
 /// space and it is an error to have any widget after.
 ///
-/// Widgets with .gravity_y not zero might overlap other widgets.
+/// Widgets with .gravity_y (.gravity_x) not zero might overlap other widgets.
 pub const BasicLayout = struct {
-    ypos: f32 = 0,
+    dir: enums.Direction = .vertical,
+    pos: f32 = 0,
     seen_expanded: bool = false,
     min_size_children: Size = .{},
 
@@ -6848,24 +6849,54 @@ pub const BasicLayout = struct {
                     break;
                 }
             }
-        } else if (e.isVertical()) {
-            self.seen_expanded = true;
         }
 
         var r = contentRect;
-        r.y = self.ypos;
-        r.h = @max(0, r.h - r.y);
+
+        switch (self.dir) {
+            .vertical => {
+                if (e.isVertical()) {
+                    self.seen_expanded = true;
+                }
+                r.y = self.pos;
+                r.h = @max(0, r.h - r.y);
+            },
+            .horizontal => {
+                if (e.isHorizontal()) {
+                    self.seen_expanded = true;
+                }
+                r.x = self.pos;
+                r.w = @max(0, r.w - r.x);
+            },
+        }
+
         const ret = dvui.placeIn(r, min_size, e, g);
-        self.ypos += ret.h;
+
+        switch (self.dir) {
+            .vertical => self.pos += ret.h,
+            .horizontal => self.pos += ret.w,
+        }
+
         return ret;
     }
 
     pub fn minSizeForChild(self: *BasicLayout, s: Size) Size {
-        // add heights
-        self.min_size_children.h += s.h;
+        switch (self.dir) {
+            .vertical => {
+                // add heights
+                self.min_size_children.h += s.h;
 
-        // max of widths
-        self.min_size_children.w = @max(self.min_size_children.w, s.w);
+                // max of widths
+                self.min_size_children.w = @max(self.min_size_children.w, s.w);
+            },
+            .horizontal => {
+                // add widths
+                self.min_size_children.w += s.w;
+
+                // max of heights
+                self.min_size_children.h = @max(self.min_size_children.h, s.h);
+            },
+        }
 
         return self.min_size_children;
     }
