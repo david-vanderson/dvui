@@ -50,7 +50,13 @@ pub fn install(self: *DropdownWidget) !void {
         try lw.draw();
         lw.deinit();
         _ = try dvui.spacer(@src(), .{ .w = 6 }, .{});
-        try dvui.icon(@src(), "dropdown_triangle", dvui.entypo.chevron_small_down, self.options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }), .{});
+        try dvui.icon(
+            @src(),
+            "dropdown_triangle",
+            dvui.entypo.chevron_small_down,
+            .{},
+            self.options.strip().override(.{ .gravity_y = 0.5, .gravity_x = 1.0 }),
+        );
 
         hbox.deinit();
     }

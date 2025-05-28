@@ -912,22 +912,20 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
     return height * @as(f32, @floatFromInt(parser.header.width)) / @as(f32, @floatFromInt(parser.header.height));
 }
 pub const IconRenderOptions = struct {
+    /// if null uses original fill colors, use .transparent to disable fill
+    fill_color: ?Color = .white,
     /// if null uses original stroke width
-    override_stroke_width: ?f32 = null,
-    /// if null uses original fill colors
-    override_fill_color: ?Color = .white,
+    stroke_width: ?f32 = null,
     /// if null uses original stroke colors
-    override_stroke_color: ?Color = .white,
-    /// only works with icons that are filled
-    disable_fill: bool = false,
+    stroke_color: ?Color = .white,
 };
 
 /// Render `tvg_bytes` at `height` into a `Texture`.  Name is for debugging.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, opt: IconRenderOptions) !TextureCacheEntry {
+pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, icon_opts: IconRenderOptions) !TextureCacheEntry {
     var cw = currentWindow();
-    const icon_hash = TextureCacheEntry.hash_icon(tvg_bytes, height, opt);
+    const icon_hash = TextureCacheEntry.hash_icon(tvg_bytes, height, icon_opts);
 
     if (cw.texture_cache.getPtr(icon_hash)) |tce| {
         tce.used = true;
@@ -968,14 +966,18 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32, opt: Ic
     var fb = std.io.fixedBufferStream(tvg_bytes);
 
     var ow_stroke: ?tvg.Color = null;
-    if (opt.override_stroke_color) |cx| ow_stroke = ImageAdapter.conv(cx);
+    if (icon_opts.stroke_color) |cx| ow_stroke = ImageAdapter.conv(cx);
     var ow_fill: ?tvg.Color = null;
-    if (opt.override_fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
+    var disable_fill = false;
+    if (ow_fill != null and ow_fill.?.a == 0.0) {
+        disable_fill = true;
+    }
+    if (icon_opts.fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
     tvg.renderStream(cw.arena(), &img, fb.reader(), .{
-        .overwrite_stroke_width = opt.override_stroke_width,
+        .overwrite_stroke_width = icon_opts.stroke_width,
         .overwrite_stroke = ow_stroke,
         .overwrite_fill = ow_fill,
-        .disable_fill = opt.disable_fill,
+        .disable_fill = disable_fill,
     }) catch |err| {
         log.warn("iconTexture Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
         return error.tvgError;
@@ -3973,9 +3975,15 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     try bcbox.install();
     try bcbox.drawBackground();
     if (expanded) {
-        try icon(@src(), "down_arrow", entypo.triangle_down, .{ .gravity_y = 0.5 }, .{});
+        try icon(@src(), "down_arrow", entypo.triangle_down, .{}, .{ .gravity_y = 0.5 });
     } else {
-        try icon(@src(), "right_arrow", entypo.triangle_right, .{ .gravity_y = 0.5 }, .{});
+        try icon(
+            @src(),
+            "right_arrow",
+            entypo.triangle_right,
+            .{},
+            .{ .gravity_y = 0.5 },
+        );
     }
     try labelNoFmt(@src(), label_str, options.strip());
 
@@ -4704,8 +4712,8 @@ pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, opts: Option
     lw.deinit();
 }
 
-pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, opts: Options, icon_opts: IconRenderOptions) !void {
-    var iw = try IconWidget.init(src, name, tvg_bytes, opts, icon_opts);
+pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: IconRenderOptions, opts: Options) !void {
+    var iw = try IconWidget.init(src, name, tvg_bytes, icon_opts, opts);
     try iw.install();
     try iw.draw();
     iw.deinit();
@@ -4883,7 +4891,13 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
 
     // When someone passes min_size_content to buttonIcon, they want the icon
     // to be that size, so we pass it through.
-    try icon(@src(), name, tvg_bytes, opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio }), icon_opts);
+    try icon(
+        @src(),
+        name,
+        tvg_bytes,
+        icon_opts,
+        opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio }),
+    );
 
     const click = bw.clicked();
     try bw.drawFocus();
@@ -4910,7 +4924,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, label_str: []const u8
         defer hbox.deinit();
 
         try labelNoFmt(@src(), label_str, options.override(.{ .expand = .horizontal }));
-        try icon(@src(), label_str, tvg_bytes, opts.strip().override(.{ .gravity_y = 0.5 }));
+        try icon(@src(), label_str, tvg_bytes, .{}, opts.strip().override(.{ .gravity_y = 0.5 }));
     }
 
     const click = bw.clicked();
