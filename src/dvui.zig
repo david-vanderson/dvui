@@ -4575,7 +4575,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
         iconopts = iconopts.override(themeGet().style_accent);
     }
 
-    try icon(@src(), name, tvg_bytes, iconopts, .{});
+    try icon(@src(), name, tvg_bytes, .{}, iconopts);
 
     mi.deinit();
 
