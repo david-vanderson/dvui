@@ -1563,7 +1563,7 @@ pub fn layout() !void {
                 opts.max_size_content = .size(opts.min_size_contentGet());
             }
 
-            var o = try dvui.overlay(@src(), opts);
+            var o = try dvui.box(@src(), .vertical, opts);
             defer o.deinit();
             const old_clip = dvui.clip(o.data().backgroundRectScale().r);
             defer dvui.clipSet(old_clip);
@@ -4282,9 +4282,7 @@ fn gridVirtualScrolling() !void {
             defer cell.deinit();
             try local.highlightIfHovered(cell, num);
             if (local.isPrime(num)) {
-                // TODO: Can't currently use gravity to centre the icon as it can't .expand. So pad it instead.
-                const pad_w = cell.data().contentRect().w / 2 - 15;
-                try dvui.icon(@src(), "Check", check_img, .{ .gravity_x = 0.5, .gravity_y = 0.5, .padding = .{ .x = pad_w }, .background = false });
+                try dvui.icon(@src(), "Check", check_img, .{ .gravity_x = 0.5, .gravity_y = 0.5 });
             }
         }
     }
