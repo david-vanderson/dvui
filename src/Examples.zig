@@ -17,6 +17,7 @@ const ButtonWidget = dvui.ButtonWidget;
 const FloatingWindowWidget = dvui.FloatingWindowWidget;
 const LabelWidget = dvui.LabelWidget;
 const TextLayoutWidget = dvui.TextLayoutWidget;
+const GridWidget = dvui.GridWidget;
 
 const enums = dvui.enums;
 
@@ -316,6 +317,7 @@ pub const demoKind = enum {
     animations,
     struct_ui,
     debugging,
+    grid,
 
     pub fn name(self: demoKind) []const u8 {
         return switch (self) {
@@ -335,6 +337,7 @@ pub const demoKind = enum {
             .animations => "Animations",
             .struct_ui => "Struct UI\n(Experimental)",
             .debugging => "Debugging",
+            .grid => "Grid",
         };
     }
 
@@ -356,6 +359,7 @@ pub const demoKind = enum {
             .animations => .{ .scale = 0.45, .offset = .{} },
             .struct_ui => .{ .scale = 0.45, .offset = .{} },
             .debugging => .{ .scale = 0.45, .offset = .{} },
+            .grid => .{ .scale = 0.45, .offset = .{} },
         };
     }
 };
@@ -468,6 +472,7 @@ pub fn demo() !void {
                     .animations => try animations(),
                     .struct_ui => try structUI(),
                     .debugging => try debuggingErrors(),
+                    .grid => try grids(0),
                 }
             }
 
@@ -520,6 +525,7 @@ pub fn demo() !void {
             .animations => animations(),
             .struct_ui => structUI(),
             .debugging => debuggingErrors(),
+            .grid => grids(scroll.si.viewport.h - hbox.data().rect.h - 10),
         };
     }
 
@@ -3655,6 +3661,653 @@ pub fn icon_browser(src: std.builtin.SourceLocation, show_flag: *bool, comptime 
         }
 
         cursor += settings.row_height;
+    }
+}
+
+const grid_panel_size: Size = .{ .w = 250 };
+
+pub fn grids(height: f32) !void {
+    // Below is a workaround for standaline demos being placed in a scroll-area.
+    // By default the scroll-area will scroll instead of the grid.
+    // Fix the height of the     // grid to the scroll area's viewport to prevent this.
+    // This would not be required for normal usage.
+    const vbox = if (height > 0)
+        try dvui.box(@src(), .vertical, .{ .min_size_content = .{ .h = height }, .max_size_content = .height(height), .expand = .horizontal })
+    else
+        null;
+
+    defer if (vbox) |vb| {
+        vb.deinit();
+    };
+
+    const GridType = enum {
+        styling,
+        layout,
+        scrolling,
+        row_heights,
+        const num_grids = @typeInfo(@This()).@"enum".fields.len;
+    };
+    const local = struct {
+        var active_grid: GridType = .styling;
+
+        fn tabSelected(grid_type: GridType) bool {
+            return active_grid == grid_type;
+        }
+
+        fn tabName(grid_type: GridType) []const u8 {
+            return switch (grid_type) {
+                .styling => "Styling and sorting",
+                .layout => "Layouts and data",
+                .scrolling => "Virtual scrolling",
+                .row_heights => "Variable row heigts",
+            };
+        }
+    };
+    {
+        var tbox = try dvui.box(@src(), .vertical, .{ .border = Rect.all(1), .expand = .horizontal });
+        defer tbox.deinit();
+        {
+            var tabs = dvui.TabsWidget.init(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+            try tabs.install();
+            defer tabs.deinit();
+
+            for (0..GridType.num_grids) |tab_num| {
+                const this_tab: GridType = @enumFromInt(tab_num);
+
+                if (try tabs.addTabLabel(local.tabSelected(this_tab), local.tabName(this_tab))) {
+                    local.active_grid = this_tab;
+                }
+            }
+        }
+    }
+    switch (local.active_grid) {
+        .styling => try gridStyling(),
+        .layout => try gridLayouts(),
+        .scrolling => try gridVirtualScrolling(),
+        .row_heights => try gridVariableRowHeights(),
+    }
+}
+
+fn gridStyling() !void {
+    const local = struct {
+        var resize_rows: bool = false;
+        var sort_dir: dvui.GridWidget.SortDirection = .unsorted;
+        var borders: Rect = .all(0);
+        var banding: Banding = .none;
+        var margin: f32 = 0;
+        var padding: f32 = 0;
+
+        fn rowColorFill(row_num: usize) ?dvui.Options.ColorOrName {
+            if (banding == .rows and row_num % 2 == 0) {
+                return .{ .name = .fill_press };
+            }
+            return null;
+        }
+
+        fn colColorFill(col_num: usize) ?dvui.Options.ColorOrName {
+            if (banding == .cols and col_num % 2 == 0) {
+                return .{ .name = .fill_press };
+            }
+            return null;
+        }
+
+        const Banding = enum { none, rows, cols };
+    };
+
+    var outer_hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+    defer outer_hbox.deinit();
+    const row_background = local.banding == .rows or local.borders.nonZero();
+
+    {
+        var grid = try dvui.grid(@src(), .{ .resize_rows = local.resize_rows }, .{
+            .expand = .both,
+            .background = true,
+            .border = Rect.all(1),
+            .padding = .{ .x = 5 },
+        });
+        defer grid.deinit();
+        local.resize_rows = false; // Only resize rows when needed.
+
+        // Set start, end and interval based on sort direction.
+        const start_temp: i32, //
+        const end_temp: i32, //
+        const interval: i32 = switch (local.sort_dir) {
+            .ascending, .unsorted => .{ 0, 100, 5 },
+            .descending => .{ 100, 0, -5 },
+        };
+        std.debug.assert(@mod(end_temp - start_temp, interval) == 0); // Temperature range must be a multiple of interval
+
+        // Manually control sorting, so that sort direction is always reversed regardless of
+        // which column header is clicked.
+        const current_sort_dir = local.sort_dir;
+
+        // First column displays temperature in Celcius.
+        {
+            var col = try grid.column(@src(), .{ .color_fill = local.colColorFill(0), .background = true });
+            defer col.deinit();
+            // Set this column as the default sort
+            if (current_sort_dir == .unsorted) {
+                local.sort_dir = .ascending;
+                grid.colSortSet(local.sort_dir);
+            }
+
+            if (try dvui.gridHeadingSortable(@src(), grid, "Celcius", &local.sort_dir, .{}, .{})) {
+                grid.colSortSet(current_sort_dir.reverse());
+            }
+
+            var temp: i32 = start_temp;
+            var row_num: usize = 0;
+            while (temp != end_temp + interval) : ({
+                temp += interval;
+                row_num += 1;
+            }) {
+                var cell = try grid.bodyCell(@src(), row_num, .{
+                    .border = local.borders,
+                    .background = row_background,
+                    .color_fill = local.rowColorFill(row_num),
+                    .margin = Rect.all(local.margin),
+                    .padding = Rect.all(local.padding),
+                });
+                defer cell.deinit();
+                try dvui.label(@src(), "{d}", .{temp}, .{ .gravity_x = 0.5, .expand = .horizontal });
+            }
+        }
+        // Second column displays temperature in Farenheight.
+        {
+            var col = try grid.column(@src(), .{
+                .color_fill = local.colColorFill(1),
+                .background = local.banding == .cols,
+            });
+            defer col.deinit();
+            if (try dvui.gridHeadingSortable(@src(), grid, "Fahrenheit", &local.sort_dir, .{}, .{})) {
+                grid.colSortSet(current_sort_dir.reverse());
+            }
+
+            var temp: i32 = start_temp;
+            var row_num: usize = 0;
+            while (temp != end_temp + interval) : ({
+                temp += interval;
+                row_num += 1;
+            }) {
+                var cell = try grid.bodyCell(@src(), row_num, .{
+                    .border = local.borders,
+                    .background = row_background,
+                    .color_fill = local.rowColorFill(row_num),
+                    .margin = Rect.all(local.margin),
+                    .padding = Rect.all(local.padding),
+                });
+                defer cell.deinit();
+                try dvui.label(@src(), "{d}", .{@divFloor(temp * 9, 5) + 32}, .{ .gravity_x = 0.5, .expand = .horizontal });
+            }
+        }
+    }
+    {
+        var outer_vbox = try dvui.box(@src(), .vertical, .{
+            .min_size_content = grid_panel_size,
+            .max_size_content = .size(grid_panel_size),
+            .expand = .vertical,
+            .border = Rect.all(1),
+        });
+        defer outer_vbox.deinit();
+
+        if (try dvui.expander(@src(), "Borders", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+            var top: bool = local.borders.y > 0;
+            var bottom: bool = local.borders.h > 0;
+            var left: bool = local.borders.x > 0;
+            var right: bool = local.borders.w > 0;
+            var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+            defer hbox.deinit();
+            {
+                var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
+                defer vbox.deinit();
+                _ = try dvui.checkbox(@src(), &top, "Top", .{});
+                _ = try dvui.checkbox(@src(), &left, "Left", .{});
+            }
+            {
+                var vbox = try dvui.box(@src(), .vertical, .{ .expand = .horizontal });
+                defer vbox.deinit();
+                _ = try dvui.checkbox(@src(), &right, "Right", .{});
+                _ = try dvui.checkbox(@src(), &bottom, "Bottom", .{});
+            }
+            local.borders = .{
+                .y = if (top) 1 else 0,
+                .h = if (bottom) 1 else 0,
+                .x = if (left) 1 else 0,
+                .w = if (right) 1 else 0,
+            };
+            if (local.borders.nonZero() and local.banding == .cols) {
+                local.banding = .none;
+            }
+        }
+        if (try dvui.expander(@src(), "Banding", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+            if (try dvui.radio(@src(), local.banding == .none, "None", .{})) {
+                local.banding = .none;
+            }
+            if (try dvui.radio(@src(), local.banding == .rows, "Rows", .{})) {
+                local.banding = .rows;
+            }
+            if (try dvui.radio(@src(), local.banding == .cols, "Cols", .{})) {
+                local.banding = .cols;
+                local.borders = Rect.all(0);
+            }
+        }
+        if (try dvui.expander(@src(), "Other", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+            {
+                var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+                defer hbox.deinit();
+                try dvui.labelNoFmt(@src(), "Margin:", .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
+                const result = try dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 10, .value = &local.margin, .show_min_max = true }, .{});
+                if (result.changed and result.value == .Valid) {
+                    local.margin = result.value.Valid;
+                    local.resize_rows = true;
+                }
+            }
+            {
+                var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+                defer hbox.deinit();
+                try dvui.labelNoFmt(@src(), "Padding:", .{ .min_size_content = .{ .w = 60 }, .gravity_y = 0.5 });
+                const result = try dvui.textEntryNumber(@src(), f32, .{ .min = 0, .max = 10, .value = &local.padding, .show_min_max = true }, .{});
+                if (result.changed and result.value == .Valid) {
+                    local.padding = result.value.Valid;
+                    local.resize_rows = true;
+                }
+            }
+        }
+    }
+}
+
+fn gridLayouts() !void {
+    const Car = struct {
+        selected: bool = false,
+        model: []const u8,
+        make: []const u8,
+        year: u32,
+        mileage: u32,
+        condition: Condition,
+        description: []const u8,
+
+        const Condition = enum { Poor, Fair, Good, Excellent, New };
+    };
+
+    const Layout = enum {
+        proportional,
+        equal_spacing,
+        fixed_width,
+        fit_window,
+    };
+
+    const local = struct {
+        const num_cols = 6;
+        const col_num_descr = 5;
+        const checkbox_w = 40;
+
+        var col_widths: [num_cols]f32 = @splat(100); // Default width to 100
+        const column_ratios = [num_cols]f32{ checkbox_w, -10, -10, -7, -15, -30 };
+        const fixed_widths = [num_cols]f32{ checkbox_w, 80, 120, 80, 100, 300 };
+        const equal_spacing = [num_cols]f32{ checkbox_w, -1, -1, -1, -1, -1 };
+        var selection_state: dvui.GridColumnSelectAllState = .select_none;
+        var sort_dir: GridWidget.SortDirection = .unsorted;
+        var layout: Layout = .proportional;
+        var h_scroll: bool = false;
+        var resize_rows: bool = false;
+
+        /// Create a textArea for the description so that the text can wrap.
+        fn customDescriptionColumn(src: std.builtin.SourceLocation, grid: *GridWidget, data: []Car, opts: dvui.Options) !void {
+            // Creating the description cells with a multi-line text area.
+            for (data, 0..) |*car, row_num| {
+                var col = try grid.bodyCell(src, row_num, rowBanding(col_num_descr, row_num));
+                defer col.deinit();
+                var text = try dvui.textLayout(@src(), .{ .break_lines = true }, .{ .expand = .both, .background = false });
+                defer text.deinit();
+                try text.addText(car.description, opts);
+            }
+        }
+
+        /// Set background of all odd rows to the theme's fill_press color.
+        fn rowBanding(_: usize, col_num: usize) GridWidget.CellOptions {
+            if (col_num % 2 == 1)
+                return .{ .color_fill = .{ .name = .fill_press }, .background = true }
+            else
+                return .{};
+        }
+
+        /// Set the text color of the Condition text, based on the condition.
+        fn conditionTextColor(_: usize, row_num: usize) Options {
+            return .{
+                .expand = .horizontal,
+                .gravity_x = 0.5,
+                .color_text = switch (all_cars[row_num].condition) {
+                    .New => .{ .color = dvui.Color.fromHex("#4bbfc3") },
+                    .Excellent => .{ .color = dvui.Color.fromHex("#6ca96c") },
+                    .Good => .{ .color = dvui.Color.fromHex("#a3b76b") },
+                    .Fair => .{ .color = dvui.Color.fromHex("#d3b95f") },
+                    .Poor => .{ .color = dvui.Color.fromHex("#c96b6b") },
+                },
+            };
+        }
+
+        fn sort(key: []const u8) void {
+            switch (sort_dir) {
+                .descending,
+                => std.mem.sort(Car, &all_cars, key, sortDesc),
+                .ascending,
+                .unsorted,
+                => std.mem.sort(Car, &all_cars, key, sortAsc),
+            }
+        }
+
+        fn sortAsc(key: []const u8, lhs: Car, rhs: Car) bool {
+            if (std.mem.eql(u8, key, "Model")) return std.mem.lessThan(u8, lhs.model, rhs.model);
+            if (std.mem.eql(u8, key, "Year")) return lhs.year < rhs.year;
+            if (std.mem.eql(u8, key, "Mileage")) return lhs.mileage < rhs.mileage;
+            if (std.mem.eql(u8, key, "Condition")) return @intFromEnum(lhs.condition) < @intFromEnum(rhs.condition);
+            if (std.mem.eql(u8, key, "Description")) return std.mem.lessThan(u8, lhs.description, rhs.description);
+            // default sort on Make
+            return std.mem.lessThan(u8, lhs.make, rhs.make);
+        }
+
+        fn sortDesc(key: []const u8, lhs: Car, rhs: Car) bool {
+            if (std.mem.eql(u8, key, "Model")) return std.mem.lessThan(u8, rhs.model, lhs.model);
+            if (std.mem.eql(u8, key, "Year")) return rhs.year < lhs.year;
+            if (std.mem.eql(u8, key, "Mileage")) return rhs.mileage < lhs.mileage;
+            if (std.mem.eql(u8, key, "Condition")) return @intFromEnum(rhs.condition) < @intFromEnum(lhs.condition);
+            if (std.mem.eql(u8, key, "Description")) return std.mem.lessThan(u8, rhs.description, lhs.description);
+            // default sort on Make
+            return std.mem.lessThan(u8, rhs.make, lhs.make);
+        }
+
+        var all_cars = [_]Car{
+            .{ .model = "Civic", .make = "Honda", .year = 2022, .mileage = 8500, .condition = .New, .description = "Still smells like optimism and plastic wrap." },
+            .{ .model = "Model 3", .make = "Tesla", .year = 2021, .mileage = 15000, .condition = .Excellent, .description = "Drives itself better than I drive myself." },
+            .{ .model = "Camry", .make = "Toyota", .year = 2018, .mileage = 43000, .condition = .Good, .description = "Reliable enough to make your toaster jealous." },
+            .{ .model = "F-150", .make = "Ford", .year = 2015, .mileage = 78000, .condition = .Fair, .description = "Hauls stuff, occasional emotions." },
+            .{ .model = "Altima", .make = "Nissan", .year = 2010, .mileage = 129000, .condition = .Poor, .description = "Drives like it’s got beef with the road." },
+            .{ .model = "Accord", .make = "Honda", .year = 2019, .mileage = 78000, .condition = .Excellent, .description = "Sensible and smooth, like your friend with a Costco card." },
+            .{ .model = "Impreza", .make = "Subaru", .year = 2016, .mileage = 78000, .condition = .Good, .description = "All-wheel drive and all-weather vibes." },
+            .{ .model = "Charger", .make = "Dodge", .year = 2014, .mileage = 97000, .condition = .Fair, .description = "Goes fast, stops… usually." },
+            .{ .model = "Beetle", .make = "Volkswagen", .year = 2006, .mileage = 142000, .condition = .Poor, .description = "Quirky, creaky, and still kinda cute." },
+            .{ .model = "Mustang", .make = "Ford", .year = 2020, .mileage = 24000, .condition = .Good, .description = "Makes you feel 20% cooler just sitting in it." },
+            .{ .model = "CX-5", .make = "Mazda", .year = 2019, .mileage = 32000, .condition = .Excellent, .description = "Zoom zoom, but responsibly." },
+            .{ .model = "Outback", .make = "Subaru", .year = 2017, .mileage = 61000, .condition = .Good, .description = "Always looks ready for a camping trip, even when it's not." },
+            .{ .model = "Civic", .make = "Honda", .year = 2022, .mileage = 8500, .condition = .New, .description = "Still smells like optimism and plastic wrap." },
+            .{ .model = "Model 3", .make = "Tesla", .year = 2021, .mileage = 15000, .condition = .Excellent, .description = "Drives itself better than I drive myself." },
+            .{ .model = "Camry", .make = "Toyota", .year = 2018, .mileage = 43000, .condition = .Good, .description = "Reliable enough to make your toaster jealous." },
+            .{ .model = "F-150", .make = "Ford", .year = 2015, .mileage = 78000, .condition = .Fair, .description = "Hauls stuff, occasional emotions." },
+            .{ .model = "Altima", .make = "Nissan", .year = 2010, .mileage = 129000, .condition = .Poor, .description = "Drives like it’s got beef with the road." },
+            .{ .model = "Accord", .make = "Honda", .year = 2019, .mileage = 78000, .condition = .Excellent, .description = "Sensible and smooth, like your friend with a Costco card." },
+            .{ .model = "Impreza", .make = "Subaru", .year = 2016, .mileage = 78000, .condition = .Good, .description = "All-wheel drive and all-weather vibes." },
+            .{ .model = "Charger", .make = "Dodge", .year = 2014, .mileage = 97000, .condition = .Fair, .description = "Goes fast, stops… usually." },
+            .{ .model = "Beetle", .make = "Volkswagen", .year = 2006, .mileage = 142000, .condition = .Poor, .description = "Quirky, creaky, and still kinda cute." },
+            .{ .model = "Mustang with a really long name", .make = "Ford", .year = 2020, .mileage = 24000, .condition = .Good, .description = "Makes you feel 20% cooler just sitting in it." },
+        };
+    };
+    const all_cars = local.all_cars[0..];
+
+    const panel_height = 250;
+    const content_h = dvui.parentGet().data().contentRect().h - panel_height;
+    {
+        const scroll_opts: ?dvui.ScrollAreaWidget.InitOpts = if (local.h_scroll)
+            .{ .horizontal = .auto, .horizontal_bar = .show, .vertical = .auto, .vertical_bar = .show }
+        else
+            null;
+
+        const col_widths: ?[]f32 = switch (local.layout) {
+            .fit_window => null,
+            else => &local.col_widths,
+        };
+
+        var grid = try dvui.grid(@src(), .{
+            .col_widths = col_widths,
+            .scroll_opts = scroll_opts,
+            .resize_rows = local.resize_rows,
+        }, .{
+            .expand = .both,
+            .background = true,
+            .border = Rect.all(2),
+            .min_size_content = .{ .h = content_h },
+            .max_size_content = .height(content_h),
+            .padding = .{ .x = 5 },
+        });
+        defer grid.deinit();
+
+        // Fit columns to the grid visible area, or to the virtual scroll area if horizontal scorlling is enabled.
+        if (local.layout != .fit_window) {
+            const ratio = switch (local.layout) {
+                .equal_spacing => &local.equal_spacing,
+                .fixed_width => &local.fixed_widths,
+                .proportional => &local.column_ratios,
+                .fit_window => unreachable,
+            };
+            dvui.columnLayoutProportional(ratio, &local.col_widths, if (local.h_scroll) 1024 else grid.data().contentRect().w);
+        }
+        local.resize_rows = false;
+
+        // Selection
+        {
+            // Make the checkbox column fixed width. (This width is used if init_opts.col_widths is null)
+            var col = try grid.column(@src(), .{ .width = local.checkbox_w });
+            defer col.deinit();
+            if (try dvui.gridHeadingCheckbox(@src(), grid, &local.selection_state, .{}, .{})) {
+                for (all_cars) |*car| {
+                    car.selected = switch (local.selection_state) {
+                        .select_all => true,
+                        .select_none => false,
+                        .unchanged => break,
+                    };
+                }
+            }
+            _ = try dvui.gridColumnCheckbox(@src(), grid, Car, all_cars[0..], "selected", .{ .callback = local.rowBanding }, .{ .options = .{ .gravity_y = 0.0 } });
+        }
+        // Make
+        {
+            var col = try grid.column(@src(), .{});
+            defer col.deinit();
+            if (try dvui.gridHeadingSortable(@src(), grid, "Make", &local.sort_dir, .{}, .{})) {
+                local.sort("Make");
+            }
+            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "make", "{s}", .{ .callback = local.rowBanding }, .none);
+        }
+        // Model
+        {
+            var col = try grid.column(@src(), .{});
+            defer col.deinit();
+            if (try dvui.gridHeadingSortable(@src(), grid, "Model", &local.sort_dir, .{}, .{})) {
+                local.sort("Model");
+            }
+            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "model", "{s}", .{ .callback = local.rowBanding }, .none);
+        }
+        // Year
+        {
+            var col = try grid.column(@src(), .{});
+            defer col.deinit();
+            if (try dvui.gridHeadingSortable(@src(), grid, "Year", &local.sort_dir, .{}, .{})) {
+                local.sort("Year");
+            }
+            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "year", "{d}", .{ .callback = local.rowBanding }, .none);
+        }
+        // Condition
+        {
+            var col = try grid.column(@src(), .{});
+            defer col.deinit();
+            if (try dvui.gridHeadingSortable(@src(), grid, "Condition", &local.sort_dir, .{}, .{ .gravity_x = 0.5, .expand = .horizontal })) {
+                local.sort("Condition");
+            }
+            try dvui.gridColumnFromSlice(@src(), grid, Car, all_cars[0..], "condition", "{s}", .{ .callback = local.rowBanding }, .{ .callback = local.conditionTextColor });
+        }
+        // Description
+        {
+            var col = try grid.column(@src(), .{});
+            defer col.deinit();
+            if (try dvui.gridHeadingSortable(@src(), grid, "Description", &local.sort_dir, .{}, .{})) {
+                local.sort("Description");
+            }
+            try local.customDescriptionColumn(@src(), grid, all_cars[0..], .{});
+        }
+    }
+    {
+        var outer_vbox = try dvui.box(@src(), .vertical, .{
+            .expand = .horizontal,
+            .border = Rect.all(1),
+        });
+        defer outer_vbox.deinit();
+
+        if (try dvui.expander(@src(), "Layouts", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+            {
+                var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+                defer hbox.deinit();
+
+                if (try dvui.radio(@src(), local.layout == .proportional, "Proportional", .{})) {
+                    local.layout = .proportional;
+                }
+                if (try dvui.radio(@src(), local.layout == .equal_spacing, "Equal spacing", .{})) {
+                    local.layout = .equal_spacing;
+                }
+                if (try dvui.radio(@src(), local.layout == .fixed_width, "Fixed widths", .{})) {
+                    local.layout = .fixed_width;
+                }
+                if (try dvui.radio(@src(), local.layout == .fit_window, "Fit window", .{})) {
+                    local.h_scroll = false;
+                    local.layout = .fit_window;
+                }
+            }
+            {
+                var hbox = try dvui.box(@src(), .horizontal, .{ .expand = .horizontal });
+                defer hbox.deinit();
+                if (try dvui.checkbox(@src(), &local.h_scroll, "Horizontal scrolling", .{})) {
+                    if (local.layout == .fit_window) {
+                        local.layout = .proportional;
+                    }
+                }
+                if (try dvui.button(@src(), "Resize Rows", .{}, .{})) {
+                    local.resize_rows = true;
+                }
+            }
+        }
+    }
+}
+
+fn gridVirtualScrolling() !void {
+    const num_rows = 1_000_000;
+    const local = struct {
+        var scroll_info: dvui.ScrollInfo = .{ .vertical = .given, .horizontal = .none };
+        var primes: std.StaticBitSet(num_rows) = .initFull();
+        var generated_primes: bool = false;
+        var highlighted_row: ?usize = null;
+
+        fn generatePrimes() void {
+            const limit = std.math.sqrt(num_rows);
+            if (num_rows > 0) primes.unset(0);
+            if (num_rows > 1) primes.unset(1);
+            var current: u32 = 2;
+            while (current < limit) : (current += 1) {
+                if (primes.isSet(current)) {
+                    var multiples = current * current;
+                    while (multiples < num_rows) : (multiples += current) {
+                        primes.unset(multiples);
+                    }
+                }
+            }
+        }
+
+        fn isPrime(num: usize) bool {
+            return primes.isSet(num);
+        }
+
+        fn highlightIfHovered(box: *dvui.BoxWidget, row_num: usize) !void {
+            if (highlighted_row != null and highlighted_row.? == row_num) {
+                box.wd.options.background = true;
+                box.wd.options.color_fill = .fill_hover;
+                try box.drawBackground();
+            }
+        }
+    };
+
+    if (!local.generated_primes) {
+        local.generatePrimes();
+        local.generated_primes = true;
+    }
+
+    var vbox = try dvui.box(@src(), .vertical, .{ .expand = .both });
+    defer vbox.deinit();
+    var grid = try dvui.grid(@src(), .{ .scroll_opts = .{ .scroll_info = &local.scroll_info } }, .{
+        .expand = .both,
+        .background = true,
+        .border = Rect.all(1),
+        .padding = .{ .x = 5 },
+    });
+    defer grid.deinit();
+
+    // Check if a row is being hovered.
+    const evts = dvui.events();
+    for (evts) |*e| {
+        if (dvui.eventMatchSimple(e, grid.scroll.data())) {
+            if (e.evt == .mouse and e.evt.mouse.action == .position) {
+                if (grid.row_height > 1) {
+                    // Convert mouse screen co-ords into co-ords relative to the scroll area's top-left.
+                    const scroll_rect = grid.scroll.data().rectScale();
+                    const offset = scroll_rect.pointFromPhysical(e.evt.mouse.p).y - grid.header_height;
+                    if (offset > 0) {
+                        // If the mouse is in the body part, not in the header part of the scroll area
+                        local.highlighted_row = @intFromFloat((local.scroll_info.viewport.y + offset) / grid.row_height);
+                        break;
+                    }
+                }
+            }
+        }
+        local.highlighted_row = null;
+    }
+
+    const scroller: dvui.GridWidget.VirtualScroller = .init(grid, .{ .total_rows = num_rows, .scroll_info = &local.scroll_info });
+    const first = scroller.startRow();
+    const last = scroller.endRow(); // Note that endRow is exclusive meaning it can be used as a slice ending index.
+
+    // Number column
+    {
+        var col = try grid.column(@src(), .{});
+        defer col.deinit();
+        try dvui.gridHeading(@src(), grid, "Number", .{}, .{});
+
+        for (first..last) |num| {
+            var cell = try grid.bodyCell(@src(), num, .{ .border = .{ .x = 1, .w = 1, .h = 1 }, .background = true });
+            defer cell.deinit();
+            try local.highlightIfHovered(cell, num);
+            try dvui.label(@src(), "{d}", .{num}, .{});
+        }
+    }
+    // Prime column
+    {
+        const check_img = @embedFile("icons/entypo/check.tvg");
+        var col = try grid.column(@src(), .{});
+        defer col.deinit();
+        try dvui.gridHeading(@src(), grid, "Is prime?", .{}, .{});
+
+        for (first..last) |num| {
+            var cell = try grid.bodyCell(@src(), num, .{ .border = .{ .w = 1, .h = 1 }, .background = true });
+            defer cell.deinit();
+            try local.highlightIfHovered(cell, num);
+            if (local.isPrime(num)) {
+                // TODO: Can't currently use gravity to centre the icon as it can't .expand. So pad it instead.
+                const pad_w = cell.data().contentRect().w / 2 - 15;
+                try dvui.icon(@src(), "Check", check_img, .{ .gravity_x = 0.5, .gravity_y = 0.5, .padding = .{ .x = pad_w }, .background = false });
+            }
+        }
+    }
+}
+
+fn gridVariableRowHeights() !void {
+    var grid = try dvui.grid(@src(), .{}, .{
+        .expand = .both,
+    });
+    defer grid.deinit();
+
+    var col = try grid.column(@src(), .{});
+    defer col.deinit();
+    for (1..10) |row_num| {
+        const row_num_i: i32 = @intCast(row_num);
+        const row_height = 70 - (@abs(row_num_i - 5) * 10);
+        var cell = try grid.bodyCell(@src(), row_num, .{ .height = @floatFromInt(row_height), .border = Rect.all(1) });
+        defer cell.deinit();
+        try dvui.label(@src(), "h = {d}", .{row_height}, .{ .gravity_x = 0.5, .expand = .horizontal });
     }
 }
 
