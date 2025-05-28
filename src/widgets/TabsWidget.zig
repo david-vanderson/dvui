@@ -26,7 +26,7 @@ pub fn init(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Optio
         .horizontal => scroll_opts = .{ .vertical = .none, .horizontal = .auto, .horizontal_bar = .hide },
         .vertical => scroll_opts = .{ .vertical = .auto, .vertical_bar = .hide },
     }
-    self.scroll = ScrollAreaWidget.init(src, scroll_opts, self.options.override(.{ .debug = true }));
+    self.scroll = ScrollAreaWidget.init(src, scroll_opts, self.options);
     return self;
 }
 
